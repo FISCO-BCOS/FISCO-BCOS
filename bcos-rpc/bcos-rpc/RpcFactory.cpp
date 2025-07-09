@@ -361,11 +361,12 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
         _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
-    auto httpServer = _wsService->httpServer();
-    if (httpServer)
+
+    if (auto httpServer = _wsService->httpServer())
     {
-        httpServer->setHttpReqHandler(std::bind(&bcos::rpc::JsonRpcInterface::onRPCRequest,
-            jsonRpcInterface, std::placeholders::_1, std::placeholders::_2));
+        httpServer->setHttpReqHandler([jsonRpcInterface](std::string_view body, auto sender) {
+            jsonRpcInterface->onRPCRequest(body, std::move(sender));
+        });
     }
     return jsonRpcInterface;
 }
@@ -378,11 +379,12 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
             m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
         m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService, web3FilterSystem);
-    auto httpServer = _wsService->httpServer();
-    if (httpServer)
+
+    if (auto httpServer = _wsService->httpServer())
     {
-        httpServer->setHttpReqHandler(std::bind(&bcos::rpc::Web3JsonRpcImpl::onRPCRequest,
-            web3JsonRpc, std::placeholders::_1, std::placeholders::_2));
+        httpServer->setHttpReqHandler([web3JsonRpc](std::string_view body, auto sender) {
+            web3JsonRpc->onRPCRequest(body, std::move(sender));
+        });
     }
     return web3JsonRpc;
 }

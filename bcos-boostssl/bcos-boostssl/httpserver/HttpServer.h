@@ -21,8 +21,6 @@
 
 #include <bcos-boostssl/httpserver/HttpSession.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <exception>
-#include <thread>
 #include <utility>
 namespace bcos::boostssl::http
 {
@@ -32,14 +30,12 @@ class HttpServer : public std::enable_shared_from_this<HttpServer>
 public:
     using Ptr = std::shared_ptr<HttpServer>;
 
-public:
     HttpServer(std::string _listenIP, uint16_t _listenPort)
       : m_listenIP(std::move(_listenIP)), m_listenPort(_listenPort)
     {}
 
     ~HttpServer() { stop(); }
 
-public:
     // start http server
     void start();
     void stop();
@@ -49,11 +45,9 @@ public:
     // handle connection
     void onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::socket socket);
 
-public:
     HttpSession::Ptr buildHttpSession(
         HttpStream::Ptr _stream, std::shared_ptr<std::string> _nodeId);
 
-public:
     HttpReqHandler httpReqHandler() const { return m_httpReqHandler; }
     void setHttpReqHandler(HttpReqHandler _httpReqHandler)
     {

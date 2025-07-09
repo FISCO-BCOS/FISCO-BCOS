@@ -24,8 +24,6 @@
 #include <bcos-utilities/Common.h>
 #include <boost/beast/ssl/ssl_stream.hpp>
 #include <memory>
-#include <stdexcept>
-#include <utility>
 
 namespace bcos::boostssl::http
 {
@@ -36,12 +34,8 @@ class HttpStream
 {
 public:
     using Ptr = std::shared_ptr<HttpStream>;
-
-    virtual ~HttpStream() {}
-
-public:
+    virtual ~HttpStream() = default;
     virtual boost::beast::tcp_stream& stream() = 0;
-
     virtual ws::WsStreamDelegate::Ptr wsStream() = 0;
 
     virtual bool open() = 0;
@@ -54,40 +48,12 @@ public:
 
     virtual void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) = 0;
 
-    virtual std::string localEndpoint()
-    {
-        try
-        {
-            auto& s = stream();
-            auto localEndPoint = s.socket().local_endpoint();
-            auto endPoint =
-                localEndPoint.address().to_string() + ":" + std::to_string(localEndPoint.port());
-            return endPoint;
-        }
-        catch (...)
-        {}
+    virtual std::string localEndpoint();
 
-        return std::string("");
-    }
-
-    virtual std::string remoteEndpoint()
-    {
-        try
-        {
-            auto& s = stream();
-            auto remoteEndpoint = s.socket().remote_endpoint();
-            auto endPoint =
-                remoteEndpoint.address().to_string() + ":" + std::to_string(remoteEndpoint.port());
-            return endPoint;
-        }
-        catch (...)
-        {}
-
-        return std::string("");
-    }
+    virtual std::string remoteEndpoint();
 
 protected:
-    std::atomic<bool> m_closed{false};
+    boost::atomic_flag m_closed;
 };
 
 // The http stream
@@ -96,63 +62,21 @@ class HttpStreamImpl : public HttpStream, public std::enable_shared_from_this<Ht
 public:
     using Ptr = std::shared_ptr<HttpStreamImpl>;
 
-public:
-    HttpStreamImpl(std::shared_ptr<boost::beast::tcp_stream> _stream) : m_stream(_stream)
-    {
-        HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStreamImpl]", this);
-    }
-    virtual ~HttpStreamImpl()
-    {
-        HTTP_STREAM(DEBUG) << LOG_KV("[DELOBJ][HttpStreamImpl]", this);
-        close();
-    }
+    HttpStreamImpl(std::shared_ptr<boost::beast::tcp_stream> _stream);
+    ~HttpStreamImpl() override;
 
-public:
-    virtual boost::beast::tcp_stream& stream() override { return *m_stream; }
+    boost::beast::tcp_stream& stream() override;
+    ws::WsStreamDelegate::Ptr wsStream() override;
 
-    virtual ws::WsStreamDelegate::Ptr wsStream() override
-    {
-        m_closed.store(true);
-        auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
-        return builder->build(m_stream);
-    }
+    bool open() override;
+    void close() override;
 
-    virtual bool open() override
-    {
-        if (!m_closed.load() && m_stream)
-        {
-            return m_stream->socket().is_open();
-        }
-        return false;
-    }
-    virtual void close() override
-    {
-        if (m_closed.load())
-        {
-            return;
-        }
-
-        bool trueValue = true;
-        bool falseValue = false;
-        if (m_closed.compare_exchange_strong(falseValue, trueValue))
-        {
-            HTTP_STREAM(INFO) << LOG_DESC("close the stream") << LOG_KV("this", this);
-            ws::WsTools::close(m_stream->socket());
-        }
-    }
-
-    virtual void asyncRead(boost::beast::flat_buffer& _buffer,
+    void asyncRead(boost::beast::flat_buffer& _buffer,
         boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>&
             _parser,
-        HttpStreamRWHandler _handler) override
-    {
-        boost::beast::http::async_read(*m_stream, _buffer, *_parser, _handler);
-    }
+        HttpStreamRWHandler _handler) override;
 
-    virtual void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) override
-    {
-        boost::beast::http::async_write(*m_stream, _httpResp, _handler);
-    }
+    void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) override;
 
 
 private:
@@ -165,67 +89,23 @@ class HttpStreamSslImpl : public HttpStream, public std::enable_shared_from_this
 public:
     using Ptr = std::shared_ptr<HttpStreamSslImpl>;
 
-public:
-    HttpStreamSslImpl(std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
-      : m_stream(_stream)
-    {
-        HTTP_STREAM(DEBUG) << LOG_KV("[NEWOBJ][HttpStreamSslImpl]", this);
-    }
+    HttpStreamSslImpl(std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream);
 
-    virtual ~HttpStreamSslImpl()
-    {
-        HTTP_STREAM(DEBUG) << LOG_KV("[DELOBJ][HttpStreamSslImpl]", this);
-        close();
-    }
+    ~HttpStreamSslImpl() override;
 
-public:
-    virtual boost::beast::tcp_stream& stream() override { return m_stream->next_layer(); }
+    boost::beast::tcp_stream& stream() override;
 
-    virtual ws::WsStreamDelegate::Ptr wsStream() override
-    {
-        m_closed.store(true);
-        auto builder = std::make_shared<ws::WsStreamDelegateBuilder>();
-        return builder->build(m_stream);
-    }
+    ws::WsStreamDelegate::Ptr wsStream() override;
 
-    virtual bool open() override
-    {
-        if (!m_closed.load() && m_stream)
-        {
-            return m_stream->next_layer().socket().is_open();
-        }
+    bool open() override;
+    void close() override;
 
-        return false;
-    }
-
-    virtual void close() override
-    {
-        if (m_closed.load())
-        {
-            return;
-        }
-
-        bool trueValue = true;
-        bool falseValue = false;
-        if (m_closed.compare_exchange_strong(falseValue, trueValue))
-        {
-            HTTP_STREAM(INFO) << LOG_DESC("close the ssl stream") << LOG_KV("this", this);
-            ws::WsTools::close(m_stream->next_layer().socket());
-        }
-    }
-
-    virtual void asyncRead(boost::beast::flat_buffer& _buffer,
+    void asyncRead(boost::beast::flat_buffer& _buffer,
         boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>&
             _parser,
-        HttpStreamRWHandler _handler) override
-    {
-        boost::beast::http::async_read(*m_stream, _buffer, *_parser, _handler);
-    }
+        HttpStreamRWHandler _handler) override;
 
-    virtual void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) override
-    {
-        boost::beast::http::async_write(*m_stream, _httpResp, _handler);
-    }
+    void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) override;
 
 private:
     std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> m_stream;
@@ -236,16 +116,9 @@ class HttpStreamFactory
 public:
     using Ptr = std::shared_ptr<HttpStreamFactory>;
 
-public:
-    HttpStream::Ptr buildHttpStream(std::shared_ptr<boost::beast::tcp_stream> _stream)
-    {
-        return std::make_shared<HttpStreamImpl>(_stream);
-    }
+    HttpStream::Ptr buildHttpStream(std::shared_ptr<boost::beast::tcp_stream> _stream);
 
     HttpStream::Ptr buildHttpStream(
-        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
-    {
-        return std::make_shared<HttpStreamSslImpl>(_stream);
-    }
+        std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream);
 };
 }  // namespace bcos::boostssl::http
