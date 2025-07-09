@@ -80,7 +80,7 @@ void HttpServer::start()
     }
 
     // start accept
-    doAccept();
+    accept();
 
     HTTP_SERVER(INFO) << LOG_BADGE("startListen") << LOG_KV("ip", endpoint.address().to_string())
                       << LOG_KV("port", endpoint.port());
@@ -97,7 +97,7 @@ void HttpServer::stop()
     HTTP_SERVER(INFO) << LOG_BADGE("stop") << LOG_DESC("http server");
 }
 
-void HttpServer::doAccept()
+void HttpServer::accept()
 {
     // The new connection gets its own strand
     m_acceptor->async_accept(*(m_ioservicePool->getIOService()),
@@ -110,7 +110,8 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     {
         HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
-        return doAccept();
+        accept();
+        return;
     }
 
     boost::system::error_code sec;
@@ -120,7 +121,8 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
         HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("local_endpoint failed", sec)
                              << LOG_KV("message", sec.message());
         ws::WsTools::close(socket);
-        return doAccept();
+        accept();
+        return;
     }
     auto remoteEndpoint = socket.remote_endpoint(sec);
     if (sec)
@@ -128,7 +130,8 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
         HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("remote_endpoint failed", sec)
                              << LOG_KV("message", sec.message());
         ws::WsTools::close(socket);
-        return doAccept();
+        accept();
+        return;
     }
     socket.set_option(boost::asio::ip::tcp::no_delay(true));
 
@@ -142,7 +145,8 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
             std::make_shared<boost::beast::tcp_stream>(std::move(socket)));
         buildHttpSession(httpStream, nullptr)->run();
 
-        return doAccept();
+        accept();
+        return;
     }
 
     // ssl should be used,  start ssl handshake
@@ -174,7 +178,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
             }
         });
 
-    return doAccept();
+    accept();
 }
 
 
@@ -183,8 +187,8 @@ HttpSession::Ptr HttpServer::buildHttpSession(
 {
     auto session = std::make_shared<HttpSession>();
 
-    auto queue = std::make_shared<Queue>();
-    queue->setSender([self = std::weak_ptr<HttpSession>(session)](HttpResponsePtr _httpResp) {
+    Queue queue;
+    queue.setSender([self = std::weak_ptr<HttpSession>(session)](HttpResponsePtr _httpResp) {
         auto session = self.lock();
         if (!session)
         {

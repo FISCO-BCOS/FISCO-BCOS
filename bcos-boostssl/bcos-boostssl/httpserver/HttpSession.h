@@ -38,24 +38,23 @@ public:
     using Ptr = std::shared_ptr<HttpSession>;
 
     HttpSession();
-
     virtual ~HttpSession();
 
     // start the HttpSession
     void run();
 
-    void doRead();
+    void read();
     void onRead(boost::beast::error_code ec, std::size_t bytes_transferred);
-    void onWrite(
-        bool close, boost::beast::error_code ec, [[maybe_unused]] std::size_t bytes_transferred);
-    void doClose();
+    void onWrite(bool closeOnEOF, boost::beast::error_code ec,
+        [[maybe_unused]] std::size_t bytes_transferred);
+    void close();
 
     /**
      * @brief: handle http request and send the response
      * @param req: http request object
      * @return void:
      */
-    void handleRequest(HttpRequest&& _httpRequest);
+    void handleRequest(HttpRequest& _httpRequest);
 
     /**
      * @brief: build http response object
@@ -71,8 +70,8 @@ public:
 
     WsUpgradeHandler wsUpgradeHandler() const;
     void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler);
-    std::shared_ptr<Queue> queue();
-    void setQueue(std::shared_ptr<Queue> _queue);
+    Queue& queue();
+    void setQueue(Queue _queue);
 
     HttpStream::Ptr httpStream();
     void setHttpStream(HttpStream::Ptr _httpStream);
@@ -80,12 +79,11 @@ public:
     std::shared_ptr<std::string> nodeId();
     void setNodeId(std::shared_ptr<std::string> _nodeId);
 
-
 private:
     HttpStream::Ptr m_httpStream;
     std::shared_ptr<boost::beast::flat_buffer> m_buffer;
 
-    std::shared_ptr<Queue> m_queue;
+    Queue m_queue;
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
     // the parser is stored in an optional container so we can
