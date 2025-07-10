@@ -41,7 +41,7 @@ public:
     void stop();
 
     // accept connection
-    void doAccept();
+    void accept();
     // handle connection
     void onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::socket socket);
 

@@ -176,10 +176,10 @@ void PBFTInitializer::initChainNodeInfo(
     m_nodeInfo->setCompatibilityVersion(m_pbft->compatibilityVersion());
     m_nodeInfo->setFeatureKeys(
         ledger::Features::featureKeys() |
-        RANGES::views::transform([](std::string_view view) { return std::string(view); }));
+        ::ranges::views::transform([](std::string_view view) { return std::string(view); }));
     m_nodeInfo->setSupportConfigs(
         ledger::SystemConfigs::supportConfigs() |
-        RANGES::views::transform([](std::string_view view) { return std::string(view); }));
+        ::ranges::views::transform([](std::string_view view) { return std::string(view); }));
     m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", m_nodeInfo->nodeType())
