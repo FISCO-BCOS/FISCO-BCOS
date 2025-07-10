@@ -23,13 +23,8 @@ void bcos::boostssl::http::HttpSession::read()
     m_parser->body_limit(PARSER_BODY_LIMITATION);
 
     m_httpStream->asyncRead(*m_buffer, m_parser,
-        [weakSession = weak_from_this()](
-            boost::system::error_code _ec, std::size_t bytes_transferred) {
-            if (auto session = weakSession.lock())
-            {
-                session->onRead(_ec, bytes_transferred);
-            }
-        });
+        [session = shared_from_this()](boost::system::error_code _ec,
+            std::size_t bytes_transferred) { session->onRead(_ec, bytes_transferred); });
 }
 void bcos::boostssl::http::HttpSession::onRead(
     boost::beast::error_code ec, std::size_t bytes_transferred)

@@ -170,8 +170,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
                 return;
             }
 
-            auto server = self.lock();
-            if (server)
+            if (auto server = self.lock())
             {
                 auto httpStream = server->httpStreamFactory()->buildHttpStream(ss);
                 server->buildHttpSession(httpStream, nodeId)->run();
