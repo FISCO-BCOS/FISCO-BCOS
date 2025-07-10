@@ -405,7 +405,7 @@ int main(int argc, char* argv[])
         }
         else
         {
-            loadUsers(usersPath, *cryptoSuite);
+            users = loadUsers(usersPath, *cryptoSuite);
         }
         transfer(
             rpcClient, cryptoSuite, std::string(contractAddress), users, transactionCount, qps);
