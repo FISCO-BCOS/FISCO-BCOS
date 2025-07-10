@@ -79,8 +79,8 @@ public:
     bcostars::GatewayServicePrx prx();
 
 protected:
-    void start() override {}
-    void stop() override {}
+    void start() override;
+    void stop() override;
     static bool shouldStopCall();
 
 private:

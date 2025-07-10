@@ -20,13 +20,6 @@
 
 #pragma once
 
-#include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
-#include "../Common.h"
-#include "../ErrorConverter.h"
-#include "../protocol/TransactionSubmitResultImpl.h"
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-tars-protocol/tars/RpcService.h>
 #include <bcos-utilities/Common.h>
@@ -38,29 +31,17 @@ namespace bcostars
 class RpcServiceClient : public bcos::rpc::RPCInterface
 {
 public:
-    RpcServiceClient(bcostars::RpcServicePrx _prx, std::string const& _rpcServiceName)
-      : m_prx(_prx), m_rpcServiceName(_rpcServiceName)
-    {}
-    ~RpcServiceClient() override {}
+    RpcServiceClient(bcostars::RpcServicePrx _prx, std::string const& _rpcServiceName);
+    ~RpcServiceClient() override;
 
     class Callback : public RpcServicePrxCallback
     {
     public:
-        explicit Callback(std::function<void(bcos::Error::Ptr)> _callback)
-          : RpcServicePrxCallback(), m_callback(_callback)
-        {}
-        ~Callback() override {}
+        explicit Callback(std::function<void(bcos::Error::Ptr)> _callback);
+        ~Callback() override;
 
-        void callback_asyncNotifyBlockNumber(const bcostars::Error& ret) override
-        {
-            s_tarsTimeoutCount.store(0);
-            m_callback(toBcosError(ret));
-        }
-        void callback_asyncNotifyBlockNumber_exception(tars::Int32 ret) override
-        {
-            s_tarsTimeoutCount++;
-            m_callback(toBcosError(ret));
-        }
+        void callback_asyncNotifyBlockNumber(const bcostars::Error& ret) override;
+        void callback_asyncNotifyBlockNumber_exception(tars::Int32 ret) override;
 
     private:
         std::function<void(bcos::Error::Ptr)> m_callback;
@@ -68,174 +49,25 @@ public:
 
     void asyncNotifyBlockNumber(std::string const& _groupID, std::string const& _nodeName,
         bcos::protocol::BlockNumber _blockNumber,
-        std::function<void(bcos::Error::Ptr)> _callback) override
-    {
-        auto shouldBlockCall = shouldStopCall();
-        auto ret = checkConnection(
-            c_moduleName, "asyncNotifyBlockNumber", m_prx, [_callback](bcos::Error::Ptr _error) {
-                if (_callback)
-                {
-                    _callback(_error);
-                }
-            });
-        if (!ret && shouldBlockCall)
-        {
-            return;
-        }
-
-        auto activeEndPoints = tarsProxyAvailableEndPoints(m_prx);
-        // notify block number to all rpc nodes
-        for (auto const& endPoint : activeEndPoints)
-        {
-            auto prx = bcostars::createServantProxy<RpcServicePrx>(m_rpcServiceName, endPoint);
-            prx->async_asyncNotifyBlockNumber(
-                new Callback(_callback), _groupID, _nodeName, _blockNumber);
-        }
-    }
+        std::function<void(bcos::Error::Ptr)> _callback) override;
 
     void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
-        std::function<void(bcos::Error::Ptr&&)> _callback) override
-    {
-        class Callback : public bcostars::RpcServicePrxCallback
-        {
-        public:
-            Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
-
-            void callback_asyncNotifyGroupInfo(const bcostars::Error& ret) override
-            {
-                s_tarsTimeoutCount.store(0);
-                m_callback(toBcosError(ret));
-            }
-            void callback_asyncNotifyGroupInfo_exception(tars::Int32 ret) override
-            {
-                s_tarsTimeoutCount++;
-                m_callback(toBcosError(ret));
-            }
-
-        private:
-            std::function<void(bcos::Error::Ptr&&)> m_callback;
-        };
-        auto shouldBlockCall = shouldStopCall();
-        auto ret = checkConnection(
-            c_moduleName, "asyncNotifyGroupInfo", m_prx,
-            [_callback](bcos::Error::Ptr _error) {
-                if (_callback)
-                {
-                    _callback(std::move(_error));
-                }
-            },
-            shouldBlockCall);
-        if (!ret && shouldBlockCall)
-        {
-            return;
-        }
-
-        auto activeEndPoints = tarsProxyAvailableEndPoints(m_prx);
-        auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
-
-        for (auto const& endPoint : activeEndPoints)
-        {
-            auto prx = bcostars::createServantProxy<RpcServicePrx>(m_rpcServiceName, endPoint);
-            prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
-        }
-    }
+        std::function<void(bcos::Error::Ptr&&)> _callback) override;
 
     void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic, bcos::bytesConstRef _data,
         std::function<void(bcos::Error::Ptr&& _error, bcos::bytesPointer _responseData)> _callback)
-        override
-    {
-        class Callback : public bcostars::RpcServicePrxCallback
-        {
-        public:
-            Callback(std::function<void(bcos::Error::Ptr&&, bcos::bytesPointer)> callback)
-              : m_callback(callback)
-            {}
-
-            void callback_asyncNotifyAMOPMessage(
-                const bcostars::Error& ret, const vector<tars::Char>& _responseData) override
-            {
-                s_tarsTimeoutCount.store(0);
-                auto responseData =
-                    std::make_shared<bcos::bytes>(_responseData.begin(), _responseData.end());
-                m_callback(toBcosError(ret), responseData);
-            }
-            void callback_asyncNotifyAMOPMessage_exception(tars::Int32 ret) override
-            {
-                s_tarsTimeoutCount++;
-                m_callback(toBcosError(ret), nullptr);
-            }
-
-        private:
-            std::function<void(bcos::Error::Ptr&&, bcos::bytesPointer)> m_callback;
-        };
-        auto shouldBlockCall = shouldStopCall();
-        auto ret = checkConnection(
-            c_moduleName, "asyncNotifyAMOPMessage", m_prx,
-            [_callback](bcos::Error::Ptr _error) {
-                if (_callback)
-                {
-                    _callback(std::move(_error), nullptr);
-                }
-            },
-            shouldBlockCall);
-        if (!ret && shouldBlockCall)
-        {
-            return;
-        }
-        vector<tars::Char> request(_data.begin(), _data.end());
-        m_prx->tars_set_timeout(c_amopTimeout)
-            ->async_asyncNotifyAMOPMessage(new Callback(_callback), _type, _topic, request);
-    }
+        override;
 
     void asyncNotifySubscribeTopic(
-        std::function<void(bcos::Error::Ptr&& _error, std::string)> _callback) override
-    {
-        class Callback : public bcostars::RpcServicePrxCallback
-        {
-        public:
-            Callback(std::function<void(bcos::Error::Ptr&&, std::string)> callback)
-              : m_callback(callback)
-            {}
+        std::function<void(bcos::Error::Ptr&& _error, std::string)> _callback) override;
 
-            void callback_asyncNotifySubscribeTopic(
-                const bcostars::Error& ret, std::string const& _topicInfo) override
-            {
-                s_tarsTimeoutCount.store(0);
-                m_callback(toBcosError(ret), _topicInfo);
-            }
-            void callback_asyncNotifySubscribeTopic_exception(tars::Int32 ret) override
-            {
-                s_tarsTimeoutCount++;
-                m_callback(toBcosError(ret), "");
-            }
-
-        private:
-            std::function<void(bcos::Error::Ptr&&, std::string)> m_callback;
-        };
-        auto shouldBlockCall = shouldStopCall();
-        auto ret = checkConnection(
-            c_moduleName, "asyncNotifySubscribeTopic", m_prx,
-            [_callback](bcos::Error::Ptr _error) {
-                if (_callback)
-                {
-                    _callback(std::move(_error), "");
-                }
-            },
-            shouldBlockCall);
-        if (!ret && shouldBlockCall)
-        {
-            return;
-        }
-        m_prx->async_asyncNotifySubscribeTopic(new Callback(_callback));
-    }
-
-    bcostars::RpcServicePrx prx() { return m_prx; }
+    bcostars::RpcServicePrx prx();
 
 protected:
-    void start() override {}
-    void stop() override {}
+    void start() override;
+    void stop() override;
 
-    static bool shouldStopCall() { return (s_tarsTimeoutCount >= c_maxTarsTimeoutCount); }
+    static bool shouldStopCall();
 
 private:
     bcostars::RpcServicePrx m_prx;
