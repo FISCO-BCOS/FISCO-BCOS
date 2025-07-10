@@ -117,20 +117,20 @@ void bcos::boostssl::http::HttpStreamSslImpl::asyncRead(boost::beast::flat_buffe
     boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>& _parser,
     HttpStreamRWHandler _handler)
 {
-    boost::beast::http::async_read(*m_stream, _buffer, *_parser, _handler);
+    boost::beast::http::async_read(*m_stream, _buffer, *_parser, std::move(_handler));
 }
 void bcos::boostssl::http::HttpStreamSslImpl::asyncWrite(
     const HttpResponse& _httpResp, HttpStreamRWHandler _handler)
 {
-    boost::beast::http::async_write(*m_stream, _httpResp, _handler);
+    boost::beast::http::async_write(*m_stream, _httpResp, std::move(_handler));
 }
 bcos::boostssl::http::HttpStream::Ptr bcos::boostssl::http::HttpStreamFactory::buildHttpStream(
     std::shared_ptr<boost::beast::tcp_stream> _stream)
 {
-    return std::make_shared<HttpStreamImpl>(_stream);
+    return std::make_shared<HttpStreamImpl>(std::move(_stream));
 }
 bcos::boostssl::http::HttpStream::Ptr bcos::boostssl::http::HttpStreamFactory::buildHttpStream(
     std::shared_ptr<boost::beast::ssl_stream<boost::beast::tcp_stream>> _stream)
 {
-    return std::make_shared<HttpStreamSslImpl>(_stream);
+    return std::make_shared<HttpStreamSslImpl>(std::move(_stream));
 }

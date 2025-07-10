@@ -8,26 +8,23 @@ bcos::boostssl::http::HttpSession::HttpSession()
 }
 bcos::boostssl::http::HttpSession::~HttpSession()
 {
-    doClose();
+    close();
     HTTP_SESSION(DEBUG) << LOG_KV("[DELOBJ][HTTPSESSION]", this);
 }
 void bcos::boostssl::http::HttpSession::run()
 {
     boost::asio::dispatch(m_httpStream->stream().get_executor(),
-        boost::beast::bind_front_handler(&HttpSession::doRead, shared_from_this()));
+        boost::beast::bind_front_handler(&HttpSession::read, shared_from_this()));
 }
-void bcos::boostssl::http::HttpSession::doRead()
+void bcos::boostssl::http::HttpSession::read()
 {
     m_parser.emplace();
     // set limit to http request size, 100m
     m_parser->body_limit(PARSER_BODY_LIMITATION);
 
-    auto buffer = m_buffer;
-    auto session = shared_from_this();
     m_httpStream->asyncRead(*m_buffer, m_parser,
-        [session, buffer](boost::system::error_code _ec, std::size_t bytes_transferred) {
-            session->onRead(_ec, bytes_transferred);
-        });
+        [session = shared_from_this()](boost::system::error_code _ec,
+            std::size_t bytes_transferred) { session->onRead(_ec, bytes_transferred); });
 }
 void bcos::boostssl::http::HttpSession::onRead(
     boost::beast::error_code ec, std::size_t bytes_transferred)
@@ -38,7 +35,7 @@ void bcos::boostssl::http::HttpSession::onRead(
         if (ec == boost::beast::http::error::end_of_stream)
         {
             HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("end of stream");
-            doClose();
+            close();
             return;
         }
 
@@ -46,7 +43,7 @@ void bcos::boostssl::http::HttpSession::onRead(
         {
             HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
                                   << LOG_KV("failed", ec);
-            doClose();
+            close();
             return;
         }
 
@@ -69,14 +66,15 @@ void bcos::boostssl::http::HttpSession::onRead(
                                       << LOG_DESC(
                                              "the session will be closed for "
                                              "unsupported websocket upgrade");
-                doClose();
+                close();
                 return;
             }
             return;
         }
 
         HTTP_SESSION(TRACE) << LOG_BADGE("onRead") << LOG_DESC("receive http request");
-        handleRequest(m_parser->release());
+        auto request = m_parser->release();
+        handleRequest(request);
     }
     catch (...)
     {
@@ -86,44 +84,44 @@ void bcos::boostssl::http::HttpSession::onRead(
                                      "failed", boost::current_exception_diagnostic_information());
     }
 
-    if (!m_queue->isFull())
+    if (!m_queue.isFull())
     {
-        doRead();
+        read();
     }
 }
 void bcos::boostssl::http::HttpSession::onWrite(
-    bool close, boost::beast::error_code ec, [[maybe_unused]] std::size_t bytes_transferred)
+    bool closeOnEOF, boost::beast::error_code ec, [[maybe_unused]] std::size_t bytes_transferred)
 {
     if (ec)
     {
         HTTP_SESSION(WARNING) << LOG_BADGE("onWrite") << LOG_DESC("close the connection")
                               << LOG_KV("failed", ec);
-        doClose();
+        close();
         return;
     }
 
-    if (close)
+    if (closeOnEOF)
     {
         // we should close the connection, usually because
         // the response indicated the "Connection: close" semantic.
-        doClose();
+        close();
         return;
     }
 
-    if (m_queue->onWrite())
+    if (m_queue.onWrite())
     {
         // read the next request
-        doRead();
+        read();
     }
 }
-void bcos::boostssl::http::HttpSession::doClose()
+void bcos::boostssl::http::HttpSession::close()
 {
     if (m_httpStream)
     {
         m_httpStream->close();
     }
 }
-void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest&& _httpRequest)
+void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest& _httpRequest)
 {
     HTTP_SESSION(DEBUG) << LOG_BADGE("handleRequest") << LOG_DESC("request")
                         << LOG_KV("method", _httpRequest.method_string())
@@ -152,7 +150,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest&& _httpRequest
                                                   resp->body().size()))
                             << LOG_KV("keep_alive", resp->keep_alive())
                             << LOG_KV("timecost", (utcTime() - startT));
-            session->queue()->enqueue(std::move(resp));
+            session->queue().enqueue(std::move(resp));
         });
     }
     else
@@ -169,7 +167,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest&& _httpRequest
         HTTP_SESSION(WARNING) << LOG_BADGE("handleRequest") << LOG_DESC("unsupported http service")
                               << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                     resp->body().size()));
-        session->queue()->enqueue(std::move(resp));
+        session->queue().enqueue(std::move(resp));
     }
 }
 bcos::boostssl::http::HttpResponsePtr bcos::boostssl::http::HttpSession::buildHttpResp(
@@ -199,11 +197,11 @@ void bcos::boostssl::http::HttpSession::setWsUpgradeHandler(WsUpgradeHandler _ws
 {
     m_wsUpgradeHandler = std::move(_wsUpgradeHandler);
 }
-std::shared_ptr<bcos::boostssl::http::Queue> bcos::boostssl::http::HttpSession::queue()
+bcos::boostssl::http::Queue& bcos::boostssl::http::HttpSession::queue()
 {
     return m_queue;
 }
-void bcos::boostssl::http::HttpSession::setQueue(std::shared_ptr<Queue> _queue)
+void bcos::boostssl::http::HttpSession::setQueue(Queue _queue)
 {
     m_queue = std::move(_queue);
 }
