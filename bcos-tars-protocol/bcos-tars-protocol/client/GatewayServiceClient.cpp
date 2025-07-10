@@ -418,3 +418,5 @@ bool bcostars::GatewayServiceClient::shouldStopCall()
 {
     return (s_tarsTimeoutCount >= c_maxTarsTimeoutCount);
 }
+void bcostars::GatewayServiceClient::start() {}
+void bcostars::GatewayServiceClient::stop() {}

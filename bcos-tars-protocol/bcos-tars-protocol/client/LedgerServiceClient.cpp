@@ -337,3 +337,56 @@ void LedgerServiceClient::asyncGetNodeListByType(std::string_view const& _type,
     m_prx->async_asyncGetNodeListByType(
         new Callback{std::move(_onGetConfig), m_keyFactory, *type}, std::string{_type});
 }
+bcostars::LedgerServiceClient::LedgerServiceClient(
+    bcostars::LedgerServicePrx _prx, bcos::protocol::BlockFactory::Ptr _blockFactory)
+  : m_prx(_prx), m_blockFactory(_blockFactory)
+{
+    if (m_blockFactory)
+    {
+        m_cryptoSuite = m_blockFactory->cryptoSuite();
+        m_keyFactory = m_cryptoSuite->keyFactory();
+    }
+}
+bcostars::LedgerServiceClient::~LedgerServiceClient() {}
+void bcostars::LedgerServiceClient::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
+    bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
+    std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
+    std::optional<bcos::ledger::Features>)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
+}
+void bcostars::LedgerServiceClient::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
+    bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPreStoreBlockTxs");
+}
+bcos::Error::Ptr bcostars::LedgerServiceClient::storeTransactionsAndReceipts(
+    bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method");
+    return nullptr;
+}
+void bcostars::LedgerServiceClient::asyncGetCurrentStateByKey(std::string_view const& _key,
+    std::function<void(bcos::Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
+
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentStateByKey");
+}
+bcos::Error::Ptr bcostars::LedgerServiceClient::setCurrentStateByKey(
+    std::string_view const& _key, bcos::storage::Entry entry)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplemented method setCurrentStateByKey");
+    return nullptr;
+}
+void bcostars::LedgerServiceClient::asyncGetNonceList(bcos::protocol::BlockNumber, int64_t,
+    std::function<void(bcos::Error::Ptr,
+        std::shared_ptr<std::map<bcos::protocol::BlockNumber, bcos::protocol::NonceListPtr>>)>)
+
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
+}
+void bcostars::LedgerServiceClient::removeExpiredNonce(
+    bcos::protocol::BlockNumber blockNumber, bool sync)
+{
+    BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
+}
