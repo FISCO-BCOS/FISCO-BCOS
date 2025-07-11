@@ -24,6 +24,54 @@
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 using namespace bcostars;
 
+class PBFTServiceCommonCallback : public bcostars::PBFTServicePrxCallback
+{
+public:
+    PBFTServiceCommonCallback(std::function<void(bcos::Error::Ptr)> _callback)
+      : PBFTServicePrxCallback(), m_callback(_callback)
+    {}
+    ~PBFTServiceCommonCallback() override {}
+
+    void callback_asyncNotifyConsensusMessage(const bcostars::Error& ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+    void callback_asyncNotifyConsensusMessage_exception(tars::Int32 ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+    void callback_asyncNotifyNewBlock(const bcostars::Error& ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+
+    void callback_asyncNotifyNewBlock_exception(tars::Int32 ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+    void callback_asyncSubmitProposal(const bcostars::Error& ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+    void callback_asyncSubmitProposal_exception(tars::Int32 ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+
+    void callback_asyncNotifyBlockSyncMessage(const bcostars::Error& ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+
+    void callback_asyncNotifyBlockSyncMessage_exception(tars::Int32 ret) override
+    {
+        m_callback(toBcosError(ret));
+    }
+
+private:
+    std::function<void(bcos::Error::Ptr)> m_callback;
+};
+
 void PBFTServiceClient::asyncSubmitProposal(bool _containSysTxs,
     const bcos::protocol::Block& proposal, bcos::protocol::BlockNumber _proposalIndex,
     bcos::crypto::HashType const& _proposalHash,
@@ -205,3 +253,62 @@ void PBFTServiceClient::asyncGetConsensusStatus(
     };
     m_proxy->async_asyncGetConsensusStatus(new Callback(_onGetConsensusStatus));
 }
+bcostars::PBFTServiceClient::PBFTServiceClient(bcostars::PBFTServicePrx _proxy) : m_proxy(_proxy) {}
+bcostars::PBFTServiceClient::~PBFTServiceClient() {}
+void bcostars::PBFTServiceClient::notifyHighestSyncingNumber(bcos::protocol::BlockNumber _number)
+{
+    throw std::runtime_error(
+        "PBFTServiceClient: notifyHighestSyncingNumber: unimplemented interface!");
+}
+void bcostars::PBFTServiceClient::asyncNotifySealProposal(
+    uint64_t, uint64_t, uint64_t, std::function<void(bcos::Error::Ptr)>)
+{
+    throw std::runtime_error(
+        "PBFTServiceClient: asyncNotifySealProposal: unimplemented interface!");
+}
+void bcostars::PBFTServiceClient::asyncNoteLatestBlockNumber(int64_t)
+{
+    throw std::runtime_error(
+        "PBFTServiceClient: asyncNoteLatestBlockNumber: unimplemented interface!");
+}
+void bcostars::PBFTServiceClient::asyncNoteLatestBlockHash(bcos::crypto::HashType)
+{
+    throw std::runtime_error(
+        "PBFTServiceClient: asyncNoteLatestBlockHash: unimplemented interface!");
+}
+void bcostars::PBFTServiceClient::asyncResetSealing(
+    std::function<void(bcos::Error::Ptr)> _onRecvResponse)
+{
+    throw std::runtime_error("PBFTServiceClient: asyncResetSealing: unimplemented interface!");
+}
+uint16_t bcostars::PBFTServiceClient::hookWhenSealBlock(bcos::protocol::Block::Ptr)
+{
+    throw std::runtime_error("PBFTServiceClient: hookWhenSealBlock: unimplemented interface!");
+}
+void bcostars::BlockSyncServiceClient::asyncNotifyNewBlock(
+    bcos::ledger::LedgerConfig::Ptr, std::function<void(bcos::Error::Ptr)>)
+{
+    throw std::runtime_error(
+        "BlockSyncServiceClient: asyncNotifyNewBlock: unimplemented interface!");
+}
+void bcostars::BlockSyncServiceClient::asyncNotifyCommittedIndex(
+    bcos::protocol::BlockNumber, std::function<void(bcos::Error::Ptr _error)>)
+{
+    throw std::runtime_error(
+        "BlockSyncServiceClient: asyncNotifyCommittedIndex: unimplemented interface!");
+}
+bool bcostars::BlockSyncServiceClient::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
+{
+    throw std::runtime_error("BlockSyncServiceClient: faultyNode: unimplemented interface!");
+}
+void bcostars::BlockSyncServiceClient::asyncNotifyBlockSyncMessage(bcos::Error::Ptr _error,
+    std::string const& _uuid, bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data,
+    std::function<void(bcos::Error::Ptr _error)> _onRecv)
+{
+    auto nodeIDData = _nodeID->data();
+    m_proxy->async_asyncNotifyBlockSyncMessage(new PBFTServiceCommonCallback(_onRecv), _uuid,
+        std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
+        std::vector<char>(_data.begin(), _data.end()));
+}
+void bcostars::BlockSyncServiceClient::start() {}
+void bcostars::BlockSyncServiceClient::stop() {}

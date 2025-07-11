@@ -29,10 +29,8 @@ namespace bcostars
 class SchedulerServiceClient : public bcos::scheduler::SchedulerInterface
 {
 public:
-    SchedulerServiceClient(SchedulerServicePrx _prx, bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
-      : m_prx(_prx), m_cryptoSuite(_cryptoSuite)
-    {}
-    ~SchedulerServiceClient() override {}
+    SchedulerServiceClient(SchedulerServicePrx _prx, bcos::crypto::CryptoSuite::Ptr _cryptoSuite);
+    ~SchedulerServiceClient() override;
 
     void call(bcos::protocol::Transaction::Ptr tx,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::TransactionReceipt::Ptr&&)>)
@@ -56,15 +54,9 @@ public:
         std::function<void(bcos::Error::Ptr&&)> callback) override;
 
     void status(
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method status");
-    }
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) override;
 
-    void reset(std::function<void(bcos::Error::Ptr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method reset");
-    }
+    void reset(std::function<void(bcos::Error::Ptr&&)>) override;
 
 private:
     SchedulerServicePrx m_prx;

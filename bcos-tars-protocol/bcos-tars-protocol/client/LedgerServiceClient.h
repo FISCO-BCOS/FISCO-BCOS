@@ -29,39 +29,21 @@ class LedgerServiceClient : public bcos::ledger::LedgerInterface
 {
 public:
     LedgerServiceClient(
-        bcostars::LedgerServicePrx _prx, bcos::protocol::BlockFactory::Ptr _blockFactory)
-      : m_prx(_prx), m_blockFactory(_blockFactory)
-    {
-        if (m_blockFactory)
-        {
-            m_cryptoSuite = m_blockFactory->cryptoSuite();
-            m_keyFactory = m_cryptoSuite->keyFactory();
-        }
-    }
-    ~LedgerServiceClient() override {}
+        bcostars::LedgerServicePrx _prx, bcos::protocol::BlockFactory::Ptr _blockFactory);
+    ~LedgerServiceClient() override;
 
     // TODO: implement this
     void asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr,
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr,
         std::function<void(std::string, bcos::Error::Ptr&&)>, bool,
-        std::optional<bcos::ledger::Features>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPrewriteBlock");
-    }
+        std::optional<bcos::ledger::Features>) override;
 
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
-        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncPreStoreBlockTxs");
-    }
+        bcos::protocol::Block::ConstPtr, std::function<void(bcos::Error::UniquePtr&&)>) override;
 
     // TODO: implement this
     bcos::Error::Ptr storeTransactionsAndReceipts(
-        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method");
-        return nullptr;
-    }
+        bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override;
 
     void asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(bcos::Error::Ptr, bcos::protocol::Block::Ptr)> _onGetBlock) override;
@@ -91,17 +73,10 @@ public:
 
     virtual void asyncGetCurrentStateByKey(std::string_view const& _key,
         std::function<void(bcos::Error::Ptr&&, std::optional<bcos::storage::Entry>&&)> _callback)
-        override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method asyncGetCurrentStateByKey");
-    }
+        override;
 
     bcos::Error::Ptr setCurrentStateByKey(
-        std::string_view const& _key, bcos::storage::Entry entry) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method setCurrentStateByKey");
-        return nullptr;
-    }
+        std::string_view const& _key, bcos::storage::Entry entry) override;
 
     void asyncGetSystemConfigByKey(std::string_view const& _key,
         std::function<void(bcos::Error::Ptr, std::string, bcos::protocol::BlockNumber)>
@@ -115,15 +90,9 @@ public:
     void asyncGetNonceList(bcos::protocol::BlockNumber, int64_t,
         std::function<void(bcos::Error::Ptr,
             std::shared_ptr<std::map<bcos::protocol::BlockNumber, bcos::protocol::NonceListPtr>>)>)
-        override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
-    }
+        override;
 
-    void removeExpiredNonce(bcos::protocol::BlockNumber blockNumber, bool sync) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplement method asyncGetNonceList");
-    }
+    void removeExpiredNonce(bcos::protocol::BlockNumber blockNumber, bool sync) override;
 
 private:
     bcostars::LedgerServicePrx m_prx;

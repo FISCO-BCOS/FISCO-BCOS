@@ -19,10 +19,21 @@
  */
 
 #include "Web3JsonRpcImpl.h"
-#include <bcos-task/Wait.h>
+#include "bcos-task/Wait.h"
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string _groupId,
+    bcos::rpc::GroupManager::Ptr _groupManager,
+    bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+    std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem)
+  : m_groupManager(std::move(_groupManager)),
+    m_gatewayInterface(std::move(_gatewayInterface)),
+    m_wsService(std::move(_wsService)),
+    m_groupId(std::move(_groupId)),
+    m_endpoints(m_groupManager->getNodeService(m_groupId, ""), filterSystem)
+{}
 
 void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender)
 {
@@ -100,7 +111,7 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
         msg << "Internal error: " << boost::current_exception_diagnostic_information();
         buildJsonError(request, InternalError, msg.str(), response);
     }
-    auto&& resp = toBytesResponse(response);
+    auto resp = toBytesResponse(response);
     WEB3_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
                     << LOG_KV("request", _requestBody)
                     << LOG_KV("response", std::string_view((const char*)resp.data(), resp.size()));

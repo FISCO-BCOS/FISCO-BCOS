@@ -1,7 +1,6 @@
 #pragma once
 
 #include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "bcos-utilities/FixedBytes.h"
 #include <indicators/block_progress_bar.hpp>
 #include <indicators/cursor_control.hpp>
 #include <indicators/multi_progress.hpp>

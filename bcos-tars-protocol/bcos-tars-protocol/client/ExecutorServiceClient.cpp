@@ -635,3 +635,9 @@ void ExecutorServiceClient::updateEoaNonce(std::unordered_map<std::string, bcos:
 {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented"));
 }
+bcostars::ExecutorServiceClient::ExecutorServiceClient(ExecutorServicePrx _prx)
+  : m_prx(_prx),
+    m_callbackPool(
+        std::make_shared<bcos::ThreadPool>("executorCallback", std::thread::hardware_concurrency()))
+{}
+bcostars::ExecutorServiceClient::~ExecutorServiceClient() {}
