@@ -97,10 +97,9 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec1(*cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn(
-                "availableBalance(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
+                "balanceOf(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0);
-
 
             handles[i].emplace(rpcClient);
             handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
@@ -132,8 +131,7 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
 }
 
 void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
-    std::string contractAddress, std::shared_ptr<bcos::crypto::KeyPairInterface> adminKeyPair,
-    std::vector<User>& users, int qps)
+    std::string contractAddress, std::vector<User>& users, int qps)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
@@ -150,7 +148,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
                 users[i].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0,
-                *adminKeyPair);
+                *users[i].keyPair);
 
             handles[i].emplace(rpcClient);
             handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
@@ -249,9 +247,8 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
     }
 }
 
-bcos::task::Task<int> initNewEnvironment(bcos::sdk::RPCClient& rpcClient,
-    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, size_t userCount, int qps, bool proxy,
-    std::string& contractAddress, std::vector<User>& users)
+bcos::task::Task<std::string> newContract(bcos::sdk::RPCClient& rpcClient,
+    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, size_t userCount, int qps, bool proxy)
 {
     auto adminKeyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
         cryptoSuite->signatureImpl()->generateKeyPair());
@@ -272,7 +269,7 @@ bcos::task::Task<int> initNewEnvironment(bcos::sdk::RPCClient& rpcClient,
     if (receipt->status() != 0)
     {
         std::cout << "Deploy contract failed" << receipt->status() << "\n";
-        co_return 1;
+        BOOST_THROW_EXCEPTION(std::runtime_error("Deploy contract failed"));
     }
     auto transfer20ContractAddress = receipt->contractAddress();
     std::cout << "Transfer20 contract address is:" << transfer20ContractAddress << "\n";
@@ -294,8 +291,9 @@ bcos::task::Task<int> initNewEnvironment(bcos::sdk::RPCClient& rpcClient,
     if (receipt2->status() != 0)
     {
         std::cout << "Deploy tup failed" << receipt2->status() << "\n";
-        co_return 1;
+        BOOST_THROW_EXCEPTION(std::runtime_error("Deploy tup failed"));
     }
+    std::string contractAddress;
     if (proxy)
     {
         contractAddress = receipt2->contractAddress();
@@ -305,126 +303,93 @@ bcos::task::Task<int> initNewEnvironment(bcos::sdk::RPCClient& rpcClient,
         contractAddress = transfer20ContractAddress;
     }
     std::cout << "Target contract address is:" << contractAddress << "\n";
-
-    users = initUsers(userCount, *cryptoSuite);
-    query(rpcClient, cryptoSuite, std::string(contractAddress), users, qps);
-    issue(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users, qps);
-
-    co_return 0;
-}
-
-std::vector<User> loadUsers(const std::string& path, bcos::crypto::CryptoSuite& cryptoSuite)
-{
-    std::vector<User> users;
-    std::ifstream file(path);
-    if (!file.is_open())
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("Failed to open user file: " + std::string(path)));
-    }
-    std::string line;
-    while (std::getline(file, line))
-    {
-        if (line.empty())
-        {
-            continue;  // Skip empty lines
-        }
-        auto& user = users.emplace_back();
-        user.keyPair = cryptoSuite.signatureImpl()->createKeyPair(
-            cryptoSuite.keyFactory()->createKey(bcos::fromHex(line)));
-        user.balance = 0;
-    }
-    return users;
+    co_return contractAddress;
 }
 
 void usage(std::string_view programName)
 {
     std::cout << "Usage: " << programName
-              << " new <connectionString> <userCount> <use proxy> <transactionCount> <qps>\n"
-              << " load <connectionString> <usersPath> <contractAddress> <transactionCount> "
-                 "<qps>"
-              << "\n"
+              << "\n    new <connectionString> <userCount> <use proxy> <transactionCount> <qps>"
+              << "\n    load <connectionString> <userCount> <contractAddress> <transactionCount> "
+                 "<qps>\n"
               << "Example: " << programName
-              << " new \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 0 1000 100\n"
-              << " load \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" ./users.txt  1000 "
-                 "100\n";
+              << "\n    new \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 0 1000 100"
+              << "\n    load \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 "
+                 "34ef062bc977f3fe2ef2a2eee4b445843b4adfeb 1000 100\n";
 }
 
 int main(int argc, char* argv[])
 {
-    return bcos::task::syncWait([&]() -> bcos::task::Task<int> {
-        if (argc < 7)
-        {
-            usage(argv[0]);
-            co_return 1;
-        }
+    if (argc < 7)
+    {
+        usage(argv[0]);
+        return 1;
+    }
 
-        std::string type = argv[1];
-        std::string connectionString = argv[2];
-        int userCount{};
-        bool proxy{};
-        std::string usersPath;
-        std::string contractAddress;
-        // mode new
-        if (type == "new")
-        {
-            userCount = boost::lexical_cast<int>(argv[3]);
-            proxy = boost::lexical_cast<bool>(argv[4]);
-        }
-        else if (type == "load")
-        {
-            usersPath = argv[3];
-            contractAddress = argv[4];
-        }
-        else
-        {
-            usage(argv[0]);
-            co_return 1;
-        }
+    std::string type = argv[1];
+    std::string connectionString = argv[2];
+    int userCount{};
+    bool proxy{};
+    std::string usersPath;
+    std::string contractAddress;
+    userCount = boost::lexical_cast<int>(argv[3]);
+    // mode new
+    if (type == "new")
+    {
+        proxy = boost::lexical_cast<bool>(argv[4]);
+    }
+    else if (type == "load")
+    {
+        contractAddress = argv[4];
+    }
+    else
+    {
+        usage(argv[0]);
+        return 1;
+    }
 
-        int transactionCount = boost::lexical_cast<int>(argv[5]);
-        int qps = boost::lexical_cast<int>(argv[6]);
+    int transactionCount = boost::lexical_cast<int>(argv[5]);
+    int qps = boost::lexical_cast<int>(argv[6]);
 
-        bcos::sdk::Config config = {
-            .connectionString = connectionString,
-            .sendQueueSize = std::max(userCount, transactionCount),
-            .timeoutMs = 600000,
-        };
-        bcos::sdk::RPCClient rpcClient(config);
-        boost::atomic_flag stopFlag{};
+    bcos::sdk::Config config = {
+        .connectionString = connectionString,
+        .sendQueueSize = std::max(userCount, transactionCount),
+        .timeoutMs = 600000,
+    };
+    bcos::sdk::RPCClient rpcClient(config);
+    boost::atomic_flag stopFlag{};
 
-        g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
-        std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
-        auto cryptoSuite =
-            std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
-                std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
-        std::vector<User> users;
-        if (type == "new")
+    g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+
+    if (type == "new")
+    {
+        contractAddress =
+            bcos::task::syncWait(newContract(rpcClient, cryptoSuite, userCount, qps, proxy));
+    }
+    auto users = initUsers(userCount, *cryptoSuite);
+    query(rpcClient, cryptoSuite, contractAddress, users, qps);
+    issue(rpcClient, cryptoSuite, contractAddress, users, qps);
+    transfer(rpcClient, cryptoSuite, contractAddress, users, transactionCount, qps);
+
+    auto resultUsers = users;
+    query(rpcClient, cryptoSuite, contractAddress, resultUsers, qps);
+
+    // Compare the result
+    for (int i = 0; i < userCount; ++i)
+    {
+        if (users[i].balance != resultUsers[i].balance)
         {
-            co_await initNewEnvironment(
-                rpcClient, cryptoSuite, userCount, qps, proxy, contractAddress, users);
+            std::cout << "Balance not match! " << users[i].balance << " " << resultUsers[i].balance
+                      << "\n";
+            exit(1);
         }
-        else
-        {
-            users = loadUsers(usersPath, *cryptoSuite);
-        }
-        transfer(
-            rpcClient, cryptoSuite, std::string(contractAddress), users, transactionCount, qps);
-        auto resultUsers = users;
-        query(rpcClient, cryptoSuite, std::string(contractAddress), resultUsers, qps);
+    }
+    stopFlag.test_and_set();
+    getBlockNumber.join();
 
-        // Compare the result
-        for (int i = 0; i < userCount; ++i)
-        {
-            if (users[i].balance != resultUsers[i].balance)
-            {
-                std::cout << "Balance not match! " << users[i].balance << " "
-                          << resultUsers[i].balance << "\n";
-                exit(1);
-            }
-        }
-        stopFlag.test_and_set();
-        getBlockNumber.join();
-
-        co_return 0;
-    }());
+    return 0;
 }
