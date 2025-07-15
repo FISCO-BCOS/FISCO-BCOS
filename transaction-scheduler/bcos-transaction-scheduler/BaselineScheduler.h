@@ -12,6 +12,7 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -227,7 +228,7 @@ private:
     std::reference_wrapper<MultiLayerStorage> m_multiLayerStorage;
     std::reference_wrapper<std::remove_reference_t<SchedulerImpl>> m_schedulerImpl;
     std::reference_wrapper<Executor> m_executor;
-    std::reference_wrapper<protocol::BlockHeaderFactory> m_blockHeaderFactory;
+    std::reference_wrapper<protocol::BlockFactory> m_blockFactory;
     std::reference_wrapper<Ledger> m_ledger;
     std::reference_wrapper<txpool::TxPoolInterface> m_txpool;
     std::reference_wrapper<protocol::TransactionSubmitResultFactory>
@@ -331,7 +332,8 @@ private:
             auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
                 *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
-            auto executedBlockHeader = m_blockHeaderFactory.get().populateBlockHeader(blockHeader);
+            auto executedBlockHeader =
+                m_blockFactory.get().blockHeaderFactory()->populateBlockHeader(blockHeader);
             bool sysBlock = false;
             co_await finishExecute(mutableStorage(view), receipts, *executedBlockHeader, *block,
                 transactions, sysBlock, m_hashImpl.get());
@@ -533,14 +535,14 @@ private:
 
 public:
     BaselineScheduler(MultiLayerStorage& multiLayerStorage, SchedulerImpl& schedulerImpl,
-        Executor& executor, protocol::BlockHeaderFactory& blockFactory, Ledger& ledger,
+        Executor& executor, protocol::BlockFactory& blockFactory, Ledger& ledger,
         txpool::TxPoolInterface& txPool,
         protocol::TransactionSubmitResultFactory& transactionSubmitResultFactory,
         crypto::Hash const& hashImpl)
       : m_multiLayerStorage(multiLayerStorage),
         m_schedulerImpl(schedulerImpl),
         m_executor(executor),
-        m_blockHeaderFactory(blockFactory),
+        m_blockFactory(blockFactory),
         m_ledger(ledger),
         m_txpool(txPool),
         m_transactionSubmitResultFactory(transactionSubmitResultFactory),
@@ -587,13 +589,10 @@ public:
             view.newMutable();
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
             auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
-
-            auto blockHeader = self->m_blockHeaderFactory.get().createBlockHeader();
-            blockHeader->setVersion(ledgerConfig->compatibilityVersion());
-            blockHeader->setNumber(ledgerConfig->blockNumber() + 1);  // Use next block number
-            blockHeader->calculateHash(self->m_hashImpl.get());
+            auto block = co_await ledger::getBlockData(
+                view, blockNumber, ledger::HEADER, self->m_blockFactory.get(), ledger::fromStorage);
             auto receipt = co_await self->m_executor.get().executeTransaction(
-                view, *blockHeader, *transaction, 0, *ledgerConfig, true);
+                view, *block->blockHeaderConst(), *transaction, 0, *ledgerConfig, true);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));
