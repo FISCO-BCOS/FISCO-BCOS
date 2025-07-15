@@ -48,7 +48,7 @@ protocol::TransactionStatus TransactionValidator::checkTransaction(
     }
     if (_tx.type() == static_cast<uint8_t>(protocol::TransactionType::Web3Transaction))
     {
-        if (_tx.inputSize() > MAX_INITCODE_SIZE)
+        if (_tx.input().size() > MAX_INITCODE_SIZE)
         {
             if (isHandleException)
             {

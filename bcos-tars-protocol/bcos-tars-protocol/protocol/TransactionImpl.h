@@ -95,8 +95,6 @@ public:
 
     size_t size() const override;
 
-    size_t inputSize() const override;
-
 private:
     std::function<bcostars::Transaction*()> m_inner;
 };
