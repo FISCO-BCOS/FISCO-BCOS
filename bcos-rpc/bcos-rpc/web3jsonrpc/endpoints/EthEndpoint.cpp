@@ -452,10 +452,13 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
             JsonRpcException(JsonRpcError::InvalidParams, "ChainId not available!"));
     }
     auto [chainId, _] = config.value();
-    if (auto txChainId = std::to_string(web3Tx.chainId.value_or(0)); txChainId != chainId)
+    if (web3Tx.chainId)
     {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
+        if (auto txChainId = std::to_string(web3Tx.chainId.value()); txChainId != chainId)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
+        }
     }
 
     auto tarsTx = web3Tx.takeToTarsTransaction();
