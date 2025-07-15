@@ -188,6 +188,8 @@ public:
 
     virtual size_t size() const { return 0; }
 
+    virtual size_t inputSize() const { return 0; }
+
 private:
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not

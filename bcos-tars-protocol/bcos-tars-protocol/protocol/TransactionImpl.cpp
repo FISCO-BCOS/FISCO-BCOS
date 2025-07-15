@@ -226,3 +226,8 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraTransactionHash.size();
     return size;
 }
+
+size_t bcostars::protocol::TransactionImpl::inputSize() const
+{
+    return m_inner()->data.input.size();
+}
