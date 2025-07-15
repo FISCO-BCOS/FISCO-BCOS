@@ -54,8 +54,9 @@ int main(int argc, char* argv[])
     std::string keyId;
     std::string inputFilePath;
     std::string outputFilePath;
+    bool verbose = false;
 
-    // 新增模式选择
+    // Add mode selection
     std::cout << "Enter mode (encrypt/decrypt): ";
     std::cin >> mode;
 
@@ -80,14 +81,22 @@ int main(int argc, char* argv[])
     std::cout << "Enter output file path: ";
     std::cin >> outputFilePath;
 
-    auto prividerOption =
+    std::cout << "Verbose? (y/n): ";
+    std::string verboseStr;
+    std::cin >> verboseStr;
+    if (verboseStr == "y" || verboseStr == "Y")
+    {
+        verbose = true;
+    }
+
+    auto providerOption =
         magic_enum::enum_cast<CloudKmsType>(kmsType, magic_enum::case_insensitive);
-    if (!prividerOption.has_value())
+    if (!providerOption.has_value())
     {
         std::cerr << "Invalid KMS provider: " << kmsType << "\n";
         return 1;
     }
-    auto provider = prividerOption.value();
+    auto provider = providerOption.value();
 
     if (provider == CloudKmsType::AWS)
     {
@@ -131,7 +140,10 @@ int main(int argc, char* argv[])
                 saveFile(outputFilePath, decryptResult);
                 // 可选：输出明文内容
                 std::string decryptResultStr(decryptResult->begin(), decryptResult->end());
-                std::cout << "Decrypted text: " << decryptResultStr << "\n";
+                if (verbose)
+                {
+                    std::cout << "Decrypted text: " << decryptResultStr << "\n";
+                }
             }
             else
             {
