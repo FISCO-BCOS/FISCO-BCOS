@@ -1,6 +1,8 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -26,8 +28,14 @@ using namespace bcos::scheduler_v1;
 
 struct MockExecutorBaseline
 {
-    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto&&...)
+    task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
+        protocol::BlockHeader const& blockHeader, protocol::Transaction const& transaction,
+        int contextID, ledger::LedgerConfig const& ledgerConfig, bool call)
     {
+        if (transaction.version() == 99)
+        {
+            BOOST_CHECK_EQUAL(blockHeader.timestamp(), 10088);
+        }
         co_return std::shared_ptr<protocol::TransactionReceipt>();
     }
 
@@ -171,8 +179,8 @@ public:
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
         multiLayerStorage(backendStorage),
-        baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockHeaderFactory,
-            mockLedger, mockTxPool, *transactionSubmitResultFactory, *hashImpl)
+        baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory, mockLedger,
+            mockTxPool, *transactionSubmitResultFactory, *hashImpl)
     {}
 
     BackendStorage backendStorage;
@@ -381,6 +389,43 @@ BOOST_AUTO_TEST_CASE(emptyBlock)
             BOOST_CHECK_EQUAL(blockHeader->receiptsRoot(), bcos::crypto::HashType{});
             BOOST_CHECK_EQUAL(blockHeader->stateRoot(), bcos::crypto::HashType{});
         });
+}
+
+BOOST_AUTO_TEST_CASE(call)
+{
+    auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto blockHeader = block->blockHeader();
+    blockHeader->setNumber(111);
+    blockHeader->setVersion(200);
+    blockHeader->setTimestamp(10088);
+    blockHeader->calculateHash(*hashImpl);
+    task::syncWait(ledger::prewriteBlock(mockLedger,
+        std::make_shared<bcos::protocol::ConstTransactions>(), block, false, backendStorage));
+    bytes headerBuffer;
+    blockHeader->encode(headerBuffer);
+
+    storage::Entry number2HeaderEntry;
+    number2HeaderEntry.importFields({std::move(headerBuffer)});
+    task::syncWait(storage2::writeOne(backendStorage,
+        StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
+        std::move(number2HeaderEntry)));
+
+    task::syncWait(storage2::writeOne(backendStorage,
+        StateKey{ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER},
+        storage::Entry{std::to_string(blockHeader->number())}));
+
+    bcos::bytes input;
+    auto transaction =
+        transactionFactory->createTransaction(99, "to", input, "12345", 100, "chain", "group", 0);
+
+    std::promise<void> end;
+    baselineScheduler.call(
+        transaction, [&](Error::Ptr&& error, protocol::TransactionReceipt::Ptr&& receipt) {
+            BOOST_CHECK(!error);
+            end.set_value();
+        });
+
+    end.get_future().get();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
