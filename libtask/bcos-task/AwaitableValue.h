@@ -55,6 +55,6 @@ struct [[nodiscard]] AwaitableValue<void>
     {
         return false;
     }
-    constexpr static void await_resume() noexcept {}
+    constexpr void await_resume() noexcept {}
 };
 }  // namespace bcos::task

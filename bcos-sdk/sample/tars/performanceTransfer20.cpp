@@ -315,7 +315,7 @@ void usage(std::string_view programName)
               << "Example: " << programName
               << "\n    new \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 0 1000 100"
               << "\n    load \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 "
-                 "34ef062bc977f3fe2ef2a2eee4b445843b4adfeb 1000 100\n";
+                 "<contractAddress> 1000 100\n";
 }
 
 int main(int argc, char* argv[])
