@@ -21,7 +21,12 @@ describe("Lock", function () {
     const [owner, otherAccount] = await hre.ethers.getSigners();
 
     const Lock = await hre.ethers.getContractFactory("Lock");
-    const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+    await Lock.deploy(unlockTime, { value: lockedAmount, nonce: 5 });
+    await Lock.deploy(unlockTime, { value: lockedAmount, nonce: 4 });
+    await Lock.deploy(unlockTime, { value: lockedAmount, nonce: 3 });
+    await Lock.deploy(unlockTime, { value: lockedAmount, nonce: 2 });
+    await Lock.deploy(unlockTime, { value: lockedAmount, nonce: 1 });
+    const lock = await Lock.deploy(unlockTime, { value: lockedAmount, nonce: 0 });
 
     return { lock, unlockTime, lockedAmount, owner, otherAccount };
   }
