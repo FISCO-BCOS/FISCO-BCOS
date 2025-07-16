@@ -132,3 +132,11 @@ bcos::bytes bcos::toCompactBigEndian(byte _val, unsigned _min)
 {
     return (_min || _val) ? bytes{_val} : bytes{};
 }
+uint64_t bcos::fromQuantity(std::string const& quantity)
+{
+    return std::stoull(quantity, nullptr, 16);
+}
+bcos::u256 bcos::fromBigQuantity(std::string_view quantity)
+{
+    return hex2u(quantity);
+}
