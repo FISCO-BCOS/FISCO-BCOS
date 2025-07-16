@@ -456,23 +456,6 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
     return TransactionStatus::None;
 }
 
-void MemoryStorage::batchInsert(Transactions const& _txs)
-{
-    for (const auto& tx : _txs)
-    {
-        insert(tx);
-    }
-
-    for (const auto& tx : _txs)
-    {
-        if (decltype(m_missedTxs)::WriteAccessor accessor; m_missedTxs.find(accessor, tx->hash()))
-        {
-            m_missedTxs.remove(accessor);
-        }
-    }
-}
-
-
 Transaction::Ptr MemoryStorage::removeWithoutNotifyUnseal(HashType const& _txHash)
 {
     if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, _txHash))

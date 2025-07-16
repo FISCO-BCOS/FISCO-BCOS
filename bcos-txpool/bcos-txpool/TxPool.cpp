@@ -130,11 +130,11 @@ task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& trans
 
 task::Task<void> TxPool::broadcastTransactionBuffer(bytesConstRef data)
 {
-    if (m_treeRouter != nullptr) [[unlikely]]
+    if (m_treeRouter != nullptr)
     {
         co_await broadcastTransactionBufferByTree(data, true);
     }
-    else [[likely]]
+    else
     {
         // co_await m_transactionSync->config()->frontService()->broadcastMessage(
         //     protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
@@ -196,23 +196,6 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions
     ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
 {
     co_return m_txpoolStorage->getTransactions(std::move(hashes));
-}
-
-bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
-{
-    auto syncConfig = m_transactionSync->config();
-    if (!_txSubmitCallback || syncConfig->existsInGroup())
-    {
-        return true;
-    }
-    auto txResult = m_config->txResultFactory()->createTxSubmitResult();
-    txResult->setTxHash(HashType());
-    txResult->setStatus((uint32_t)TransactionStatus::RequestNotBelongToTheGroup);
-
-    const auto* errorMsg = "Do not send transactions to nodes that are not in the group";
-    _txSubmitCallback(BCOS_ERROR_PTR((int32_t)txResult->status(), errorMsg), txResult);
-    TXPOOL_LOG(WARNING) << LOG_DESC(errorMsg);
-    return false;
 }
 
 std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> TxPool::sealTxs(
@@ -704,4 +687,25 @@ void bcos::txpool::TxPool::clearAllTxs()
 bcos::sync::TransactionSyncInterface::Ptr& bcos::txpool::TxPool::transactionSync()
 {
     return m_transactionSync;
+}
+bool bcos::txpool::TxPool::existsInGroup(bcos::crypto::NodeIDPtr _nodeId)
+{
+    return m_transactionSync->config()->existsInGroup(_nodeId);
+}
+void bcos::txpool::TxPool::setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter)
+{
+    m_treeRouter = std::move(_treeRouter);
+}
+tool::TreeTopology::Ptr bcos::txpool::TxPool::treeRouter() const
+{
+    return m_treeRouter;
+}
+void bcos::txpool::TxPool::setCheckBlockLimit(bool _checkBlockLimit)
+{
+    m_checkBlockLimit = _checkBlockLimit;
+}
+void bcos::txpool::TxPool::registerTxsNotifier(
+    std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
+{
+    m_txpoolStorage->registerTxsNotifier(_txsNotifier);
 }

@@ -57,7 +57,7 @@ public:
         bcos::crypto::NodeIDPtr fromNode = nullptr) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override;
     // ===============================
 
@@ -122,10 +122,7 @@ public:
 
     task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
 
-    bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override
-    {
-        return m_transactionSync->config()->existsInGroup(_nodeId);
-    }
+    bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override;
 
     // for UT
     void setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolStorage);
@@ -134,23 +131,16 @@ public:
 
     void clearAllTxs() override;
 
-    void setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter)
-    {
-        m_treeRouter = std::move(_treeRouter);
-    }
+    void setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter);
 
-    auto treeRouter() const { return m_treeRouter; }
+    tool::TreeTopology::Ptr treeRouter() const;
 
-    void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
+    void setCheckBlockLimit(bool _checkBlockLimit);
 
     void registerTxsNotifier(
-        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override
-    {
-        m_txpoolStorage->registerTxsNotifier(_txsNotifier);
-    }
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override;
 
 protected:
-    virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
         bcos::crypto::HashListPtr _missedTxs,
         std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled);
