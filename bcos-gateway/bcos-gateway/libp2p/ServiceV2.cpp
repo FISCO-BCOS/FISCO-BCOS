@@ -43,18 +43,25 @@ ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTab
     m_routerTable->setUnreachableDistance(c_unreachableDistance);
     // process router packet related logic
     registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
-        boost::bind(&ServiceV2::onReceiveRouterSeq, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
-
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceiveRouterSeq(std::move(exception), std::move(session), std::move(message));
+        });
     registerHandlerByMsgType(GatewayMessageType::RouterTableResponse,
-        boost::bind(&ServiceV2::onReceivePeersRouterTable, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceivePeersRouterTable(std::move(exception), std::move(session), std::move(message));
+        });
 
     registerHandlerByMsgType(GatewayMessageType::RouterTableRequest,
-        boost::bind(&ServiceV2::onReceiveRouterTableRequest, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
-    registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(_session); });
-    registerOnDeleteSession([this](P2PSession::Ptr _session) { onEraseSession(_session); });
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceiveRouterTableRequest(
+                std::move(exception), std::move(session), std::move(message));
+        });
+    registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(std::move(_session)); });
+    registerOnDeleteSession(
+        [this](P2PSession::Ptr _session) { onEraseSession(std::move(_session)); });
 
     m_routerTimer->registerTimeoutHandler([this]() { broadcastRouterSeq(); });
 }
