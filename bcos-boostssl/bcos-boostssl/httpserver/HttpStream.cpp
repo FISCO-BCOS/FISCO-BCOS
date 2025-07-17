@@ -63,13 +63,14 @@ void bcos::boostssl::http::HttpStreamImpl::close()
         ws::WsTools::close(m_stream->socket());
     }
 }
+
 void bcos::boostssl::http::HttpStreamImpl::asyncRead(boost::beast::flat_buffer& _buffer,
-    boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>& _parser,
+    boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
     HttpStreamRWHandler _handler)
 {
     if (!m_closed.test())
     {
-        boost::beast::http::async_read(*m_stream, _buffer, *_parser, _handler);
+        boost::beast::http::async_read(*m_stream, _buffer, _parser, std::move(_handler));
     }
 }
 void bcos::boostssl::http::HttpStreamImpl::asyncWrite(
@@ -77,7 +78,7 @@ void bcos::boostssl::http::HttpStreamImpl::asyncWrite(
 {
     if (!m_closed.test())
     {
-        boost::beast::http::async_write(*m_stream, _httpResp, _handler);
+        boost::beast::http::async_write(*m_stream, _httpResp, std::move(_handler));
     }
 }
 bcos::boostssl::http::HttpStreamSslImpl::HttpStreamSslImpl(
@@ -114,10 +115,10 @@ void bcos::boostssl::http::HttpStreamSslImpl::close()
     }
 }
 void bcos::boostssl::http::HttpStreamSslImpl::asyncRead(boost::beast::flat_buffer& _buffer,
-    boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>& _parser,
+    boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
     HttpStreamRWHandler _handler)
 {
-    boost::beast::http::async_read(*m_stream, _buffer, *_parser, std::move(_handler));
+    boost::beast::http::async_read(*m_stream, _buffer, _parser, std::move(_handler));
 }
 void bcos::boostssl::http::HttpStreamSslImpl::asyncWrite(
     const HttpResponse& _httpResp, HttpStreamRWHandler _handler)

@@ -54,7 +54,7 @@ public:
      * @param req: http request object
      * @return void:
      */
-    void handleRequest(HttpRequest& _httpRequest);
+    void handleRequest(const HttpRequest& _httpRequest);
 
     /**
      * @brief: build http response object
@@ -63,7 +63,7 @@ public:
      * @return HttpResponsePtr:
      */
     HttpResponsePtr buildHttpResp(
-        boost::beast::http::status status, unsigned version, bcos::bytes content);
+        boost::beast::http::status status, bool keepAlive, unsigned version, bcos::bytes content);
 
     HttpReqHandler httpReqHandler() const;
     void setRequestHandler(HttpReqHandler _httpReqHandler);
@@ -81,15 +81,14 @@ public:
 
 private:
     HttpStream::Ptr m_httpStream;
-    std::shared_ptr<boost::beast::flat_buffer> m_buffer;
+    boost::beast::flat_buffer m_buffer;
 
     Queue m_queue;
     HttpReqHandler m_httpReqHandler;
     WsUpgradeHandler m_wsUpgradeHandler;
     // the parser is stored in an optional container so we can
     // construct it from scratch it at the beginning of each new message.
-    boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>> m_parser;
-
+    std::optional<boost::beast::http::request_parser<boost::beast::http::string_body>> m_parser;
     std::shared_ptr<std::string> m_nodeId;
 };
 
