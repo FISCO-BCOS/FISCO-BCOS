@@ -50,8 +50,8 @@ template <>
 struct [[nodiscard]] AwaitableValue<void>
 {
     AwaitableValue() = default;
-    static constexpr bool await_ready() noexcept { return true; }
-    static constexpr bool await_suspend([[maybe_unused]] std::coroutine_handle<> handle) noexcept
+    constexpr static bool await_ready() noexcept { return true; }
+    constexpr static bool await_suspend([[maybe_unused]] std::coroutine_handle<> handle) noexcept
     {
         return false;
     }

@@ -62,10 +62,6 @@ public:
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
 
-    [[deprecated(
-        "do not use raw insert tx pool without check, use batchVerifyAndSubmitTransaction")]] void
-    batchInsert(bcos::protocol::Transactions const& _txs) override;
-
     bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
     // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,

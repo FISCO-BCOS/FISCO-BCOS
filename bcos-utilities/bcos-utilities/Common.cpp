@@ -161,6 +161,26 @@ uint32_t calcAvgQPS(uint64_t _requestCount, uint32_t _intervalMS)
     }
     return 0;
 }
+bool isNumStr(std::string const& _stringData)
+{
+    if (_stringData.empty())
+    {
+        return false;
+    }
+    for (const auto& ch : _stringData)
+    {
+        if (isdigit(ch))
+        {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+int32_t toMillisecond(int32_t _seconds)
+{
+    return _seconds * 1000;
+}
 }  // namespace bcos
 
 void bcos::pthread_setThreadName(std::string const& _n)
