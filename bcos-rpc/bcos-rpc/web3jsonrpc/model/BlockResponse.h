@@ -19,6 +19,10 @@
  */
 
 #pragma once
+#include "Bloom.h"
+#include "Log.h"
+
+
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
@@ -41,7 +45,22 @@ namespace bcos::rpc
     result["nonce"] = "0x0000000000000000";
     // empty uncle hash: keccak256(RLP([]))
     result["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
-    result["logsBloom"] = "0x";
+    rpc::Logs logs;
+    for (uint64_t i = 0; i < block->receiptsSize(); ++i)
+    {
+        auto receipt = block->receipt(i);
+        for (auto const& log : receipt->logEntries())
+        {
+            rpc::Log logObj{
+                .address = bcos::bytes(log.address().begin(), log.address().end()),
+                .topics = bcos::h256s(log.topics().begin(), log.topics().end()),
+                .data = bcos::bytes(log.data().begin(), log.data().end()),
+            };
+            logs.push_back(std::move(logObj));
+        }
+    }
+    auto logsBloom = getLogsBloom(logs);
+    result["logsBloom"] = toHexStringWithPrefix(logsBloom);
     result["transactionsRoot"] = block->blockHeader()->txsRoot().hexPrefixed();
     result["stateRoot"] = block->blockHeader()->stateRoot().hexPrefixed();
     result["receiptsRoot"] = block->blockHeader()->receiptsRoot().hexPrefixed();
