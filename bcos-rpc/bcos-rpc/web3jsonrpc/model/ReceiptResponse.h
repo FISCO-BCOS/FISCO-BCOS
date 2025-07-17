@@ -47,15 +47,17 @@ namespace bcos::rpc
     crypto::HashType blockHash;
     uint64_t blockNumber = 0;
     u256 cumulativeGasUsed = 0;
+    size_t logIndex = 0;
     if (block)
     {
         blockHash = block->blockHeader()->hash();
         blockNumber = block->blockHeader()->number();
         for (; transactionIndex < block->transactionsHashSize(); transactionIndex++)
         {
-            if (transactionIndex <= block->receiptsSize())
+            if (transactionIndex < block->receiptsSize())
             {
                 cumulativeGasUsed += block->receipt(transactionIndex)->gasUsed();
+                logIndex += block->receipt(transactionIndex)->logEntries().size();
             }
             if (block->transactionHash(transactionIndex) == tx->hash())
             {
@@ -98,6 +100,8 @@ namespace bcos::rpc
     result["logs"] = Json::arrayValue;
     auto* mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(receipt.get());
     auto receiptLog = mutableReceipt->takeLogEntries();
+    Logs logs;
+    logs.reserve(receiptLog.size());
     for (size_t i = 0; i < receiptLog.size(); i++)
     {
         Json::Value log;
@@ -110,23 +114,17 @@ namespace bcos::rpc
             log["topics"].append(topic.hexPrefixed());
         }
         log["data"] = toHexStringWithPrefix(receiptLog[i].data());
-        log["logIndex"] = toQuantity(i);
+        log["logIndex"] = toQuantity(logIndex + i);
         log["blockNumber"] = toQuantity(blockNumber);
         log["blockHash"] = blockHash.hexPrefixed();
         log["transactionIndex"] = toQuantity(transactionIndex);
         log["transactionHash"] = tx->hash().hexPrefixed();
         log["removed"] = false;
         result["logs"].append(std::move(log));
-    }
-    Logs logs;
-    logs.reserve(receiptLog.size());
-    for (size_t i = 0; i < receiptLog.size(); i++)
-    {
-        rpc::Log log{.address = std::move(receiptLog[i].takeAddress()),
+        rpc::Log logObj{.address = std::move(receiptLog[i].takeAddress()),
             .topics = std::move(receiptLog[i].takeTopics()),
             .data = std::move(receiptLog[i].takeData())};
-        log.logIndex = i;
-        logs.push_back(std::move(log));
+        logs.push_back(std::move(logObj));
     }
     auto logsBloom = getLogsBloom(logs);
     result["logsBloom"] = toHexStringWithPrefix(logsBloom);
