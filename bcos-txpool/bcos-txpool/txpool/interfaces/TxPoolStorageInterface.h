@@ -24,7 +24,6 @@
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/CallbackCollectionHandler.h>
 #include <utility>
 
 namespace bcos::txpool
@@ -41,17 +40,13 @@ public:
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
         protocol::Transaction::Ptr transaction) = 0;
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes) = 0;
+        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized>
+            hashes) = 0;
 
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
         protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
-    [[deprecated(
-        "do not use raw insert tx pool without check, use "
-        "batchVerifyAndSubmitTransaction")]] virtual void
-    batchInsert(bcos::protocol::Transactions const& _txs) = 0;
-
     virtual bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) = 0;
     virtual bcos::protocol::Transaction::Ptr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) = 0;
