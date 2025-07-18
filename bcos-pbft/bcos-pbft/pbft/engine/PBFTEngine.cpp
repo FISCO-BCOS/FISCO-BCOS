@@ -413,18 +413,15 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     auto encodeEnd = utcTime();
 
     // only broadcast pbft message to the consensus nodes
-
-    // TODO: check and fix broadcastMessage get stucked
-
-    task::wait([](auto front, decltype(encodedData) encoded) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(std::as_const(*encoded))));
-    }(m_config->frontService(), encodedData));
     PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
                    << LOG_KV("packetSize", encodedData->size())
                    << LOG_KV("index", pbftMessage->index())
                    << LOG_KV("encode(ms)", encodeEnd - encodeStart)
                    << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
+    task::wait([](auto front, decltype(encodedData) encoded) -> task::Task<void> {
+        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
+            ::ranges::views::single(ref(std::as_const(*encoded))));
+    }(m_config->frontService(), std::move(encodedData)));
 
     // handle the pre-prepare packet
     RecursiveGuard lock(m_mutex);
@@ -1236,7 +1233,7 @@ void PBFTEngine::broadcastViewChangeReq()
     task::wait([](FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
         co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
             ::ranges::views::single(ref(*encodedData)));
-    }(m_config->frontService(), encodedData));
+    }(m_config->frontService(), std::move(encodedData)));
 
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
