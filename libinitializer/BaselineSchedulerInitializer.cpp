@@ -9,14 +9,12 @@
 #include "libinitializer/Common.h"
 #include <boost/throw_exception.hpp>
 
-using MutableStorage =
-    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-        bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
-using CacheStorage =
-    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-        bcos::executor_v1::StateValue,
-        bcos::storage2::memory_storage::CONCURRENT | bcos::storage2::memory_storage::LRU>;
+using MutableStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue,
+    bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
+using CacheStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+    bcos::executor_v1::StateValue,
+    bcos::storage2::memory_storage::CONCURRENT | bcos::storage2::memory_storage::LRU>;
 
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
     std::function<void(std::function<void(bcos::protocol::BlockNumber)>)>>
@@ -30,9 +28,8 @@ bcos::scheduler_v1::BaselineSchedulerInitializer::build(::rocksdb::DB& rocksDB,
     struct Data
     {
         CacheStorage m_cacheStorage;
-        storage2::rocksdb::RocksDBStorage2<executor_v1::StateKey,
-            executor_v1::StateValue, storage2::rocksdb::StateKeyResolver,
-            storage2::rocksdb::StateValueResolver>
+        storage2::rocksdb::RocksDBStorage2<executor_v1::StateKey, executor_v1::StateValue,
+            storage2::rocksdb::StateKeyResolver, storage2::rocksdb::StateValueResolver>
             m_rocksDBStorage;
 
         MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)>
@@ -56,7 +53,7 @@ bcos::scheduler_v1::BaselineSchedulerInitializer::build(::rocksdb::DB& rocksDB,
             std::make_shared<BaselineScheduler<decltype(data->m_multiLayerStorage),
                 decltype(data->m_transactionExecutor), decltype(*scheduler),
                 ledger::LedgerInterface>>(data->m_multiLayerStorage, *scheduler,
-                data->m_transactionExecutor, *blockFactory->blockHeaderFactory(), *ledger, *txpool,
+                data->m_transactionExecutor, *blockFactory, *ledger, *txpool,
                 *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         baselineScheduler->registerTransactionNotifier(
             [txpool](bcos::protocol::BlockNumber blockNumber,
