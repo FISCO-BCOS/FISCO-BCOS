@@ -136,11 +136,11 @@ task::Task<void> TxPool::broadcastTransactionBuffer(bytesConstRef data)
     }
     else
     {
-        // co_await m_transactionSync->config()->frontService()->broadcastMessage(
-        //     protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
-        //     ::ranges::views::single(data));
-        m_transactionSync->config()->frontService()->asyncSendBroadcastMessage(
-            protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, data);
+        co_await m_transactionSync->config()->frontService()->broadcastMessage(
+            protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+            ::ranges::views::single(data));
+        // m_transactionSync->config()->frontService()->asyncSendBroadcastMessage(
+        //     protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION, data);
     }
 }
 

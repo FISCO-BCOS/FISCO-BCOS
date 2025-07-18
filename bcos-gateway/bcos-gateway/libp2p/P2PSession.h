@@ -12,6 +12,7 @@
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
+#include <utility>
 
 
 namespace bcos::gateway
@@ -34,7 +35,10 @@ public:
     virtual void heartBeat();
 
     virtual SessionFace::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
+    virtual void setSession(std::shared_ptr<SessionFace> session)
+    {
+        m_session = std::move(session);
+    }
 
     virtual P2pID p2pID() { return m_p2pInfo->rawP2pID; }
     virtual std::string printP2pID() { return printShortP2pID(m_p2pInfo->rawP2pID); }
@@ -66,7 +70,7 @@ public:
         SessionCallbackFunc callback = SessionCallbackFunc());
 
     task::Task<Message::Ptr> fastSendP2PMessage(
-        P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+        const P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:
     SessionFace::Ptr m_session;

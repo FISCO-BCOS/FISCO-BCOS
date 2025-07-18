@@ -3,8 +3,6 @@
 bcos::boostssl::http::HttpSession::HttpSession()
 {
     HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this);
-
-    m_buffer = std::make_shared<boost::beast::flat_buffer>();
 }
 bcos::boostssl::http::HttpSession::~HttpSession()
 {
@@ -22,7 +20,7 @@ void bcos::boostssl::http::HttpSession::read()
     // set limit to http request size, 100m
     m_parser->body_limit(PARSER_BODY_LIMITATION);
 
-    m_httpStream->asyncRead(*m_buffer, m_parser,
+    m_httpStream->asyncRead(m_buffer, *m_parser,
         [session = shared_from_this()](boost::system::error_code _ec,
             std::size_t bytes_transferred) { session->onRead(_ec, bytes_transferred); });
 }
@@ -47,18 +45,12 @@ void bcos::boostssl::http::HttpSession::onRead(
             return;
         }
 
-        auto self = std::weak_ptr<HttpSession>(shared_from_this());
         if (boost::beast::websocket::is_upgrade(m_parser->get()))
         {
             HTTP_SESSION(INFO) << LOG_BADGE("onRead") << LOG_DESC("websocket upgrade");
             if (m_wsUpgradeHandler)
             {
-                auto httpSession = self.lock();
-                if (!httpSession)
-                {
-                    return;
-                }
-                m_wsUpgradeHandler(m_httpStream, m_parser->release(), httpSession->nodeId());
+                m_wsUpgradeHandler(m_httpStream, m_parser->release(), nodeId());
             }
             else
             {
@@ -121,7 +113,7 @@ void bcos::boostssl::http::HttpSession::close()
         m_httpStream->close();
     }
 }
-void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest& _httpRequest)
+void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRequest)
 {
     HTTP_SESSION(DEBUG) << LOG_BADGE("handleRequest") << LOG_DESC("request")
                         << LOG_KV("method", _httpRequest.method_string())
@@ -132,18 +124,13 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest& _httpRequest)
 
     auto startT = utcTime();
     unsigned version = _httpRequest.version();
-    auto self = std::weak_ptr<HttpSession>(shared_from_this());
     if (m_httpReqHandler)
     {
         const std::string& request = _httpRequest.body();
-        m_httpReqHandler(request, [self, version, startT](bcos::bytes _content) {
-            auto session = self.lock();
-            if (!session)
-            {
-                return;
-            }
+        m_httpReqHandler(request, [session = shared_from_this(), version, startT,
+                                      keepAlive = _httpRequest.keep_alive()](bcos::bytes _content) {
             auto resp = session->buildHttpResp(
-                boost::beast::http::status::ok, version, std::move(_content));
+                boost::beast::http::status::ok, keepAlive, version, std::move(_content));
             // put the response into the queue and waiting to be send
             BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
                             << LOG_KV("body", std::string_view((const char*)resp->body().data(),
@@ -156,27 +143,22 @@ void bcos::boostssl::http::HttpSession::handleRequest(HttpRequest& _httpRequest)
     else
     {
         // unsupported http service
-        auto resp =
-            buildHttpResp(boost::beast::http::status::http_version_not_supported, version, {});
-        auto session = self.lock();
-        if (!session)
-        {
-            return;
-        }
+        auto resp = buildHttpResp(boost::beast::http::status::http_version_not_supported,
+            _httpRequest.keep_alive(), version, {});
         // put the response into the queue and waiting to be send
         HTTP_SESSION(WARNING) << LOG_BADGE("handleRequest") << LOG_DESC("unsupported http service")
                               << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                     resp->body().size()));
-        session->queue().enqueue(std::move(resp));
+        queue().enqueue(std::move(resp));
     }
 }
 bcos::boostssl::http::HttpResponsePtr bcos::boostssl::http::HttpSession::buildHttpResp(
-    boost::beast::http::status status, unsigned version, bcos::bytes content)
+    boost::beast::http::status status, bool keepAlive, unsigned version, bcos::bytes content)
 {
     auto msg = std::make_shared<HttpResponse>(status, version);
     msg->set(boost::beast::http::field::server, BOOST_BEAST_VERSION_STRING);
     msg->set(boost::beast::http::field::content_type, "application/json");
-    msg->keep_alive(true);  // default , keep alive
+    msg->keep_alive(keepAlive);  // default , keep alive
     msg->body() = std::move(content);
     msg->prepare_payload();
     return msg;

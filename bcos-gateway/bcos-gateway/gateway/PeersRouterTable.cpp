@@ -288,7 +288,7 @@ void PeersRouterTable::asyncBroadcastMsg(
 }
 
 bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_t type,
-    std::string_view group, uint16_t moduleID, P2PMessage& message,
+    std::string_view group, uint16_t moduleID, const P2PMessage& message,
     ::ranges::any_view<bytesConstRef> payloads)
 {
     std::vector<std::string> selectedPeers;
@@ -297,7 +297,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
     for (auto const& it : m_gatewayInfos)
     {
         // not broadcast message to the gateway-self
-        if (it.first == m_uuid)
+        if (it.first == m_uuid || !it.second)
         {
             continue;
         }
@@ -319,6 +319,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
                               << LOG_KV("nodeType", type) << LOG_KV("moduleID", moduleID)
                               << LOG_KV("dst", printShortP2pID(peer));
         }
-        co_await m_p2pInterface->sendMessageByNodeID(peer, message, payloads);
+        auto forkMessage = message;
+        co_await m_p2pInterface->sendMessageByNodeID(peer, forkMessage, payloads);
     }
 }

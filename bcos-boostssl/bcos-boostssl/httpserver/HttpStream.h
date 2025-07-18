@@ -18,6 +18,7 @@
  * @date 2021-10-31
  */
 #pragma once
+#include "bcos-task/Task.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-boostssl/websocket/WsTools.h>
@@ -42,8 +43,7 @@ public:
     virtual void close() = 0;
 
     virtual void asyncRead(boost::beast::flat_buffer& _buffer,
-        boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>&
-            _parser,
+        boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
         HttpStreamRWHandler _handler) = 0;
 
     virtual void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) = 0;
@@ -72,8 +72,7 @@ public:
     void close() override;
 
     void asyncRead(boost::beast::flat_buffer& _buffer,
-        boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>&
-            _parser,
+        boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
         HttpStreamRWHandler _handler) override;
 
     void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) override;
@@ -101,8 +100,7 @@ public:
     void close() override;
 
     void asyncRead(boost::beast::flat_buffer& _buffer,
-        boost::optional<boost::beast::http::request_parser<boost::beast::http::string_body>>&
-            _parser,
+        boost::beast::http::request_parser<boost::beast::http::string_body>& _parser,
         HttpStreamRWHandler _handler) override;
 
     void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) override;
