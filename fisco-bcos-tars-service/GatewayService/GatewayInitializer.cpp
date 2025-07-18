@@ -122,3 +122,32 @@ void GatewayInitializer::stop()
     }
     TLOGINFO(LOG_DESC("[GATEWAYSERVICE] Stop the GatewayService success") << std::endl);
 }
+bcostars::GatewayInitializer::GatewayInitializer(
+    std::string const& _configPath, bcos::gateway::GatewayConfig::Ptr _gatewayConfig)
+  : m_gatewayConfig(_gatewayConfig),
+    m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>()),
+    m_groupInfoFactory(std::make_shared<bcos::group::GroupInfoFactory>()),
+    m_chainNodeInfoFactory(std::make_shared<bcos::group::ChainNodeInfoFactory>())
+{
+    init(_configPath);
+}
+bcostars::GatewayInitializer::~GatewayInitializer()
+{
+    stop();
+}
+bcos::gateway::GatewayInterface::Ptr bcostars::GatewayInitializer::gateway()
+{
+    return m_gateway;
+}
+bcos::group::ChainNodeInfoFactory::Ptr bcostars::GatewayInitializer::chainNodeInfoFactory()
+{
+    return m_chainNodeInfoFactory;
+}
+bcos::group::GroupInfoFactory::Ptr bcostars::GatewayInitializer::groupInfoFactory()
+{
+    return m_groupInfoFactory;
+}
+bcos::crypto::KeyFactory::Ptr bcostars::GatewayInitializer::keyFactory()
+{
+    return m_keyFactory;
+}
