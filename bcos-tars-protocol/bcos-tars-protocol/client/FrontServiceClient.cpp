@@ -214,14 +214,6 @@ void bcostars::FrontServiceClient::asyncSendMessageByNodeIDs(
         ->async_asyncSendMessageByNodeIDs(
             nullptr, _moduleID, tarsNodeIDs, std::vector<char>(_data.begin(), _data.end()));
 }
-void bcostars::FrontServiceClient::asyncSendBroadcastMessage(
-    uint16_t _type, int _moduleID, bcos::bytesConstRef _data)
-{
-    auto data = _data.toBytes();
-    m_proxy->tars_set_timeout(c_frontServiceTimeout)
-        ->async_asyncSendBroadcastMessage(
-            nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
-}
 bcos::task::Task<void> bcostars::FrontServiceClient::broadcastMessage(
     uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads)
 {

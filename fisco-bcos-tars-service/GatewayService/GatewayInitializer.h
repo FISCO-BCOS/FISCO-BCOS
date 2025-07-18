@@ -34,26 +34,19 @@ class GatewayInitializer
 public:
     using Ptr = std::shared_ptr<GatewayInitializer>;
     GatewayInitializer(
-        std::string const& _configPath, bcos::gateway::GatewayConfig::Ptr _gatewayConfig)
-      : m_gatewayConfig(_gatewayConfig),
-        m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>()),
-        m_groupInfoFactory(std::make_shared<bcos::group::GroupInfoFactory>()),
-        m_chainNodeInfoFactory(std::make_shared<bcos::group::ChainNodeInfoFactory>())
-    {
-        init(_configPath);
-    }
+        std::string const& _configPath, bcos::gateway::GatewayConfig::Ptr _gatewayConfig);
 
-    virtual ~GatewayInitializer() { stop(); }
+    virtual ~GatewayInitializer();
 
 
     virtual void start();
     virtual void stop();
 
-    bcos::gateway::GatewayInterface::Ptr gateway() { return m_gateway; }
-    bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory() { return m_chainNodeInfoFactory; }
-    bcos::group::GroupInfoFactory::Ptr groupInfoFactory() { return m_groupInfoFactory; }
+    bcos::gateway::GatewayInterface::Ptr gateway();
+    bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory();
+    bcos::group::GroupInfoFactory::Ptr groupInfoFactory();
 
-    bcos::crypto::KeyFactory::Ptr keyFactory() { return m_keyFactory; }
+    bcos::crypto::KeyFactory::Ptr keyFactory();
 
 protected:
     virtual void init(std::string const& _configPath);

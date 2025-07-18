@@ -130,14 +130,6 @@ public:
     virtual void asyncSendMessageByNodeIDs(int _moduleID,
         const std::vector<bcos::crypto::NodeIDPtr>& _nodeIDs, bytesConstRef _data) = 0;
 
-    /**
-     * @brief: send broadcast message
-     * @param _moduleID: moduleID
-     * @param _data:  message
-     * @return void
-     */
-    virtual void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) = 0;
-
     virtual task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
 

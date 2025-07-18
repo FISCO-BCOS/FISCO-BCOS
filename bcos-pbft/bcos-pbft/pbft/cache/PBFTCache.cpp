@@ -19,6 +19,7 @@
  * @date 2021-04-23
  */
 #include "PBFTCache.h"
+#include "bcos-task/Wait.h"
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -51,8 +52,11 @@ void PBFTCache::onCheckPointTimeout()
         m_checkpointProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to consensus node
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    task::wait(
+        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
+            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
+                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
+        }(m_config->frontService(), std::move(encodedData)));
 }
 
 bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -238,8 +242,11 @@ bool PBFTCache::checkAndPreCommit()
                    << LOG_KV("index", commitReq->index());
     auto encodedData = m_config->codec()->encode(commitReq, m_config->pbftMsgDefaultVersion());
     // only broadcast message to consensus nodes
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    task::wait(
+        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
+            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
+                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
+        }(m_config->frontService(), std::move(encodedData)));
     m_precommitted = true;
     // collect the commitReq and try to commit
     return checkAndCommit();
@@ -329,7 +336,7 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
         return;
     }
     for (auto exceptionPrePrepare = m_exceptionPrePrepareList.begin();
-         exceptionPrePrepare != m_exceptionPrePrepareList.end();)
+        exceptionPrePrepare != m_exceptionPrePrepareList.end();)
     {
         PBFT_LOG(INFO) << LOG_DESC("resetCache: asyncResetTxsFlag exceptionPrePrepare")
                        << LOG_KV("prePrepare", m_prePrepare ? "true" : "false")

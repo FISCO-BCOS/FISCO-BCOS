@@ -91,14 +91,6 @@ public:
     void asyncSendMessageByNodeIDs(
         int _moduleID, const crypto::NodeIDs& _nodeIDs, bytesConstRef _data) override;
 
-    /**
-     * @brief: send broadcast message
-     * @param _moduleID: moduleID
-     * @param _data: send message data
-     * @return void
-     */
-    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) override;
-
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
 

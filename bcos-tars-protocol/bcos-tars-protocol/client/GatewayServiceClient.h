@@ -51,9 +51,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
         bcos::bytesConstRef _payload) override;
 
-    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override;
-
     bcos::task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID,
         ::ranges::any_view<bcos::bytesConstRef> payloads) override;
