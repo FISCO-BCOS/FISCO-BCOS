@@ -97,18 +97,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
         bytesConstRef _payload) = 0;
 
-    /**
-     * @brief: send message to all nodes
-     * @param _type: type
-     * @param _groupID: groupID
-     * @param _moduleID: moduleID
-     * @param _srcNodeID: the sender nodeID
-     * @param _payload: message content
-     * @return void
-     */
-    virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
-        int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
-
     virtual task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) = 0;
 

@@ -88,18 +88,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
         bytesConstRef _payload) override;
 
-    /**
-     * @brief: send message to all nodes
-     * @param _nodeType: nodeType
-     * @param _groupID: groupID
-     * @param _moduleID: moduleID
-     * @param _srcNodeID: the sender nodeID
-     * @param _payload: message content
-     * @return void
-     */
-    void asyncSendBroadcastMessage(uint16_t _nodeType, const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
-
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override
     {

@@ -331,25 +331,6 @@ void FrontService::asyncSendMessageByNodeIDs(
     }
 }
 
-/**
- * @brief: send broadcast message
- * @param _moduleID: moduleID
- * @param _data: send message data
- * @return void
- */
-void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
-{
-    FrontMessage message;
-    message.setModuleID(_moduleID);
-    message.setPayload(_data);
-
-    bytes buffer;
-    message.encode(buffer);
-
-    m_gatewayInterface->asyncSendBroadcastMessage(
-        _type, m_groupID, _moduleID, m_nodeID, bytesConstRef(buffer.data(), buffer.size()));
-}
-
 task::Task<void> FrontService::broadcastMessage(
     uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads)
 {

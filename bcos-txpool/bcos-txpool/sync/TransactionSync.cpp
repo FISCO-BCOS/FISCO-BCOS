@@ -19,6 +19,7 @@
  * @date 2021-05-11
  */
 #include "bcos-txpool/sync/TransactionSync.h"
+#include "bcos-task/Wait.h"
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
@@ -516,9 +517,12 @@ void TransactionSync::onEmptyTxs()
     auto txsStatus =
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
     auto packetData = txsStatus->encode();
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
-        ModuleID::TxsSync, ref(*packetData));
+    task::wait([](decltype(packetData) packetData,
+                   bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
+        co_await front->broadcastMessage(
+            bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
+            ModuleID::TxsSync, ::ranges::views::single(ref(*packetData)));
+    }(std::move(packetData), m_config->frontService()));
 }
 
 void TransactionSync::stop()
