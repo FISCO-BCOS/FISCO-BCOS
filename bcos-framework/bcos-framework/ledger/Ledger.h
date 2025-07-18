@@ -5,6 +5,7 @@
 #include "LedgerTypeDef.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
@@ -61,6 +62,12 @@ inline constexpr struct GetBlockData
         auto& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag) const
     {
         co_return co_await tag_invoke(*this, ledger, blockNumber, blockFlag);
+    }
+    task::Task<protocol::Block::Ptr> operator()(auto& storage, protocol::BlockNumber blockNumber,
+        int32_t blockFlag, protocol::BlockFactory& blockFactory, FromStorage fromStorage) const
+    {
+        co_return co_await tag_invoke(
+            *this, storage, blockNumber, blockFlag, blockFactory, fromStorage);
     }
 } getBlockData{};
 

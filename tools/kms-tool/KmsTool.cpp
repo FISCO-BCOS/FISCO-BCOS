@@ -11,9 +11,11 @@ using namespace bcos::security;
 void printUsage(const char* programName)
 {
     std::cerr << "Usage: " << programName
-              << " <kms_type> <access_key> <secret_key> <region> <key_id> <inputFilePath> "
-                 "<outputFilePath>"
-              << "\n";
+              << " <mode: encrypt|decrypt> <kms_type> <access_key> <secret_key> <region> <key_id> "
+                 "<inputFilePath> <outputFilePath>\n"
+              << "Example: " << programName
+              << " encrypt/decrypt AWS <access_key> <secret_key> <region> <key_id> input.txt "
+                 "output.enc\n";
 }
 
 int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
@@ -47,6 +49,7 @@ int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)
 
 int main(int argc, char* argv[])
 {
+    std::string mode;
     std::string kmsType;
     std::string accessKey;
     std::string secretKey;
@@ -54,8 +57,12 @@ int main(int argc, char* argv[])
     std::string keyId;
     std::string inputFilePath;
     std::string outputFilePath;
+    bool verbose = false;
 
-    // 提示用户输入参数
+    // Add mode selection
+    std::cout << "Enter mode (encrypt/decrypt): ";
+    std::cin >> mode;
+
     std::cout << "Enter KMS type: ";
     std::cin >> kmsType;
 
@@ -77,18 +84,25 @@ int main(int argc, char* argv[])
     std::cout << "Enter output file path: ";
     std::cin >> outputFilePath;
 
-    auto prividerOption =
+    std::cout << "Verbose? (y/n): ";
+    std::string verboseStr;
+    std::cin >> verboseStr;
+    if (verboseStr == "y" || verboseStr == "Y")
+    {
+        verbose = true;
+    }
+
+    auto providerOption =
         magic_enum::enum_cast<CloudKmsType>(kmsType, magic_enum::case_insensitive);
-    if (!prividerOption.has_value())
+    if (!providerOption.has_value())
     {
         std::cerr << "Invalid KMS provider: " << kmsType << "\n";
         return 1;
     }
-    auto provider = prividerOption.value();
+    auto provider = providerOption.value();
 
     if (provider == CloudKmsType::AWS)
     {
-        // initialize the AWS SDK
         try
         {
             struct AwsSdkLifecycleManager
@@ -101,47 +115,44 @@ int main(int argc, char* argv[])
                 AwsSdkLifecycleManager(AwsSdkLifecycleManager&&) = delete;
                 AwsSdkLifecycleManager& operator=(AwsSdkLifecycleManager&&) = delete;
             } sdkLifecycleManager;
-            // create an AWS KMS wrapper
+
             AwsKmsWrapper kmsWrapper(region, accessKey, secretKey, keyId);
 
-            // encrypt data
-            auto plaintext = readContents(inputFilePath);
-            auto encryptResult = kmsWrapper.encryptContents(plaintext);
-            if (encryptResult == nullptr)
+            if (mode == "encrypt")
             {
-                std::cerr << "Encryption failed!"
-                          << "\n";
+                auto plaintext = readContents(inputFilePath);
+                auto encryptResult = kmsWrapper.encryptContents(plaintext);
+                if (encryptResult == nullptr)
+                {
+                    std::cerr << "Encryption failed!" << "\n";
+                    return 1;
+                }
+                std::cout << "Encrypted data : " << encryptResult->size() << " bytes" << "\n";
+                saveFile(outputFilePath, encryptResult);
+            }
+            else if (mode == "decrypt")
+            {
+                auto ciphertext = readContents(inputFilePath);
+                auto decryptResult = kmsWrapper.decryptContents(ciphertext);
+                if (decryptResult == nullptr)
+                {
+                    std::cerr << "Decryption failed!" << "\n";
+                    return 1;
+                }
+                std::cout << "Decrypted data : " << decryptResult->size() << " bytes" << "\n";
+                saveFile(outputFilePath, decryptResult);
+                // 可选：输出明文内容
+                std::string decryptResultStr(decryptResult->begin(), decryptResult->end());
+                if (verbose)
+                {
+                    std::cout << "Decrypted text: " << decryptResultStr << "\n";
+                }
+            }
+            else
+            {
+                std::cerr << "Invalid mode: " << mode << ". Use 'encrypt' or 'decrypt'.\n";
                 return 1;
             }
-
-            std::cout << "Encrypted data : " << encryptResult->size() << " bytes"
-                      << "\n";
-            saveFile(outputFilePath, encryptResult);
-
-            // decrypt data
-            auto decryptResult = kmsWrapper.decryptContents(encryptResult);
-            if (decryptResult == nullptr)
-            {
-                std::cerr << "Decryption failed!"
-                          << "\n";
-                return 1;
-            }
-
-            std::cout << "Decrypted text: " << decryptResult->size() << "\n";
-
-            // text bytes to string
-            std::string decryptResultStr(decryptResult->begin(), decryptResult->end());
-            std::string expectedStr(plaintext->begin(), plaintext->end());
-            std::cout << "Decrypted text: " << decryptResultStr << "\n";
-            std::cout << "expectedStr text: " << expectedStr << "\n";
-            if (decryptResultStr != expectedStr)
-            {
-                std::cerr << "Error:Decrypted data is not the same as the original data!"
-                          << "\n";
-                return 1;
-            }
-            std::cout << "Decrypted data is the same as the original data"
-                      << "\n";
         }
         catch (const std::exception& e)
         {

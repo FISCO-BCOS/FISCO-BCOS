@@ -43,11 +43,11 @@ TransactionStatus TransactionValidator::validateTransaction(const bcos::protocol
     // EIP-3860: Limit and meter initcode
     if (_tx.type() == TransactionType::Web3Transaction)
     {
-        if (_tx.size() > MAX_INITCODE_SIZE)
+        if (_tx.input().size() > MAX_INITCODE_SIZE)
         {
             TX_VALIDATOR_CHECKER_LOG(TRACE)
                 << LOG_BADGE("ValidateTransaction")
-                << LOG_DESC("RejectTransactionWithLargeInitCode") << LOG_KV("txSize", _tx.size())
+                << LOG_DESC("RejectTransactionWithLargeInitCode") << LOG_KV("txSize", _tx.input().size())
                 << LOG_KV("maxInitCodeSize", MAX_INITCODE_SIZE);
             // Reject transactions with initcode larger than MAX_INITCODE_SIZE
             return TransactionStatus::MaxInitCodeSizeExceeded;
