@@ -823,9 +823,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
                         [](Message::Ptr& response) -> Message::Ptr { return std::move(response); }),
                     m_result);
             }
-        };
-
-        Awaitable awaitable{.m_options = options,
+        } awaitable{.m_options = options,
             .m_host = m_server,
             .m_message = message,
             .m_self = shared_from_this(),
@@ -861,8 +859,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
                     BOOST_THROW_EXCEPTION(m_exception);
                 }
             }
-        };
-        Awaitable awaitable{.m_self = *this, .m_view = view, .m_exception = {}};
+        } awaitable{.m_self = *this, .m_view = view, .m_exception = {}};
         co_await awaitable;
         co_return {};
     }
@@ -880,4 +877,193 @@ size_t bcos::gateway::Payload::size() const
                     [](size_t sum, const bytesConstRef& ref) { return sum + ref.size(); });
             }),
         m_data);
+}
+std::size_t bcos::gateway::SessionRecvBuffer::readPos() const
+{
+    return m_readPos;
+}
+std::size_t bcos::gateway::SessionRecvBuffer::writePos() const
+{
+    return m_writePos;
+}
+std::size_t bcos::gateway::SessionRecvBuffer::dataSize() const
+{
+    return m_writePos - m_readPos;
+}
+size_t bcos::gateway::SessionRecvBuffer::recvBufferSize() const
+{
+    return m_recvBufferSize;
+}
+bool bcos::gateway::SessionRecvBuffer::onRead(std::size_t _dataSize)
+{
+    if (m_readPos + _dataSize <= m_writePos)
+    {
+        m_readPos += _dataSize;
+        return true;
+    }
+    return false;
+}
+bool bcos::gateway::SessionRecvBuffer::onWrite(std::size_t _dataSize)
+{
+    if (m_writePos + _dataSize <= m_recvBufferSize)
+    {
+        m_writePos += _dataSize;
+        return true;
+    }
+    return false;
+}
+bool bcos::gateway::SessionRecvBuffer::resizeBuffer(size_t _bufferSize)
+{
+    if (_bufferSize > m_recvBufferSize)
+    {
+        m_recvBuffer.resize(_bufferSize);
+        m_recvBufferSize = _bufferSize;
+
+        return true;
+    }
+
+    return false;
+}
+void bcos::gateway::SessionRecvBuffer::moveToHeader()
+{
+    if (m_writePos > m_readPos)
+    {
+        memmove(m_recvBuffer.data(), m_recvBuffer.data() + m_readPos, m_writePos - m_readPos);
+        m_writePos -= m_readPos;
+        m_readPos = 0;
+    }
+    else if (m_writePos == m_readPos)
+    {
+        m_readPos = 0;
+        m_writePos = 0;
+    }
+}
+bcos::bytesConstRef bcos::gateway::SessionRecvBuffer::asReadBuffer() const
+{
+    return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};
+}
+bcos::bytesConstRef bcos::gateway::SessionRecvBuffer::asWriteBuffer() const
+{
+    return {m_recvBuffer.data() + m_writePos, m_recvBufferSize - m_writePos};
+}
+bcos::gateway::Host& bcos::gateway::Session::host()
+{
+    return m_server;
+}
+std::shared_ptr<SocketFace> bcos::gateway::Session::socket()
+{
+    return m_socket;
+}
+void bcos::gateway::Session::setSocket(const std::shared_ptr<SocketFace>& socket)
+{
+    m_socket = socket;
+}
+bcos::gateway::MessageFactory::Ptr bcos::gateway::Session::messageFactory() const
+{
+    return m_messageFactory;
+}
+void bcos::gateway::Session::setMessageFactory(const MessageFactory::Ptr& _messageFactory)
+{
+    m_messageFactory = _messageFactory;
+}
+bcos::gateway::SessionCallbackManagerInterface::Ptr bcos::gateway::Session::sessionCallbackManager()
+    const
+{
+    return m_sessionCallbackManager;
+}
+void bcos::gateway::Session::setSessionCallbackManager(
+    const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
+{
+    m_sessionCallbackManager = _sessionCallbackManager;
+}
+const std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>&
+bcos::gateway::Session::messageHandler()
+{
+    return m_messageHandler;
+}
+void bcos::gateway::Session::setMessageHandler(
+    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
+
+{
+    m_messageHandler = std::move(messageHandler);
+}
+void bcos::gateway::Session::setBeforeMessageHandler(
+    std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler)
+{
+    m_beforeMessageHandler = std::move(handler);
+}
+void bcos::gateway::Session::setHostInfo(P2PInfo _hostInfo)
+{
+    m_hostInfo = std::move(_hostInfo);
+}
+uint32_t bcos::gateway::Session::maxReadDataSize() const
+{
+    return m_maxReadDataSize;
+}
+void bcos::gateway::Session::setMaxReadDataSize(uint32_t _maxReadDataSize)
+{
+    m_maxReadDataSize = _maxReadDataSize;
+}
+uint32_t bcos::gateway::Session::maxSendDataSize() const
+{
+    return m_maxSendDataSize;
+}
+void bcos::gateway::Session::setMaxSendDataSize(uint32_t _maxSendDataSize)
+{
+    m_maxSendDataSize = _maxSendDataSize;
+}
+uint32_t bcos::gateway::Session::maxSendMsgCountS() const
+{
+    return m_maxSendMsgCountS;
+}
+void bcos::gateway::Session::setMaxSendMsgCountS(uint32_t _maxSendMsgCountS)
+{
+    m_maxSendMsgCountS = _maxSendMsgCountS;
+}
+uint32_t bcos::gateway::Session::allowMaxMsgSize() const
+{
+    return m_allowMaxMsgSize;
+}
+void bcos::gateway::Session::setAllowMaxMsgSize(uint32_t _allowMaxMsgSize)
+{
+    m_allowMaxMsgSize = _allowMaxMsgSize;
+}
+void bcos::gateway::Session::setEnableCompress(bool _enableCompress)
+{
+    m_enableCompress = _enableCompress;
+}
+bool bcos::gateway::Session::enableCompress() const
+{
+    return m_enableCompress;
+}
+bcos::gateway::SessionRecvBuffer& bcos::gateway::Session::recvBuffer()
+{
+    return m_recvBuffer;
+}
+const bcos::gateway::SessionRecvBuffer& bcos::gateway::Session::recvBuffer() const
+{
+    return m_recvBuffer;
+}
+std::shared_ptr<SessionFace> bcos::gateway::SessionFactory::createSession(Host& _server,
+    std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
+    SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
+{
+    std::shared_ptr<Session> session =
+        std::make_shared<Session>(_socket, _server, m_sessionRecvBufferSize);
+    session->setHostInfo(m_hostInfo);
+    session->setMessageFactory(_messageFactory);
+    session->setSessionCallbackManager(_sessionCallbackManager);
+    session->setAllowMaxMsgSize(m_allowMaxMsgSize);
+    session->setMaxReadDataSize(m_maxReadDataSize);
+    session->setMaxSendDataSize(m_maxSendDataSize);
+    session->setMaxSendMsgCountS(m_maxSendMsgCountS);
+    session->setEnableCompress(m_enableCompress);
+    BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session")
+                   << LOG_KV("sessionRecvBufferSize", m_sessionRecvBufferSize)
+                   << LOG_KV("allowMaxMsgSize", m_allowMaxMsgSize)
+                   << LOG_KV("maxReadDataSize", m_maxReadDataSize)
+                   << LOG_KV("maxSendDataSize", m_maxSendDataSize)
+                   << LOG_KV("maxSendMsgCountS", m_maxSendMsgCountS)
+                   << LOG_KV("enableCompress", m_enableCompress);
+    return session;
 }

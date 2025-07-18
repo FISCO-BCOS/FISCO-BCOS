@@ -10,14 +10,10 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <vector>
 
 using P2PNodeID = bcos::h512;
 
-namespace bcos
-{
-
-namespace gateway
+namespace bcos::gateway
 {
 
 class PeerBlackWhitelistInterface
@@ -25,7 +21,6 @@ class PeerBlackWhitelistInterface
 public:
     using Ptr = std::shared_ptr<PeerBlackWhitelistInterface>;
 
-public:
     PeerBlackWhitelistInterface(std::set<std::string> const& _strList, bool _enable = false);
     PeerBlackWhitelistInterface(std::set<P2PNodeID> const& _nodeList, bool _enable);
     virtual ~PeerBlackWhitelistInterface() = default;
@@ -45,6 +40,4 @@ protected:
     std::set<P2PNodeID> m_peerList;
 };
 
-}  // namespace gateway
-
-}  // namespace bcos
+}  // namespace bcos::gateway

@@ -34,9 +34,9 @@ struct EncodedMessage
     bcos::bytes payload;
     bool compress = true;
 
-    inline std::size_t dataSize() const { return headerSize() + payloadSize(); }
-    inline std::size_t headerSize() const { return header.size(); }
-    inline std::size_t payloadSize() const { return payload.size(); }
+    std::size_t dataSize() const;
+    std::size_t headerSize() const;
+    std::size_t payloadSize() const;
 };
 
 class Message
@@ -46,11 +46,11 @@ public:
     using ConstPtr = std::shared_ptr<const Message>;
 
     Message() = default;
-    Message(const Message&) = delete;
-    Message(Message&&) = delete;
-    Message& operator=(Message&&) = delete;
-    Message& operator=(const Message&) = delete;
-    virtual ~Message() = default;
+    Message(const Message&) = default;
+    Message(Message&&) = default;
+    Message& operator=(Message&&) = default;
+    Message& operator=(const Message&) = default;
+    virtual ~Message() noexcept = default;
 
     virtual uint32_t lengthDirect() const = 0;
     virtual uint32_t length() const = 0;
@@ -87,11 +87,7 @@ public:
     virtual ~MessageFactory() = default;
     virtual Message::Ptr buildMessage() = 0;
 
-    virtual uint32_t newSeq()
-    {
-        uint32_t seq = ++m_seq;
-        return seq;
-    }
+    virtual uint32_t newSeq();
 
 private:
     std::atomic<uint32_t> m_seq = {1};
