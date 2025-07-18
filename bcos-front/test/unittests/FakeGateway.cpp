@@ -66,3 +66,15 @@ void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int,
 
     FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeIDs" << LOG_KV("groupID", _groupID);
 }
+bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t type,
+    std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
+    ::ranges::any_view<bytesConstRef> payloads)
+{
+    auto data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
+    auto nodeIDPtr = std::shared_ptr<bcos::crypto::NodeID>(
+        const_cast<bcos::crypto::NodeID*>(std::addressof(srcNodeID)), [](auto* ptr) {});
+    m_frontService->onReceiveBroadcastMessage(
+        std::string{groupID}, nodeIDPtr, ref(data), ErrorRespFunc());
+    FRONT_LOG(DEBUG) << "asyncSendBroadcastMessage" << LOG_KV("groupID", groupID);
+    co_return;
+};

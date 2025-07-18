@@ -89,10 +89,7 @@ public:
         bytesConstRef _payload) override;
 
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
-        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override
-    {
-        co_return;
-    };
+        const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override;
 
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override
