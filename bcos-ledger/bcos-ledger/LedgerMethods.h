@@ -2,6 +2,7 @@
 
 #include "ConsensusNode.h"
 #include "bcos-concepts/Serialize.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
@@ -10,10 +11,11 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-ledger/LedgerImpl.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-task/AwaitableValue.h"
@@ -76,6 +78,115 @@ void tag_invoke(ledger::tag_t<removeExpiredNonce>, LedgerInterface& ledger,
 
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     LedgerInterface& ledger, protocol::BlockNumber blockNumber, int32_t blockFlag);
+
+task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
+    protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory,
+    FromStorage /*unused*/)
+{
+    LEDGER_LOG(TRACE) << "GetBlockDataByNumber request" << LOG_KV("blockNumber", _blockNumber)
+                      << LOG_KV("blockFlag", _blockFlag);
+    if (_blockNumber < 0 || _blockFlag < 0)
+    {
+        LEDGER_LOG(INFO) << "GetBlockDataByNumber, wrong argument";
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::ErrorArgument, "Wrong argument"));
+    }
+    if (((_blockFlag & TRANSACTIONS) != 0) && ((_blockFlag & TRANSACTIONS_HASH) != 0))
+    {
+        LEDGER_LOG(INFO) << "GetBlockDataByNumber, wrong argument, transaction already has hash";
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::ErrorArgument, "Wrong argument"));
+    }
+
+    if ((_blockFlag & TRANSACTIONS) != 0 || (_blockFlag & RECEIPTS) != 0)
+    {
+        if (auto entry = co_await storage2::readOne(
+                storage, executor_v1::StateKeyView{SYS_CURRENT_STATE, SYS_KEY_ARCHIVED_NUMBER}))
+        {
+            auto archivedBlockNumber = boost::lexical_cast<int64_t>(entry->get());
+            if (_blockNumber < archivedBlockNumber)
+            {
+                LEDGER_LOG(INFO)
+                    << "GetBlockDataByNumber, block number is larger than archived number";
+                BOOST_THROW_EXCEPTION(BCOS_ERROR(LedgerError::ErrorArgument,
+                    "Wrong argument, this block's transactions and receipts are archived"));
+            }
+        }
+    }
+
+    auto block = blockFactory.createBlock();
+    auto blockNumberStr = std::to_string(_blockNumber);
+    if (_blockFlag & HEADER)
+    {
+        if (auto entry = co_await storage2::readOne(
+                storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
+        {
+            auto field = entry->getField(0);
+            auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+                bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+            block->setBlockHeader(std::move(headerPtr));
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(NotFoundBlockHeader{});
+        }
+    }
+    if (((_blockFlag & TRANSACTIONS) != 0) || ((_blockFlag & RECEIPTS) != 0) ||
+        (_blockFlag & TRANSACTIONS_HASH) != 0)
+    {
+        if (auto txsEntry = co_await storage2::readOne(
+                storage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr}))
+        {
+            auto txs = txsEntry->getField(0);
+            auto blockWithTxs =
+                blockFactory.createBlock(bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
+            auto hashes = blockWithTxs->transactionHashes() | ::ranges::to<std::vector>();
+            LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
+
+            if ((_blockFlag & TRANSACTIONS) != 0)
+            {
+                auto transactions = co_await storage2::readSome(
+                    storage, hashes | ::ranges::views::transform([](auto& hash) {
+                        return executor_v1::StateKeyView{
+                            SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(hash)};
+                    }));
+                for (auto& txEntry : transactions)
+                {
+                    auto field = txEntry->getField(0);
+                    auto transaction = blockFactory.transactionFactory()->createTransaction(
+                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false);
+                    block->appendTransaction(std::move(transaction));
+                }
+            }
+
+            if ((_blockFlag & RECEIPTS) != 0)
+            {
+                auto receipts = co_await storage2::readSome(
+                    storage, ::ranges::views::transform(hashes, [](auto& hash) {
+                        return executor_v1::StateKeyView{
+                            SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(hash)};
+                    }));
+                for (auto& receiptEntry : receipts)
+                {
+                    auto field = receiptEntry->getField(0);
+                    auto receipt = blockFactory.receiptFactory()->createReceipt(
+                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+                    block->appendReceipt(std::move(receipt));
+                }
+            }
+
+            if ((_blockFlag & TRANSACTIONS_HASH) != 0)
+            {
+                for (auto& hash : hashes)
+                {
+                    auto txMeta = blockFactory.createTransactionMetaData();
+                    txMeta->setHash(hash);
+                    block->appendTransactionMetaData(std::move(txMeta));
+                }
+            }
+        }
+    }
+    co_return block;
+}
 
 task::Task<TransactionCount> tag_invoke(
     ledger::tag_t<getTransactionCount> /*unused*/, LedgerInterface& ledger);
@@ -200,7 +311,7 @@ bcos::task::Task<bcos::crypto::HashType> tag_invoke(ledger::tag_t<getBlockHash> 
     LedgerInterface& ledger, protocol::BlockNumber blockNumber);
 
 task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHash> /*unused*/,
-    storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
+    storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
     protocol::BlockNumber blockNumber, FromStorage /*unused*/)
 {
     LEDGER_LOG(TRACE) << "GetBlockHashByNumber request" << LOG_KV("blockNumber", blockNumber);

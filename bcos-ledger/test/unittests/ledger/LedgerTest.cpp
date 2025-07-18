@@ -768,6 +768,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
     // test cache
     initChain(20);
 
+    protocol::Block::Ptr block;
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     // error number
@@ -777,6 +778,9 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block, nullptr);
             p1.set_value(true);
         });
+    BOOST_CHECK_THROW(block = task::syncWait(ledger::getBlockData(
+                          *m_storage, 1000, FULL_BLOCK, *m_blockFactory, fromStorage)),
+        NotFoundBlockHeader);
 
     std::promise<bool> pp1;
     auto ff1 = pp1.get_future();
@@ -786,6 +790,9 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block, nullptr);
             pp1.set_value(true);
         });
+    BOOST_CHECK_THROW(block = task::syncWait(ledger::getBlockData(
+                          *m_storage, -1, FULL_BLOCK, *m_blockFactory, fromStorage)),
+        bcos::Error);
 
     std::promise<bool> p2;
     auto f2 = p2.get_future();
@@ -798,6 +805,11 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->receiptsSize() != 0);
             p2.set_value(true);
         });
+    block = task::syncWait(
+        ledger::getBlockData(*m_storage, 15, FULL_BLOCK, *m_blockFactory, fromStorage));
+    BOOST_CHECK(block->blockHeader());
+    BOOST_CHECK_GT(block->transactionsSize(), 0);
+    BOOST_CHECK_GT(block->receiptsSize(), 0);
 
     std::promise<bool> p3;
     auto f3 = p3.get_future();
@@ -810,6 +822,11 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->receiptsSize() != 0);
             p3.set_value(true);
         });
+    block = task::syncWait(
+        ledger::getBlockData(*m_storage, 3, FULL_BLOCK, *m_blockFactory, fromStorage));
+    BOOST_CHECK(block->blockHeader());
+    BOOST_CHECK_GT(block->transactionsSize(), 0);
+    BOOST_CHECK_GT(block->receiptsSize(), 0);
 
     std::promise<bool> p4;
     auto f4 = p4.get_future();
@@ -819,6 +836,9 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->transactionsSize() != 0);
             p4.set_value(true);
         });
+    block = task::syncWait(
+        ledger::getBlockData(*m_storage, 5, TRANSACTIONS, *m_blockFactory, fromStorage));
+    BOOST_CHECK_GT(block->transactionsSize(), 0);
 
     std::promise<bool> p5;
     auto f5 = p5.get_future();
@@ -828,6 +848,9 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->receiptsSize() != 0);
             p5.set_value(true);
         });
+    block =
+        task::syncWait(ledger::getBlockData(*m_storage, 5, RECEIPTS, *m_blockFactory, fromStorage));
+    BOOST_CHECK_GT(block->receiptsSize(), 0);
 
     std::promise<bool> p6;
     auto f6 = p6.get_future();
@@ -837,6 +860,9 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->transactionsSize(), 0);
             p6.set_value(true);
         });
+    block = task::syncWait(
+        ledger::getBlockData(*m_storage, 0, TRANSACTIONS, *m_blockFactory, fromStorage));
+    BOOST_CHECK_EQUAL(block->transactionsSize(), 0);
 
     std::promise<bool> p7;
     auto f7 = p7.get_future();
@@ -846,6 +872,10 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
             p7.set_value(true);
         });
+    block =
+        task::syncWait(ledger::getBlockData(*m_storage, 0, RECEIPTS, *m_blockFactory, fromStorage));
+    BOOST_CHECK_EQUAL(block->receiptsSize(), 0);
+
     std::promise<bool> p8;
     auto f8 = p8.get_future();
     m_ledger->asyncGetBlockDataByNumber(
@@ -856,6 +886,12 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_TEST(_block->transactionsMetaDataSize() != 0);
             p8.set_value(true);
         });
+    block = task::syncWait(
+        ledger::getBlockData(*m_storage, 15, TRANSACTIONS_HASH, *m_blockFactory, fromStorage));
+    BOOST_CHECK_GT(block->transactionsMetaDataSize(), 0);
+    BOOST_CHECK_EQUAL(block->transactionsSize(), 0);
+    BOOST_CHECK_EQUAL(block->receiptsSize(), 0);
+
     BOOST_CHECK_EQUAL(f1.get(), true);
     BOOST_CHECK_EQUAL(ff1.get(), true);
     BOOST_CHECK_EQUAL(f2.get(), true);
