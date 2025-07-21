@@ -339,7 +339,7 @@ public:
         static const char* committeeBin = bcos::initializer::committeeBin;
 
         // deploy CommitteeManager
-
+        // compiled from https://github.com/FISCO-BCOS/bcos-auth/blob/main/CommitteeManager.sol
         // hex bin code to bytes
         bytes code;
         boost::algorithm::unhex(committeeBin, std::back_inserter(code));
