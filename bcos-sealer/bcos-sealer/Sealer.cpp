@@ -135,7 +135,7 @@ void Sealer::executeWorker()
     else
     {
         boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(10));
+        m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
     }
 }
 
