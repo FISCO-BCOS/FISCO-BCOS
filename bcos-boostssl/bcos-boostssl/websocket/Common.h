@@ -36,6 +36,9 @@
 #define WEBSOCKET_SSL_STREAM(LEVEL) BCOS_LOG(LEVEL) << "[WS][SSL][STREAM]"
 #define WEBSOCKET_INITIALIZER(LEVEL) BCOS_LOG(LEVEL) << "[WS][INITIALIZER]"
 
+// Note!!! 0xffff is raw ws message type, user should not use this type
+constexpr uint16_t WS_RAW_MESSAGE_TYPE = 0xffff;
+
 namespace bcos::boostssl::ws
 {
 class WsSession;

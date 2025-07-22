@@ -90,7 +90,10 @@ BOOST_AUTO_TEST_CASE(test_buildMessage)
         uint16_t type = 111;
         std::string data = "HelloWorld.";
         auto factory = std::make_shared<WsMessageFactory>();
-        auto msg = factory->buildMessage(type, std::make_shared<bytes>(data.begin(), data.end()));
+        auto payload = std::make_shared<bytes>(data.begin(), data.end());
+        auto msg = factory->buildMessage();
+        msg->setPacketType(type);
+        msg->setPayload(payload);
         auto wsMessage = std::dynamic_pointer_cast<WsMessage>(msg);
         wsMessage->setStatus(status);
         wsMessage->setPacketType(type);

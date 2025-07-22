@@ -120,27 +120,9 @@ public:
     WsMessageFactory& operator=(WsMessageFactory&&) = delete;
     ~WsMessageFactory() override = default;
 
-    std::string newSeq() override
-    {
-        std::string seq = boost::uuids::to_string(boost::uuids::random_generator()());
-        seq.erase(std::remove(seq.begin(), seq.end(), '-'), seq.end());
-        return seq;
-    }
-
     boostssl::MessageFace::Ptr buildMessage() override
     {
         auto msg = std::make_shared<WsMessage>();
-        return msg;
-    }
-
-    static std::shared_ptr<WsMessage> buildMessage(
-        uint16_t _type, std::shared_ptr<bcos::bytes> _data)
-    {
-        auto msg = std::make_shared<WsMessage>();
-
-        msg->setPacketType(_type);
-        msg->setPayload(std::move(_data));
-
         return msg;
     }
 };

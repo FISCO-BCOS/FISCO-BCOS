@@ -71,7 +71,13 @@ public:
     virtual ~MessageFaceFactory() = default;
 
     virtual MessageFace::Ptr buildMessage() = 0;
-    virtual std::string newSeq() = 0;
+
+    virtual std::string newSeq()
+    {
+        std::string seq = boost::uuids::to_string(boost::uuids::random_generator()());
+        seq.erase(std::remove(seq.begin(), seq.end(), '-'), seq.end());
+        return seq;
+    }
 };
 
 }  // namespace bcos::boostssl

@@ -33,7 +33,9 @@ bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string _groupId,
     m_wsService(std::move(_wsService)),
     m_groupId(std::move(_groupId)),
     m_endpoints(m_groupManager->getNodeService(m_groupId, ""), filterSystem)
-{}
+{
+    WEBSOCKET_MESSAGE(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
+}
 
 void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender)
 {
@@ -49,6 +51,9 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, msg));
         }
+
+        // TODO: Add handle batch request
+
         response["id"] = request["id"];
         if (auto const handler = m_endpointsMapping.findHandler(request["method"].asString());
             handler.has_value())

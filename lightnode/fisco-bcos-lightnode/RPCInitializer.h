@@ -54,7 +54,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{});
     }
 
-    wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
+    wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
         [nodeConfig, nodeID, localLedger](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             RPC_LOG(INFO) << "LightNode handshake request";

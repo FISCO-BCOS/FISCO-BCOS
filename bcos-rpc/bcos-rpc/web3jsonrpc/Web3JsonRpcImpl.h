@@ -37,7 +37,7 @@ public:
     Web3JsonRpcImpl(std::string _groupId, bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem);
-    ~Web3JsonRpcImpl() = default;
+    ~Web3JsonRpcImpl() { WEBSOCKET_MESSAGE(INFO) << LOG_KV("[DELOBJ][Web3JsonRpcImpl]", this); }
 
     void onRPCRequest(std::string_view _requestBody, Sender _sender);
 

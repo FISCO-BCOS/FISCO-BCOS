@@ -62,7 +62,7 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
         });
 
     // handshake msgHandler
-    m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
         boost::bind(
             &Rpc::onRecvHandshakeRequest, this, boost::placeholders::_1, boost::placeholders::_2));
 }
