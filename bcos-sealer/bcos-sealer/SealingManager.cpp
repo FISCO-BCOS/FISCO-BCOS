@@ -20,7 +20,6 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
-#include "bcos-framework/protocol/CommonError.h"
 
 using namespace bcos;
 using namespace bcos::sealer;
