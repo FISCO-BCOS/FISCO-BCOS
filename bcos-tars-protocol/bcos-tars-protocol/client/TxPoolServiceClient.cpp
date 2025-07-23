@@ -78,7 +78,7 @@ bcostars::TxPoolServiceClient::submitTransaction(
     Awaitable awaitable{.m_callback = tarsCallback.release(),
         .m_transaction = std::move(transaction),
         .m_proxy = m_proxy,
-        .m_waitForReceipt = waitForReceipt};
+        };
 
     co_return co_await awaitable;
 }
