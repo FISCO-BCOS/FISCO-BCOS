@@ -96,7 +96,7 @@ void EndpointsMapping::addEthHandlers()
 void EndpointsMapping::addNetHandlers()
 {
     // clang-format off
-    m_handlers[methodString(EthMethod::net_version)] = &Endpoints::verison;
+    m_handlers[methodString(EthMethod::net_version)] = &Endpoints::version;
     m_handlers[methodString(EthMethod::net_peerCount)] = &Endpoints::peerCount;
     m_handlers[methodString(EthMethod::net_listening)] = &Endpoints::listening;
     // clang-format on

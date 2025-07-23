@@ -197,6 +197,7 @@ public:
     uint32_t web3RpcThreadSize() const { return m_web3RpcThreadSize; }
     uint32_t web3FilterTimeout() const { return m_web3FilterTimeout; }
     uint32_t web3MaxProcessBlock() const { return m_web3MaxProcessBlock; }
+    uint32_t web3BatchRequestSizeLimit() const { return m_web3BatchRequestSizeLimit; }
 
     // the gateway configurations
     const std::string& p2pListenIP() const { return m_p2pListenIP; }
@@ -482,6 +483,7 @@ private:
     uint32_t m_web3RpcThreadSize{};
     uint32_t m_web3FilterTimeout{};
     uint32_t m_web3MaxProcessBlock{};
+    uint32_t m_web3BatchRequestSizeLimit{};
 
     // config for gateway
     std::string m_p2pListenIP;

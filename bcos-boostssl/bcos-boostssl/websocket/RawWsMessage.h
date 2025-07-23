@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file WsMessage.h
+ * @file RawWsMessage.h
  * @author: octopus
  * @date 2021-07-28
  */

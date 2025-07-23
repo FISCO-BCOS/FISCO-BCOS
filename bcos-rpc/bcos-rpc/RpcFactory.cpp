@@ -378,8 +378,9 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     auto web3FilterSystem =
         std::make_shared<Web3FilterSystem>(_groupManager, m_nodeConfig->groupId(),
             m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
-    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
-        m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService, web3FilterSystem);
+    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
+        m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager), m_gateway, _wsService,
+        web3FilterSystem);
 
     if (auto httpServer = _wsService->httpServer())
     {
@@ -395,7 +396,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
             auto payload = msg->payload();
             std::string_view strRequest((char*)payload->data(), payload->size());
 
-            RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
+            // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
 
             web3JsonRpc->onRPCRequest(strRequest, [session, msg](bcos::bytes _respData) {
                 msg->setPayload(std::make_shared<bcos::bytes>(std::move(_respData)));
