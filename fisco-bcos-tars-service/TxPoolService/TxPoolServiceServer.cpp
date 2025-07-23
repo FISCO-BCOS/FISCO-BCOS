@@ -19,7 +19,7 @@ bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
                          tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
         try
         {
-            auto submitResult = co_await txpool->submitTransaction(std::move(transaction, true));
+            auto submitResult = co_await txpool->submitTransaction(std::move(transaction), true);
             async_response_submit(current, {},
                 std::dynamic_pointer_cast<bcostars::protocol::TransactionSubmitResultImpl>(
                     submitResult)
