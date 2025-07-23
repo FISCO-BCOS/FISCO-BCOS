@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
     //    txpool.txpoolStorage()->insert(tx);
     task::wait([](decltype(txpool) txpool, decltype(tx) transaction) -> task::Task<void> {
         [[maybe_unused]] auto submitResult =
-            co_await txpool.submitTransaction(std::move(transaction));
+            co_await txpool.submitTransaction(std::move(transaction), true);
     }(txpool, tx));
     task::syncWait(txpool.broadcastTransactionBufferByTree(bcos::ref(data), true));
     // broadcast to all nodes finally

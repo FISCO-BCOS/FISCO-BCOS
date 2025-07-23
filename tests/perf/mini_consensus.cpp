@@ -96,7 +96,7 @@ void createTxs(bcos::initializer::Initializer::Ptr const& init)
         tx->setNonce(std::to_string(utcSteadyTime()));
         task::wait([](bcos::initializer::Initializer::Ptr const& init,
                        decltype(tx) tx) -> task::Task<void> {
-            co_await init->txPoolInitializer()->txpool()->submitTransaction(tx);
+            co_await init->txPoolInitializer()->txpool()->submitTransaction(tx, true);
         }(init, tx));
     }
 }
@@ -117,8 +117,8 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
     auto nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
-    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
-        nodeInitializer->protocolInitializer()->keyEncryption());
+    GatewayFactory gatewayFactory(
+        nodeConfig->chainId(), "localRpc", nodeInitializer->protocolInitializer()->keyEncryption());
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
 
     auto frontServiceInitializer = std::make_shared<FrontServiceInitializer>(

@@ -1,10 +1,12 @@
 #include "TxPoolServiceClient.h"
+
 bcostars::TxPoolServiceClient::TxPoolServiceClient(bcostars::TxPoolServicePrx _proxy,
     bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::protocol::BlockFactory::Ptr _blockFactory)
   : m_proxy(_proxy), m_cryptoSuite(_cryptoSuite), m_blockFactory(_blockFactory)
 {}
 bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr>
-bcostars::TxPoolServiceClient::submitTransaction(bcos::protocol::Transaction::Ptr transaction)
+bcostars::TxPoolServiceClient::submitTransaction(
+    bcos::protocol::Transaction::Ptr transaction, bool waitForReceipt)
 {
     struct TarsCallback : public bcostars::TxPoolServicePrxCallback
     {
@@ -67,6 +69,7 @@ bcostars::TxPoolServiceClient::submitTransaction(bcos::protocol::Transaction::Pt
         TarsCallback* m_callback = nullptr;
         bcos::protocol::Transaction::Ptr m_transaction;
         bcostars::TxPoolServicePrx m_proxy;
+        bool m_waitForReceipt = false;
     };
 
     auto tarsCallback = std::make_unique<TarsCallback>();
@@ -74,7 +77,8 @@ bcostars::TxPoolServiceClient::submitTransaction(bcos::protocol::Transaction::Pt
 
     Awaitable awaitable{.m_callback = tarsCallback.release(),
         .m_transaction = std::move(transaction),
-        .m_proxy = m_proxy};
+        .m_proxy = m_proxy,
+        .m_waitForReceipt = waitForReceipt};
 
     co_return co_await awaitable;
 }

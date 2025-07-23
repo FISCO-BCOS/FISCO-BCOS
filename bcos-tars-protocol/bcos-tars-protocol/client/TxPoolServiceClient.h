@@ -27,7 +27,7 @@ public:
     ~TxPoolServiceClient() override = default;
 
     bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        bcos::protocol::Transaction::Ptr transaction) override;
+        bcos::protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     bcos::task::Task<void> broadcastTransaction(
         [[maybe_unused]] const bcos::protocol::Transaction& transaction) override;
