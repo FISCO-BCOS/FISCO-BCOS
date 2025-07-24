@@ -62,18 +62,12 @@ public:
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
 
-    bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) override;
     // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
-    bcos::protocol::Transaction::Ptr removeSubmittedTx(
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override;
 
     bcos::protocol::ConstTransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
-
-    // FIXME: deprecated, after using txpool::broadcastTransaction
-    bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) override;
 
     bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
@@ -114,6 +108,8 @@ public:
         protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
         bool checkPoolLimit, bool lock);
 
+    void remove(crypto::HashType const& _txHash);
+
 
 protected:
     virtual void notifyTxsSize(size_t _retryTime = 0);
@@ -127,15 +123,6 @@ protected:
         protocol::TxSubmitCallback& txSubmitCallback);
 
     void onTxRemoved(const bcos::protocol::Transaction::Ptr& _tx, bool needNotifyUnsealedTxsSize);
-
-    virtual bcos::protocol::Transaction::Ptr removeWithoutNotifyUnseal(
-        bcos::crypto::HashType const& _txHash);
-    virtual bcos::protocol::Transaction::Ptr removeSubmittedTxWithoutLock(
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult, bool _notify = true);
-
-    virtual void notifyInvalidReceipt(bcos::crypto::HashType const& _txHash,
-        bcos::protocol::TransactionStatus _status,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback);
 
     virtual void notifyTxResult(bcos::protocol::Transaction& transaction,
         bcos::protocol::TransactionSubmitResult::Ptr txSubmitResult);
