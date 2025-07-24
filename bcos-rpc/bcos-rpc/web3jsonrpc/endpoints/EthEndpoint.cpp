@@ -870,3 +870,11 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
     auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag);
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
+
+task::Task<void> EthEndpoint::maxPriorityFeePerGas(
+    const Json::Value& request, Json::Value& response)
+{
+    Json::Value result = "0x0";
+    buildJsonContent(result, response);
+    co_return;
+}
