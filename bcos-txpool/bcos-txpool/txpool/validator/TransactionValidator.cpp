@@ -45,10 +45,10 @@ TransactionStatus TransactionValidator::validateTransaction(const bcos::protocol
     {
         if (_tx.input().size() > MAX_INITCODE_SIZE)
         {
-            TX_VALIDATOR_CHECKER_LOG(TRACE)
-                << LOG_BADGE("ValidateTransaction")
-                << LOG_DESC("RejectTransactionWithLargeInitCode") << LOG_KV("txSize", _tx.input().size())
-                << LOG_KV("maxInitCodeSize", MAX_INITCODE_SIZE);
+            TX_VALIDATOR_CHECKER_LOG(TRACE) << LOG_BADGE("ValidateTransaction")
+                                            << LOG_DESC("RejectTransactionWithLargeInitCode")
+                                            << LOG_KV("txSize", _tx.input().size())
+                                            << LOG_KV("maxInitCodeSize", MAX_INITCODE_SIZE);
             // Reject transactions with initcode larger than MAX_INITCODE_SIZE
             return TransactionStatus::MaxInitCodeSizeExceeded;
         }
@@ -99,8 +99,6 @@ task::Task<TransactionStatus> TransactionValidator::validateTransactionWithState
     //         << LOG_KV("code", code);
     //     co_return TransactionStatus::SenderNoEOA;
     // }
-
-    // 检查账户余额
 
     if (!skipBalanceCheck)
     {

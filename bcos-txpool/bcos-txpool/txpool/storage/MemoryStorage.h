@@ -41,24 +41,16 @@ public:
     // the default txsExpirationTime is 10 minutes
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
-    ~MemoryStorage() override { stop(); };
+    ~MemoryStorage() override;
 
     // New interfaces =============
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) override;
-
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
-        protocol::Transaction::Ptr transaction) override;
+        protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
         ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override;
     // ============================
-
-    // disassemble submitTransaction
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction,
-        std::function<void()> afterInsertHook = nullptr) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
 
@@ -72,11 +64,7 @@ public:
     bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
-    bool exist(bcos::crypto::HashType const& _txHash) override
-    {
-        TxsMap::ReadAccessor accessor;
-        return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
-    }
+    bool exist(bcos::crypto::HashType const& _txHash) override;
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 

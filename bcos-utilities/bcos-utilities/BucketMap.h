@@ -54,7 +54,7 @@ struct StringHash
     using is_transparent = void;
 
     template <std::convertible_to<std::string_view> T>
-    std::size_t operator()(T&& str) const
+    std::size_t operator()(const T& str) const
     {
         return std::hash<std::decay_t<T>>{}(str);
     }
