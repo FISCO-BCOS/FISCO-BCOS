@@ -47,9 +47,6 @@ public:
         protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
-    virtual bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) = 0;
-    virtual bcos::protocol::Transaction::Ptr removeSubmittedTx(
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) = 0;
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
@@ -67,7 +64,6 @@ public:
      * @param _txsLimit Maximum number of transactions that can be obtained at a time
      * @return List of new transactions
      */
-    virtual bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) = 0;
     virtual bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList,
         bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
         bool _avoidDuplicate = true) = 0;
