@@ -118,7 +118,8 @@ struct MockTxPool : public txpool::TxPoolInterface
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) override
     {}
-    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID, bytesConstRef const& _block,
+    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
+        protocol::Block::ConstPtr _block,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
     {}
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,

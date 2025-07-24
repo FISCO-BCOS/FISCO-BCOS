@@ -969,9 +969,9 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         return false;
     }
     m_config->validator()->verifyProposal(leaderNodeInfo->nodeID,
-        _prePrepareMsg->consensusProposal(),
-        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature,
-            block = std::move(block)](auto&& _error, bool _verifyResult) {
+        _prePrepareMsg->consensusProposal()->index(), block,
+        [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature, block](
+            auto&& _error, bool _verifyResult) {
             try
             {
                 auto pbftEngine = self.lock();

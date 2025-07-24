@@ -59,7 +59,7 @@ public:
         tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
-        const vector<tars::Char>& block, tars::Bool& result, tars::TarsCurrentPtr current) override;
+        const bcostars::Block& block, tars::Bool& result, tars::TarsCurrentPtr current) override;
 
     bcostars::Error notifyConnectedNodes(
         const vector<vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current) override;

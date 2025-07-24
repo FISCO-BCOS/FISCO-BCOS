@@ -12,7 +12,7 @@ module bcostars {
 
         Error asyncSealTxs(long txsLimit, vector<vector<byte>> avoidTxs, out Block txsList, out Block sysTxsList);
         Error asyncMarkTxs(vector<vector<byte>> txHashs, bool sealedFlag, long batchId, vector<byte> batchHash);
-        Error asyncVerifyBlock(vector<byte> generatedNodeID, vector<byte> block, out bool result);
+        Error asyncVerifyBlock(vector<byte> generatedNodeID, Block block, out bool result);
         Error asyncFillBlock(vector<vector<byte>> txHashs, out vector<Transaction> filled);
         Error asyncNotifyBlockResult(long blockNumber, vector<TransactionSubmitResult> result);
         Error asyncNotifyTxsSyncMessage(Error error, string id, vector<byte> nodeID, vector<byte> data);

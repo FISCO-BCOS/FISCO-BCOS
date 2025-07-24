@@ -256,7 +256,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     block->encode(*encodedData);
     finish = false;
     faker->txpool()->asyncVerifyBlock(
-        syncPeer->nodeID(), ref(*encodedData), [&](Error::Ptr _error, bool _result) {
+        syncPeer->nodeID(), block, [&](Error::Ptr _error, bool _result) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK(_result == true);
             finish = true;

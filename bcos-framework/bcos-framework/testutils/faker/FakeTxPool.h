@@ -87,7 +87,7 @@ public:
         bcos::crypto::HashType const&, std::function<void(Error::Ptr)>) override
     {}
 
-    void asyncVerifyBlock(PublicPtr, bytesConstRef const&,
+    void asyncVerifyBlock(PublicPtr, protocol::Block::ConstPtr,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
     {
         m_worker->enqueue([this, _onVerifyFinished]() {

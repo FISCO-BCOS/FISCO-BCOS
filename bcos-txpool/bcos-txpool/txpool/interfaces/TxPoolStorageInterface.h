@@ -50,7 +50,7 @@ public:
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) = 0;
 
     virtual bool batchVerifyAndSubmitTransaction(
-        bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) = 0;
+        bcos::protocol::BlockHeader::ConstPtr _header, bcos::protocol::TransactionsPtr _txs) = 0;
     virtual void batchImportTxs(bcos::protocol::TransactionsPtr _txs) = 0;
 
     /**
@@ -82,7 +82,7 @@ public:
     virtual void printPendingTxs() {}
 
     virtual std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
-        bcos::protocol::Block::Ptr _block) = 0;
+        bcos::protocol::Block::ConstPtr _block) = 0;
 
     virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
     virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;

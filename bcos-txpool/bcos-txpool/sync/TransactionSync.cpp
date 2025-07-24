@@ -119,7 +119,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
 }
 
 void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
-    Block::Ptr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
+    Block::ConstPtr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
     auto missedTxsSet =
         std::make_shared<std::set<HashType>>(_missedTxs->begin(), _missedTxs->end());
@@ -161,11 +161,11 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                 << LOG_KV("txsSize", ledgerMissedTxs->size())
                 << LOG_KV("peer", _generatedNodeID->shortHex())
                 << LOG_KV("readDBTime", utcTime() - startT)
-                << LOG_KV("consNum", _verifiedProposal && _verifiedProposal->blockHeader() ?
-                                         _verifiedProposal->blockHeader()->number() :
+                << LOG_KV("consNum", _verifiedProposal && _verifiedProposal->blockHeaderConst() ?
+                                         _verifiedProposal->blockHeaderConst()->number() :
                                          -1)
-                << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeader() ?
-                                      _verifiedProposal->blockHeader()->hash().abridged() :
+                << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeaderConst() ?
+                                      _verifiedProposal->blockHeaderConst()->hash().abridged() :
                                       "null");
             txsSync->requestMissedTxsFromPeer(
                 _generatedNodeID, ledgerMissedTxs, _verifiedProposal, _onVerifyFinished);
@@ -173,7 +173,7 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
 }
 
 size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs, Error::Ptr _error,
-    TransactionsPtr _fetchedTxs, Block::Ptr _verifiedProposal,
+    TransactionsPtr _fetchedTxs, Block::ConstPtr _verifiedProposal,
     VerifyResponseCallback _onVerifyFinished)
 {
     if (_error != nullptr)
@@ -216,12 +216,12 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
 }
 
 void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
-    Block::Ptr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
+    Block::ConstPtr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
-    BlockHeader::Ptr proposalHeader = nullptr;
+    BlockHeader::ConstPtr proposalHeader = nullptr;
     if (_verifiedProposal)
     {
-        proposalHeader = _verifiedProposal->blockHeader();
+        proposalHeader = _verifiedProposal->blockHeaderConst();
     }
     if (_missedTxs->empty() && _onVerifyFinished)
     {
@@ -282,7 +282,8 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
 }
 
 void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data,
-    HashListPtr _missedTxs, Block::Ptr _verifiedProposal, VerifyResponseCallback _onVerifyFinished)
+    HashListPtr _missedTxs, Block::ConstPtr _verifiedProposal,
+    VerifyResponseCallback _onVerifyFinished)
 {
     auto startT = utcTime();
     auto recordT = utcTime();
@@ -293,14 +294,14 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("missedTxsSize", _missedTxs->size())
                        << LOG_KV("code", _error->errorCode())
                        << LOG_KV("msg", _error->errorMessage())
-                       << LOG_KV(
-                              "propHash", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
-                                              _verifiedProposal->blockHeader()->hash().abridged() :
-                                              "unknown")
-                       << LOG_KV(
-                              "propIndex", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
-                                               _verifiedProposal->blockHeader()->number() :
-                                               -1);
+                       << LOG_KV("propHash",
+                              (_verifiedProposal && _verifiedProposal->blockHeaderConst()) ?
+                                  _verifiedProposal->blockHeaderConst()->hash().abridged() :
+                                  "unknown")
+                       << LOG_KV("propIndex",
+                              (_verifiedProposal && _verifiedProposal->blockHeaderConst()) ?
+                                  _verifiedProposal->blockHeaderConst()->number() :
+                                  -1);
         _onVerifyFinished(_error, false);
         return;
     }
@@ -320,10 +321,10 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     auto transactions = m_config->blockFactory()->createBlock(txsResponse->txsData(), true, false);
     auto decodeT = utcTime() - startT;
     startT = utcTime();
-    BlockHeader::Ptr proposalHeader = nullptr;
+    BlockHeader::ConstPtr proposalHeader = nullptr;
     if (_verifiedProposal)
     {
-        proposalHeader = _verifiedProposal->blockHeader();
+        proposalHeader = _verifiedProposal->blockHeaderConst();
     }
     if (_missedTxs->size() != transactions->transactionsSize())
     {
@@ -369,7 +370,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
 }
 
 bool TransactionSync::importDownloadedTxsByBlock(
-    Block::Ptr _txsBuffer, Block::Ptr _verifiedProposal)
+    Block::Ptr _txsBuffer, Block::ConstPtr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
@@ -380,7 +381,7 @@ bool TransactionSync::importDownloadedTxsByBlock(
     return importDownloadedTxs(std::move(txs), std::move(_verifiedProposal));
 }
 
-bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _verifiedProposal)
+bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr _verifiedProposal)
 {
     if (_txs->empty())
     {
@@ -389,11 +390,11 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::Ptr _veri
     auto txsSize = _txs->size();
     // Note: only need verify the signature for the transactions
     bool enforceImport = false;
-    BlockHeader::Ptr proposalHeader = nullptr;
+    BlockHeader::ConstPtr proposalHeader = nullptr;
     // if _verifiedProposal is null, it means import txs from ledger
-    if (_verifiedProposal && _verifiedProposal->blockHeader())
+    if (_verifiedProposal && _verifiedProposal->blockHeaderConst())
     {
-        proposalHeader = _verifiedProposal->blockHeader();
+        proposalHeader = _verifiedProposal->blockHeaderConst();
         enforceImport = true;
     }
     auto recordT = utcTime();

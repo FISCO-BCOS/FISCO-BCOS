@@ -51,12 +51,11 @@ ssize_t bcos::consensus::TxsValidator::resettingProposalSize() const
 }
 
 void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
-    PBFTProposalInterface::Ptr _proposal,
+    bcos::protocol::BlockNumber index, protocol::Block::ConstPtr block,
     std::function<void(Error::Ptr, bool)> _verifyFinishedHandler)
 {
-    auto block = m_blockFactory->createBlock(_proposal->data());
-    auto blockHeader = block->blockHeader();
-    if (blockHeader->number() != _proposal->index())
+    auto blockHeader = block->blockHeaderConst();
+    if (blockHeader->number() != index)
     {
         if (_verifyFinishedHandler)
         {
@@ -66,7 +65,7 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
         return;
     }
     // TODO: passing block directly, no need to createBlock twice
-    m_txPool->asyncVerifyBlock(_fromNode, _proposal->data(), _verifyFinishedHandler);
+    m_txPool->asyncVerifyBlock(_fromNode, std::move(block), _verifyFinishedHandler);
 }
 
 void TxsValidator::asyncResetTxsFlag(

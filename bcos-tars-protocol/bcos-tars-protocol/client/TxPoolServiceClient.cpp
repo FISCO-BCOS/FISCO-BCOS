@@ -1,5 +1,8 @@
 #include "TxPoolServiceClient.h"
 
+#include <memory>
+#include <utility>
+
 bcostars::TxPoolServiceClient::TxPoolServiceClient(bcostars::TxPoolServicePrx _proxy,
     bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::protocol::BlockFactory::Ptr _blockFactory)
   : m_proxy(_proxy), m_cryptoSuite(_cryptoSuite), m_blockFactory(_blockFactory)
@@ -75,10 +78,11 @@ bcostars::TxPoolServiceClient::submitTransaction(
     auto tarsCallback = std::make_unique<TarsCallback>();
     tarsCallback->m_cryptoSuite = m_cryptoSuite;
 
-    Awaitable awaitable{.m_callback = tarsCallback.release(),
+    Awaitable awaitable{
+        .m_callback = tarsCallback.release(),
         .m_transaction = std::move(transaction),
         .m_proxy = m_proxy,
-        };
+    };
 
     co_return co_await awaitable;
 }
@@ -185,13 +189,15 @@ void bcostars::TxPoolServiceClient::asyncMarkTxs(const bcos::crypto::HashList& _
         std::vector<char>(_batchHash.begin(), _batchHash.end()));
 }
 void bcostars::TxPoolServiceClient::asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
-    bcos::bytesConstRef const& _block,
+    bcos::protocol::Block::ConstPtr _block,
     std::function<void(bcos::Error::Ptr, bool)> _onVerifyFinished)
 {
     class Callback : public bcostars::TxPoolServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr, bool)> callback) : m_callback(callback) {}
+        Callback(std::function<void(bcos::Error::Ptr, bool)> callback)
+          : m_callback(std::move(callback))
+        {}
 
         void callback_asyncVerifyBlock(const bcostars::Error& ret, tars::Bool result) override
         {
@@ -207,10 +213,10 @@ void bcostars::TxPoolServiceClient::asyncVerifyBlock(bcos::crypto::PublicPtr _ge
         std::function<void(bcos::Error::Ptr, bool)> m_callback;
     };
 
+    const auto& blockImpl = dynamic_cast<const bcostars::protocol::BlockImpl&>(*_block);
     auto nodeID = _generatedNodeID->data();
     m_proxy->async_asyncVerifyBlock(new Callback(_onVerifyFinished),
-        std::vector<char>(nodeID.begin(), nodeID.end()),
-        std::vector<char>(_block.begin(), _block.end()));
+        std::vector<char>(nodeID.begin(), nodeID.end()), blockImpl.inner());
 }
 void bcostars::TxPoolServiceClient::asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
     std::function<void(bcos::Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
