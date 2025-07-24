@@ -66,7 +66,8 @@ public:
 
     // for consensus module, to verify whether block's txs in txpool or not, invoke when consensus
     // receive proposal
-    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID, bytesConstRef const& _block,
+    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
+        protocol::Block::ConstPtr _block,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override;
 
     // hook for tx/consensus sync message receive
@@ -145,7 +146,7 @@ protected:
 
     void initSendResponseHandler();
 
-    virtual void storeVerifiedBlock(bcos::protocol::Block::Ptr _block);
+    virtual void storeVerifiedBlock(bcos::protocol::Block::ConstPtr _block);
 
 private:
     TxPoolConfig::Ptr m_config;

@@ -70,7 +70,8 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
     }
     // Note: to fetch the remote proposal(the from node hits all transactions)
     auto self = weak_from_this();
-    m_config->validator()->verifyProposal(_fromNode, _proposal,
+    auto block = m_config->blockFactory().createBlock(_proposal->data(), false, false);
+    m_config->validator()->verifyProposal(_fromNode, _proposal->index(), block,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try
             {

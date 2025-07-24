@@ -207,15 +207,16 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
 }
 
 bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
-    const vector<tars::Char>& block, tars::Bool& result, tars::TarsCurrentPtr current)
+    const bcostars::Block& block, tars::Bool& result, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
     bcos::crypto::PublicPtr pk = m_txpoolInitializer->cryptoSuite()->keyFactory()->createKey(
         bcos::bytesConstRef((const bcos::byte*)generatedNodeID.data(), generatedNodeID.size()));
-    m_txpoolInitializer->txpool()->asyncVerifyBlock(pk,
-        bcos::bytesConstRef((const bcos::byte*)block.data(), block.size()),
-        [current](bcos::Error::Ptr error, bool result) {
+    auto blockImpl = std::make_shared<bcostars::protocol::BlockImpl>(
+        [m_block = std::move(const_cast<bcostars::Block&>(block))]() mutable { return &m_block; });
+    m_txpoolInitializer->txpool()->asyncVerifyBlock(
+        pk, blockImpl, [current](bcos::Error::Ptr error, bool result) {
             async_response_asyncVerifyBlock(current, toTarsError(error), result);
         });
 

@@ -992,7 +992,7 @@ void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
     }
 }
 
-std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
+std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _block)
 {
     auto missedTxs = std::make_shared<HashList>();
     auto txsSize = _block->transactionsHashSize();
@@ -1000,9 +1000,13 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     {
         return missedTxs;
     }
-    auto batchId = (_block && _block->blockHeader()) ? _block->blockHeader()->number() : -1;
-    auto batchHash = (_block && _block->blockHeader()) ? _block->blockHeader()->hash() :
-                                                         bcos::crypto::HashType();
+    protocol::BlockHeader::ConstPtr blockHeader;
+    if (_block)
+    {
+        blockHeader = _block->blockHeaderConst();
+    }
+    auto batchId = (_block && blockHeader) ? blockHeader->number() : -1;
+    auto batchHash = (_block && blockHeader) ? blockHeader->hash() : bcos::crypto::HashType();
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();
@@ -1022,12 +1026,11 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
         }
         else if ((*value)->sealed())
         {
-            auto header = _block->blockHeader();
-            if ((*value)->batchId() != header->number() && (*value)->batchId() != -1)
+            if ((*value)->batchId() != blockHeader->number() && (*value)->batchId() != -1)
             {
                 TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
-                                 << LOG_KV("blkNum", header->number())
-                                 << LOG_KV("blkHash", header->hash().abridged())
+                                 << LOG_KV("blkNum", blockHeader->number())
+                                 << LOG_KV("blkHash", blockHeader->hash().abridged())
                                  << LOG_KV("txHash", (*value)->hash().hexPrefixed())
                                  << LOG_KV("txBatchId", (*value)->batchId())
                                  << LOG_KV("txBatchHash", (*value)->batchHash().abridged());
@@ -1213,7 +1216,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 }
 
 bool MemoryStorage::batchVerifyAndSubmitTransaction(
-    bcos::protocol::BlockHeader::Ptr _header, TransactionsPtr _txs)
+    bcos::protocol::BlockHeader::ConstPtr _header, TransactionsPtr _txs)
 {
     // use writeGuard here in case of the transaction status will be modified by other
     // interfaces

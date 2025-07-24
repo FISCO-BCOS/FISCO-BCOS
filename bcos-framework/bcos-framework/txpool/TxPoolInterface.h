@@ -109,7 +109,8 @@ public:
      * @param _onVerifyFinished callback to be called after the block verification is over
      */
     virtual void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
-        bytesConstRef const& _block, std::function<void(Error::Ptr, bool)> _onVerifyFinished) = 0;
+        protocol::Block::ConstPtr _block,
+        std::function<void(Error::Ptr, bool)> _onVerifyFinished) = 0;
 
     /**
      * @brief The dispatcher obtains the transaction list corresponding to the block from the

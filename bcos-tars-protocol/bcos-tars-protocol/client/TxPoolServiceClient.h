@@ -44,7 +44,7 @@ public:
         std::function<void(bcos::Error::Ptr)> _onRecvResponse) override;
 
     void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
-        bcos::bytesConstRef const& _block,
+        bcos::protocol::Block::ConstPtr _block,
         std::function<void(bcos::Error::Ptr, bool)> _onVerifyFinished) override;
 
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
