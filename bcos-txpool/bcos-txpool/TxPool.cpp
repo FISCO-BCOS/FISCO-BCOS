@@ -103,14 +103,7 @@ void TxPool::stop()
 task::Task<protocol::TransactionSubmitResult::Ptr> TxPool::submitTransaction(
     protocol::Transaction::Ptr transaction, bool waitForReceipt)
 {
-    if (waitForReceipt)
-    {
-        co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction));
-    }
-    else
-    {
-        co_return co_await m_txpoolStorage->submitTransactionWithoutReceipt(std::move(transaction));
-    }
+    co_return co_await m_txpoolStorage->submitTransaction(std::move(transaction), waitForReceipt);
 }
 
 task::Task<void> TxPool::broadcastTransaction(const protocol::Transaction& transaction)
