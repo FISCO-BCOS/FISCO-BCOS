@@ -417,24 +417,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     return result;
 }
 
-void MemoryStorage::notifyInvalidReceipt(
-    HashType const& _txHash, TransactionStatus _status, TxSubmitCallback _txSubmitCallback)
-{
-    if (!_txSubmitCallback)
-    {
-        return;
-    }
-    // notify txResult
-    auto txResult = m_config->txResultFactory()->createTxSubmitResult();
-    txResult->setTxHash(_txHash);
-    txResult->setStatus((uint32_t)_status);
-    std::stringstream errorMsg;
-    errorMsg << _status;
-    _txSubmitCallback(BCOS_ERROR_PTR((int32_t)_status, errorMsg.str()), txResult);
-    TXPOOL_LOG(WARNING) << LOG_DESC("notifyReceipt: reject invalid tx")
-                        << LOG_KV("tx", _txHash.abridged()) << LOG_KV("exception", _status);
-}
-
 TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 {
     return insertWithoutLock(std::move(transaction));
@@ -454,48 +436,6 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
         return TransactionStatus::AlreadyInTxPool;
     }
     return TransactionStatus::None;
-}
-
-Transaction::Ptr MemoryStorage::removeWithoutNotifyUnseal(HashType const& _txHash)
-{
-    if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, _txHash))
-    {
-        auto tx = std::move(accessor.value());
-        m_txsTable.remove(accessor);
-        return tx;
-    }
-    return {};
-}
-
-Transaction::Ptr MemoryStorage::remove(HashType const& _txHash)
-{
-    return removeWithoutNotifyUnseal(_txHash);
-}
-
-Transaction::Ptr MemoryStorage::removeSubmittedTxWithoutLock(
-    TransactionSubmitResult::Ptr txSubmitResult, bool _notify)
-{
-    auto tx = removeWithoutNotifyUnseal(txSubmitResult->txHash());
-    if (!tx)
-    {
-        return nullptr;
-    }
-    if (_notify)
-    {
-        notifyTxResult(*tx, std::move(txSubmitResult));
-    }
-    return tx;
-}
-
-Transaction::Ptr MemoryStorage::removeSubmittedTx(TransactionSubmitResult::Ptr txSubmitResult)
-{
-    auto tx = remove(txSubmitResult->txHash());
-    if (!tx)
-    {
-        return nullptr;
-    }
-    notifyTxResult(*tx, std::move(txSubmitResult));
-    return tx;
 }
 
 void MemoryStorage::notifyTxResult(
@@ -702,31 +642,6 @@ ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList cons
 }
 
 #if 1
-ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
-{
-    auto fetchedTxs = std::make_shared<ConstTransactions>();
-    fetchedTxs->reserve(_txsLimit);
-
-    for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
-    {
-        const auto& tx = accessor.value();
-        // Note: When inserting data into tbb::concurrent_unordered_map while traversing, it.second
-        // will occasionally be a null pointer.
-        if (!tx || tx->synced())
-        {
-            continue;
-        }
-        tx->setSynced(true);
-        fetchedTxs->emplace_back(tx);
-        if (!(fetchedTxs->size() < _txsLimit))
-        {
-            break;
-        }
-    }
-
-    return fetchedTxs;
-}
-
 bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
@@ -1360,4 +1275,12 @@ void MemoryStorage::notifyTxsSize(size_t _retryTime)
         }
         memoryStorage->notifyTxsSize((_retryTime + 1));
     });
+}
+
+void MemoryStorage::remove(crypto::HashType const& _txHash)
+{
+    if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, _txHash))
+    {
+        m_txsTable.remove(accessor);
+    }
 }
