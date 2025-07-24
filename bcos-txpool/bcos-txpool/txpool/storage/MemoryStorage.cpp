@@ -77,18 +77,40 @@ void MemoryStorage::stop()
 }
 
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
-    protocol::Transaction::Ptr transaction)
-{
-    co_return co_await submitTransactionWithHook(transaction, nullptr);
-}
-
-task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithHook(
-    protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted)
+    protocol::Transaction::Ptr transaction, bool waitForReceipt)
 {
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
-        [[maybe_unused]] static constexpr bool await_ready() { return false; }
+        [[maybe_unused]] bool await_ready()
+        {
+            if (m_waitForReceipt)
+            {
+                return false;
+            }
+
+            auto result = m_self->verifyAndSubmitTransaction(m_transaction, {}, true, true);
+            if (result != TransactionStatus::None)
+            {
+                TXPOOL_LOG(DEBUG) << "Submit transaction failed! "
+                                  << LOG_KV(
+                                         "TxHash", m_transaction ? m_transaction->hash().hex() : "")
+                                  << LOG_KV("result", result);
+                m_submitResult.emplace<Error::Ptr>(
+                    BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
+            }
+            else
+            {
+                auto res = std::make_shared<TransactionSubmitResultImpl>();
+                res->setStatus(static_cast<uint32_t>(result));
+                res->setTxHash(m_transaction->hash());
+                res->setSender(std::string(m_transaction->sender()));
+                res->setTo(std::string(m_transaction->to()));
+                m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
+            }
+            return true;
+        }
+
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
             try
@@ -112,12 +134,6 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         }
                     },
                     true, true);
-
-                // already in txpool but not sealed in block now
-                if (result == TransactionStatus::None && m_onTxSubmitted != nullptr)
-                {
-                    m_onTxSubmitted();
-                }
 
                 if (result != TransactionStatus::None)
                 {
@@ -150,82 +166,15 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         }
 
         protocol::Transaction::Ptr m_transaction;
-        std::function<void()> m_onTxSubmitted;
         std::shared_ptr<MemoryStorage> m_self;
         std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
             m_submitResult;
-    };
-
-    Awaitable awaitable{.m_transaction = std::move(transaction),
-        .m_onTxSubmitted = std::move(onTxSubmitted),
+        bool m_waitForReceipt;
+    } awaitable{.m_transaction = std::move(transaction),
         .m_self = shared_from_this(),
-        .m_submitResult = {}};
-    co_return co_await awaitable;
-}
+        .m_submitResult = {},
+        .m_waitForReceipt = waitForReceipt};
 
-task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransactionWithoutReceipt(
-    protocol::Transaction::Ptr transaction)
-{
-    transaction->setImportTime(utcTime());
-    struct Awaitable
-    {
-        [[maybe_unused]] static constexpr bool await_ready() { return false; }
-        [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
-        {
-            try
-            {
-                auto const txHash = m_transaction->hash();
-                auto const from = std::string(m_transaction->sender());
-                auto const to = std::string(m_transaction->to());
-                auto result = m_self->verifyAndSubmitTransaction(
-                    std::move(m_transaction), nullptr, true, true);
-
-                if (result != TransactionStatus::None)
-                {
-                    TXPOOL_LOG(DEBUG) << "Submit transaction failed! "
-                                      << LOG_KV("TxHash", txHash.hex()) << LOG_KV("result", result);
-                    m_submitResult.emplace<Error::Ptr>(
-                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
-                }
-                else
-                {
-                    auto res = std::make_shared<TransactionSubmitResultImpl>();
-                    res->setStatus(static_cast<uint32_t>(result));
-                    res->setTxHash(txHash);
-                    res->setSender(from);
-                    res->setTo(std::string(to));
-                    m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
-                }
-                handle.resume();
-            }
-            catch (std::exception& e)
-            {
-                TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
-                m_submitResult.emplace<Error::Ptr>(
-                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
-                handle.resume();
-            }
-        }
-        bcos::protocol::TransactionSubmitResult::Ptr await_resume()
-        {
-            if (std::holds_alternative<Error::Ptr>(m_submitResult))
-            {
-                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
-            }
-
-            return std::move(
-                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
-        }
-
-        protocol::Transaction::Ptr m_transaction;
-        std::shared_ptr<MemoryStorage> m_self;
-        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
-            m_submitResult;
-    };
-
-    Awaitable awaitable{.m_transaction = std::move(transaction),
-        .m_self = shared_from_this(),
-        .m_submitResult = {}};
     co_return co_await awaitable;
 }
 
@@ -1283,4 +1232,13 @@ void MemoryStorage::remove(crypto::HashType const& _txHash)
     {
         m_txsTable.remove(accessor);
     }
+}
+bcos::txpool::MemoryStorage::~MemoryStorage()
+{
+    stop();
+}
+bool bcos::txpool::MemoryStorage::exist(bcos::crypto::HashType const& _txHash)
+{
+    TxsMap::ReadAccessor accessor;
+    return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
 }

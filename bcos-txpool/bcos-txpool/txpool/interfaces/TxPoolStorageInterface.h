@@ -36,15 +36,10 @@ public:
     virtual ~TxPoolStorageInterface() = default;
 
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) = 0;
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
-        protocol::Transaction::Ptr transaction) = 0;
+        protocol::Transaction::Ptr transaction, bool waitForReceipt) = 0;
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
         ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized>
             hashes) = 0;
-
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
