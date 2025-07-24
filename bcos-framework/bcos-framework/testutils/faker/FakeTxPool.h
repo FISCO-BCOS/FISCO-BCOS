@@ -29,9 +29,8 @@ using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::consensus;
 
-namespace bcos
-{
-namespace test
+
+namespace bcos::test
 {
 class FakeTxPool : public TxPoolInterface
 {
@@ -45,7 +44,7 @@ public:
 
     // useless for PBFT, maybe needed by RPC
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) override
+        protocol::Transaction::Ptr transaction, bool /*unused*/) override
     {
         co_return nullptr;
     }
@@ -112,5 +111,4 @@ private:
     bool m_verifyResult = true;
     std::shared_ptr<ThreadPool> m_worker = nullptr;
 };
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

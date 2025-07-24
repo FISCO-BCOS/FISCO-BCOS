@@ -38,43 +38,25 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         NonceCheckerInterface::Ptr _txpoolNonceChecker, int64_t _blockLimit, size_t _poolLimit,
-        bool checkTransactionSignature)
-      : m_txValidator(std::move(_txValidator)),
-        m_txResultFactory(std::move(_txResultFactory)),
-        m_blockFactory(std::move(_blockFactory)),
-        m_ledger(std::move(_ledger)),
-        m_txPoolNonceChecker(std::move(_txpoolNonceChecker)),
-        m_blockLimit(_blockLimit),
-        m_poolLimit(_poolLimit),
-        m_checkTransactionSignature(checkTransactionSignature)
-    {}
+        bool checkTransactionSignature);
 
     virtual ~TxPoolConfig() = default;
-    virtual void setPoolLimit(size_t _poolLimit) { m_poolLimit = _poolLimit; }
-    virtual size_t poolLimit() const { return m_poolLimit; }
+    virtual void setPoolLimit(size_t _poolLimit);
+    virtual size_t poolLimit() const;
 
-    NonceCheckerInterface::Ptr txPoolNonceChecker() { return m_txPoolNonceChecker; }
+    NonceCheckerInterface::Ptr txPoolNonceChecker();
 
-    TxValidatorInterface::Ptr txValidator() { return m_txValidator; }
-    bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory()
-    {
-        return m_txResultFactory;
-    }
+    TxValidatorInterface::Ptr txValidator();
+    bcos::protocol::TransactionSubmitResultFactory::Ptr txResultFactory();
 
-    bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
-    void setBlockFactory(bcos::protocol::BlockFactory::Ptr _blockFactory)
-    {
-        m_blockFactory = std::move(_blockFactory);
-    }
+    bcos::protocol::BlockFactory::Ptr blockFactory();
+    void setBlockFactory(bcos::protocol::BlockFactory::Ptr _blockFactory);
 
-    bcos::protocol::TransactionFactory::Ptr txFactory()
-    {
-        return m_blockFactory->transactionFactory();
-    }
-    std::shared_ptr<bcos::ledger::LedgerInterface> ledger() { return m_ledger; }
-    int64_t blockLimit() const { return m_blockLimit; }
+    bcos::protocol::TransactionFactory::Ptr txFactory();
+    std::shared_ptr<bcos::ledger::LedgerInterface> ledger();
+    int64_t blockLimit() const;
 
-    bool checkTransactionSignature() const { return m_checkTransactionSignature; }
+    bool checkTransactionSignature() const;
 
 private:
     TxValidatorInterface::Ptr m_txValidator;

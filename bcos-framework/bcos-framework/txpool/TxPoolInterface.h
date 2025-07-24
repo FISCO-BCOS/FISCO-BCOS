@@ -48,20 +48,7 @@ public:
      * @return protocol::TransactionSubmitResult::Ptr
      */
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        [[maybe_unused]] protocol::Transaction::Ptr transaction)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
-    }
-
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
-        [[maybe_unused]] protocol::Transaction::Ptr transaction)
-    {
-        BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
-    }
-
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        [[maybe_unused]] protocol::Transaction::Ptr transaction,
-        [[maybe_unused]] std::function<void()> afterInsertHook)
+        [[maybe_unused]] protocol::Transaction::Ptr transaction, bool waitForReceipt)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }

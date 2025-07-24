@@ -55,7 +55,7 @@ Transactions importTransactions(
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
         task::syncWait(txpool->broadcastTransaction(*transaction));
-        task::wait(txpool->submitTransaction(transaction));
+        task::wait(txpool->submitTransaction(transaction, true));
     }
     auto startT = utcTime();
     while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))
@@ -88,7 +88,7 @@ void importTransactionsNew(
             auto& transaction = transactions[i];
             task::wait(
                 [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
-                    auto result = co_await txpool->submitTransaction(transaction);
+                    auto result = co_await txpool->submitTransaction(transaction, true);
                     BOOST_CHECK_EQUAL(result->status(), 0);
                     TXPOOL_LOG(DEBUG) << "Submit transaction successed";
                 }(txpool, transaction));

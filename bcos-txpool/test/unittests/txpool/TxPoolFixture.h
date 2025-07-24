@@ -374,7 +374,7 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
                          uint32_t _expectedStatus) -> bcos::task::Task<void> {
         try
         {
-            auto submitResult = co_await txpool->submitTransaction(std::move(transaction));
+            auto submitResult = co_await txpool->submitTransaction(std::move(transaction), true);
             if (submitResult->txHash() != _expectedTxHash)
             {
                 // do something
@@ -429,8 +429,7 @@ inline void checkWebTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterfac
                          uint32_t _expectedStatus) -> bcos::task::Task<void> {
         try
         {
-            auto submitResult =
-                co_await txpool->submitTransactionWithoutReceipt(std::move(transaction));
+            auto submitResult = co_await txpool->submitTransaction(std::move(transaction), false);
             if (submitResult->txHash() != _expectedTxHash)
             {
                 // do something
