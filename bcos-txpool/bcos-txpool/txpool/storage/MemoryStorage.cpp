@@ -1236,7 +1236,7 @@ void MemoryStorage::remove(crypto::HashType const& _txHash)
 bcos::txpool::MemoryStorage::~MemoryStorage()
 {
     stop();
-};
+}
 bool bcos::txpool::MemoryStorage::exist(bcos::crypto::HashType const& _txHash)
 {
     TxsMap::ReadAccessor accessor;
