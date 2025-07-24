@@ -43,13 +43,7 @@ public:
 
     // New interfaces ==================
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) override;
-
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
-        protocol::Transaction::Ptr transaction) override;
-
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted) override;
+        protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
     task::Task<void> broadcastTransactionBuffer(bytesConstRef data) override;

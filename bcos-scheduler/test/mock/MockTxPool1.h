@@ -22,7 +22,7 @@ public:
     void start() override {}
     void stop() override {}
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) override
+        protocol::Transaction::Ptr transaction, bool /*waitForReceipt*/) override
     {
         co_return nullptr;
     }

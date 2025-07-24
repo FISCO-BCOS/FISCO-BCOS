@@ -15,7 +15,7 @@ class MockTransactionPoolMT
 {
 public:
     bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        bcos::protocol::Transaction::Ptr transaction)
+        bcos::protocol::Transaction::Ptr transaction, bool /*unused*/)
     {
         if constexpr (withError)
         {
@@ -40,7 +40,7 @@ class MockTransactionPoolST
 {
 public:
     bcos::task::Task<bcos::protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        bcos::protocol::Transaction::Ptr transaction)
+        bcos::protocol::Transaction::Ptr transaction, bool /*unused*/)
     {
         std::cout << "start resume at " << std::this_thread::get_id() << std::endl;
 

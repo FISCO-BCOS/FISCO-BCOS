@@ -62,7 +62,7 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         {
             auto tx = fakeTransaction(_cryptoSuite, std::to_string(1000 + i),
                 ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
-            task::syncWait(txpool->submitTransaction(tx));
+            task::syncWait(txpool->submitTransaction(tx, true));
             auto result = std::make_shared<TransactionSubmitResultImpl>();
             result->setTxHash(tx->hash());
             (*txsResult)[i] = result;

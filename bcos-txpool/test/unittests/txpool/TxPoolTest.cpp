@@ -472,7 +472,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     }
     try
     {
-        auto _result = bcos::task::syncWait(txpool->submitTransaction(tx));
+        auto _result = bcos::task::syncWait(txpool->submitTransaction(tx, true));
     }
     catch (bcos::Error& e)
     {
@@ -603,7 +603,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     }
     try
     {
-        bcos::task::syncWait(txpool->submitTransactionWithoutReceipt(tx));
+        bcos::task::syncWait(txpool->submitTransaction(tx, false));
     }
     catch (bcos::Error& e)
     {

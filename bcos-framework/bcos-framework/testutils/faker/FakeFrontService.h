@@ -158,7 +158,7 @@ public:
             bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data, decltype(tx) tx,
                                  decltype(_fromNode) fromNode) -> bcos::task::Task<void> {
                 co_await txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
-                auto submit = co_await txpool->submitTransaction(tx);
+                auto submit = co_await txpool->submitTransaction(tx, true);
                 assert(submit->status() == (uint32_t)TransactionStatus::None);
             }(txpool, _data, tx, _fromNode));
         }
@@ -171,7 +171,7 @@ public:
             auto tx = txFactory->createTransaction(_data);
             bcos::task::wait(
                 [](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-                    auto submit = co_await txpool->submitTransaction(tx);
+                    auto submit = co_await txpool->submitTransaction(tx, true);
                     assert(submit->status() == (uint32_t)TransactionStatus::None);
                 }(txpool, tx));
         }
