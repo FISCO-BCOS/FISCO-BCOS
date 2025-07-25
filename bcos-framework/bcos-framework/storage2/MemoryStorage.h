@@ -49,7 +49,7 @@ enum Attribute : uint8_t
     LOGICAL_DELETION = 1 << 3
 };
 
-template <class KeyType, class ValueType = Empty, int attribute = Attribute::UNORDERED,
+template <class KeyType, class ValueType = Empty, uint8_t attribute = Attribute::UNORDERED,
     class HasherType = std::hash<KeyType>, class Equal = std::equal_to<>,
     class BucketHasherType = HasherType>
 class MemoryStorage
@@ -105,7 +105,7 @@ public:
         {
             return object.size();
         }
-        // Treat any no-size() object as trivial, TODO: fix it
+        // Treat any no-size() object as trivial
         return sizeof(ObjectType);
     }
 
@@ -183,31 +183,7 @@ public:
         }
     }
 
-    friend auto tag_invoke(bcos::storage2::tag_t<readSome> /*unused*/, MemoryStorage& storage,
-        ::ranges::input_range auto keys) -> task::AwaitableValue<std::vector<std::optional<Value>>>
-    {
-        auto results = storage.readSome(std::move(keys));
-        return {::ranges::views::transform(results, [](auto& result) {
-            return std::visit(
-                bcos::overloaded{[](DELETED_TYPE) { return std::optional<Value>{}; },
-                    [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; },
-                    [](Value& value) { return std::make_optional(std::move(value)); }},
-                result);
-        }) | ::ranges::to<std::vector>()};
-    }
-
-    friend task::AwaitableValue<std::optional<Value>> tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto key,
-        auto&&... args)
-    {
-        auto result = storage.readOne(key, std::forward<decltype(args)>(args)...);
-        return {std::visit(bcos::overloaded{[](DELETED_TYPE) { return std::optional<Value>{}; },
-                               [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; },
-                               [](Value& value) { return std::make_optional(std::move(value)); }},
-            result)};
-    }
-
-    DataValue readOne(const auto& key, auto&&... /*unused*/)
+    DataValue readOne(const auto& key)
     {
         auto& bucket = this->getBucket(key);
         Lock lock(bucket.mutex, false);
@@ -241,8 +217,23 @@ public:
         constexpr static auto deleteOP =
             std::is_same_v<std::decay_t<decltype(value)>, DELETED_TYPE>;
 
-        auto it = index.find(key);
-        if (it != index.end())
+        bool found = false;
+        auto it = [&]() {
+            if constexpr (withOrdered)
+            {
+                auto it = index.lower_bound(key);
+                found = (it != index.end() && it->key == key);
+                return it;
+            }
+            else
+            {
+                auto it = index.find(key);
+                found = (it != index.end());
+                return it;
+            }
+        }();
+
+        if (found)
         {
             if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
             {
@@ -287,6 +278,41 @@ public:
         }
     }
 
+    void removeSome(::ranges::input_range auto keys, bool ignoreLogicalDeletion)
+    {
+        for (auto&& key : keys)
+        {
+            auto& bucket = getBucket(key);
+            Lock lock(bucket.mutex, true);
+            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, ignoreLogicalDeletion);
+        }
+    }
+
+    friend auto tag_invoke(bcos::storage2::tag_t<storage2::readSome> /*unused*/,
+        MemoryStorage& storage, ::ranges::input_range auto keys)
+        -> task::AwaitableValue<std::vector<std::optional<Value>>>
+    {
+        auto results = storage.readSome(std::move(keys));
+        return {::ranges::views::transform(results, [](auto& result) {
+            return std::visit(
+                bcos::overloaded{[](DELETED_TYPE) { return std::optional<Value>{}; },
+                    [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; },
+                    [](Value& value) { return std::make_optional(std::move(value)); }},
+                result);
+        }) | ::ranges::to<std::vector>()};
+    }
+
+    friend task::AwaitableValue<std::optional<Value>> tag_invoke(
+        storage2::tag_t<storage2::readOne> /*unused*/, MemoryStorage& storage, auto key,
+        auto&&... args)
+    {
+        auto result = storage.readOne(key);
+        return {std::visit(bcos::overloaded{[](DELETED_TYPE) { return std::optional<Value>{}; },
+                               [](NOT_EXISTS_TYPE) { return std::optional<Value>{}; },
+                               [](Value& value) { return std::make_optional(std::move(value)); }},
+            result)};
+    }
+
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
         MemoryStorage& storage, auto key, auto value)
     {
@@ -310,29 +336,18 @@ public:
         return {};
     }
 
-    task::AwaitableValue<void> removeSome(
-        ::ranges::input_range auto keys, bool ignoreLogicalDeletion)
-    {
-        for (auto&& key : keys)
-        {
-            auto& bucket = getBucket(key);
-            Lock lock(bucket.mutex, true);
-            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, ignoreLogicalDeletion);
-        }
-
-        return {};
-    }
-
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         MemoryStorage& storage, ::ranges::input_range auto keys)
     {
-        return storage.removeSome(std::move(keys), false);
+        storage.removeSome(std::move(keys), false);
+        return {};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         MemoryStorage& storage, ::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
     {
-        return storage.removeSome(std::move(keys), true);
+        storage.removeSome(std::move(keys), true);
+        return {};
     }
 
     friend task::AwaitableValue<void> tag_invoke(
