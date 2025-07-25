@@ -26,7 +26,7 @@
 
 using namespace bcos;
 using namespace bcos::rpc;
-task::Task<void> NetEndpoint::verison(const Json::Value&, Json::Value& response)
+task::Task<void> NetEndpoint::version(const Json::Value&, Json::Value& response)
 {
     auto const ledger = m_nodeService->ledger();
     auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);

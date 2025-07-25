@@ -34,22 +34,26 @@ class Web3JsonRpcImpl : public std::enable_shared_from_this<Web3JsonRpcImpl>
 public:
     using Ptr = std::shared_ptr<Web3JsonRpcImpl>;
     using Sender = std::function<void(bcos::bytes)>;
-    Web3JsonRpcImpl(std::string _groupId, bcos::rpc::GroupManager::Ptr _groupManager,
+    Web3JsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
+        bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem);
-    ~Web3JsonRpcImpl() = default;
+    ~Web3JsonRpcImpl() { RPC_LOG(INFO) << LOG_KV("[DELOBJ][Web3JsonRpcImpl]", this); }
 
-    void onRPCRequest(std::string_view _requestBody, Sender _sender);
+    void onRPCRequest(std::string_view _requestBody, const Sender& _sender);
+
+    void handleRequest(Json::Value _request, const std::function<void(Json::Value)>& _callback);
+    void handleRequest(Json::Value _request, const Sender& _sender);
+    void handleBatchRequest(Json::Value _request, const Sender& _sender);
 
 private:
-    static std::tuple<bool, std::string> parseRequestAndValidate(
-        std::string_view request, Json::Value& root);
     static bcos::bytes toBytesResponse(Json::Value const& jResp);
     // Note: only use in one group
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
     std::string m_groupId;
+    uint32_t m_batchRequestSizeLimit;
     Endpoints m_endpoints;
     EndpointsMapping m_endpointsMapping;
 };

@@ -20,6 +20,7 @@
  */
 #include "AirNodeInitializer.h"
 #include "libinitializer/Common.h"
+#include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
@@ -129,9 +130,9 @@ void AirNodeInitializer::start()
     {
         // start monitor object alloc
         m_objMonitor->startMonitor</*boostssl start*/ bcos::boostssl::ws::WsMessage,
-            bcos::boostssl::ws::WsSession, bcos::boostssl::ws::RawWsStream,
-            bcos::boostssl::ws::SslWsStream, bcos::boostssl::ws::WsSession::CallBack,
-            bcos::boostssl::ws::WsSession::Message,
+            bcos::boostssl::ws::RawWsMessage, bcos::boostssl::ws::WsSession,
+            bcos::boostssl::ws::RawWsStream, bcos::boostssl::ws::SslWsStream,
+            bcos::boostssl::ws::WsSession::CallBack, bcos::boostssl::ws::WsSession::Message,
             bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/, bcos::gateway::FrontServiceInfo,
             bcos::ratelimiter::TimeWindowRateLimiter,
             bcos::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);

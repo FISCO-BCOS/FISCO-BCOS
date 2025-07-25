@@ -407,6 +407,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         ; 300s
         filter_timeout=300
         filter_max_process_block=10
+        batch_request_size_limit=8
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
@@ -414,6 +415,7 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
     const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
+    const int batchRequestSizeLimit = _pt.get<int>("web3_rpc.batch_request_size_limit", 8);
 
     m_web3RpcListenIP = listenIP;
     m_web3RpcListenPort = listenPort;
@@ -421,10 +423,14 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     m_enableWeb3Rpc = enableWeb3Rpc;
     m_web3FilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_web3MaxProcessBlock = maxProcessBlock;
+    m_web3BatchRequestSizeLimit = batchRequestSizeLimit;
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("listenPort", listenPort);
+                         << LOG_KV("listenPort", listenPort) << LOG_KV("threadCount", threadCount)
+                         << LOG_KV("filterTimeout", filterTimeout)
+                         << LOG_KV("maxProcessBlock", maxProcessBlock)
+                         << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)

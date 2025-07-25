@@ -19,9 +19,8 @@
  * @date 2021-07-15
  */
 
-#include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-rpc/groupmgr/TarsGroupManager.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
+#include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -31,6 +30,7 @@
 #include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
+#include <bcos-rpc/groupmgr/TarsGroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcFilterSystem.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
@@ -44,6 +44,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 using namespace bcos;
@@ -377,8 +378,9 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     auto web3FilterSystem =
         std::make_shared<Web3FilterSystem>(_groupManager, m_nodeConfig->groupId(),
             m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
-    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
-        m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService, web3FilterSystem);
+    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
+        m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager), m_gateway, _wsService,
+        web3FilterSystem);
 
     if (auto httpServer = _wsService->httpServer())
     {
@@ -386,6 +388,26 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
             web3JsonRpc->onRPCRequest(body, std::move(sender));
         });
     }
+
+    // register web3 json websocket message handler
+    _wsService->registerMsgHandler(
+        WS_RAW_MESSAGE_TYPE, [web3JsonRpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+                                 std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
+            auto payload = msg->payload();
+            std::string_view strRequest((char*)payload->data(), payload->size());
+
+            // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
+
+            web3JsonRpc->onRPCRequest(strRequest, [session, msg](bcos::bytes _respData) {
+                msg->setPayload(std::make_shared<bcos::bytes>(std::move(_respData)));
+                session->asyncSendMessage(msg);
+            });
+        });
+
+    auto messageFactory = std::make_shared<RawWsMessageFactory>();
+    // reset message factory
+    _wsService->setMessageFactory(messageFactory);
+
     return web3JsonRpc;
 }
 

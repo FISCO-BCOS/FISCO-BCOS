@@ -90,13 +90,14 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getFilterChanges)] = &Endpoints::getFilterChanges;
     m_handlers[methodString(EthMethod::eth_getFilterLogs)] = &Endpoints::getFilterLogs;
     m_handlers[methodString(EthMethod::eth_getLogs)] = &Endpoints::getLogs;
+    m_handlers[methodString(EthMethod::eth_maxPriorityFeePerGas)] = &Endpoints::maxPriorityFeePerGas;
     // clang-format on
 }
 
 void EndpointsMapping::addNetHandlers()
 {
     // clang-format off
-    m_handlers[methodString(EthMethod::net_version)] = &Endpoints::verison;
+    m_handlers[methodString(EthMethod::net_version)] = &Endpoints::version;
     m_handlers[methodString(EthMethod::net_peerCount)] = &Endpoints::peerCount;
     m_handlers[methodString(EthMethod::net_listening)] = &Endpoints::listening;
     // clang-format on

@@ -81,6 +81,7 @@ protected:
     task::Task<void> getLogs(const Json::Value&, Json::Value&);
     task::Task<std::tuple<protocol::BlockNumber, bool>> getBlockNumberByTag(
         std::string_view blockTag);
+    task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
