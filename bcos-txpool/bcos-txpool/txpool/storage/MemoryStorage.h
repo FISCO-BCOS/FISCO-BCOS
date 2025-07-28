@@ -59,7 +59,7 @@ public:
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
     bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
-        size_t _txsLimit, bool _avoidDuplicate = true) override;
+        size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
     size_t size() const override { return m_txsTable.size(); }
