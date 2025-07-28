@@ -336,6 +336,20 @@ public:
         return {};
     }
 
+    friend task::AwaitableValue<void> tag_invoke(
+        storage2::tag_t<storage2::removeOne> /*unused*/, MemoryStorage& storage, auto key)
+    {
+        storage.removeSome(::ranges::views::single(std::move(key)), false);
+        return {};
+    }
+
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/,
+        MemoryStorage& storage, auto key, DIRECT_TYPE /*unused*/)
+    {
+        storage.removeSome(::ranges::views::single(std::move(key)), true);
+        return {};
+    }
+
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         MemoryStorage& storage, ::ranges::input_range auto keys)
     {
@@ -497,11 +511,11 @@ public:
 
     template <class... FromStorages>
         requires(withConcurrent && (... && (!FromStorages::withConcurrent)))
-    friend task::Task<void> tag_invoke(storage2::tag_t<storage2::merge> /*unused*/,
+    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::merge> /*unused*/,
         MemoryStorage& toStorage, FromStorages&... fromStorage)
     {
         toStorage.merge(toStorage, fromStorage...);
-        co_return;
+        return {};
     }
 };
 

@@ -279,6 +279,13 @@ public:
         co_await storage2::merge(mutableStorage(toView), fromStorage...);
     }
 
+    friend task::Task<void> tag_invoke(
+        storage2::tag_t<storage2::removeOne> /*unused*/, View& view, auto key, auto&&... args)
+    {
+        co_await storage2::removeOne(
+            mutableStorage(view), std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
     friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, View& view,
         ::ranges::input_range auto keys, auto&&... args)
     {

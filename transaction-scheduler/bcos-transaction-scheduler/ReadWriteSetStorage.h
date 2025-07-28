@@ -101,6 +101,14 @@ private:
         co_return co_await storage2::writeSome(storage.m_storage.get(), std::move(keyValues));
     }
 
+    friend task::Task<void> tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/,
+        ReadWriteSetStorage& storage, auto key, auto&&... args)
+    {
+        putSet(storage, true, key);
+        co_await storage2::removeOne(
+            storage.m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         ReadWriteSetStorage& storage, ::ranges::input_range auto keys, auto&&... args)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
