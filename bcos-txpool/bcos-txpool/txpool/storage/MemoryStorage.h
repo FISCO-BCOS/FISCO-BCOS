@@ -28,8 +28,6 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <tbb/concurrent_queue.h>
-#include <boost/thread/pthread/shared_mutex.hpp>
 
 namespace bcos::txpool
 {
@@ -43,14 +41,12 @@ public:
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override;
 
-    // New interfaces =============
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
         ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override;
-    // ============================
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
 
@@ -64,10 +60,6 @@ public:
     bool exist(bcos::crypto::HashType const& _txHash) override;
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
-
-    // FIXME: deprecated, after using txpool::broadcastTransaction
-    bcos::crypto::HashListPtr filterUnknownTxs(
-        bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
     bcos::crypto::HashListPtr getTxsHash(int _limit) override;
     void batchMarkAllTxs(bool _sealFlag) override;
