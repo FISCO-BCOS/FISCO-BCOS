@@ -1,9 +1,14 @@
 #include "HttpSession.h"
+#include <boost/system/error_code.hpp>
 
-bcos::boostssl::http::HttpSession::HttpSession()
+bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)
+  : m_httpBodySizeLimit(_httpBodySizeLimit), m_corsConfig(std::move(_corsConfig))
 {
-    HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this);
+    HTTP_SESSION(DEBUG) << LOG_KV("[NEWOBJ][HTTPSESSION]", this)
+                        << LOG_KV("httpBodySizeLimit", _httpBodySizeLimit)
+                        << LOG_KV("corsConfig", _corsConfig.toString());
 }
+
 bcos::boostssl::http::HttpSession::~HttpSession()
 {
     close();
@@ -17,8 +22,10 @@ void bcos::boostssl::http::HttpSession::run()
 void bcos::boostssl::http::HttpSession::read()
 {
     m_parser.emplace();
-    // set limit to http request size, 100m
-    m_parser->body_limit(PARSER_BODY_LIMITATION);
+    //
+    auto httpBodySizeLimit = m_httpBodySizeLimit;
+    // set limit to http request size
+    m_parser->body_limit(httpBodySizeLimit);
 
     m_httpStream->asyncRead(m_buffer, *m_parser,
         [session = shared_from_this()](boost::system::error_code _ec,
@@ -40,7 +47,7 @@ void bcos::boostssl::http::HttpSession::onRead(
         if (ec)
         {
             HTTP_SESSION(WARNING) << LOG_BADGE("onRead") << LOG_DESC("close the connection")
-                                  << LOG_KV("failed", ec);
+                                  << LOG_KV("ec", ec) << LOG_KV("ec_message", ec.message());
             close();
             return;
         }
@@ -72,8 +79,7 @@ void bcos::boostssl::http::HttpSession::onRead(
     {
         HTTP_SESSION(WARNING) << LOG_DESC("onRead exception")
                               << LOG_KV("bytesSize", bytes_transferred)
-                              << LOG_KV(
-                                     "failed", boost::current_exception_diagnostic_information());
+                              << LOG_KV("error", boost::current_exception_diagnostic_information());
     }
 
     if (!m_queue.isFull())
@@ -124,18 +130,39 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
 
     auto startT = utcTime();
     unsigned version = _httpRequest.version();
+
+    // handle options request for CORS preflight
+    if (_httpRequest.method() == boost::beast::http::verb::options)
+    {
+        // The standard response status code for preflight requests is 204(No Content)
+        auto resp = buildHttpResp(boost::beast::http::status::no_content, _httpRequest.keep_alive(),
+            version, {}, m_corsConfig);
+
+        BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("options response")
+                        << LOG_KV("body", std::string_view((const char*)resp->body().data(),
+                                              resp->body().size()))
+                        << LOG_KV("keep_alive", resp->keep_alive())
+                        << LOG_KV("need_eof", resp->need_eof())
+                        << LOG_KV("timecost", (utcTime() - startT));
+
+        queue().enqueue(std::move(resp));
+        return;
+    }
+
+    // handle http request
     if (m_httpReqHandler)
     {
         const std::string& request = _httpRequest.body();
         m_httpReqHandler(request, [session = shared_from_this(), version, startT,
                                       keepAlive = _httpRequest.keep_alive()](bcos::bytes _content) {
-            auto resp = session->buildHttpResp(
-                boost::beast::http::status::ok, keepAlive, version, std::move(_content));
+            auto resp = session->buildHttpResp(boost::beast::http::status::ok, keepAlive, version,
+                std::move(_content), session->corsConfig());
             // put the response into the queue and waiting to be send
             BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
                             << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                   resp->body().size()))
                             << LOG_KV("keep_alive", resp->keep_alive())
+                            << LOG_KV("need_eof", resp->need_eof())
                             << LOG_KV("timecost", (utcTime() - startT));
             session->queue().enqueue(std::move(resp));
         });
@@ -144,7 +171,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
     {
         // unsupported http service
         auto resp = buildHttpResp(boost::beast::http::status::http_version_not_supported,
-            _httpRequest.keep_alive(), version, {});
+            _httpRequest.keep_alive(), version, {}, m_corsConfig);
         // put the response into the queue and waiting to be send
         HTTP_SESSION(WARNING) << LOG_BADGE("handleRequest") << LOG_DESC("unsupported http service")
                               << LOG_KV("body", std::string_view((const char*)resp->body().data(),
@@ -153,13 +180,31 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
     }
 }
 bcos::boostssl::http::HttpResponsePtr bcos::boostssl::http::HttpSession::buildHttpResp(
-    boost::beast::http::status status, bool keepAlive, unsigned version, bcos::bytes content)
+    boost::beast::http::status status, bool keepAlive, unsigned version, bcos::bytes content,
+    const CorsConfig& corsConfig) const
 {
     auto msg = std::make_shared<HttpResponse>(status, version);
     msg->set(boost::beast::http::field::server, BOOST_BEAST_VERSION_STRING);
     msg->set(boost::beast::http::field::content_type, "application/json");
     msg->keep_alive(keepAlive);  // default , keep alive
     msg->body() = std::move(content);
+
+    // set cors config
+    if (corsConfig.enableCORS)
+    {
+        msg->set(boost::beast::http::field::access_control_allow_origin, corsConfig.allowedOrigins);
+        msg->set(
+            boost::beast::http::field::access_control_allow_methods, corsConfig.allowedMethods);
+        msg->set(
+            boost::beast::http::field::access_control_allow_headers, corsConfig.allowedHeaders);
+        msg->set(
+            boost::beast::http::field::access_control_max_age, std::to_string(corsConfig.maxAge));
+        msg->set(boost::beast::http::field::access_control_allow_credentials,
+            corsConfig.allowCredentials ? "true" : "false");
+    }
+
+    // TODO: limit response body size
+
     msg->prepare_payload();
     return msg;
 }

@@ -30,8 +30,12 @@ class HttpServer : public std::enable_shared_from_this<HttpServer>
 public:
     using Ptr = std::shared_ptr<HttpServer>;
 
-    HttpServer(std::string _listenIP, uint16_t _listenPort)
-      : m_listenIP(std::move(_listenIP)), m_listenPort(_listenPort)
+    HttpServer(std::string _listenIP, uint16_t _listenPort, uint32_t _httpBodySizeLimit,
+        CorsConfig _corsConfig)
+      : m_listenIP(std::move(_listenIP)),
+        m_listenPort(_listenPort),
+        m_httpBodySizeLimit(_httpBodySizeLimit),
+        m_corsConfig(std::move(_corsConfig))
     {}
 
     ~HttpServer() { stop(); }
@@ -83,6 +87,15 @@ public:
         m_ioservicePool = std::move(_ioservicePool);
     }
 
+    uint32_t httpBodySizeLimit() const { return m_httpBodySizeLimit; }
+    void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit)
+    {
+        m_httpBodySizeLimit = _httpBodySizeLimit;
+    }
+
+    CorsConfig corsConfig() const { return m_corsConfig; }
+    void setCorsConfig(CorsConfig _corsConfig) { m_corsConfig = std::move(_corsConfig); }
+
 private:
     std::string m_listenIP;
     uint16_t m_listenPort;
@@ -96,6 +109,10 @@ private:
 
     std::shared_ptr<HttpStreamFactory> m_httpStreamFactory;
     bcos::IOServicePool::Ptr m_ioservicePool;
+
+    uint32_t m_httpBodySizeLimit;
+    // cors config
+    CorsConfig m_corsConfig;
 };
 
 // The http server factory
@@ -111,11 +128,14 @@ public:
      * @param _listenPort: listen port
      * @param _ioc: io_context
      * @param _ctx: ssl context
+     * @param _httpBodySizeLimit: http body size limit
+     * @param _corsConfig: cors config
      * @return HttpServer::Ptr:
      */
     HttpServer::Ptr buildHttpServer(const std::string& _listenIP, uint16_t _listenPort,
         std::shared_ptr<boost::asio::io_context> _ioc,
-        std::shared_ptr<boost::asio::ssl::context> _ctx);
+        std::shared_ptr<boost::asio::ssl::context> _ctx, uint32_t _httpBodySizeLimit = -1,
+        CorsConfig _corsConfig = CorsConfig());
 };
 
 }  // namespace bcos::boostssl::http

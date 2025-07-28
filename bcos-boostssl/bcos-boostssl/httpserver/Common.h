@@ -44,5 +44,24 @@ using HttpReqHandler =
 using WsUpgradeHandler =
     std::function<void(std::shared_ptr<HttpStream>, HttpRequest&&, std::shared_ptr<std::string>)>;
 
-static const int PARSER_BODY_LIMITATION = 100 * 1024 * 1024;
+// cors config
+struct CorsConfig
+{
+    bool enableCORS{true};
+    bool allowCredentials{true};
+
+    // bool allowCredentials{true};
+    std::string allowedOrigins{"*"};
+    std::string allowedMethods{"GET, POST, OPTIONS"};
+    std::string allowedHeaders{"Content-Type, Authorization, X-Requested-With"};
+    int maxAge{86400};
+
+    std::string toString() const
+    {
+        return std::string("CorsConfig{") + "enableCORS=" + (enableCORS ? "true" : "false") +
+               ", allowedOrigins=" + allowedOrigins + ", allowedMethods=" + allowedMethods +
+               ", allowedHeaders=" + allowedHeaders + ", maxAge=" + std::to_string(maxAge) +
+               ", allowCredentials=" + (allowCredentials ? "true" : "false") + "}}";
+    }
+};
 }  // namespace bcos::boostssl::http
