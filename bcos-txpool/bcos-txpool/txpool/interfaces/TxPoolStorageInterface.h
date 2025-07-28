@@ -45,10 +45,6 @@ public:
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
-    // Note: the transactions may be missing from the transaction pool
-    virtual bcos::protocol::ConstTransactionsPtr fetchTxs(
-        bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) = 0;
-
     virtual bool batchVerifyAndSubmitTransaction(
         bcos::protocol::BlockHeader::ConstPtr _header, bcos::protocol::TransactionsPtr _txs) = 0;
     virtual void batchImportTxs(bcos::protocol::TransactionsPtr _txs) = 0;

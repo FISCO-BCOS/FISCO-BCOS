@@ -58,11 +58,8 @@ public:
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
-    bcos::protocol::ConstTransactionsPtr fetchTxs(
-        bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
-
     bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
-        size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
+        size_t _txsLimit, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
     size_t size() const override { return m_txsTable.size(); }
@@ -97,7 +94,6 @@ public:
         bool checkPoolLimit, bool lock);
 
     void remove(crypto::HashType const& _txHash);
-
 
 protected:
     virtual void notifyTxsSize(size_t _retryTime = 0);

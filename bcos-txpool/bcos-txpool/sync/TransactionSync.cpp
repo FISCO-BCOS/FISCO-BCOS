@@ -90,8 +90,17 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     SendResponseCallback _sendResponse, bcos::crypto::PublicPtr _peer)
 {
     auto const& txsHash = _txsRequest->txsHash();
-    HashList missedTxs;
-    auto txs = m_config->txpoolStorage()->fetchTxs(missedTxs, txsHash);
+    auto txs = m_config->txpoolStorage()->getTransactions(txsHash);
+    auto missedTxs = ::ranges::views::zip(txsHash, txs) |
+                     ::ranges::views::filter([](const auto& pair) {
+                         auto& [hash, tx] = pair;
+                         return !tx;
+                     }) |
+                     ::ranges::views::transform([](const auto& pair) {
+                         auto& [hash, tx] = pair;
+                         return hash;
+                     }) |
+                     ::ranges::to<HashList>();
     // Note: here assume that all the transaction should be hit in the txpool
     if (!missedTxs.empty())
     {
@@ -102,10 +111,12 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     }
     // response the txs
     auto block = m_config->blockFactory()->createBlock();
-    for (const auto& constTx : *txs)
+    for (const auto& constTx : txs)
     {
-        auto tx = std::const_pointer_cast<Transaction>(constTx);
-        block->appendTransaction(tx);
+        if (constTx)
+        {
+            block->appendTransaction(std::const_pointer_cast<Transaction>(constTx));
+        }
     }
     bytes txsData;
     block->encode(txsData);
@@ -115,7 +126,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     _sendResponse(ref(*packetData));
     SYNC_LOG(INFO) << LOG_DESC("onReceiveTxsRequest: response txs")
                    << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
-                   << LOG_KV("txsSize", txs->size());
+                   << LOG_KV("txsSize", txs.size());
 }
 
 void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _missedTxs,

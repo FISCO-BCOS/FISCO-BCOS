@@ -269,10 +269,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         txResult->setStatus((uint32_t)TransactionStatus::None);
         txsResult->emplace_back(txResult);
     }
-    auto missedTxs = std::make_shared<HashList>();
-    auto notifiedTxs = _txpoolStorage->fetchTxs(*missedTxs, *sealedTxs);
-    BOOST_CHECK(missedTxs->size() == 0);
-    BOOST_CHECK(notifiedTxs->size() == sealedTxs->size());
+    auto notifiedTxs = _txpoolStorage->getTransactions(*sealedTxs);
+    BOOST_CHECK(!::ranges::any_of(notifiedTxs, [](auto& tx) { return !tx; }));
+    BOOST_CHECK(notifiedTxs.size() == sealedTxs->size());
 
     auto finish = false;
     _faker->asyncNotifyBlockResult(blockNumber, txsResult, [&](Error::Ptr _error) {
@@ -292,7 +291,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     auto validator =
         std::dynamic_pointer_cast<TxValidator>(_faker->txpool()->txpoolConfig()->txValidator());
     auto ledgerNonceChecker = validator->ledgerNonceChecker();
-    for (auto tx : *notifiedTxs | RANGES::views::filter([](auto const& tx) {
+    for (auto tx : notifiedTxs | ::ranges::views::filter([](auto const& tx) {
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {

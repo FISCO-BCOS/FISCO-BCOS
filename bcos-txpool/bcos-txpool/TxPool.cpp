@@ -20,6 +20,7 @@
  */
 #include "TxPool.h"
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -30,6 +31,9 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/filter.hpp>
+#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -406,18 +410,28 @@ void TxPool::fillBlock(HashListPtr _txsHash,
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FILL_BLOCK);
 
-    HashListPtr missedTxs = std::make_shared<HashList>();
-    auto txs = m_txpoolStorage->fetchTxs(*missedTxs, *_txsHash);
-    if (!missedTxs->empty())
+    auto txs = m_txpoolStorage->getTransactions(*_txsHash);
+    auto missedTxs = ::ranges::views::zip(*_txsHash, txs) |
+                     ::ranges::views::filter([](const auto& pair) {
+                         auto& [hash, tx] = pair;
+                         return !tx;
+                     }) |
+                     ::ranges::views::transform([](const auto& pair) {
+                         auto& [hash, tx] = pair;
+                         return hash;
+                     }) |
+                     ::ranges::to<HashList>();
+    if (!missedTxs.empty())
     {
         TXPOOL_LOG(WARNING) << LOG_DESC("asyncFillBlock failed for missing some transactions")
-                            << LOG_KV("missedTxsSize", missedTxs->size());
+                            << LOG_KV("missedTxsSize", missedTxs.size());
         if (_fetchFromLedger)
         {
             TXPOOL_LOG(INFO) << LOG_DESC("getTxsFromLocalLedger")
                              << LOG_KV("txsSize", _txsHash->size())
-                             << LOG_KV("missedSize", missedTxs->size());
-            getTxsFromLocalLedger(_txsHash, missedTxs, _onBlockFilled);
+                             << LOG_KV("missedSize", missedTxs.size());
+            getTxsFromLocalLedger(
+                _txsHash, std::make_shared<HashList>(std::move(missedTxs)), _onBlockFilled);
         }
         else
         {
@@ -428,7 +442,7 @@ void TxPool::fillBlock(HashListPtr _txsHash,
     }
     report.release();
 
-    _onBlockFilled(nullptr, txs);
+    _onBlockFilled(nullptr, std::make_shared<ConstTransactions>(std::move(txs)));
 }
 
 
