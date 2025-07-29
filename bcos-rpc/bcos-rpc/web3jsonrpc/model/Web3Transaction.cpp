@@ -19,10 +19,14 @@
  */
 
 #include "Web3Transaction.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <range/v3/algorithm/count_if.hpp>
+#include <range/v3/algorithm/find_first_of.hpp>
+#include <utility>
 
 namespace bcos
 {
@@ -32,6 +36,13 @@ using codec::rlp::decode;
 using codec::rlp::encode;
 using codec::rlp::header;
 using codec::rlp::length;
+
+bytesConstRef getSignatureRef(bytesConstRef input)
+{
+    const auto* it = ::ranges::find_if(input, [](byte b) { return b != 0; });
+    return {it, input.size() - (it - input.begin())};
+}
+
 bcos::bytes Web3Transaction::encodeForSign() const
 {
     bcos::bytes out;
@@ -255,8 +266,8 @@ Header header(Web3Transaction const& tx) noexcept
 {
     auto header = headerTxBase(tx);
     header.payloadLength += (tx.type == TransactionType::Legacy) ? length(tx.getSignatureV()) : 1;
-    header.payloadLength += length(tx.signatureR);
-    header.payloadLength += length(tx.signatureS);
+    header.payloadLength += length(getSignatureRef(ref(tx.signatureR)));
+    header.payloadLength += length(getSignatureRef(ref(tx.signatureS)));
     return header;
 }
 Header headerForSign(Web3Transaction const& tx) noexcept
@@ -302,8 +313,8 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
         encode(out, tx.value);
         encode(out, tx.data);
         encode(out, tx.getSignatureV());
-        encode(out, tx.signatureR);
-        encode(out, tx.signatureS);
+        encode(out, getSignatureRef(ref(tx.signatureR)));
+        encode(out, getSignatureRef(ref(tx.signatureS)));
     }
     else
     {
@@ -345,8 +356,8 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
             encode(out, tx.blobVersionedHashes);
         }
         encode(out, tx.signatureV);
-        encode(out, tx.signatureR);
-        encode(out, tx.signatureS);
+        encode(out, getSignatureRef(ref(tx.signatureR)));
+        encode(out, getSignatureRef(ref(tx.signatureS)));
     }
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept

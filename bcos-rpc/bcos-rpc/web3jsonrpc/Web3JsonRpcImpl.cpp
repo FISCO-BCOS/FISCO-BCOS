@@ -66,10 +66,9 @@ void Web3JsonRpcImpl::handleRequest(
             BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
         }
 
-
-        task::wait([startT](Web3JsonRpcImpl* self, EndpointsMapping::Handler _handler,
-                       Json::Value _request,
-                       std::function<void(Json::Value)> _callback) -> task::Task<void> {
+        task::wait([](Web3JsonRpcImpl* self, EndpointsMapping::Handler _handler,
+                       Json::Value _request, std::function<void(Json::Value)> _callback,
+                       decltype(startT) startT) -> task::Task<void> {
             Json::Value resp;
             try
             {
@@ -91,7 +90,6 @@ void Web3JsonRpcImpl::handleRequest(
                 buildJsonError(_request, InternalError,
                     boost::current_exception_diagnostic_information(), resp);
             }
-            // auto&& respBytes = toBytesResponse(resp);
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
                 auto endT = utcTime();
@@ -102,7 +100,7 @@ void Web3JsonRpcImpl::handleRequest(
             }
 
             _callback(std::move(resp));
-        }(this, optHandler.value(), std::move(_request), _callback));
+        }(this, optHandler.value(), std::move(_request), _callback, startT));
 
         return;
     }

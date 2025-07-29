@@ -470,11 +470,15 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
 
     // for web3.eth.sendRawTransaction, return the hash of raw transaction
     if (auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
-        c_fileLogLevel == DEBUG && web3TxHash != encodeTxHash) [[unlikely]]
+        web3TxHash != encodeTxHash) [[unlikely]]
     {
-        WEB3_LOG(DEBUG) << "sendRawTransaction hash not match"
-                        << LOG_KV("inputHash", web3TxHash.hexPrefixed())
-                        << LOG_KV("encodedHash", encodeTxHash.hexPrefixed());
+        bytes web3Encoded;
+        codec::rlp::encode(web3Encoded, web3Tx);
+        WEB3_LOG(WARNING) << "sendRawTransaction hash not match"
+                          << LOG_KV("inputHash", web3TxHash.hexPrefixed())
+                          << LOG_KV("encodedHash", encodeTxHash.hexPrefixed())
+                          << " payload: " << web3Tx.toString() << " origin: " << toHex(rawTxBytes)
+                          << " encoded: " << toHex(web3Encoded);
     }
     tx->mutableInner().extraTransactionHash.assign(encodeTxHash.begin(), encodeTxHash.end());
 
@@ -483,7 +487,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
     co_await txpool->broadcastTransaction(*tx);
-    auto const txResult = co_await txpool->submitTransaction(std::move(tx), true);
+    auto const txResult = co_await txpool->submitTransaction(std::move(tx), false);
     if (txResult->status() == 0)
     {
         Json::Value result = encodeTxHash.hexPrefixed();
@@ -491,15 +495,14 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     }
     else
     {
-        protocol::TransactionStatus status =
-            static_cast<protocol::TransactionStatus>(txResult->status());
+        auto status = static_cast<protocol::TransactionStatus>(txResult->status());
         Json::Value errorData = Json::objectValue;
         errorData["txHash"] = encodeTxHash.hexPrefixed();
         auto output = toHex(txResult->transactionReceipt()->output(), "0x");
         auto msg = fmt::format("VM Exception while processing transaction, reason: {}, msg: {}",
             protocol::toString(status), output);
         errorData["message"] = msg;
-        errorData["data"] = std::move(output);
+        errorData["data"] = output;
         buildJsonErrorWithData(errorData, InternalError, std::move(msg), response);
     }
     if (c_fileLogLevel == TRACE) [[unlikely]]
