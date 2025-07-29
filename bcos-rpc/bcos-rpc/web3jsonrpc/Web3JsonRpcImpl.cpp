@@ -144,7 +144,7 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, Sender _sender)
     for (auto& reqItem : _request)
     {
         handleRequest(std::move(reqItem),
-            [respJsonValuePtr, requestSize, _sender = std::move(_sender), startT](
+            [respJsonValuePtr, requestSize, &_sender, startT](
                 Json::Value response) {
                 respJsonValuePtr->append(std::move(response));
                 if (respJsonValuePtr->size() < requestSize)
