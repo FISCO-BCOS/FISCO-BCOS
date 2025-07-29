@@ -468,7 +468,8 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     // check transaction validator
     TransactionValidator::checkTransaction(*tx, true);
 
-    // for web3.eth.sendRawTransaction, return the hash of raw transaction
+// for web3.eth.sendRawTransaction, return the hash of raw transaction
+#if 0
     if (auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
         web3TxHash != encodeTxHash) [[unlikely]]
     {
@@ -480,6 +481,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
                           << " payload: " << web3Tx.toString() << " origin: " << toHex(rawTxBytes)
                           << " encoded: " << toHex(web3Encoded);
     }
+#endif
     tx->mutableInner().extraTransactionHash.assign(encodeTxHash.begin(), encodeTxHash.end());
 
     if (c_fileLogLevel == TRACE)
