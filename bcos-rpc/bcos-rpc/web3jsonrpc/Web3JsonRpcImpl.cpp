@@ -129,7 +129,7 @@ void Web3JsonRpcImpl::handleRequest(Json::Value _request, Sender _sender)
     });
 }
 
-void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, Sender _sender)
+void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, const Sender& _sender)
 {
     auto respJsonValuePtr = std::make_shared<Json::Value>(Json::arrayValue);
     auto requestSize = _request.size();
@@ -144,8 +144,7 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, Sender _sender)
     for (auto& reqItem : _request)
     {
         handleRequest(std::move(reqItem),
-            [respJsonValuePtr, requestSize, &_sender, startT](
-                Json::Value response) {
+            [respJsonValuePtr, requestSize, _sender, startT](Json::Value response) {
                 respJsonValuePtr->append(std::move(response));
                 if (respJsonValuePtr->size() < requestSize)
                 {
@@ -166,7 +165,7 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, Sender _sender)
     }
 }
 
-void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender)
+void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& _sender)
 {
     auto startT = utcTime();
     auto batchRequestSizeLimit = m_batchRequestSizeLimit;
@@ -225,12 +224,12 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, Sender _sender
         if (isBatchRequest)
         {
             // handle batch request
-            handleBatchRequest(std::move(request), std::move(_sender));
+            handleBatchRequest(std::move(request), _sender);
         }
         else
         {
             // handle single request
-            handleRequest(std::move(request), std::move(_sender));
+            handleRequest(std::move(request), _sender);
         }
 
         return;
