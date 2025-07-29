@@ -3,7 +3,7 @@ console_branch="master"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
-node_list="node0 node1 node2 node3"
+node_list="node0 node1 node2"
 check_web3_test="false"
 LOG_ERROR() {
     local content=${1}
@@ -69,7 +69,7 @@ init()
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -l "127.0.0.1:3" -e ${fisco_bcos_path} "${sm_option}"
     # sed change node0 config.ini to change web3 rpc enable
     sed -e 's/^enable_web3_rpc = false/enable_web3_rpc = true/' -i nodes/
     cd nodes/127.0.0.1 && wait_and_start
@@ -82,7 +82,7 @@ init_baseline()
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -l "127.0.0.1:3" -e ${fisco_bcos_path} "${sm_option}"
 
     # 启用executor v1
     # Enable executor v1
@@ -106,20 +106,20 @@ expand_node()
     if [ "$(uname)" == "Darwin" ];then
         sed_cmd="sed -i .bkp"
     fi
-    ${sed_cmd}  's/listen_port=30300/listen_port=30304/g' config/config.ini
-    ${sed_cmd}  's/listen_port=20200/listen_port=20204/g' config/config.ini
-    sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30304",/' config/nodes.json.tmp > config/nodes.json
+    ${sed_cmd}  's/listen_port=30300/listen_port=30303/g' config/config.ini
+    ${sed_cmd}  's/listen_port=20200/listen_port=20203/g' config/config.ini
+    sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30303",/' config/nodes.json.tmp > config/nodes.json
     cat config/nodes.json
-    bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node4 -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node3 -e ${fisco_bcos_path} "${sm_option}"
     LOG_INFO "expand node success..."
-    bash ${current_path}/nodes/127.0.0.1/node4/start.sh
+    bash ${current_path}/nodes/127.0.0.1/node3/start.sh
     sleep 10
     LOG_INFO "check expand node status..."
     flag='false'
     for node in ${node_list}
     do
         count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
-        if [ ${count} -eq 4 ];then
+        if [ ${count} -eq 3 ];then
             flag='true'
         fi
     done
@@ -196,8 +196,6 @@ if [[ ${?} == "0" ]]; then
        exit 1
 fi
 LOG_INFO "======== check non-sm success ========"
-
-LOG_INFO "======== clear node after non-sm test ========"
 clear_node
 LOG_INFO "======== clear node after non-sm test success ========"
 
@@ -226,7 +224,6 @@ if [[ ${?} == "0" ]]; then
        echo "java_sdk_demo_ci_test error"
        exit 1
 fi
-
 LOG_INFO "======== check sm case success ========"
 clear_node
 LOG_INFO "======== clear node after sm test success ========"
