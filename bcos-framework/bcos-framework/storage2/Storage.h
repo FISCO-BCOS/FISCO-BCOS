@@ -87,21 +87,6 @@ inline constexpr struct Range
     }
 } range;
 
-namespace detail
-{
-auto toSingleView(auto&& item)
-{
-    if constexpr (std::is_lvalue_reference_v<decltype(item)>)
-    {
-        return ::ranges::views::single(std::addressof(item)) | ::ranges::views::indirect;
-    }
-    else
-    {
-        return ::ranges::views::single(std::forward<decltype(item)>(item));
-    }
-}
-}  // namespace detail
-
 inline constexpr struct ReadOne
 {
     auto operator()(auto& storage, auto key, auto&&... args) const
@@ -125,16 +110,7 @@ inline constexpr struct RemoveOne
 {
     auto operator()(auto& storage, auto key, auto&&... args) const -> task::Task<void>
     {
-        if constexpr (HasTag<RemoveOne, decltype(storage), decltype(key), decltype(args)...>)
-        {
-            co_await tag_invoke(
-                *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            co_await removeSome(storage, detail::toSingleView(std::move(key)),
-                std::forward<decltype(args)>(args)...);
-        }
+        co_await tag_invoke(*this, storage, std::move(key), std::forward<decltype(args)>(args)...);
     }
 } removeOne;
 

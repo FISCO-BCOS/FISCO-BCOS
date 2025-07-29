@@ -194,9 +194,9 @@ struct DagExecutorFixture
 };
 BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 
-#ifdef WITH_WASM
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
+#ifdef WITH_WASM
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
@@ -450,10 +450,12 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
             BOOST_CHECK_EQUAL(dept, std::get<1>(expected[i]));
         }
     }
+#endif
 }  // namespace test
 
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
+#ifdef WITH_WASM
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(8192);
     auto executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
@@ -680,8 +682,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             codec->decode(result->data(), name);
             BOOST_CHECK_EQUAL(name, "alice");
         });
-}
 #endif
+}
 
 BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
