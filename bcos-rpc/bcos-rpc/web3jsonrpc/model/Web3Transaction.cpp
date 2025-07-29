@@ -37,7 +37,7 @@ using codec::rlp::encode;
 using codec::rlp::header;
 using codec::rlp::length;
 
-bytesConstRef getSignatureRef(bytesConstRef input)
+static bytesConstRef getSignatureRef(bytesConstRef input)
 {
     const auto* it = ::ranges::find_if(input, [](byte b) { return b != 0; });
     return {it, input.size() - (it - input.begin())};
