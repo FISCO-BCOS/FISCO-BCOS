@@ -41,8 +41,8 @@ public:
     ~Web3JsonRpcImpl() = default;
 
     void onRPCRequest(std::string_view _requestBody, const Sender& _sender);
-    void handleRequest(Json::Value _request, std::function<void(Json::Value)> _callback);
-    void handleRequest(Json::Value _request, Sender _sender);
+    void handleRequest(Json::Value _request, const std::function<void(Json::Value)>& _callback);
+    void handleRequest(Json::Value _request, const Sender& _sender);
     void handleBatchRequest(Json::Value _request, const Sender& _sender);
 
 private:

@@ -204,7 +204,6 @@ public:
 
     template <class Accessor, bool parallel, class Keys, class Handler>
         requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys> &&
-                 std::is_lvalue_reference_v<::ranges::range_reference_t<Keys>> &&
                  std::invocable<Handler, Accessor&, std::span<::ranges::range_size_t<Keys>>,
                      BucketType&>
     auto traverse(const Keys& keys, Handler handler)

@@ -28,8 +28,6 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <tbb/concurrent_queue.h>
-#include <boost/thread/pthread/shared_mutex.hpp>
 
 namespace bcos::txpool
 {
@@ -43,28 +41,22 @@ public:
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override;
 
-    // New interfaces =============
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
         ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override;
-    // ============================
-
-    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
 
     // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
-    bcos::protocol::ConstTransactionsPtr fetchTxs(
-        bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) override;
-
     bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
+
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
@@ -96,8 +88,9 @@ public:
         protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
         bool checkPoolLimit, bool lock);
 
+    // For testing
+    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction);
     void remove(crypto::HashType const& _txHash);
-
 
 protected:
     virtual void notifyTxsSize(size_t _retryTime = 0);

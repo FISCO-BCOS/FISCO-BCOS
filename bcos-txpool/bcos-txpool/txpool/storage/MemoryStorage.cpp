@@ -560,37 +560,6 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
-ConstTransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
-{
-    ittapi::Report report(
-        ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FETCH_TXS);
-
-    auto fetchedTxs = std::make_shared<ConstTransactions>();
-    _missedTxs.clear();
-
-    for (auto const& hash : _txs)
-    {
-        TxsMap::ReadAccessor accessor;
-        auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, hash);
-        if (!has)
-        {
-            _missedTxs.emplace_back(hash);
-            continue;
-        }
-        const auto& tx = accessor.value();
-        fetchedTxs->emplace_back(tx);
-    }
-    if (c_fileLogLevel <= TRACE) [[unlikely]]
-    {
-        for (auto const& tx : _missedTxs)
-        {
-            TXPOOL_LOG(TRACE) << "miss: " << tx.abridged();
-        }
-    }
-    return fetchedTxs;
-}
-
-#if 1
 bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
@@ -737,7 +706,6 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                      << LOG_KV("traverseCount", traverseCount);
     return true;
 }
-#endif
 
 void MemoryStorage::removeInvalidTxs(bool lock)
 {
@@ -949,21 +917,14 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     {
         return missedTxs;
     }
-    protocol::BlockHeader::ConstPtr blockHeader;
-    if (_block)
-    {
-        blockHeader = _block->blockHeaderConst();
-    }
+    auto blockHeader = _block->blockHeaderConst();
     auto batchId = (_block && blockHeader) ? blockHeader->number() : -1;
     auto batchHash = (_block && blockHeader) ? blockHeader->hash() : bcos::crypto::HashType();
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();
 
-    auto txHashes = ::ranges::iota_view<size_t, size_t>{0, txsSize} |
-                    ::ranges::views::transform(
-                        [&_block](size_t index) { return _block->transactionHash(index); }) |
-                    ::ranges::to<std::vector>();
+    auto txHashes = ::ranges::to<std::vector>(_block->transactionHashes());
     bool findErrorTxInBlock = false;
 
     auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(txHashes);

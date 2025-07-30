@@ -397,7 +397,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     if (auto httpServer = _wsService->httpServer())
     {
         httpServer->setHttpReqHandler([web3JsonRpc](std::string_view body, auto sender) {
-            web3JsonRpc->onRPCRequest(body, sender);
+            web3JsonRpc->onRPCRequest(body, std::move(sender));
         });
     }
 
