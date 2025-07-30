@@ -20,11 +20,11 @@
 #pragma once
 
 #include <bcos-boostssl/context/ContextConfig.h>
+#include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/interfaces/NodeInfoDef.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <cstdint>
-#include <memory>
 #include <set>
 #include <utility>
 
@@ -89,6 +89,9 @@ private:
     // the max message to be send or read
     uint32_t m_maxMsgSize{DEFAULT_MAX_MESSAGE_SIZE};
 
+    // cors config
+    http::CorsConfig m_corsConfig;
+
 public:
     void setModel(WsModel _model) { m_model = _model; }
     WsModel model() const { return m_model; }
@@ -141,5 +144,8 @@ public:
     {
         m_contextConfig = std::move(_contextConfig);
     }
+
+    http::CorsConfig corsConfig() const { return m_corsConfig; }
+    void setCorsConfig(http::CorsConfig _corsConfig) { m_corsConfig = std::move(_corsConfig); }
 };
 }  // namespace bcos::boostssl::ws

@@ -27,7 +27,6 @@
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/websocket.hpp>
-#include <memory>
 
 namespace bcos::boostssl::http
 {
@@ -36,8 +35,14 @@ class HttpSession : public std::enable_shared_from_this<HttpSession>
 {
 public:
     using Ptr = std::shared_ptr<HttpSession>;
+    using ConstPtr = std::shared_ptr<const HttpSession>;
 
-    HttpSession();
+    HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig);
+    HttpSession(const HttpSession&) = delete;
+    HttpSession(HttpSession&&) = delete;
+    HttpSession& operator=(const HttpSession&) = delete;
+    HttpSession& operator=(HttpSession&&) = delete;
+
     virtual ~HttpSession();
 
     // start the HttpSession
@@ -60,10 +65,11 @@ public:
      * @brief: build http response object
      * @param status: http response status
      * @param content: http response content
+     * @param corsConfig: cors config
      * @return HttpResponsePtr:
      */
-    HttpResponsePtr buildHttpResp(
-        boost::beast::http::status status, bool keepAlive, unsigned version, bcos::bytes content);
+    HttpResponsePtr buildHttpResp(boost::beast::http::status status, bool keepAlive,
+        unsigned version, bcos::bytes content, const CorsConfig& corsConfig) const;
 
     HttpReqHandler httpReqHandler() const;
     void setRequestHandler(HttpReqHandler _httpReqHandler);
@@ -79,6 +85,14 @@ public:
     std::shared_ptr<std::string> nodeId();
     void setNodeId(std::shared_ptr<std::string> _nodeId);
 
+    uint32_t httpBodySizeLimit() const { return m_httpBodySizeLimit; }
+    void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit)
+    {
+        m_httpBodySizeLimit = _httpBodySizeLimit;
+    }
+    CorsConfig corsConfig() const { return m_corsConfig; }
+    void setCorsConfig(CorsConfig _corsConfig) { m_corsConfig = std::move(_corsConfig); }
+
 private:
     HttpStream::Ptr m_httpStream;
     boost::beast::flat_buffer m_buffer;
@@ -90,6 +104,9 @@ private:
     // construct it from scratch it at the beginning of each new message.
     std::optional<boost::beast::http::request_parser<boost::beast::http::string_body>> m_parser;
     std::shared_ptr<std::string> m_nodeId;
+
+    uint32_t m_httpBodySizeLimit;
+    CorsConfig m_corsConfig;
 };
 
 }  // namespace bcos::boostssl::http

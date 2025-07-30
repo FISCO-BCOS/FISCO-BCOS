@@ -53,7 +53,8 @@ public:
         m_listenPort(_listenPort)
     {
         m_ioServicePool = std::make_shared<IOServicePool>();
-        m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(m_listenIP, m_listenPort);
+        m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
+            m_listenIP, m_listenPort, -1, bcos::boostssl::http::CorsConfig());
         auto acceptor =
             std::make_shared<boost::asio::ip::tcp::acceptor>((*m_ioServicePool->getIOService()));
         auto httpStreamFactory = std::make_shared<bcos::boostssl::http::HttpStreamFactory>();
