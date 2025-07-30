@@ -38,12 +38,11 @@ public:
         bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
         std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem);
-    ~Web3JsonRpcImpl() { RPC_LOG(INFO) << LOG_KV("[DELOBJ][Web3JsonRpcImpl]", this); }
+    ~Web3JsonRpcImpl() = default;
 
     void onRPCRequest(std::string_view _requestBody, const Sender& _sender);
-
-    void handleRequest(Json::Value _request, const std::function<void(Json::Value)>& _callback);
-    void handleRequest(Json::Value _request, const Sender& _sender);
+    void handleRequest(Json::Value _request, std::function<void(Json::Value)> _callback);
+    void handleRequest(Json::Value _request, Sender _sender);
     void handleBatchRequest(Json::Value _request, const Sender& _sender);
 
 private:

@@ -24,8 +24,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <concepts/bcos-concepts/Basic.h>
-
-#include <utility>
 #include <vector>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git

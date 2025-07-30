@@ -18,11 +18,11 @@
  * @date 2021-10-31
  */
 #pragma once
-#include "bcos-task/Task.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-boostssl/websocket/WsTools.h>
 #include <bcos-utilities/Common.h>
+#include <boost/atomic/atomic_flag.hpp>
 #include <boost/beast/ssl/ssl_stream.hpp>
 #include <memory>
 
@@ -47,9 +47,7 @@ public:
         HttpStreamRWHandler _handler) = 0;
 
     virtual void asyncWrite(const HttpResponse& _httpResp, HttpStreamRWHandler _handler) = 0;
-
     virtual std::string localEndpoint();
-
     virtual std::string remoteEndpoint();
 
 protected:
