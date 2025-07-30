@@ -177,6 +177,7 @@ elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_compile_definitions(NOMINMAX)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
+    add_compile_options(/utf-8)
 
     # MSVC only support static build
     set(CMAKE_CXX_FLAGS_DEBUG "/MTd /DEBUG")

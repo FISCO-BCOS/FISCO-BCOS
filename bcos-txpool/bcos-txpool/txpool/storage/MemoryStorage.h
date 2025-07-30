@@ -58,8 +58,13 @@ public:
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
+
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
+
+    // FIXME: deprecated, after using txpool::broadcastTransaction
+    bcos::crypto::HashListPtr filterUnknownTxs(
+        bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
     bcos::crypto::HashListPtr getTxsHash(int _limit) override;
     void batchMarkAllTxs(bool _sealFlag) override;

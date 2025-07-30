@@ -786,6 +786,32 @@ void MemoryStorage::clear()
     m_missedTxs.clear();
 }
 
+HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
+{
+    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    HashList missList = ::ranges::views::filter(values, [](const auto& transaction) {
+        return transaction.has_value();
+    }) | ::ranges::views::transform([](const auto& transaction) {
+        return (*transaction)->hash();
+    }) | ::ranges::to<std::vector>();
+
+    auto unknownTxsList = std::make_shared<HashList>();
+    auto results = m_missedTxs.batchInsert<true>(missList);
+    for (auto [index, result] : ::ranges::views::enumerate(results))
+    {
+        if (result != 0)
+        {
+            unknownTxsList->push_back(missList[index]);
+        }
+    }
+
+    if (m_missedTxs.size() >= m_config->poolLimit())
+    {
+        m_missedTxs.clear();
+    }
+    return unknownTxsList;
+}
+
 bool MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
