@@ -332,11 +332,23 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
     wsConfig->setListenPort(_nodeConfig->web3RpcListenPort());
     wsConfig->setThreadPoolSize(_nodeConfig->web3RpcThreadSize());
     wsConfig->setDisableSsl(true);
+    wsConfig->setMaxMsgSize(_nodeConfig->web3HttpBodySizeLimit());
+    wsConfig->setCorsConfig(
+        bcos::boostssl::http::CorsConfig{.enableCORS = _nodeConfig->web3EnableCors(),
+            .allowCredentials = _nodeConfig->web3CorsAllowCredentials(),
+            .allowedOrigins = _nodeConfig->web3CorsAllowedOrigins(),
+            .allowedMethods = _nodeConfig->web3CorsAllowedMethods(),
+            .allowedHeaders = _nodeConfig->web3CorsAllowedHeaders(),
+            .maxAge = _nodeConfig->web3CorsMaxAge()});
+
     RPC_LOG(INFO) << LOG_BADGE("initWeb3RpcServiceConfig")
                   << LOG_KV("listenIP", wsConfig->listenIP())
                   << LOG_KV("listenPort", wsConfig->listenPort())
                   << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                  << LOG_KV("asServer", wsConfig->asServer());
+                  << LOG_KV("asServer", wsConfig->asServer())
+                  << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
+                  << LOG_KV("corsConfig", wsConfig->corsConfig().toString());
+
     return wsConfig;
 }
 
