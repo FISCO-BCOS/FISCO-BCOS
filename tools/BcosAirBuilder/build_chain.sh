@@ -1390,6 +1390,14 @@ generate_config_ini() {
     listen_ip=0.0.0.0
     listen_port=8545
     thread_count=8
+    request_body_size_limit=10240000
+    ; cors config for web3 rpc
+    enable_cors=true
+    cors_allow_credentials=true
+    cors_allowed_origins=*
+    cors_allowed_methods=GET, POST, OPTIONS
+    cors_allowed_headers=Content-Type, Authorization, X-Requested-With
+    cors_max_age=86400
 
 [cert]
     ; directory the certificates located in
@@ -1613,6 +1621,14 @@ generate_sm_config_ini() {
     listen_ip=0.0.0.0
     listen_port=8545
     thread_count=8
+    http_body_size_limit=10240000
+    ; cors config for web3 rpc
+    enable_cors=true
+    cors_allow_credentials=true
+    cors_allowed_origins=*
+    cors_allowed_methods=GET, POST, OPTIONS
+    cors_allowed_headers=Content-Type, Authorization, X-Requested-With
+    cors_max_age=86400
 
 [cert]
     ; directory the certificates located in
