@@ -118,7 +118,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     blockHeader->calculateHash(*_cryptoSuite->hashImpl());
     tx->setBatchId(blockHeader->number() - 1);
     tx->setBatchHash(blockHeader->hash());
-    _txpoolStorage->insert(tx);
+    dynamic_cast<MemoryStorage&>(*_txpoolStorage).insert(tx);
     _txpoolStorage->batchMarkTxs(
         {tx->hash()}, blockHeader->number() - 1, blockHeader->hash(), true);
     txMetaData = _faker->blockFactory()->createTransactionMetaData();

@@ -41,7 +41,6 @@ public:
         ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized>
             hashes) = 0;
 
-    virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 

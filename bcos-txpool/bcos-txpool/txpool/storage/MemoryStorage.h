@@ -48,8 +48,6 @@ public:
         ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
         override;
 
-    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction) override;
-
     // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
@@ -90,6 +88,8 @@ public:
         protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
         bool checkPoolLimit, bool lock);
 
+    // For testing
+    bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction);
     void remove(crypto::HashType const& _txHash);
 
 protected:
