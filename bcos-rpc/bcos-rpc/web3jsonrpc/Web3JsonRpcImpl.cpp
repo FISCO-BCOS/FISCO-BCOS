@@ -39,7 +39,7 @@ bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string _groupId, uint32_t _batc
 }
 
 void Web3JsonRpcImpl::handleRequest(
-    Json::Value _request, std::function<void(Json::Value)> _callback)
+    Json::Value _request, const std::function<void(Json::Value)>& _callback)
 {
     Json::Value response;
     try
@@ -100,7 +100,7 @@ void Web3JsonRpcImpl::handleRequest(
             }
 
             _callback(std::move(resp));
-        }(this, optHandler.value(), std::move(_request), std::move(_callback), startT));
+        }(this, optHandler.value(), std::move(_request), _callback, startT));
 
         return;
     }
@@ -121,9 +121,9 @@ void Web3JsonRpcImpl::handleRequest(
     _callback(std::move(response));
 }
 
-void Web3JsonRpcImpl::handleRequest(Json::Value _request, Sender _sender)
+void Web3JsonRpcImpl::handleRequest(Json::Value _request, const Sender& _sender)
 {
-    handleRequest(std::move(_request), [_sender = std::move(_sender)](Json::Value _response) {
+    handleRequest(std::move(_request), [_sender](Json::Value _response) {
         auto respBytes = toBytesResponse(_response);
         _sender(std::move(respBytes));
     });
