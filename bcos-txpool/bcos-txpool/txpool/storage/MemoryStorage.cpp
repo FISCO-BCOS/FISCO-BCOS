@@ -48,7 +48,6 @@ MemoryStorage::MemoryStorage(
   : m_config(std::move(_config)),
     m_txsTable(BUCKET_SIZE),
     m_invalidTxs(BUCKET_SIZE),
-    m_missedTxs(CPU_CORES),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
     m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
@@ -782,33 +781,22 @@ void MemoryStorage::clear()
 {
     m_txsTable.clear();
     m_invalidTxs.clear();
-    m_missedTxs.clear();
 }
 
-HashListPtr MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
+HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
 {
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
-    HashList missList = ::ranges::views::filter(values, [](const auto& transaction) {
-        return !transaction.has_value();
-    }) | ::ranges::views::transform([](const auto& transaction) {
-        return (*transaction)->hash();
-    }) | ::ranges::to<std::vector>();
-
-    auto unknownTxsList = std::make_shared<HashList>();
-    auto results = m_missedTxs.batchInsert<true>(missList);
-    for (auto [index, result] : ::ranges::views::enumerate(results))
-    {
-        if (result != 0)
-        {
-            unknownTxsList->push_back(missList[index]);
-        }
-    }
-
-    if (m_missedTxs.size() >= m_config->poolLimit())
-    {
-        m_missedTxs.clear();
-    }
-    return unknownTxsList;
+    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    auto missList = ::ranges::views::enumerate(values) |
+                    ::ranges::views::filter([](const auto& tuple) {
+                        auto&& [index, transaction] = tuple;
+                        return !transaction.has_value();
+                    }) |
+                    ::ranges::views::transform([&](const auto& tuple) {
+                        auto&& [index, transaction] = tuple;
+                        return _txsHashList[index];
+                    }) |
+                    ::ranges::to<std::vector>();
+    return missList;
 }
 
 bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber _batchId,

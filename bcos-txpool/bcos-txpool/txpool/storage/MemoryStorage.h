@@ -61,7 +61,7 @@ public:
     void clear() override;
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
-    bcos::crypto::HashListPtr filterUnknownTxs(
+    bcos::crypto::HashList filterUnknownTxs(
         crypto::HashListView _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
     bcos::crypto::HashListPtr getTxsHash(int _limit) override;
@@ -120,9 +120,6 @@ protected:
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
     TxsMap m_txsTable;
     TxsMap m_invalidTxs;
-
-    using HashSet = BucketSet<bcos::crypto::HashType, std::hash<bcos::crypto::HashType>>;
-    HashSet m_missedTxs;
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;

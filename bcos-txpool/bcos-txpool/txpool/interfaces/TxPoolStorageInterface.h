@@ -60,7 +60,7 @@ public:
     virtual bool exist(bcos::crypto::HashType const& _txHash) = 0;
     virtual bool batchExists(crypto::HashListView _txsHashList) = 0;
 
-    virtual bcos::crypto::HashListPtr filterUnknownTxs(
+    virtual bcos::crypto::HashList filterUnknownTxs(
         crypto::HashListView _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
 
     virtual size_t size() const = 0;
