@@ -418,7 +418,7 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         transaction5->forceSender(bytesConstRef{senderAddress.bytes}.toBytes());
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction5).mutableInner().type = 1;
         auto receipt5 = co_await executor.executeTransaction(
-            storage, blockHeader, *transaction4, 4, ledgerConfig, true);
+            storage, blockHeader, *transaction5, 4, ledgerConfig, true);
         BOOST_CHECK_EQUAL(receipt5->status(), 0);
         totalETH = 0;
         abiCodec.abiOut(receipt5->output(), totalETH);
