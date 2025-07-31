@@ -264,8 +264,8 @@ public:
     }
 
     // handler: accessor is nullptr if not found, handler return false to break to find
-    template <class AccessorType>
-    auto batchFind(auto&& keys)
+    template <class AccessorType, class Keys>
+    auto batchFind(Keys auto&& keys)
     {
         std::vector<std::optional<ValueType>,
             tbb::cache_aligned_allocator<std::optional<ValueType>>>

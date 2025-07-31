@@ -59,6 +59,7 @@ public:
         bool _avoidDuplicate = true) = 0;
 
     virtual bool exist(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bool batchExists(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
 
     virtual bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
@@ -79,7 +80,6 @@ public:
     virtual std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::ConstPtr _block) = 0;
 
-    virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
     virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)

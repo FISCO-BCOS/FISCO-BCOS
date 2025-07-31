@@ -253,7 +253,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                         // try to fetch the missed txs from the local  txpool again
                         if (_error && _error->errorCode() == CommonError::TransactionsMissing)
                         {
-                            verifyRet = txpoolStorage->batchVerifyProposal(missedTxs);
+                            verifyRet = txpoolStorage->batchExists(missedTxs);
                         }
                         if (verifyRet)
                         {

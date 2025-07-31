@@ -181,8 +181,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
 {
-    auto hashesVector = ::ranges::to<std::vector>(hashes);
-    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(hashesVector);
+    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(hashes);
     return values |
            ::ranges::views::transform([](auto const& value) -> protocol::Transaction::ConstPtr {
                if (value)
@@ -973,7 +972,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     return findErrorTxInBlock ? nullptr : missedTxs;
 }
 
-bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
+bool MemoryStorage::batchExists(std::shared_ptr<HashList> _txsHashList)
 {
     bool has = false;
     auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(*_txsHashList);

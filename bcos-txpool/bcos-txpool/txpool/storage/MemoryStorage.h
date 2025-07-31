@@ -56,6 +56,7 @@ public:
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
+    bool batchExists(std::shared_ptr<bcos::crypto::HashList> _txsHashList) override;
 
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
@@ -72,8 +73,6 @@ public:
 
     std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::ConstPtr _block) override;
-
-    bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) override;
 
     bool batchVerifyAndSubmitTransaction(bcos::protocol::BlockHeader::ConstPtr _header,
         bcos::protocol::TransactionsPtr _txs) override;
