@@ -181,7 +181,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
 {
-    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(hashes);
+    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(std::move(hashes));
     return values |
            ::ranges::views::transform([](auto const& value) -> protocol::Transaction::ConstPtr {
                if (value)
@@ -196,8 +196,8 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
 TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
-    auto txHash = transaction.hash();
-    if (TxsMap::ReadAccessor accessor; m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash))
+    if (TxsMap::ReadAccessor accessor;
+        m_txsTable.find<TxsMap::ReadAccessor>(accessor, transaction.hash()))
     {
         if (txSubmitCallback && !accessor.value()->submitCallback())
         {
@@ -785,11 +785,11 @@ void MemoryStorage::clear()
     m_missedTxs.clear();
 }
 
-HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
+HashListPtr MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
 {
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
     HashList missList = ::ranges::views::filter(values, [](const auto& transaction) {
-        return transaction.has_value();
+        return !transaction.has_value();
     }) | ::ranges::views::transform([](const auto& transaction) {
         return (*transaction)->hash();
     }) | ::ranges::to<std::vector>();
@@ -811,14 +811,14 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
     return unknownTxsList;
 }
 
-bool MemoryStorage::batchMarkTxs(
-    HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
+bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber _batchId,
+    HashType const& _batchHash, bool _sealFlag)
 {
-    return batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
+    return batchMarkTxsWithoutLock(std::move(_txsHashList), _batchId, _batchHash, _sealFlag);
 }
 
-bool MemoryStorage::batchMarkTxsWithoutLock(
-    HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
+bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, BlockNumber _batchId,
+    HashType const& _batchHash, bool _sealFlag)
 {
     auto recordT = utcTime();
     auto startT = utcTime();
@@ -972,10 +972,10 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     return findErrorTxInBlock ? nullptr : missedTxs;
 }
 
-bool MemoryStorage::batchExists(std::shared_ptr<HashList> _txsHashList)
+bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
 {
     bool has = false;
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(*_txsHashList);
+    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
     return ::ranges::all_of(values, [](const auto& value) { return value.has_value(); });
 }
 

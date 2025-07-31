@@ -488,7 +488,8 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
         responseTxsStatus(std::move(_fromNode));
         return;
     }
-    auto requestTxs = m_config->txpoolStorage()->filterUnknownTxs(_txsStatus->txsHash(), _fromNode);
+    auto requestTxs = m_config->txpoolStorage()->filterUnknownTxs(
+        ::ranges::views::all(_txsStatus->txsHash()), _fromNode);
     if (requestTxs->empty())
     {
         return;

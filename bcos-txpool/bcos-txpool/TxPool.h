@@ -124,8 +124,6 @@ public:
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch) override;
 
-    void clearAllTxs() override;
-
     void setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter);
 
     tool::TreeTopology::Ptr treeRouter() const;

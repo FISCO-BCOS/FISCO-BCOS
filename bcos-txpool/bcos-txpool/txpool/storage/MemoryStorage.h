@@ -45,8 +45,7 @@ public:
         protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
-        override;
+        crypto::HashListView hashes) override;
 
     // invoke when scheduler finished block executed and notify txpool new block result
     void batchRemove(bcos::protocol::BlockNumber _batchId,
@@ -56,14 +55,14 @@ public:
         size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
-    bool batchExists(std::shared_ptr<bcos::crypto::HashList> _txsHashList) override;
+    bool batchExists(crypto::HashListView _txsHashList) override;
 
     size_t size() const override { return m_txsTable.size(); }
     void clear() override;
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
     bcos::crypto::HashListPtr filterUnknownTxs(
-        bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
+        crypto::HashListView _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
     bcos::crypto::HashListPtr getTxsHash(int _limit) override;
     void batchMarkAllTxs(bool _sealFlag) override;
@@ -79,9 +78,8 @@ public:
     void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
 
     // return true if all txs have been marked
-    bool batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
-        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
-        bool _sealFlag) override;
+    bool batchMarkTxs(crypto::HashListView _txsHashList, bcos::protocol::BlockNumber _batchId,
+        bcos::crypto::HashType const& _batchHash, bool _sealFlag) override;
 
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
         protocol::Transaction::Ptr transaction, protocol::TxSubmitCallback txSubmitCallback,
@@ -111,7 +109,7 @@ protected:
     virtual void cleanUpExpiredTransactions();
 
     // return true if all txs have been marked
-    virtual bool batchMarkTxsWithoutLock(bcos::crypto::HashList const& _txsHashList,
+    virtual bool batchMarkTxsWithoutLock(crypto::HashListView _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag);
 
