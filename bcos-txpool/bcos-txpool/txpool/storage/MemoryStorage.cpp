@@ -969,7 +969,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
         auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result != TransactionStatus::None)
         {
-            invalidTxs.emplace_back(std::move(tx));
+            invalidTxs.emplace_back(tx);
             continue;
         }
         if ((int)txsHash->size() >= _limit)
