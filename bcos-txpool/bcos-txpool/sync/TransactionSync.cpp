@@ -488,15 +488,17 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
         responseTxsStatus(std::move(_fromNode));
         return;
     }
-    auto requestTxs = m_config->txpoolStorage()->filterUnknownTxs(_txsStatus->txsHash(), _fromNode);
-    if (requestTxs->empty())
+    auto requestTxs = m_config->txpoolStorage()->filterUnknownTxs(
+        ::ranges::views::all(_txsStatus->txsHash()), _fromNode);
+    if (requestTxs.empty())
     {
         return;
     }
-    requestMissedTxsFromPeer(_fromNode, requestTxs, nullptr, nullptr);
-    SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus") << LOG_KV("reqSize", requestTxs->size())
+    SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus") << LOG_KV("reqSize", requestTxs.size())
                     << LOG_KV("peerTxsSize", _txsStatus->txsHash().size())
                     << LOG_KV("peer", _fromNode->shortHex());
+    requestMissedTxsFromPeer(
+        _fromNode, std::make_shared<HashList>(std::move(requestTxs)), nullptr, nullptr);
 }
 
 void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)

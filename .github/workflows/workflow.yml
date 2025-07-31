@@ -85,7 +85,7 @@ jobs:
       - name: Configure for windows
         if: matrix.os == 'windows-2022'
         run: |
-          mkdir -p build
+          mkdir build -Force
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DWITH_WASM=OFF -DWITH_TIKV=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static ..
       - name: Build

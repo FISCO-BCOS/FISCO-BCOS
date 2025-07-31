@@ -48,7 +48,6 @@ MemoryStorage::MemoryStorage(
   : m_config(std::move(_config)),
     m_txsTable(BUCKET_SIZE),
     m_invalidTxs(BUCKET_SIZE),
-    m_missedTxs(CPU_CORES),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
     m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
@@ -179,10 +178,9 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 }
 
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
-    ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
+    crypto::HashListView hashes)
 {
-    auto hashesVector = ::ranges::to<std::vector>(hashes);
-    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(hashesVector);
+    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(std::move(hashes));
     return values |
            ::ranges::views::transform([](auto const& value) -> protocol::Transaction::ConstPtr {
                if (value)
@@ -197,8 +195,8 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
 TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
-    auto txHash = transaction.hash();
-    if (TxsMap::ReadAccessor accessor; m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash))
+    if (TxsMap::ReadAccessor accessor;
+        m_txsTable.find<TxsMap::ReadAccessor>(accessor, transaction.hash()))
     {
         if (txSubmitCallback && !accessor.value()->submitCallback())
         {
@@ -783,43 +781,32 @@ void MemoryStorage::clear()
 {
     m_txsTable.clear();
     m_invalidTxs.clear();
-    m_missedTxs.clear();
 }
 
-HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
+HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
 {
     auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(_txsHashList);
-    HashList missList = ::ranges::views::filter(values, [](const auto& transaction) {
-        return transaction.has_value();
-    }) | ::ranges::views::transform([](const auto& transaction) {
-        return (*transaction)->hash();
-    }) | ::ranges::to<std::vector>();
-
-    auto unknownTxsList = std::make_shared<HashList>();
-    auto results = m_missedTxs.batchInsert<true>(missList);
-    for (auto [index, result] : ::ranges::views::enumerate(results))
-    {
-        if (result != 0)
-        {
-            unknownTxsList->push_back(missList[index]);
-        }
-    }
-
-    if (m_missedTxs.size() >= m_config->poolLimit())
-    {
-        m_missedTxs.clear();
-    }
-    return unknownTxsList;
+    auto missList = ::ranges::views::enumerate(values) |
+                    ::ranges::views::filter([](const auto& tuple) {
+                        auto&& [index, transaction] = tuple;
+                        return !transaction.has_value();
+                    }) |
+                    ::ranges::views::transform([&](const auto& tuple) {
+                        auto&& [index, transaction] = tuple;
+                        return _txsHashList[index];
+                    }) |
+                    ::ranges::to<std::vector>();
+    return missList;
 }
 
-bool MemoryStorage::batchMarkTxs(
-    HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
+bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber _batchId,
+    HashType const& _batchHash, bool _sealFlag)
 {
-    return batchMarkTxsWithoutLock(_txsHashList, _batchId, _batchHash, _sealFlag);
+    return batchMarkTxsWithoutLock(std::move(_txsHashList), _batchId, _batchHash, _sealFlag);
 }
 
-bool MemoryStorage::batchMarkTxsWithoutLock(
-    HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
+bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, BlockNumber _batchId,
+    HashType const& _batchHash, bool _sealFlag)
 {
     auto recordT = utcTime();
     auto startT = utcTime();
@@ -973,10 +960,10 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     return findErrorTxInBlock ? nullptr : missedTxs;
 }
 
-bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
+bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
 {
     bool has = false;
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(*_txsHashList);
+    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
     return ::ranges::all_of(values, [](const auto& value) { return value.has_value(); });
 }
 

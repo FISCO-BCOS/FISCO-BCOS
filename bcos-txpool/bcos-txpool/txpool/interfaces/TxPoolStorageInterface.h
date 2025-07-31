@@ -38,8 +38,7 @@ public:
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction, bool waitForReceipt) = 0;
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized>
-            hashes) = 0;
+        crypto::HashListView hashes) = 0;
 
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
@@ -59,15 +58,16 @@ public:
         bool _avoidDuplicate = true) = 0;
 
     virtual bool exist(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bool batchExists(crypto::HashListView _txsHashList) = 0;
 
-    virtual bcos::crypto::HashListPtr filterUnknownTxs(
-        bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
+    virtual bcos::crypto::HashList filterUnknownTxs(
+        crypto::HashListView _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
 
     virtual size_t size() const = 0;
     virtual void clear() = 0;
 
     // return true if all txs have been marked
-    virtual bool batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
+    virtual bool batchMarkTxs(crypto::HashListView _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) = 0;
     virtual void batchMarkAllTxs(bool _sealFlag) = 0;
@@ -79,7 +79,6 @@ public:
     virtual std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::ConstPtr _block) = 0;
 
-    virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
     virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)

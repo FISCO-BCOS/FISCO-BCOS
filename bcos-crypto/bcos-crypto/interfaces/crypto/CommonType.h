@@ -28,5 +28,7 @@ namespace bcos::crypto
 using HashType = h256;
 using HashList = std::vector<HashType>;
 using HashListPtr = std::shared_ptr<HashList>;
+using HashListView =
+    ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized>;
 
 }  // namespace bcos::crypto

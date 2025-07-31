@@ -253,7 +253,8 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                         // try to fetch the missed txs from the local  txpool again
                         if (_error && _error->errorCode() == CommonError::TransactionsMissing)
                         {
-                            verifyRet = txpoolStorage->batchVerifyProposal(missedTxs);
+                            verifyRet =
+                                txpoolStorage->batchExists(::ranges::views::all(*missedTxs));
                         }
                         if (verifyRet)
                         {
@@ -451,7 +452,8 @@ void TxPool::asyncMarkTxs(const HashList& _txsHash, bool _sealedFlag,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
     bool allMarked = false;
-    allMarked = m_txpoolStorage->batchMarkTxs(_txsHash, _batchId, _batchHash, _sealedFlag);
+    allMarked = m_txpoolStorage->batchMarkTxs(
+        ::ranges::views::all(_txsHash), _batchId, _batchHash, _sealedFlag);
 
     if (!_onRecvResponse)
     {
@@ -679,10 +681,6 @@ void bcos::txpool::TxPool::setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolS
 {
     m_txpoolStorage = _txpoolStorage;
     m_transactionSync->config()->setTxPoolStorage(_txpoolStorage);
-}
-void bcos::txpool::TxPool::clearAllTxs()
-{
-    m_txpoolStorage->clear();
 }
 bcos::sync::TransactionSyncInterface::Ptr& bcos::txpool::TxPool::transactionSync()
 {

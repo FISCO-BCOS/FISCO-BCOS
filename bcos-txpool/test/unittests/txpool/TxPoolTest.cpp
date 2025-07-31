@@ -120,7 +120,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     tx->setBatchHash(blockHeader->hash());
     dynamic_cast<MemoryStorage&>(*_txpoolStorage).insert(tx);
     _txpoolStorage->batchMarkTxs(
-        {tx->hash()}, blockHeader->number() - 1, blockHeader->hash(), true);
+        ::ranges::views::single(tx->hash()), blockHeader->number() - 1, blockHeader->hash(), true);
     txMetaData = _faker->blockFactory()->createTransactionMetaData();
     txMetaData->setHash(tx->hash());
     txMetaData->setTo(std::string(tx->to()));
