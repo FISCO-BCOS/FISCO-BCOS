@@ -178,7 +178,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 }
 
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
-    ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
+    crypto::HashListView hashes)
 {
     auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(std::move(hashes));
     return values |
