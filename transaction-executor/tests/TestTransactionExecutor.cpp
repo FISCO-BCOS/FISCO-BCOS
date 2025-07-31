@@ -345,11 +345,14 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         using namespace std::string_literals;
         using namespace std::string_view_literals;
         auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
+        evmc_address senderAddress = unhexAddress(sender);
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        co_await senderAccount.setBalance(500);
 
         bcos::bytes input;
         boost::algorithm::unhex(ETHReceiverV1ByteCode, std::back_inserter(input));
-        auto transaction = transactionFactory.createTransaction(0, "", input, "0", 0, "", "", 0);
-        evmc_address senderAddress = unhexAddress(sender);
+        auto transaction = transactionFactory.createTransaction(
+            1, "", input, "0", 0, "", "", 0, ""s, "0x32", {}, 0, "0x0", "0x0");
         transaction->forceSender(bytesConstRef{senderAddress.bytes}.toBytes());
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
 
@@ -357,6 +360,10 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
             storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
         BOOST_CHECK_GT(receipt->contractAddress().size(), 0);
+        BOOST_CHECK_EQUAL(co_await senderAccount.balance(), 450);
+
+        ledger::account::EVMAccount implAccount(storage, receipt->contractAddress(), false);
+        BOOST_CHECK_EQUAL(co_await implAccount.balance(), 50);
 
         bcos::bytes input2;
         boost::algorithm::unhex(TRANSPARENT_UPGRADEABLE_PROXY_BYTECODE, std::back_inserter(input2));
@@ -375,9 +382,6 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         BOOST_CHECK_GT(receipt2->contractAddress().size(), 0);
         BOOST_CHECK_NE(receipt->contractAddress(), receipt2->contractAddress());
 
-        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
-        co_await senderAccount.setBalance(500);
-
         auto transferInput = abiCodec.abiIn("transfer()");
         auto transaction3 =
             transactionFactory.createTransaction(1, std::string{receipt2->contractAddress()},
@@ -387,17 +391,11 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         auto receipt3 = co_await executor.executeTransaction(
             storage, blockHeader, *transaction3, 2, ledgerConfig, false);
         BOOST_CHECK_EQUAL(receipt3->status(), 0);
-
-        auto balance = co_await senderAccount.balance();
-        BOOST_CHECK_EQUAL(balance, 400);
+        BOOST_CHECK_EQUAL(co_await senderAccount.balance(), 350);
 
         ledger::account::EVMAccount proxyAccount(storage, receipt2->contractAddress(), false);
-        auto balance2 = co_await proxyAccount.balance();
-        BOOST_CHECK_EQUAL(balance2, 100);
-
-        ledger::account::EVMAccount contractAccount(storage, receipt->contractAddress(), false);
-        auto balance3 = co_await contractAccount.balance();
-        BOOST_CHECK_EQUAL(balance3, 0);
+        BOOST_CHECK_EQUAL(co_await proxyAccount.balance(), 100);
+        BOOST_CHECK_EQUAL(co_await implAccount.balance(), 50);
 
         auto queryInput = abiCodec.abiIn("totalETH()");
         auto transaction4 =
@@ -410,7 +408,7 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
         BOOST_CHECK_EQUAL(receipt4->status(), 0);
         u256 totalETH = 0;
         abiCodec.abiOut(receipt4->output(), totalETH);
-        BOOST_CHECK_EQUAL(totalETH, 0);
+        BOOST_CHECK_EQUAL(totalETH, 50);
 
         auto transaction5 =
             transactionFactory.createTransaction(1, std::string{receipt2->contractAddress()},

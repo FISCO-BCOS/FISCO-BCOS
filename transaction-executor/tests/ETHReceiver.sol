@@ -9,7 +9,8 @@ contract ETHReceiverV1 is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     uint256 public totalETH; // 存储接收的 ETH 总量
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    constructor() payable {
+        totalETH += msg.value;
         _disableInitializers(); // 禁止外部初始化
     }
 
