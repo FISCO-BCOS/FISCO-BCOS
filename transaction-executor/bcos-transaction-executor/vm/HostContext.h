@@ -403,11 +403,25 @@ public:
             {
                 // 先转账，再执行
                 // Transfer first, then proceed execute
-                if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                    m_ledgerConfig.get().balanceTransfer())
+                if (m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_delegatecall_transfer))
                 {
-                    co_await transferBalance(*ref);
+                    if (ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0 &&
+                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        m_ledgerConfig.get().balanceTransfer())
+                    {
+                        co_await transferBalance(*ref);
+                    }
                 }
+                else
+                {
+                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        m_ledgerConfig.get().balanceTransfer())
+                    {
+                        co_await transferBalance(*ref);
+                    }
+                }
+
 
                 if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                 {
