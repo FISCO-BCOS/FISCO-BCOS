@@ -8,6 +8,7 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
@@ -15,7 +16,7 @@
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <optional>
-#include <boost/filesystem.hpp>
+#include <random>
 
 using namespace bcos::storage;
 using namespace std;
@@ -33,7 +34,7 @@ class Header256Hash : public bcos::crypto::Hash
 public:
     typedef std::shared_ptr<Header256Hash> Ptr;
     Header256Hash() = default;
-    virtual ~Header256Hash(){};
+    virtual ~Header256Hash() {};
     bcos::crypto::HashType hash(bytesConstRef _data) const override
     {
         std::hash<std::string_view> hash;
@@ -210,7 +211,7 @@ struct TestRocksDBStorageFixture
         boost::log::core::get()->set_logging_enabled(true);
     }
 
-    std::string path = "./unittestdb";
+    std::string path = "./unittestdb" + std::to_string(std::random_device{}());
     RocksDBStorage::Ptr rocksDBStorage;
     std::string testTableName = "TestTable";
     TableInfo::ConstPtr testTableInfo = nullptr;
