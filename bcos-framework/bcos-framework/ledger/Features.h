@@ -49,6 +49,7 @@ public:
         bugfix_precompiled_gascalc,
         bugfix_method_auth_sender,
         bugfix_precompiled_evm_status,
+        bugfix_delegatecall_transfer,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -267,10 +268,13 @@ public:
                 {.to = protocol::BlockVersion::V3_15_1_VERSION,
                     .flags = {Flag::bugfix_precompiled_gascalc}},
                 {.to = protocol::BlockVersion::V3_15_2_VERSION,
-                    .flags = {
-                        Flag::bugfix_method_auth_sender,
-                        Flag::bugfix_precompiled_evm_status,
-                    }}});
+                    .flags =
+                        {
+                            Flag::bugfix_method_auth_sender,
+                            Flag::bugfix_precompiled_evm_status,
+                        }},
+                {.to = protocol::BlockVersion::V3_16_0_VERSION,
+                    .flags = {Flag::bugfix_delegatecall_transfer}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

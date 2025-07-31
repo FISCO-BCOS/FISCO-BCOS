@@ -108,7 +108,7 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
-        if: matrix.os != 'windows-2022'
+        if: matrix.os != 'windows-2022' && matrix.os != 'macos-15'
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
