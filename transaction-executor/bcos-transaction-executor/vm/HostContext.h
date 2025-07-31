@@ -407,7 +407,7 @@ public:
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
                 {
                     if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
-                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE) &&
+                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
                         !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
                         m_ledgerConfig.get().balanceTransfer())
                     {
