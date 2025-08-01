@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
@@ -105,7 +106,7 @@ protected:
     virtual void notifyTxResult(bcos::protocol::Transaction& transaction,
         bcos::protocol::TransactionSubmitResult::Ptr txSubmitResult);
 
-    virtual void removeInvalidTxs(bool lock);
+    void removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr> txs);
     virtual void cleanUpExpiredTransactions();
 
     // return true if all txs have been marked
@@ -119,7 +120,6 @@ protected:
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
     TxsMap m_txsTable;
-    TxsMap m_invalidTxs;
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;

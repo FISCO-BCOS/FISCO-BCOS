@@ -19,11 +19,12 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/validator/TransactionValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
-#include <bcos-protocol/TransactionSubmitResultImpl.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
@@ -47,7 +48,6 @@ MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
     m_txsTable(BUCKET_SIZE),
-    m_invalidTxs(BUCKET_SIZE),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
     m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
@@ -580,6 +580,7 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     size_t traverseCount = 0;
     size_t sealed = 0;
 
+    std::vector<Transaction::Ptr> invalidTxs;
     auto handleTx = [&](const Transaction::Ptr& tx) {
         traverseCount++;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
@@ -599,15 +600,10 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
-            TxsMap::WriteAccessor accessor;
-            m_invalidTxs.insert(accessor, {txHash, tx});
+            invalidTxs.emplace_back(tx);
             return false;
         }
 
-        if (m_invalidTxs.contains(txHash))
-        {
-            return false;
-        }
         /// check nonce again when obtain transactions
         // since the invalid nonce has already been checked before the txs import into the
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
@@ -620,15 +616,13 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             auto transaction = std::const_pointer_cast<Transaction>(tx);
             transaction->takeSubmitCallback();
             // add to m_invalidTxs to be deleted
-            TxsMap::WriteAccessor accessor;
-            m_invalidTxs.insert(accessor, {txHash, tx});
+            invalidTxs.emplace_back(tx);
             return false;
         }
         // blockLimit expired
         if (result == TransactionStatus::BlockLimitCheckFail)
         {
-            TxsMap::WriteAccessor accessor;
-            m_invalidTxs.insert(accessor, {txHash, tx});
+            invalidTxs.emplace_back(tx);
             return false;
         }
         if (_avoidTxs && _avoidTxs->contains(txHash))
@@ -689,8 +683,8 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             }
         }
     }
-    auto invalidTxsSize = m_invalidTxs.size();
-    removeInvalidTxs(true);
+    auto invalidTxsSize = invalidTxs.size();
+    removeInvalidTxs(invalidTxs);
 
     auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
@@ -699,31 +693,24 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
                      << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT)
-                     << LOG_KV("invalidBefore", invalidTxsSize)
-                     << LOG_KV("invalidNow", m_invalidTxs.size()) << LOG_KV("sealed", sealed)
+                     << LOG_KV("invalidBefore", invalidTxsSize) << LOG_KV("sealed", sealed)
                      << LOG_KV("traverseCount", traverseCount);
     return true;
 }
 
-void MemoryStorage::removeInvalidTxs(bool lock)
+void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr> txs)
 {
     try
     {
-        if (m_invalidTxs.empty())
-        {
-            return;
-        }
-
         // remove invalid txs
         size_t txCnt = 0;
         std::unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr> txs2Remove;
 
-        for (auto& accessor : m_invalidTxs.range<decltype(m_invalidTxs)::ReadAccessor>())
+        for (const auto& transaction : txs)
         {
             ++txCnt;
-            txs2Remove.emplace(accessor.key(), accessor.value());
+            txs2Remove.emplace(transaction->hash(), transaction);
         }
-        m_invalidTxs.clear();
 
         bcos::protocol::NonceList invalidNonceList;
         for (auto const& [_, tx] : txs2Remove)
@@ -780,7 +767,6 @@ void MemoryStorage::removeInvalidTxs(bool lock)
 void MemoryStorage::clear()
 {
     m_txsTable.clear();
-    m_invalidTxs.clear();
 }
 
 HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
@@ -971,6 +957,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
 {
     auto txsHash = std::make_shared<HashList>();
 
+    std::vector<Transaction::Ptr> invalidTxs;
     for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
     {
         auto tx = accessor.value();
@@ -982,8 +969,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
         auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result != TransactionStatus::None)
         {
-            TxsMap::WriteAccessor writeAccessor;
-            m_invalidTxs.insert(writeAccessor, {tx->hash(), tx});
+            invalidTxs.emplace_back(tx);
             continue;
         }
         if ((int)txsHash->size() >= _limit)
@@ -992,7 +978,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
         }
         txsHash->emplace_back(accessor.key());
     };
-    removeInvalidTxs(true);
+    removeInvalidTxs(invalidTxs);
     return txsHash;
 }
 
@@ -1018,8 +1004,10 @@ void MemoryStorage::cleanUpExpiredTransactions()
     size_t sealedTxs = 0;
     uint64_t currentTime = utcTime();
 
+    std::vector<Transaction::Ptr> invalidTxs;
     for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
     {
+        bool added = false;
         traversedTxsNum++;
         if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
         {
@@ -1038,24 +1026,8 @@ void MemoryStorage::cleanUpExpiredTransactions()
         // the txs expired or not
         if (currentTime > (tx->importTime() + m_txsExpirationTime))
         {
-            TxsMap::WriteAccessor accessor1;
-            if (m_invalidTxs.insert(accessor1, {tx->hash(), tx}))
-            {
-                erasedTxs++;
-            }
-            else
-            {
-                // already exist
-                continue;
-            }
-        }
-        else
-        {
-            if (m_invalidTxs.contains(tx->hash()))
-            {
-                // already exist
-                continue;
-            }
+            invalidTxs.emplace_back(tx);
+            added = true;
         }
         // check txpool txs, no need to check txpool nonce
         auto validator = m_config->txValidator();
@@ -1063,15 +1035,11 @@ void MemoryStorage::cleanUpExpiredTransactions()
         // blockLimit expired
         if (result != TransactionStatus::None)
         {
-            TxsMap::WriteAccessor writeAccessor;
-            if (m_invalidTxs.insert(writeAccessor, {tx->hash(), tx}))
+            if (!added)
             {
-                erasedTxs++;
+                invalidTxs.emplace_back(tx);
             }
-            else
-            {  // already exist
-                continue;
-            }
+            erasedTxs++;
         }
 
         if (traversedTxsNum > MAX_TRAVERSE_TXS_COUNT)
@@ -1079,7 +1047,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
             break;
         }
     }
-    removeInvalidTxs(true);
+    removeInvalidTxs(invalidTxs);
 
     TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs)
