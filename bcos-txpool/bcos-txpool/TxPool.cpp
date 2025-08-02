@@ -193,7 +193,7 @@ std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> TxPool::sealT
     auto fetchedTxs = m_config->blockFactory()->createBlock();
     auto sysTxs = m_config->blockFactory()->createBlock();
 
-    m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+    m_txpoolStorage->batchSealTransactions(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
     return {std::move(fetchedTxs), std::move(sysTxs)};
 }
 
@@ -452,8 +452,7 @@ void TxPool::asyncMarkTxs(const HashList& _txsHash, bool _sealedFlag,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
     bool allMarked = false;
-    allMarked = m_txpoolStorage->batchMarkTxs(
-        ::ranges::views::all(_txsHash), _batchId, _batchHash, _sealedFlag);
+    allMarked = m_txpoolStorage->batchMarkTxs(_txsHash, _batchId, _batchHash, _sealedFlag);
 
     if (!_onRecvResponse)
     {

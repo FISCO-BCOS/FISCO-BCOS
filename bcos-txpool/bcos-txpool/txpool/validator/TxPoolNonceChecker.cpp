@@ -62,7 +62,7 @@ void TxPoolNonceChecker::remove(NonceType const& _nonce)
 
 void TxPoolNonceChecker::batchRemove(NonceList const& _nonceList)
 {
-    m_nonces.batchRemove<decltype(_nonceList), false>(_nonceList);
+    m_nonces.batchRemove(_nonceList);
 }
 
 void TxPoolNonceChecker::batchRemove(tbb::concurrent_unordered_set<bcos::protocol::NonceType,

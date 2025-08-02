@@ -44,7 +44,6 @@ public:
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
-
     std::vector<protocol::Transaction::ConstPtr> getTransactions(
         crypto::HashListView hashes) override;
 
@@ -52,13 +51,14 @@ public:
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
-    bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList, bcos::protocol::Block::Ptr _sysTxsList,
-        size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate = true) override;
+    bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
+        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
+        bool _avoidDuplicate = true) override;
 
     bool exist(bcos::crypto::HashType const& _txHash) override;
     bool batchExists(crypto::HashListView _txsHashList) override;
 
-    size_t size() const override { return m_txsTable.size(); }
+    size_t size() const override;
     void clear() override;
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
@@ -93,8 +93,6 @@ public:
 protected:
     virtual void notifyTxsSize(size_t _retryTime = 0);
 
-    bcos::protocol::TransactionStatus insertWithoutLock(
-        bcos::protocol::Transaction::Ptr transaction);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus txpoolStorageCheck(
@@ -109,17 +107,13 @@ protected:
     void removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr> txs);
     virtual void cleanUpExpiredTransactions();
 
-    // return true if all txs have been marked
-    virtual bool batchMarkTxsWithoutLock(crypto::HashListView _txsHashList,
-        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
-        bool _sealFlag);
-
     void printPendingTxs() override;
 
     TxPoolConfig::Ptr m_config;
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
-    TxsMap m_txsTable;
+    TxsMap m_unsealTransactions;
+    TxsMap m_sealedTransactions;
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;

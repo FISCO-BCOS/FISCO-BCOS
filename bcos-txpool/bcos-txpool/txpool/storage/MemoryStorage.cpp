@@ -37,7 +37,7 @@
 #include <variant>
 
 const static auto CPU_CORES = std::thread::hardware_concurrency();
-const static auto BUCKET_SIZE = 4 * CPU_CORES;
+const static auto BUCKET_SIZE = CPU_CORES;
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -47,7 +47,8 @@ using namespace bcos::protocol;
 MemoryStorage::MemoryStorage(
     TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
-    m_txsTable(BUCKET_SIZE),
+    m_unsealTransactions(BUCKET_SIZE),
+    m_sealedTransactions(BUCKET_SIZE),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
     m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
@@ -180,15 +181,16 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     crypto::HashListView hashes)
 {
-    auto values = m_txsTable.batchFind<decltype(m_txsTable)::ReadAccessor>(std::move(hashes));
-    return values |
-           ::ranges::views::transform([](auto const& value) -> protocol::Transaction::ConstPtr {
-               if (value)
-               {
-                   return protocol::Transaction::ConstPtr(std::move(*value));
-               }
-               return {};
-           }) |
+    auto values = m_sealedTransactions.batchFind<decltype(m_sealedTransactions)::ReadAccessor>(
+        std::move(hashes));
+    return ::ranges::views::transform(values,
+               [](auto const& value) -> protocol::Transaction::ConstPtr {
+                   if (value)
+                   {
+                       return protocol::Transaction::ConstPtr(std::move(*value));
+                   }
+                   return {};
+               }) |
            ::ranges::to<std::vector>();
 }
 
@@ -196,7 +198,8 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     if (TxsMap::ReadAccessor accessor;
-        m_txsTable.find<TxsMap::ReadAccessor>(accessor, transaction.hash()))
+        m_unsealTransactions.find<TxsMap::ReadAccessor>(accessor, transaction.hash()) ||
+        m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, transaction.hash()))
     {
         if (txSubmitCallback && !accessor.value()->submitCallback())
         {
@@ -227,7 +230,9 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     }
 
     Transaction::ConstPtr tx = nullptr;
-    if (TxsMap::ReadAccessor accessor; m_txsTable.find<TxsMap::ReadAccessor>(accessor, txHash))
+    if (TxsMap::ReadAccessor accessor;
+        m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, txHash) ||
+        m_unsealTransactions.find<TxsMap::ReadAccessor>(accessor, txHash))
     {
         tx = accessor.value();
     }
@@ -263,13 +268,13 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 
     auto txHasSeal = _tx->sealed();
     _tx->setSealed(true);  // must set seal before insert
-    if (auto status = insertWithoutLock(_tx); status != TransactionStatus::None)
+    if (auto status = insert(_tx); status != TransactionStatus::None)
     {
         _tx->setSealed(txHasSeal);
         Transaction::Ptr tx;
         {
             TxsMap::ReadAccessor accessor;
-            auto has = m_txsTable.find<TxsMap::ReadAccessor>(accessor, _tx->hash());
+            auto has = m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, _tx->hash());
             assert(has);  // assume must has
             tx = accessor.value();
         }
@@ -307,12 +312,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     {
         m_tpsStatstartTime = utcTime();
     }
-    // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
-    // restricted
-    // if (checkPoolLimit && txsSize >= m_config->poolLimit())
-    // {
-    //     return TransactionStatus::TxPoolIsFull;
-    // }
 
     // verify the transaction
     if (m_config->checkTransactionSignature())
@@ -340,21 +339,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     if (result == TransactionStatus::None)
     {
         auto const txImportTime = transaction->importTime();
-        auto const txHash = transaction->hash().hex();
         if (txSubmitCallback)
         {
             transaction->setSubmitCallback(std::move(txSubmitCallback));
         }
-        if (lock)
-        {
-            result = insert(std::move(transaction));
-        }
-        else
-        {
-            result = insertWithoutLock(std::move(transaction));
-        }
+        result = insert(std::move(transaction));
         if (c_fileLogLevel == TRACE)
         {
+            auto const txHash = transaction->hash().hex();
             TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
                               << LOG_KV("result", result)
                               << LOG_KV("insertTime", utcTime() - txImportTime);
@@ -366,14 +358,9 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 
 TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 {
-    return insertWithoutLock(std::move(transaction));
-}
-
-TransactionStatus MemoryStorage::insertWithoutLock(Transaction::Ptr transaction)
-{
-    TxsMap::WriteAccessor accessor;
-    auto inserted = m_txsTable.insert(accessor, {transaction->hash(), transaction});
-    if (!inserted)
+    auto* toMap = transaction->sealed() ? &m_sealedTransactions : &m_unsealTransactions;
+    if (TxsMap::WriteAccessor accessor;
+        !toMap->insert(accessor, {transaction->hash(), transaction}))
     {
         if (transaction->submitCallback() && !accessor.value()->submitCallback())
         {
@@ -420,8 +407,8 @@ void MemoryStorage::printPendingTxs()
         return;
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled")
-                      << LOG_KV("pendingSize", m_txsTable.size());
-    for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
+                      << LOG_KV("pendingSize", m_sealedTransactions.size());
+    for (auto& accessor : m_sealedTransactions.range<TxsMap::ReadAccessor>())
     {
         auto tx = accessor.value();
         if (!tx)
@@ -447,11 +434,11 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_blockNumberUpdatedTime = recordT;
     size_t succCount = 0;
 
-    auto txHashes =
-        ::ranges::views::transform(txsResult,
-            [](TransactionSubmitResult::Ptr const& _txResult) { return _txResult->txHash(); }) |
-        ::ranges::to<std::vector>;
-    auto removedTxs = m_txsTable.batchRemove<decltype(txHashes), true>(txHashes);
+    auto txHashes = ::ranges::views::transform(txsResult,
+        [](TransactionSubmitResult::Ptr const& _txResult) { return _txResult->txHash(); });
+    auto removedTxs =
+        m_unsealTransactions.batchFind<decltype(m_unsealTransactions)::ReadAccessor>(txHashes);
+    m_unsealTransactions.batchRemove(txHashes);
 
     auto results = ::ranges::views::transform(txsResult,
                        [](TransactionSubmitResult::Ptr const& _txResult) {
@@ -478,7 +465,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
     m_onChainTxsCount += txsResult.size();
     // stop stat the tps when there has no pending txs
-    if (m_tpsStatstartTime.load() > 0 && m_txsTable.empty())
+    if (m_tpsStatstartTime.load() > 0 && m_sealedTransactions.empty())
     {
         auto totalTime = (utcTime() - m_tpsStatstartTime);
         if (totalTime > 0)
@@ -558,10 +545,10 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
-bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
-    TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
+bool MemoryStorage::batchSealTransactions(Block::Ptr _txsList, Block::Ptr _sysTxsList,
+    size_t _txsLimit, TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
-    auto txsSize = m_txsTable.size();
+    auto txsSize = m_unsealTransactions.size();
     if (txsSize == 0)
     {
         return false;
@@ -656,45 +643,34 @@ bool MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         return true;
     };
 
-    if (_avoidDuplicate)
+    for (auto& accessor :
+        m_unsealTransactions.rangeByKey<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash))
     {
-        for (auto& accessor :
-            m_txsTable.rangeByKey<TxsMap::ReadAccessor>(m_knownLatestSealedTxHash))
+        const auto& tx = accessor.value();
+        handleTx(tx);
+        if (!((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) <
+                _txsLimit))
         {
-            const auto& tx = accessor.value();
-            handleTx(tx);
-            if (!((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) <
-                    _txsLimit))
-            {
-                break;
-            }
-        }
-    }
-    else
-    {
-        for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
-        {
-            const auto& tx = accessor.value();
-            handleTx(tx);
-            if (!((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) <
-                    _txsLimit))
-            {
-                break;
-            }
+            break;
         }
     }
     auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
+
+    auto sealedTxs = m_unsealTransactions.batchFind<decltype(m_unsealTransactions)::ReadAccessor>(
+        ::ranges::views::concat(
+            _sysTxsList->transactionsMetaData(), _txsList->transactionsMetaData()) |
+        ::ranges::views::transform([](const auto& txMetaData) { return txMetaData->hash(); }));
 
     auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
                      << LOG_KV("time", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
-                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
-                     << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT)
-                     << LOG_KV("invalidBefore", invalidTxsSize) << LOG_KV("sealed", sealed)
-                     << LOG_KV("traverseCount", traverseCount);
+                     << LOG_KV("pendingTxs", m_sealedTransactions.size())
+                     << LOG_KV("limit", _txsLimit) << LOG_KV("fetchTxsT", fetchTxsT)
+                     << LOG_KV("lockT", lockT) << LOG_KV("invalidBefore", invalidTxsSize)
+                     << LOG_KV("sealed", sealed) << LOG_KV("traverseCount", traverseCount);
     return true;
 }
 
@@ -731,9 +707,10 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
 
         for (const auto& tx2Remove : txs2Remove | ::ranges::views::keys)
         {
-            if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, tx2Remove))
+            if (decltype(m_unsealTransactions)::WriteAccessor accessor;
+                m_unsealTransactions.find(accessor, tx2Remove))
             {
-                m_txsTable.remove(accessor);
+                m_unsealTransactions.remove(accessor);
             }
             else
             {
@@ -766,14 +743,15 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
 
 void MemoryStorage::clear()
 {
-    m_txsTable.clear();
+    m_sealedTransactions.clear();
 }
 
 HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
 {
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(_txsHashList);
-    auto missList = ::ranges::views::enumerate(values) |
-                    ::ranges::views::filter([](const auto& tuple) {
+    auto unSealValues = m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    auto sealedValues = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    auto missList = ::ranges::views::concat(unSealValues, sealedValues) |
+                    ::ranges::views::enumerate | ::ranges::views::filter([](const auto& tuple) {
                         auto&& [index, transaction] = tuple;
                         return !transaction.has_value();
                     }) |
@@ -788,12 +766,6 @@ HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, Node
 bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber _batchId,
     HashType const& _batchHash, bool _sealFlag)
 {
-    return batchMarkTxsWithoutLock(std::move(_txsHashList), _batchId, _batchHash, _sealFlag);
-}
-
-bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, BlockNumber _batchId,
-    HashType const& _batchHash, bool _sealFlag)
-{
     auto recordT = utcTime();
     auto startT = utcTime();
     std::atomic_size_t successCount = 0;
@@ -801,7 +773,11 @@ bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, B
     std::atomic_size_t reSealed = 0;
     std::atomic_int64_t knownLatestSealedTxIndex = -1;
 
-    m_txsTable.traverse<TxsMap::ReadAccessor, true>(
+    TxsMap* fromMap = _sealFlag ? &m_unsealTransactions : &m_sealedTransactions;
+    TxsMap* toMap = _sealFlag ? &m_sealedTransactions : &m_unsealTransactions;
+    std::vector<Transaction::Ptr> moveTransactions;
+    moveTransactions.reserve(_txsHashList.size());
+    fromMap->traverse<TxsMap::ReadAccessor, true>(
         _txsHashList, [&](TxsMap::ReadAccessor& accessor, const auto& range, auto& bucket) {
             size_t localNotFound = 0;
             size_t localReSealed = 0;
@@ -816,14 +792,13 @@ bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, B
                 }
 
                 const auto& transaction = accessor.value();
-                if ((transaction->batchId() != _batchId ||
-                        transaction->batchHash() != _batchHash) &&
-                    transaction->sealed() && !_sealFlag)
+                if ((transaction->batchId() != _batchId || transaction->batchHash() != _batchHash))
                 {
                     ++localReSealed;
                     continue;
                 }
                 transaction->setSealed(_sealFlag);
+                moveTransactions.emplace_back(accessor.value());
                 ++localSuccess;
                 // set the block information for the transaction
                 if (_sealFlag)
@@ -855,6 +830,11 @@ bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, B
         m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
     }
 
+    fromMap->batchRemove(
+        ::ranges::views::transform(moveTransactions, [](const auto& tx) { return tx->hash(); }));
+    toMap->batchInsert(::ranges::views::transform(
+        moveTransactions, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
+
     TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
                      << LOG_KV("sealFlag", _sealFlag) << LOG_KV("notFound", notFound)
@@ -866,19 +846,24 @@ bool MemoryStorage::batchMarkTxsWithoutLock(crypto::HashListView _txsHashList, B
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
 {
-    for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
+    auto handle = [&](auto& accessor) {
+        if (auto& tx = accessor.value())
+        {
+            tx->setSealed(_sealFlag);
+            if (!_sealFlag)
+            {
+                tx->setBatchId(-1);
+                tx->setBatchHash(HashType());
+            }
+        }
+    };
+    for (auto& accessor : m_sealedTransactions.range<TxsMap::ReadAccessor>())
     {
-        auto tx = accessor.value();
-        if (!tx)
-        {
-            continue;
-        }
-        tx->setSealed(_sealFlag);
-        if (!_sealFlag)
-        {
-            tx->setBatchId(-1);
-            tx->setBatchHash(HashType());
-        }
+        handle(accessor);
+    }
+    for (auto& accessor : m_unsealTransactions.range<TxsMap::ReadAccessor>())
+    {
+        handle(accessor);
     }
 }
 
@@ -900,7 +885,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     auto txHashes = ::ranges::to<std::vector>(_block->transactionHashes());
     bool findErrorTxInBlock = false;
 
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(txHashes);
+    auto values = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
     for (auto&& [index, value] : ::ranges::views::enumerate(values))
     {
         if (!value)
@@ -949,7 +934,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
 bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
 {
     bool has = false;
-    auto values = m_txsTable.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
+    auto values = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
     return ::ranges::all_of(values, [](const auto& value) { return value.has_value(); });
 }
 
@@ -958,7 +943,7 @@ HashListPtr MemoryStorage::getTxsHash(int _limit)
     auto txsHash = std::make_shared<HashList>();
 
     std::vector<Transaction::Ptr> invalidTxs;
-    for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
+    for (auto& accessor : m_sealedTransactions.range<TxsMap::ReadAccessor>())
     {
         auto tx = accessor.value();
         if (!tx)
@@ -994,7 +979,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
         return;
     }
 
-    if (m_txsTable.empty())
+    if (m_sealedTransactions.empty())
     {
         return;
     }
@@ -1005,7 +990,7 @@ void MemoryStorage::cleanUpExpiredTransactions()
     uint64_t currentTime = utcTime();
 
     std::vector<Transaction::Ptr> invalidTxs;
-    for (auto& accessor : m_txsTable.range<TxsMap::ReadAccessor>())
+    for (auto& accessor : m_sealedTransactions.range<TxsMap::ReadAccessor>())
     {
         bool added = false;
         traversedTxsNum++;
@@ -1050,8 +1035,8 @@ void MemoryStorage::cleanUpExpiredTransactions()
     removeInvalidTxs(invalidTxs);
 
     TXPOOL_LOG(INFO) << LOG_DESC("cleanUpExpiredTransactions")
-                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("erasedTxs", erasedTxs)
-                     << LOG_KV("sealedTxs", sealedTxs)
+                     << LOG_KV("pendingTxs", m_sealedTransactions.size())
+                     << LOG_KV("erasedTxs", erasedTxs) << LOG_KV("sealedTxs", sealedTxs)
                      << LOG_KV("traversedTxsNum", traversedTxsNum);
 }
 
@@ -1076,7 +1061,8 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         successCount++;
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchImportTxs success") << LOG_KV("importTxs", successCount)
-                      << LOG_KV("totalTxs", _txs->size()) << LOG_KV("pendingTxs", m_txsTable.size())
+                      << LOG_KV("totalTxs", _txs->size())
+                      << LOG_KV("pendingTxs", m_sealedTransactions.size())
                       << LOG_KV("timecost", (utcTime() - recordT));
 }
 
@@ -1147,9 +1133,10 @@ void MemoryStorage::notifyTxsSize(size_t _retryTime)
 
 void MemoryStorage::remove(crypto::HashType const& _txHash)
 {
-    if (decltype(m_txsTable)::WriteAccessor accessor; m_txsTable.find(accessor, _txHash))
+    if (decltype(m_sealedTransactions)::WriteAccessor accessor;
+        m_sealedTransactions.find(accessor, _txHash))
     {
-        m_txsTable.remove(accessor);
+        m_sealedTransactions.remove(accessor);
     }
 }
 bcos::txpool::MemoryStorage::~MemoryStorage()
@@ -1159,5 +1146,9 @@ bcos::txpool::MemoryStorage::~MemoryStorage()
 bool bcos::txpool::MemoryStorage::exist(bcos::crypto::HashType const& _txHash)
 {
     TxsMap::ReadAccessor accessor;
-    return m_txsTable.find<TxsMap::ReadAccessor>(accessor, _txHash);
+    return m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, _txHash);
+}
+size_t bcos::txpool::MemoryStorage::size() const
+{
+    return m_unsealTransactions.size();
 }
