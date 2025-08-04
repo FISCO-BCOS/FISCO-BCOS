@@ -33,6 +33,7 @@
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <variant>
 
@@ -657,10 +658,24 @@ bool MemoryStorage::batchSealTransactions(Block::Ptr _txsList, Block::Ptr _sysTx
     auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
 
-    auto sealedTxs = m_unsealTransactions.batchFind<decltype(m_unsealTransactions)::ReadAccessor>(
+    auto sealedHashes =
         ::ranges::views::concat(
-            _sysTxsList->transactionsMetaData(), _txsList->transactionsMetaData()) |
-        ::ranges::views::transform([](const auto& txMetaData) { return txMetaData->hash(); }));
+            _sysTxsList->transactionMetaDatas(), _txsList->transactionMetaDatas()) |
+        ::ranges::views::transform([](const auto& txMetaData) { return txMetaData->hash(); });
+    std::vector<Transaction::Ptr> values(sealedHashes.size());
+    m_unsealTransactions.traverse<decltype(m_unsealTransactions)::WriteAccessor, true>(
+        sealedHashes, [&](auto& accessor, auto indexes, auto& bucket) {
+            for (auto index : indexes)
+            {
+                if (bucket.find(accessor, sealedHashes[index]))
+                {
+                    values[index] = accessor.value();
+                    bucket.remove(accessor);
+                }
+            }
+        });
+    m_sealedTransactions.batchInsert(::ranges::views::transform(
+        values, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
 
     auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
