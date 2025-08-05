@@ -154,7 +154,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         {
             sealedTxs->emplace_back(_txsMetaDataList->transactionHash(i));
         }
-        BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
+        BOOST_TEST(_txpoolStorage->size() == originTxsSize);
     }
     // seal again to fetch all unsealed txs
     {

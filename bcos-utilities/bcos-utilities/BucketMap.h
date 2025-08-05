@@ -234,7 +234,6 @@ public:
 
             Accessor accessor;
             bucket->acquireAccessor(accessor);
-
             handler(accessor, ::ranges::views::keys(chunk), *bucket);
         };
 

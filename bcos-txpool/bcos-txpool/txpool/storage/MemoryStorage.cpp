@@ -31,6 +31,7 @@
 #include <tbb/parallel_invoke.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <memory>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
@@ -344,7 +345,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         {
             transaction->setSubmitCallback(std::move(txSubmitCallback));
         }
-        result = insert(std::move(transaction));
         if (c_fileLogLevel == TRACE)
         {
             auto const txHash = transaction->hash().hex();
@@ -352,6 +352,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
                               << LOG_KV("result", result)
                               << LOG_KV("insertTime", utcTime() - txImportTime);
         }
+        result = insert(std::move(transaction));
     }
 
     return result;
@@ -571,13 +572,6 @@ bool MemoryStorage::batchSealTransactions(Block::Ptr _txsList, Block::Ptr _sysTx
     std::vector<Transaction::Ptr> invalidTxs;
     auto handleTx = [&](const Transaction::Ptr& tx) {
         traverseCount++;
-        // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
-        // it.second will occasionally be a null pointer.
-        if (!tx)
-        {
-            return false;
-        }
-
         auto txHash = tx->hash();
         // the transaction has already been sealed for newer proposal
         if (_avoidDuplicate && tx->sealed())
@@ -658,13 +652,12 @@ bool MemoryStorage::batchSealTransactions(Block::Ptr _txsList, Block::Ptr _sysTx
     auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
 
-    auto sealedHashes =
-        ::ranges::views::concat(
-            _sysTxsList->transactionMetaDatas(), _txsList->transactionMetaDatas()) |
-        ::ranges::views::transform([](const auto& txMetaData) { return txMetaData->hash(); });
+    auto systemHashes = _sysTxsList->transactionHashes();
+    auto txsHashes = _txsList->transactionHashes();
+    auto sealedHashes = ::ranges::views::concat(systemHashes, txsHashes);
     std::vector<Transaction::Ptr> values(sealedHashes.size());
     m_unsealTransactions.traverse<decltype(m_unsealTransactions)::WriteAccessor, true>(
-        sealedHashes, [&](auto& accessor, auto indexes, auto& bucket) {
+        sealedHashes, [&](auto& accessor, const auto& indexes, auto& bucket) {
             for (auto index : indexes)
             {
                 if (bucket.find(accessor, sealedHashes[index]))
@@ -790,8 +783,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
 
     TxsMap* fromMap = _sealFlag ? &m_unsealTransactions : &m_sealedTransactions;
     TxsMap* toMap = _sealFlag ? &m_sealedTransactions : &m_unsealTransactions;
-    std::vector<Transaction::Ptr> moveTransactions;
-    moveTransactions.reserve(_txsHashList.size());
+    std::vector<Transaction::Ptr> moveTransactions(_txsHashList.size());
     fromMap->traverse<TxsMap::ReadAccessor, true>(
         _txsHashList, [&](TxsMap::ReadAccessor& accessor, const auto& range, auto& bucket) {
             size_t localNotFound = 0;
@@ -813,7 +805,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     continue;
                 }
                 transaction->setSealed(_sealFlag);
-                moveTransactions.emplace_back(accessor.value());
+                moveTransactions[index] = accessor.value();
                 ++localSuccess;
                 // set the block information for the transaction
                 if (_sealFlag)
@@ -845,10 +837,13 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
         m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
     }
 
+    auto removedEnd =
+        ::ranges::remove_if(moveTransactions, [](const auto& tx) { return tx == nullptr; });
+    auto removedRange = std::span(moveTransactions.begin(), removedEnd);
     fromMap->batchRemove(
-        ::ranges::views::transform(moveTransactions, [](const auto& tx) { return tx->hash(); }));
+        ::ranges::views::transform(removedRange, [](const auto& tx) { return tx->hash(); }));
     toMap->batchInsert(::ranges::views::transform(
-        moveTransactions, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
+        removedRange, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
 
     TXPOOL_LOG(INFO) << LOG_DESC("batchMarkTxs") << LOG_KV("txsSize", _txsHashList.size())
                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
@@ -900,42 +895,47 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     auto txHashes = ::ranges::to<std::vector>(_block->transactionHashes());
     bool findErrorTxInBlock = false;
 
-    auto values = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
-    for (auto&& [index, value] : ::ranges::views::enumerate(values))
+    auto unsealTransactions = m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
+    auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
+    for (auto&& [index, value] : ::ranges::views::enumerate(unsealTransactions))
     {
         if (!value)
         {
             missedTxs->emplace_back(txHashes[index]);
         }
-        else if ((*value)->sealed())
+    }
+    for (auto&& [index, value] : ::ranges::views::enumerate(sealedTransactions))
+    {
+        if (!value)
         {
-            if ((*value)->batchId() != blockHeader->number() && (*value)->batchId() != -1)
-            {
-                TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
-                                 << LOG_KV("blkNum", blockHeader->number())
-                                 << LOG_KV("blkHash", blockHeader->hash().abridged())
-                                 << LOG_KV("txHash", (*value)->hash().hexPrefixed())
-                                 << LOG_KV("txBatchId", (*value)->batchId())
-                                 << LOG_KV("txBatchHash", (*value)->batchHash().abridged());
-                // NOTE: In certain scenarios, a bug may occur here: The leader generates the
-                // (N)th proposal, which includes transaction A. The local node puts this
-                // proposal into the cache and sets the batchId of transaction A to (N) and the
-                // batchHash to the hash of the (N)th proposal.
-                //
-                // However, at this point, a view change happens, and the next leader completes
-                // the resetTx operation for the (N)th proposal and includes transaction A in
-                // the new block of the (N)th proposal.
-                //
-                // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
-                // view change, has not completed it yet, and it receives the (N+1)th proposal
-                // sent by the new leader. During the verification process, transaction A has a
-                // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
-                // proposal, leading to false positives.
-                //
-                // Therefore, we do not validate the consistency of the batchHash for now.
-                findErrorTxInBlock = true;
-                break;
-            }
+            missedTxs->emplace_back(txHashes[index]);
+        }
+        else if ((*value)->batchId() != blockHeader->number() && (*value)->batchId() != -1)
+        {
+            TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                             << LOG_KV("blkNum", blockHeader->number())
+                             << LOG_KV("blkHash", blockHeader->hash().abridged())
+                             << LOG_KV("txHash", (*value)->hash().hexPrefixed())
+                             << LOG_KV("txBatchId", (*value)->batchId())
+                             << LOG_KV("txBatchHash", (*value)->batchHash().abridged());
+            // NOTE: In certain scenarios, a bug may occur here: The leader generates the
+            // (N)th proposal, which includes transaction A. The local node puts this
+            // proposal into the cache and sets the batchId of transaction A to (N) and the
+            // batchHash to the hash of the (N)th proposal.
+            //
+            // However, at this point, a view change happens, and the next leader completes
+            // the resetTx operation for the (N)th proposal and includes transaction A in
+            // the new block of the (N)th proposal.
+            //
+            // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
+            // view change, has not completed it yet, and it receives the (N+1)th proposal
+            // sent by the new leader. During the verification process, transaction A has a
+            // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
+            // proposal, leading to false positives.
+            //
+            // Therefore, we do not validate the consistency of the batchHash for now.
+            findErrorTxInBlock = true;
+            break;
         }
     }
 
