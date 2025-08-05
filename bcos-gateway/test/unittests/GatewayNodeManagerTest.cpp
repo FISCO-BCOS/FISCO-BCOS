@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_statusSeqChanged)
     std::string p2pID = "1";
     bool changed = false;
     changed = gatewayNodeManager->statusChanged(p2pID, 1);
-    BOOST_CHECK(changed);
+    BOOST_TEST(changed);
 }
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
     auto s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
-    BOOST_CHECK(!s.empty());
+    BOOST_TEST(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
     r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
@@ -147,7 +147,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
     s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
-    BOOST_CHECK(s.empty());
+    BOOST_TEST(s.empty());
 
     seq = gatewayNodeManager->statusSeq();
     r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
     s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
-    BOOST_CHECK(!s.empty());
+    BOOST_TEST(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
     r = gatewayNodeManager->registerNode(groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE,
@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
     s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
-    BOOST_CHECK(!s.empty());
+    BOOST_TEST(!s.empty());
 }
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
         auto statusData = gatewayNodeManager->generateNodeStatus();
-        BOOST_CHECK(!statusData->empty());
+        BOOST_TEST(!statusData->empty());
 
         seq = gatewayNodeManager->statusSeq();
         r = gatewayNodeManager->unregisterNode(groupID, nodeID->hex());
@@ -228,11 +228,11 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
         r = gatewayNodeManager->registerNode(groupID, nodeID,
             bcos::protocol::NodeType::CONSENSUS_NODE, nullptr,
             g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService));
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
         auto nodeStatusData = gatewayNodeManager->generateNodeStatus();
-        BOOST_CHECK(!nodeStatusData->empty());
+        BOOST_TEST(!nodeStatusData->empty());
 
         uint32_t statusSeq;
         auto gatewayStatus = std::make_shared<GatewayNodeStatus>();
@@ -282,24 +282,24 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_statusEncodeDecode)
     BOOST_CHECK_EQUAL(decodedStatus->seq(), 110);
     BOOST_CHECK_EQUAL(decodedStatus->uuid(), "testuuid");
     auto const& groupInfos = decodedStatus->groupNodeInfos();
-    BOOST_CHECK(groupInfos.size() == 3);
-    BOOST_CHECK(groupInfos[0]->groupID() == "group1");
-    BOOST_CHECK(groupInfos[0]->nodeIDList().size() == 3);
-    BOOST_CHECK(groupInfos[0]->nodeIDList()[0] == "a0");
-    BOOST_CHECK(groupInfos[0]->nodeIDList()[1] == "b0");
-    BOOST_CHECK(groupInfos[0]->nodeIDList()[2] == "c0");
+    BOOST_TEST(groupInfos.size() == 3);
+    BOOST_TEST(groupInfos[0]->groupID() == "group1");
+    BOOST_TEST(groupInfos[0]->nodeIDList().size() == 3);
+    BOOST_TEST(groupInfos[0]->nodeIDList()[0] == "a0");
+    BOOST_TEST(groupInfos[0]->nodeIDList()[1] == "b0");
+    BOOST_TEST(groupInfos[0]->nodeIDList()[2] == "c0");
 
-    BOOST_CHECK(groupInfos[1]->groupID() == "group2");
-    BOOST_CHECK(groupInfos[1]->nodeIDList().size() == 3);
-    BOOST_CHECK(groupInfos[1]->nodeIDList()[0] == "a1");
-    BOOST_CHECK(groupInfos[1]->nodeIDList()[1] == "b1");
-    BOOST_CHECK(groupInfos[1]->nodeIDList()[2] == "c1");
+    BOOST_TEST(groupInfos[1]->groupID() == "group2");
+    BOOST_TEST(groupInfos[1]->nodeIDList().size() == 3);
+    BOOST_TEST(groupInfos[1]->nodeIDList()[0] == "a1");
+    BOOST_TEST(groupInfos[1]->nodeIDList()[1] == "b1");
+    BOOST_TEST(groupInfos[1]->nodeIDList()[2] == "c1");
 
-    BOOST_CHECK(groupInfos[2]->groupID() == "group3");
-    BOOST_CHECK(groupInfos[2]->nodeIDList().size() == 3);
-    BOOST_CHECK(groupInfos[2]->nodeIDList()[0] == "a2");
-    BOOST_CHECK(groupInfos[2]->nodeIDList()[1] == "b2");
-    BOOST_CHECK(groupInfos[2]->nodeIDList()[2] == "c2");
+    BOOST_TEST(groupInfos[2]->groupID() == "group3");
+    BOOST_TEST(groupInfos[2]->nodeIDList().size() == 3);
+    BOOST_TEST(groupInfos[2]->nodeIDList()[0] == "a2");
+    BOOST_TEST(groupInfos[2]->nodeIDList()[1] == "b2");
+    BOOST_TEST(groupInfos[2]->nodeIDList()[2] == "c2");
 }
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveGroupNodeInfo)
@@ -313,14 +313,14 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveGroupNodeInfo)
     bool changed = false;
 
     changed = gatewayNodeManager->statusChanged(p2pID, 110);
-    BOOST_CHECK(!changed);
+    BOOST_TEST(!changed);
     gatewayNodeManager->setStatusSeq(p2pID, 110);
 
     changed = gatewayNodeManager->statusChanged(p2pID, 111);
-    BOOST_CHECK(changed);
+    BOOST_TEST(changed);
 
     changed = gatewayNodeManager->statusChanged(p2pID, 109);
-    BOOST_CHECK(!changed);
+    BOOST_TEST(!changed);
 }
 
 
@@ -382,18 +382,18 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     auto gatewayStatus = gatewayNodeManager->peersRouterTable()->gatewayInfo(status->uuid());
 
     std::string choiceNodeID;
-    BOOST_CHECK(
+    BOOST_TEST(
         gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::CONSENSUS_NODE, "group1"));
-    BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
+    BOOST_TEST(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
                 p2pIDs5.contains(choiceNodeID));
 
-    BOOST_CHECK(
+    BOOST_TEST(
         gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::OBSERVER_NODE, "group2"));
-    BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
+    BOOST_TEST(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
                 p2pIDs5.contains(choiceNodeID));
 
-    BOOST_CHECK(gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::FREE_NODE, "group3"));
-    BOOST_CHECK(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
+    BOOST_TEST(gatewayStatus->randomChooseP2PNode(choiceNodeID, NodeType::FREE_NODE, "group3"));
+    BOOST_TEST(p2pIDs1.contains(choiceNodeID) || p2pIDs2.contains(choiceNodeID) ||
                 p2pIDs5.contains(choiceNodeID));
 }
 
@@ -428,48 +428,48 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
     {
         auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
         BOOST_CHECK_EQUAL(p2pIDs1.size(), 3);
-        BOOST_CHECK(p2pIDs1.find(p2pID2) != p2pIDs1.end());
-        BOOST_CHECK(p2pIDs1.find(p2pID3) != p2pIDs1.end());
-        BOOST_CHECK(p2pIDs1.find(p2pID1) != p2pIDs1.end());
+        BOOST_TEST(p2pIDs1.find(p2pID2) != p2pIDs1.end());
+        BOOST_TEST(p2pIDs1.find(p2pID3) != p2pIDs1.end());
+        BOOST_TEST(p2pIDs1.find(p2pID1) != p2pIDs1.end());
 
         auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
         BOOST_CHECK_EQUAL(p2pIDs2.size(), 3);
-        BOOST_CHECK(p2pIDs2.find(p2pID2) != p2pIDs2.end());
-        BOOST_CHECK(p2pIDs2.find(p2pID3) != p2pIDs2.end());
-        BOOST_CHECK(p2pIDs2.find(p2pID1) != p2pIDs2.end());
+        BOOST_TEST(p2pIDs2.find(p2pID2) != p2pIDs2.end());
+        BOOST_TEST(p2pIDs2.find(p2pID3) != p2pIDs2.end());
+        BOOST_TEST(p2pIDs2.find(p2pID1) != p2pIDs2.end());
     }
 
     gatewayNodeManager->onRemoveNodeIDs(p2pID1);
     {
         auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
         BOOST_CHECK_EQUAL(p2pIDs1.size(), 2);
-        BOOST_CHECK(p2pIDs1.find(p2pID2) != p2pIDs1.end());
-        BOOST_CHECK(p2pIDs1.find(p2pID3) != p2pIDs1.end());
+        BOOST_TEST(p2pIDs1.find(p2pID2) != p2pIDs1.end());
+        BOOST_TEST(p2pIDs1.find(p2pID3) != p2pIDs1.end());
 
         auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
         BOOST_CHECK_EQUAL(p2pIDs2.size(), 2);
-        BOOST_CHECK(p2pIDs2.find(p2pID2) != p2pIDs2.end());
-        BOOST_CHECK(p2pIDs2.find(p2pID3) != p2pIDs2.end());
+        BOOST_TEST(p2pIDs2.find(p2pID2) != p2pIDs2.end());
+        BOOST_TEST(p2pIDs2.find(p2pID3) != p2pIDs2.end());
     }
 
     gatewayNodeManager->onRemoveNodeIDs(p2pID2);
     {
         auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
         BOOST_CHECK_EQUAL(p2pIDs1.size(), 1);
-        BOOST_CHECK(p2pIDs1.find(p2pID3) != p2pIDs1.end());
+        BOOST_TEST(p2pIDs1.find(p2pID3) != p2pIDs1.end());
 
         auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
         BOOST_CHECK_EQUAL(p2pIDs2.size(), 1);
-        BOOST_CHECK(p2pIDs2.find(p2pID3) != p2pIDs2.end());
+        BOOST_TEST(p2pIDs2.find(p2pID3) != p2pIDs2.end());
     }
 
     gatewayNodeManager->onRemoveNodeIDs(p2pID3);
     {
         auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
-        BOOST_CHECK(p2pIDs1.empty());
+        BOOST_TEST(p2pIDs1.empty());
 
         auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
-        BOOST_CHECK(p2pIDs2.empty());
+        BOOST_TEST(p2pIDs2.empty());
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

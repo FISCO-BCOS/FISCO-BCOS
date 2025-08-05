@@ -32,11 +32,11 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
 
     h256 blockhash = blockContext->hash();
     EXECUTOR_LOG(DEBUG) << blockhash;
-    BOOST_CHECK(blockContext->storage() == nullptr);
-    // BOOST_CHECK(blockContext->lastStorage() == nullptr);
-    BOOST_CHECK(!blockContext->isWasm());
-    BOOST_CHECK(!blockContext->isAuthCheck());
-    // BOOST_CHECK(blockContext->hash() != nullptr);
+    BOOST_TEST(blockContext->storage() == nullptr);
+    // BOOST_TEST(blockContext->lastStorage() == nullptr);
+    BOOST_TEST(!blockContext->isWasm());
+    BOOST_TEST(!blockContext->isAuthCheck());
+    // BOOST_TEST(blockContext->hash() != nullptr);
     BOOST_CHECK_EQUAL(blockContext->number(), 0);
     BOOST_CHECK_EQUAL(blockContext->timestamp(), 0);
     BOOST_CHECK_EQUAL(blockContext->blockVersion(), 0);
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(BlockContextTest)
     //     if (executiveFlow->name() == executiveFlowName[i])
     //         ++count1;
     // }
-    BOOST_CHECK(blockContext->getExecutiveFlow(codeAddressArr[0]) == nullptr);
+    BOOST_TEST(blockContext->getExecutiveFlow(codeAddressArr[0]) == nullptr);
     blockContext->stop();
 }
 

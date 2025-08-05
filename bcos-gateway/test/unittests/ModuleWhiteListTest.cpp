@@ -35,18 +35,18 @@ BOOST_AUTO_TEST_CASE(test_moduleWhiteList)
 {
     bcos::gateway::ratelimiter::ModuleWhiteList moduleWhiteList;
 
-    BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
+    BOOST_TEST(!moduleWhiteList.isModuleExist(1001));
 
-    BOOST_CHECK(moduleWhiteList.addModuleID(1001));
-    BOOST_CHECK(moduleWhiteList.isModuleExist(1001));
+    BOOST_TEST(moduleWhiteList.addModuleID(1001));
+    BOOST_TEST(moduleWhiteList.isModuleExist(1001));
 
-    BOOST_CHECK(!moduleWhiteList.addModuleID(1001));
-    BOOST_CHECK(moduleWhiteList.isModuleExist(1001));
+    BOOST_TEST(!moduleWhiteList.addModuleID(1001));
+    BOOST_TEST(moduleWhiteList.isModuleExist(1001));
 
     moduleWhiteList.removeModuleID(1001);
-    BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
-    BOOST_CHECK(!moduleWhiteList.removeModuleID(1001));
-    BOOST_CHECK(!moduleWhiteList.isModuleExist(1001));
+    BOOST_TEST(!moduleWhiteList.isModuleExist(1001));
+    BOOST_TEST(!moduleWhiteList.removeModuleID(1001));
+    BOOST_TEST(!moduleWhiteList.isModuleExist(1001));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -59,7 +59,7 @@ public:
     {
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
-        BOOST_CHECK(web3JsonRpc != nullptr);
+        BOOST_TEST(web3JsonRpc != nullptr);
     }
     Json::Value onRPCRequestWrapper(std::string_view request, rpc::Sender _diySender = nullptr)
     {
@@ -83,11 +83,11 @@ public:
     }
     static void validRespCheck(Json::Value const& resp)
     {
-        BOOST_CHECK(!resp.isMember("error"));
-        BOOST_CHECK(resp.isMember("result"));
-        BOOST_CHECK(resp.isMember("id"));
-        BOOST_CHECK(resp.isMember("jsonrpc"));
-        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+        BOOST_TEST(!resp.isMember("error"));
+        BOOST_TEST(resp.isMember("result"));
+        BOOST_TEST(resp.isMember("id"));
+        BOOST_TEST(resp.isMember("jsonrpc"));
+        BOOST_TEST(resp["jsonrpc"].asString() == "2.0");
     };
 
     Rpc::Ptr rpc;
@@ -100,33 +100,33 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
     {
         const auto request = R"({"jsonrpc":"2.0","id":1})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
     }
 
     // invalid json
     {
         const auto request = R"({{"jsonrpc":"2.0","id":1, "method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
     }
 
     // invalid params type
     {
         const auto request = R"({"jsonrpc":"2.0","id":1, "method":"eth_blockNumber","params":{}})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
     }
 
     // invalid method
     {
         const auto request = R"({"jsonrpc":"2.0","id":1, "method":"eth_AAA","params":[]})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == MethodNotFound);
-        BOOST_CHECK(response["error"]["message"].asString() == "Method not found");
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == MethodNotFound);
+        BOOST_TEST(response["error"]["message"].asString() == "Method not found");
     }
 }
 
@@ -137,8 +137,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":123, "method":"eth_chainId","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 123);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 0);
+        BOOST_TEST(response["id"].asInt64() == 123);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
     }
 
     // method eth_mining
@@ -146,8 +146,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_mining","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 3214);
-        BOOST_CHECK(response["result"].asBool() == false);
+        BOOST_TEST(response["id"].asInt64() == 3214);
+        BOOST_TEST(response["result"].asBool() == false);
     }
 
     // method eth_hashrate
@@ -155,8 +155,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_hashrate","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 3214);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 0);
+        BOOST_TEST(response["id"].asInt64() == 3214);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
     }
 
     // method eth_gasPrice
@@ -166,11 +166,11 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"jsonrpc":"2.0","id":541321, "method":"eth_gasPrice","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 541321);
+        BOOST_TEST(response["id"].asInt64() == 541321);
         auto b = fromQuantity(response["result"].asString());
         std::cout << b << std::endl;
-        BOOST_CHECK(b == 10086000);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 10086000);
+        BOOST_TEST(b == 10086000);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 10086000);
     }
 
     // method eth_accounts
@@ -178,8 +178,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_accounts","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 3214);
-        BOOST_CHECK(response["result"].size() == 0);
+        BOOST_TEST(response["id"].asInt64() == 3214);
+        BOOST_TEST(response["result"].size() == 0);
     }
 
     // method eth_blockNumber
@@ -188,9 +188,9 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"jsonrpc":"2.0","id":996886, "method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 996886);
+        BOOST_TEST(response["id"].asInt64() == 996886);
         auto const blkNum = toQuantity(m_ledger->blockNumber());
-        BOOST_CHECK(response["result"].asString() == blkNum);
+        BOOST_TEST(response["result"].asString() == blkNum);
     }
 
     // method eth_blockNumber
@@ -199,9 +199,9 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"id":1655516568316917,"jsonrpc":"2.0","method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asUInt64() == 1655516568316917);
+        BOOST_TEST(response["id"].asUInt64() == 1655516568316917);
         auto const blkNum = toQuantity(m_ledger->blockNumber());
-        BOOST_CHECK(response["result"].asString() == blkNum);
+        BOOST_TEST(response["result"].asString() == blkNum);
     }
 
     // method eth_blockNumber
@@ -210,9 +210,9 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"id":"e4df2b99-f80b-4e23-91c7-b9471b46af26","jsonrpc":"2.0","method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asString() == "e4df2b99-f80b-4e23-91c7-b9471b46af26");
+        BOOST_TEST(response["id"].asString() == "e4df2b99-f80b-4e23-91c7-b9471b46af26");
         auto const blkNum = toQuantity(m_ledger->blockNumber());
-        BOOST_CHECK(response["result"].asString() == blkNum);
+        BOOST_TEST(response["result"].asString() == blkNum);
     }
 
     // method eth_blockNumber
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             rawTx + R"("]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asString() == "e4df2b99-f80b-4e23-123231");
+        BOOST_TEST(response["id"].asString() == "e4df2b99-f80b-4e23-123231");
         // before set config, return lowest gas limit
         BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(LowestGasUsed));
 
@@ -241,11 +241,11 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
 BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
 {
     auto validRespCheck = [](Json::Value const& resp) {
-        BOOST_CHECK(!resp.isMember("error"));
-        BOOST_CHECK(resp.isMember("result"));
-        BOOST_CHECK(resp.isMember("id"));
-        BOOST_CHECK(resp.isMember("jsonrpc"));
-        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+        BOOST_TEST(!resp.isMember("error"));
+        BOOST_TEST(resp.isMember("result"));
+        BOOST_TEST(resp.isMember("id"));
+        BOOST_TEST(resp.isMember("jsonrpc"));
+        BOOST_TEST(resp["jsonrpc"].asString() == "2.0");
     };
 
     // method web3_clientVersion
@@ -254,9 +254,9 @@ BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
             R"({"jsonrpc":"2.0","id":24243, "method":"web3_clientVersion","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 24243);
+        BOOST_TEST(response["id"].asInt64() == 24243);
         std::string result = response["result"].asString();
-        BOOST_CHECK(result.find("FISCO-BCOS-Web3RPC") != std::string::npos);
+        BOOST_TEST(result.find("FISCO-BCOS-Web3RPC") != std::string::npos);
     }
 
     // method web3_sha3
@@ -265,8 +265,8 @@ BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
             R"({"jsonrpc":"2.0","id":321314, "method":"web3_sha3","params":["0x68656c6c6f20776f726c64"]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 321314);
-        BOOST_CHECK(response["result"].asString() ==
+        BOOST_TEST(response["id"].asInt64() == 321314);
+        BOOST_TEST(response["result"].asString() ==
                     "0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad");
     }
 }
@@ -284,32 +284,32 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
         onRPCRequestWrapper(request, [](auto&&) {});
         // validRespCheck(response);
-        // BOOST_CHECK(response["id"].asInt64() == 1132123);
-        // BOOST_CHECK(response["result"].asString() == expectHash);
+        // BOOST_TEST(response["id"].asInt64() == 1132123);
+        // BOOST_TEST(response["result"].asString() == expectHash);
 
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([](Web3TestFixture* self, decltype(hashes) m_hashes,
                        decltype(rawWeb3Tx) rawWeb3Tx) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_CHECK(txs.size() == 1);
-            BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
-            BOOST_CHECK(txs[0]->type() == 1);
-            BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());
+            BOOST_TEST(txs.size() == 1);
+            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
+            BOOST_TEST(txs[0]->type() == 1);
+            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             auto const chainId = txs[0]->chainId();
-            BOOST_CHECK(chainId == std::to_string(rawWeb3Tx.chainId.value_or(0)));
+            BOOST_TEST(chainId == std::to_string(rawWeb3Tx.chainId.value_or(0)));
             Web3Transaction tx;
             bcos::codec::rlp::decode(ref, tx);
-            BOOST_CHECK(tx.type == rawWeb3Tx.type);
-            BOOST_CHECK(tx.data == rawWeb3Tx.data);
-            BOOST_CHECK(tx.nonce == rawWeb3Tx.nonce);
-            BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_CHECK(tx.value == rawWeb3Tx.value);
-            BOOST_CHECK(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_CHECK(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_CHECK(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_CHECK(tx.accessList == rawWeb3Tx.accessList);
+            BOOST_TEST(tx.type == rawWeb3Tx.type);
+            BOOST_TEST(tx.data == rawWeb3Tx.data);
+            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
+            BOOST_TEST(tx.to == rawWeb3Tx.to);
+            BOOST_TEST(tx.value == rawWeb3Tx.value);
+            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
+            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
+            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
+            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
         }(this, std::move(hashes), std::move(rawWeb3Tx)));
     };
 
@@ -353,31 +353,31 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
         onRPCRequestWrapper(request, [](auto&&) {});
         // validRespCheck(response);
-        // BOOST_CHECK(response["id"].asInt64() == 1132123);
-        // BOOST_CHECK(response["result"].asString() == expectHash);
+        // BOOST_TEST(response["id"].asInt64() == 1132123);
+        // BOOST_TEST(response["result"].asString() == expectHash);
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([&rawWeb3Tx](
                        Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_CHECK(txs.size() == 1);
-            BOOST_CHECK(txs[0] != nullptr);
-            BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
-            BOOST_CHECK(txs[0]->type() == 1);
-            BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());
+            BOOST_TEST(txs.size() == 1);
+            BOOST_TEST(txs[0] != nullptr);
+            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
+            BOOST_TEST(txs[0]->type() == 1);
+            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             Web3Transaction tx;
             bcos::codec::rlp::decode(ref, tx);
-            BOOST_CHECK(tx.type == rawWeb3Tx.type);
-            BOOST_CHECK(tx.data == rawWeb3Tx.data);
-            BOOST_CHECK(tx.nonce == rawWeb3Tx.nonce);
-            BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_CHECK(tx.value == rawWeb3Tx.value);
-            BOOST_CHECK(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_CHECK(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_CHECK(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_CHECK(tx.accessList == rawWeb3Tx.accessList);
-            BOOST_CHECK(tx.chainId == rawWeb3Tx.chainId);
+            BOOST_TEST(tx.type == rawWeb3Tx.type);
+            BOOST_TEST(tx.data == rawWeb3Tx.data);
+            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
+            BOOST_TEST(tx.to == rawWeb3Tx.to);
+            BOOST_TEST(tx.value == rawWeb3Tx.value);
+            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
+            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
+            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
+            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
+            BOOST_TEST(tx.chainId == rawWeb3Tx.chainId);
         }(this, std::move(hashes)));
         return rawWeb3Tx;
     };
@@ -416,32 +416,32 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
         onRPCRequestWrapper(request, [](auto&&) {});
         // validRespCheck(response);
-        // BOOST_CHECK(response["id"].asInt64() == 1132123);
-        // BOOST_CHECK(response["result"].asString() == expectHash);
+        // BOOST_TEST(response["id"].asInt64() == 1132123);
+        // BOOST_TEST(response["result"].asString() == expectHash);
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([&rawWeb3Tx](
                        Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_CHECK(txs.size() == 1);
-            BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
-            BOOST_CHECK(txs[0]->type() == 1);
-            BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());
+            BOOST_TEST(txs.size() == 1);
+            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
+            BOOST_TEST(txs[0]->type() == 1);
+            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             Web3Transaction tx;
             bcos::codec::rlp::decode(ref, tx);
-            BOOST_CHECK(tx.type == rawWeb3Tx.type);
-            BOOST_CHECK(tx.data == rawWeb3Tx.data);
-            BOOST_CHECK(tx.nonce == rawWeb3Tx.nonce);
-            BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_CHECK(tx.value == rawWeb3Tx.value);
-            BOOST_CHECK(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_CHECK(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_CHECK(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_CHECK(tx.accessList == rawWeb3Tx.accessList);
-            BOOST_CHECK(tx.chainId == rawWeb3Tx.chainId);
-            BOOST_CHECK(tx.maxFeePerBlobGas == rawWeb3Tx.maxFeePerBlobGas);
-            BOOST_CHECK(tx.blobVersionedHashes == rawWeb3Tx.blobVersionedHashes);
+            BOOST_TEST(tx.type == rawWeb3Tx.type);
+            BOOST_TEST(tx.data == rawWeb3Tx.data);
+            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
+            BOOST_TEST(tx.to == rawWeb3Tx.to);
+            BOOST_TEST(tx.value == rawWeb3Tx.value);
+            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
+            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
+            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
+            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
+            BOOST_TEST(tx.chainId == rawWeb3Tx.chainId);
+            BOOST_TEST(tx.maxFeePerBlobGas == rawWeb3Tx.maxFeePerBlobGas);
+            BOOST_TEST(tx.blobVersionedHashes == rawWeb3Tx.blobVersionedHashes);
         }(this, std::move(hashes)));
         return rawWeb3Tx;
     };
@@ -487,10 +487,10 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         auto params1 = std::make_shared<Web3FilterRequest>();
         auto params2 = std::make_shared<Web3FilterRequest>();
         params2->addAddress(toHexStringWithPrefix(address1));
-        BOOST_CHECK(matcher.matches(params1, log1));
-        BOOST_CHECK(matcher.matches(params1, log2));
-        BOOST_CHECK(!matcher.matches(params2, log1));
-        BOOST_CHECK(!matcher.matches(params2, log2));
+        BOOST_TEST(matcher.matches(params1, log1));
+        BOOST_TEST(matcher.matches(params1, log2));
+        BOOST_TEST(!matcher.matches(params2, log1));
+        BOOST_TEST(!matcher.matches(params2, log2));
     }
     // 2.[A] "A in first position (and anything after)"
     {
@@ -500,16 +500,16 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         protocol::LogEntry log;
         // [A]
         log = protocol::LogEntry(address1, {A}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B]
         log = protocol::LogEntry(address1, {A, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C]
         log = protocol::LogEntry(address1, {C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, D]
         log = protocol::LogEntry(address1, {C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
     }
     // 3.[null, B] "anything in first position AND B in second position (and anything after)"
     {
@@ -520,41 +520,41 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         // matched
         // [A, B]
         log = protocol::LogEntry(address1, {A, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C, B]
         log = protocol::LogEntry(address1, {C, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, F]
         log = protocol::LogEntry(address1, {A, B, F}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, E]
         log = protocol::LogEntry(address1, {A, B, E}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C, B, F]
         log = protocol::LogEntry(address1, {C, B, F}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C, B, E]
         log = protocol::LogEntry(address1, {C, B, E}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // mismatched
         // [A, G]
         log = protocol::LogEntry(address1, {A, G}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, G]
         log = protocol::LogEntry(address1, {C, G}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, G, F]
         log = protocol::LogEntry(address1, {A, G, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, G, E]
         log = protocol::LogEntry(address1, {A, G, E}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, G, F]
         log = protocol::LogEntry(address1, {C, G, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, G, E]
         log = protocol::LogEntry(address1, {C, G, E}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
     }
     // 4.[A, B] "A in first position AND B in second position (and anything after)"
     {
@@ -567,33 +567,33 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         // matched
         // [A, B]
         log = protocol::LogEntry(address1, {A, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, C]
         log = protocol::LogEntry(address1, {A, B, C}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, E]
         log = protocol::LogEntry(address1, {A, B, E}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
 
         // mismatched
         // [A]
         log = protocol::LogEntry(address1, {A}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, C]
         log = protocol::LogEntry(address1, {A, C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, C, F]
         log = protocol::LogEntry(address1, {A, C, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [B]
         log = protocol::LogEntry(address1, {B}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [B, C]
         log = protocol::LogEntry(address1, {B, C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [B, C, F]
         log = protocol::LogEntry(address1, {B, C, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
     }
     // 5.[[A, B], [A, B]] "(A OR B) in first position AND (A OR B) in second position (and anything
     // after)"
@@ -610,109 +610,109 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         {
             // [A, C]
             log = protocol::LogEntry(address1, {A, C}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [A, D]
             log = protocol::LogEntry(address1, {A, D}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, C]
             log = protocol::LogEntry(address1, {B, C}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, D]
             log = protocol::LogEntry(address1, {B, D}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
         }
         {
             // [A, C, E]
             log = protocol::LogEntry(address1, {A, C, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [A, D, E]
             log = protocol::LogEntry(address1, {A, D, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, C, E]
             log = protocol::LogEntry(address1, {B, C, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, D, E]
             log = protocol::LogEntry(address1, {B, D, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
         }
         {
             // [A, C, F]
             log = protocol::LogEntry(address1, {A, C, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [A, D, F]
             log = protocol::LogEntry(address1, {A, D, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, C, F]
             log = protocol::LogEntry(address1, {B, C, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, D, F]
             log = protocol::LogEntry(address1, {B, D, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
         }
         // mismatched
         {
             // [A]
             log = protocol::LogEntry(address1, {A}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B]
             log = protocol::LogEntry(address1, {B}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [E, C]
             log = protocol::LogEntry(address1, {E, C}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [E, D]
             log = protocol::LogEntry(address1, {E, D}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, C]
             log = protocol::LogEntry(address1, {F, C}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, D]
             log = protocol::LogEntry(address1, {F, D}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [A, E]
             log = protocol::LogEntry(address1, {A, E}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [A, F]
             log = protocol::LogEntry(address1, {A, F}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, E]
             log = protocol::LogEntry(address1, {B, E}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, F]
             log = protocol::LogEntry(address1, {B, F}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [E, C, G]
             log = protocol::LogEntry(address1, {E, C, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [E, D, G]
             log = protocol::LogEntry(address1, {E, D, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, C, G]
             log = protocol::LogEntry(address1, {F, C, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, D, G]
             log = protocol::LogEntry(address1, {F, D, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [A, E, G]
             log = protocol::LogEntry(address1, {A, E, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [A, F, G]
             log = protocol::LogEntry(address1, {A, F, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, E, G]
             log = protocol::LogEntry(address1, {B, E, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, F, G]
             log = protocol::LogEntry(address1, {B, F, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
     }
 }

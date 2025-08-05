@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
     auto sequence = std::make_shared<tbb::concurrent_vector<int64_t>>();
     ExecutiveStackFlow::Ptr executiveStackFlow =
         std::make_shared<ExecutiveStackFlow>(executiveFactory);
-    BOOST_CHECK(executiveStackFlow != nullptr);
+    BOOST_TEST(executiveStackFlow != nullptr);
 
     executiveStackFlow->submit(txInputs);
     EXECUTOR_LOG(DEBUG) << "submit 20 transaction success!";
@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(RunTest)
             break;
         }
     }
-    BOOST_CHECK(flag);
+    BOOST_TEST(flag);
 
     // clear pausedPool
     std::promise<void> finish3;
@@ -223,8 +223,8 @@ BOOST_AUTO_TEST_CASE(RunTest)
             break;
         }
     }
-    BOOST_CHECK(sequence->size() == 20);
-    BOOST_CHECK(flag1);
+    BOOST_TEST(sequence->size() == 20);
+    BOOST_TEST(flag1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

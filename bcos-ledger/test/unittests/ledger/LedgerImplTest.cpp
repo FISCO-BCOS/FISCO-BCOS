@@ -238,7 +238,7 @@ BOOST_AUTO_TEST_CASE(notExistsBlock)
 
     std::vector<std::byte> hash;
     bcos::task::syncWait(ledger.getBlockHashByNumber(50, hash));
-    BOOST_CHECK(RANGES::empty(hash));
+    BOOST_TEST(RANGES::empty(hash));
 
     int64_t number = 0;
     bcos::task::syncWait(ledger.getBlockNumberByHash(hash, number));

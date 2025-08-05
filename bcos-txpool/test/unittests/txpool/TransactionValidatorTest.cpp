@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     faker->ledger()->initEoaContext(
         eoaKey->address(cryptoSuite->hashImpl()).hex(), fakeNonce.convert_to<std::string>());
     auto result = TransactionValidator::validateTransaction(*tx);
-    BOOST_CHECK(result == TransactionStatus::None);
+    BOOST_TEST(result == TransactionStatus::None);
 
     std::string inputStr = "testTransactionValidatorTx";
     // fake input str large size transaction
@@ -90,11 +90,11 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     // std::string duplicatedNonceStr(duplicatedNonce);
     tx = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKey, inputStrLarge);
     auto resultLarge = TransactionValidator::validateTransaction(*tx);
-    BOOST_CHECK(resultLarge == TransactionStatus::MaxInitCodeSizeExceeded);
+    BOOST_TEST(resultLarge == TransactionStatus::MaxInitCodeSizeExceeded);
 
     // check with state
     // auto resultWithStateNoAccount = TransactionValidator::ValidateTransactionWithState(tx,
-    // ledger); BOOST_CHECK(resultWithStateNoAccount == TransactionStatus::NoAccount);
+    // ledger); BOOST_TEST(resultWithStateNoAccount == TransactionStatus::NoAccount);
 
     std::optional<storage::Entry> codeHashOp = storage::Entry();
     codeHashOp->set(asBytes(""));
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     auto resultWithState =
         task::syncWait(TransactionValidator::validateTransactionWithState(*tx, ledger));
-    BOOST_CHECK(resultWithState == TransactionStatus::None);
+    BOOST_TEST(resultWithState == TransactionStatus::None);
 
     // NoEOA
     auto const eoaKeyNew = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     // auto resultWithStateNoEOAAccount =
     //     task::syncWait(TransactionValidator::ValidateTransactionWithState(txNoEoa, ledger));
-    // BOOST_CHECK(resultWithStateNoEOAAccount == TransactionStatus::SenderNoEOA);
+    // BOOST_TEST(resultWithStateNoEOAAccount == TransactionStatus::SenderNoEOA);
 
     const uint64_t value = 1234567;
     auto txNoEoughtValue = fakeInvalidateTransacton(inputStr, value);
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
         std::string(bcos::ledger::ACCOUNT_TABLE_FIELDS::BALANCE), balanceOp);
     auto resultWithStateNoEnoughBalance = task::syncWait(
         TransactionValidator::validateTransactionWithState(*txNoEoughtValue, ledger));
-    BOOST_CHECK(resultWithStateNoEnoughBalance == TransactionStatus::InsufficientFunds);
+    BOOST_TEST(resultWithStateNoEnoughBalance == TransactionStatus::InsufficientFunds);
 
     txpool->txpoolStorage()->clear();
     std::cout << "#### testTransactionValidator finish" << std::endl;

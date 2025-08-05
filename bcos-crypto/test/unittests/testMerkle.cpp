@@ -102,8 +102,8 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
 
                 std::cout << "Proof: " << std::endl;
                 std::cout << outProof << std::endl;
-                BOOST_CHECK(trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
-                BOOST_CHECK(!trie.verifyMerkleProof(outProof, emptyHash, *(outMerkle.rbegin())));
+                BOOST_TEST(trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
+                BOOST_TEST(!trie.verifyMerkleProof(outProof, emptyHash, *(outMerkle.rbegin())));
 
                 auto dis = std::uniform_int_distribution<size_t>(0lu, outProof.size() - 1);
                 std::mt19937 prng{seed};
@@ -111,7 +111,7 @@ void testFixedWidthMerkle(bcos::crypto::merkle::HashRange auto const& inputHashe
 
                 if (outProof.size() > 1)
                 {
-                    BOOST_CHECK(!trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
+                    BOOST_TEST(!trie.verifyMerkleProof(outProof, hash, *(outMerkle.rbegin())));
                 }
 
                 outProof.clear();

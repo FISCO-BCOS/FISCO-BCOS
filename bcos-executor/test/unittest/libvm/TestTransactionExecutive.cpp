@@ -58,7 +58,7 @@ public:
 
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -127,7 +127,7 @@ public:
 
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -194,7 +194,7 @@ public:
 
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -262,7 +262,7 @@ public:
 
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::forward<decltype(result)>(result));
         });
 
@@ -330,7 +330,7 @@ public:
 
             std::promise<ExecutionMessage::UniquePtr> executePromise;
             executor->executeTransaction(std::move(params), [&](auto&& error, auto&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::forward<decltype(result)>(result));
             });
 

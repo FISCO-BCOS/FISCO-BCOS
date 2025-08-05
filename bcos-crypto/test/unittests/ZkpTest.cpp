@@ -38,18 +38,18 @@ BOOST_AUTO_TEST_CASE(testAggregateRistrettoPoint)
     auto zkpImpl = std::make_shared<DiscreteLogarithmZkp>();
 
     auto result = zkpImpl->aggregateRistrettoPoint(*fromHexString(point1), *fromHexString(point2));
-    BOOST_CHECK(
+    BOOST_TEST(
         *toHexString(result) == "327ea1e62fd6c6a3fc8fb203618fbf2f7924bbfbdec52a9324bd6964c4c0ca12");
 
     point1 = "786058ceffe85198ef127b6a9781b07adbe3b2d21de87a26804e6a1b43cd4135";
     point2 = "18df09397eed2a614062649be865da8e26cbdd8848fdbed7e8ae8b0e67745d52";
     result = zkpImpl->aggregateRistrettoPoint(*fromHexString(point1), *fromHexString(point2));
-    BOOST_CHECK(
+    BOOST_TEST(
         *toHexString(result) == "36f238ce7215e9704a60c631ac0d576a5d816baf6fc1092798d3bd6ae260f540");
 
     point2 = "c25d4eed8b636edaa06e2ee0b3a16d1ea7058a3fd455702180cc9bdb14ce8016";
     result = zkpImpl->aggregateRistrettoPoint(*fromHexString(point1), *fromHexString(point2));
-    BOOST_CHECK(
+    BOOST_TEST(
         *toHexString(result) != "36f238ce7215e9704a60c631ac0d576a5d816baf6fc1092798d3bd6ae260f540");
 }
 // verifyEitherEqualityProof
@@ -72,13 +72,13 @@ BOOST_AUTO_TEST_CASE(testVerifyEitherEqualityProof)
     auto result = zkpImpl->verifyEitherEqualityProof(*fromHexString(c1_point),
         *fromHexString(c2_point), *fromHexString(c3_point), *fromHexString(proof),
         *fromHexString(basepoint), *fromHexString(blinding_basepoint));
-    BOOST_CHECK(result == true);
+    BOOST_TEST(result == true);
 
     // invalid case
     result = zkpImpl->verifyEitherEqualityProof(*fromHexString(c2_point), *fromHexString(c2_point),
         *fromHexString(c1_point), *fromHexString(proof), *fromHexString(basepoint),
         *fromHexString(blinding_basepoint));
-    BOOST_CHECK(result == false);
+    BOOST_TEST(result == false);
 
     // case equal to zeror
     c1_point = "ced7f98f75ab04635c7acd0600a67067b5c3475a82911aa02cdd92864a273118";
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(testVerifyEitherEqualityProof)
     result = zkpImpl->verifyEitherEqualityProof(*fromHexString(c1_point), *fromHexString(c2_point),
         *fromHexString(c3_point), *fromHexString(proof), *fromHexString(basepoint),
         *fromHexString(blinding_basepoint));
-    BOOST_CHECK(result == true);
+    BOOST_TEST(result == true);
 }
 
 // verifyKnowledgeProof
@@ -110,11 +110,11 @@ BOOST_AUTO_TEST_CASE(testVerifyKnowledgeProof)
     bytes blinding_base_point =
         *fromHexString("625c50529218ebb9f80e296886f4ac5bb55e06416db27b901c552d3e06ec4871");
     auto ret = zkpImpl->verifyKnowledgeProof(point, proof, base_point, blinding_base_point);
-    BOOST_CHECK(ret == true);
+    BOOST_TEST(ret == true);
 
     // invalid case
     ret = zkpImpl->verifyKnowledgeProof(base_point, proof, point, blinding_base_point);
-    BOOST_CHECK(ret == false);
+    BOOST_TEST(ret == false);
 }
 
 // verifyFormatProof
@@ -135,12 +135,12 @@ BOOST_AUTO_TEST_CASE(testVerifyFormatProof)
         *fromHexString("c2b614cc98c793bff0298b0c0881fa78261f0bc6d5f826484257b34d3480c22e");
     auto ret =
         zkpImpl->verifyFormatProof(c1, c2, proof, c1_basepoint, c2_basepoint, blinding_base_point);
-    BOOST_CHECK(ret == true);
+    BOOST_TEST(ret == true);
 
     // invalid case
     ret =
         zkpImpl->verifyFormatProof(c2, c1, proof, c1_basepoint, c2_basepoint, blinding_base_point);
-    BOOST_CHECK(ret == false);
+    BOOST_TEST(ret == false);
 }
 
 // verifySumProof
@@ -162,11 +162,11 @@ BOOST_AUTO_TEST_CASE(testVerifySumProof)
     bytes blinding_base_point =
         *fromHexString("8c9240b456a9e6dc65c377a1048d745f94a08cdb7f44cbcd7b46f34048871134");
     auto ret = zkpImpl->verifySumProof(c1, c2, c3, proof, value_basepoint, blinding_base_point);
-    BOOST_CHECK(ret == true);
+    BOOST_TEST(ret == true);
 
     // invalid case
     ret = zkpImpl->verifySumProof(c2, c1, c3, proof, value_basepoint, blinding_base_point);
-    BOOST_CHECK(ret == false);
+    BOOST_TEST(ret == false);
 }
 
 // verifyProductProof
@@ -188,11 +188,11 @@ BOOST_AUTO_TEST_CASE(testVerifyProductProof)
     bytes blinding_base_point =
         *fromHexString("8c9240b456a9e6dc65c377a1048d745f94a08cdb7f44cbcd7b46f34048871134");
     auto ret = zkpImpl->verifyProductProof(c1, c2, c3, proof, value_basepoint, blinding_base_point);
-    BOOST_CHECK(ret == true);
+    BOOST_TEST(ret == true);
 
     // invalid case
     ret = zkpImpl->verifyProductProof(c2, c1, c3, proof, value_basepoint, blinding_base_point);
-    BOOST_CHECK(ret == false);
+    BOOST_TEST(ret == false);
 }
 
 // verifyEqualityProof
@@ -210,11 +210,11 @@ BOOST_AUTO_TEST_CASE(testVerifyEqualityProof)
     bytes basepoint2 =
         *fromHexString("8c9240b456a9e6dc65c377a1048d745f94a08cdb7f44cbcd7b46f34048871134");
     auto ret = zkpImpl->verifyEqualityProof(c1, c2, proof, basepoint1, basepoint2);
-    BOOST_CHECK(ret == true);
+    BOOST_TEST(ret == true);
 
     // invalid case
     ret = zkpImpl->verifyEqualityProof(c2, c1, proof, basepoint1, basepoint2);
-    BOOST_CHECK(ret == false);
+    BOOST_TEST(ret == false);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

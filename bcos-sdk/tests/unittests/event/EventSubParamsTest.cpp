@@ -33,10 +33,10 @@ BOOST_AUTO_TEST_CASE(test_EventSubParams)
 {
     {
         auto params = std::make_shared<bcos::cppsdk::event::EventSubParams>();
-        BOOST_CHECK(params->fromBlock() < 0);
-        BOOST_CHECK(params->toBlock() < 0);
-        BOOST_CHECK(params->addresses().empty());
-        BOOST_CHECK(params->topics().empty());
+        BOOST_TEST(params->fromBlock() < 0);
+        BOOST_TEST(params->toBlock() < 0);
+        BOOST_TEST(params->addresses().empty());
+        BOOST_TEST(params->topics().empty());
     }
 
     {
@@ -56,15 +56,15 @@ BOOST_AUTO_TEST_CASE(test_EventSubParams)
         BOOST_CHECK_EQUAL(params->addresses().size(), 1);
 
         auto r = params->addTopic(0, topic);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = params->addTopic(1, topic);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = params->addTopic(2, topic);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = params->addTopic(3, topic);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = params->addTopic(4, topic);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         BOOST_CHECK_EQUAL(params->topics().size(), 5);
         for (auto& topics : params->topics())

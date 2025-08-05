@@ -307,8 +307,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
 
     storage->asyncGetRow(tableInfo->name(), "newkey" + boost::lexical_cast<std::string>(1050),
         [&](Error::UniquePtr error, std::optional<Entry> entry) {
-            BOOST_CHECK(!error.get());
-            BOOST_CHECK(entry.has_value());
+            BOOST_TEST(!error.get());
+            BOOST_TEST(entry.has_value());
         });
 
     // clean new data

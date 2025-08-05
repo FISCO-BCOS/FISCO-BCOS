@@ -41,9 +41,9 @@ BOOST_AUTO_TEST_CASE(test_AMOPRequestEncodeDecode)
     std::string topic = "testAMOPRequest+-@topic";
     request->setTopic(topic);
 
-    BOOST_CHECK(request->version() == 10023);
-    BOOST_CHECK(request->topic() == topic);
-    BOOST_CHECK(*(request->data().data()) == *(dataStr.data()));
+    BOOST_TEST(request->version() == 10023);
+    BOOST_TEST(request->topic() == topic);
+    BOOST_TEST(*(request->data().data()) == *(dataStr.data()));
 
     // encode
     bytes encodedData;
@@ -51,48 +51,48 @@ BOOST_AUTO_TEST_CASE(test_AMOPRequestEncodeDecode)
 
     // decode
     auto decodedRequest = amopRequestFactory->buildRequest(ref(encodedData));
-    BOOST_CHECK(decodedRequest->version() == request->version());
-    BOOST_CHECK(decodedRequest->topic() == request->topic());
-    BOOST_CHECK(*(decodedRequest->data().data()) == *(request->data().data()));
+    BOOST_TEST(decodedRequest->version() == request->version());
+    BOOST_TEST(decodedRequest->topic() == request->topic());
+    BOOST_TEST(*(decodedRequest->data().data()) == *(request->data().data()));
 }
 BOOST_AUTO_TEST_CASE(test_TopicManager)
 {
     {
         auto topicManager = std::make_shared<TopicManager>();
         auto topics = topicManager->topics();
-        BOOST_CHECK(topics.size() == 0);
+        BOOST_TEST(topics.size() == 0);
 
         std::string topic1 = "a";
         std::string topic2 = "a";
         std::string topic3 = "a";
 
         auto r = topicManager->addTopic(topic1);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = topicManager->addTopic(topic1);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
         r = topicManager->addTopic(topic2);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
         r = topicManager->addTopic(topic3);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         topics = topicManager->topics();
-        BOOST_CHECK(topics.size() == 1);
+        BOOST_TEST(topics.size() == 1);
 
         r = topicManager->removeTopic(topic1);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
 
         r = topicManager->removeTopic(topic1);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         topics = topicManager->topics();
-        BOOST_CHECK(topics.size() == 0);
+        BOOST_TEST(topics.size() == 0);
 
-        BOOST_CHECK(!topicManager->toJson().empty());
+        BOOST_TEST(!topicManager->toJson().empty());
     }
 
     {
         auto topicManager = std::make_shared<TopicManager>();
-        BOOST_CHECK(topicManager->topics().size() == 0);
+        BOOST_TEST(topicManager->topics().size() == 0);
 
         std::string topic1 = "a";
         std::string topic2 = "b";
@@ -100,26 +100,26 @@ BOOST_AUTO_TEST_CASE(test_TopicManager)
         std::set<std::string> topics{topic1, topic2, topic3};
 
         auto r = topicManager->addTopics(topics);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = topicManager->addTopics(topics);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
-        BOOST_CHECK(topics.size() == topics.size());
-
-        r = topicManager->removeTopics(topics);
-        BOOST_CHECK(r);
+        BOOST_TEST(topics.size() == topics.size());
 
         r = topicManager->removeTopics(topics);
-        BOOST_CHECK(!r);
+        BOOST_TEST(r);
+
+        r = topicManager->removeTopics(topics);
+        BOOST_TEST(!r);
 
         topics = topicManager->topics();
-        BOOST_CHECK(topics.size() == 0);
-        BOOST_CHECK(!topicManager->toJson().empty());
+        BOOST_TEST(topics.size() == 0);
+        BOOST_TEST(!topicManager->toJson().empty());
     }
 
     {
         auto topicManager = std::make_shared<TopicManager>();
-        BOOST_CHECK(topicManager->topics().size() == 0);
+        BOOST_TEST(topicManager->topics().size() == 0);
 
         std::string topic1 = "a";
         std::string topic2 = "a";
@@ -127,28 +127,28 @@ BOOST_AUTO_TEST_CASE(test_TopicManager)
         std::set<std::string> topics{topic1, topic2, topic3};
 
         auto r = topicManager->addTopics(topics);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = topicManager->addTopics(topics);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         topics = topicManager->topics();
-        BOOST_CHECK(topics.size() == topics.size());
+        BOOST_TEST(topics.size() == topics.size());
 
         r = topicManager->removeTopic(topic1);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
 
         r = topicManager->removeTopic(topic2);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         r = topicManager->removeTopic(topic3);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         r = topicManager->removeTopics(topics);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         topics = topicManager->topics();
-        BOOST_CHECK(topics.size() == 0);
-        BOOST_CHECK(!topicManager->toJson().empty());
+        BOOST_TEST(topics.size() == 0);
+        BOOST_TEST(!topicManager->toJson().empty());
     }
 }
 

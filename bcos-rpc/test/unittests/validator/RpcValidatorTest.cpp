@@ -61,19 +61,19 @@ BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
     //     1, to, input, nonce, 100, "testChainValidator", "testGroup", 1000, *keyPair);
 
     // auto result = RpcValidator::checkBcosReplayedProtected(tx, "testChainValidator");
-    // BOOST_CHECK(result == true);
+    // BOOST_TEST(result == true);
     // std::string chainIdError = "testChainValidatorError";
     // result = RpcValidator::checkBcosReplayedProtected(tx, chainIdError);
-    // BOOST_CHECK(result == false);
+    // BOOST_TEST(result == false);
     auto tx = factory.createTransaction(
         1, to, input, nonce, 100, "testChainValidator", "testGroup", 1000, *keyPair, "");
     auto resultStatus = TransactionValidator::checkTransaction(*tx);
-    BOOST_CHECK(resultStatus == TransactionStatus::None);
+    BOOST_TEST(resultStatus == TransactionStatus::None);
     auto outRangeValue = "0x" + std::string(TRANSACTION_VALUE_MAX_LENGTH, '1');
     tx = factory.createTransaction(1, to, input, nonce, 100, "testChainValidator", "testGroup",
         1000, *keyPair, "", outRangeValue);
     resultStatus = TransactionValidator::checkTransaction(*tx);
-    BOOST_CHECK(resultStatus == TransactionStatus::OverFlowValue);
+    BOOST_TEST(resultStatus == TransactionStatus::OverFlowValue);
 
     auto largeInput = "0x" + std::string(MAX_INITCODE_SIZE, '1');
     auto const eoaKey = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
     std::string duplicatedNonceStr(duplicatedNonce);
     tx = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKey, largeInput);
     resultStatus = TransactionValidator::checkTransaction(*tx);
-    BOOST_CHECK(resultStatus == TransactionStatus::MaxInitCodeSizeExceeded);
+    BOOST_TEST(resultStatus == TransactionStatus::MaxInitCodeSizeExceeded);
 }
 
 

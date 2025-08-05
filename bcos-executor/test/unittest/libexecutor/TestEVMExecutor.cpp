@@ -204,7 +204,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -212,7 +212,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -223,8 +223,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_EQUAL(result->from(), paramsBak.to());
     BOOST_CHECK_EQUAL(result->to(), sender);
 
-    BOOST_CHECK(result->message().empty());
-    BOOST_CHECK(!result->newEVMContractAddress().empty());
+    BOOST_TEST(result->message().empty());
+    BOOST_TEST(!result->newEVMContractAddress().empty());
     BOOST_CHECK_LT(result->gasAvailable(), gas);
 
     auto address = result->newEVMContractAddress();
@@ -234,7 +234,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     std::promise<void> preparePromise;
     executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         preparePromise.set_value();
     });
     preparePromise.get_future().get();
@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     ledger->setBlockHeader(blockHeader);
     std::promise<void> commitPromise;
     executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
@@ -251,22 +251,22 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     // test getCode()
     executor->getCode(address, [](Error::Ptr error, bcos::bytes code) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(!code.empty());
+        BOOST_TEST(!error);
+        BOOST_TEST(!code.empty());
         BOOST_CHECK_GT(code.size(), 0);
     });
 
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
     backend->asyncOpenTable(tableName, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(table);
+        BOOST_TEST(!error);
+        BOOST_TEST(table);
         tablePromise.set_value(std::move(*table));
     });
     auto table = tablePromise.get_future().get();
 
     auto entry = table.getRow("code");
-    BOOST_CHECK(entry);
+    BOOST_TEST(entry);
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     // start new block
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     std::promise<void> nextPromise2;
     executor->nextBlockHeader(0, std::move(blockHeader2), [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
 
         nextPromise2.set_value();
     });
@@ -311,12 +311,12 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise2;
     executor->dmcExecuteTransaction(std::move(params2),
         [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
     auto result2 = executePromise2.get_future().get();
 
-    BOOST_CHECK(result2);
+    BOOST_TEST(result2);
     BOOST_CHECK_EQUAL(result2->status(), 0);
     BOOST_CHECK_EQUAL(result2->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result2->message(), "");
@@ -345,12 +345,12 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(params3),
         [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise3.set_value(std::move(result));
         });
     auto result3 = executePromise3.get_future().get();
 
-    BOOST_CHECK(result3);
+    BOOST_TEST(result3);
     BOOST_CHECK_EQUAL(result3->status(), 0);
     BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
     BOOST_CHECK_EQUAL(result3->message(), "");
@@ -452,7 +452,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -463,7 +463,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -474,7 +474,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result->status(), 0);
     BOOST_CHECK_EQUAL(result->evmStatus(), 0);
     BOOST_CHECK_GT(address.size(), 0);
-    BOOST_CHECK(result->keyLocks().empty());
+    BOOST_TEST(result->keyLocks().empty());
 
     // --------------------------------
     // Call A createAndCallB(int256)
@@ -497,21 +497,21 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise2;
     executor->dmcExecuteTransaction(std::move(params2),
         [&](bcos::Error::UniquePtr&& error, NativeExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
     auto result2 = executePromise2.get_future().get();
 
-    BOOST_CHECK(result2);
+    BOOST_TEST(result2);
     BOOST_CHECK_EQUAL(result2->type(), ExecutionMessage::MESSAGE);
-    BOOST_CHECK(result2->data().size() > 0);
+    BOOST_TEST(result2->data().size() > 0);
     BOOST_CHECK_EQUAL(result2->contextID(), 101);
     BOOST_CHECK_EQUAL(result2->seq(), 1001);
     BOOST_CHECK_EQUAL(result2->create(), true);
     BOOST_CHECK_EQUAL(result2->newEVMContractAddress(), "");
     BOOST_CHECK_EQUAL(result2->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result2->from(), std::string(address));
-    BOOST_CHECK(result2->to().empty());
+    BOOST_TEST(result2->to().empty());
     BOOST_CHECK_LT(result2->gasAvailable(), gas);
     BOOST_CHECK_EQUAL(result2->keyLocks().size(), 2);  // code,codeHash
     BOOST_CHECK_EQUAL(result2->keyLocks()[0], "code");
@@ -533,11 +533,11 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(result2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise3.set_value(std::move(result));
         });
     auto result3 = executePromise3.get_future().get();
-    BOOST_CHECK(result3);
+    BOOST_TEST(result3);
     BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result3->data().size(), 0);
     BOOST_CHECK_EQUAL(result3->contextID(), 101);
@@ -549,8 +549,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result3->create(), false);
     BOOST_CHECK_EQUAL(result3->status(), 0);
     BOOST_CHECK_EQUAL(result3->evmStatus(), 0);
-    BOOST_CHECK(result3->logEntries().size() == 0);
-    BOOST_CHECK(result3->keyLocks().empty());
+    BOOST_TEST(result3->logEntries().size() == 0);
+    BOOST_TEST(result3->keyLocks().empty());
 
     // --------------------------------
     // Message 2: Create contract B success return, set previous seq 1001
@@ -560,16 +560,16 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise4;
     executor->dmcExecuteTransaction(std::move(result3),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise4.set_value(std::move(result));
         });
     auto result4 = executePromise4.get_future().get();
 
-    BOOST_CHECK(result4);
+    BOOST_TEST(result4);
     BOOST_CHECK_EQUAL(result4->type(), ExecutionMessage::MESSAGE);
     BOOST_CHECK_GT(result4->data().size(), 0);
     auto param = codec->encodeWithSig("value()");
-    BOOST_CHECK(result4->data().toBytes() == param);
+    BOOST_TEST(result4->data().toBytes() == param);
     BOOST_CHECK_EQUAL(result4->contextID(), 101);
     BOOST_CHECK_EQUAL(result4->seq(), 1001);
     BOOST_CHECK_EQUAL(result4->from(), std::string(address));
@@ -579,8 +579,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     // Request message without status
     // BOOST_CHECK_EQUAL(result4->status(), 0);
-    BOOST_CHECK(result4->message().empty());
-    BOOST_CHECK(result4->newEVMContractAddress().empty());
+    BOOST_TEST(result4->message().empty());
+    BOOST_TEST(result4->newEVMContractAddress().empty());
     BOOST_CHECK_GT(result4->keyLocks().size(), 0);
 
     // --------------------------------
@@ -594,23 +594,23 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise5;
     executor->dmcExecuteTransaction(std::move(result4),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise5.set_value(std::move(result));
         });
     auto result5 = executePromise5.get_future().get();
 
-    BOOST_CHECK(result5);
+    BOOST_TEST(result5);
     BOOST_CHECK_EQUAL(result5->type(), ExecutionMessage::FINISHED);
     BOOST_CHECK_GT(result5->data().size(), 0);
     param = codec->encode(s256(1000));
-    BOOST_CHECK(result5->data().toBytes() == param);
+    BOOST_TEST(result5->data().toBytes() == param);
     BOOST_CHECK_EQUAL(result5->contextID(), 101);
     BOOST_CHECK_EQUAL(result5->seq(), 1003);
     BOOST_CHECK_EQUAL(result5->from(), std::string(addressString2));
     BOOST_CHECK_EQUAL(result5->to(), std::string(address));
     BOOST_CHECK_EQUAL(result5->status(), 0);
     BOOST_CHECK_EQUAL(result5->evmStatus(), 0);
-    BOOST_CHECK(result5->message().empty());
+    BOOST_TEST(result5->message().empty());
     BOOST_CHECK_EQUAL(result5->keyLocks().size(), 0);
 
     // --------------------------------
@@ -621,14 +621,14 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<ExecutionMessage::UniquePtr> executePromise6;
     executor->dmcExecuteTransaction(std::move(result5),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise6.set_value(std::move(result));
         });
     auto result6 = executePromise6.get_future().get();
-    BOOST_CHECK(result6);
+    BOOST_TEST(result6);
     BOOST_CHECK_EQUAL(result6->type(), ExecutionMessage::FINISHED);
     BOOST_CHECK_GT(result6->data().size(), 0);
-    BOOST_CHECK(result6->data().toBytes() == param);
+    BOOST_TEST(result6->data().toBytes() == param);
     BOOST_CHECK_EQUAL(result6->contextID(), 101);
     BOOST_CHECK_EQUAL(result6->seq(), 1001);
     BOOST_CHECK_EQUAL(result6->from(), std::string(address));
@@ -636,12 +636,12 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(result6->origin(), std::string(sender));
     BOOST_CHECK_EQUAL(result6->status(), 0);
     BOOST_CHECK_EQUAL(result6->evmStatus(), 0);
-    BOOST_CHECK(result6->message().empty());
-    BOOST_CHECK(result6->logEntries().size() == 1);
+    BOOST_TEST(result6->message().empty());
+    BOOST_TEST(result6->logEntries().size() == 1);
     BOOST_CHECK_EQUAL(result6->keyLocks().size(), 0);
 
     executor->getHash(1, [&](bcos::Error::UniquePtr&& error, crypto::HashType&& hash) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         BOOST_CHECK_NE(hash.hex(), h256().hex());
     });
 
@@ -649,9 +649,9 @@ BOOST_AUTO_TEST_CASE(externalCall)
     TwoPCParams commitParams;
     commitParams.number = 1;
 
-    executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    executor->prepare(commitParams, [](bcos::Error::Ptr error) { BOOST_TEST(!error); });
     ledger->setBlockHeader(blockHeader);
-    executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    executor->commit(commitParams, [](bcos::Error::Ptr error) { BOOST_TEST(!error); });
 
 
     // execute a call request
@@ -671,7 +671,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResultPromise;
     executor->dmcCall(std::move(callParam),
         [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             callResultPromise.set_value(std::move(response));
         });
 
@@ -683,13 +683,13 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(callResult->evmStatus(), 0);
 
     auto expectResult = codec->encode(s256(1000));
-    BOOST_CHECK(callResult->data().toBytes() == expectResult);
+    BOOST_TEST(callResult->data().toBytes() == expectResult);
 
     // commit the state, and call
     // bcos::protocol::TwoPCParams commitParams;
     // commitParams.number = 1;
-    // executor->prepare(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
-    // executor->commit(commitParams, [&](bcos::Error::Ptr error) { BOOST_CHECK(!error); });
+    // executor->prepare(commitParams, [&](bcos::Error::Ptr error) { BOOST_TEST(!error); });
+    // executor->commit(commitParams, [&](bcos::Error::Ptr error) { BOOST_TEST(!error); });
 
     auto callParam2 = std::make_unique<NativeExecutionMessage>();
     callParam2->setType(executor::NativeExecutionMessage::MESSAGE);
@@ -707,7 +707,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> callResult2Promise;
     executor->dmcCall(std::move(callParam2),
         [&](bcos::Error::UniquePtr error, bcos::protocol::ExecutionMessage::UniquePtr response) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             callResult2Promise.set_value(std::move(response));
         });
 
@@ -719,7 +719,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
     BOOST_CHECK_EQUAL(callResult2->evmStatus(), 0);
 
     auto expectResult2 = codec->encode(s256(1000));
-    BOOST_CHECK(callResult2->data().toBytes() == expectResult);
+    BOOST_TEST(callResult2->data().toBytes() == expectResult);
 
     std::string tableName;
     tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
@@ -727,8 +727,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     {
         auto [e, nonceEntry] = backend->getRow(tableName, ledger::ACCOUNT_TABLE_FIELDS::NONCE);
-        BOOST_CHECK(!e);
-        BOOST_CHECK(nonceEntry);
+        BOOST_TEST(!e);
+        BOOST_TEST(nonceEntry);
         BOOST_CHECK_EQUAL(nonceEntry->get(), "1");
     }
 }
@@ -856,7 +856,7 @@ BOOST_AUTO_TEST_CASE(performance)
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             nextPromise.set_value();
         });
         nextPromise.get_future().get();
@@ -868,7 +868,7 @@ BOOST_AUTO_TEST_CASE(performance)
         executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -947,7 +947,7 @@ BOOST_AUTO_TEST_CASE(performance)
                     {
                         std::cout << "Error!" << boost::diagnostic_information(*error);
                     }
-                    // BOOST_CHECK(!error);
+                    // BOOST_TEST(!error);
                     outputPromise.set_value(std::move(result));
                 });
             ExecutionMessage::UniquePtr transResult = std::move(*outputPromise.get_future().get());
@@ -989,7 +989,7 @@ BOOST_AUTO_TEST_CASE(performance)
                     {
                         std::cout << "Error!" << boost::diagnostic_information(*error);
                     }
-                    // BOOST_CHECK(!error);
+                    // BOOST_TEST(!error);
                     outputPromise.set_value(std::move(result));
                 });
 
@@ -1011,7 +1011,7 @@ BOOST_AUTO_TEST_CASE(performance)
             //            }
         }
         size_t c = std::count(values.begin(), values.end(), u256(1000000 - 10));
-        BOOST_CHECK(c == count - 1);
+        BOOST_TEST(c == count - 1);
         BOOST_CHECK_EQUAL(values.at(values.size() - 1), u256(1000000 + 10 * (count - 1)));
 
         std::cout << "Check elapsed: "
@@ -1019,7 +1019,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
         executor->getHash(
             blockNumber, [&hash](bcos::Error::UniquePtr error, crypto::HashType resultHash) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 BOOST_CHECK_NE(resultHash, h256());
                 hash = resultHash;
             });
@@ -1074,7 +1074,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -1099,7 +1099,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
     {
         auto& [error, result] = it;
 
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         if (error)
         {
             std::cout << boost::diagnostic_information(*error) << std::endl;
@@ -1107,8 +1107,8 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
 
         BOOST_CHECK_EQUAL(result->status(), 0);
         BOOST_CHECK_EQUAL(result->evmStatus(), 0);
-        BOOST_CHECK(result->message().empty());
-        BOOST_CHECK(!result->newEVMContractAddress().empty());
+        BOOST_TEST(result->message().empty());
+        BOOST_TEST(!result->newEVMContractAddress().empty());
         BOOST_CHECK_LT(result->gasAvailable(), gas);
     }
 }
@@ -1196,7 +1196,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         blockHeader->calculateHash(*cryptoSuite->hashImpl());
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             nextPromise.set_value();
         });
         nextPromise.get_future().get();
@@ -1208,12 +1208,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
         auto result = executePromise.get_future().get();
-        BOOST_CHECK(result);
+        BOOST_TEST(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::OutOfGas);
         BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)evmc_status_code::EVMC_OUT_OF_GAS);
@@ -1223,21 +1223,21 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK_EQUAL(result->newEVMContractAddress(), "");
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), addressString);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
 
         TwoPCParams commitParams{};
         commitParams.number = 1;
 
         std::promise<void> preparePromise;
         executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             preparePromise.set_value();
         });
         preparePromise.get_future().get();
 
         std::promise<void> commitPromise;
         executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             commitPromise.set_value();
         });
         commitPromise.get_future().get();
@@ -1384,7 +1384,7 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
 
         std::promise<void> nextPromise;
         executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             nextPromise.set_value();
         });
         nextPromise.get_future().get();
@@ -1396,12 +1396,12 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
         auto result = executePromise.get_future().get();
-        BOOST_CHECK(result);
+        BOOST_TEST(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(result->status(), (int32_t)TransactionStatus::Unknown);
         BOOST_CHECK_EQUAL(result->evmStatus(), (int32_t)evmc_status_code::EVMC_SUCCESS);
@@ -1411,21 +1411,21 @@ BOOST_AUTO_TEST_CASE(deployErrorCode)
         BOOST_CHECK_EQUAL(result->newEVMContractAddress(), "");
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), addressString);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
 
         TwoPCParams commitParams{};
         commitParams.number = 2;
 
         std::promise<void> preparePromise;
         executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             preparePromise.set_value();
         });
         preparePromise.get_future().get();
 
         std::promise<void> commitPromise;
         executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             commitPromise.set_value();
         });
         commitPromise.get_future().get();
@@ -1544,7 +1544,7 @@ contract DelegateCallTest {
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -1555,7 +1555,7 @@ contract DelegateCallTest {
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -1571,8 +1571,8 @@ contract DelegateCallTest {
     // --------------------------------
     std::promise<bcos::bytes> executePromise1;
     executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(!code.empty());
+        BOOST_TEST(!error);
+        BOOST_TEST(!code.empty());
         BOOST_CHECK_GT(code.size(), 0);
         executePromise1.set_value(code);
     });
@@ -1613,7 +1613,7 @@ contract DelegateCallTest {
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
 
@@ -1741,7 +1741,7 @@ contract HelloWorld {
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -1752,7 +1752,7 @@ contract HelloWorld {
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -1768,8 +1768,8 @@ contract HelloWorld {
     // --------------------------------
     std::promise<bcos::bytes> executePromise1;
     executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(!code.empty());
+        BOOST_TEST(!error);
+        BOOST_TEST(!code.empty());
         BOOST_CHECK_GT(code.size(), 0);
         executePromise1.set_value(code);
     });
@@ -1810,7 +1810,7 @@ contract HelloWorld {
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
     executePromise2.get_future().get();
@@ -1821,8 +1821,8 @@ contract HelloWorld {
     std::promise<bcos::bytes> executePromise3;
     executor->getHash(1, [&](bcos::Error::UniquePtr, crypto::HashType) {
         executor->getCode(address, [&](Error::Ptr error, bcos::bytes code) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(code.empty());
+            BOOST_TEST(!error);
+            BOOST_TEST(code.empty());
             BOOST_CHECK_EQUAL(code.size(), 0);
             executePromise3.set_value(code);
         });
@@ -1919,7 +1919,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -1930,11 +1930,11 @@ BOOST_AUTO_TEST_CASE(transientStorageTest)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
 
     // feature_evm_cancun is off
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::REVERT);
@@ -2058,7 +2058,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2069,11 +2069,11 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     newExecutor->executeTransaction(std::move(params1),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
 
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
@@ -2142,7 +2142,7 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2153,11 +2153,11 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
 
     // feature_evm_cancun is off
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::REVERT);
@@ -2237,7 +2237,7 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2248,11 +2248,11 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     newExecutor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
     BOOST_CHECK_EQUAL(result->evmStatus(), 0);
@@ -2343,7 +2343,7 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2354,11 +2354,11 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     newExecutor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
     BOOST_CHECK_EQUAL(result->evmStatus(), 0);
@@ -2444,7 +2444,7 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2455,11 +2455,11 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     newExecutor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
     BOOST_CHECK_EQUAL(result->evmStatus(), 0);
@@ -2572,7 +2572,7 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     newExecutor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2583,11 +2583,11 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     newExecutor->executeTransaction(std::move(params1),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
-    BOOST_CHECK(result);
+    BOOST_TEST(result);
 
     BOOST_CHECK_EQUAL(result->type(), NativeExecutionMessage::FINISHED);
     BOOST_CHECK_EQUAL(result->status(), 0);
@@ -2658,7 +2658,7 @@ contract HelloFactory {
     blockHeader->calculateHash(*cryptoSuite->hashImpl());
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -2667,7 +2667,7 @@ contract HelloFactory {
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->executeTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto result = executePromise.get_future().get();
@@ -2679,8 +2679,8 @@ contract HelloFactory {
     //     tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
     //     tableName.append(newAddress);
     //     auto [e, nonceEntry] = backend->getRow(tableName, ledger::ACCOUNT_TABLE_FIELDS::NONCE);
-    //     BOOST_CHECK(!e);
-    //     BOOST_CHECK(nonceEntry);
+    //     BOOST_TEST(!e);
+    //     BOOST_TEST(nonceEntry);
     //     BOOST_CHECK_EQUAL(nonceEntry->get(), "1");
     // }
 
@@ -2701,7 +2701,7 @@ contract HelloFactory {
     std::promise<ExecutionMessage::UniquePtr> executePromise2;
     executor->executeTransaction(std::move(params2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
 

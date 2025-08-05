@@ -73,11 +73,11 @@ BOOST_AUTO_TEST_CASE(testFrontService_buildFrontService)
     auto frontService = buildFrontService();
     BOOST_CHECK_EQUAL(frontService->groupID(), g_groupID);
     // BOOST_CHECK_EQUAL(frontService->nodeID()->hex(), g_srcNodeID);
-    BOOST_CHECK(frontService->gatewayInterface());
-    BOOST_CHECK(frontService->messageFactory());
-    BOOST_CHECK(frontService->ioService());
-    BOOST_CHECK(frontService->callback().empty());
-    BOOST_CHECK(frontService->moduleID2MessageDispatcher().empty());
+    BOOST_TEST(frontService->gatewayInterface());
+    BOOST_TEST(frontService->messageFactory());
+    BOOST_TEST(frontService->ioService());
+    BOOST_TEST(frontService->callback().empty());
+    BOOST_TEST(frontService->moduleID2MessageDispatcher().empty());
 }
 
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_withoutCallback)
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_withoutCallback)
     auto f = p.get_future();
     auto moduleCallback = [&p, dstNodeID, data](bcos::crypto::NodeIDPtr _nodeID,
                               const std::string& _id, bytesConstRef _data) {
-        BOOST_CHECK(!_id.empty());
+        BOOST_TEST(!_id.empty());
         BOOST_CHECK_EQUAL(dstNodeID->hex(), _nodeID->hex());
         BOOST_CHECK_EQUAL(std::string(_data.begin(), _data.end()), data);
         p.set_value(true);
@@ -100,12 +100,12 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_withoutCallback)
 
     int moduleID = 111;
     frontService->registerModuleMessageDispatcher(moduleID, moduleCallback);
-    BOOST_CHECK(frontService->moduleID2MessageDispatcher().find(moduleID) !=
+    BOOST_TEST(frontService->moduleID2MessageDispatcher().find(moduleID) !=
                 frontService->moduleID2MessageDispatcher().end());
 
     frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
         bytesConstRef((unsigned char*)data.data(), data.size()), 0, CallbackFunc());
-    BOOST_CHECK(frontService->callback().empty());
+    BOOST_TEST(frontService->callback().empty());
     f.get();
 }
 
@@ -132,18 +132,18 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
             }
         });
 
-    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID) !=
+    BOOST_TEST(frontService->module2GroupNodeInfoNotifier().find(moduleID) !=
                 frontService->module2GroupNodeInfoNotifier().end());
-    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID + 1) ==
+    BOOST_TEST(frontService->module2GroupNodeInfoNotifier().find(moduleID + 1) ==
                 frontService->module2GroupNodeInfoNotifier().end());
 
     auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setNodeIDList(std::move(expectedNodeIDList));
     frontService->onReceiveGroupNodeInfo(
-        "1", groupNodeInfo, [](Error::Ptr _error) { BOOST_CHECK(_error == nullptr); });
+        "1", groupNodeInfo, [](Error::Ptr _error) { BOOST_TEST(_error == nullptr); });
 
     f.get();
-    BOOST_CHECK(nodeIDs0.size() == orgExpectedNodeIDList.size());
+    BOOST_TEST(nodeIDs0.size() == orgExpectedNodeIDList.size());
 }
 
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_callback)
@@ -163,20 +163,20 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_callback)
                             std::function<void(bytesConstRef _respData)> _respFunc) {
             (void)_uuid;
             (void)_respFunc;
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             BOOST_CHECK_EQUAL(dstNodeID->hex(), _nodeID->hex());
             BOOST_CHECK_EQUAL(std::string(_data.begin(), _data.end()), data);
             p.set_value(true);
         };
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
             bytesConstRef((unsigned char*)data.data(), data.size()), 0, callback);
-        BOOST_CHECK(!frontService->callback().empty());
+        BOOST_TEST(!frontService->callback().empty());
         auto uuid = frontService->callback().begin()->first;
         frontService->asyncSendResponse(uuid, moduleID, dstNodeID,
             bytesConstRef((unsigned char*)data.data(), data.size()),
             [](Error::Ptr _error) { (void)_error; });
         f.get();
-        BOOST_CHECK(frontService->callback().empty());
+        BOOST_TEST(frontService->callback().empty());
     }
 }
 
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
     auto dstNodeID = createKey(g_dstNodeID_0);
     std::string data(100000, '#');
 
-    BOOST_CHECK(frontService->callback().empty());
+    BOOST_TEST(frontService->callback().empty());
 
     {
         std::promise<void> barrier;
@@ -209,10 +209,10 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
             bytesConstRef((unsigned char*)data.data(), data.size()), 2000, callback);
 
-        BOOST_CHECK(frontService->callback().size() == 1);
+        BOOST_TEST(frontService->callback().size() == 1);
         std::future<void> barrier_future = barrier.get_future();
         barrier_future.wait();
-        BOOST_CHECK(frontService->callback().empty());
+        BOOST_TEST(frontService->callback().empty());
     }
 }
 
@@ -236,13 +236,13 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendBroadcastMessage)
 
     int moduleID = 111;
     frontService->registerModuleMessageDispatcher(moduleID, moduleCallback);
-    BOOST_CHECK(frontService->moduleID2MessageDispatcher().find(moduleID) !=
+    BOOST_TEST(frontService->moduleID2MessageDispatcher().find(moduleID) !=
                 frontService->moduleID2MessageDispatcher().end());
 
     task::syncWait(
         frontService->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, moduleID,
             ::ranges::views::single(bytesConstRef((unsigned char*)data.data(), data.size()))));
-    BOOST_CHECK(frontService->callback().empty());
+    BOOST_TEST(frontService->callback().empty());
     f.get();
 }
 
@@ -266,13 +266,13 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDs)
 
     int moduleID = 111;
     frontService->registerModuleMessageDispatcher(moduleID, moduleCallback);
-    BOOST_CHECK(frontService->moduleID2MessageDispatcher().find(moduleID) !=
+    BOOST_TEST(frontService->moduleID2MessageDispatcher().find(moduleID) !=
                 frontService->moduleID2MessageDispatcher().end());
 
     frontService->asyncSendMessageByNodeIDs(moduleID, bcos::crypto::NodeIDs{dstNodeID},
         bytesConstRef((unsigned char*)data.data(), data.size()));
 
-    BOOST_CHECK(frontService->callback().empty());
+    BOOST_TEST(frontService->callback().empty());
     f.get();
 }
 
@@ -286,7 +286,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
     auto dstNodeID = createKey(g_dstNodeID_0);
     std::string data(1000, '#');
 
-    BOOST_CHECK(frontService->callback().empty());
+    BOOST_TEST(frontService->callback().empty());
 
     std::vector<std::promise<void>> barriers;
     barriers.resize(1000);
@@ -309,7 +309,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
             bytesConstRef((unsigned char*)data.data(), data.size()), 2000, callback);
     }
 
-    BOOST_CHECK(frontService->callback().size() == barriers.size());
+    BOOST_TEST(frontService->callback().size() == barriers.size());
 
     for (auto& barrier : barriers)
     {
@@ -317,7 +317,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
         barrier_future.wait();
     }
 
-    BOOST_CHECK(frontService->callback().empty());
+    BOOST_TEST(frontService->callback().empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

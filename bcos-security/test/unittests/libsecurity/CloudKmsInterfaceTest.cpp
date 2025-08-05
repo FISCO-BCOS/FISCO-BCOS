@@ -142,9 +142,9 @@ BOOST_FIXTURE_TEST_CASE(testSuccessfulEncryption, AwsKmsWrapperFixture)
 
     auto encryptedContents = wrapper->encryptContents(contents);
 
-    BOOST_CHECK(mockKmsClient->encryptCalled);
+    BOOST_TEST(mockKmsClient->encryptCalled);
     BOOST_CHECK_EQUAL(mockKmsClient->lastEncryptKeyId, keyId);
-    BOOST_CHECK(encryptedContents != nullptr);
+    BOOST_TEST(encryptedContents != nullptr);
 }
 
 BOOST_FIXTURE_TEST_CASE(testFailedEncryption, AwsKmsWrapperFixture)
@@ -154,7 +154,7 @@ BOOST_FIXTURE_TEST_CASE(testFailedEncryption, AwsKmsWrapperFixture)
     std::string testData = "Test encryption failure";
     auto contents = std::make_shared<bcos::bytes>(stringToBytes(testData));
 
-    BOOST_CHECK(mockKmsClient->encryptCalled == false);
+    BOOST_TEST(mockKmsClient->encryptCalled == false);
 }
 
 BOOST_FIXTURE_TEST_CASE(testEncryptionDecryptionRoundTrip, AwsKmsWrapperFixture)
@@ -163,12 +163,12 @@ BOOST_FIXTURE_TEST_CASE(testEncryptionDecryptionRoundTrip, AwsKmsWrapperFixture)
     auto contents = std::make_shared<bcos::bytes>(stringToBytes(testData));
 
     auto encryptedContents = wrapper->encryptContents(contents);
-    BOOST_CHECK(mockKmsClient->encryptCalled);
-    BOOST_CHECK(encryptedContents != nullptr);
+    BOOST_TEST(mockKmsClient->encryptCalled);
+    BOOST_TEST(encryptedContents != nullptr);
 
     auto decryptedContents = wrapper->decryptContents(encryptedContents);
-    BOOST_CHECK(mockKmsClient->decryptCalled);
-    BOOST_CHECK(decryptedContents != nullptr);
+    BOOST_TEST(mockKmsClient->decryptCalled);
+    BOOST_TEST(decryptedContents != nullptr);
     std::string resultStr = std::string(decryptedContents->begin(), decryptedContents->end());
 
     BOOST_CHECK_EQUAL(resultStr, testData);
@@ -180,13 +180,13 @@ BOOST_FIXTURE_TEST_CASE(testEmptyContent, AwsKmsWrapperFixture)
     auto contents = std::make_shared<bcos::bytes>(stringToBytes(emptyContents));
 
     auto encryptedContents = wrapper->encryptContents(contents);
-    BOOST_CHECK(mockKmsClient->encryptCalled);
-    BOOST_CHECK(encryptedContents != nullptr);
+    BOOST_TEST(mockKmsClient->encryptCalled);
+    BOOST_TEST(encryptedContents != nullptr);
 
     auto decryptedContents = wrapper->decryptContents(encryptedContents);
-    BOOST_CHECK(mockKmsClient->decryptCalled);
-    BOOST_CHECK(decryptedContents != nullptr);
-    BOOST_CHECK(decryptedContents->empty());
+    BOOST_TEST(mockKmsClient->decryptCalled);
+    BOOST_TEST(decryptedContents != nullptr);
+    BOOST_TEST(decryptedContents->empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

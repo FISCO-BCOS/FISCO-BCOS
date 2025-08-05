@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(Test)
 
     std::cout << "[2]:" << res2 << " Use " << (utcTime() - start) << "ms from last" << std::endl;
 
-    BOOST_CHECK(res1 == res2);
+    BOOST_TEST(res1 == res2);
 }
 }  // namespace bcos::test
 }  // namespace bcos::test

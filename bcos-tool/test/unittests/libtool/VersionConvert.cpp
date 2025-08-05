@@ -23,11 +23,11 @@ BOOST_AUTO_TEST_CASE(testVersionConvert)
 
 BOOST_AUTO_TEST_CASE(testVersionCompare)
 {
-    BOOST_CHECK(BlockVersion::V3_3_VERSION <=> BlockVersion::V3_3_VERSION == 0);
-    BOOST_CHECK(BlockVersion::V3_3_VERSION <=> BlockVersion::V3_2_VERSION >= 0);
-    BOOST_CHECK(BlockVersion::V3_3_VERSION <=> BlockVersion::V3_2_VERSION > 0);
-    BOOST_CHECK(BlockVersion::V3_2_VERSION <=> BlockVersion::V3_3_VERSION < 0);
-    BOOST_CHECK(BlockVersion::V3_1_VERSION <=> BlockVersion::V3_3_VERSION <= 0);
+    BOOST_TEST(BlockVersion::V3_3_VERSION <=> BlockVersion::V3_3_VERSION == 0);
+    BOOST_TEST(BlockVersion::V3_3_VERSION <=> BlockVersion::V3_2_VERSION >= 0);
+    BOOST_TEST(BlockVersion::V3_3_VERSION <=> BlockVersion::V3_2_VERSION > 0);
+    BOOST_TEST(BlockVersion::V3_2_VERSION <=> BlockVersion::V3_3_VERSION < 0);
+    BOOST_TEST(BlockVersion::V3_1_VERSION <=> BlockVersion::V3_3_VERSION <= 0);
 }
 
 }  // namespace test

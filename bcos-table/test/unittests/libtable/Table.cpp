@@ -86,15 +86,15 @@ BOOST_AUTO_TEST_CASE(dump_hash)
     std::promise<std::optional<Table>> createPromise;
     tableFactory->asyncCreateTable(
         tableName, valueField, [&](auto&& error, std::optional<Table>&& table) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             createPromise.set_value(table);
         });
 
-    BOOST_CHECK(createPromise.get_future().get());
+    BOOST_TEST(createPromise.get_future().get());
 
     std::promise<std::optional<Table>> tablePromise;
     tableFactory->asyncOpenTable("t_test", [&](auto&& error, auto&& table) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         tablePromise.set_value(std::move(table));
     });
     auto table = tablePromise.get_future().get();
@@ -140,14 +140,14 @@ BOOST_AUTO_TEST_CASE(setRow)
     std::promise<std::optional<Table>> createPromise;
     tableFactory->asyncCreateTable(
         tableName, valueField, [&](auto&& error, std::optional<Table>&& table) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             createPromise.set_value(std::move(table));
         });
-    BOOST_CHECK(createPromise.get_future().get());
+    BOOST_TEST(createPromise.get_future().get());
 
     std::promise<std::optional<Table>> tablePromise;
     tableFactory->asyncOpenTable("t_test", [&](auto&& error, auto&& table) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         tablePromise.set_value(std::move(table));
     });
     auto table = tablePromise.get_future().get();
@@ -166,12 +166,12 @@ BOOST_AUTO_TEST_CASE(setRow)
     // check fields order of SYS_TABLE
     std::promise<std::optional<Table>> sysTablePromise;
     tableFactory->asyncOpenTable(StorageInterface::SYS_TABLES, [&](auto&& error, auto&& table) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         BOOST_TEST(table);
         sysTablePromise.set_value(std::move(table));
     });
     auto sysTable = sysTablePromise.get_future().get();
-    BOOST_CHECK(sysTable);
+    BOOST_TEST(sysTable);
 
     BOOST_TEST(sysTable->tableInfo()->fields().size() == 1);
     BOOST_TEST(sysTable->tableInfo()->fields()[0] == StateStorage::SYS_TABLE_VALUE_FIELDS);
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(removeFromCache)
     auto hashs = tableFactory->hash(hashImpl, ledger::Features());
 
     auto tableFactory2 = std::make_shared<StateStorage>(nullptr, false);
-    BOOST_CHECK(tableFactory2->createTable(tableName, valueField));
+    BOOST_TEST(tableFactory2->createTable(tableName, valueField));
     auto table2 = tableFactory2->openTable(tableName);
     BOOST_TEST(table2);
 

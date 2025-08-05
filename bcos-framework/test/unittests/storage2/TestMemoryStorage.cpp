@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
             auto [key, value] = *item;
             if (i % 2 == 0)
             {
-                BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(value));
+                BOOST_TEST(std::holds_alternative<storage2::DELETED_TYPE>(value));
             }
             else
             {
@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(range)
             }));
         for (auto&& [value, num] : ::ranges::views::zip(readRange, ::ranges::iota_view<size_t>(0)))
         {
-            BOOST_CHECK(value);
+            BOOST_TEST(value);
             BOOST_CHECK_EQUAL(value->get(), "Hello world!" + boost::lexical_cast<std::string>(num));
             BOOST_CHECK_LT(num, 10);
         }
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(range)
         size_t num = 0;
         while (auto kv = co_await seekRange.next())
         {
-            BOOST_CHECK(kv);
+            BOOST_TEST(kv);
             auto& [key, value] = *kv;
             const auto& [tableName, keyName] = key;
             BOOST_CHECK_LT(num, 100);
@@ -330,7 +330,7 @@ BOOST_AUTO_TEST_CASE(merge)
         auto expectValues2 = ::ranges::views::iota(0, 20) | ::ranges::views::transform([](int i) {
             return std::make_optional(100);
         }) | ::ranges::to<std::vector>();
-        BOOST_CHECK(values2 == expectValues2);
+        BOOST_TEST(values2 == expectValues2);
     }());
 }
 
@@ -367,12 +367,12 @@ BOOST_AUTO_TEST_CASE(keyComp)
     executor_v1::StateKeyView key2("/tables/t_testV320", "type");
 
     BOOST_CHECK_EQUAL(key1, key2);
-    BOOST_CHECK(!(key1 > key2));
-    BOOST_CHECK(!(key1 < key2));
+    BOOST_TEST(!(key1 > key2));
+    BOOST_TEST(!(key1 < key2));
 
     BOOST_CHECK_EQUAL(key2, key1);
-    BOOST_CHECK(!(key2 > key1));
-    BOOST_CHECK(!(key2 < key1));
+    BOOST_TEST(!(key2 > key1));
+    BOOST_TEST(!(key2 < key1));
 
     auto hash1 = std::hash<decltype(key1)>{}(key1);
     auto hash2 = std::hash<decltype(key2)>{}(key2);
@@ -416,14 +416,14 @@ BOOST_AUTO_TEST_CASE(keyComp)
                 storage, bcos::executor_v1::StateKey(std::string{key}), std::move(value));
         }
 
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_TEST(co_await storage2::existsOne(
             storage, bcos::executor_v1::StateKeyView("/tables/t_testV320", "type")));
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_TEST(co_await storage2::existsOne(
             storage, bcos::executor_v1::StateKeyView("/tables/t_testV320", "link_address")));
-        BOOST_CHECK(co_await storage2::existsOne(storage,
+        BOOST_TEST(co_await storage2::existsOne(storage,
             bcos::executor_v1::StateKeyView(
                 "/apps/f051d3dc3139daa9eeb86a4e388b73cb024d5f5f_accessAuth", "method_auth_white")));
-        BOOST_CHECK(co_await storage2::existsOne(
+        BOOST_TEST(co_await storage2::existsOne(
             storage, bcos::executor_v1::StateKeyView(
                          "/apps/130cfa5e32bcb8bfcffc146bbdcb8967ecc3e556_accessAuth", "status")));
     }());
@@ -503,19 +503,19 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         co_await storage2::removeOne(storage, 6);
 
         auto value = co_await storage2::readOne(storage, 6);
-        BOOST_CHECK(!value);
+        BOOST_TEST(!value);
         auto value2 = storage.readOne(6);
-        BOOST_CHECK(std::holds_alternative<bcos::storage2::DELETED_TYPE>(value2));
+        BOOST_TEST(std::holds_alternative<bcos::storage2::DELETED_TYPE>(value2));
 
         auto value3 = storage.readOne(11);
-        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value3));
+        BOOST_TEST(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value3));
         auto value4 = co_await storage2::readOne(storage, 11);
-        BOOST_CHECK(!value4);
+        BOOST_TEST(!value4);
 
         auto value5 = co_await storage2::readOne(storage, 3);
-        BOOST_CHECK(value5);
+        BOOST_TEST(value5);
         auto value6 = storage.readOne(3);
-        BOOST_CHECK(std::holds_alternative<int>(value6));
+        BOOST_TEST(std::holds_alternative<int>(value6));
 
         MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED> storage_2;
         co_await storage2::writeSome(storage_2,
@@ -523,15 +523,15 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         co_await storage2::removeOne(storage_2, 6);
 
         auto value21 = co_await storage2::readOne(storage_2, 6);
-        BOOST_CHECK(!value21);
+        BOOST_TEST(!value21);
 
         auto value22 = storage_2.readOne(6);
-        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value22));
+        BOOST_TEST(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value22));
 
         auto value23 = storage_2.readOne(11);
-        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value23));
+        BOOST_TEST(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value23));
         auto value24 = co_await storage2::readOne(storage_2, 11);
-        BOOST_CHECK(!value24);
+        BOOST_TEST(!value24);
     }());
 }
 

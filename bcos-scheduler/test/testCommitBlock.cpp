@@ -135,16 +135,16 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeader = std::move(header);
         });
 
     scheduler->commitBlock(
         executedHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
-            BOOST_CHECK(!error);
-            // BOOST_CHECK(config);
+            BOOST_TEST(!error);
+            // BOOST_TEST(config);
             (void)config;
         });
     promise<Table> prom;

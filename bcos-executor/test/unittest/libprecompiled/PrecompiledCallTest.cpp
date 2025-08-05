@@ -69,14 +69,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
         return result2;
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(precompiled_gas_test)
     gas = 1;
     bcos::protocol::BlockNumber number = 1;
     auto result = openTable(number++, "error_test");
-    BOOST_CHECK(result->status() == (int32_t)TransactionStatus::OutOfGas);
+    BOOST_TEST(result->status() == (int32_t)TransactionStatus::OutOfGas);
 }
 
 

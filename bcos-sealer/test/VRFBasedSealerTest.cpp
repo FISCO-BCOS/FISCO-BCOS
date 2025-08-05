@@ -82,27 +82,27 @@ BOOST_AUTO_TEST_CASE(testVRFSealer)
     sealer->init(consensus);
     auto result = sealer::VRFBasedSealer::generateTransactionForRotating(
         block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
-    BOOST_CHECK(result == sealer::Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK);
+    BOOST_TEST(result == sealer::Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK);
     sealer->sealingManager()->resetLatestNumber(8);
 
     result = sealer::VRFBasedSealer::generateTransactionForRotating(
         block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
-    BOOST_CHECK(result == sealer::Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK);
+    BOOST_TEST(result == sealer::Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK);
 
     sealer->sealingManager()->resetLatestNumber(9);
     result = sealer::VRFBasedSealer::generateTransactionForRotating(
         block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
-    BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
-    BOOST_CHECK(block->transactionsMetaDataSize() == 1);
-    BOOST_CHECK(block->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
+    BOOST_TEST(result == sealer::Sealer::SealBlockResult::SUCCESS);
+    BOOST_TEST(block->transactionsMetaDataSize() == 1);
+    BOOST_TEST(block->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
 
     auto block2 = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);
     sealer->sealingManager()->resetLatestNumber(0);
     result = sealer::VRFBasedSealer::generateTransactionForRotating(
         block2, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, true);
-    BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
-    BOOST_CHECK(block2->transactionsMetaDataSize() == 1);
-    BOOST_CHECK(block2->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
+    BOOST_TEST(result == sealer::Sealer::SealBlockResult::SUCCESS);
+    BOOST_TEST(block2->transactionsMetaDataSize() == 1);
+    BOOST_TEST(block2->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
 }
 
 BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
@@ -133,14 +133,14 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
     // vrfProof.resize(200);
     COutputBuffer proof{(char*)vrfProof.data(), sealer::secp256k1VRFProofSize};
     vrfProve = wedpr_secp256k1_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-    BOOST_CHECK(vrfProve == 0);
-    BOOST_CHECK(pubkeyDerive == 0);
+    BOOST_TEST(vrfProve == 0);
+    BOOST_TEST(pubkeyDerive == 0);
 
     CInputBuffer publicKeyInput{
         reinterpret_cast<const char*>(vrfPublicKey.data()), vrfPublicKey.size()};
 
     uint8_t isSuccessFlag = wedpr_secp256k1_vrf_is_valid_public_key(&publicKeyInput);
-    BOOST_CHECK(isSuccessFlag == 0);
+    BOOST_TEST(isSuccessFlag == 0);
 
     bytes vrfProofHash;
     vrfProofHash.resize(32);
@@ -148,10 +148,10 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
 
     CInputBuffer proofBuffer{reinterpret_cast<const char*>(vrfProof.data()), vrfProof.size()};
     uint8_t proofToHash = wedpr_secp256k1_vrf_proof_to_hash(&proofBuffer, &proofHash);
-    BOOST_CHECK(proofToHash == 0);
+    BOOST_TEST(proofToHash == 0);
 
     uint8_t verifyFlag = wedpr_secp256k1_vrf_verify_utf8(&publicKeyInput, &inputMsg, &proofBuffer);
-    BOOST_CHECK(verifyFlag == 0);
+    BOOST_TEST(verifyFlag == 0);
 
     CInputBuffer inputMsgError = {
         .data = reinterpret_cast<const char*>("test error"),
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
 
     int8_t verifyFlagError =
         wedpr_secp256k1_vrf_verify_utf8(&publicKeyInput, &inputMsgError, &proofBuffer);
-    BOOST_CHECK(verifyFlagError == -1);
+    BOOST_TEST(verifyFlagError == -1);
 
     // check error public key
     bytes vrfPublicKeyError;
@@ -169,7 +169,7 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
         reinterpret_cast<const char*>(vrfPublicKeyError.data()), vrfPublicKeyError.size()};
     int8_t verifyFlagErrorPublicKey =
         wedpr_secp256k1_vrf_verify_utf8(&publicKeyError, &inputMsg, &proofBuffer);
-    BOOST_CHECK(verifyFlagErrorPublicKey == -1);
+    BOOST_TEST(verifyFlagErrorPublicKey == -1);
 
     // check error proof
     bytes vrfProofError;
@@ -179,7 +179,7 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
 
     int8_t verifyFlagErrorProof =
         wedpr_secp256k1_vrf_verify_utf8(&publicKeyInput, &inputMsg, &proofBufferError);
-    BOOST_CHECK(verifyFlagErrorProof == -1);
+    BOOST_TEST(verifyFlagErrorProof == -1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

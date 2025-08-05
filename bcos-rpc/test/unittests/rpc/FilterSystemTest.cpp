@@ -18,7 +18,7 @@ public:
     {
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
-        BOOST_CHECK(web3JsonRpc != nullptr);
+        BOOST_TEST(web3JsonRpc != nullptr);
         filterSystem =
             std::make_shared<Web3FilterSystem>(rpc->groupManager(), "test-group", 600000, 10);
     }
@@ -44,11 +44,11 @@ public:
     }
     static void validRespCheck(Json::Value const& resp)
     {
-        BOOST_CHECK(!resp.isMember("error"));
-        BOOST_CHECK(resp.isMember("result"));
-        BOOST_CHECK(resp.isMember("id"));
-        BOOST_CHECK(resp.isMember("jsonrpc"));
-        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+        BOOST_TEST(!resp.isMember("error"));
+        BOOST_TEST(resp.isMember("result"));
+        BOOST_TEST(resp.isMember("id"));
+        BOOST_TEST(resp.isMember("jsonrpc"));
+        BOOST_TEST(resp["jsonrpc"].asString() == "2.0");
     };
 
     Rpc::Ptr rpc;
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(test_new_block_filter)
     BOOST_TEST(!filterId.empty());
     auto value = task::syncWait(filterSystem->getFilterChanges(u256(filterId)));
     BOOST_TEST(value.isArray());
-    BOOST_CHECK(value.empty());
+    BOOST_TEST(value.empty());
 
 
     // genesis block
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(test_new_pending_tx_filter)
     BOOST_TEST(!filterId.empty());
     auto value = task::syncWait(filterSystem->getFilterChanges(u256(filterId)));
     BOOST_TEST(value.isArray());
-    BOOST_CHECK(value.empty());
+    BOOST_TEST(value.empty());
     auto const blockSize = m_ledger->blockNumber() + 1;
     auto transactionSize = 10;
     for (int i = 0; i < 10; ++i)

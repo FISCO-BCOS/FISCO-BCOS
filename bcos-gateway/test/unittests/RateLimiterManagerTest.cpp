@@ -48,17 +48,17 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter_allowExceedMaxPermitSize)
         auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
             maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);
 
-        BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
-        BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
-        BOOST_CHECK(rateLimiter->currentPermitsSize() == maxPermitsSize);
-        BOOST_CHECK(rateLimiter->allowExceedMaxPermitSize() == allowExceedMaxPermitSize);
+        BOOST_TEST(rateLimiter->timeWindowMS() == timeWindowMS);
+        BOOST_TEST(rateLimiter->maxPermitsSize() == maxPermitsSize);
+        BOOST_TEST(rateLimiter->currentPermitsSize() == maxPermitsSize);
+        BOOST_TEST(rateLimiter->allowExceedMaxPermitSize() == allowExceedMaxPermitSize);
 
         uint64_t permitsSize = 2 * maxPermitsSize;
-        BOOST_CHECK(permitsSize > maxPermitsSize);
-        BOOST_CHECK(permitsSize > rateLimiter->maxPermitsSize());
+        BOOST_TEST(permitsSize > maxPermitsSize);
+        BOOST_TEST(permitsSize > rateLimiter->maxPermitsSize());
 
-        BOOST_CHECK(!rateLimiter->acquire(permitsSize));
-        BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(!rateLimiter->acquire(permitsSize));
+        BOOST_TEST(!rateLimiter->tryAcquire(permitsSize));
     }
 
     {
@@ -68,17 +68,17 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter_allowExceedMaxPermitSize)
         auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
             maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);
 
-        BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
-        BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
-        BOOST_CHECK(rateLimiter->currentPermitsSize() == maxPermitsSize);
-        BOOST_CHECK(rateLimiter->allowExceedMaxPermitSize() == allowExceedMaxPermitSize);
+        BOOST_TEST(rateLimiter->timeWindowMS() == timeWindowMS);
+        BOOST_TEST(rateLimiter->maxPermitsSize() == maxPermitsSize);
+        BOOST_TEST(rateLimiter->currentPermitsSize() == maxPermitsSize);
+        BOOST_TEST(rateLimiter->allowExceedMaxPermitSize() == allowExceedMaxPermitSize);
 
         uint64_t permitsSize = 2 * maxPermitsSize;
-        BOOST_CHECK(permitsSize > maxPermitsSize);
-        BOOST_CHECK(permitsSize > rateLimiter->maxPermitsSize());
+        BOOST_TEST(permitsSize > maxPermitsSize);
+        BOOST_TEST(permitsSize > rateLimiter->maxPermitsSize());
 
-        BOOST_CHECK(rateLimiter->acquire(permitsSize));
-        BOOST_CHECK(rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(rateLimiter->acquire(permitsSize));
+        BOOST_TEST(rateLimiter->tryAcquire(permitsSize));
     }
 }
 
@@ -90,55 +90,55 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
     auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
         maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);
 
-    BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
-    BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
-    BOOST_CHECK(rateLimiter->currentPermitsSize() == maxPermitsSize);
-    BOOST_CHECK(rateLimiter->allowExceedMaxPermitSize() == allowExceedMaxPermitSize);
+    BOOST_TEST(rateLimiter->timeWindowMS() == timeWindowMS);
+    BOOST_TEST(rateLimiter->maxPermitsSize() == maxPermitsSize);
+    BOOST_TEST(rateLimiter->currentPermitsSize() == maxPermitsSize);
+    BOOST_TEST(rateLimiter->allowExceedMaxPermitSize() == allowExceedMaxPermitSize);
 
     {
         uint64_t permitsSize = 2001;
-        BOOST_CHECK(permitsSize > rateLimiter->maxPermitsSize());
-        BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
-        BOOST_CHECK(!rateLimiter->acquire(permitsSize));
+        BOOST_TEST(permitsSize > rateLimiter->maxPermitsSize());
+        BOOST_TEST(!rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(!rateLimiter->acquire(permitsSize));
     }
 
     {
         uint64_t permitsSize = 2000;
-        BOOST_CHECK(rateLimiter->tryAcquire(permitsSize));
-        BOOST_CHECK(rateLimiter->currentPermitsSize() == 0);
-        BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
-        BOOST_CHECK(rateLimiter->acquire(permitsSize));
+        BOOST_TEST(rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(rateLimiter->currentPermitsSize() == 0);
+        BOOST_TEST(!rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(rateLimiter->acquire(permitsSize));
     }
 
     {
         int64_t permitsSize = 2000;
         std::this_thread::sleep_for(std::chrono::milliseconds(timeWindowMS / 2));
-        BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
-        BOOST_CHECK(rateLimiter->currentPermitsSize() == 0);
-        BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
-        BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
+        BOOST_TEST(!rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(rateLimiter->currentPermitsSize() == 0);
+        BOOST_TEST(rateLimiter->timeWindowMS() == timeWindowMS);
+        BOOST_TEST(rateLimiter->maxPermitsSize() == maxPermitsSize);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(timeWindowMS));
-        BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
-        BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
-        BOOST_CHECK(rateLimiter->tryAcquire(permitsSize / 2));
-        BOOST_CHECK(rateLimiter->currentPermitsSize() == (maxPermitsSize - permitsSize / 2));
-        BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(rateLimiter->timeWindowMS() == timeWindowMS);
+        BOOST_TEST(rateLimiter->maxPermitsSize() == maxPermitsSize);
+        BOOST_TEST(rateLimiter->tryAcquire(permitsSize / 2));
+        BOOST_TEST(rateLimiter->currentPermitsSize() == (maxPermitsSize - permitsSize / 2));
+        BOOST_TEST(!rateLimiter->tryAcquire(permitsSize));
 
         rateLimiter->rollback(permitsSize);
 
-        BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
-        BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
-        BOOST_CHECK(rateLimiter->currentPermitsSize() == (uint64_t)permitsSize);
-        BOOST_CHECK(rateLimiter->tryAcquire(permitsSize));
+        BOOST_TEST(rateLimiter->timeWindowMS() == timeWindowMS);
+        BOOST_TEST(rateLimiter->maxPermitsSize() == maxPermitsSize);
+        BOOST_TEST(rateLimiter->currentPermitsSize() == (uint64_t)permitsSize);
+        BOOST_TEST(rateLimiter->tryAcquire(permitsSize));
 
         std::this_thread::sleep_for(std::chrono::milliseconds(timeWindowMS));
-        BOOST_CHECK(rateLimiter->tryAcquire(200));
-        BOOST_CHECK(rateLimiter->tryAcquire(400));
-        BOOST_CHECK(rateLimiter->tryAcquire(600));
-        BOOST_CHECK(rateLimiter->tryAcquire(800));
-        BOOST_CHECK(!rateLimiter->tryAcquire(200));
-        BOOST_CHECK(rateLimiter->acquire(2000));
+        BOOST_TEST(rateLimiter->tryAcquire(200));
+        BOOST_TEST(rateLimiter->tryAcquire(400));
+        BOOST_TEST(rateLimiter->tryAcquire(600));
+        BOOST_TEST(rateLimiter->tryAcquire(800));
+        BOOST_TEST(!rateLimiter->tryAcquire(200));
+        BOOST_TEST(rateLimiter->acquire(2000));
     }
 }
 
@@ -150,55 +150,55 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
-    BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
-    BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-    BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
-    BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-    BOOST_CHECK(rateLimiterConfig.timeWindowSec == 1);
-    BOOST_CHECK(rateLimiterConfig.totalOutgoingBwLimit < 0);
-    BOOST_CHECK(rateLimiterConfig.connOutgoingBwLimit < 0);
-    BOOST_CHECK(rateLimiterConfig.groupOutgoingBwLimit < 0);
-    BOOST_CHECK(rateLimiterConfig.group2BwLimit.empty());
+    BOOST_TEST(!rateLimiterConfig.enableOutRateLimit());
+    BOOST_TEST(!rateLimiterConfig.enableDistributedRatelimit);
+    BOOST_TEST(rateLimiterConfig.enableDistributedRateLimitCache);
+    BOOST_TEST(!rateLimiterConfig.allowExceedMaxPermitSize);
+    BOOST_TEST(rateLimiterConfig.timeWindowSec == 1);
+    BOOST_TEST(rateLimiterConfig.totalOutgoingBwLimit < 0);
+    BOOST_TEST(rateLimiterConfig.connOutgoingBwLimit < 0);
+    BOOST_TEST(rateLimiterConfig.groupOutgoingBwLimit < 0);
+    BOOST_TEST(rateLimiterConfig.group2BwLimit.empty());
 
-    BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
-    BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
-    BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
+    BOOST_TEST(!rateLimiterConfig.enableOutGroupRateLimit());
+    BOOST_TEST(!rateLimiterConfig.enableOutConnRateLimit());
+    BOOST_TEST(!rateLimiterConfig.enableDistributedRatelimit);
 
-    BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
-    BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
-    BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
-    BOOST_CHECK(rateLimiterConfig.p2pBasicMsgQPS < 0);
-    BOOST_CHECK(rateLimiterConfig.p2pModuleMsgQPS < 0);
-    BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.size() == 65535);
-    BOOST_CHECK(rateLimiterConfig.moduleMsg2QPSSize == 0);
+    BOOST_TEST(!rateLimiterConfig.enableInRateLimit());
+    BOOST_TEST(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+    BOOST_TEST(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+    BOOST_TEST(rateLimiterConfig.p2pBasicMsgQPS < 0);
+    BOOST_TEST(rateLimiterConfig.p2pModuleMsgQPS < 0);
+    BOOST_TEST(rateLimiterConfig.moduleMsg2QPS.size() == 65535);
+    BOOST_TEST(rateLimiterConfig.moduleMsg2QPSSize == 0);
 
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
+    BOOST_TEST(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
 
-    BOOST_CHECK(
+    BOOST_TEST(
         rateLimiterManager
             ->registerRateLimiter("192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
             .first);
-    BOOST_CHECK(!rateLimiterManager
+    BOOST_TEST(!rateLimiterManager
                      ->registerRateLimiter(
                          "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
                      .first);
 
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") != nullptr);
-    BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.0"));
-    BOOST_CHECK(!rateLimiterManager->removeRateLimiter("192.108.0.0"));
+    BOOST_TEST(rateLimiterManager->getRateLimiter("192.108.0.0") != nullptr);
+    BOOST_TEST(rateLimiterManager->removeRateLimiter("192.108.0.0"));
+    BOOST_TEST(!rateLimiterManager->removeRateLimiter("192.108.0.0"));
 
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
+    BOOST_TEST(rateLimiterManager->getRateLimiter("192.108.0.0") == nullptr);
 
     auto result = rateLimiterManager->registerRateLimiter(
         "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10));
-    BOOST_CHECK(result.first);
-    BOOST_CHECK(result.second == nullptr);
-    BOOST_CHECK(rateLimiterManager->getRateLimiter("192.108.0.0") != nullptr);
+    BOOST_TEST(result.first);
+    BOOST_TEST(result.second == nullptr);
+    BOOST_TEST(rateLimiterManager->getRateLimiter("192.108.0.0") != nullptr);
 
     result = rateLimiterManager->registerRateLimiter(
         "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10));
-    BOOST_CHECK(!result.first);
-    BOOST_CHECK(result.second != nullptr);
+    BOOST_TEST(!result.first);
+    BOOST_TEST(result.second != nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
@@ -211,34 +211,34 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
     auto config = std::make_shared<GatewayConfig>();
     config->initFlowControlConfig(pt);
 
-    BOOST_CHECK(config->rateLimiterConfig().enableOutRateLimit());
-    BOOST_CHECK(config->rateLimiterConfig().enableOutConnRateLimit());
-    BOOST_CHECK(config->rateLimiterConfig().enableOutGroupRateLimit());
-    BOOST_CHECK(config->rateLimiterConfig().enableDistributedRatelimit);
-    BOOST_CHECK(config->rateLimiterConfig().enableDistributedRateLimitCache);
+    BOOST_TEST(config->rateLimiterConfig().enableOutRateLimit());
+    BOOST_TEST(config->rateLimiterConfig().enableOutConnRateLimit());
+    BOOST_TEST(config->rateLimiterConfig().enableOutGroupRateLimit());
+    BOOST_TEST(config->rateLimiterConfig().enableDistributedRatelimit);
+    BOOST_TEST(config->rateLimiterConfig().enableDistributedRateLimitCache);
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().distributedRateLimitCachePercent, 13);
 
-    BOOST_CHECK(config->rateLimiterConfig().enableInRateLimit());
-    BOOST_CHECK(config->rateLimiterConfig().enableInP2pBasicMsgLimit());
-    BOOST_CHECK(config->rateLimiterConfig().enableInP2pModuleMsgLimit(1));
-    BOOST_CHECK(config->rateLimiterConfig().enableInP2pModuleMsgLimit(9));
+    BOOST_TEST(config->rateLimiterConfig().enableInRateLimit());
+    BOOST_TEST(config->rateLimiterConfig().enableInP2pBasicMsgLimit());
+    BOOST_TEST(config->rateLimiterConfig().enableInP2pModuleMsgLimit(1));
+    BOOST_TEST(config->rateLimiterConfig().enableInP2pModuleMsgLimit(9));
 
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pBasicMsgTypes.size(), 5);
-    BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(1));
-    BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(2));
-    BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(3));
-    BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(6));
-    BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(9));
-    BOOST_CHECK(!config->rateLimiterConfig().p2pBasicMsgTypes.contains(10));
+    BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(1));
+    BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(2));
+    BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(3));
+    BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(6));
+    BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(9));
+    BOOST_TEST(!config->rateLimiterConfig().p2pBasicMsgTypes.contains(10));
 
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pModuleMsgQPS, 555);
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pBasicMsgQPS, 123);
     BOOST_CHECK_EQUAL(config->rateLimiterConfig().moduleMsg2QPSSize, 3);
-    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(1));
-    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(5));
-    BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(7));
-    BOOST_CHECK(!config->rateLimiterConfig().moduleMsg2QPS.at(9));
-    BOOST_CHECK(!config->rateLimiterConfig().moduleMsg2QPS.at(10));
+    BOOST_TEST(config->rateLimiterConfig().moduleMsg2QPS.at(1));
+    BOOST_TEST(config->rateLimiterConfig().moduleMsg2QPS.at(5));
+    BOOST_TEST(config->rateLimiterConfig().moduleMsg2QPS.at(7));
+    BOOST_TEST(!config->rateLimiterConfig().moduleMsg2QPS.at(9));
+    BOOST_TEST(!config->rateLimiterConfig().moduleMsg2QPS.at(10));
 
     auto rateLimiterConfig = config->rateLimiterConfig();
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
@@ -248,27 +248,27 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
 
     auto timeWindowSec = rateLimiterConfig.timeWindowSec;
 
-    BOOST_CHECK(rateLimiterFactory != nullptr);
-    BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(1));
-    BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(2));
-    BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(3));
-    BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(6));
-    BOOST_CHECK(rateLimiterManager->isP2pBasicMsgType(9));
-    BOOST_CHECK(!rateLimiterManager->isP2pBasicMsgType(10));
-    BOOST_CHECK(!rateLimiterManager->isP2pBasicMsgType(0xff));
+    BOOST_TEST(rateLimiterFactory != nullptr);
+    BOOST_TEST(rateLimiterManager->isP2pBasicMsgType(1));
+    BOOST_TEST(rateLimiterManager->isP2pBasicMsgType(2));
+    BOOST_TEST(rateLimiterManager->isP2pBasicMsgType(3));
+    BOOST_TEST(rateLimiterManager->isP2pBasicMsgType(6));
+    BOOST_TEST(rateLimiterManager->isP2pBasicMsgType(9));
+    BOOST_TEST(!rateLimiterManager->isP2pBasicMsgType(10));
+    BOOST_TEST(!rateLimiterManager->isP2pBasicMsgType(0xff));
 
     {
         // modules_without_bw_limit=raft,pbft,txs_sync,amop
-        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::PBFT));
-        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::Raft));
-        BOOST_CHECK(
+        BOOST_TEST(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::PBFT));
+        BOOST_TEST(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::Raft));
+        BOOST_TEST(
             rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::TxsSync));
-        BOOST_CHECK(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::AMOP));
-        BOOST_CHECK(!rateLimiterManager->modulesWithoutLimit().at(
+        BOOST_TEST(rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::AMOP));
+        BOOST_TEST(!rateLimiterManager->modulesWithoutLimit().at(
             bcos::protocol::ModuleID::LIGHTNODE_GET_ABI));
-        BOOST_CHECK(
+        BOOST_TEST(
             !rateLimiterManager->modulesWithoutLimit().at(bcos::protocol::ModuleID::BlockSync));
-        BOOST_CHECK(!rateLimiterManager->modulesWithoutLimit().at(0xff));
+        BOOST_TEST(!rateLimiterManager->modulesWithoutLimit().at(0xff));
     }
 
     {
@@ -289,36 +289,36 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
             config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().group2BwLimit.find("group2")->second,
             config->doubleMBToBit(2));
-        BOOST_CHECK(config->rateLimiterConfig().group2BwLimit.find("group3") ==
+        BOOST_TEST(config->rateLimiterConfig().group2BwLimit.find("group3") ==
                     config->rateLimiterConfig().group2BwLimit.end());
 
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group0") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group1") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group3") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group4") != nullptr);
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group0") != nullptr);
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group1") != nullptr);
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group3") != nullptr);
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group4") != nullptr);
 
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter("group3"));
-        BOOST_CHECK(!rateLimiterManager->removeRateLimiter("group3"));
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter("group2"));
-        BOOST_CHECK(!rateLimiterManager->removeRateLimiter("group2"));
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
-        BOOST_CHECK(
+        BOOST_TEST(rateLimiterManager->removeRateLimiter("group3"));
+        BOOST_TEST(!rateLimiterManager->removeRateLimiter("group3"));
+        BOOST_TEST(rateLimiterManager->removeRateLimiter("group2"));
+        BOOST_TEST(!rateLimiterManager->removeRateLimiter("group2"));
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
+        BOOST_TEST(
             !rateLimiterManager
                  ->registerRateLimiter("group2", rateLimiterFactory->buildTimeWindowRateLimiter(10))
                  .first);
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter("group2"));
-        BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
+        BOOST_TEST(rateLimiterManager->removeRateLimiter("group2"));
+        BOOST_TEST(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
 
         {
             auto rateLimiterManager =
                 gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-            BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
-            BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+            BOOST_TEST(rateLimiterConfig.enableOutConnRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableDistributedRatelimit);
+            BOOST_TEST(rateLimiterConfig.enableDistributedRateLimitCache);
 
             auto distributedRateLimiter0 =
                 std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
@@ -374,44 +374,44 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
             config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().ip2BwLimit.find("192.108.0.3")->second,
             config->doubleMBToBit(3));
-        BOOST_CHECK(config->rateLimiterConfig().ip2BwLimit.find("192.108.0.0") ==
+        BOOST_TEST(config->rateLimiterConfig().ip2BwLimit.find("192.108.0.0") ==
                     config->rateLimiterConfig().ip2BwLimit.end());
 
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.1") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.3") != nullptr);
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.1") != nullptr);
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.3") != nullptr);
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
 
-        BOOST_CHECK(!rateLimiterManager
+        BOOST_TEST(!rateLimiterManager
                          ->registerRateLimiter(
                              "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
                          .first);
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.0") != nullptr);
 
-        BOOST_CHECK(!rateLimiterManager
+        BOOST_TEST(!rateLimiterManager
                          ->registerRateLimiter(
                              "192.108.0.0", rateLimiterFactory->buildTimeWindowRateLimiter(10))
                          .first);
 
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.2"));
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter("192.108.0.2"));
+        BOOST_TEST(rateLimiterManager->removeRateLimiter("192.108.0.2"));
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
+        BOOST_TEST(rateLimiterManager->removeRateLimiter("192.108.0.2"));
 
-        BOOST_CHECK(rateLimiterManager
+        BOOST_TEST(rateLimiterManager
                         ->registerRateLimiter(
                             "192.108.0.2", rateLimiterFactory->buildTimeWindowRateLimiter(10))
                         .first);
-        BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
+        BOOST_TEST(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
 
         {
             // rate limiter factory
             auto rateLimiterManager =
                 gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-            BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
-            BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+            BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableOutConnRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableDistributedRatelimit);
+            BOOST_TEST(rateLimiterConfig.enableDistributedRateLimitCache);
 
             auto rateLimiter0 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
                 rateLimiterManager->getConnRateLimiter("192.108.0.1"));
@@ -452,15 +452,15 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pBasicMsgQPS, 123);
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().p2pModuleMsgQPS, 555);
         BOOST_CHECK_EQUAL(config->rateLimiterConfig().moduleMsg2QPSSize, 3);
-        BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(1));
-        BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(2));
-        BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(3));
-        BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(6));
-        BOOST_CHECK(config->rateLimiterConfig().p2pBasicMsgTypes.contains(9));
-        BOOST_CHECK(!config->rateLimiterConfig().p2pBasicMsgTypes.contains(10));
-        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(1));
-        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(5));
-        BOOST_CHECK(config->rateLimiterConfig().moduleMsg2QPS.at(7));
+        BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(1));
+        BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(2));
+        BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(3));
+        BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(6));
+        BOOST_TEST(config->rateLimiterConfig().p2pBasicMsgTypes.contains(9));
+        BOOST_TEST(!config->rateLimiterConfig().p2pBasicMsgTypes.contains(10));
+        BOOST_TEST(config->rateLimiterConfig().moduleMsg2QPS.at(1));
+        BOOST_TEST(config->rateLimiterConfig().moduleMsg2QPS.at(5));
+        BOOST_TEST(config->rateLimiterConfig().moduleMsg2QPS.at(7));
 
         std::string groupID = "groupID";
         uint16_t packageType = 1;
@@ -470,42 +470,42 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
 
         const std::string& inKey = endpoint + "_" + std::to_string(packageType);
 
-        BOOST_CHECK(!rateLimiterManager->removeRateLimiter(inKey));
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 1) != nullptr);
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter(inKey));
+        BOOST_TEST(!rateLimiterManager->removeRateLimiter(inKey));
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 1) != nullptr);
+        BOOST_TEST(rateLimiterManager->removeRateLimiter(inKey));
 
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 2) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 3) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 6) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 9) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 1) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(endpoint, 10) == nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 2) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 3) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 6) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 9) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 1) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(endpoint, 10) == nullptr);
 
         const std::string& inKey1 = groupID + "_" + std::to_string(moduleID);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(groupID, 1, true) != nullptr);
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter(inKey1));
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(groupID, 1, true) != nullptr);
-        BOOST_CHECK(rateLimiterManager->removeRateLimiter(inKey1));
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(groupID, 1, true) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(groupID, 1, true) != nullptr);
+        BOOST_TEST(rateLimiterManager->removeRateLimiter(inKey1));
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(groupID, 1, true) != nullptr);
+        BOOST_TEST(rateLimiterManager->removeRateLimiter(inKey1));
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(groupID, 1, true) != nullptr);
 
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(groupID, 5, true) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(groupID, 7, true) != nullptr);
-        BOOST_CHECK(rateLimiterManager->getInRateLimiter(groupID, 9, true) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(groupID, 5, true) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(groupID, 7, true) != nullptr);
+        BOOST_TEST(rateLimiterManager->getInRateLimiter(groupID, 9, true) != nullptr);
 
         {
             // rate limiter factory
             auto rateLimiterManager =
                 gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
-            BOOST_CHECK(rateLimiterConfig.allowExceedMaxPermitSize);
-            BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
-            BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+            BOOST_TEST(rateLimiterConfig.allowExceedMaxPermitSize);
+            BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableOutConnRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableDistributedRatelimit);
+            BOOST_TEST(rateLimiterConfig.enableDistributedRateLimitCache);
 
-            BOOST_CHECK(rateLimiterConfig.enableInRateLimit());
-            BOOST_CHECK(rateLimiterConfig.enableInP2pBasicMsgLimit());
-            // BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+            BOOST_TEST(rateLimiterConfig.enableInRateLimit());
+            BOOST_TEST(rateLimiterConfig.enableInP2pBasicMsgLimit());
+            // BOOST_TEST(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
 
 
             {
@@ -513,7 +513,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
                 std::string endpoint = "192.108.0.3";
 
                 auto rateLimiter = rateLimiterManager->getInRateLimiter(endpoint, packageType);
-                BOOST_CHECK(rateLimiter == nullptr);
+                BOOST_TEST(rateLimiter == nullptr);
             }
 
             {
@@ -537,14 +537,14 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
                 auto rateLimiter =
                     std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
                         rateLimiterManager->getInRateLimiter(endpoint, packageType, true));
-                BOOST_CHECK(rateLimiter == nullptr);
+                BOOST_TEST(rateLimiter == nullptr);
             }
 
             {
                 uint16_t module = 5;
                 std::string group = "group0";
 
-                BOOST_CHECK(rateLimiterConfig.moduleMsg2QPS.at(module));
+                BOOST_TEST(rateLimiterConfig.moduleMsg2QPS.at(module));
 
                 const std::string& inKey = group + "_" + std::to_string(module);
                 auto rateLimiter =
@@ -572,21 +572,21 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
 
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
 
-    BOOST_CHECK(rateLimiterFactory != nullptr);
+    BOOST_TEST(rateLimiterFactory != nullptr);
 
-    BOOST_CHECK(rateLimiterConfig.totalOutgoingBwLimit > 0);
-    BOOST_CHECK(rateLimiterConfig.connOutgoingBwLimit > 0);
-    BOOST_CHECK(rateLimiterConfig.groupOutgoingBwLimit > 0);
+    BOOST_TEST(rateLimiterConfig.totalOutgoingBwLimit > 0);
+    BOOST_TEST(rateLimiterConfig.connOutgoingBwLimit > 0);
+    BOOST_TEST(rateLimiterConfig.groupOutgoingBwLimit > 0);
 
-    BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
-    BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
-    BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
-    BOOST_CHECK(rateLimiterConfig.enableInRateLimit());
-    BOOST_CHECK(rateLimiterConfig.enableInP2pBasicMsgLimit());
-    BOOST_CHECK(rateLimiterConfig.enableInRateLimit());
-    BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
-    BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-    BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
+    BOOST_TEST(rateLimiterConfig.enableOutRateLimit());
+    BOOST_TEST(rateLimiterConfig.enableOutConnRateLimit());
+    BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
+    BOOST_TEST(rateLimiterConfig.enableInRateLimit());
+    BOOST_TEST(rateLimiterConfig.enableInP2pBasicMsgLimit());
+    BOOST_TEST(rateLimiterConfig.enableInRateLimit());
+    BOOST_TEST(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+    BOOST_TEST(!rateLimiterConfig.enableDistributedRatelimit);
+    BOOST_TEST(!rateLimiterConfig.allowExceedMaxPermitSize);
     BOOST_CHECK_EQUAL(rateLimiterConfig.enableDistributedRateLimitCache, true);
     BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
     BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgTypes.size(), 3);
@@ -628,7 +628,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
         auto rateLimiter1 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
             rateLimiterManager->getInRateLimiter(endpoint, packageType));
         BOOST_CHECK_EQUAL(rateLimiter1->maxPermitsSize(), 666 * timeWindowSec);
-        BOOST_CHECK(!rateLimiterManager->getInRateLimiter(endpoint, 1));
+        BOOST_TEST(!rateLimiterManager->getInRateLimiter(endpoint, 1));
 
         auto ratelimiter2 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
             rateLimiterManager->getInRateLimiter(groupID, 111, true));

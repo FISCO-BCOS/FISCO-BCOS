@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(test_EventSubUnsubRequestTest)
 
         auto decodeReq = std::make_shared<bcos::cppsdk::event::EventSubUnsubRequest>();
         auto r = decodeReq->fromJson(json);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         BOOST_CHECK_EQUAL(decodeReq->group(), group);
         BOOST_CHECK_EQUAL(decodeReq->id(), id);
     }
@@ -51,13 +51,13 @@ BOOST_AUTO_TEST_CASE(test_EventSubUnsubRequestTest)
     {
         auto decodeReq = std::make_shared<bcos::cppsdk::event::EventSubUnsubRequest>();
         auto r = decodeReq->fromJson("{}");
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
     }
 
     {
         auto decodeReq = std::make_shared<bcos::cppsdk::event::EventSubUnsubRequest>();
         auto r = decodeReq->fromJson("aaa");
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
     }
 }
 
@@ -80,14 +80,14 @@ BOOST_AUTO_TEST_CASE(test_EventSubSubRequestTest)
         {
             auto request = std::make_shared<bcos::cppsdk::event::EventSubSubRequest>();
             auto r = request->fromJson(json);
-            BOOST_CHECK(r);
+            BOOST_TEST(r);
             BOOST_CHECK_EQUAL(id, request->id());
             BOOST_CHECK_EQUAL(group, request->group());
             auto params = request->params();
-            BOOST_CHECK(params->fromBlock() < 0);
-            BOOST_CHECK(params->toBlock() < 0);
-            BOOST_CHECK(params->addresses().empty());
-            BOOST_CHECK(params->topics().empty());
+            BOOST_TEST(params->fromBlock() < 0);
+            BOOST_TEST(params->toBlock() < 0);
+            BOOST_TEST(params->addresses().empty());
+            BOOST_TEST(params->topics().empty());
         }
     }
 
@@ -120,14 +120,14 @@ BOOST_AUTO_TEST_CASE(test_EventSubSubRequestTest)
         {
             auto request = std::make_shared<bcos::cppsdk::event::EventSubSubRequest>();
             auto r = request->fromJson(json);
-            BOOST_CHECK(r);
+            BOOST_TEST(r);
             BOOST_CHECK_EQUAL(id, request->id());
             BOOST_CHECK_EQUAL(group, request->group());
             auto params = request->params();
             BOOST_CHECK_EQUAL(params->fromBlock(), curBlk + 1);
             BOOST_CHECK_EQUAL(params->toBlock(), toBlk);
             BOOST_CHECK_EQUAL(params->addresses().size(), 1);
-            BOOST_CHECK(params->addresses().find(addr) != params->addresses().end());
+            BOOST_TEST(params->addresses().find(addr) != params->addresses().end());
             BOOST_CHECK_EQUAL(params->topics().size(), 4);
             BOOST_CHECK_EQUAL(params->topics()[0].size(), 0);
             BOOST_CHECK_EQUAL(params->topics()[1].size(), 1);

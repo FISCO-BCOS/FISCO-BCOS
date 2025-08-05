@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     dmcExecutor->submit(std::move(message4), false);
 
     auto needScheduler_out = dmcExecutor->prepare();
-    BOOST_CHECK(needScheduler_out);
+    BOOST_TEST(needScheduler_out);
     dmcExecutor->go(executorCallback);
     SCHEDULER_LOG(DEBUG) << LOG_BADGE("DmcExecutor") << LOG_KV("round is ", dmcFlagStruct.round)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
@@ -215,11 +215,11 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
 
-    BOOST_CHECK(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
-    BOOST_CHECK(dmcFlagStruct.schedulerOutFlag);
+    BOOST_TEST(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
+    BOOST_TEST(dmcFlagStruct.schedulerOutFlag);
     BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
     BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
-    BOOST_CHECK(!dmcFlagStruct.callFlag);
+    BOOST_TEST(!dmcFlagStruct.callFlag);
     dmcFlagStruct.DmcFlag = false;
     dmcFlagStruct.finishFlag = false;
     dmcFlagStruct.schedulerOutFlag = false;
@@ -237,9 +237,9 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
-    BOOST_CHECK(dmcFlagStruct.callFlag && dmcFlagStruct.finishFlag);
-    BOOST_CHECK(!dmcFlagStruct.DmcFlag && !dmcFlagStruct.schedulerOutFlag);
-    BOOST_CHECK(!dmcFlagStruct.lockedFlag && !dmcFlagStruct.switchFlag);
+    BOOST_TEST(dmcFlagStruct.callFlag && dmcFlagStruct.finishFlag);
+    BOOST_TEST(!dmcFlagStruct.DmcFlag && !dmcFlagStruct.schedulerOutFlag);
+    BOOST_TEST(!dmcFlagStruct.lockedFlag && !dmcFlagStruct.switchFlag);
 }
 
 BOOST_AUTO_TEST_CASE(keyLocksTest)
@@ -355,7 +355,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     dmcExecutor->prepare();
     auto locked = dmcExecutor->unlockPrepare();
     auto found = dmcExecutor->detectLockAndRevert();
-    BOOST_CHECK(found && locked);
+    BOOST_TEST(found && locked);
     SCHEDULER_LOG(DEBUG) << "no need_prepare, found deadlock and revert";
     dmcExecutor->releaseOutdatedLock();
     dmcExecutor->go(executorCallback);
@@ -364,7 +364,7 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
                          << LOG_KV("finished is ", dmcFlagStruct.finished)
                          << LOG_KV("paused is ", dmcFlagStruct.paused)
                          << LOG_KV("error is ", dmcFlagStruct.error);
-    // BOOST_CHECK(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
+    // BOOST_TEST(dmcFlagStruct.DmcFlag && dmcFlagStruct.finishFlag);
     BOOST_CHECK_EQUAL(dmcFlagStruct.paused, 1);
     BOOST_CHECK_EQUAL(dmcFlagStruct.round, 1);
     // dmcExecutor->go(executorCallback);

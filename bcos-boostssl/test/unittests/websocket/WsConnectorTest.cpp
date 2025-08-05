@@ -41,13 +41,13 @@ BOOST_AUTO_TEST_CASE(test_WsConnectorTest)
 
         std::string endpoint = host + ":" + std::to_string(port);
         auto r = connector->insertPendingConns(endpoint);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = connector->insertPendingConns(endpoint);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
         r = connector->erasePendingConns(endpoint);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = connector->insertPendingConns(endpoint);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
     }
 }
 

@@ -240,21 +240,21 @@ BOOST_AUTO_TEST_CASE(testGE)
     {
         Condition cond;
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.LT(fillZero(10));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.LE(fillZero(10));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -262,7 +262,7 @@ BOOST_AUTO_TEST_CASE(testGE)
         cond.LE(fillZero(10));
         cond.LT(fillZero(10));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // update condition
@@ -270,7 +270,7 @@ BOOST_AUTO_TEST_CASE(testGE)
         Condition cond;
         cond.GE(fillZero(5));
         cond.GE(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(testGE)
         cond.LT(fillZero(10));
         cond.GE(fillZero(5));
         cond.GE(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -286,7 +286,7 @@ BOOST_AUTO_TEST_CASE(testGE)
         cond.LE(fillZero(10));
         cond.GE(fillZero(5));
         cond.GE(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(testGE)
         cond.LT(fillZero(10));
         cond.GE(fillZero(5));
         cond.GE(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // conflict condition
@@ -303,21 +303,21 @@ BOOST_AUTO_TEST_CASE(testGE)
         Condition cond;
         cond.LT(fillZero(5));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.LT(fillZero(4));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.LE(fillZero(4));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
@@ -325,7 +325,7 @@ BOOST_AUTO_TEST_CASE(testGE)
         cond.LT(fillZero(5));
         cond.LE(fillZero(4));
         cond.GE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 }
 
@@ -337,21 +337,21 @@ BOOST_AUTO_TEST_CASE(testGT)
     {
         Condition cond;
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.LT(fillZero(10));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.LE(fillZero(10));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -359,7 +359,7 @@ BOOST_AUTO_TEST_CASE(testGT)
         cond.LE(fillZero(10));
         cond.LT(fillZero(10));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // update condition
@@ -367,7 +367,7 @@ BOOST_AUTO_TEST_CASE(testGT)
         Condition cond;
         cond.GT(fillZero(5));
         cond.GT(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -375,7 +375,7 @@ BOOST_AUTO_TEST_CASE(testGT)
         cond.LT(fillZero(10));
         cond.GT(fillZero(5));
         cond.GT(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -383,7 +383,7 @@ BOOST_AUTO_TEST_CASE(testGT)
         cond.LE(fillZero(10));
         cond.GT(fillZero(5));
         cond.GT(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -392,7 +392,7 @@ BOOST_AUTO_TEST_CASE(testGT)
         cond.LT(fillZero(10));
         cond.GT(fillZero(5));
         cond.GT(fillZero(6));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // conflict condition
@@ -400,28 +400,28 @@ BOOST_AUTO_TEST_CASE(testGT)
         Condition cond;
         cond.LT(fillZero(5));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.LT(fillZero(4));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.LE(fillZero(5));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.LE(fillZero(4));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
@@ -429,7 +429,7 @@ BOOST_AUTO_TEST_CASE(testGT)
         cond.LT(fillZero(5));
         cond.LE(fillZero(5));
         cond.GT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 }
 
@@ -441,21 +441,21 @@ BOOST_AUTO_TEST_CASE(testLT)
     {
         Condition cond;
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.GT(fillZero(10));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.GE(fillZero(10));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -463,7 +463,7 @@ BOOST_AUTO_TEST_CASE(testLT)
         cond.GE(fillZero(10));
         cond.GT(fillZero(10));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // update condition
@@ -471,7 +471,7 @@ BOOST_AUTO_TEST_CASE(testLT)
         Condition cond;
         cond.LT(fillZero(16));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -479,7 +479,7 @@ BOOST_AUTO_TEST_CASE(testLT)
         cond.GT(fillZero(10));
         cond.LT(fillZero(16));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -487,7 +487,7 @@ BOOST_AUTO_TEST_CASE(testLT)
         cond.GE(fillZero(10));
         cond.LT(fillZero(16));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -496,7 +496,7 @@ BOOST_AUTO_TEST_CASE(testLT)
         cond.GT(fillZero(10));
         cond.LT(fillZero(16));
         cond.LT(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // conflict condition
@@ -504,28 +504,28 @@ BOOST_AUTO_TEST_CASE(testLT)
         Condition cond;
         cond.GT(fillZero(5));
         cond.LT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.GT(fillZero(5));
         cond.LT(fillZero(4));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.GE(fillZero(5));
         cond.LT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.GE(fillZero(5));
         cond.LT(fillZero(4));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
@@ -533,7 +533,7 @@ BOOST_AUTO_TEST_CASE(testLT)
         cond.GT(fillZero(5));
         cond.GE(fillZero(5));
         cond.LT(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 }
 
@@ -545,21 +545,21 @@ BOOST_AUTO_TEST_CASE(testLE)
     {
         Condition cond;
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.GT(fillZero(10));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.GE(fillZero(10));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -567,7 +567,7 @@ BOOST_AUTO_TEST_CASE(testLE)
         cond.GE(fillZero(10));
         cond.GT(fillZero(10));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // update condition
@@ -575,7 +575,7 @@ BOOST_AUTO_TEST_CASE(testLE)
         Condition cond;
         cond.LE(fillZero(16));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -583,7 +583,7 @@ BOOST_AUTO_TEST_CASE(testLE)
         cond.GT(fillZero(10));
         cond.LE(fillZero(16));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -591,7 +591,7 @@ BOOST_AUTO_TEST_CASE(testLE)
         cond.GE(fillZero(10));
         cond.LE(fillZero(16));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
@@ -600,7 +600,7 @@ BOOST_AUTO_TEST_CASE(testLE)
         cond.GT(fillZero(10));
         cond.LE(fillZero(16));
         cond.LE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     // conflict condition
@@ -608,21 +608,21 @@ BOOST_AUTO_TEST_CASE(testLE)
         Condition cond;
         cond.GT(fillZero(5));
         cond.LE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.GT(fillZero(5));
         cond.LE(fillZero(4));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
         Condition cond;
         cond.GE(fillZero(5));
         cond.LE(fillZero(4));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 
     {
@@ -630,7 +630,7 @@ BOOST_AUTO_TEST_CASE(testLE)
         cond.GT(fillZero(5));
         cond.GE(fillZero(5));
         cond.LE(fillZero(5));
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 }
 
@@ -643,14 +643,14 @@ BOOST_AUTO_TEST_CASE(testNE)
         cond.NE(fillZero(16));
         cond.NE(fillZero(17));
         cond.NE(fillZero(100));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.NE(fillZero(15));
         cond.NE(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 }
 
@@ -660,21 +660,21 @@ BOOST_AUTO_TEST_CASE(testEQ)
     {
         Condition cond;
         cond.EQ(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.EQ(fillZero(15));
         cond.EQ(fillZero(15));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.EQ(fillZero(15));
         cond.EQ(fillZero(16));
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 }
 
@@ -684,28 +684,28 @@ BOOST_AUTO_TEST_CASE(testSTARTS_WITH)
     {
         Condition cond;
         cond.startsWith("abcd");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.startsWith("abc");
         cond.startsWith("abcd");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.startsWith("abcd");
         cond.startsWith("abc");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.startsWith("abcd");
         cond.startsWith("abce");
-        BOOST_CHECK(cond.isEquivalent(testData, true));
+        BOOST_TEST(cond.isEquivalent(testData, true));
     }
 }
 
@@ -715,21 +715,21 @@ BOOST_AUTO_TEST_CASE(testCONTAINS)
     {
         Condition cond;
         cond.contains("abcd");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.contains("abc");
         cond.contains("abcd");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.contains("abc");
         cond.contains("bcf");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 }
 
@@ -739,28 +739,28 @@ BOOST_AUTO_TEST_CASE(testENDS_WITH)
     {
         Condition cond;
         cond.endsWith("dcba");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.endsWith("cba");
         cond.endsWith("dcba");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.endsWith("dcba");
         cond.endsWith("cba");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 
     {
         Condition cond;
         cond.endsWith("dcba");
         cond.endsWith("ecba");
-        BOOST_CHECK(cond.isEquivalent(testData));
+        BOOST_TEST(cond.isEquivalent(testData));
     }
 }
 

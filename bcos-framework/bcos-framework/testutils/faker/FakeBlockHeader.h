@@ -38,8 +38,8 @@ namespace test
 {
 inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr decodedBlockHeader)
 {
-    BOOST_CHECK(decodedBlockHeader->version() == blockHeader->version());
-    // BOOST_CHECK(decodedBlockHeader->parentInfo() == blockHeader->parentInfo());
+    BOOST_TEST(decodedBlockHeader->version() == blockHeader->version());
+    // BOOST_TEST(decodedBlockHeader->parentInfo() == blockHeader->parentInfo());
 
     auto originParent = blockHeader->parentInfo();
     auto decodedParent = decodedBlockHeader->parentInfo();
@@ -50,29 +50,29 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
         BOOST_CHECK_EQUAL(originParentInfo.blockHash, decodedParentInfo.blockHash);
         BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodedParentInfo.blockNumber);
     }
-    BOOST_CHECK(decodedBlockHeader->txsRoot() == blockHeader->txsRoot());
-    BOOST_CHECK(decodedBlockHeader->receiptsRoot() == blockHeader->receiptsRoot());
-    BOOST_CHECK(decodedBlockHeader->stateRoot() == blockHeader->stateRoot());
-    BOOST_CHECK(decodedBlockHeader->number() == blockHeader->number());
-    BOOST_CHECK(decodedBlockHeader->gasUsed() == blockHeader->gasUsed());
-    BOOST_CHECK(decodedBlockHeader->timestamp() == blockHeader->timestamp());
-    BOOST_CHECK(decodedBlockHeader->sealer() == blockHeader->sealer());
+    BOOST_TEST(decodedBlockHeader->txsRoot() == blockHeader->txsRoot());
+    BOOST_TEST(decodedBlockHeader->receiptsRoot() == blockHeader->receiptsRoot());
+    BOOST_TEST(decodedBlockHeader->stateRoot() == blockHeader->stateRoot());
+    BOOST_TEST(decodedBlockHeader->number() == blockHeader->number());
+    BOOST_TEST(decodedBlockHeader->gasUsed() == blockHeader->gasUsed());
+    BOOST_TEST(decodedBlockHeader->timestamp() == blockHeader->timestamp());
+    BOOST_TEST(decodedBlockHeader->sealer() == blockHeader->sealer());
 
     auto decodedSealerList = decodedBlockHeader->sealerList();
-    BOOST_CHECK(decodedSealerList.size() == blockHeader->sealerList().size());
+    BOOST_TEST(decodedSealerList.size() == blockHeader->sealerList().size());
     for (decltype(decodedSealerList)::size_type i = 0; i < decodedSealerList.size(); i++)
     {
-        BOOST_CHECK(decodedSealerList[i] == blockHeader->sealerList()[i]);
+        BOOST_TEST(decodedSealerList[i] == blockHeader->sealerList()[i]);
     }
-    BOOST_CHECK(decodedBlockHeader->extraData().toBytes() == blockHeader->extraData().toBytes());
-    BOOST_CHECK((decodedBlockHeader->consensusWeights()) == (blockHeader->consensusWeights()));
+    BOOST_TEST(decodedBlockHeader->extraData().toBytes() == blockHeader->extraData().toBytes());
+    BOOST_TEST((decodedBlockHeader->consensusWeights()) == (blockHeader->consensusWeights()));
     // check signature
-    BOOST_CHECK(decodedBlockHeader->signatureList().size() == blockHeader->signatureList().size());
+    BOOST_TEST(decodedBlockHeader->signatureList().size() == blockHeader->signatureList().size());
     size_t index = 0;
     for (auto signature : decodedBlockHeader->signatureList())
     {
-        BOOST_CHECK(signature.index == blockHeader->signatureList()[index].index);
-        BOOST_CHECK(signature.signature == blockHeader->signatureList()[index].signature);
+        BOOST_TEST(signature.index == blockHeader->signatureList()[index].index);
+        BOOST_TEST(signature.signature == blockHeader->signatureList()[index].signature);
         index++;
     }
 #if 0
@@ -126,7 +126,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
     blockHeader->setConsensusWeights(weights);
     if (_check)
     {
-        BOOST_CHECK(blockHeaderImpl->inner().dataHash.empty());
+        BOOST_TEST(blockHeaderImpl->inner().dataHash.empty());
     }
     blockHeader->calculateHash(*_cryptoSuite->hashImpl());
 
@@ -141,7 +141,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
 
         bcos::bytes buffer;
         blockHeader->encode(buffer);
-        BOOST_CHECK(*encodedData == buffer);
+        BOOST_TEST(*encodedData == buffer);
 
         // decode
         auto decodedBlockHeader = blockHeaderFactory->createBlockHeader(*encodedData);
@@ -149,7 +149,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
         auto decodedBlockHeaderImpl =
             std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedBlockHeader);
 
-        BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
+        BOOST_TEST(!decodedBlockHeaderImpl->inner().dataHash.empty());
         decodedBlockHeader->calculateHash(*_cryptoSuite->hashImpl());
 #if 0
     std::cout << "### PBBlockHeaderTest: encodedData:" << *toHexString(*encodedData) << std::endl;
@@ -157,14 +157,14 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
         // update the hash data field
         blockHeader->setNumber(_number + 1);
         blockHeader->calculateHash(*_cryptoSuite->hashImpl());
-        BOOST_CHECK(blockHeader->hash() != decodedBlockHeader->hash());
-        BOOST_CHECK(blockHeader->number() == decodedBlockHeader->number() + 1);
+        BOOST_TEST(blockHeader->hash() != decodedBlockHeader->hash());
+        BOOST_TEST(blockHeader->number() == decodedBlockHeader->number() + 1);
         // recover the hash field
         blockHeader->setNumber(_number);
         blockHeader->calculateHash(*_cryptoSuite->hashImpl());
-        BOOST_CHECK(blockHeader->hash() == decodedBlockHeader->hash());
-        BOOST_CHECK(decodedBlockHeader->consensusWeights().size() == 1);
-        BOOST_CHECK(decodedBlockHeader->consensusWeights()[0] == 0);
+        BOOST_TEST(blockHeader->hash() == decodedBlockHeader->hash());
+        BOOST_TEST(decodedBlockHeader->consensusWeights().size() == 1);
+        BOOST_TEST(decodedBlockHeader->consensusWeights()[0] == 0);
     }
     return blockHeader;
 }

@@ -25,8 +25,8 @@ BOOST_FIXTURE_TEST_SUITE(TestExecutivePool, ExecutivePoolFixture)
 BOOST_AUTO_TEST_CASE(addAndgetTest1)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
-    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
-    BOOST_CHECK(executivePool->empty());
+    BOOST_TEST(executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
+    BOOST_TEST(executivePool->empty());
     for (int64_t i = 0; i < 50; ++i)
     {
         auto executiveState = std::make_shared<bcos::scheduler::ExecutiveState>(i, nullptr, false);
@@ -37,15 +37,15 @@ BOOST_AUTO_TEST_CASE(addAndgetTest1)
     {
         ++count;
     }
-    BOOST_CHECK(count == 50);
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
+    BOOST_TEST(count == 50);
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
 }
 
 BOOST_AUTO_TEST_CASE(addAndgetTest2)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
-    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
-    BOOST_CHECK(executivePool->empty());
+    BOOST_TEST(executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
+    BOOST_TEST(executivePool->empty());
     for (int64_t i = 0; i < 10; ++i)
     {
         auto message = std::make_unique<bcos::executor::NativeExecutionMessage>();
@@ -73,16 +73,16 @@ BOOST_AUTO_TEST_CASE(addAndgetTest2)
     auto executiveState =
         std::make_shared<bcos::scheduler::ExecutiveState>(9, std::move(message), true);
     bool success = executivePool->add(9, executiveState);
-    BOOST_CHECK(!success);
+    BOOST_TEST(!success);
     auto state = executivePool->get(9);
     SCHEDULER_LOG(DEBUG) << state->message->to();
-    BOOST_CHECK(std::string(state->message->to()) == "ccddeeff");
+    BOOST_TEST(std::string(state->message->to()) == "ccddeeff");
 }
 
 BOOST_AUTO_TEST_CASE(refreshTest)
 {
     ExecutivePool::Ptr executivePool = std::make_shared<ExecutivePool>();
-    BOOST_CHECK(executivePool->empty());
+    BOOST_TEST(executivePool->empty());
     for (int64_t i = 1; i <= 30; ++i)
     {
         executivePool->markAs(i, ExecutivePool::MessageHint::ALL);
@@ -101,14 +101,14 @@ BOOST_AUTO_TEST_CASE(refreshTest)
             executivePool->markAs(i, ExecutivePool::MessageHint::END);
         }
     }
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::END));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
     executivePool->refresh();
-    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
-    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::END));
-    BOOST_CHECK(executivePool->empty(ExecutivePool::MessageHint::LOCKED) &&
+    BOOST_TEST(executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
+    BOOST_TEST(executivePool->empty(ExecutivePool::MessageHint::END));
+    BOOST_TEST(executivePool->empty(ExecutivePool::MessageHint::LOCKED) &&
                 !executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
 }
 
@@ -159,10 +159,10 @@ BOOST_AUTO_TEST_CASE(forEachTest)
         executivePool->markAs(i, ExecutivePool::MessageHint::END);
     }
 
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::ALL));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::END));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::ALL));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::NEED_PREPARE));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::END));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::NEED_SCHEDULE_OUT));
 
     executivePool->forEach(ExecutivePool::MessageHint::NEED_PREPARE,
         [&needPrepare](int64_t contextID, ExecutiveState::Ptr) {
@@ -193,9 +193,9 @@ BOOST_AUTO_TEST_CASE(forEachTest)
             BCOS_LOG(DEBUG) << " 1.PendingMsg: \t\t [--] " << executiveState->toString();
             return true;
         });
-    BOOST_CHECK(needPrepare.empty());
-    BOOST_CHECK(needSchedule.empty());
-    BOOST_CHECK(needRemove.empty());
+    BOOST_TEST(needPrepare.empty());
+    BOOST_TEST(needSchedule.empty());
+    BOOST_TEST(needRemove.empty());
 }
 
 BOOST_AUTO_TEST_CASE(forEachAndClearTest)
@@ -222,8 +222,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
         executivePool->markAs(i, ExecutivePool::MessageHint::LOCKED);
     }
 
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
-    BOOST_CHECK(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::NEED_SEND));
+    BOOST_TEST(!executivePool->empty(ExecutivePool::MessageHint::LOCKED));
 
     executivePool->forEachAndClear(
         ExecutivePool::MessageHint::NEED_SEND, [&needSend](int64_t contextID, ExecutiveState::Ptr) {
@@ -240,8 +240,8 @@ BOOST_AUTO_TEST_CASE(forEachAndClearTest)
             locked.erase(iter);
             return true;
         });
-    BOOST_CHECK(needSend.empty());
-    BOOST_CHECK(locked.empty());
+    BOOST_TEST(needSend.empty());
+    BOOST_TEST(locked.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

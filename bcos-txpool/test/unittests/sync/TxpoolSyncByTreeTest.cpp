@@ -86,9 +86,9 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
         totalMsg += fakeFront->totalSendMsgSize();
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
-        BOOST_CHECK(size == 1);
+        BOOST_TEST(size == 1);
     }
-    BOOST_CHECK(totalMsg <= m_nodeIdList.size());
+    BOOST_TEST(totalMsg <= m_nodeIdList.size());
 }
 
 BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(testObserverNodeTreeSync)
     {
         auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
         auto size = nodeTxpool.txpoolStorage()->size();
-        BOOST_CHECK(size == 1);
+        BOOST_TEST(size == 1);
     }
 }
 

@@ -80,69 +80,69 @@ BOOST_AUTO_TEST_CASE(test_buildMethod_buildMethodBySignature)
     BOOST_CHECK_EQUAL(func->inputs()[17]->type(), "string[]");
 
     auto inputs = factory.buildInput(*func);
-    BOOST_CHECK(inputs->type() == Type::STRUCT);
+    BOOST_TEST(inputs->type() == Type::STRUCT);
 
     BOOST_CHECK_EQUAL(inputs->memberSize(), 18);
 
-    BOOST_CHECK(inputs->value()[0]->type() == Type::INT);
-    BOOST_CHECK(inputs->value()[1]->type() == Type::UINT);
-    BOOST_CHECK(inputs->value()[2]->type() == Type::BOOL);
-    BOOST_CHECK(inputs->value()[3]->type() == Type::FIXED_BYTES);
-    BOOST_CHECK(inputs->value()[4]->type() == Type::DYNAMIC_BYTES);
-    BOOST_CHECK(inputs->value()[5]->type() == Type::STRING);
+    BOOST_TEST(inputs->value()[0]->type() == Type::INT);
+    BOOST_TEST(inputs->value()[1]->type() == Type::UINT);
+    BOOST_TEST(inputs->value()[2]->type() == Type::BOOL);
+    BOOST_TEST(inputs->value()[3]->type() == Type::FIXED_BYTES);
+    BOOST_TEST(inputs->value()[4]->type() == Type::DYNAMIC_BYTES);
+    BOOST_TEST(inputs->value()[5]->type() == Type::STRING);
 
-    BOOST_CHECK(inputs->value()[6]->type() == Type::FIXED_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[6])->dimension() == 3);
-    BOOST_CHECK(
+    BOOST_TEST(inputs->value()[6]->type() == Type::FIXED_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[6])->dimension() == 3);
+    BOOST_TEST(
         std::dynamic_pointer_cast<FixedList>(inputs->value()[6])->value()[0]->type() == Type::INT);
 
-    BOOST_CHECK(inputs->value()[7]->type() == Type::FIXED_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[7])->dimension() == 3);
-    BOOST_CHECK(
+    BOOST_TEST(inputs->value()[7]->type() == Type::FIXED_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[7])->dimension() == 3);
+    BOOST_TEST(
         std::dynamic_pointer_cast<FixedList>(inputs->value()[7])->value()[0]->type() == Type::UINT);
 
-    BOOST_CHECK(inputs->value()[8]->type() == Type::FIXED_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[8])->dimension() == 3);
-    BOOST_CHECK(
+    BOOST_TEST(inputs->value()[8]->type() == Type::FIXED_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[8])->dimension() == 3);
+    BOOST_TEST(
         std::dynamic_pointer_cast<FixedList>(inputs->value()[8])->value()[0]->type() == Type::BOOL);
 
-    BOOST_CHECK(inputs->value()[9]->type() == Type::FIXED_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[9])->dimension() == 3);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[9])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[9]->type() == Type::FIXED_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[9])->dimension() == 3);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[9])->value()[0]->type() ==
                 Type::FIXED_BYTES);
 
-    BOOST_CHECK(inputs->value()[10]->type() == Type::FIXED_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[10])->dimension() == 3);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[10])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[10]->type() == Type::FIXED_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[10])->dimension() == 3);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[10])->value()[0]->type() ==
                 Type::DYNAMIC_BYTES);
 
-    BOOST_CHECK(inputs->value()[11]->type() == Type::FIXED_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[11])->dimension() == 3);
-    BOOST_CHECK(std::dynamic_pointer_cast<FixedList>(inputs->value()[11])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[11]->type() == Type::FIXED_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[11])->dimension() == 3);
+    BOOST_TEST(std::dynamic_pointer_cast<FixedList>(inputs->value()[11])->value()[0]->type() ==
                 Type::STRING);
 
-    BOOST_CHECK(inputs->value()[12]->type() == Type::DYNAMIC_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<DynamicList>(inputs->value()[12])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[12]->type() == Type::DYNAMIC_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<DynamicList>(inputs->value()[12])->value()[0]->type() ==
                 Type::INT);
 
-    BOOST_CHECK(inputs->value()[13]->type() == Type::DYNAMIC_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<DynamicList>(inputs->value()[13])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[13]->type() == Type::DYNAMIC_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<DynamicList>(inputs->value()[13])->value()[0]->type() ==
                 Type::UINT);
 
-    BOOST_CHECK(inputs->value()[14]->type() == Type::DYNAMIC_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<DynamicList>(inputs->value()[14])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[14]->type() == Type::DYNAMIC_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<DynamicList>(inputs->value()[14])->value()[0]->type() ==
                 Type::BOOL);
 
-    BOOST_CHECK(inputs->value()[15]->type() == Type::DYNAMIC_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<DynamicList>(inputs->value()[15])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[15]->type() == Type::DYNAMIC_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<DynamicList>(inputs->value()[15])->value()[0]->type() ==
                 Type::FIXED_BYTES);
 
-    BOOST_CHECK(inputs->value()[16]->type() == Type::DYNAMIC_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<DynamicList>(inputs->value()[16])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[16]->type() == Type::DYNAMIC_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<DynamicList>(inputs->value()[16])->value()[0]->type() ==
                 Type::DYNAMIC_BYTES);
 
-    BOOST_CHECK(inputs->value()[17]->type() == Type::DYNAMIC_LIST);
-    BOOST_CHECK(std::dynamic_pointer_cast<DynamicList>(inputs->value()[17])->value()[0]->type() ==
+    BOOST_TEST(inputs->value()[17]->type() == Type::DYNAMIC_LIST);
+    BOOST_TEST(std::dynamic_pointer_cast<DynamicList>(inputs->value()[17])->value()[0]->type() ==
                 Type::STRING);
 
     BOOST_CHECK_EQUAL(func->getMethodSignatureAsString(),
@@ -160,8 +160,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::UINT);
-        BOOST_CHECK(static_cast<Uint&>(*tv).extent() == 256);
+        BOOST_TEST(tv->type() == Type::UINT);
+        BOOST_TEST(static_cast<Uint&>(*tv).extent() == 256);
     }
 
     {
@@ -171,8 +171,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::UINT);
-        BOOST_CHECK(static_cast<Uint&>(*tv).extent() == 8);
+        BOOST_TEST(tv->type() == Type::UINT);
+        BOOST_TEST(static_cast<Uint&>(*tv).extent() == 8);
     }
 
     {
@@ -182,8 +182,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::UINT);
-        BOOST_CHECK(static_cast<Uint&>(*tv).extent() == 256);
+        BOOST_TEST(tv->type() == Type::UINT);
+        BOOST_TEST(static_cast<Uint&>(*tv).extent() == 256);
     }
 
     {
@@ -202,8 +202,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::INT);
-        BOOST_CHECK(static_cast<Int&>(*tv).extent() == 256);
+        BOOST_TEST(tv->type() == Type::INT);
+        BOOST_TEST(static_cast<Int&>(*tv).extent() == 256);
     }
 
     {
@@ -213,8 +213,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::INT);
-        BOOST_CHECK(static_cast<Int&>(*tv).extent() == 32);
+        BOOST_TEST(tv->type() == Type::INT);
+        BOOST_TEST(static_cast<Int&>(*tv).extent() == 32);
     }
 
     {
@@ -233,7 +233,7 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::BOOL);
+        BOOST_TEST(tv->type() == Type::BOOL);
     }
 
     {
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::ADDRESS);
+        BOOST_TEST(tv->type() == Type::ADDRESS);
     }
 
     {
@@ -253,7 +253,7 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::STRING);
+        BOOST_TEST(tv->type() == Type::STRING);
     }
 
     {
@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::DYNAMIC_BYTES);
+        BOOST_TEST(tv->type() == Type::DYNAMIC_BYTES);
     }
 
     {
@@ -273,8 +273,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::FIXED_BYTES);
-        BOOST_CHECK(static_cast<bcos::cppsdk::abi::FixedBytes&>(*tv).fixedN() == 32);
+        BOOST_TEST(tv->type() == Type::FIXED_BYTES);
+        BOOST_TEST(static_cast<bcos::cppsdk::abi::FixedBytes&>(*tv).fixedN() == 32);
     }
 
     {
@@ -284,8 +284,8 @@ BOOST_AUTO_TEST_CASE(test_buildBaseAbstractType)
 
         auto tv = contractABIDefinitionFactory.buildBaseAbstractType(_namedTypeHelper);
 
-        BOOST_CHECK(tv->type() == Type::FIXED_BYTES);
-        BOOST_CHECK(static_cast<bcos::cppsdk::abi::FixedBytes&>(*tv).fixedN() == 1);
+        BOOST_TEST(tv->type() == Type::FIXED_BYTES);
+        BOOST_TEST(static_cast<bcos::cppsdk::abi::FixedBytes&>(*tv).fixedN() == 1);
     }
 
     {
@@ -380,7 +380,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_HelloWorld)
 
     {
         auto getHelloFunc = contractABIDefinitionFactory.buildMethod(abi, "getHello");
-        BOOST_CHECK(getHelloFunc.empty());
+        BOOST_TEST(getHelloFunc.empty());
     }
 
     {
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_HelloWorld)
 
         auto it = func->methods().find("constructor");
         // constructor
-        BOOST_CHECK(it != func->methods().end());
+        BOOST_TEST(it != func->methods().end());
         BOOST_CHECK_EQUAL(it->second.size(), 1);
 
         auto constructor = it->second[0];
@@ -425,7 +425,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_HelloWorld)
         // set
         auto it = func->methods().find("set");
         // constructor
-        BOOST_CHECK(it != func->methods().end());
+        BOOST_TEST(it != func->methods().end());
         BOOST_CHECK_EQUAL(it->second.size(), 1);
 
         BOOST_CHECK_EQUAL(func->getMethod("set", true).size(), 1);
@@ -454,13 +454,13 @@ BOOST_AUTO_TEST_CASE(test_loadABI_HelloWorld)
         BOOST_CHECK_EQUAL(inputStruct->memberSize(), 1);
         BOOST_CHECK_EQUAL(inputStruct->value().size(), 1);
 
-        BOOST_CHECK(inputStruct->value()[0]->type() == Type::STRING);
+        BOOST_TEST(inputStruct->value()[0]->type() == Type::STRING);
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->name(), "n");
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->dynamicType(), true);
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
         BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 1);
-        BOOST_CHECK(inputStruct->kvValue().find("n") != inputStruct->kvValue().end());
+        BOOST_TEST(inputStruct->kvValue().find("n") != inputStruct->kvValue().end());
 
         auto outputStruct = contractABIDefinitionFactory.buildOutput(*set);
         BOOST_CHECK_EQUAL(outputStruct->memberSize(), 0);
@@ -476,7 +476,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_HelloWorld)
         // get
         auto it = func->methods().find("get");
         // get
-        BOOST_CHECK(it != func->methods().end());
+        BOOST_TEST(it != func->methods().end());
         BOOST_CHECK_EQUAL(it->second.size(), 1);
 
         auto get = it->second[0];
@@ -509,16 +509,16 @@ BOOST_AUTO_TEST_CASE(test_loadABI_HelloWorld)
         BOOST_CHECK_EQUAL(outputStruct->value().size(), 1);
         BOOST_CHECK_EQUAL(outputStruct->kvValue().size(), 0);
 
-        BOOST_CHECK(outputStruct->value()[0]->type() == Type::STRING);
+        BOOST_TEST(outputStruct->value()[0]->type() == Type::STRING);
         BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
         BOOST_CHECK_EQUAL(outputStruct->value()[0]->dynamicType(), true);
         BOOST_CHECK_EQUAL(outputStruct->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
-        BOOST_CHECK(outputStruct->kvValue().find("n") == inputStruct->kvValue().end());
+        BOOST_TEST(outputStruct->kvValue().find("n") == inputStruct->kvValue().end());
     }
 
     {
         auto getHelloFunc = contractABIDefinitionFactory.buildMethod(abi, "getHello");
-        BOOST_CHECK(getHelloFunc.empty());
+        BOOST_TEST(getHelloFunc.empty());
     }
 }
 
@@ -747,7 +747,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
 
         auto it = contract->methods().find("get");
         // constructor
-        BOOST_CHECK(it != contract->methods().end());
+        BOOST_TEST(it != contract->methods().end());
         BOOST_CHECK_EQUAL(it->second.size(), 1);
 
         auto getFunc = it->second[0];
@@ -769,20 +769,20 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
         BOOST_CHECK_EQUAL(inputStruct->memberSize(), 1);
         BOOST_CHECK_EQUAL(inputStruct->value().size(), 1);
 
-        BOOST_CHECK(inputStruct->value()[0]->type() == Type::DYNAMIC_LIST);
+        BOOST_TEST(inputStruct->value()[0]->type() == Type::DYNAMIC_LIST);
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->name(), "person");
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->dynamicType(), true);
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
         BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 1);
-        BOOST_CHECK(inputStruct->kvValue().find("person") != inputStruct->kvValue().end());
+        BOOST_TEST(inputStruct->kvValue().find("person") != inputStruct->kvValue().end());
 
         auto outputStruct = factory.buildOutput(*getFunc);
         BOOST_CHECK_EQUAL(outputStruct->memberSize(), 1);
         BOOST_CHECK_EQUAL(outputStruct->value().size(), 1);
         BOOST_CHECK_EQUAL(outputStruct->kvValue().size(), 0);
 
-        BOOST_CHECK(outputStruct->value()[0]->type() == Type::DYNAMIC_LIST);
+        BOOST_TEST(outputStruct->value()[0]->type() == Type::DYNAMIC_LIST);
         // BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "person");
         BOOST_CHECK_EQUAL(outputStruct->value()[0]->dynamicType(), true);
         BOOST_CHECK_EQUAL(outputStruct->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
@@ -795,7 +795,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
 
         auto it = contract->methods().find("register");
         // constructor
-        BOOST_CHECK(it != contract->methods().end());
+        BOOST_TEST(it != contract->methods().end());
         BOOST_CHECK_EQUAL(it->second.size(), 1);
 
         auto registerFunc = it->second[0];
@@ -819,10 +819,10 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             BOOST_CHECK_EQUAL(inputStruct->memberSize(), 1);
             BOOST_CHECK_EQUAL(inputStruct->value().size(), 1);
             BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 1);
-            BOOST_CHECK(inputStruct->kvValue().find("person") != inputStruct->kvValue().end());
+            BOOST_TEST(inputStruct->kvValue().find("person") != inputStruct->kvValue().end());
 
             auto inputParams0 = inputStruct->value()[0];
-            BOOST_CHECK(inputParams0->type() == Type::STRUCT);
+            BOOST_TEST(inputParams0->type() == Type::STRUCT);
             // BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
             BOOST_CHECK_EQUAL(inputParams0->dynamicType(), true);
             BOOST_CHECK_EQUAL(inputParams0->offsetAsBytes(), MAX_BYTE_LENGTH);
@@ -836,19 +836,19 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             BOOST_CHECK_EQUAL(p0->kvValue().size(), 3);
 
             BOOST_CHECK_EQUAL(p0->value()[0]->name(), "name");
-            BOOST_CHECK(p0->value()[0]->type() == Type::STRING);
+            BOOST_TEST(p0->value()[0]->type() == Type::STRING);
             BOOST_CHECK_EQUAL(p0->value()[0]->dynamicType(), true);
             BOOST_CHECK_EQUAL(p0->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
             // uint256
             BOOST_CHECK_EQUAL(p0->value()[1]->name(), "age");
-            BOOST_CHECK(p0->value()[1]->type() == Type::UINT);
+            BOOST_TEST(p0->value()[1]->type() == Type::UINT);
             BOOST_CHECK_EQUAL(p0->value()[1]->dynamicType(), false);
             BOOST_CHECK_EQUAL(p0->value()[1]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
             // (address,int256)
             BOOST_CHECK_EQUAL(p0->value()[2]->name(), "account");
-            BOOST_CHECK(p0->value()[2]->type() == Type::STRUCT);
+            BOOST_TEST(p0->value()[2]->type() == Type::STRUCT);
             BOOST_CHECK_EQUAL(p0->value()[2]->dynamicType(), false);
             BOOST_CHECK_EQUAL(p0->value()[2]->offsetAsBytes(), 2 * MAX_BYTE_LENGTH);
 
@@ -857,18 +857,18 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             BOOST_CHECK_EQUAL(p00->memberSize(), 2);
             BOOST_CHECK_EQUAL(p00->value().size(), 2);
             BOOST_CHECK_EQUAL(p00->kvValue().size(), 2);
-            BOOST_CHECK(p00->kvValue().find("accountAddr") != p00->kvValue().end());
-            BOOST_CHECK(p00->kvValue().find("points") != p00->kvValue().end());
+            BOOST_TEST(p00->kvValue().find("accountAddr") != p00->kvValue().end());
+            BOOST_TEST(p00->kvValue().find("points") != p00->kvValue().end());
 
             // address
             BOOST_CHECK_EQUAL(p00->value()[0]->name(), "accountAddr");
-            BOOST_CHECK(p00->value()[0]->type() == Type::ADDRESS);
+            BOOST_TEST(p00->value()[0]->type() == Type::ADDRESS);
             BOOST_CHECK_EQUAL(p00->value()[0]->dynamicType(), false);
             BOOST_CHECK_EQUAL(p00->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
             // int256
             BOOST_CHECK_EQUAL(p00->value()[1]->name(), "points");
-            BOOST_CHECK(p00->value()[1]->type() == Type::INT);
+            BOOST_TEST(p00->value()[1]->type() == Type::INT);
             BOOST_CHECK_EQUAL(p00->value()[1]->dynamicType(), false);
             BOOST_CHECK_EQUAL(p00->value()[1]->offsetAsBytes(), MAX_BYTE_LENGTH);
         }
@@ -879,14 +879,14 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             BOOST_CHECK_EQUAL(outputStruct->value().size(), 1);
             BOOST_CHECK_EQUAL(outputStruct->kvValue().size(), 0);
 
-            BOOST_CHECK(outputStruct->value()[0]->type() == Type::DYNAMIC_LIST);
+            BOOST_TEST(outputStruct->value()[0]->type() == Type::DYNAMIC_LIST);
             // BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
             BOOST_CHECK_EQUAL(outputStruct->value()[0]->dynamicType(), true);
             BOOST_CHECK_EQUAL(outputStruct->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
-            BOOST_CHECK(outputStruct->kvValue().find("person") == outputStruct->kvValue().end());
+            BOOST_TEST(outputStruct->kvValue().find("person") == outputStruct->kvValue().end());
 
             auto outputParams0 = outputStruct->value()[0];
-            BOOST_CHECK(outputParams0->type() == Type::DYNAMIC_LIST);
+            BOOST_TEST(outputParams0->type() == Type::DYNAMIC_LIST);
             // BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
             BOOST_CHECK_EQUAL(outputParams0->dynamicType(), true);
             BOOST_CHECK_EQUAL(outputParams0->offsetAsBytes(), MAX_BYTE_LENGTH);
@@ -895,12 +895,12 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             auto p0 = std::dynamic_pointer_cast<DynamicList>(outputParams0);
             BOOST_CHECK_EQUAL(p0->name(), "");
             BOOST_CHECK_EQUAL(p0->dynamicType(), true);
-            BOOST_CHECK(p0->type() == Type::DYNAMIC_LIST);
+            BOOST_TEST(p0->type() == Type::DYNAMIC_LIST);
             BOOST_CHECK_EQUAL(p0->value().size(), 1);
             BOOST_CHECK_EQUAL(p0->offsetAsBytes(), MAX_BYTE_LENGTH);
 
             // (string,uint256,(address,int256))
-            BOOST_CHECK(p0->value()[0]->type() == Type::STRUCT);
+            BOOST_TEST(p0->value()[0]->type() == Type::STRUCT);
             BOOST_CHECK_EQUAL(p0->value()[0]->dynamicType(), true);
             BOOST_CHECK_EQUAL(p0->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
@@ -909,25 +909,25 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             BOOST_CHECK_EQUAL(p00->memberSize(), 3);
             BOOST_CHECK_EQUAL(p00->value().size(), 3);
             BOOST_CHECK_EQUAL(p00->kvValue().size(), 3);
-            BOOST_CHECK(p00->kvValue().find("name") != p00->kvValue().end());
-            BOOST_CHECK(p00->kvValue().find("age") != p00->kvValue().end());
-            BOOST_CHECK(p00->kvValue().find("account") != p00->kvValue().end());
+            BOOST_TEST(p00->kvValue().find("name") != p00->kvValue().end());
+            BOOST_TEST(p00->kvValue().find("age") != p00->kvValue().end());
+            BOOST_TEST(p00->kvValue().find("account") != p00->kvValue().end());
 
             // string
             BOOST_CHECK_EQUAL(p00->value()[0]->dynamicType(), true);
-            BOOST_CHECK(p00->value()[0]->type() == Type::STRING);
+            BOOST_TEST(p00->value()[0]->type() == Type::STRING);
             BOOST_CHECK_EQUAL(p00->value()[0]->name(), "name");
             BOOST_CHECK_EQUAL(p00->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
             // uint256
             BOOST_CHECK_EQUAL(p00->value()[1]->dynamicType(), false);
-            BOOST_CHECK(p00->value()[1]->type() == Type::UINT);
+            BOOST_TEST(p00->value()[1]->type() == Type::UINT);
             BOOST_CHECK_EQUAL(p00->value()[1]->name(), "age");
             BOOST_CHECK_EQUAL(p00->value()[1]->offsetAsBytes(), MAX_BYTE_LENGTH);
 
             // (address,int256)
             BOOST_CHECK_EQUAL(p00->value()[2]->dynamicType(), false);
-            BOOST_CHECK(p00->value()[2]->type() == Type::STRUCT);
+            BOOST_TEST(p00->value()[2]->type() == Type::STRUCT);
             BOOST_CHECK_EQUAL(p00->value()[2]->name(), "account");
             BOOST_CHECK_EQUAL(p00->value()[2]->offsetAsBytes(), 2 * MAX_BYTE_LENGTH);
 
@@ -937,15 +937,15 @@ BOOST_AUTO_TEST_CASE(test_loadABI_TestStruct)
             BOOST_CHECK_EQUAL(p000->memberSize(), 2);
             BOOST_CHECK_EQUAL(p000->value().size(), 2);
             BOOST_CHECK_EQUAL(p000->kvValue().size(), 2);
-            BOOST_CHECK(p000->kvValue().find("accountAddr") != p00->kvValue().end());
-            BOOST_CHECK(p000->kvValue().find("points") != p00->kvValue().end());
+            BOOST_TEST(p000->kvValue().find("accountAddr") != p00->kvValue().end());
+            BOOST_TEST(p000->kvValue().find("points") != p00->kvValue().end());
 
-            BOOST_CHECK(p000->value()[0]->type() == Type::ADDRESS);
+            BOOST_TEST(p000->value()[0]->type() == Type::ADDRESS);
             BOOST_CHECK_EQUAL(p000->value()[0]->dynamicType(), false);
             BOOST_CHECK_EQUAL(p000->value()[0]->offsetAsBytes(), MAX_BYTE_LENGTH);
             BOOST_CHECK_EQUAL(p000->value()[0]->name(), "accountAddr");
 
-            BOOST_CHECK(p000->value()[1]->type() == Type::INT);
+            BOOST_TEST(p000->value()[1]->type() == Type::INT);
             BOOST_CHECK_EQUAL(p000->value()[1]->dynamicType(), false);
             BOOST_CHECK_EQUAL(p000->value()[1]->offsetAsBytes(), MAX_BYTE_LENGTH);
             BOOST_CHECK_EQUAL(p000->value()[1]->name(), "points");
@@ -1153,8 +1153,8 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
             BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 1);
 
             BOOST_CHECK_EQUAL(inputStruct->value()[0]->name(), "id");
-            BOOST_CHECK(inputStruct->value()[0]->type() == Type::STRING);
-            BOOST_CHECK(inputStruct->value()[0]->dynamicType());
+            BOOST_TEST(inputStruct->value()[0]->type() == Type::STRING);
+            BOOST_TEST(inputStruct->value()[0]->dynamicType());
 
             auto outputStruct = contractABIDefinitionFactory.buildOutput(*get);
             BOOST_CHECK_EQUAL(outputStruct->memberSize(), 3);
@@ -1162,11 +1162,11 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
             BOOST_CHECK_EQUAL(outputStruct->kvValue().size(), 0);
 
             BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
-            BOOST_CHECK(outputStruct->value()[0]->type() == Type::BOOL);
+            BOOST_TEST(outputStruct->value()[0]->type() == Type::BOOL);
             BOOST_CHECK_EQUAL(outputStruct->value()[1]->name(), "");
-            BOOST_CHECK(outputStruct->value()[1]->type() == Type::INT);
+            BOOST_TEST(outputStruct->value()[1]->type() == Type::INT);
             BOOST_CHECK_EQUAL(outputStruct->value()[2]->name(), "");
-            BOOST_CHECK(outputStruct->value()[2]->type() == Type::STRING);
+            BOOST_TEST(outputStruct->value()[2]->type() == Type::STRING);
         }
 
         {
@@ -1187,7 +1187,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
             BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 1);
 
             BOOST_CHECK_EQUAL(inputStruct->value()[0]->name(), "age");
-            BOOST_CHECK(inputStruct->value()[0]->type() == Type::UINT);
+            BOOST_TEST(inputStruct->value()[0]->type() == Type::UINT);
 
             auto outputStruct = contractABIDefinitionFactory.buildOutput(*get);
             BOOST_CHECK_EQUAL(outputStruct->memberSize(), 3);
@@ -1195,11 +1195,11 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
             BOOST_CHECK_EQUAL(outputStruct->kvValue().size(), 0);
 
             BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
-            BOOST_CHECK(outputStruct->value()[0]->type() == Type::BOOL);
+            BOOST_TEST(outputStruct->value()[0]->type() == Type::BOOL);
             BOOST_CHECK_EQUAL(outputStruct->value()[1]->name(), "");
-            BOOST_CHECK(outputStruct->value()[1]->type() == Type::INT);
+            BOOST_TEST(outputStruct->value()[1]->type() == Type::INT);
             BOOST_CHECK_EQUAL(outputStruct->value()[2]->name(), "");
-            BOOST_CHECK(outputStruct->value()[2]->type() == Type::STRING);
+            BOOST_TEST(outputStruct->value()[2]->type() == Type::STRING);
         }
     }
 
@@ -1227,17 +1227,17 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
         BOOST_CHECK_EQUAL(inputStruct->value().size(), 3);
         BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 3);
 
-        BOOST_CHECK(inputStruct->kvValue().find("id") != inputStruct->kvValue().end());
-        BOOST_CHECK(inputStruct->kvValue().find("item_price") != inputStruct->kvValue().end());
-        BOOST_CHECK(inputStruct->kvValue().find("item_name") != inputStruct->kvValue().end());
+        BOOST_TEST(inputStruct->kvValue().find("id") != inputStruct->kvValue().end());
+        BOOST_TEST(inputStruct->kvValue().find("item_price") != inputStruct->kvValue().end());
+        BOOST_TEST(inputStruct->kvValue().find("item_name") != inputStruct->kvValue().end());
 
 
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->name(), "id");
-        BOOST_CHECK(inputStruct->value()[0]->type() == Type::STRING);
+        BOOST_TEST(inputStruct->value()[0]->type() == Type::STRING);
         BOOST_CHECK_EQUAL(inputStruct->value()[1]->name(), "item_price");
-        BOOST_CHECK(inputStruct->value()[1]->type() == Type::INT);
+        BOOST_TEST(inputStruct->value()[1]->type() == Type::INT);
         BOOST_CHECK_EQUAL(inputStruct->value()[2]->name(), "item_name");
-        BOOST_CHECK(inputStruct->value()[2]->type() == Type::STRING);
+        BOOST_TEST(inputStruct->value()[2]->type() == Type::STRING);
 
         auto outputStruct = contractABIDefinitionFactory.buildOutput(*set);
         BOOST_CHECK_EQUAL(outputStruct->memberSize(), 1);
@@ -1245,7 +1245,7 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
         BOOST_CHECK_EQUAL(outputStruct->kvValue().size(), 0);
 
         BOOST_CHECK_EQUAL(outputStruct->value()[0]->name(), "");
-        BOOST_CHECK(outputStruct->value()[0]->type() == Type::INT);
+        BOOST_TEST(outputStruct->value()[0]->type() == Type::INT);
     }
 
     // SetResult
@@ -1269,10 +1269,10 @@ BOOST_AUTO_TEST_CASE(test_loadABI_KVTableTest)
         BOOST_CHECK_EQUAL(inputStruct->value().size(), 1);
         BOOST_CHECK_EQUAL(inputStruct->kvValue().size(), 1);
 
-        BOOST_CHECK(inputStruct->kvValue().find("count") != inputStruct->kvValue().end());
+        BOOST_TEST(inputStruct->kvValue().find("count") != inputStruct->kvValue().end());
 
         BOOST_CHECK_EQUAL(inputStruct->value()[0]->name(), "count");
-        BOOST_CHECK(inputStruct->value()[0]->type() == Type::INT);
+        BOOST_TEST(inputStruct->value()[0]->type() == Type::INT);
 
         auto outputStruct = contractABIDefinitionFactory.buildOutput(*setResult);
         BOOST_CHECK_EQUAL(outputStruct->memberSize(), 0);
@@ -1554,12 +1554,12 @@ BOOST_AUTO_TEST_CASE(test_loadABI_SolTypes)
     BOOST_CHECK_EQUAL(ids.size(), 6);
     BOOST_CHECK_EQUAL(names.size(), 6);
 
-    BOOST_CHECK(std::find(names.begin(), names.end(), "getValue") != names.end());
-    BOOST_CHECK(std::find(names.begin(), names.end(), "getDynamicValue") != names.end());
-    BOOST_CHECK(std::find(names.begin(), names.end(), "getFixedValue") != names.end());
-    BOOST_CHECK(std::find(names.begin(), names.end(), "setDynamicValue") != names.end());
-    BOOST_CHECK(std::find(names.begin(), names.end(), "setFixedValue") != names.end());
-    BOOST_CHECK(std::find(names.begin(), names.end(), "setValue") != names.end());
+    BOOST_TEST(std::find(names.begin(), names.end(), "getValue") != names.end());
+    BOOST_TEST(std::find(names.begin(), names.end(), "getDynamicValue") != names.end());
+    BOOST_TEST(std::find(names.begin(), names.end(), "getFixedValue") != names.end());
+    BOOST_TEST(std::find(names.begin(), names.end(), "setDynamicValue") != names.end());
+    BOOST_TEST(std::find(names.begin(), names.end(), "setFixedValue") != names.end());
+    BOOST_TEST(std::find(names.begin(), names.end(), "setValue") != names.end());
 
     {
         auto methods = factory.buildMethod(abi, "getValue");

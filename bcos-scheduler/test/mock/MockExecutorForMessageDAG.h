@@ -33,7 +33,7 @@ public:
             callback) override
     {
         // Always success
-        BOOST_CHECK(input);
+        BOOST_TEST(input);
         if (input->type() == bcos::protocol::ExecutionMessage::MESSAGE)
         {
             BOOST_CHECK_NE(input->transactionHash(), bcos::crypto::HashType());

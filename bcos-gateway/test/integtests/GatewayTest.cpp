@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
     {
         frontService->asyncGetGroupNodeInfo([frontService](Error::Ptr _error,
                                                 bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             auto const& nodeIDs = _groupNodeInfo->nodeIDList();
             BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
 
@@ -96,8 +96,8 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceEcho)
                         p.set_value(true);
                         (void)_respFunc;
                         (void)_nodeID;
-                        BOOST_CHECK(!_id.empty());
-                        BOOST_CHECK(_error == nullptr);
+                        BOOST_TEST(!_id.empty());
+                        BOOST_TEST(_error == nullptr);
                         std::string retStr = std::string(_data.begin(), _data.end());
                         BOOST_CHECK_EQUAL(sendStr, retStr);
                     });
@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceTimeout)
     {
         frontService->asyncGetGroupNodeInfo([frontService](Error::Ptr _error,
                                                 bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             auto const& nodeIDs = _groupNodeInfo->nodeIDList();
             BOOST_CHECK_EQUAL(nodeIDs.size(), nodeCount);
 
@@ -140,8 +140,8 @@ BOOST_AUTO_TEST_CASE(test_FrontServiceTimeout)
                         (void)_respFunc;
                         (void)_nodeID;
                         (void)_data;
-                        BOOST_CHECK(!_id.empty());
-                        BOOST_CHECK(_error != nullptr);
+                        BOOST_TEST(!_id.empty());
+                        BOOST_TEST(_error != nullptr);
                         BOOST_CHECK_EQUAL(
                             _error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
                     });

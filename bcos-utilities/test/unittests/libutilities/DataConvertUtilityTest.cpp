@@ -50,24 +50,24 @@ BOOST_AUTO_TEST_CASE(testHex)
         }
         hexStr = *toHexString(hexVec);
         hexStrWithPrefix = *toHexString(hexVec);
-        BOOST_CHECK(*fromHexString(hexStr) == hexVec);
-        BOOST_CHECK(*fromHexString(hexStrWithPrefix) == hexVec);
+        BOOST_TEST(*fromHexString(hexStr) == hexVec);
+        BOOST_TEST(*fromHexString(hexStrWithPrefix) == hexVec);
     }
     // fromHexString Exception
     BOOST_CHECK_THROW(fromHexString("0934xyz"), BadHexCharacter);
-    BOOST_CHECK(isHexString("0934xyz") == false);
+    BOOST_TEST(isHexString("0934xyz") == false);
 
-    BOOST_CHECK(isHexString("0x000abc") == true);
+    BOOST_TEST(isHexString("0x000abc") == true);
 
-    BOOST_CHECK(isHexString("000123123") == true);
+    BOOST_TEST(isHexString("000123123") == true);
 }
 
 /// test asString && asBytes
 BOOST_AUTO_TEST_CASE(testStringTrans)
 {
     std::string tmp_str = "abcdef012343";
-    BOOST_CHECK(asString(asBytes(tmp_str)) == tmp_str);
-    BOOST_CHECK(asString(asBytes(tmp_str)) == tmp_str);
+    BOOST_TEST(asString(asBytes(tmp_str)) == tmp_str);
+    BOOST_TEST(asString(asBytes(tmp_str)) == tmp_str);
     // construct random vector
     unsigned int round = 10;
     unsigned int size = 10;
@@ -81,8 +81,8 @@ BOOST_AUTO_TEST_CASE(testStringTrans)
         }
         tmp_str = asString(tmp_bytes);
         tmp_str_from_ref = asString(ref(tmp_bytes));
-        BOOST_CHECK(tmp_str == tmp_str_from_ref);
-        BOOST_CHECK(asBytes(tmp_str) == tmp_bytes);
+        BOOST_TEST(tmp_str == tmp_str_from_ref);
+        BOOST_TEST(asBytes(tmp_str) == tmp_bytes);
     }
 }
 
@@ -93,8 +93,8 @@ BOOST_AUTO_TEST_CASE(testBigEndian)
     u256 number("9832989324908234742342343243243234324324243432432234324");
     u160 number_u160("983298932");
     bytes big_endian_bytes = toBigEndian(number);
-    BOOST_CHECK(fromBigEndian<u256>(big_endian_bytes) == number);
-    BOOST_CHECK(fromBigEndian<u160>(toBigEndian(number_u160)) == number_u160);
+    BOOST_TEST(fromBigEndian<u256>(big_endian_bytes) == number);
+    BOOST_TEST(fromBigEndian<u160>(toBigEndian(number_u160)) == number_u160);
 }
 
 /// test toBigEndian && fromBigEndian
@@ -110,13 +110,13 @@ BOOST_AUTO_TEST_CASE(testBigEndianToU64)
     uint64_t fromBig0 = 0;
     std::reverse_copy(bigEndU64.data() + 24, bigEndU64.data() + 32, (char*)&fromBig0);
     std::cout << "fromBig:" << fromBig0 << std::endl;
-    BOOST_CHECK(fromBig0 == number);
+    BOOST_TEST(fromBig0 == number);
 
     uint64_t fromBig = 0;
     std::reverse(bigEndU64.data() + 24, bigEndU64.data() + 32);
     fromBig = *(uint64_t*)(bigEndU64.data() + 24);
     std::cout << "fromBig:" << fromBig << std::endl;
-    BOOST_CHECK(fromBig == number);
+    BOOST_TEST(fromBig == number);
 }
 
 /// test operator+
@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(testOperators)
     std::vector<char> a_vec(a_str.begin(), a_str.end());
     std::vector<char> b_vec(b_str.begin(), b_str.end());
     std::vector<char> result = a_vec + b_vec;
-    BOOST_CHECK(std::string(result.begin(), result.end()) == (a_str + b_str));
+    BOOST_TEST(std::string(result.begin(), result.end()) == (a_str + b_str));
     // test common operator+
     std::vector<std::string> total_array;
     std::vector<std::string> a_str_array;
@@ -141,12 +141,12 @@ BOOST_AUTO_TEST_CASE(testOperators)
     total_array.push_back("aa");
     total_array.push_back("cc");
     std::vector<std::string> c_str_array = a_str_array + b_str_array;
-    BOOST_CHECK(c_str_array == total_array);
+    BOOST_TEST(c_str_array == total_array);
 
     // test toString
     string32 s_32 = {{'a', 'b', 'c'}};
     std::string s = toString(s_32);
-    BOOST_CHECK(s == "abc");
+    BOOST_TEST(s == "abc");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

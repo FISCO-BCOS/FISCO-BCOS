@@ -72,7 +72,7 @@ void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
     auto blockData = std::make_shared<bytes>();
     block->encode(*blockData);
     auto blockHeader = block->blockHeader();
-    BOOST_CHECK(blockHeader);
+    BOOST_TEST(blockHeader);
     // handle pre-prepare message ,broadcast prepare messages and handle the collectted
     // prepare-request
     // check the duplicated case
@@ -195,7 +195,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);
     nonLeaderFaker->pbftEngine()->executeWorker();
-    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    BOOST_TEST(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case2: invalid view
     index = expectedIndex;
@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);
     nonLeaderFaker->pbftEngine()->executeWorker();
-    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    BOOST_TEST(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case3: not from the leader
     pbftMsg = fakePBFTMessage(utcTime(), 1, (nonLeaderFaker->pbftConfig()->view()),
@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     leaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, leaderFaker->keyPair()->publicKey(), ref(*data), nullptr);
     leaderFaker->pbftEngine()->executeWorker();
-    BOOST_CHECK(!leaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    BOOST_TEST(!leaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case4: invalid signature
     pbftMsg = fakePBFTMessage(utcTime(), 1, (leaderFaker->pbftConfig()->view()), expectedLeader,
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);
     nonLeaderFaker->pbftEngine()->executeWorker();
-    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    BOOST_TEST(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case5: invalid pre-prepare for txpool verify failed
     data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);
     nonLeaderFaker->pbftEngine()->executeWorker();
-    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    BOOST_TEST(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case6: valid pre-prepare
     nonLeaderFaker->txpool()->setVerifyResult(true);
@@ -260,7 +260,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    BOOST_CHECK(nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    BOOST_TEST(nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
     nonLeaderFaker->pbftConfig()->setConsensusTimeout(200);
     leaderFaker->pbftConfig()->setConsensusTimeout(200);
     leaderFaker->pbftConfig()->timer()->start();

@@ -66,10 +66,10 @@ void testRequestAndDownloadBlock(CryptoSuite::Ptr _cryptoSuite)
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 
-    BOOST_CHECK(newerPeer->syncConfig()->knownHighestNumber() == maxBlock);
-    BOOST_CHECK(lowerPeer->syncConfig()->knownHighestNumber() == maxBlock);
-    BOOST_CHECK(lowerPeer->syncConfig()->knownLatestHash().asBytes() == latestHash.asBytes());
-    BOOST_CHECK(newerPeer->syncConfig()->knownLatestHash().asBytes() == latestHash.asBytes());
+    BOOST_TEST(newerPeer->syncConfig()->knownHighestNumber() == maxBlock);
+    BOOST_TEST(lowerPeer->syncConfig()->knownHighestNumber() == maxBlock);
+    BOOST_TEST(lowerPeer->syncConfig()->knownLatestHash().asBytes() == latestHash.asBytes());
+    BOOST_TEST(newerPeer->syncConfig()->knownLatestHash().asBytes() == latestHash.asBytes());
     // check request/response blocks
     while (lowerPeer->ledger()->blockNumber() != maxBlock)
     {
@@ -77,8 +77,8 @@ void testRequestAndDownloadBlock(CryptoSuite::Ptr _cryptoSuite)
         lowerPeer->sync()->executeWorker();
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    BOOST_CHECK(newerPeer->consensus()->ledgerConfig()->blockNumber() == maxBlock);
-    BOOST_CHECK(lowerPeer->consensus()->ledgerConfig()->blockNumber() == maxBlock);
+    BOOST_TEST(newerPeer->consensus()->ledgerConfig()->blockNumber() == maxBlock);
+    BOOST_TEST(lowerPeer->consensus()->ledgerConfig()->blockNumber() == maxBlock);
 }
 
 bool checkPeer(std::vector<SyncFixture::Ptr> const& _peerList, size_t _expectedPeerSize)
@@ -174,19 +174,19 @@ void testComplicatedCase(CryptoSuite::Ptr _cryptoSuite)
     {
         auto genesisBlockHeader = genesisBlock->blockHeader();
         auto latestBlockHeader = latestBlock->blockHeader();
-        BOOST_CHECK(faker->syncConfig()->genesisHash() == genesisBlockHeader->hash());
-        BOOST_CHECK(faker->syncConfig()->knownLatestHash() == latestBlockHeader->hash());
-        BOOST_CHECK(faker->syncConfig()->knownHighestNumber() == maxBlockNumber);
+        BOOST_TEST(faker->syncConfig()->genesisHash() == genesisBlockHeader->hash());
+        BOOST_TEST(faker->syncConfig()->knownLatestHash() == latestBlockHeader->hash());
+        BOOST_TEST(faker->syncConfig()->knownHighestNumber() == maxBlockNumber);
     }
     auto invalidLedgerData = invalidFaker->ledger()->ledgerData();
     auto invalidLatestBlock = invalidLedgerData[invalidFaker->ledger()->blockNumber()];
     auto invalidGenesisBlock = invalidLedgerData[0];
-    BOOST_CHECK(invalidFaker->sync()->syncStatus()->peers()->size() == 1);
+    BOOST_TEST(invalidFaker->sync()->syncStatus()->peers()->size() == 1);
     auto invalidGenesisBlockHeader = invalidGenesisBlock->blockHeader();
-    BOOST_CHECK(invalidFaker->syncConfig()->genesisHash() == invalidGenesisBlockHeader->hash());
+    BOOST_TEST(invalidFaker->syncConfig()->genesisHash() == invalidGenesisBlockHeader->hash());
     auto invalidLatestBlockHeader = invalidLatestBlock->blockHeader();
-    BOOST_CHECK(invalidFaker->syncConfig()->knownLatestHash() == invalidLatestBlockHeader->hash());
-    BOOST_CHECK(invalidFaker->syncConfig()->knownHighestNumber() == 0);
+    BOOST_TEST(invalidFaker->syncConfig()->knownLatestHash() == invalidLatestBlockHeader->hash());
+    BOOST_TEST(invalidFaker->syncConfig()->knownHighestNumber() == 0);
 
     // wait the nodes to sync blocks
     startT = utcTime();
@@ -241,25 +241,25 @@ BOOST_AUTO_TEST_CASE(testDownloadQueueTopMerge)
     queue->push(19, 1, 3);
     queue->push(20, 1, 3);
     auto request = queue->topAndPop();
-    BOOST_CHECK(request->size() == 7);
-    BOOST_CHECK(request->fromNumber() == 1);
-    BOOST_CHECK(request->interval() == 3);
+    BOOST_TEST(request->size() == 7);
+    BOOST_TEST(request->fromNumber() == 1);
+    BOOST_TEST(request->interval() == 3);
     request = queue->topAndPop();
-    BOOST_CHECK(request->size() == 1);
-    BOOST_CHECK(request->fromNumber() == 20);
-    BOOST_CHECK(request->interval() == 3);
+    BOOST_TEST(request->size() == 1);
+    BOOST_TEST(request->fromNumber() == 20);
+    BOOST_TEST(request->interval() == 3);
 
     queue->push(3, 8, 3);
     queue->push(25, 8, 3);
     request = queue->topAndPop();
-    BOOST_CHECK(request->size() == 8);
-    BOOST_CHECK(request->fromNumber() == 3);
-    BOOST_CHECK(request->interval() == 3);
+    BOOST_TEST(request->size() == 8);
+    BOOST_TEST(request->fromNumber() == 3);
+    BOOST_TEST(request->interval() == 3);
 
     request = queue->topAndPop();
-    BOOST_CHECK(request->size() == 8);
-    BOOST_CHECK(request->fromNumber() == 25);
-    BOOST_CHECK(request->interval() == 3);
+    BOOST_TEST(request->size() == 8);
+    BOOST_TEST(request->fromNumber() == 25);
+    BOOST_TEST(request->interval() == 3);
 
     // clang-format off
     // "Tops" means that the merge result of all tops can merge at one turn
@@ -280,13 +280,13 @@ BOOST_AUTO_TEST_CASE(testDownloadQueueTopMerge)
     queue->push(10, 2);
 
     request = queue->topAndPop();
-    BOOST_CHECK(request->size() == 7);
-    BOOST_CHECK(request->fromNumber() == 1);
-    BOOST_CHECK(request->interval() == 0);
+    BOOST_TEST(request->size() == 7);
+    BOOST_TEST(request->fromNumber() == 1);
+    BOOST_TEST(request->interval() == 0);
     request = queue->topAndPop();
-    BOOST_CHECK(request->size() == 2);
-    BOOST_CHECK(request->fromNumber() == 10);
-    BOOST_CHECK(request->interval() == 0);
+    BOOST_TEST(request->size() == 2);
+    BOOST_TEST(request->fromNumber() == 10);
+    BOOST_TEST(request->interval() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(testDownloadQueueMerge)
@@ -326,7 +326,7 @@ BOOST_AUTO_TEST_CASE(testDownloadQueueMerge)
     queue->push(20, 1);
     queue->push(21, 2);
     auto request = queue->mergeAndPop();
-    BOOST_CHECK(request.size() == 12);
+    BOOST_TEST(request.size() == 12);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

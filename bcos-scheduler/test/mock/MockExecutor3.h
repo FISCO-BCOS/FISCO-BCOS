@@ -24,14 +24,14 @@ public:
 
         // if (input->transactionHash() == h256(9))
         // {
-        //     BOOST_CHECK(input->to().find("contract") == std::string::npos);
+        //     BOOST_TEST(input->to().find("contract") == std::string::npos);
         // }
 
         // Always success
         SCHEDULER_LOG(TRACE) << "Input, hash:" << input->transactionHash().hex()
                              << " contract:" << input.get() << " to:" << input->to();
-        BOOST_CHECK(input);
-        BOOST_CHECK(!input->to().empty());
+        BOOST_TEST(input);
+        BOOST_TEST(!input->to().empty());
         BOOST_CHECK_EQUAL(input->depth(), 0);
         BOOST_CHECK_EQUAL(input->gasAvailable(), gasLimit);
 

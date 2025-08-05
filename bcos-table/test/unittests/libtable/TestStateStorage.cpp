@@ -63,7 +63,7 @@ struct TableFactoryFixture
         std::promise<std::optional<Table>> createPromise;
         tableFactory->asyncCreateTable(
             testTableName, valueField, [&](auto&& error, std::optional<Table> table) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 createPromise.set_value(table);
             });
         return createPromise.get_future().get();
@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(hash)
     auto deletedEntry = std::make_optional(table->newDeletedEntry());
     BOOST_CHECK_NO_THROW(table->setRow("id", *deletedEntry));
     entry = table->getRow("id");
-    BOOST_CHECK(!entry);
+    BOOST_TEST(!entry);
 
     tableFactory->rollback(*savePoint);
     entry = table->getRow("name");
@@ -473,7 +473,7 @@ BOOST_AUTO_TEST_CASE(hash)
     auto deletedEntry2 = std::make_optional(table->newDeletedEntry());
     BOOST_CHECK_NO_THROW(table->setRow("name", *deletedEntry2));
     entry = table->getRow("name");
-    BOOST_CHECK(!entry);
+    BOOST_TEST(!entry);
     // BOOST_CHECK_EQUAL(entry->status(), Entry::DELETED);
     keys = table->getPrimaryKeys({});
     BOOST_TEST(keys.size() == 2);
@@ -485,7 +485,7 @@ BOOST_AUTO_TEST_CASE(hash)
     auto deletedEntry3 = std::make_optional(table->newDeletedEntry());
     BOOST_CHECK_NO_THROW(table->setRow("id", *deletedEntry3));
     entry = table->getRow("id");
-    BOOST_CHECK(!entry);
+    BOOST_TEST(!entry);
     // BOOST_CHECK_EQUAL(entry->status(), Entry::DELETED);
     keys = table->getPrimaryKeys({});
     BOOST_TEST(keys.size() == 1);
@@ -522,7 +522,7 @@ BOOST_AUTO_TEST_CASE(openAndCommit)
 
         std::promise<bool> getRow;
         table->asyncGetRow(key, [&](auto&& error, auto&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             BOOST_CHECK_EQUAL(result->getField(0), "hello world!");
 
             getRow.set_value(true);
@@ -545,7 +545,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
         {
             auto tableName = "table_" + boost::lexical_cast<std::string>(i) + "_" +
                              boost::lexical_cast<std::string>(j);
-            BOOST_CHECK(tableStorage->createTable(tableName, valueFields));
+            BOOST_TEST(tableStorage->createTable(tableName, valueFields));
 
             auto table = tableStorage->openTable(tableName);
             BOOST_TEST(table);
@@ -701,7 +701,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     prev = std::make_shared<StateStorage>(prev, false);
     auto tableStorage = std::make_shared<StateStorage>(prev, false);
 
-    BOOST_CHECK(prev->createTable("t_test", valueFields));
+    BOOST_TEST(prev->createTable("t_test", valueFields));
 
     auto table = prev->openTable("t_test");
     BOOST_TEST(table);
@@ -793,11 +793,11 @@ BOOST_AUTO_TEST_CASE(getRows)
     {
         if (i >= 10 && i < 20)
         {
-            BOOST_CHECK(!values2[i]);
+            BOOST_TEST(!values2[i]);
         }
         else
         {
-            BOOST_CHECK(values2[i]);
+            BOOST_TEST(values2[i]);
         }
     }
 
@@ -820,7 +820,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     auto values3 = queryTable->getRows(keys);
     for (auto& it : values3)
     {
-        BOOST_CHECK(it);
+        BOOST_TEST(it);
         BOOST_CHECK_EQUAL(it->getField(0), "ddd1");
         BOOST_CHECK_EQUAL(it->dirty(), true);
     }
@@ -831,7 +831,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     size_t count = 70;
     for (auto& it : values4)
     {
-        BOOST_CHECK(it);
+        BOOST_TEST(it);
         BOOST_CHECK_EQUAL(it->getField(0), "data" + boost::lexical_cast<std::string>(count));
         BOOST_CHECK_EQUAL(it->dirty(), false);
         ++count;
@@ -863,31 +863,31 @@ BOOST_AUTO_TEST_CASE(deleteAndGetRows)
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
         });
 
     Entry entry1;
     entry1.importFields({"value1"});
     storage1->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     Entry entry2;
     entry2.importFields({"value2"});
     storage1->asyncSetRow(
-        "table", "key2", std::move(entry2), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key2", std::move(entry2), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     storage2->setEnableTraverse(true);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key2", std::move(deleteEntry),
-        [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     StateStorage::Ptr storage3 = std::make_shared<StateStorage>(storage2, false);
     storage3->asyncGetPrimaryKeys(
         "table", std::nullopt, [](Error::UniquePtr error, std::vector<std::string> keys) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             BOOST_CHECK_EQUAL(keys.size(), 1);
             BOOST_CHECK_EQUAL(keys[0], "key1");
         });
@@ -899,29 +899,29 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRow)
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
         });
 
     Entry entry1;
     entry1.importFields({"value1"});
     storage1->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key1", std::move(deleteEntry),
-        [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(!entry);
+        BOOST_TEST(!error);
+        BOOST_TEST(!entry);
     });
 
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(!entry);
+        BOOST_TEST(!error);
+        BOOST_TEST(!entry);
     });
 }
 
@@ -931,27 +931,27 @@ BOOST_AUTO_TEST_CASE(deletedAndGetRows)
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
         });
 
     Entry entry1;
     entry1.importFields({"value1"});
     storage1->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     Entry deleteEntry;
     deleteEntry.setStatus(Entry::DELETED);
     storage2->asyncSetRow("table", "key1", std::move(deleteEntry),
-        [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     std::string_view keys[] = {"key1"};
     storage2->asyncGetRows(
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             BOOST_CHECK_EQUAL(entry.size(), 1);
-            BOOST_CHECK(!entry[0]);
+            BOOST_TEST(!entry[0]);
         });
 }
 
@@ -961,14 +961,14 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
         });
 
     Entry entry1;
     entry1.importFields({"value1"});
     storage1->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     auto recoder = std::make_shared<Recoder>();
@@ -977,19 +977,19 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
     Entry entry2;
     entry2.importFields({"value2"});
     storage2->asyncSetRow(
-        "table", "key1", std::move(entry2), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry2), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(entry);
+        BOOST_TEST(!error);
+        BOOST_TEST(entry);
         BOOST_CHECK_EQUAL(entry->getField(0), "value2");
     });
 
     storage2->rollback(*recoder);
 
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(entry);
+        BOOST_TEST(!error);
+        BOOST_TEST(entry);
         BOOST_CHECK_EQUAL(entry->getField(0), "value1");
     });
 }
@@ -1000,14 +1000,14 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
 
     storage1->asyncCreateTable(
         "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
         });
 
     Entry entry1;
     entry1.importFields({"value1"});
     storage1->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     StateStorage::Ptr storage2 = std::make_shared<StateStorage>(storage1, false);
     auto recoder = std::make_shared<Recoder>();
@@ -1016,12 +1016,12 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
     Entry entry2;
     entry2.importFields({"value2"});
     storage2->asyncSetRow(
-        "table", "key1", std::move(entry2), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+        "table", "key1", std::move(entry2), [](Error::UniquePtr error) { BOOST_TEST(!error); });
 
     std::string_view keys[] = {"key1"};
     storage2->asyncGetRows(
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             BOOST_CHECK_EQUAL(entry.size(), 1);
             BOOST_CHECK_EQUAL(entry[0].value().getField(0), "value2");
         });
@@ -1030,7 +1030,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
 
     storage2->asyncGetRows(
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             BOOST_CHECK_EQUAL(entry.size(), 1);
             BOOST_CHECK_EQUAL(entry[0].value().getField(0), "value1");
         });
@@ -1081,13 +1081,13 @@ BOOST_AUTO_TEST_CASE(randomRWHash)
 
                 storage->asyncOpenTable(table, [storage, tableName = table](Error::UniquePtr error,
                                                    std::optional<Table> tableItem) {
-                    BOOST_CHECK(!error);
+                    BOOST_TEST(!error);
                     if (!tableItem)
                     {
                         storage->asyncCreateTable(tableName, "value",
                             [](Error::UniquePtr error, std::optional<Table> tableItem) {
-                                BOOST_CHECK(!error);
-                                BOOST_CHECK(tableItem);
+                                BOOST_TEST(!error);
+                                BOOST_TEST(tableItem);
                             });
                     }
                 });
@@ -1097,12 +1097,12 @@ BOOST_AUTO_TEST_CASE(randomRWHash)
                     Entry entry;
                     entry.importFields({value});
                     storage->asyncSetRow(table, key, std::move(entry),
-                        [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+                        [](Error::UniquePtr error) { BOOST_TEST(!error); });
                 }
                 else
                 {
                     storage->asyncGetRow(table, key,
-                        [](Error::UniquePtr error, std::optional<Entry>) { BOOST_CHECK(!error); });
+                        [](Error::UniquePtr error, std::optional<Entry>) { BOOST_TEST(!error); });
                 }
             }
 
@@ -1189,10 +1189,10 @@ BOOST_AUTO_TEST_CASE(hash_map)
     std::string key = "key";
 
     decltype(data)::const_accessor it;
-    BOOST_CHECK(data.emplace(it, EntryKey("table", std::string_view("key")), 100));
+    BOOST_TEST(data.emplace(it, EntryKey("table", std::string_view("key")), 100));
 
     decltype(data)::const_accessor findIt;
-    BOOST_CHECK(data.find(findIt, EntryKey("table", std::string_view("key"))));
+    BOOST_TEST(data.find(findIt, EntryKey("table", std::string_view("key"))));
 }
 
 BOOST_AUTO_TEST_CASE(importPrev) {}

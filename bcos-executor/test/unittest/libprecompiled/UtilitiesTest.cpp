@@ -54,26 +54,26 @@ BOOST_FIXTURE_TEST_SUITE(UtilitiesTest, UtilitiesFixture)
 
 BOOST_AUTO_TEST_CASE(pathValidTest)
 {
-    BOOST_CHECK(!checkPathValid(""));
-    BOOST_CHECK(!checkPathValid("/apps/check/path/level/is/too/deep"));
-    BOOST_CHECK(!checkPathValid(
+    BOOST_TEST(!checkPathValid(""));
+    BOOST_TEST(!checkPathValid("/apps/check/path/level/is/too/deep"));
+    BOOST_TEST(!checkPathValid(
         "/apps/check/path/too/looooooooooooooooooooooooooooooooooooooooooooooooon"));
-    BOOST_CHECK(checkPathValid("/"));
-    BOOST_CHECK(checkPathValid("/apps/123456/"));
-    BOOST_CHECK(checkPathValid("apps/123456/"));
-    BOOST_CHECK(!checkPathValid("/apps/123456>"));
-    BOOST_CHECK(!checkPathValid("/apps/123456="));
-    BOOST_CHECK(!checkPathValid("/apps/123\"456"));
+    BOOST_TEST(checkPathValid("/"));
+    BOOST_TEST(checkPathValid("/apps/123456/"));
+    BOOST_TEST(checkPathValid("apps/123456/"));
+    BOOST_TEST(!checkPathValid("/apps/123456>"));
+    BOOST_TEST(!checkPathValid("/apps/123456="));
+    BOOST_TEST(!checkPathValid("/apps/123\"456"));
     /// >= 3.2
-    BOOST_CHECK(checkPathValid("/apps/123456/", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(checkPathValid("apps/123456/", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(!checkPathValid("/apps/123456>", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(!checkPathValid("/apps/123456=", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(!checkPathValid("/apps/123\"456", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(!checkPathValid("/apps/123456\n", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(!checkPathValid("/apps/123456\t", BlockVersion::V3_2_VERSION));
-    BOOST_CHECK(!checkPathValid("/apps/123456 ", BlockVersion::V3_2_VERSION));
-    //    BOOST_CHECK(checkPathValid(std::string("/apps/123456中文"), BlockVersion::V3_2_VERSION));
+    BOOST_TEST(checkPathValid("/apps/123456/", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(checkPathValid("apps/123456/", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(!checkPathValid("/apps/123456>", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(!checkPathValid("/apps/123456=", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(!checkPathValid("/apps/123\"456", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(!checkPathValid("/apps/123456\n", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(!checkPathValid("/apps/123456\t", BlockVersion::V3_2_VERSION));
+    BOOST_TEST(!checkPathValid("/apps/123456 ", BlockVersion::V3_2_VERSION));
+    //    BOOST_TEST(checkPathValid(std::string("/apps/123456中文"), BlockVersion::V3_2_VERSION));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

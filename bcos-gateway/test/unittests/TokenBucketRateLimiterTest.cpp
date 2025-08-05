@@ -38,13 +38,13 @@ BOOST_AUTO_TEST_CASE(acquireTest)
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // check acquire failed
-    BOOST_CHECK(!rateLimiter.acquire(maxPermit + 1));
+    BOOST_TEST(!rateLimiter.acquire(maxPermit + 1));
 
     // check acquire bound
-    BOOST_CHECK(rateLimiter.acquire(maxPermit));
+    BOOST_TEST(rateLimiter.acquire(maxPermit));
 
     // check acquire waiting and must get
-    BOOST_CHECK(rateLimiter.acquire(1));
+    BOOST_TEST(rateLimiter.acquire(1));
 }
 
 BOOST_AUTO_TEST_CASE(tryAcquireTest)
@@ -54,18 +54,18 @@ BOOST_AUTO_TEST_CASE(tryAcquireTest)
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // check acquire failed
-    BOOST_CHECK(!rateLimiter.tryAcquire(maxPermit + 1));
+    BOOST_TEST(!rateLimiter.tryAcquire(maxPermit + 1));
 
     // check acquire bound
-    BOOST_CHECK(rateLimiter.tryAcquire(maxPermit));
+    BOOST_TEST(rateLimiter.tryAcquire(maxPermit));
 
     // check acquire waiting and must get
-    BOOST_CHECK(!rateLimiter.tryAcquire(maxPermit));
+    BOOST_TEST(!rateLimiter.tryAcquire(maxPermit));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // check acquire waiting and must get
-    BOOST_CHECK(rateLimiter.tryAcquire(maxPermit));
+    BOOST_TEST(rateLimiter.tryAcquire(maxPermit));
 }
 
 BOOST_AUTO_TEST_CASE(rollbackTest)
@@ -74,14 +74,14 @@ BOOST_AUTO_TEST_CASE(rollbackTest)
     bcos::ratelimiter::TokenBucketRateLimiter rateLimiter(maxPermit);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    BOOST_CHECK(rateLimiter.acquire(maxPermit));
+    BOOST_TEST(rateLimiter.acquire(maxPermit));
 
     // check acquire waiting and must get
-    BOOST_CHECK(!rateLimiter.tryAcquire(maxPermit));
+    BOOST_TEST(!rateLimiter.tryAcquire(maxPermit));
 
     rateLimiter.rollback(maxPermit / 10);
 
-    BOOST_CHECK(rateLimiter.tryAcquire(maxPermit / 10));
+    BOOST_TEST(rateLimiter.tryAcquire(maxPermit / 10));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

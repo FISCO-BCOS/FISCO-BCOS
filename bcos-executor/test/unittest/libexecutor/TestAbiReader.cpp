@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
     )"sv;
 
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
-    BOOST_CHECK(result.get() != nullptr);
+    BOOST_TEST(result.get() != nullptr);
     BOOST_CHECK_EQUAL(result->inputs.size(), 1);
 
     auto& input = result->inputs[0];
@@ -160,12 +160,12 @@ BOOST_AUTO_TEST_CASE(NormalCase)
     BOOST_CHECK_EQUAL(conflictFields[0].kind, 0);
 
     auto accessPath = vector<uint8_t>{};
-    BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].value.begin()));
+    BOOST_TEST(std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].value.begin()));
     BOOST_CHECK_EQUAL(conflictFields[0].slot.value(), 0);
 
     accessPath = vector<uint8_t>{0, 1, 2};
     cout << conflictFields[1].value.size() << endl;
-    BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
+    BOOST_TEST(std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
     BOOST_CHECK_EQUAL(conflictFields[1].slot.value(), 1);
 }
 
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(InvalidAbi)
 {
     auto abiStr = "vita"sv;
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
-    BOOST_CHECK(!result);
+    BOOST_TEST(!result);
 }
 
 BOOST_AUTO_TEST_CASE(InvalidSelector)
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
     )"sv;
 
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
-    BOOST_CHECK(!result);
+    BOOST_TEST(!result);
 }
 
 BOOST_AUTO_TEST_CASE(EmptyConflictFields)
@@ -237,8 +237,8 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
     )"sv;
 
     auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), false);
-    BOOST_CHECK(result.get() != nullptr);
-    BOOST_CHECK(result->conflictFields.empty());
+    BOOST_TEST(result.get() != nullptr);
+    BOOST_TEST(result->conflictFields.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

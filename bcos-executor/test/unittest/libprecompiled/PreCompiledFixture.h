@@ -154,7 +154,7 @@ public:
             std::promise<std::optional<Table>> promise1;
             storage->asyncCreateTable(std::string{ledger::SYS_CONFIG}, "value",
                 [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
+                    BOOST_TEST(!_error);
                     promise1.set_value(std::move(_table));
                 });
             auto table = promise1.get_future().get();
@@ -183,7 +183,7 @@ public:
                 std::promise<std::optional<Table>> promise2;
                 storage->asyncCreateTable(
                     "/", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                        BOOST_CHECK(!_error);
+                        BOOST_TEST(!_error);
                         promise2.set_value(std::move(_table));
                     });
                 auto rootTable = promise2.get_future().get();
@@ -211,7 +211,7 @@ public:
                 std::promise<std::optional<Table>> promise3;
                 storage->asyncCreateTable("/tables", "value",
                     [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                        BOOST_CHECK(!_error);
+                        BOOST_TEST(!_error);
                         promise3.set_value(std::move(_table));
                     });
                 auto tablesTable = promise3.get_future().get();
@@ -236,7 +236,7 @@ public:
                 std::promise<std::optional<Table>> promise4;
                 storage->asyncCreateTable("/apps", "value",
                     [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                        BOOST_CHECK(!_error);
+                        BOOST_TEST(!_error);
                         promise4.set_value(std::move(_table));
                     });
                 auto appsTable = promise4.get_future().get();
@@ -261,7 +261,7 @@ public:
                 std::promise<std::optional<Table>> promise4;
                 storage->asyncCreateTable(
                     "/sys", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                        BOOST_CHECK(!_error);
+                        BOOST_TEST(!_error);
                         promise4.set_value(std::move(_table));
                     });
                 auto appsTable = promise4.get_future().get();
@@ -385,7 +385,7 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -425,14 +425,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
         if (_errorCode != 0)
         {
             std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(_errorCode), empty));
         }
 
         commitBlock(_number);
@@ -464,13 +464,13 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);

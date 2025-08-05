@@ -110,7 +110,7 @@ struct DagExecutorFixture
             std::promise<std::optional<Table>> promise2;
             backend->asyncCreateTable(
                 "/", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
+                    BOOST_TEST(!_error);
                     promise2.set_value(std::move(_table));
                 });
             auto rootTable = promise2.get_future().get();
@@ -138,7 +138,7 @@ struct DagExecutorFixture
             std::promise<std::optional<Table>> promise3;
             backend->asyncCreateTable(
                 "/tables", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
+                    BOOST_TEST(!_error);
                     promise3.set_value(std::move(_table));
                 });
             auto tablesTable = promise3.get_future().get();
@@ -163,7 +163,7 @@ struct DagExecutorFixture
             std::promise<std::optional<Table>> promise4;
             backend->asyncCreateTable(
                 "/apps", "value", [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
+                    BOOST_TEST(!_error);
                     promise4.set_value(std::move(_table));
                 });
             auto appsTable = promise4.get_future().get();
@@ -247,12 +247,12 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     auto future1 = nextPromise.get_future();
     auto status = future1.wait_for(1s);
-    BOOST_CHECK(status == future_status::ready);
+    BOOST_TEST(status == future_status::ready);
     future1.get();
 
     // --------------------------------
@@ -261,33 +261,33 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
     auto future2 = executePromise.get_future();
-    BOOST_CHECK(future2.wait_for(1s) == future_status::ready);
+    BOOST_TEST(future2.wait_for(1s) == future_status::ready);
     auto result = future2.get();
     result->setSeq(1001);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
     executor->dmcExecuteTransaction(std::move(result),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
     auto future3 = executePromise2.get_future();
-    BOOST_CHECK(future3.wait_for(1s) == future_status::ready);
+    BOOST_TEST(future3.wait_for(1s) == future_status::ready);
     auto result2 = future3.get();
     result2->setSeq(1000);
 
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(result2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise3.set_value(std::move(result));
         });
     auto future4 = executePromise3.get_future();
-    BOOST_CHECK(future4.wait_for(1s) == future_status::ready);
+    BOOST_TEST(future4.wait_for(1s) == future_status::ready);
     auto result3 = future4.get();
 
     BOOST_CHECK_EQUAL(result3->status(), 0);
@@ -295,8 +295,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
     BOOST_CHECK_EQUAL(result3->to(), sender);
 
-    BOOST_CHECK(result3->message().empty());
-    BOOST_CHECK(!result3->newEVMContractAddress().empty());
+    BOOST_TEST(result3->message().empty());
+    BOOST_TEST(!result3->newEVMContractAddress().empty());
     BOOST_CHECK_LT(result3->gasAvailable(), gas);
 
     auto address = result3->newEVMContractAddress();
@@ -306,40 +306,40 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     std::promise<void> preparePromise;
     executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         preparePromise.set_value();
     });
     auto future5 = preparePromise.get_future();
-    BOOST_CHECK(future5.wait_for(1s) == future_status::ready);
+    BOOST_TEST(future5.wait_for(1s) == future_status::ready);
     future5.get();
 
     std::promise<void> commitPromise;
     executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         commitPromise.set_value();
     });
     auto future6 = commitPromise.get_future();
-    BOOST_CHECK(future6.wait_for(1s) == future_status::ready);
+    BOOST_TEST(future6.wait_for(1s) == future_status::ready);
     future6.get();
     auto tableName = std::string("/apps/") + string(address);
 
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
     backend->asyncOpenTable(tableName, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(table);
+        BOOST_TEST(!error);
+        BOOST_TEST(table);
         tablePromise.set_value(std::move(*table));
     });
     auto future7 = tablePromise.get_future();
-    BOOST_CHECK(future7.wait_for(1s) == future_status::ready);
+    BOOST_TEST(future7.wait_for(1s) == future_status::ready);
     auto table = future7.get();
 
     auto entry = table.getRow("code");
-    BOOST_CHECK(entry);
+    BOOST_TEST(entry);
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     entry = table.getRow("abi");
-    BOOST_CHECK(entry);
+    BOOST_TEST(entry);
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     std::vector<ExecutionMessage::UniquePtr> requests;
@@ -387,12 +387,12 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     executor->dagExecuteTransactions(
         requests, [&](bcos::Error::UniquePtr error,
                       std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             dagPromise.set_value(std::move(results));
         });
 
     auto future8 = dagPromise.get_future();
-    BOOST_CHECK(future8.wait_for(3s) == future_status::ready);
+    BOOST_TEST(future8.wait_for(3s) == future_status::ready);
     auto results = future8.get();
 
     vector<pair<string, uint32_t>> expected;
@@ -404,10 +404,10 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
         for (size_t i = 0; i < results.size(); ++i)
         {
             BOOST_CHECK_EQUAL(results[i]->status(), 0);
-            BOOST_CHECK(results[i]->message().empty());
+            BOOST_TEST(results[i]->message().empty());
             bool flag;
             codec->decode(results[i]->data(), flag);
-            BOOST_CHECK(flag);
+            BOOST_TEST(flag);
         }
 
         for (size_t i = 0; i < expected.size(); ++i)
@@ -432,14 +432,14 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
             executor->dmcExecuteTransaction(
                 std::move(paramsR), [&dmcPromise](bcos::Error::UniquePtr&& error,
                                         ExecutionMessage::UniquePtr&& result) {
-                    BOOST_CHECK(!error);
+                    BOOST_TEST(!error);
                     dmcPromise.set_value(std::move(result));
                 });
             auto future = dmcPromise.get_future();
-            BOOST_CHECK(future.wait_for(3s) == future_status::ready);
+            BOOST_TEST(future.wait_for(3s) == future_status::ready);
             result = future.get();
 
-            BOOST_CHECK(result);
+            BOOST_TEST(result);
             BOOST_CHECK_EQUAL(result->status(), 0);
             BOOST_CHECK_EQUAL(result->message(), "");
             BOOST_CHECK_EQUAL(result->newEVMContractAddress(), "");
@@ -510,7 +510,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -521,7 +521,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -532,7 +532,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
     executor->dmcExecuteTransaction(std::move(result),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise2.set_value(std::move(result));
         });
 
@@ -542,7 +542,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
     executor->dmcExecuteTransaction(std::move(result2),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise3.set_value(std::move(result));
         });
 
@@ -553,8 +553,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
     BOOST_CHECK_EQUAL(result3->to(), sender);
 
-    BOOST_CHECK(result3->message().empty());
-    BOOST_CHECK(!result3->newEVMContractAddress().empty());
+    BOOST_TEST(result3->message().empty());
+    BOOST_TEST(!result3->newEVMContractAddress().empty());
     BOOST_CHECK_LT(result3->gasAvailable(), gas);
 
     auto address = result3->newEVMContractAddress();
@@ -564,14 +564,14 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     std::promise<void> preparePromise;
     executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         preparePromise.set_value();
     });
     preparePromise.get_future().get();
 
     std::promise<void> commitPromise;
     executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
@@ -580,18 +580,18 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
     backend->asyncOpenTable(tableName, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(table);
+        BOOST_TEST(!error);
+        BOOST_TEST(table);
         tablePromise.set_value(std::move(*table));
     });
     auto table = tablePromise.get_future().get();
 
     auto entry = table.getRow("code");
-    BOOST_CHECK(entry);
+    BOOST_TEST(entry);
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     entry = table.getRow("abi");
-    BOOST_CHECK(entry);
+    BOOST_TEST(entry);
     BOOST_CHECK_GT(entry->getField(0).size(), 0);
 
     std::vector<ExecutionMessage::UniquePtr> requests;
@@ -636,14 +636,14 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     executor->dagExecuteTransactions(
         requests, [&](bcos::Error::UniquePtr error,
                       std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
 
             for (size_t i = 0; i < results.size(); ++i)
             {
                 auto& result = results[i];
                 BOOST_CHECK_EQUAL(result->status(), 0);
-                BOOST_CHECK(result->message().empty());
-                BOOST_CHECK(result->type() == ExecutionMessage::SEND_BACK);
+                BOOST_TEST(result->message().empty());
+                BOOST_TEST(result->type() == ExecutionMessage::SEND_BACK);
             }
 
             bytes getBytes;
@@ -667,12 +667,12 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
             executor->dmcExecuteTransaction(
                 std::move(params), [&executePromise](bcos::Error::UniquePtr&& error,
                                        ExecutionMessage::UniquePtr&& result) {
-                    BOOST_CHECK(!error);
+                    BOOST_TEST(!error);
                     executePromise.set_value(std::move(result));
                 });
             result = executePromise.get_future().get();
 
-            BOOST_CHECK(result);
+            BOOST_TEST(result);
             BOOST_CHECK_EQUAL(result->status(), 0);
             BOOST_CHECK_EQUAL(result->message(), "");
             BOOST_CHECK_EQUAL(result->newEVMContractAddress(), "");
@@ -779,7 +779,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -790,7 +790,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -866,8 +866,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     std::promise<std::optional<Table>> tablePromise;
     backend->asyncCreateTable("cp_ff6f30856ad3bae00b1169808488502786a13e3c",
         "functionName,criticalSize", [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
             tablePromise.set_value(std::move(*table));
         });
     auto table = tablePromise.get_future().get();
@@ -879,13 +879,13 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     executor->dagExecuteTransactions(
         requests, [&](bcos::Error::UniquePtr error,
                       std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
 
             for (size_t i = 0; i < results.size(); ++i)
             {
                 auto& result = results[i];
                 BOOST_CHECK_EQUAL(result->status(), 0);
-                BOOST_CHECK(result->message().empty());
+                BOOST_TEST(result->message().empty());
             }
 
             // Check result
@@ -914,7 +914,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
                         {
                             std::cout << "Error!" << boost::diagnostic_information(*error);
                         }
-                        // BOOST_CHECK(!error);
+                        // BOOST_TEST(!error);
                         outputPromise.set_value(std::move(result));
                     });
                 ExecutionMessage::UniquePtr balanceResult =
@@ -1022,7 +1022,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 
     std::promise<void> nextPromise;
     executor->nextBlockHeader(0, blockHeader, [&](bcos::Error::Ptr&& error) {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         nextPromise.set_value();
     });
     nextPromise.get_future().get();
@@ -1033,7 +1033,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
     executor->dmcExecuteTransaction(std::move(params),
         [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             executePromise.set_value(std::move(result));
         });
 
@@ -1105,8 +1105,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     std::promise<std::optional<Table>> tablePromise;
     backend->asyncCreateTable("cp_ff6f30856ad3bae00b1169808488502786a13e3c",
         "functionName,criticalSize", [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
+            BOOST_TEST(!error);
+            BOOST_TEST(table);
             tablePromise.set_value(std::move(*table));
         });
     auto table = tablePromise.get_future().get();
@@ -1118,13 +1118,13 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     executor->dagExecuteTransactions(
         requests, [&](bcos::Error::UniquePtr error,
                       std::vector<bcos::protocol::ExecutionMessage::UniquePtr> results) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
 
             for (size_t i = 0; i < results.size(); ++i)
             {
                 auto& result = results[i];
                 BOOST_CHECK_EQUAL(result->status(), 0);
-                BOOST_CHECK(result->message().empty());
+                BOOST_TEST(result->message().empty());
             }
 
             // Check result
@@ -1153,7 +1153,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
                         {
                             std::cout << "Error!" << boost::diagnostic_information(*error);
                         }
-                        // BOOST_CHECK(!error);
+                        // BOOST_TEST(!error);
                         outputPromise.set_value(std::move(result));
                     });
                 ExecutionMessage::UniquePtr balanceResult =

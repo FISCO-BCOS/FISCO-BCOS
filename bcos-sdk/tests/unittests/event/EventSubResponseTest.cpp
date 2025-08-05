@@ -44,12 +44,12 @@ BOOST_AUTO_TEST_CASE(test_EventSubResponse)
 
         auto r = resp->fromJson(json);
 
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         BOOST_CHECK_EQUAL(id, resp->id());
         BOOST_CHECK_EQUAL(status, resp->status());
 
-        BOOST_CHECK(!resp->fromJson("{}"));
-        BOOST_CHECK(!resp->fromJson("aaa"));
+        BOOST_TEST(!resp->fromJson("{}"));
+        BOOST_TEST(!resp->fromJson("aaa"));
     }
 }
 
@@ -60,13 +60,13 @@ BOOST_AUTO_TEST_CASE(test_EventSubResponse_Event)
         auto json =
             "{\"id\":\"0x123\",\"status\":0,\"result\":{\"blockNumber\":111,\"events\":[]}}";
         auto r = resp->fromJson(json);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
 
         BOOST_CHECK_EQUAL("0x123", resp->id());
         BOOST_CHECK_EQUAL(0, resp->status());
 
-        BOOST_CHECK(resp->jResp().isMember("result"));
-        BOOST_CHECK(resp->jResp()["result"].isMember("blockNumber"));
+        BOOST_TEST(resp->jResp().isMember("result"));
+        BOOST_TEST(resp->jResp()["result"].isMember("blockNumber"));
         BOOST_CHECK_EQUAL(resp->jResp()["result"]["blockNumber"].asInt64(), 111);
     }
 }

@@ -222,9 +222,9 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
     baselineScheduler.executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader,
             bool sysBlock) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(blockHeader);
-            BOOST_CHECK(!sysBlock);
+            BOOST_TEST(!error);
+            BOOST_TEST(blockHeader);
+            BOOST_TEST(!sysBlock);
 
             task::syncWait([&]() -> task::Task<void> {
                 auto view = fork(multiLayerStorage);
@@ -260,22 +260,22 @@ BOOST_AUTO_TEST_CASE(sameBlock)
     bcos::protocol::BlockHeader::Ptr executedHeader;
     baselineScheduler.executeBlock(block, false,
         [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr blockHeader, bool sysBlock) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(blockHeader);
-            BOOST_CHECK(!sysBlock);
+            BOOST_TEST(!error);
+            BOOST_TEST(blockHeader);
+            BOOST_TEST(!sysBlock);
 
             executedHeader = blockHeader;
             end.set_value(error);
         });
     auto error = end.get_future().get();
-    BOOST_CHECK(!error);
+    BOOST_TEST(!error);
 
     std::promise<bcos::Error::Ptr> end2;
     baselineScheduler.executeBlock(block, false,
         [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr blockHeader, bool sysBlock) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(blockHeader);
-            BOOST_CHECK(!sysBlock);
+            BOOST_TEST(!error);
+            BOOST_TEST(blockHeader);
+            BOOST_TEST(!sysBlock);
 
             BOOST_CHECK_EQUAL(blockHeader.get(), executedHeader.get());
             BOOST_CHECK_EQUAL(blockHeader->hash(), executedHeader->hash());
@@ -283,7 +283,7 @@ BOOST_AUTO_TEST_CASE(sameBlock)
             end2.set_value(error);
         });
     auto error2 = end2.get_future().get();
-    BOOST_CHECK(!error2);
+    BOOST_TEST(!error2);
 }
 
 BOOST_AUTO_TEST_CASE(resultCache)
@@ -304,10 +304,10 @@ BOOST_AUTO_TEST_CASE(resultCache)
         baselineScheduler.executeBlock(block, false,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
                 bool sysBlock) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(gotBlockHeader);
-                BOOST_CHECK(!sysBlock);
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
+                BOOST_TEST(gotBlockHeader);
+                BOOST_TEST(!sysBlock);
+                BOOST_TEST(!error);
             });
     }
 
@@ -317,7 +317,7 @@ BOOST_AUTO_TEST_CASE(resultCache)
         baselineScheduler.executeBlock(block, false,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
                 bool sysBlock) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 BOOST_CHECK_EQUAL(gotBlockHeader->number(), block->blockHeader()->number());
             });
     }
@@ -335,8 +335,8 @@ BOOST_AUTO_TEST_CASE(resultCache)
     baselineScheduler.executeBlock(smallBlock, false,
         [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
             bool sysBlock) {
-            BOOST_CHECK(error);
-            BOOST_CHECK(error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber);
+            BOOST_TEST(error);
+            BOOST_TEST(error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber);
         });
 
     // Try Bigger block
@@ -351,8 +351,8 @@ BOOST_AUTO_TEST_CASE(resultCache)
     baselineScheduler.executeBlock(bigBlock, false,
         [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
             bool sysBlock) {
-            BOOST_CHECK(error);
-            BOOST_CHECK(error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber);
+            BOOST_TEST(error);
+            BOOST_TEST(error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlockNumber);
         });
 
     // Try expect block
@@ -367,7 +367,7 @@ BOOST_AUTO_TEST_CASE(resultCache)
 
         baselineScheduler.executeBlock(expectBlock, false,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
-                bool sysBlock) { BOOST_CHECK(!error); });
+                bool sysBlock) { BOOST_TEST(!error); });
     }
 }
 
@@ -382,9 +382,9 @@ BOOST_AUTO_TEST_CASE(emptyBlock)
     baselineScheduler.executeBlock(block, false,
         [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
             bool sysBlock) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(gotBlockHeader);
-            BOOST_CHECK(!sysBlock);
+            BOOST_TEST(!error);
+            BOOST_TEST(gotBlockHeader);
+            BOOST_TEST(!sysBlock);
 
             BOOST_CHECK_EQUAL(blockHeader->txsRoot(), bcos::crypto::HashType{});
             BOOST_CHECK_EQUAL(blockHeader->receiptsRoot(), bcos::crypto::HashType{});
@@ -422,7 +422,7 @@ BOOST_AUTO_TEST_CASE(call)
     std::promise<void> end;
     baselineScheduler.call(
         transaction, [&](Error::Ptr&& error, protocol::TransactionReceipt::Ptr&& receipt) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             end.set_value();
         });
 

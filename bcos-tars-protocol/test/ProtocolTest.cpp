@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(transaction)
         0, to, input, nonce, 100, "testChain", "testGroup", 1000, *keyPair);
 
     tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
-    BOOST_CHECK(!tx->sender().empty());
+    BOOST_TEST(!tx->sender().empty());
     bcos::bytes buffer;
     tx->encode(buffer);
 
@@ -224,7 +224,7 @@ BOOST_AUTO_TEST_CASE(block)
     header->setTimestamp(500);
 
     header->setSealerList(gsl::span<const bcos::bytes>(sealerList));
-    BOOST_CHECK(header->sealerList().size() == 4);
+    BOOST_TEST(header->sealerList().size() == 4);
     header->calculateHash(*blockFactory->cryptoSuite()->hashImpl());
 
     auto signatureList = std::make_shared<std::vector<bcos::protocol::Signature>>();
@@ -237,17 +237,17 @@ BOOST_AUTO_TEST_CASE(block)
         signatureList->push_back(signature);
     }
     header->setSignatureList(*signatureList);
-    BOOST_CHECK(header->signatureList().size() == 2);
-    BOOST_CHECK(header->signatureList().size() == 2);
+    BOOST_TEST(header->signatureList().size() == 2);
+    BOOST_TEST(header->signatureList().size() == 2);
 
     for (size_t i = 0; i < 100; ++i)
     {
         auto constHeader = block->blockHeaderConst();
-        BOOST_CHECK(constHeader->signatureList().size() == 2);
+        BOOST_TEST(constHeader->signatureList().size() == 2);
         std::cout << "### getHash:" << constHeader->hash().abridged() << std::endl;
 
         auto header2 = block->blockHeader();
-        BOOST_CHECK(header2->signatureList().size() == 2);
+        BOOST_TEST(header2->signatureList().size() == 2);
     }
 
     auto logEntries = std::make_shared<std::vector<bcos::protocol::LogEntry>>();
@@ -285,20 +285,20 @@ BOOST_AUTO_TEST_CASE(block)
 
     auto decodedBlock = blockFactory->createBlock(bcos::ref(buffer));
 
-    BOOST_CHECK(decodedBlock->blockHeader()->sealerList().size() == header->sealerList().size());
+    BOOST_TEST(decodedBlock->blockHeader()->sealerList().size() == header->sealerList().size());
     // ensure the sealerlist lifetime
     auto decodedSealerList = decodedBlock->blockHeader()->sealerList();
     for (auto i = 0u; i < decodedSealerList.size(); i++)
     {
-        BOOST_CHECK(decodedSealerList[i] == sealerList[i]);
+        BOOST_TEST(decodedSealerList[i] == sealerList[i]);
     }
     auto decodedBlockHeader = decodedBlock->blockHeader();
-    BOOST_CHECK(decodedBlockHeader->signatureList().size() == 2);
+    BOOST_TEST(decodedBlockHeader->signatureList().size() == 2);
 
     // ensure the blockheader lifetime
     for (auto i = 0u; i < decodedBlock->blockHeader()->sealerList().size(); i++)
     {
-        BOOST_CHECK(decodedBlock->blockHeader()->sealerList()[i] == sealerList[i]);
+        BOOST_TEST(decodedBlock->blockHeader()->sealerList()[i] == sealerList[i]);
         std::cout << "##### decodedSealerList size:"
                   << decodedBlock->blockHeader()->sealerList()[i].size() << std::endl;
     }
@@ -456,7 +456,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
 
     auto headerImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(header);
 
-    BOOST_CHECK(headerImpl->inner().dataHash.empty());
+    BOOST_TEST(headerImpl->inner().dataHash.empty());
 
     bcos::bytes buffer;
     header->encode(buffer);
@@ -468,7 +468,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
     auto decodedBlockHeaderImpl =
         std::dynamic_pointer_cast<bcostars::protocol::BlockHeaderImpl>(decodedHeader);
 
-    BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
+    BOOST_TEST(!decodedBlockHeaderImpl->inner().dataHash.empty());
 
     BOOST_CHECK_EQUAL(header->number(), decodedHeader->number());
     BOOST_CHECK_EQUAL(header->timestamp(), decodedHeader->timestamp());
@@ -534,15 +534,15 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
     std::string memberConfig = "testConfig";
     member->setMemberID(memberID);
     member->setMemberConfig(memberConfig);
-    BOOST_CHECK(member->memberID() == memberID);
-    BOOST_CHECK(member->memberConfig() == memberConfig);
+    BOOST_TEST(member->memberID() == memberID);
+    BOOST_TEST(member->memberConfig() == memberConfig);
 
     std::string encodedData;
     member->encode(encodedData);
 
     auto member2 = memberFactory->createMember(encodedData);
-    BOOST_CHECK(member2->memberID() == memberID);
-    BOOST_CHECK(member2->memberConfig() == memberConfig);
+    BOOST_TEST(member2->memberID() == memberID);
+    BOOST_TEST(member2->memberConfig() == memberConfig);
 
     // test groupInfoCodec
     auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
@@ -580,26 +580,26 @@ BOOST_AUTO_TEST_CASE(testMemberImpl)
     groupInfoCodec->serialize(encodedData2, groupInfo);
 
     auto decodedGroupInfo = groupInfoCodec->deserialize(encodedData2);
-    BOOST_CHECK(decodedGroupInfo->groupID() == groupID);
-    BOOST_CHECK(decodedGroupInfo->chainID() == chainID);
-    BOOST_CHECK(decodedGroupInfo->iniConfig() == iniConfig);
-    BOOST_CHECK(decodedGroupInfo->genesisConfig() == genesisConfig);
-    BOOST_CHECK(decodedGroupInfo->nodesNum() == 3);
+    BOOST_TEST(decodedGroupInfo->groupID() == groupID);
+    BOOST_TEST(decodedGroupInfo->chainID() == chainID);
+    BOOST_TEST(decodedGroupInfo->iniConfig() == iniConfig);
+    BOOST_TEST(decodedGroupInfo->genesisConfig() == genesisConfig);
+    BOOST_TEST(decodedGroupInfo->nodesNum() == 3);
 
     auto nodesInfo = decodedGroupInfo->nodeInfos();
     auto firstNodeInfo = nodesInfo.at(nodeName + std::to_string(0));
-    BOOST_CHECK(firstNodeInfo->nodeCryptoType() == nodeCryptoType);
-    BOOST_CHECK(firstNodeInfo->iniConfig() == iniConfig);
-    BOOST_CHECK(firstNodeInfo->nodeID() == nodeID);
-    BOOST_CHECK(firstNodeInfo->microService() == true);
-    BOOST_CHECK(firstNodeInfo->compatibilityVersion() == 10);
-    BOOST_CHECK(firstNodeInfo->nodeType() == bcos::protocol::NodeType::CONSENSUS_NODE);
-    BOOST_CHECK(firstNodeInfo->serviceName(bcos::protocol::ServiceType::SCHEDULER) == "SCHEDULER");
+    BOOST_TEST(firstNodeInfo->nodeCryptoType() == nodeCryptoType);
+    BOOST_TEST(firstNodeInfo->iniConfig() == iniConfig);
+    BOOST_TEST(firstNodeInfo->nodeID() == nodeID);
+    BOOST_TEST(firstNodeInfo->microService() == true);
+    BOOST_TEST(firstNodeInfo->compatibilityVersion() == 10);
+    BOOST_TEST(firstNodeInfo->nodeType() == bcos::protocol::NodeType::CONSENSUS_NODE);
+    BOOST_TEST(firstNodeInfo->serviceName(bcos::protocol::ServiceType::SCHEDULER) == "SCHEDULER");
 
     auto decodedProtocolInfo = firstNodeInfo->nodeProtocol();
-    BOOST_CHECK(decodedProtocolInfo->protocolModuleID() == protocolInfo.protocolModuleID());
-    BOOST_CHECK(decodedProtocolInfo->maxVersion() == protocolInfo.maxVersion());
-    BOOST_CHECK(decodedProtocolInfo->minVersion() == protocolInfo.minVersion());
+    BOOST_TEST(decodedProtocolInfo->protocolModuleID() == protocolInfo.protocolModuleID());
+    BOOST_TEST(decodedProtocolInfo->maxVersion() == protocolInfo.maxVersion());
+    BOOST_TEST(decodedProtocolInfo->minVersion() == protocolInfo.minVersion());
 }
 
 void checkExecutionMessage(bcostars::protocol::ExecutionMessageImpl::Ptr executionMsg,

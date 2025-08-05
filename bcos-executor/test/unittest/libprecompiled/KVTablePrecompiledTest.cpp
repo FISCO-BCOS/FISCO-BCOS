@@ -73,7 +73,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -82,7 +82,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
+                BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             }
             commitBlock(_number);
             return result2;
@@ -96,7 +96,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -106,7 +106,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -117,7 +117,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(std::move(result4),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise5.set_value(std::move(result));
             });
         auto result5 = executePromise5.get_future().get();
@@ -128,14 +128,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(std::move(result5),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise6.set_value(std::move(result));
             });
         auto result6 = executePromise6.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result6->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result6->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
         return result6;
@@ -166,7 +166,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -202,7 +202,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -237,7 +237,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     {
         auto response = creatKVTable(number++, "t_test/t_test2", "id", "item_name",
             "3234853b49838bd3e9466c85a4cc3428c960dde2");
-        BOOST_CHECK(response->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(response->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     std::string errorStr;
@@ -281,13 +281,13 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     {
         auto r1 = creatKVTable(number++, errorStr, "id", "item_name",
             "1134853b49838bd3e9466c85a4cc3428c960dde1", 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatKVTable(number++, "t_test", errorStr, "item_name",
             "2134853b49838bd3e9466c85a4cc3428c960dde1", 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatKVTable(number++, "t_test", "id", errorStr,
             "3134853b49838bd3e9466c85a4cc3428c960dde1", 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // createTable error key and field
@@ -295,13 +295,13 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     {
         auto r1 = creatKVTable(number++, errorStr2, "id", "item_name,item_id",
             "4134853b49838bd3e9466c85a4cc3428c960dde1", 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatKVTable(number++, "t_test", errorStr2, "item_name,item_id",
             "5134853b49838bd3e9466c85a4cc3428c960dde1", 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatKVTable(number++, "t_test", "id", errorStr2,
             "6134853b49838bd3e9466c85a4cc3428c960dde1", 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -324,7 +324,7 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     {
         auto response =
             creatKVTable(number++, "t_test/t_test2", "id", "item_name", "/tables/t_test/t_test2");
-        BOOST_CHECK(response->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(response->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     std::string errorStr;
@@ -335,12 +335,12 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     // createTable too long tableName, key and field
     {
         auto r1 = creatKVTable(number++, errorStr, "id", "item_name", "/tables/t_test3", 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 =
             creatKVTable(number++, "t_test", errorStr, "item_name", "/tables/t_test4", 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatKVTable(number++, "t_test", "id", errorStr, "/tables/t_test5", 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // createTable error key and field
@@ -348,12 +348,12 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     {
         auto r1 = creatKVTable(
             number++, errorStr2, "id", "item_name,item_id", "/tables/t_test6", 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatKVTable(
             number++, "t_test", errorStr2, "item_name,item_id", "/tables/t_test7", 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatKVTable(number++, "t_test", "id", errorStr2, "/tables/t_test8", 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -368,7 +368,7 @@ BOOST_AUTO_TEST_CASE(descTest)
 
     auto result2 = desc(number++, "t_kv_test");
     TableInfoTuple tableInfo = {"id", {"item_name"}};
-    BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
+    BOOST_TEST(result2->data().toBytes() == codec->encode(tableInfo));
 }
 
 BOOST_AUTO_TEST_CASE(descWasmTest)
@@ -379,12 +379,12 @@ BOOST_AUTO_TEST_CASE(descWasmTest)
     // create
     {
         auto result = creatKVTable(number++, "t_kv_test", "id", "item_name", address);
-        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+        BOOST_TEST(result->status() == (int32_t)TransactionStatus::None);
     }
 
     auto result2 = desc(number++, "t_kv_test");
     TableInfoTuple tableInfo = {"id", {"item_name"}};
-    BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
+    BOOST_TEST(result2->data().toBytes() == codec->encode(tableInfo));
 }
 
 BOOST_AUTO_TEST_CASE(setTest)
@@ -400,20 +400,20 @@ BOOST_AUTO_TEST_CASE(setTest)
     {
         auto result1 = set(number++, address, "id1", "test1");
         auto result2 = get(number++, address, "id1");
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, std::string("test1")));
+        BOOST_TEST(result2->data().toBytes() == codec->encode(true, std::string("test1")));
     }
 
     // cover write and get
     {
         auto result3 = set(number++, address, "id1", "test2");
         auto result4 = get(number++, address, "id1");
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, std::string("test2")));
+        BOOST_TEST(result4->data().toBytes() == codec->encode(true, std::string("test2")));
     }
 
     // get not exist
     {
         auto result4 = get(number++, address, "noExist");
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, std::string("")));
+        BOOST_TEST(result4->data().toBytes() == codec->encode(false, std::string("")));
     }
 
     boost::log::core::get()->set_logging_enabled(false);
@@ -425,7 +425,7 @@ BOOST_AUTO_TEST_CASE(setTest)
             errorKey += "0";
         }
         auto result3 = set(number++, address, errorKey, "test2");
-        BOOST_CHECK(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // set value overflow
@@ -436,7 +436,7 @@ BOOST_AUTO_TEST_CASE(setTest)
             errorValue += "0";
         }
         auto result3 = set(number++, address, "1", errorValue);
-        BOOST_CHECK(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     boost::log::core::get()->set_logging_enabled(true);
 }
@@ -455,20 +455,20 @@ BOOST_AUTO_TEST_CASE(setWasmTest)
     {
         auto result1 = set(number++, address, "id1", "test1");
         auto result2 = get(number++, address, "id1");
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, std::string("test1")));
+        BOOST_TEST(result2->data().toBytes() == codec->encode(true, std::string("test1")));
     }
 
     // cover write and get
     {
         auto result3 = set(number++, address, "id1", "test2");
         auto result4 = get(number++, address, "id1");
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, std::string("test2")));
+        BOOST_TEST(result4->data().toBytes() == codec->encode(true, std::string("test2")));
     }
 
     // get not exist
     {
         auto result4 = get(number++, address, "noExist");
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, std::string("")));
+        BOOST_TEST(result4->data().toBytes() == codec->encode(false, std::string("")));
     }
 
     boost::log::core::get()->set_logging_enabled(false);
@@ -480,7 +480,7 @@ BOOST_AUTO_TEST_CASE(setWasmTest)
             errorKey += "0";
         }
         auto result3 = set(number++, address, errorKey, "test2");
-        BOOST_CHECK(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // set value overflow
@@ -491,7 +491,7 @@ BOOST_AUTO_TEST_CASE(setWasmTest)
             errorValue += "0";
         }
         auto result3 = set(number++, address, "1", errorValue);
-        BOOST_CHECK(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     boost::log::core::get()->set_logging_enabled(true);
 }

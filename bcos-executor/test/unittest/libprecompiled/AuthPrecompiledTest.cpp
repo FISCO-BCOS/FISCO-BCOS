@@ -86,7 +86,7 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -99,7 +99,7 @@ public:
         BOOST_CHECK_EQUAL(result->newEVMContractAddress(), helloAddress);
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), helloAddress);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
         BOOST_CHECK_LT(result->gasAvailable(), gas);
 
         commitBlock(2);
@@ -141,7 +141,7 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -154,7 +154,7 @@ public:
         BOOST_CHECK_EQUAL(result->newEVMContractAddress(), newHello2Address);
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), newHello2Address);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
         BOOST_CHECK_LT(result->gasAvailable(), gas);
 
         commitBlock(2);
@@ -202,7 +202,7 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -224,7 +224,7 @@ public:
         BOOST_CHECK_EQUAL(result->create(), false);
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), newAddress);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
 
         commitBlock(_number);
 
@@ -272,7 +272,7 @@ public:
         executor->dmcExecuteTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -285,7 +285,7 @@ public:
         executor->dmcExecuteTransaction(
             std::move(result), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
 
@@ -298,7 +298,7 @@ public:
         executor->dmcExecuteTransaction(
             std::move(result2), [&](bcos::Error::UniquePtr&& error,
                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
 
@@ -316,7 +316,7 @@ public:
         executor->dmcExecuteTransaction(
             std::move(result3), [&](bcos::Error::UniquePtr&& error,
                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
 
@@ -328,7 +328,7 @@ public:
         executor->dmcExecuteTransaction(
             std::move(result4), [&](bcos::Error::UniquePtr&& error,
                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise5.set_value(std::move(result));
             });
 
@@ -340,7 +340,7 @@ public:
         executor->dmcExecuteTransaction(
             std::move(result5), [&](bcos::Error::UniquePtr&& error,
                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise6.set_value(std::move(result));
             });
 
@@ -389,14 +389,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
 
@@ -422,7 +422,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->call(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -470,14 +470,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -517,14 +517,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -561,7 +561,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
@@ -569,7 +569,7 @@ public:
         // call precompiled
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
 
@@ -605,14 +605,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result1 = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result1->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -648,14 +648,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result1 = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result1->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -693,7 +693,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result1 = executePromise.get_future().get();
@@ -706,7 +706,7 @@ public:
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result1->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -739,14 +739,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -780,14 +780,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -820,14 +820,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -863,14 +863,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result1 = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result1->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -907,7 +907,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -915,7 +915,7 @@ public:
         result2->setSeq(1001);
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -950,7 +950,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -958,7 +958,7 @@ public:
         result2->setSeq(1001);
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -993,7 +993,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -1001,7 +1001,7 @@ public:
         result2->setSeq(1001);
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -1036,7 +1036,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -1044,7 +1044,7 @@ public:
         result2->setSeq(1001);
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -1079,7 +1079,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -1087,7 +1087,7 @@ public:
         result2->setSeq(1001);
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -1120,7 +1120,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -1128,7 +1128,7 @@ public:
         result2->setSeq(1001);
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -1160,7 +1160,7 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
     // simple get
     {
         auto result = helloGet(number++, 1000);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
     }
 
     // add method acl type
@@ -1169,12 +1169,12 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
 
         // not found
         auto r1 = getMethodAuth(number++, Address(helloAddress), "set(string)");
-        BOOST_CHECK(
+        BOOST_TEST(
             r1->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
                                         std::vector<std::string>({})));
 
         auto r2 = getMethodAuth(number++, Address(helloAddress), "get()");
-        BOOST_CHECK(
+        BOOST_TEST(
             r2->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
                                         std::vector<std::string>({})));
 
@@ -1182,11 +1182,11 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
         {
             auto result = setMethodType(
                 _number++, 1000, Address(helloAddress), "get()", AuthType::WHITE_LIST_MODE);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
 
             // row not found
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(1),
+            BOOST_TEST(result2->data().toBytes() == codec->encode((uint8_t)(1),
                                                          std::vector<std::string>({}),
                                                          std::vector<std::string>({})));
         }
@@ -1194,14 +1194,14 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
         // can't get now, even if not set any acl
         {
             auto result = helloGet(_number++, 1000, 0);
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
 
         // can still set
         {
             auto result = helloSet(_number++, 1000, "test1");
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::None);
         }
 
         // open white list, only 0x1234567890123456789012345678901234567890 address can use
@@ -1209,10 +1209,10 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
             auto result4 = modifyMethodAuth(_number++, 1000,
                 "openMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() ==
+            BOOST_TEST(result2->data().toBytes() ==
                         codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
                             std::vector<std::string>({"1234567890123456789012345678901234567890"}),
                             std::vector<std::string>({})));
@@ -1221,21 +1221,21 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
         // get permission denied
         {
             auto result5 = helloGet(_number++, 1000);
-            BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result5->type() == ExecutionMessage::REVERT);
         }
 
         // can still set
         {
             auto result6 = helloSet(_number++, 1000, "test2");
-            BOOST_CHECK(result6->status() == (int32_t)TransactionStatus::None);
+            BOOST_TEST(result6->status() == (int32_t)TransactionStatus::None);
         }
 
         // use address 0x1234567890123456789012345678901234567890, success get
         {
             auto result7 =
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result7->data().toBytes() == codec->encode(std::string("test2")));
+            BOOST_TEST(result7->data().toBytes() == codec->encode(std::string("test2")));
         }
 
         // close white list, 0x1234567890123456789012345678901234567890 address can not use
@@ -1243,10 +1243,10 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
             auto result4 = modifyMethodAuth(_number++, 1000,
                 "closeMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, Address(helloAddress), "get()");
-            BOOST_CHECK(
+            BOOST_TEST(
                 result2->data().toBytes() ==
                 codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE), std::vector<std::string>({}),
                     std::vector<std::string>({"1234567890123456789012345678901234567890"})));
@@ -1256,23 +1256,23 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteList)
         {
             auto result5 =
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result5->type() == ExecutionMessage::REVERT);
 
             auto result2 = checkMethodAuth(number++, Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(bool(false)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(bool(false)));
 
             auto result3 = checkMethodAuth(number++, Address(helloAddress), "set(string)",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result3->data().toBytes() == codec->encode(bool(true)));
+            BOOST_TEST(result3->data().toBytes() == codec->encode(bool(true)));
         }
 
         // use address 0x1234567890123456789012345678901234567890 still can set
         {
             auto result = helloSet(
                 _number++, 1000, "test2", 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::None);
         }
     }
 }
@@ -1284,7 +1284,7 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
     // simple get
     {
         auto result = helloGet(number++, 1000, 0, Address(), newHello2Address);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello World!")));
     }
 
     Address helloInside;
@@ -1299,18 +1299,18 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
 
         // not found
         auto r1 = getMethodAuth(number++, helloInside, "set(string)");
-        BOOST_CHECK(
+        BOOST_TEST(
             r1->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
                                         std::vector<std::string>({})));
         // set method acl type
         {
             auto result = setMethodType(
                 _number++, 1000, helloInside, "set(string)", AuthType::WHITE_LIST_MODE);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
 
             // row not found
             auto result2 = getMethodAuth(number++, helloInside, "set(string)");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(1),
+            BOOST_TEST(result2->data().toBytes() == codec->encode((uint8_t)(1),
                                                          std::vector<std::string>({}),
                                                          std::vector<std::string>({})));
         }
@@ -1318,15 +1318,15 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
         // can't set now, white list doesnt have any account
         {
             auto result = helloSet(_number++, 1000, "123", 0, Address(), helloInside.hex());
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
 
         // can't set by new hello2 now, white list doesnt have any account
         {
             auto result = helloSet(_number++, 1000, "123", 0, Address(), newHello2Address);
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::RevertInstruction);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::RevertInstruction);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
 
         // open white list, only newHelloAddress address can use
@@ -1334,10 +1334,10 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
             auto result4 =
                 modifyMethodAuth(_number++, 1000, "openMethodAuth(address,bytes4,address)",
                     helloInside, "set(string)", Address(newHello2Address));
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, helloInside, "set(string)");
-            BOOST_CHECK(
+            BOOST_TEST(
                 result2->data().toBytes() == codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
                                                  std::vector<std::string>({newHello2Address}),
                                                  std::vector<std::string>({})));
@@ -1346,8 +1346,8 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
         // use random tx.origin set permission denied
         {
             auto result5 = helloSet(_number++, 1000, "123", 0, Address(), helloInside.hex());
-            BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result5->type() == ExecutionMessage::REVERT);
         }
 
         // use hello2 contract to set, success set
@@ -1361,10 +1361,10 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
             auto result4 =
                 modifyMethodAuth(_number++, 1000, "closeMethodAuth(address,bytes4,address)",
                     helloInside, "set(string)", Address(newHello2Address));
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(number++, helloInside, "set(string)");
-            BOOST_CHECK(
+            BOOST_TEST(
                 result2->data().toBytes() == codec->encode((uint8_t)(AuthType::WHITE_LIST_MODE),
                                                  std::vector<std::string>({}),
                                                  std::vector<std::string>({newHello2Address})));
@@ -1373,14 +1373,14 @@ BOOST_AUTO_TEST_CASE(testMethodWhiteListWithSenderCheck)
         // call hello inside get permission denied
         {
             auto result5 = helloSet(_number++, 1000, "123", 0, Address(), helloInside.hex());
-            BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result5->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result5->type() == ExecutionMessage::REVERT);
         }
         // call hello outside get permission denied
         {
             auto result5 = helloSet(_number++, 1000, "123", 0, Address(), newHello2Address);
-            BOOST_CHECK(result5->status() == (int32_t)TransactionStatus::RevertInstruction);
-            BOOST_CHECK(result5->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result5->status() == (int32_t)TransactionStatus::RevertInstruction);
+            BOOST_TEST(result5->type() == ExecutionMessage::REVERT);
         }
     }
 }
@@ -1391,7 +1391,7 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
     // simple get
     {
         auto result = helloGet(3, 1000);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
     }
 
     // add method acl type
@@ -1399,12 +1399,12 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
         bcos::protocol::BlockNumber _number = 4;
         // not found
         auto r1 = getMethodAuth(_number++, Address(helloAddress), "set(string)");
-        BOOST_CHECK(
+        BOOST_TEST(
             r1->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
                                         std::vector<std::string>({})));
 
         auto r2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-        BOOST_CHECK(
+        BOOST_TEST(
             r2->data().toBytes() == codec->encode((uint8_t)(0), std::vector<std::string>({}),
                                         std::vector<std::string>({})));
 
@@ -1412,10 +1412,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
         {
             auto result = setMethodType(
                 _number++, 1000, Address(helloAddress), "get()", AuthType::BLACK_LIST_MODE);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode((uint8_t)(2),
+            BOOST_TEST(result2->data().toBytes() == codec->encode((uint8_t)(2),
                                                          std::vector<std::string>({}),
                                                          std::vector<std::string>({})));
         }
@@ -1423,19 +1423,19 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
         // still can get now, even if not set any acl
         {
             auto result = helloGet(_number++, 1000, 0);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+            BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
         }
 
         // still can set, even if not set any acl
         {
             auto result = helloSet(_number++, 1000, "test1");
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::None);
         }
 
         // still can get now, even if not set any acl
         {
             auto result = helloGet(_number++, 1000, 0);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("test1")));
+            BOOST_TEST(result->data().toBytes() == codec->encode(std::string("test1")));
         }
 
         // open black list, block 0x1234567890123456789012345678901234567890 address usage
@@ -1443,10 +1443,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             auto result = modifyMethodAuth(_number++, 1000,
                 "openMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(result2->data().toBytes() ==
+            BOOST_TEST(result2->data().toBytes() ==
                         codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE),
                             std::vector<std::string>({"1234567890123456789012345678901234567890"}),
                             std::vector<std::string>({})));
@@ -1455,20 +1455,20 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
         // can still set
         {
             auto result = helloSet(_number++, 1000, "test2");
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::None);
         }
 
         // can still get with default address
         {
             auto result = helloGet(_number++, 1000);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("test2")));
+            BOOST_TEST(result->data().toBytes() == codec->encode(std::string("test2")));
         }
 
         // use address 0x1234567890123456789012345678901234567890, still can get
         {
             auto result =
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("test2")));
+            BOOST_TEST(result->data().toBytes() == codec->encode(std::string("test2")));
         }
 
         // close black list, 0x1234567890123456789012345678901234567890 address block
@@ -1476,10 +1476,10 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
             auto result4 = modifyMethodAuth(_number++, 1000,
                 "closeMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(u256(0)));
 
             auto result2 = getMethodAuth(_number++, Address(helloAddress), "get()");
-            BOOST_CHECK(
+            BOOST_TEST(
                 result2->data().toBytes() ==
                 codec->encode((uint8_t)(AuthType::BLACK_LIST_MODE), std::vector<std::string>({}),
                     std::vector<std::string>({"1234567890123456789012345678901234567890"})));
@@ -1489,8 +1489,8 @@ BOOST_AUTO_TEST_CASE(testMethodBlackList)
         {
             auto result =
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
     }
 }
@@ -1501,7 +1501,7 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
     // simple get
     {
         auto result = helloGet(2, 1000);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
     }
 
     // add method acl type
@@ -1510,7 +1510,7 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
         // get admin
         {
             auto result = getAdmin(_number++, 1000, Address(helloAddress));
-            BOOST_CHECK(result->data().toBytes() ==
+            BOOST_TEST(result->data().toBytes() ==
                         codec->encode(Address("11ac3ca85a307ae2aff614e83949ab691ba019c5")));
         }
         // get admin in wrong address
@@ -1519,19 +1519,19 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
                 getAdmin(_number++, 1000, Address("0x1234567890123456789012345678901234567890"));
             if (versionCompareTo(m_blockVersion, BlockVersion::V3_3_VERSION) >= 0)
             {
-                BOOST_CHECK(
+                BOOST_TEST(
                     result->data().toBytes() == codec->encode(Address(std::string(EMPTY_ADDRESS))));
             }
             else
             {
-                BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PrecompiledError);
+                BOOST_TEST(result->status() == (int32_t)TransactionStatus::PrecompiledError);
             }
         }
         // set method acl type
         {
             auto result = setMethodType(
                 _number++, 1000, Address(helloAddress), "get()", AuthType::BLACK_LIST_MODE);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
         }
 
         // close black list, block 0x1234567890123456789012345678901234567890 address usage
@@ -1539,27 +1539,27 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
             auto result = modifyMethodAuth(_number++, 1000,
                 "closeMethodAuth(address,bytes4,address)", Address(helloAddress), "get()",
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
         }
 
         // can still set
         {
             auto result = helloSet(_number++, 1000, "test2");
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::None);
         }
 
         // can still get with default address
         {
             auto result = helloGet(_number++, 1000);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("test2")));
+            BOOST_TEST(result->data().toBytes() == codec->encode(std::string("test2")));
         }
 
         // use address 0x1234567890123456789012345678901234567890, get permission denied
         {
             auto result =
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
 
         // reset admin in error contract address
@@ -1567,28 +1567,28 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
             auto result =
                 resetAdmin(_number++, 1000, Address("0x1234567890123456789012345678901234567890"),
                     Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PrecompiledError);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PrecompiledError);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
 
         // reset admin
         {
             auto result = resetAdmin(_number++, 1000, Address(helloAddress),
                 Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(0)));
         }
 
         // reset admin with wrong sender
         {
             auto result = resetAdmin(_number++, 1000, Address(helloAddress),
                 Address("0x1234567890123456789012345678901234567890"), 0, true);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(CODE_NO_AUTHORIZED)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(CODE_NO_AUTHORIZED)));
         }
 
         // get admin
         {
             auto result = getAdmin(_number++, 1000, Address(helloAddress));
-            BOOST_CHECK(result->data().toBytes() ==
+            BOOST_TEST(result->data().toBytes() ==
                         codec->encode(Address("0x1234567890123456789012345678901234567890")));
         }
 
@@ -1596,8 +1596,8 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
         {
             auto result =
                 helloGet(_number++, 1000, 0, Address("0x1234567890123456789012345678901234567890"));
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
     }
 }
@@ -1614,58 +1614,58 @@ BOOST_AUTO_TEST_CASE(testDeployWhiteList)
         // set deploy acl type
         {
             auto result = setDeployType(_number++, 1000, AuthType::WHITE_LIST_MODE);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(0)));
         }
         // cannot deploy
         {
             auto result = deployHelloInAuthCheck(
                 "1234654b49838bd3e9466c85a4cc3428c9601235", _number++, admin, true);
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
         // has auth? no
         {
             auto result = hasDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(false));
+            BOOST_TEST(result->data().toBytes() == codec->encode(false));
         }
         // open deploy auth
         {
             auto result = openDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(0)));
         }
         // has auth? yes
         {
             auto result = hasDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(true));
+            BOOST_TEST(result->data().toBytes() == codec->encode(true));
         }
         // deploy ok
         {
             auto result = deployHelloInAuthCheck(
                 "1234654b49838bd3e9466c85a4cc3428c9605431", _number++, admin, false);
-            BOOST_CHECK(
+            BOOST_TEST(
                 result->newEVMContractAddress() == "1234654b49838bd3e9466c85a4cc3428c9605431");
         }
         // close auth
         {
             auto result = closeDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(0)));
         }
         // has auth? no
         {
             auto result = hasDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(false));
+            BOOST_TEST(result->data().toBytes() == codec->encode(false));
         }
         // cannot deploy
         {
             auto result = deployHelloInAuthCheck(
                 "1234654b49838bd3e9466c85a4cc3428c9605430", _number++, admin, true);
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
         // get deploy type
         {
             auto result = getDeployType(_number++, 1000);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(1)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(1)));
         }
     }
 }
@@ -1682,58 +1682,58 @@ BOOST_AUTO_TEST_CASE(testDeployBlackList)
         // set deploy acl type
         {
             auto result = setDeployType(_number++, 1000, AuthType::BLACK_LIST_MODE);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(0)));
         }
         // can still deploy
         {
             auto result = deployHelloInAuthCheck(
                 "1234654b49838bd3e9466c85a4cc3428c9601235", _number++, admin, false);
-            BOOST_CHECK(
+            BOOST_TEST(
                 result->newEVMContractAddress() == "1234654b49838bd3e9466c85a4cc3428c9601235");
         }
         // has auth? yes
         {
             auto result = hasDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(true));
+            BOOST_TEST(result->data().toBytes() == codec->encode(true));
         }
         // close deploy auth
         {
             auto result = closeDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(0)));
         }
         // has auth? no
         {
             auto result = hasDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(false));
+            BOOST_TEST(result->data().toBytes() == codec->encode(false));
         }
         // deploy permission denied
         {
             auto result = deployHelloInAuthCheck(
                 "1234654b49838bd3e9466c85a4cc3428c9605431", _number++, admin, true);
-            BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
-            BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
+            BOOST_TEST(result->status() == (int32_t)TransactionStatus::PermissionDenied);
+            BOOST_TEST(result->type() == ExecutionMessage::REVERT);
         }
         // open auth
         {
             auto result = openDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(0)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(0)));
         }
         // has auth? yes
         {
             auto result = hasDeployAuth(_number++, 1000, admin);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(true));
+            BOOST_TEST(result->data().toBytes() == codec->encode(true));
         }
         // deploy ok
         {
             auto result = deployHelloInAuthCheck(
                 "1234654b49838bd3e9466c85a4cc3428c9605430", _number++, admin, false);
-            BOOST_CHECK(
+            BOOST_TEST(
                 result->newEVMContractAddress() == "1234654b49838bd3e9466c85a4cc3428c9605430");
         }
         // get deploy type
         {
             auto result = getDeployType(_number++, 1000);
-            BOOST_CHECK(result->data().toBytes() == codec->encode(u256(2)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(u256(2)));
         }
     }
 }
@@ -1771,7 +1771,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -1790,14 +1790,14 @@ BOOST_AUTO_TEST_CASE(testDeployAdmin)
     {
         auto result1 =
             getAdmin(_number++, 1000, Address("1234654b49838bd3e9466c85a4cc3428c9601235"));
-        BOOST_CHECK(result1->data().toBytes() == codec->encode(admin));
+        BOOST_TEST(result1->data().toBytes() == codec->encode(admin));
     }
 
     // test external deploy admin
     {
         auto result1 = getAdmin(_number++, 1000, Address(hello2Address));
         std::cout << toHexStringWithPrefix(result1->data().toBytes()) << std::endl;
-        BOOST_CHECK(result1->data().toBytes() == codec->encode(admin));
+        BOOST_TEST(result1->data().toBytes() == codec->encode(admin));
     }
 }
 
@@ -1808,43 +1808,43 @@ BOOST_AUTO_TEST_CASE(testContractStatus)
     // frozen
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), true);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
 
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(false));
     }
     // frozen, revert
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractFrozen);
+        BOOST_TEST(result->status() == (int32_t)TransactionStatus::ContractFrozen);
 
         auto result2 = helloSet(_number++, 1000, "");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
     }
     // switch normal
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), false);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(true));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(true));
     }
     // normal
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
 
         auto result2 = helloSet(_number++, 1000, "test");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::None);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::None);
 
         auto result3 = helloGet(_number++, 1000);
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string("test")));
+        BOOST_TEST(result3->data().toBytes() == codec->encode(std::string("test")));
     }
 
     // contract address not found
     {
         auto errorAddress = "123456";
         auto result2 = contractAvailable(_number++, Address(errorAddress));
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -1857,43 +1857,43 @@ BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
     // frozen
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), true);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
 
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(false));
     }
     // frozen, revert
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractFrozen);
+        BOOST_TEST(result->status() == (int32_t)TransactionStatus::ContractFrozen);
 
         auto result2 = helloSet(_number++, 1000, "");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
     }
     // switch normal
     {
         auto r1 = setContractStatus(_number++, Address(helloAddress), false);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(true));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(true));
     }
     // normal
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
 
         auto result2 = helloSet(_number++, 1000, "test");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::None);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::None);
 
         auto result3 = helloGet(_number++, 1000);
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string("test")));
+        BOOST_TEST(result3->data().toBytes() == codec->encode(std::string("test")));
     }
 
     // contract address not found
     {
         auto errorAddress = "123456";
         auto result2 = contractAvailable(_number++, Address(errorAddress));
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -1906,72 +1906,72 @@ BOOST_AUTO_TEST_CASE(testContractAbolish)
     // frozen
     {
         auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Frozen);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
 
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(false));
     }
     // frozen, revert
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractFrozen);
+        BOOST_TEST(result->status() == (int32_t)TransactionStatus::ContractFrozen);
 
         auto result2 = helloSet(_number++, 1000, "");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::ContractFrozen);
     }
     // switch normal
     {
         auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Available);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(true));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(true));
     }
     // normal
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
+        BOOST_TEST(result->data().toBytes() == codec->encode(std::string("Hello, World!")));
 
         auto result2 = helloSet(_number++, 1000, "test");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::None);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::None);
 
         auto result3 = helloGet(_number++, 1000);
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(std::string("test")));
+        BOOST_TEST(result3->data().toBytes() == codec->encode(std::string("test")));
     }
 
     // contract address not found
     {
         auto errorAddress = "123456";
         auto result2 = contractAvailable(_number++, Address(errorAddress));
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // abolish
     {
         auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Abolish);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
 
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(false));
     }
     // abolish, revert
     {
         auto result = helloGet(_number++, 1000);
-        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::ContractAbolished);
+        BOOST_TEST(result->status() == (int32_t)TransactionStatus::ContractAbolished);
 
         auto result2 = helloSet(_number++, 1000, "");
-        BOOST_CHECK(result2->status() == (int32_t)TransactionStatus::ContractAbolished);
+        BOOST_TEST(result2->status() == (int32_t)TransactionStatus::ContractAbolished);
     }
 
     // frozen again, return error
     {
         auto r1 = setContractStatus32(_number++, Address(helloAddress), ContractStatus::Frozen);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = contractAvailable(_number++, Address(helloAddress));
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(false));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(false));
 
         auto r3 = setContractStatus(_number++, Address(helloAddress), true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -1984,7 +1984,7 @@ BOOST_AUTO_TEST_CASE(testInitAuth)
 
     // init in 3.2, not exist address
     auto re = initAuth(_number++, admin);
-    BOOST_CHECK(re->status() == (int32_t)TransactionStatus::CallAddressError);
+    BOOST_TEST(re->status() == (int32_t)TransactionStatus::CallAddressError);
 
     helloSet(_number++, 3, "test");
     helloGet(_number++, 3);
@@ -2029,18 +2029,18 @@ BOOST_AUTO_TEST_CASE(testInitAuth)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
-        BOOST_CHECK(result2->status() == 0);
+        BOOST_TEST(result2->status() == 0);
         commitBlock(_number);
     }
 
     // init again, it should throw
     auto re2 = initAuth(_number++, admin);
-    BOOST_CHECK(re2->status() == (int32_t)TransactionStatus::PrecompiledError);
+    BOOST_TEST(re2->status() == (int32_t)TransactionStatus::PrecompiledError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

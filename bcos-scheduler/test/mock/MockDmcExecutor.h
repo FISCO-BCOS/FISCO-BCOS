@@ -131,7 +131,7 @@ public:
         }
 
         // Always success
-        BOOST_CHECK(input);
+        BOOST_TEST(input);
         if (input->type() == bcos::protocol::ExecutionMessage::TXHASH)
         {
             BOOST_CHECK_NE(input->transactionHash(), bcos::crypto::HashType());

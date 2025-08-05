@@ -200,20 +200,20 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(flags1.size(), expect1.size());
     for (auto feature : expect1)
     {
-        BOOST_CHECK(features1.get(feature));
+        BOOST_TEST(features1.get(feature));
     }
 
     // 3.2.7 to 3.3
     Features features2;
     features2.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_2_7_VERSION, bcos::protocol::BlockVersion::V3_3_VERSION);
-    BOOST_CHECK(validFlags(features2).empty());
+    BOOST_TEST(validFlags(features2).empty());
 
     // 3.3 to 3.4
     Features features3;
     features3.setUpgradeFeatures(
         bcos::protocol::BlockVersion::V3_3_VERSION, bcos::protocol::BlockVersion::V3_4_VERSION);
-    BOOST_CHECK(validFlags(features3).empty());
+    BOOST_TEST(validFlags(features3).empty());
 
     // 3.2.7 to 3.6.0
     Features features4;
@@ -226,7 +226,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features4).size(), expect4.size());
     for (auto feature : expect4)
     {
-        BOOST_CHECK(features4.get(feature));
+        BOOST_TEST(features4.get(feature));
     }
 
     // 3.2.4 to 3.6.0
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features5).size(), expect2.size());
     for (auto feature : expect2)
     {
-        BOOST_CHECK(features5.get(feature));
+        BOOST_TEST(features5.get(feature));
     }
 
     // 3.4 to 3.5
@@ -251,7 +251,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features6).size(), expect3.size());
     for (auto feature : expect3)
     {
-        BOOST_CHECK(features6.get(feature));
+        BOOST_TEST(features6.get(feature));
     }
 
     // 3.2.2 to 3.2.3
@@ -262,7 +262,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features7).size(), expect5.size());
     for (auto feature : expect5)
     {
-        BOOST_CHECK(features7.get(feature));
+        BOOST_TEST(features7.get(feature));
     }
 
     // 3.2.5 to 3.2.7
@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features8).size(), expect6.size());
     for (auto feature : expect6)
     {
-        BOOST_CHECK(features8.get(feature));
+        BOOST_TEST(features8.get(feature));
     }
 
     // 3.5.0 to 3.6.0
@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features9).size(), expect7.size());
     for (auto feature : expect7)
     {
-        BOOST_CHECK(features9.get(feature));
+        BOOST_TEST(features9.get(feature));
     }
 
     // 3.4.0  to 3.5.0
@@ -298,7 +298,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features10).size(), expect8.size());
     for (auto feature : expect8)
     {
-        BOOST_CHECK(features10.get(feature));
+        BOOST_TEST(features10.get(feature));
     }
 
     // 3.6.0 to 3.7.0
@@ -311,7 +311,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features11).size(), expect9.size());
     for (auto feature : expect9)
     {
-        BOOST_CHECK(features11.get(feature));
+        BOOST_TEST(features11.get(feature));
     }
 
     // 3.2.4 to 3.2.6
@@ -323,7 +323,7 @@ BOOST_AUTO_TEST_CASE(upgrade)
     BOOST_CHECK_EQUAL(validFlags(features12).size(), expect10.size());
     for (auto feature : expect10)
     {
-        BOOST_CHECK(features12.get(feature));
+        BOOST_TEST(features12.get(feature));
     }
 }
 
@@ -337,7 +337,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features1).size(), expect1.size());
     for (auto feature : expect1)
     {
-        BOOST_CHECK(features1.get(feature));
+        BOOST_TEST(features1.get(feature));
     }
 
     // 3.5.0
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features2).size(), expect2.size());
     for (auto feature : expect2)
     {
-        BOOST_CHECK(features2.get(feature));
+        BOOST_TEST(features2.get(feature));
     }
 
     // 3.6.0
@@ -359,7 +359,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features3).size(), expect3.size());
     for (auto feature : expect3)
     {
-        BOOST_CHECK(features3.get(feature));
+        BOOST_TEST(features3.get(feature));
     }
 
     // 3.7.0
@@ -374,7 +374,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features37).size(), expect37.size());
     for (auto feature : expect37)
     {
-        BOOST_CHECK(features37.get(feature));
+        BOOST_TEST(features37.get(feature));
     }
 
     // 3.8.0
@@ -392,7 +392,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features38).size(), expect38.size());
     for (auto feature : expect38)
     {
-        BOOST_CHECK(features38.get(feature));
+        BOOST_TEST(features38.get(feature));
     }
 
     // 3.4.0
@@ -402,7 +402,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features4).size(), expect4.size());
     for (auto feature : expect4)
     {
-        BOOST_CHECK(features4.get(feature));
+        BOOST_TEST(features4.get(feature));
     }
 
     // 3.12.0
@@ -421,7 +421,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features3_12).size(), expect3_12.size());
     for (auto feature : expect3_12)
     {
-        BOOST_CHECK(features3_12.get(feature));
+        BOOST_TEST(features3_12.get(feature));
     }
 
     // 3.15.1
@@ -443,7 +443,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features3_15).size(), expect3_15.size());
     for (auto feature : expect3_15)
     {
-        BOOST_CHECK(features3_15.get(feature));
+        BOOST_TEST(features3_15.get(feature));
     }
 
     // 3.15.1
@@ -466,7 +466,7 @@ BOOST_AUTO_TEST_CASE(genesis)
     BOOST_CHECK_EQUAL(validFlags(features3_152).size(), expect3_152.size());
     for (auto feature : expect3_152)
     {
-        BOOST_CHECK(features3_152.get(feature));
+        BOOST_TEST(features3_152.get(feature));
     }
 }
 
@@ -475,11 +475,11 @@ BOOST_AUTO_TEST_CASE(testDependenciesFeatures)
 {
     Features features;
     // features.set(ledger::Features::Flag::feature_ethereum_compatible);
-    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance));
-    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_balance_precompiled));
-    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_calculate_gasPrice));
-    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_address));
-    // BOOST_CHECK(features.get(ledger::Features::Flag::feature_evm_cancun));
+    // BOOST_TEST(features.get(ledger::Features::Flag::feature_balance));
+    // BOOST_TEST(features.get(ledger::Features::Flag::feature_balance_precompiled));
+    // BOOST_TEST(features.get(ledger::Features::Flag::feature_calculate_gasPrice));
+    // BOOST_TEST(features.get(ledger::Features::Flag::feature_evm_address));
+    // BOOST_TEST(features.get(ledger::Features::Flag::feature_evm_cancun));
 }
 
 

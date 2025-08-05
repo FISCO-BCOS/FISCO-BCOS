@@ -38,18 +38,18 @@ BOOST_AUTO_TEST_CASE(test_initTopicManager)
         uint32_t topicSeq;
         TopicItems topicItems;
         auto b = topicManager->parseTopicItemsJson(topicSeq, topicItems, jsonValue);
-        BOOST_CHECK(b);
-        BOOST_CHECK(topicSeq == 1);
-        BOOST_CHECK(topicItems.empty());
+        BOOST_TEST(b);
+        BOOST_TEST(topicSeq == 1);
+        BOOST_TEST(topicItems.empty());
     }
 
     {
         auto seq = topicManager->topicSeq();
-        BOOST_CHECK(seq == 1);
+        BOOST_TEST(seq == 1);
         topicManager->incTopicSeq();
-        BOOST_CHECK(topicManager->topicSeq() == (seq + 1));
+        BOOST_TEST(topicManager->topicSeq() == (seq + 1));
         topicManager->incTopicSeq();
-        BOOST_CHECK(topicManager->topicSeq() == (seq + 2));
+        BOOST_TEST(topicManager->topicSeq() == (seq + 2));
     }
 }
 
@@ -61,35 +61,35 @@ BOOST_AUTO_TEST_CASE(test_parseTopicItemsJson)
         TopicItems topicItems;
         std::string json = "";
         auto r = topicManager->parseTopicItemsJson(topicSeq, topicItems, json);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
     }
     {
         uint32_t topicSeq;
         TopicItems topicItems;
         std::string json = "{\"topicSeq\":111,\"topicItems\":[]}";
         auto r = topicManager->parseTopicItemsJson(topicSeq, topicItems, json);
-        BOOST_CHECK(r);
-        BOOST_CHECK(topicSeq == 111);
-        BOOST_CHECK(topicItems.size() == 0);
+        BOOST_TEST(r);
+        BOOST_TEST(topicSeq == 111);
+        BOOST_TEST(topicItems.size() == 0);
     }
     {
         uint32_t topicSeq;
         TopicItems topicItems;
         std::string json = "{\"topicSeq\":123,\"topicItems\":[\"a\",\"b\",\"c\"]}";
         auto r = topicManager->parseTopicItemsJson(topicSeq, topicItems, json);
-        BOOST_CHECK(r);
-        BOOST_CHECK(topicSeq == 123);
-        BOOST_CHECK(topicItems.size() == 3);
+        BOOST_TEST(r);
+        BOOST_TEST(topicSeq == 123);
+        BOOST_TEST(topicItems.size() == 3);
         auto a = std::string("a");
-        BOOST_CHECK(std::find_if(topicItems.begin(), topicItems.end(),
+        BOOST_TEST(std::find_if(topicItems.begin(), topicItems.end(),
                         [a](const TopicItem& _topicItem) { return _topicItem.topicName() == a; }) !=
                     topicItems.end());
         auto b = std::string("b");
-        BOOST_CHECK(std::find_if(topicItems.begin(), topicItems.end(),
+        BOOST_TEST(std::find_if(topicItems.begin(), topicItems.end(),
                         [b](const TopicItem& _topicItem) { return _topicItem.topicName() == b; }) !=
                     topicItems.end());
         auto c = std::string("c");
-        BOOST_CHECK(std::find_if(topicItems.begin(), topicItems.end(),
+        BOOST_TEST(std::find_if(topicItems.begin(), topicItems.end(),
                         [c](const TopicItem& _topicItem) { return _topicItem.topicName() == c; }) !=
                     topicItems.end());
     }
@@ -103,8 +103,8 @@ BOOST_AUTO_TEST_CASE(test_subTopics)
     {
         TopicItems topicItems;
         auto r = topicManager->queryTopicItemsByClient(clientID, topicItems);
-        BOOST_CHECK(!r);
-        BOOST_CHECK(topicItems.empty());
+        BOOST_TEST(!r);
+        BOOST_TEST(topicItems.empty());
     }
 
 
@@ -120,19 +120,19 @@ BOOST_AUTO_TEST_CASE(test_subTopics)
         topicManager->subTopic(clientID, topicItems);
         topicItems.clear();
         auto r = topicManager->queryTopicItemsByClient(clientID, topicItems);
-        BOOST_CHECK(r);
-        BOOST_CHECK(topicItems.size() == topics.size());
-        BOOST_CHECK(topicManager->topicSeq() == (seq + 1));
+        BOOST_TEST(r);
+        BOOST_TEST(topicItems.size() == topics.size());
+        BOOST_TEST(topicManager->topicSeq() == (seq + 1));
 
         auto jsonValue = topicManager->queryTopicsSubByClient();
-        BOOST_CHECK(!jsonValue.empty());
+        BOOST_TEST(!jsonValue.empty());
 
         uint32_t topicSeqFromJson;
         TopicItems topicItemsFromJson;
         auto b = topicManager->parseTopicItemsJson(topicSeqFromJson, topicItemsFromJson, jsonValue);
-        BOOST_CHECK(b);
-        BOOST_CHECK(topicSeqFromJson = topicManager->topicSeq());
-        BOOST_CHECK(topicItemsFromJson.size() == topicItems.size());
+        BOOST_TEST(b);
+        BOOST_TEST(topicSeqFromJson = topicManager->topicSeq());
+        BOOST_TEST(topicItemsFromJson.size() == topicItems.size());
     }
 }
 

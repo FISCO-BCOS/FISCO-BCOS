@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
 
         auto entry = co_await storage2::readOne(*backendStorage,
             executor_v1::StateKeyView(ledger::SYS_CONFIG, "bugfix_revert"));
-        BOOST_CHECK(!entry);
+        BOOST_TEST(!entry);
 
         result = systemConfigPrecompiled.call(executive, getRevertParameters);
         codec.decode(bcos::ref(result->execResult()), value);
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
 
         entry = co_await storage2::readOne(*backendStorage,
             bcos::executor_v1::StateKeyView(ledger::SYS_CONFIG, "feature_sharding"));
-        BOOST_CHECK(entry);
+        BOOST_TEST(entry);
 
         auto getShardingParameters = std::make_shared<PrecompiledExecResult>();
         auto getShardingInput =

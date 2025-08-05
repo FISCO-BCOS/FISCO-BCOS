@@ -59,7 +59,7 @@ BOOST_FIXTURE_TEST_SUITE(TreeTopologyTest, TreeTopologyTestFixture)
 BOOST_AUTO_TEST_CASE(UpdateTreeTopologyTest)
 {
     treeTopology.updateConsensusNodeInfo(consensusList);
-    BOOST_CHECK(treeTopology.consIndex() == 0);
+    BOOST_TEST(treeTopology.consIndex() == 0);
 
     const size_t consensusInsertSize = 8;
     for (size_t i = 0; i < consensusInsertSize; ++i)
@@ -72,14 +72,14 @@ BOOST_AUTO_TEST_CASE(UpdateTreeTopologyTest)
     }
 
     treeTopology.updateConsensusNodeInfo(consensusList);
-    BOOST_CHECK(treeTopology.consIndex() == consensusInsertSize);
+    BOOST_TEST(treeTopology.consIndex() == consensusInsertSize);
 
     // select correct
     auto selectedNodes = treeTopology.selectNodes(*peers, treeTopology.consIndex());
-    BOOST_CHECK(selectedNodes->size() == treeWidth);
+    BOOST_TEST(selectedNodes->size() == treeWidth);
     for (size_t i = 0; i < treeWidth; ++i)
     {
-        BOOST_CHECK(selectedNodes->contains(consensusList.at(consensusInsertSize + i + 1)));
+        BOOST_TEST(selectedNodes->contains(consensusList.at(consensusInsertSize + i + 1)));
     }
 }
 
@@ -90,13 +90,13 @@ BOOST_AUTO_TEST_CASE(SelectTest)
     treeTopology.updateConsensusNodeInfo(consensusList);
 
     auto selectedNodes = treeTopology.selectNodes(*peers, treeTopology.consIndex());
-    BOOST_CHECK(selectedNodes->empty());
+    BOOST_TEST(selectedNodes->empty());
 
     selectedNodes = treeTopology.selectNodes(*peers, treeTopology.consIndex(), true);
-    BOOST_CHECK(selectedNodes->size() == 1);
+    BOOST_TEST(selectedNodes->size() == 1);
 
     selectedNodes = treeTopology.selectParent(*peers, treeTopology.consIndex(), true);
-    BOOST_CHECK(selectedNodes->empty());
+    BOOST_TEST(selectedNodes->empty());
 
     consensusList.insert(consensusList.begin(), localKey);
     treeTopology.updateConsensusNodeInfo(consensusList);
@@ -118,11 +118,11 @@ BOOST_AUTO_TEST_CASE(SelectTest)
                 return node->data() == nodeId->data();
             }) == consensusList.cend())
         {
-            BOOST_CHECK(nodeIdSet->empty());
+            BOOST_TEST(nodeIdSet->empty());
         }
         else
         {
-            BOOST_CHECK(nodeIdSet->size() == 1);
+            BOOST_TEST(nodeIdSet->size() == 1);
         }
     }
 }

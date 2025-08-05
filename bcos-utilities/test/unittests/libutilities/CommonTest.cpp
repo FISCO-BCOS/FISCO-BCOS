@@ -40,30 +40,30 @@ BOOST_AUTO_TEST_CASE(testArithCal)
     ///=========test u2s==================
     u256 u_bigint("343894723987432");
     bigint c_end = bigint(1) << 256;
-    BOOST_CHECK(u2s(u_bigint) == u_bigint);
+    BOOST_TEST(u2s(u_bigint) == u_bigint);
     u_bigint = Invalid256;
-    BOOST_CHECK(u2s(u_bigint) < s256(0));
+    BOOST_TEST(u2s(u_bigint) < s256(0));
     u_bigint = u256("0xa170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c6");
-    BOOST_CHECK(u2s(u_bigint) < s256(0));
-    BOOST_CHECK(u2s(u_bigint) == s256(-(c_end - u_bigint)));
+    BOOST_TEST(u2s(u_bigint) < s256(0));
+    BOOST_TEST(u2s(u_bigint) == s256(-(c_end - u_bigint)));
     u_bigint = u256("0x7170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c6");
-    BOOST_CHECK(u2s(u_bigint) == u_bigint);
+    BOOST_TEST(u2s(u_bigint) == u_bigint);
     ///=========test s2u==================
     s256 s_bigint("0x7170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c6");
-    BOOST_CHECK(s2u(s_bigint) == s_bigint);
+    BOOST_TEST(s2u(s_bigint) == s_bigint);
     s_bigint = s256("0xf170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c6");
-    BOOST_CHECK(s2u(s_bigint) == u256(c_end + s_bigint));
+    BOOST_TEST(s2u(s_bigint) == u256(c_end + s_bigint));
     ///=========test exp10==================
-    BOOST_CHECK(exp10<1>() == u256(10));
-    BOOST_CHECK(exp10<9>() == u256(1000000000));
-    BOOST_CHECK(exp10<0>() == u256(1));
+    BOOST_TEST(exp10<1>() == u256(10));
+    BOOST_TEST(exp10<9>() == u256(1000000000));
+    BOOST_TEST(exp10<0>() == u256(1));
 }
 /// test utcTime
 BOOST_AUTO_TEST_CASE(testUtcTime)
 {
     uint64_t old_time = utcTime();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    BOOST_CHECK(old_time < utcTime());
+    BOOST_TEST(old_time < utcTime());
 }
 
 BOOST_AUTO_TEST_CASE(testGuards)
@@ -94,11 +94,11 @@ BOOST_AUTO_TEST_CASE(testGuards)
     // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
     //     std::chrono::high_resolution_clock::now() - begin);
 
-    BOOST_CHECK(count == max);
+    BOOST_TEST(count == max);
 
     // uint64_t end_time = end.tv_sec * 1000000 + end.tv_usec;
     // uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
-    // BOOST_CHECK((end_time - begin_time) >= (uint64_t(max) * 1000));
+    // BOOST_TEST((end_time - begin_time) >= (uint64_t(max) * 1000));
     delete[] t;
 }
 
@@ -134,8 +134,8 @@ BOOST_AUTO_TEST_CASE(testWriteGuard)
     // uint64_t end_time = end.tv_sec * 1000000 + end.tv_usec;
     // uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
 
-    // BOOST_CHECK((end_time - begin_time) > (uint64_t(max) * 1000));
-    BOOST_CHECK(count == max);
+    // BOOST_TEST((end_time - begin_time) > (uint64_t(max) * 1000));
+    BOOST_TEST(count == max);
     delete[] t;
 }
 
@@ -176,8 +176,8 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
 
     // uint64_t end_time = end.tv_sec * 1000000 + end.tv_usec;
     // uint64_t begin_time = begin.tv_sec * 1000000 + begin.tv_usec;
-    // BOOST_CHECK((end_time - begin_time) >= (uint64_t(max) * 1000));
-    BOOST_CHECK(count == 2 * max);
+    // BOOST_TEST((end_time - begin_time) >= (uint64_t(max) * 1000));
+    BOOST_TEST(count == 2 * max);
     delete[] t;
 }
 BOOST_AUTO_TEST_CASE(testError)
@@ -185,20 +185,20 @@ BOOST_AUTO_TEST_CASE(testError)
     std::string errorMessage = " test error";
     int64_t errorCode = -100042;
     Error::Ptr error = std::make_unique<Error>(Error::buildError("", errorCode, errorMessage));
-    BOOST_CHECK(error->errorCode() == errorCode);
-    BOOST_CHECK(error->errorMessage() == errorMessage);
+    BOOST_TEST(error->errorCode() == errorCode);
+    BOOST_TEST(error->errorMessage() == errorMessage);
 
     errorMessage = " test error234";
     errorCode = 100044;
     error->setErrorCode(errorCode);
     error->setErrorMessage(errorMessage);
-    BOOST_CHECK(error->errorCode() == errorCode);
-    BOOST_CHECK(error->errorMessage() == errorMessage);
+    BOOST_TEST(error->errorCode() == errorCode);
+    BOOST_TEST(error->errorMessage() == errorMessage);
 }
 
 void testRange(::ranges::range auto range)
 {
-    BOOST_CHECK(::ranges::size(range) > 0);
+    BOOST_TEST(::ranges::size(range) > 0);
 }
 
 BOOST_AUTO_TEST_CASE(range)

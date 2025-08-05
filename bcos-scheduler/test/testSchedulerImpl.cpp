@@ -145,18 +145,18 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
             if (error)
             {
                 executeBlockError = true;
-                BOOST_CHECK(error);
+                BOOST_TEST(error);
                 SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
             }
             else
             {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(header);
+                BOOST_TEST(!error);
+                BOOST_TEST(header);
             }
             future.set_value(std::move(header));
         });
     blockHeader = future.get_future().get();
-    BOOST_CHECK(executeBlockError);
+    BOOST_TEST(executeBlockError);
     executeBlockError = false;
 
     // first time executeBlock, add m_block cache
@@ -182,21 +182,21 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
                 SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
                 if (error)
                 {
-                    BOOST_CHECK(error);
+                    BOOST_TEST(error);
                     executeBlockError = true;
                     SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
                 }
                 else
                 {
-                    BOOST_CHECK(!error);
-                    BOOST_CHECK(header);
+                    BOOST_TEST(!error);
+                    BOOST_TEST(header);
                 }
                 future1.set_value(std::move(header));
             });
         blockHeader = future1.get_future().get();
         if (!executeBlockError)
         {
-            BOOST_CHECK(blockHeader);
+            BOOST_TEST(blockHeader);
         }
         executeBlockError = false;
         blockHeader = nullptr;
@@ -222,20 +222,20 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
                 if (error)
                 {
                     executeBlockError = true;
-                    BOOST_CHECK(error);
+                    BOOST_TEST(error);
                     SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
                 }
                 else
                 {
-                    BOOST_CHECK(!error);
-                    BOOST_CHECK(header);
+                    BOOST_TEST(!error);
+                    BOOST_TEST(header);
                 }
                 future1.set_value(std::move(header));
             });
         executeHeader1 = future1.get_future().get();
         if (!executeBlockError)
         {
-            BOOST_CHECK(executeHeader1);
+            BOOST_TEST(executeHeader1);
         }
         executeBlockError = false;
         executeHeader1 = nullptr;
@@ -258,19 +258,19 @@ BOOST_AUTO_TEST_CASE(executeBlockTest)
             SCHEDULER_LOG(DEBUG) << LOG_KV("BlockHeader", header);
             if (error)
             {
-                BOOST_CHECK(error);
+                BOOST_TEST(error);
                 executeBlockError = true;
                 SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
             }
             else
             {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(header);
+                BOOST_TEST(!error);
+                BOOST_TEST(header);
             }
             future1.set_value(std::move(header));
         });
     executeHeader11 = future1.get_future().get();
-    BOOST_CHECK(executeBlockError);
+    BOOST_TEST(executeBlockError);
 }
 BOOST_AUTO_TEST_CASE(commitBlock)
 {
@@ -302,20 +302,20 @@ BOOST_AUTO_TEST_CASE(commitBlock)
                 if (error)
                 {
                     executeBlockError = true;
-                    BOOST_CHECK(error);
+                    BOOST_TEST(error);
                     SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
                 }
                 else
                 {
-                    BOOST_CHECK(!error);
-                    BOOST_CHECK(header);
+                    BOOST_TEST(!error);
+                    BOOST_TEST(header);
                 }
                 future.set_value(std::move(header));
             });
         blockHeader = future.get_future().get();
         if (!executeBlockError)
         {
-            BOOST_CHECK(blockHeader);
+            BOOST_TEST(blockHeader);
         }
         executeBlockError = false;
         blockHeader = nullptr;
@@ -344,7 +344,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
                 else
                 {
                     ++queueFrontNumber;
-                    BOOST_CHECK(config);
+                    BOOST_TEST(config);
                     BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
                     BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
                     BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
@@ -360,7 +360,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     }
     BOOST_CHECK_EQUAL(errorNumber, 4);
     BOOST_CHECK_EQUAL(queueFrontNumber, 0);
-    BOOST_CHECK(!commitBlockError);
+    BOOST_TEST(!commitBlockError);
     SCHEDULER_LOG(DEBUG) << LOG_KV("errorNumber", errorNumber)
                          << LOG_KV("queueFrontNumber", queueFrontNumber);
 
@@ -381,7 +381,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
             else
             {
                 ++queueFrontNumber;
-                BOOST_CHECK(config);
+                BOOST_TEST(config);
                 BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
                 BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
                 BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
@@ -427,7 +427,7 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
     }
     // preExecuteBlock
     scheduler->preExecuteBlock(
-        block, false, [&](bcos::Error::Ptr&& error) { BOOST_CHECK(!error); });
+        block, false, [&](bcos::Error::Ptr&& error) { BOOST_TEST(!error); });
 
 
     // executeBlock
@@ -439,18 +439,18 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
             if (error)
             {
                 executeBlockError = true;
-                BOOST_CHECK(error);
+                BOOST_TEST(error);
                 SCHEDULER_LOG(ERROR) << "ExecuteBlock callback error";
             }
             else
             {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(header);
+                BOOST_TEST(!error);
+                BOOST_TEST(header);
             }
             future.set_value(std::move(header));
         });
     bcos::protocol::BlockHeader::Ptr blockHeader = future.get_future().get();
-    BOOST_CHECK(blockHeader);
+    BOOST_TEST(blockHeader);
 
 
     // commitBlock
@@ -464,7 +464,7 @@ BOOST_AUTO_TEST_CASE(handlerBlockTest)
             }
             else
             {
-                BOOST_CHECK(config);
+                BOOST_TEST(config);
                 BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
                 BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
                 BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
@@ -488,8 +488,8 @@ BOOST_AUTO_TEST_CASE(getCode)
     executorManager->addExecutor("executor1", executor);
     SCHEDULER_LOG(DEBUG) << "----- add Executor ------";
     scheduler->getCode("hello world!", [](Error::Ptr error, bcos::bytes code) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(code.empty());
+        BOOST_TEST(!error);
+        BOOST_TEST(code.empty());
     });
 }
 
@@ -523,8 +523,8 @@ BOOST_AUTO_TEST_CASE(call)
             [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
                 auto blockNumber = receiptResponse->blockNumber();
                 std::cout << "blockNumber" << blockNumber << std::endl;
-                BOOST_CHECK(!error);
-                BOOST_CHECK(receiptResponse);
+                BOOST_TEST(!error);
+                BOOST_TEST(receiptResponse);
 
                 receipt = std::move(receiptResponse);
             });
@@ -543,9 +543,9 @@ BOOST_AUTO_TEST_CASE(call)
     {
         scheduler->call(empty_to,
             [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
-                BOOST_CHECK(error);
-                BOOST_CHECK(error->errorMessage() == "Call address is empty");
-                BOOST_CHECK(receiptResponse == nullptr);
+                BOOST_TEST(error);
+                BOOST_TEST(error->errorMessage() == "Call address is empty");
+                BOOST_TEST(receiptResponse == nullptr);
             });
     }
 }
@@ -574,13 +574,13 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
             // callback(BCOS_ERROR_UNIQUE_PTR(-1, "deploy sys contract!"), nullptr);
-            BOOST_CHECK(error == nullptr);
+            BOOST_TEST(error == nullptr);
             executedHeader.set_value(std::move(header));
         });
     auto header = executedHeader.get_future().get();
 
 
-    BOOST_CHECK(header);
+    BOOST_TEST(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
 }
 
@@ -601,8 +601,8 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
 
     scheduler->call(
         tx, [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(receiptResponse);
+            BOOST_TEST(!error);
+            BOOST_TEST(receiptResponse);
 
             receipt = std::move(receiptResponse);
         });

@@ -40,13 +40,13 @@ inline void checkBasic(BlockSyncMsgInterface::Ptr _syncMsg, int32_t _packetType,
     auto factory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto encodedData = _syncMsg->encode();
     auto decodedBasicMsg = factory->createBlockSyncMsg(ref(*encodedData));
-    BOOST_CHECK(_syncMsg->version() == decodedBasicMsg->version());
-    BOOST_CHECK(_syncMsg->packetType() == decodedBasicMsg->packetType());
-    BOOST_CHECK(_syncMsg->number() == decodedBasicMsg->number());
+    BOOST_TEST(_syncMsg->version() == decodedBasicMsg->version());
+    BOOST_TEST(_syncMsg->packetType() == decodedBasicMsg->packetType());
+    BOOST_TEST(_syncMsg->number() == decodedBasicMsg->number());
 
-    BOOST_CHECK(decodedBasicMsg->version() == _version);
-    BOOST_CHECK(decodedBasicMsg->packetType() == _packetType);
-    BOOST_CHECK(decodedBasicMsg->number() == _blockNumber);
+    BOOST_TEST(decodedBasicMsg->version() == _version);
+    BOOST_TEST(decodedBasicMsg->packetType() == _packetType);
+    BOOST_TEST(decodedBasicMsg->number() == _blockNumber);
 }
 inline BlockSyncMsgInterface::Ptr testSyncMsg(int32_t _packetType, BlockNumber _blockNumber,
     int32_t _version, HashType const& _hash, HashType const& _genesisHash, size_t _size,
@@ -101,25 +101,25 @@ inline BlockSyncMsgInterface::Ptr testSyncMsg(int32_t _packetType, BlockNumber _
     case BlockSyncPacketType::BlockStatusPacket:
     {
         auto statusMsg = factory->createBlockSyncStatusMsg(decodedBasicMsg);
-        BOOST_CHECK(statusMsg->hash().asBytes() == _hash.asBytes());
-        BOOST_CHECK(statusMsg->genesisHash().asBytes() == _genesisHash.asBytes());
+        BOOST_TEST(statusMsg->hash().asBytes() == _hash.asBytes());
+        BOOST_TEST(statusMsg->genesisHash().asBytes() == _genesisHash.asBytes());
         break;
     }
     case BlockSyncPacketType::BlockRequestPacket:
     {
         auto requestMsg = factory->createBlockRequest(decodedBasicMsg);
-        BOOST_CHECK(requestMsg->size() == _size);
+        BOOST_TEST(requestMsg->size() == _size);
         break;
     }
     case BlockSyncPacketType::BlockResponsePacket:
     {
         auto responseMsg = factory->createBlocksMsg(decodedBasicMsg);
-        BOOST_CHECK(responseMsg->blocksSize() == _blockData.size());
+        BOOST_TEST(responseMsg->blocksSize() == _blockData.size());
         size_t i = 0;
         for (auto const& data : _blockData)
         {
             auto decodedData = responseMsg->blockData(i++);
-            BOOST_CHECK(data == decodedData.toBytes());
+            BOOST_TEST(data == decodedData.toBytes());
         }
         break;
     }

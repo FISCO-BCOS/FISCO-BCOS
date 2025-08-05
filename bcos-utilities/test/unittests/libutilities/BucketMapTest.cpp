@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(serialTest)
 
     BKMap bucketMap(10);
     std::cout << bucketMap.size() << std::endl;
-    BOOST_CHECK(bucketMap.empty());
+    BOOST_TEST(bucketMap.empty());
 
     // insert
     for (int i = 0; i < 100; i++)
@@ -83,13 +83,13 @@ BOOST_AUTO_TEST_CASE(serialTest)
             bool has = bucketMap.find<ReadAccessor>(accessor, i);
             BOOST_CHECK_EQUAL(accessor.key(), i);
             BOOST_CHECK_EQUAL(accessor.value(), i + 1);
-            BOOST_CHECK(has);
+            BOOST_TEST(has);
         }
 
 
         {  // constains
             bool has = bucketMap.contains(i);
-            BOOST_CHECK(has);
+            BOOST_TEST(has);
         }
 
         // remove
@@ -102,12 +102,12 @@ BOOST_AUTO_TEST_CASE(serialTest)
         {  // find again
             ReadAccessor accessor;
             bool has = bucketMap.find<ReadAccessor>(accessor, i);
-            BOOST_CHECK(!has);
+            BOOST_TEST(!has);
         }
 
         {  // constains ?
             bool has = bucketMap.contains(i);
-            BOOST_CHECK(!has);
+            BOOST_TEST(!has);
         }
     }
     BOOST_CHECK_EQUAL(90, bucketMap.size());
@@ -133,8 +133,8 @@ BOOST_AUTO_TEST_CASE(serialTest)
 
     // clear
     bucketMap.clear();
-    BOOST_CHECK(!bucketMap.contains(6));
-    BOOST_CHECK(bucketMap.empty());
+    BOOST_TEST(!bucketMap.contains(6));
+    BOOST_TEST(bucketMap.empty());
 }
 
 BOOST_AUTO_TEST_CASE(batchFindTest)
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(batchFindTest)
 
     BKMap bucketMap(10);
     std::cout << bucketMap.size() << std::endl;
-    BOOST_CHECK(bucketMap.empty());
+    BOOST_TEST(bucketMap.empty());
     std::vector<int> keys;
 
     // insert

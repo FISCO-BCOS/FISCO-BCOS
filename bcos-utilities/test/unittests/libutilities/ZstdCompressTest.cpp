@@ -37,15 +37,15 @@ BOOST_AUTO_TEST_CASE(testZstdCompress)
 
     // compress uncompress success
     bool retCompress = ZstdCompress::compress(ref(*payload), *compressData, 1);
-    BOOST_CHECK(retCompress);
+    BOOST_TEST(retCompress);
     ssize_t retUncompress = ZstdCompress::uncompress(ref(*compressData), *uncompressData);
-    BOOST_CHECK(retUncompress);
+    BOOST_TEST(retUncompress);
     BOOST_CHECK_EQUAL(std::string(uncompressData->begin(), uncompressData->end()),
         std::string(payload->begin(), payload->end()));
 
     // uncompress fail
     bool retUncompressFail = ZstdCompress::uncompress(ref(*wrongCompressedData), *uncompressData);
-    BOOST_CHECK(!retUncompressFail);
+    BOOST_TEST(!retUncompressFail);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

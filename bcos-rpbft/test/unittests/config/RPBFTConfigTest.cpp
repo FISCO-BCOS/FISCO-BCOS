@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     auto ledgerConfig = buildLedgerConfig(4, 0, 0);
     ledgerConfig->setBlockNumber(numer++);
     m_rpbftConfig->resetConfig(ledgerConfig);
-    BOOST_CHECK(!m_rpbftConfig->shouldRotateSealers(numer));
+    BOOST_TEST(!m_rpbftConfig->shouldRotateSealers(numer));
 
     // use rpbft feature, should rotate
     ledgerConfig->setBlockNumber(numer++);
@@ -132,13 +132,13 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     features.set(Features::Flag::feature_rpbft);
     ledgerConfig->setFeatures(features);
     m_rpbftConfig->resetConfig(ledgerConfig);
-    BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
+    BOOST_TEST(m_rpbftConfig->shouldRotateSealers(numer));
 
     // update sealer num, should rotate
     ledgerConfig->setBlockNumber(numer++);
     ledgerConfig->setEpochSealerNum({2, 0});
     m_rpbftConfig->resetConfig(ledgerConfig);
-    BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
+    BOOST_TEST(m_rpbftConfig->shouldRotateSealers(numer));
 
     // rotate tx
     for (auto i : {0, 1})
@@ -151,33 +151,33 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     // the next block should not rotate
     ledgerConfig->setBlockNumber(numer++);
     m_rpbftConfig->resetConfig(ledgerConfig);
-    BOOST_CHECK(!m_rpbftConfig->shouldRotateSealers(numer));
+    BOOST_TEST(!m_rpbftConfig->shouldRotateSealers(numer));
 
     // update block num, should rotate
     {
         ledgerConfig->setBlockNumber(numer++);
         ledgerConfig->setEpochBlockNum({3, 0});
         m_rpbftConfig->resetConfig(ledgerConfig);
-        BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
+        BOOST_TEST(m_rpbftConfig->shouldRotateSealers(numer));
 
         ledgerConfig->setBlockNumber(numer++);
         m_rpbftConfig->resetConfig(ledgerConfig);
-        BOOST_CHECK(!m_rpbftConfig->shouldRotateSealers(numer));
+        BOOST_TEST(!m_rpbftConfig->shouldRotateSealers(numer));
 
         ledgerConfig->setBlockNumber(numer++);
         m_rpbftConfig->resetConfig(ledgerConfig);
-        BOOST_CHECK(!m_rpbftConfig->shouldRotateSealers(numer));
+        BOOST_TEST(!m_rpbftConfig->shouldRotateSealers(numer));
 
         ledgerConfig->setBlockNumber(numer++);
         m_rpbftConfig->resetConfig(ledgerConfig);
-        BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
+        BOOST_TEST(m_rpbftConfig->shouldRotateSealers(numer));
     }
 
     // notify rotate flag enable
     ledgerConfig->setNotifyRotateFlagInfo(1);
     ledgerConfig->setBlockNumber(numer++);
     m_rpbftConfig->resetConfig(ledgerConfig);
-    BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
+    BOOST_TEST(m_rpbftConfig->shouldRotateSealers(numer));
 
     // working sealer exist, rotate
     ledgerConfig->setNotifyRotateFlagInfo(0);
@@ -185,7 +185,7 @@ BOOST_AUTO_TEST_CASE(testRPBFTConfig)
     ledgerConfig->setBlockNumber(numer++);
     ledgerConfig->mutableCandidateSealerNodeList().pop_back();
     m_rpbftConfig->resetConfig(ledgerConfig);
-    BOOST_CHECK(m_rpbftConfig->shouldRotateSealers(numer));
+    BOOST_TEST(m_rpbftConfig->shouldRotateSealers(numer));
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

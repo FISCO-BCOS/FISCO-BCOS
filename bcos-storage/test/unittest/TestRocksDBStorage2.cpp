@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(kvResolver)
     auto decodedKey = bcos::storage2::rocksdb::StateKeyResolver::decode(mergedKey);
 
     StateKey key("test_table!!!"sv, "key100"sv);
-    BOOST_CHECK(key == decodedKey);
+    BOOST_TEST(key == decodedKey);
 }
 
 BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
@@ -83,13 +83,13 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         {
             if (i < 100)
             {
-                BOOST_CHECK(value);
+                BOOST_TEST(value);
                 BOOST_CHECK_EQUAL(
                     value->get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             }
             else
             {
-                BOOST_CHECK(!value);
+                BOOST_TEST(!value);
             }
         }
 
@@ -107,17 +107,17 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         {
             if (i >= 50 && i < 70)
             {
-                BOOST_CHECK(!value);
+                BOOST_TEST(!value);
             }
             else if (i < 100)
             {
-                BOOST_CHECK(value);
+                BOOST_TEST(value);
                 BOOST_CHECK_EQUAL(
                     value->get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             }
             else
             {
-                BOOST_CHECK(!value);
+                BOOST_TEST(!value);
             }
         }
 

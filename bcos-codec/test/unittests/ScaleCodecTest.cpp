@@ -45,7 +45,7 @@ void testArray()
 
         auto data = encode(testee);
         auto decoded_res = decode<Array>((data));
-        BOOST_CHECK(testee == decoded_res);
+        BOOST_TEST(testee == decoded_res);
     }
 }
 BOOST_AUTO_TEST_CASE(ArrayTest)
@@ -75,11 +75,11 @@ BOOST_AUTO_TEST_CASE(BoolTest)
     ScaleEncoderStream s1;
     s1 << true;
     std::vector<byte> data = {0x1};
-    BOOST_CHECK(s1.data() == data);
+    BOOST_TEST(s1.data() == data);
     ScaleEncoderStream s2;
     s2 << false;
     data = {0x0};
-    BOOST_CHECK(s2.data() == data);
+    BOOST_TEST(s2.data() == data);
 
     // exception case
     data = bytes{0, 1, 2};
@@ -87,9 +87,9 @@ BOOST_AUTO_TEST_CASE(BoolTest)
 
     data = bytes{0, 1, 0};
     auto result = decode<ThreeBooleans>((data));
-    BOOST_CHECK(result.b1 == false);
-    BOOST_CHECK(result.b2 == true);
-    BOOST_CHECK(result.b3 == false);
+    BOOST_TEST(result.b1 == false);
+    BOOST_TEST(result.b2 == true);
+    BOOST_TEST(result.b3 == false);
 }
 BOOST_AUTO_TEST_CASE(pairTest)
 {
@@ -98,15 +98,15 @@ BOOST_AUTO_TEST_CASE(pairTest)
     ScaleEncoderStream s;
     s << std::make_pair(v1, v2);
     bytes data = {1, 2, 0, 0, 0};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
 
     data = {1, 2, 0, 0, 0};
     ScaleDecoderStream s2((data));
     using pair_type = std::pair<uint8_t, uint32_t>;
     pair_type pair{};
     s2 >> pair;
-    BOOST_CHECK(pair.first == 1);
-    BOOST_CHECK(pair.second == 2);
+    BOOST_TEST(pair.first == 1);
+    BOOST_TEST(pair.second == 2);
 }
 
 template <class T, class F>
@@ -125,11 +125,11 @@ void testMap(std::vector<T>& t_v, std::vector<F>& f_v, size_t _size = 1)
     std::map<T, F> newMap;
     s2 >> newMap;
 
-    BOOST_CHECK(_size == newMap.size());
+    BOOST_TEST(_size == newMap.size());
     bool allEqual = std::equal(m.begin(), m.end(), newMap.begin(), [&](auto& pair1, auto& pair2) {
         return pair1.first == pair2.first && pair1.second == pair2.second;
     });
-    BOOST_CHECK(allEqual);
+    BOOST_TEST(allEqual);
 }
 
 BOOST_AUTO_TEST_CASE(mapTest)
@@ -199,18 +199,18 @@ BOOST_AUTO_TEST_CASE(testString)
     ScaleEncoderStream s{};
     s << v;
     bytes data = {28, 'a', 's', 'd', 'a', 'd', 'a', 'd'};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
 
     std::string v2 = "asdadad";
     ScaleEncoderStream s2;
     s2 << v2;
     data = {28, 'a', 's', 'd', 'a', 'd', 'a', 'd'};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
 
     data = {28, 'a', 's', 'd', 'a', 'd', 'a', 'd'};
     ScaleDecoderStream s3((data));
     s3 >> v;
-    BOOST_CHECK(v == "asdadad");
+    BOOST_TEST(v == "asdadad");
 }
 
 
@@ -221,11 +221,11 @@ BOOST_AUTO_TEST_CASE(testBytes1)
     ScaleEncoderStream s{};
     s << fb1;
     bytes data = {1};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
     FixedBytes<1> fb2;
     ScaleDecoderStream sd((data));
     sd >> fb2;
-    BOOST_CHECK(fb1 == fb2);
+    BOOST_TEST(fb1 == fb2);
 }
 
 BOOST_AUTO_TEST_CASE(testBytes2)
@@ -235,11 +235,11 @@ BOOST_AUTO_TEST_CASE(testBytes2)
     ScaleEncoderStream s{};
     s << fb2_i;
     bytes data = {1, 2};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
     FixedBytes<2> fb2_o;
     ScaleDecoderStream sd((data));
     sd >> fb2_o;
-    BOOST_CHECK(fb2_i == fb2_o);
+    BOOST_TEST(fb2_i == fb2_o);
 }
 
 BOOST_AUTO_TEST_CASE(testBytes16)
@@ -249,11 +249,11 @@ BOOST_AUTO_TEST_CASE(testBytes16)
     ScaleEncoderStream s{};
     s << fb2_i;
     bytes data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
     FixedBytes<16> fb2_o;
     ScaleDecoderStream sd((data));
     sd >> fb2_o;
-    BOOST_CHECK(fb2_i == fb2_o);
+    BOOST_TEST(fb2_i == fb2_o);
 }
 
 BOOST_AUTO_TEST_CASE(testBytes22)
@@ -263,11 +263,11 @@ BOOST_AUTO_TEST_CASE(testBytes22)
     ScaleEncoderStream s{};
     s << fb2_i;
     bytes data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
     FixedBytes<22> fb2_o;
     ScaleDecoderStream sd((data));
     sd >> fb2_o;
-    BOOST_CHECK(fb2_i == fb2_o);
+    BOOST_TEST(fb2_i == fb2_o);
 }
 
 BOOST_AUTO_TEST_CASE(testBytes32)
@@ -278,11 +278,11 @@ BOOST_AUTO_TEST_CASE(testBytes32)
     s << fb2_i;
     bytes data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
         23, 24, 25, 26, 27, 28, 29, 30, 31};
-    BOOST_CHECK(s.data() == data);
+    BOOST_TEST(s.data() == data);
     FixedBytes<32> fb2_o;
     ScaleDecoderStream sd((data));
     sd >> fb2_o;
-    BOOST_CHECK(fb2_i == fb2_o);
+    BOOST_TEST(fb2_i == fb2_o);
 }
 
 BOOST_AUTO_TEST_CASE(testTuple)
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE(testTuple)
         bytes expectedBytes = {1, 2, 0, 0, 0, 3};
         ScaleEncoderStream s;
         s << std::make_tuple(v1, v2, v3);
-        BOOST_CHECK(s.data() == expectedBytes);
+        BOOST_TEST(s.data() == expectedBytes);
     }
 
     {
@@ -304,16 +304,16 @@ BOOST_AUTO_TEST_CASE(testTuple)
         tuple_type tuple{};
         s2 >> tuple;
         auto&& [v1, v2, v3] = tuple;
-        BOOST_CHECK(v1 == 1);
-        BOOST_CHECK(v2 == 2);
-        BOOST_CHECK(v3 == 3);
+        BOOST_TEST(v1 == 1);
+        BOOST_TEST(v2 == 2);
+        BOOST_TEST(v3 == 3);
     }
 
     using tuple_type_t = std::tuple<uint8_t, uint16_t, uint8_t, uint32_t>;
     tuple_type_t tuple = std::make_tuple(uint8_t(1), uint16_t(3), uint8_t(2), uint32_t(4));
     auto encodeBytes = encode(tuple);
     auto decodResult = decode<tuple_type_t>((encodeBytes));
-    BOOST_CHECK(decodResult == tuple);
+    BOOST_TEST(decodResult == tuple);
 }
 
 struct TestStruct
@@ -339,14 +339,14 @@ BOOST_AUTO_TEST_CASE(ScaleConvenienceFuncsTest)
     TestStruct s1{"some_string", 42};
     auto encodedData = encode((s1));
     auto decodedResult = decode<TestStruct>((encodedData));
-    BOOST_CHECK(decodedResult == s1);
+    BOOST_TEST(decodedResult == s1);
 
     std::string expectedString = "some_string";
     int expectedInt = 42;
     encodedData = encode(expectedString, expectedInt);
     decodedResult = decode<TestStruct>(encodedData);
-    BOOST_CHECK(decodedResult.a == expectedString);
-    BOOST_CHECK(decodedResult.b == expectedInt);
+    BOOST_TEST(decodedResult.a == expectedString);
+    BOOST_TEST(decodedResult.b == expectedInt);
 }
 
 BOOST_AUTO_TEST_CASE(EncodeOptionalTest)
@@ -355,39 +355,39 @@ BOOST_AUTO_TEST_CASE(EncodeOptionalTest)
     {
         ScaleEncoderStream s;
         s << boost::optional<uint8_t>{boost::none};
-        BOOST_CHECK(s.data() == (bytes{0}));
+        BOOST_TEST(s.data() == (bytes{0}));
     }
     // encode existing uint8_t
     {
         ScaleEncoderStream s;
         s << boost::optional<uint8_t>{1};
-        BOOST_CHECK(s.data() == (bytes{1, 1}));
+        BOOST_TEST(s.data() == (bytes{1, 1}));
     }
 
     {
         // encode negative int8_t
         ScaleEncoderStream s;
         s << boost::optional<int8_t>{-1};
-        BOOST_CHECK(s.data() == (bytes{1, 255}));
+        BOOST_TEST(s.data() == (bytes{1, 255}));
     }
 
     // encode non-existing uint16_t
     {
         ScaleEncoderStream s;
         s << boost::optional<uint16_t>{boost::none};
-        BOOST_CHECK(s.data() == (bytes{0}));
+        BOOST_TEST(s.data() == (bytes{0}));
     }
     // encode existing uint16_t
     {
         ScaleEncoderStream s;
         s << boost::optional<uint16_t>{511};
-        BOOST_CHECK(s.data() == (bytes{1, 255, 1}));
+        BOOST_TEST(s.data() == (bytes{1, 255, 1}));
     }
     // encode existing uint32_t
     {
         ScaleEncoderStream s;
         s << boost::optional<uint32_t>{67305985};
-        BOOST_CHECK(s.data() == (bytes{1, 1, 2, 3, 4}));
+        BOOST_TEST(s.data() == (bytes{1, 1, 2, 3, 4}));
     }
 }
 
@@ -405,42 +405,42 @@ BOOST_AUTO_TEST_CASE(DecodeOptionalTest)
     {
         boost::optional<uint8_t> opt;
         stream >> opt;
-        BOOST_CHECK(opt.has_value() == false);
+        BOOST_TEST(opt.has_value() == false);
     }
     // decode optional uint8_t
     {
         boost::optional<uint8_t> opt;
         stream >> opt;
-        BOOST_CHECK(opt.has_value() == true);
-        BOOST_CHECK(*opt == 1);
+        BOOST_TEST(opt.has_value() == true);
+        BOOST_TEST(*opt == 1);
     }
     // decode optional negative int8_t
     {
         boost::optional<int8_t> opt;
         stream >> opt;
-        BOOST_CHECK(opt.has_value() == true);
-        BOOST_CHECK(*opt == -1);
+        BOOST_TEST(opt.has_value() == true);
+        BOOST_TEST(*opt == -1);
     }
     // decode nullopt uint16_t
     // it requires 1 zero byte just like any other nullopt
     {
         boost::optional<uint16_t> opt;
         stream >> opt;
-        BOOST_CHECK(opt.has_value() == false);
+        BOOST_TEST(opt.has_value() == false);
     }
     // decode optional uint16_t
     {
         boost::optional<uint16_t> opt;
         stream >> opt;
-        BOOST_CHECK(opt.has_value() == true);
-        BOOST_CHECK(*opt == 511);
+        BOOST_TEST(opt.has_value() == true);
+        BOOST_TEST(*opt == 511);
     }
     // decode optional uint32_t
     {
         boost::optional<uint32_t> opt;
         stream >> opt;
-        BOOST_CHECK(opt.has_value() == true);
-        BOOST_CHECK(*opt == 67305985);
+        BOOST_TEST(opt.has_value() == true);
+        BOOST_TEST(*opt == 67305985);
     }
 }
 
@@ -465,16 +465,16 @@ BOOST_AUTO_TEST_CASE(encodeOptionalBoolSuccessTest)
     {
         s << v;
     }
-    BOOST_CHECK(s.data() == (bytes{1, 2, 0}));
+    BOOST_TEST(s.data() == (bytes{1, 2, 0}));
     auto data = bytes{0, 1, 2, 3};
     BOOST_CHECK_THROW(decode<FourOptBools>(data), ScaleDecodeException);
     data = bytes{0, 1, 2, 1};
     using optbool = boost::optional<bool>;
     auto res = decode<FourOptBools>(data);
-    BOOST_CHECK(res.b1 == boost::none);
-    BOOST_CHECK(res.b2 == optbool(true));
-    BOOST_CHECK(res.b3 == optbool(false));
-    BOOST_CHECK(res.b4 == optbool(true));
+    BOOST_TEST(res.b1 == boost::none);
+    BOOST_TEST(res.b2 == optbool(true));
+    BOOST_TEST(res.b3 == optbool(false));
+    BOOST_TEST(res.b4 == optbool(true));
 }
 
 BOOST_AUTO_TEST_CASE(scaleDecodeStreamTest)
@@ -486,20 +486,20 @@ BOOST_AUTO_TEST_CASE(scaleDecodeStreamTest)
     {
         uint8_t byteData = 255u;
         byteData = stream.nextByte();
-        BOOST_CHECK(byteData == data.at(i));
+        BOOST_TEST(byteData == data.at(i));
     }
     BOOST_CHECK_THROW(stream.nextByte(), std::exception);
     data = bytes{0, 1};
     auto stream2 = ScaleDecoderStream{data};
-    BOOST_CHECK(stream2.hasMore(0) == true);
-    BOOST_CHECK(stream2.hasMore(1) == true);
-    BOOST_CHECK(stream2.hasMore(2) == true);
-    BOOST_CHECK(stream2.hasMore(3) == false);
+    BOOST_TEST(stream2.hasMore(0) == true);
+    BOOST_TEST(stream2.hasMore(1) == true);
+    BOOST_TEST(stream2.hasMore(2) == true);
+    BOOST_TEST(stream2.hasMore(3) == false);
     stream2.nextByte();
-    BOOST_CHECK(stream2.hasMore(1) == true);
-    BOOST_CHECK(stream2.hasMore(2) == false);
+    BOOST_TEST(stream2.hasMore(1) == true);
+    BOOST_TEST(stream2.hasMore(2) == false);
     stream2.nextByte();
-    BOOST_CHECK(stream2.hasMore(1) == false);
+    BOOST_TEST(stream2.hasMore(1) == false);
     BOOST_CHECK_THROW(stream2.nextByte(), std::exception);
 }
 
@@ -515,12 +515,12 @@ void testCompactEncodeAndDecode(std::pair<CompactInteger, bytes> _compactData)
     // encode
     const auto& [value, match] = _compactData;
     s << value;
-    BOOST_CHECK(s.data() == match);
+    BOOST_TEST(s.data() == match);
     // decode
     ScaleDecoderStream s2(gsl::make_span(match));
     CompactInteger v{};
     s2 >> v;
-    BOOST_CHECK(v == value);
+    BOOST_TEST(v == value);
 }
 
 BOOST_AUTO_TEST_CASE(scaleCompactTest)
@@ -565,7 +565,7 @@ BOOST_AUTO_TEST_CASE(testScaleEncodeFail)
     CompactInteger v(-1);
     ScaleEncoderStream out{};
     BOOST_CHECK_THROW((out << v), std::exception);
-    BOOST_CHECK(out.data().size() == 0);  // nothing was written to buffer
+    BOOST_TEST(out.data().size() == 0);  // nothing was written to buffer
 
     CompactInteger v2(
         "224945689727159819140526925384299092943484855915095831"
@@ -574,7 +574,7 @@ BOOST_AUTO_TEST_CASE(testScaleEncodeFail)
 
     ScaleEncoderStream out2;
     BOOST_CHECK_THROW((out2 << v2), std::exception);  // value is too big, it is not encoded
-    BOOST_CHECK(out2.data().size() == 0);             // nothing was written to buffer
+    BOOST_TEST(out2.data().size() == 0);             // nothing was written to buffer
 
     auto data = bytes{255, 255, 255, 255};
     BOOST_CHECK_THROW(decode<CompactInteger>(data), ScaleDecodeException);
@@ -593,22 +593,22 @@ BOOST_AUTO_TEST_CASE(testScaleVariant)
     auto variantPair = makeVariantPair(uint8_t(1), {0, 1});
     const auto& [value, match] = variantPair;
     s << value;
-    BOOST_CHECK(s.data() == match);
+    BOOST_TEST(s.data() == match);
     // decode uint8_t
     ScaleDecoderStream s2(match);
     boost::variant<uint8_t, uint32_t> val{};
     s2 >> val;
-    BOOST_CHECK(boost::get<uint8_t>(val) == 1);
+    BOOST_TEST(boost::get<uint8_t>(val) == 1);
 
     // encode uint32_t
     variantPair = makeVariantPair(uint32_t(2), {1, 2, 0, 0, 0});
     ScaleEncoderStream s3;
     const auto& [value2, match2] = variantPair;
     s3 << value2;
-    BOOST_CHECK(s3.data() == match2);
+    BOOST_TEST(s3.data() == match2);
     ScaleDecoderStream s4(match2);
     s4 >> val;
-    BOOST_CHECK(boost::get<uint32_t>(val) == 2);
+    BOOST_TEST(boost::get<uint32_t>(val) == 2);
 }
 
 
@@ -626,11 +626,11 @@ void testFixedWidthInteger(std::pair<T, bytes> const& _matchPair, bool _check = 
     s << value;
     if (_check)
     {
-        BOOST_CHECK(s.data() == match);
+        BOOST_TEST(s.data() == match);
         ScaleDecoderStream s2(match);
         T v;
         s2 >> v;
-        BOOST_CHECK(v == value);
+        BOOST_TEST(v == value);
     }
     std::cout << "##### value:" << std::to_string(value) << ", data:" << *toHexString(s.data())
               << std::endl;
@@ -898,8 +898,8 @@ BOOST_AUTO_TEST_CASE(testCollections)
         ScaleEncoderStream s;
         s << collection;
         auto&& out = s.data();
-        BOOST_CHECK(out.size() == 82);
-        BOOST_CHECK(out == match);
+        BOOST_TEST(out.size() == 82);
+        BOOST_TEST(out == match);
     }
 
     {
@@ -909,7 +909,7 @@ BOOST_AUTO_TEST_CASE(testCollections)
         s << collectionInt16;
         auto&& out = s.data();
         // clang-format off
-  BOOST_CHECK(out ==
+  BOOST_TEST(out ==
           (bytes{
               16,  // header
             1, 0,  // first item
@@ -926,7 +926,7 @@ BOOST_AUTO_TEST_CASE(testCollections)
   s << collectionUint32;
   auto &&out = s.data();
   // clang-format off
-  BOOST_CHECK(out ==
+  BOOST_TEST(out ==
             (bytes{
                     16,                // header
                     0, 1, 2, 3,        // first item
@@ -943,7 +943,7 @@ std::vector<uint64_t> collection = {506097522914230528ull,
   s << collection;
   auto &&out = s.data();
   // clang-format off
-  BOOST_CHECK(out ==
+  BOOST_TEST(out ==
             (bytes{
                     8,                // header
                     0, 1, 2, 3,        // first item
@@ -964,25 +964,25 @@ std::vector<uint16_t> collection;
   ScaleEncoderStream s;
   s << collection;
   auto &&out = s.data();
-  BOOST_CHECK((size_t)out.size() == (size_t)(length * 2 + 4));
+  BOOST_TEST((size_t)out.size() == (size_t)(length * 2 + 4));
   // header takes 4 byte,
   // first 4 bytes represent le-encoded value 2^16 + 2
   // which is compact-encoded value 2^14 = 16384
   auto stream = ScaleDecoderStream(gsl::make_span(out));
   CompactInteger res;
   stream >> res;
-  BOOST_CHECK(res == 16384);
+  BOOST_TEST(res == 16384);
   // now only 32768 bytes left in stream
-  BOOST_CHECK(stream.hasMore(32768)== true);
-  BOOST_CHECK(stream.hasMore(32769)== false);
+  BOOST_TEST(stream.hasMore(32768)== true);
+  BOOST_TEST(stream.hasMore(32769)== false);
   for (auto i = 0; i < length; ++i) {
     uint8_t data = 0u;
     stream >> data;
-    BOOST_CHECK(data == i % 256);
+    BOOST_TEST(data == i % 256);
     stream >> data;
-    BOOST_CHECK(data == 0);
+    BOOST_TEST(data == 0);
   }
-  BOOST_CHECK(stream.hasMore(1) == false);
+  BOOST_TEST(stream.hasMore(1) == false);
 }
 
 {
@@ -1006,7 +1006,7 @@ auto length = 1048576;  // 2^20
   ScaleEncoderStream s;
   s << collection;
   auto &&out = s.data();
-  BOOST_CHECK((size_t)out.size() == (size_t)(length + 4));
+  BOOST_TEST((size_t)out.size() == (size_t)(length + 4));
   // header takes 4 bytes,
   // first byte == (4-4) + 3 = 3,
   // which means that number of items requires 4 bytes
@@ -1015,18 +1015,18 @@ auto length = 1048576;  // 2^20
   auto stream = ScaleDecoderStream(gsl::make_span(out));
   CompactInteger bi;
   stream >> bi;
-  BOOST_CHECK(bi == 1048576);
+  BOOST_TEST(bi == 1048576);
 
   // now only 1048576 bytes left in stream
-  BOOST_CHECK(stream.hasMore(1048576) == true);
-  BOOST_CHECK(stream.hasMore(1048576 + 1) == false);
+  BOOST_TEST(stream.hasMore(1048576) == true);
+  BOOST_TEST(stream.hasMore(1048576 + 1) == false);
 
   for (auto i = 0; i < length; ++i) {
     uint8_t data{0u};
     stream >> data;
-    BOOST_CHECK(data == i % 256);
+    BOOST_TEST(data == i % 256);
   }
-  BOOST_CHECK(stream.hasMore(1) ==false);
+  BOOST_TEST(stream.hasMore(1) ==false);
 }
 }
 
@@ -1039,7 +1039,7 @@ void printData(T const& _data)
     T decodedNumber;
     ScaleDecoderStream decoder(gsl::make_span(out));
     decoder >> decodedNumber;
-    BOOST_CHECK(_data == decodedNumber);
+    BOOST_TEST(_data == decodedNumber);
     std::cout << "#### value:" << _data << ", encoded:" << *toHexString(encoder.data()) << std::endl;
 }
 BOOST_AUTO_TEST_CASE(testU256)
@@ -1054,7 +1054,7 @@ BOOST_AUTO_TEST_CASE(testU256)
     ScaleDecoderStream decoder(gsl::make_span(out));
     decoder >> decodedNumber;
     std::cout << "#### number:" << number << ", decodedNumber:" << decodedNumber << std::endl;
-    BOOST_CHECK(number == decodedNumber);
+    BOOST_TEST(number == decodedNumber);
 
     CompactInteger number2("123");
     ScaleEncoderStream encoder2;
@@ -1064,7 +1064,7 @@ BOOST_AUTO_TEST_CASE(testU256)
     CompactInteger decodedNumber2;
     decoder2 >> decodedNumber2;
     std::cout << "#### number2:" << number2 << ", decodedNumber2:" << decodedNumber2 << std::endl;
-    BOOST_CHECK(number2 == decodedNumber2);
+    BOOST_TEST(number2 == decodedNumber2);
 
     std::cout << "##### u256 test" << std::endl;
     printData((u256)0);
@@ -1096,7 +1096,7 @@ BOOST_AUTO_TEST_CASE(tests256)
     ScaleDecoderStream decoder(gsl::make_span(out));
     decoder >> decodedNumber;
     std::cout << "#### number:" << number << ", decodedNumber:" << decodedNumber << std::endl;
-    BOOST_CHECK(number == decodedNumber);
+    BOOST_TEST(number == decodedNumber);
 
 
     s256 number2 = -3453456346534;
@@ -1109,7 +1109,7 @@ BOOST_AUTO_TEST_CASE(tests256)
     ScaleDecoderStream decoder2(gsl::make_span(out2));
     decoder2 >> decodedNumber2;
     std::cout << "#### number2:" << number2 << ", decodedNumber2:" << decodedNumber2 << std::endl;
-    BOOST_CHECK(number2 == decodedNumber2);
+    BOOST_TEST(number2 == decodedNumber2);
 
     std::cout << "##### s256 test" << std::endl;
     printData((s256)0);

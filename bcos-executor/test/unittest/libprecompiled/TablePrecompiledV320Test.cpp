@@ -77,7 +77,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -86,7 +86,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
+                BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             }
             commitBlock(_number);
             return result2;
@@ -100,7 +100,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -110,7 +110,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -121,7 +121,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(std::move(result4),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise5.set_value(std::move(result));
             });
         auto result5 = executePromise5.get_future().get();
@@ -132,14 +132,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(std::move(result5),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise6.set_value(std::move(result));
             });
         auto result6 = executePromise6.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result6->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result6->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
         return result6;
@@ -172,14 +172,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
         return result2;
@@ -211,13 +211,13 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -249,7 +249,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -509,7 +509,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -576,7 +576,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -1030,7 +1030,7 @@ static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INS
         auto r2 = fixture->count(number++, {cond1, cond2, cond4}, callAddress);
         countRes = 0;
         fixture->codec->decode(r2->data(), countRes);
-        BOOST_CHECK(countRes == total - validCount);
+        BOOST_TEST(countRes == total - validCount);
     }
 
     // (< && < && ==) or (< && < && !=)
@@ -1070,7 +1070,7 @@ static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INS
         auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
         uint32_t countRes = 0;
         fixture->codec->decode(r1->data(), countRes);
-        BOOST_CHECK(countRes == validCount);
+        BOOST_TEST(countRes == validCount);
 
         // lowKey < key < highKey && value != "yes"
         low = boost::lexical_cast<uint32_t>(lowKey);
@@ -1079,7 +1079,7 @@ static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INS
         auto r2 = fixture->count(number++, {cond1, cond2, cond4}, callAddress);
         countRes = 0;
         fixture->codec->decode(r2->data(), countRes);
-        BOOST_CHECK(countRes == total - validCount);
+        BOOST_TEST(countRes == total - validCount);
     }
 
     // 0 <= key <= 987
@@ -1123,13 +1123,13 @@ static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INS
         // index out of range
         ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
         auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // empty condition
     {
         auto r1 = fixture->count(number++, {}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // condition with undefined cmp
@@ -1140,29 +1140,29 @@ static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INS
             (uint8_t)storage::Condition::Comparator::LT, "id", std::to_string(INSERT_COUNT)};
         ConditionTupleV320 cond3 = {10, "value", "yes"};
         auto r1 = fixture->count(number++, {cond1, cond2, cond3}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // count, non numeric key
     {
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
         auto r1 = fixture->count(number++, {cond1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
         auto r2 = fixture->count(number++, {cond2}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond3 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
         auto r3 = fixture->count(number++, {cond3}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MIN - 1
         ConditionTupleV320 cond4 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
         auto r4 = fixture->count(number++, {cond4}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // count, negative key
@@ -1217,7 +1217,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
                 break;
             ++count;
         }
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+        BOOST_TEST(entries.size() == limitCount && count == limitCount);
     }
 
     {
@@ -1243,7 +1243,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             ++count;
         }
 
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+        BOOST_TEST(entries.size() == limitCount && count == limitCount);
     }
 
     {
@@ -1269,7 +1269,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             ++count;
         }
 
-        BOOST_CHECK(
+        BOOST_TEST(
             entries.size() == (VALID_COUNT - limitOffset) && count == (VALID_COUNT - limitOffset));
     }
 
@@ -1297,7 +1297,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             ++count;
         }
 
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+        BOOST_TEST(entries.size() == limitCount && count == limitCount);
     }
 
     // select by condition limitCount == 0
@@ -1325,7 +1325,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             ++count;
         }
 
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+        BOOST_TEST(entries.size() == limitCount && count == limitCount);
     }
 
     {
@@ -1355,7 +1355,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
                     break;
                 ++count1;
             }
-            BOOST_CHECK(entries.size() == (VALID_COUNT - limitOffset) &&
+            BOOST_TEST(entries.size() == (VALID_COUNT - limitOffset) &&
                         count1 == (VALID_COUNT - limitOffset));
         }
         uint32_t count2 = 0;
@@ -1378,20 +1378,20 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
                     break;
                 ++count2;
             }
-            BOOST_CHECK(entries.size() == (VALID_COUNT - limitOffset) &&
+            BOOST_TEST(entries.size() == (VALID_COUNT - limitOffset) &&
                         count2 == (VALID_COUNT - limitOffset));
         }
-        BOOST_CHECK(count1 == count2);
+        BOOST_TEST(count1 == count2);
     }
 
     // empty condition
     {
         LimitTuple limit = {0, 10};
         auto r1 = fixture->selectByCondition(number++, {}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = fixture->count(number++, {}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // condition with undefined cmp
@@ -1399,7 +1399,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         ConditionTupleV320 cond1 = {100, "id", "90"};
         LimitTuple limit = {0, 10};
         auto r1 = fixture->selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // limit overflow
@@ -1407,7 +1407,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
         LimitTuple limit = {0, 10000};
         auto r1 = fixture->selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // The index of condition out of range
@@ -1420,7 +1420,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         // index out of range  0 <= idx <= 1
         ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
         auto r1 = fixture->selectByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // select, non numeric key
@@ -1428,22 +1428,22 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         LimitTuple limit = {0, 50};
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
         auto r1 = fixture->selectByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
         auto r2 = fixture->selectByCondition(number++, {cond2}, limit, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond3 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
         auto r3 = fixture->selectByCondition(number++, {cond3}, limit, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MIN - 1
         ConditionTupleV320 cond4 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
         auto r4 = fixture->selectByCondition(number++, {cond4}, limit, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // select, negative key
@@ -1483,12 +1483,12 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             std::vector<EntryTuple> entries1;
             auto r1 = fixture->selectByCondition(number++, {cond1, cond3}, limit, callAddress);
             fixture->codec->decode(r1->data(), entries1);
-            BOOST_CHECK(checkFunc(target1, entries1));
+            BOOST_TEST(checkFunc(target1, entries1));
 
             std::vector<EntryTuple> entries2;
             auto r2 = fixture->selectByCondition(number++, {cond2, cond3}, limit, callAddress);
             fixture->codec->decode(r2->data(), entries2);
-            BOOST_CHECK(checkFunc(target2, entries2));
+            BOOST_TEST(checkFunc(target2, entries2));
         }
 
         // use value condition
@@ -1497,13 +1497,13 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             auto r1 =
                 fixture->selectByCondition(number++, {cond1, cond3, cond4}, limit, callAddress);
             fixture->codec->decode(r1->data(), entries1);
-            BOOST_CHECK(checkFunc(target1, entries1));
+            BOOST_TEST(checkFunc(target1, entries1));
 
             std::vector<EntryTuple> entries2;
             auto r2 =
                 fixture->selectByCondition(number++, {cond2, cond3, cond4}, limit, callAddress);
             fixture->codec->decode(r2->data(), entries2);
-            BOOST_CHECK(checkFunc(target2, entries2));
+            BOOST_TEST(checkFunc(target2, entries2));
         }
     }
 }
@@ -1547,7 +1547,7 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
         int32_t affectRows2 = updateFunc(0, INSERT_COUNT, 0, VALID_COUNT, "yes", "update");
         int32_t countAfterRecover = countFunc("yes");
-        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
+        BOOST_TEST(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
                     affectRows1 == 20 && countBeforeUpdate == countAfterRecover &&
                     countBeforeUpdate == VALID_COUNT);
     }
@@ -1586,7 +1586,7 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
         int32_t affectRows2 = updateFunc(0, INSERT_COUNT, 0, 0, "yes", "update");
         int32_t countAfterRecover = countFunc("yes");
-        BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
+        BOOST_TEST(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
                     affectRows1 == 0 && countBeforeUpdate == countAfterRecover &&
                     countBeforeUpdate == VALID_COUNT);
     }
@@ -1596,7 +1596,7 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         LimitTuple limit = {0, 10};
         UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
         auto r1 = fixture->updateByCondition(number++, {}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // condition with undefined cmp
@@ -1606,7 +1606,7 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
         auto r1 =
             fixture->updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // limit overflow
@@ -1616,7 +1616,7 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
         auto r1 =
             fixture->updateByCondition(number++, {cond1}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // The index of condition out of range
@@ -1631,7 +1631,7 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         UpdateFieldTuple updateFieldTuple1 = {"value", "update"};
         auto r1 = fixture->updateByCondition(
             number++, {cond1, cond2, cond3}, limit, {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // update, non numeric key
@@ -1641,25 +1641,25 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
         auto r1 =
             fixture->updateByCondition(number++, {cond1}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
         auto r2 =
             fixture->updateByCondition(number++, {cond2}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond3 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
         auto r3 =
             fixture->updateByCondition(number++, {cond3}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MIN - 1
         ConditionTupleV320 cond4 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
         auto r4 =
             fixture->updateByCondition(number++, {cond4}, limit, {updateFieldTuple}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // update, negative key
@@ -1681,15 +1681,15 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             number++, {cond1, cond2}, limit, {updateFieldTuple}, callAddress);
         uint32_t affectRows = 0;
         fixture->codec->decode(r1->data(), affectRows);
-        BOOST_CHECK(affectRows == 4);
+        BOOST_TEST(affectRows == 4);
 
         std::vector<EntryTuple> entries;
         auto r2 = fixture->selectByCondition(number++, {cond3}, limit, callAddress);
         fixture->codec->decode(r2->data(), entries);
-        BOOST_CHECK(std::get<0>(entries[0]) == "-9223372036854775808");
-        BOOST_CHECK(std::get<0>(entries[1]) == "-1000");
-        BOOST_CHECK(std::get<0>(entries[2]) == "-100");
-        BOOST_CHECK(std::get<0>(entries[3]) == "-10");
+        BOOST_TEST(std::get<0>(entries[0]) == "-9223372036854775808");
+        BOOST_TEST(std::get<0>(entries[1]) == "-1000");
+        BOOST_TEST(std::get<0>(entries[2]) == "-100");
+        BOOST_TEST(std::get<0>(entries[3]) == "-10");
     }
 }
 
@@ -1706,30 +1706,30 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     // open table not exist
     {
         auto response1 = openTable(number++, "t_test2");
-        BOOST_CHECK(response1->data().toBytes() == codec->encode(Address()));
+        BOOST_TEST(response1->data().toBytes() == codec->encode(Address()));
 
         auto response2 = openTable(number++, tableTestAddress);
-        BOOST_CHECK(response2->data().toBytes() == codec->encode(Address()));
+        BOOST_TEST(response2->data().toBytes() == codec->encode(Address()));
     }
 
     // check create
     {
         auto r1 = openTable(number++, "t_test");
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(Address(tableTestAddress)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(Address(tableTestAddress)));
 
         auto response1 = openTable(number++, "/tables/t_test");
         Address address;
         codec->decode(response1->data(), address);
-        BOOST_CHECK(address.hex() == tableTestAddress);
+        BOOST_TEST(address.hex() == tableTestAddress);
         auto response2 = list(number++, "/tables");
         int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
-        BOOST_CHECK(ret == 0);
-        BOOST_CHECK(bfsInfos.size() == 1);
+        BOOST_TEST(ret == 0);
+        BOOST_TEST(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
-        BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
-        BOOST_CHECK(std::get<1>(fileInfo) == tool::FS_TYPE_LINK);
+        BOOST_TEST(std::get<0>(fileInfo) == "t_test");
+        BOOST_TEST(std::get<1>(fileInfo) == tool::FS_TYPE_LINK);
     }
 
     // createTable exist
@@ -1747,12 +1747,12 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     {
         auto r1 =
             creatTable(number++, errorStr, 0, "id", {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatTable(
             number++, "t_test", 0, errorStr, {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatTable(number++, "t_test", 0, "id", {errorStr}, callAddress, 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // createTable error key and field
@@ -1760,29 +1760,29 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     {
         auto r1 = creatTable(
             number++, errorStr2, 0, "id", {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatTable(
             number++, "t_test", 0, errorStr2, {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatTable(number++, "t_test", 0, "id", {errorStr2}, callAddress, 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // check trim create table params
     {
         auto r1 = creatTable(number++, "t_test123", 0, " id ", {" item_name ", " item_id "},
             "420f853b49838bd3e9466c85a4cc3428c960dde3");
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
         auto r2 = desc(number++, "t_test123");
         TableInfoTupleV320 t = {0, "id", {"item_name", "item_id"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(t));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(t));
     }
 
     // undefined keyOrder
     {
         auto r1 = creatTable(
             number++, "t_test456", 2, "id", {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -1797,30 +1797,30 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     // open table not exist
     {
         auto response1 = openTable(number++, "t_test2");
-        BOOST_CHECK(response1->data().toBytes() == codec->encode(Address()));
+        BOOST_TEST(response1->data().toBytes() == codec->encode(Address()));
 
         auto response2 = openTable(number++, tableTestAddress);
-        BOOST_CHECK(response2->data().toBytes() == codec->encode(Address()));
+        BOOST_TEST(response2->data().toBytes() == codec->encode(Address()));
     }
 
     // check create
     {
         auto r1 = openTable(number++, "t_test");
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(Address(tableTestAddress)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(Address(tableTestAddress)));
 
         auto response1 = openTable(number++, "/tables/t_test");
         Address address;
         codec->decode(response1->data(), address);
-        BOOST_CHECK(address.hex() == tableTestAddress);
+        BOOST_TEST(address.hex() == tableTestAddress);
         auto response2 = list(number++, "/tables");
         int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
-        BOOST_CHECK(ret == 0);
-        BOOST_CHECK(bfsInfos.size() == 1);
+        BOOST_TEST(ret == 0);
+        BOOST_TEST(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
-        BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
-        BOOST_CHECK(std::get<1>(fileInfo) == tool::FS_TYPE_LINK);
+        BOOST_TEST(std::get<0>(fileInfo) == "t_test");
+        BOOST_TEST(std::get<1>(fileInfo) == tool::FS_TYPE_LINK);
     }
 
     // createTable exist
@@ -1838,12 +1838,12 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     {
         auto r1 =
             creatTable(number++, errorStr, 0, "id", {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatTable(
             number++, "t_test", 0, errorStr, {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatTable(number++, "t_test", 0, "id", {errorStr}, callAddress, 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // createTable error key and field
@@ -1851,29 +1851,29 @@ BOOST_AUTO_TEST_CASE(createTableWasmTest)
     {
         auto r1 = creatTable(
             number++, errorStr2, 0, "id", {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = creatTable(
             number++, "t_test", 0, errorStr2, {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r3 = creatTable(number++, "t_test", 0, "id", {errorStr2}, callAddress, 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // check trim create table params
     {
         auto r1 = creatTable(number++, "t_test123", 0, " id ", {" item_name ", " item_id "},
             "420f853b49838bd3e9466c85a4cc3428c960dde3");
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(0)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(0)));
         auto r2 = desc(number++, "t_test123");
         TableInfoTupleV320 t = {0, "id", {"item_name", "item_id"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(t));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(t));
     }
 
     // undefined keyOrder
     {
         auto r1 = creatTable(
             number++, "t_test456", 2, "id", {"item_name", "item_id"}, callAddress, 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -1889,25 +1889,25 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "id1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // insert exist
     {
         auto r1 = insert(number++, "id1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
     }
 
     // insert too much value
     {
         auto r1 = insert(number++, "id2", {"test1", "test2", "test3"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // insert not enough value
     {
         auto r1 = insert(number++, "id3", {"test1"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // insert too long key
@@ -1917,7 +1917,7 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
         ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
         std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
@@ -1928,7 +1928,7 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
         ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
         std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
@@ -1937,20 +1937,20 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderTest)
         auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
         auto r2 = desc(number++, "t_test");
         TableInfoTupleV320 tableInfo = {0, "id", {"item_name", "item_id", "v1", "v2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(tableInfo));
 
         // good
         auto r3 = insert(number++, "id4", {"test1", "test2", "test3", "test4"}, callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
 
         // insert too much value
         auto r4 =
             insert(number++, "id5", {"test1", "test2", "test3", "test4", "test5"}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // insert not enough value
         auto r5 = insert(number++, "id3", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -1965,45 +1965,45 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
     // insert exist
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
     }
     // insert too much value
     {
         auto r1 = insert(number++, "2", {"test1", "test2", "test3"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert not enough value
     {
         auto r1 = insert(number++, "3", {"test1"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert a non numeric key
     {
         auto r1 = insert(number++, "03", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = insert(number++, "aa", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = insert(number++, "9223372036854775808", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert negative key
     {
         auto r1 = insert(number++, "-10", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         // LONG_MIN
         auto r2 = insert(number++, "-9223372036854775808", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(int32_t(1)));
 
         // LONG_MIN - 1
         auto r3 = insert(number++, "-9223372036854775809", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert too long value
     {
@@ -2012,7 +2012,7 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
         ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
         std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
     // insert after append
@@ -2020,16 +2020,16 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrderTest)
         auto r1 = appendColumns(number++, "t_test_1", {"v1", "v2"});
         auto r2 = desc(number++, "t_test_1");
         TableInfoTupleV320 tableInfo = {1, "id", {"item_name", "item_id", "v1", "v2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(tableInfo));
         // good
         auto r3 = insert(number++, "4", {"test1", "test2", "test3", "test4"}, callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
         // insert too much value
         auto r4 = insert(number++, "5", {"test1", "test2", "test3", "test4", "test5"}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
         // insert not enough value
         auto r5 = insert(number++, "6", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2046,25 +2046,25 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "id1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // insert exist
     {
         auto r1 = insert(number++, "id1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
     }
 
     // insert too much value
     {
         auto r1 = insert(number++, "id2", {"test1", "test2", "test3"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // insert not enough value
     {
         auto r1 = insert(number++, "id3", {"test1"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // insert too long key
@@ -2074,7 +2074,7 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
         ss << std::setw(USER_TABLE_KEY_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
         std::string longKey = ss.str();
         auto r1 = insert(number++, longKey, {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
@@ -2085,7 +2085,7 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
         ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
         std::string longValue = ss.str();
         auto r1 = insert(number++, "id111", {"test1", longValue}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
@@ -2094,20 +2094,20 @@ BOOST_AUTO_TEST_CASE(insertLexicographicOrderWasmTest)
         auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
         auto r2 = desc(number++, "t_test");
         TableInfoTupleV320 tableInfo = {0, "id", {"item_name", "item_id", "v1", "v2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(tableInfo));
 
         // good
         auto r3 = insert(number++, "id4", {"test1", "test2", "test3", "test4"}, callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
 
         // insert too much value
         auto r4 =
             insert(number++, "id5", {"test1", "test2", "test3", "test4", "test5"}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // insert not enough value
         auto r5 = insert(number++, "id3", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2123,45 +2123,45 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
     // insert exist
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
     }
     // insert too much value
     {
         auto r1 = insert(number++, "2", {"test1", "test2", "test3"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert not enough value
     {
         auto r1 = insert(number++, "3", {"test1"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert a non numeric key
     {
         auto r1 = insert(number++, "03", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         auto r2 = insert(number++, "aa", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = insert(number++, "9223372036854775808", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert negative key
     {
         auto r1 = insert(number++, "-10", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         // LONG_MIN
         auto r2 = insert(number++, "-9223372036854775808", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(int32_t(1)));
 
         // LONG_MIN - 1
         auto r3 = insert(number++, "-9223372036854775809", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
     // insert too long value
     {
@@ -2170,7 +2170,7 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
         ss << std::setw(USER_TABLE_FIELD_VALUE_MAX_LENGTH + 1) << std::setfill('0') << '0';
         std::string longValue = ss.str();
         auto r1 = insert(number++, "3", {"test1", longValue}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
     // insert after append
@@ -2178,16 +2178,16 @@ BOOST_AUTO_TEST_CASE(insertNumericalOrdeWasmTest)
         auto r1 = appendColumns(number++, "t_test_1", {"v1", "v2"});
         auto r2 = desc(number++, "t_test_1");
         TableInfoTupleV320 tableInfo = {1, "id", {"item_name", "item_id", "v1", "v2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(tableInfo));
         // good
         auto r3 = insert(number++, "4", {"test1", "test2", "test3", "test4"}, callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
         // insert too much value
         auto r4 = insert(number++, "5", {"test1", "test2", "test3", "test4", "test5"}, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
         // insert not enough value
         auto r5 = insert(number++, "6", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2207,21 +2207,21 @@ BOOST_AUTO_TEST_CASE(selectLexicographicOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, fillZero(1), {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple select by key
     {
         auto r1 = selectByKey(number++, fillZero(1), callAddress);
         EntryTuple entryTuple = {fillZero(1), {"test1", "test2"}};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 
     // select by key not exist
     {
         auto r1 = selectByKey(number++, fillZero(2), callAddress);
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 }
 
@@ -2236,34 +2236,34 @@ BOOST_AUTO_TEST_CASE(selectNumericalOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple select by key
     {
         auto r1 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"test1", "test2"}};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 
     // select by key not exist
     {
         auto r1 = selectByKey(number++, "2", callAddress);
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 
     // select a non numeric key
     {
         auto r1 = selectByKey(number++, "01", callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = selectByKey(number++, "aa", callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = selectByKey(number++, "9223372036854775808", callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // select negative key
@@ -2273,15 +2273,15 @@ BOOST_AUTO_TEST_CASE(selectNumericalOrderTest)
 
         auto r1 = selectByKey(number++, "-10", callAddress);
         EntryTuple entryTuple1 = {"-10", {"test1", "test2"}};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple1));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple1));
 
         auto r2 = selectByKey(number++, "-9223372036854775808", callAddress);
         EntryTuple entryTuple2 = {"-9223372036854775808", {"test1", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple2));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple2));
 
         // LONG_MIN - 1
         auto r3 = selectByKey(number++, "-9223372036854775809", callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2302,21 +2302,21 @@ BOOST_AUTO_TEST_CASE(selectLexicographicOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, fillZero(1), {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple select by key
     {
         auto r1 = selectByKey(number++, fillZero(1), callAddress);
         EntryTuple entryTuple = {fillZero(1), {"test1", "test2"}};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 
     // select by key not exist
     {
         auto r1 = selectByKey(number++, fillZero(2), callAddress);
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 }
 
@@ -2332,34 +2332,34 @@ BOOST_AUTO_TEST_CASE(selectNumericalOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple select by key
     {
         auto r1 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"test1", "test2"}};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 
     // select by key not exist
     {
         auto r1 = selectByKey(number++, "2", callAddress);
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple));
     }
 
     // select a non numeric key
     {
         auto r1 = selectByKey(number++, "01", callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = selectByKey(number++, "aa", callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = selectByKey(number++, "9223372036854775808", callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // select negative key
@@ -2369,15 +2369,15 @@ BOOST_AUTO_TEST_CASE(selectNumericalOrderWasmTest)
 
         auto r1 = selectByKey(number++, "-10", callAddress);
         EntryTuple entryTuple1 = {"-10", {"test1", "test2"}};
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(entryTuple1));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(entryTuple1));
 
         auto r2 = selectByKey(number++, "-9223372036854775808", callAddress);
         EntryTuple entryTuple2 = {"-9223372036854775808", {"test1", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple2));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple2));
 
         // LONG_MIN - 1
         auto r3 = selectByKey(number++, "-9223372036854775809", callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2392,17 +2392,17 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple update by key, modify 1 column
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // simple update by key, modify 2 columns
@@ -2410,24 +2410,24 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple2, updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update1", "update2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // update by key not exist
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
     // update by key, index overflow
     {
         UpdateFieldTuple updateFieldTuple1 = {"errorField", "update1"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     std::stringstream ss;
@@ -2439,7 +2439,7 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderTest)
         boost::log::core::get()->set_logging_enabled(false);
         UpdateFieldTuple updateFieldTuple1 = {"item_name", longValue};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 }
@@ -2455,17 +2455,17 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple update by key, modify 1 column
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // simple update by key, modify 2 columns
@@ -2473,24 +2473,24 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple2, updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update1", "update2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // update by key not exist
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
     // update by key, index overflow
     {
         UpdateFieldTuple updateFieldTuple1 = {"errorField", "update1"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     std::stringstream ss;
@@ -2502,7 +2502,7 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
         boost::log::core::get()->set_logging_enabled(false);
         UpdateFieldTuple updateFieldTuple1 = {"item_name", longValue};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
@@ -2510,14 +2510,14 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "01", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = updateByKey(number++, "aa", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = updateByKey(number++, "9223372036854775808", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // update, negative key
@@ -2527,20 +2527,20 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderTest)
 
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "-10", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "-10", callAddress);
         EntryTuple entryTuple1 = {"-10", {"update", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple1));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple1));
 
         auto r3 = updateByKey(number++, "-9223372036854775808", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
         auto r4 = selectByKey(number++, "-9223372036854775808", callAddress);
         EntryTuple entryTuple2 = {"-9223372036854775808", {"update", "test2"}};
-        BOOST_CHECK(r4->data().toBytes() == codec->encode(entryTuple2));
+        BOOST_TEST(r4->data().toBytes() == codec->encode(entryTuple2));
 
         // LONG_MIN - 1
         auto r5 = updateByKey(number++, "-9223372036854775809", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2556,17 +2556,17 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple update by key, modify 1 column
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // simple update by key, modify 2 columns
@@ -2574,24 +2574,24 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderWasmTest)
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple2, updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update1", "update2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // update by key not exist
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
     // update by key, index overflow
     {
         UpdateFieldTuple updateFieldTuple1 = {"errorField", "update1"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     std::stringstream ss;
@@ -2603,7 +2603,7 @@ BOOST_AUTO_TEST_CASE(updateLexicographicOrderWasmTest)
         boost::log::core::get()->set_logging_enabled(false);
         UpdateFieldTuple updateFieldTuple1 = {"item_name", longValue};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 }
@@ -2620,17 +2620,17 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple update by key, modify 1 column
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // simple update by key, modify 2 columns
@@ -2638,24 +2638,24 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         UpdateFieldTuple updateFieldTuple2 = {"item_id", "update2"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple2, updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         EntryTuple entryTuple = {"1", {"update1", "update2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // update by key not exist
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update1"};
         auto r1 = updateByKey(number++, "2", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
     }
 
     // update by key, index overflow
     {
         UpdateFieldTuple updateFieldTuple1 = {"errorField", "update1"};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     std::stringstream ss;
@@ -2667,7 +2667,7 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
         boost::log::core::get()->set_logging_enabled(false);
         UpdateFieldTuple updateFieldTuple1 = {"item_name", longValue};
         auto r1 = updateByKey(number++, "1", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
         boost::log::core::get()->set_logging_enabled(true);
     }
 
@@ -2675,14 +2675,14 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
     {
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "01", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = updateByKey(number++, "aa", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = updateByKey(number++, "9223372036854775808", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // update, negative key
@@ -2692,20 +2692,20 @@ BOOST_AUTO_TEST_CASE(updateNumericalOrderWasmTest)
 
         UpdateFieldTuple updateFieldTuple1 = {"item_name", "update"};
         auto r1 = updateByKey(number++, "-10", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "-10", callAddress);
         EntryTuple entryTuple1 = {"-10", {"update", "test2"}};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple1));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple1));
 
         auto r3 = updateByKey(number++, "-9223372036854775808", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
         auto r4 = selectByKey(number++, "-9223372036854775808", callAddress);
         EntryTuple entryTuple2 = {"-9223372036854775808", {"update", "test2"}};
-        BOOST_CHECK(r4->data().toBytes() == codec->encode(entryTuple2));
+        BOOST_TEST(r4->data().toBytes() == codec->encode(entryTuple2));
 
         // LONG_MIN - 1
         auto r5 = updateByKey(number++, "-9223372036854775809", {updateFieldTuple1}, callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2720,23 +2720,23 @@ BOOST_AUTO_TEST_CASE(removeLexicographicOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple remove by key
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         // empty
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // remove by key not exist
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
     }
 }
 
@@ -2751,36 +2751,36 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple remove by key
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         // empty
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // remove by key not exist
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
     }
 
     // remove, non numeric key
     {
         auto r1 = removeByKey(number++, "01", callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = removeByKey(number++, "aa", callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = removeByKey(number++, "9223372036854775808", callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // remove, negative key
@@ -2790,18 +2790,18 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderTest)
         EntryTuple entryTuple = {};
 
         auto r1 = removeByKey(number++, "-10", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "-10", callAddress);
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
 
         auto r3 = removeByKey(number++, "-9223372036854775808", callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
         auto r4 = selectByKey(number++, "-9223372036854775808", callAddress);
-        BOOST_CHECK(r4->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r4->data().toBytes() == codec->encode(entryTuple));
 
         // LONG_MIN - 1
         auto r5 = removeByKey(number++, "-9223372036854775809", callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -2817,23 +2817,23 @@ BOOST_AUTO_TEST_CASE(removeLexicographicOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple remove by key
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         // empty
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // remove by key not exist
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
     }
 }
 
@@ -2849,36 +2849,36 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderWasmTest)
     // simple insert
     {
         auto r1 = insert(number++, "1", {"test1", "test2"}, callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
     }
 
     // simple remove by key
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "1", callAddress);
         // empty
         EntryTuple entryTuple = {};
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
     }
 
     // remove by key not exist
     {
         auto r1 = removeByKey(number++, "1", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
     }
 
     // remove, non numeric key
     {
         auto r1 = removeByKey(number++, "01", callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         auto r2 = removeByKey(number++, "aa", callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MAX + 1
         auto r3 = removeByKey(number++, "9223372036854775808", callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // remove, negative key
@@ -2888,18 +2888,18 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderWasmTest)
         EntryTuple entryTuple = {};
 
         auto r1 = removeByKey(number++, "-10", callAddress);
-        BOOST_CHECK(r1->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r1->data().toBytes() == codec->encode(int32_t(1)));
         auto r2 = selectByKey(number++, "-10", callAddress);
-        BOOST_CHECK(r2->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r2->data().toBytes() == codec->encode(entryTuple));
 
         auto r3 = removeByKey(number++, "-9223372036854775808", callAddress);
-        BOOST_CHECK(r3->data().toBytes() == codec->encode(int32_t(1)));
+        BOOST_TEST(r3->data().toBytes() == codec->encode(int32_t(1)));
         auto r4 = selectByKey(number++, "-9223372036854775808", callAddress);
-        BOOST_CHECK(r4->data().toBytes() == codec->encode(entryTuple));
+        BOOST_TEST(r4->data().toBytes() == codec->encode(entryTuple));
 
         // LONG_MIN - 1
         auto r5 = removeByKey(number++, "-9223372036854775809", callAddress);
-        BOOST_CHECK(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r5->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
@@ -3094,19 +3094,19 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
+        BOOST_TEST(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
             std::string key = std::get<0>(entry);
             if (!savedSet.contains(key))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 break;
             }
             savedSet.erase(key);
         }
-        BOOST_CHECK(savedSet.empty());
+        BOOST_TEST(savedSet.empty());
         // recover data
         recoverFunc(removedSet);
     }
@@ -3149,19 +3149,19 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
+        BOOST_TEST(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
             std::string key = std::get<0>(entry);
             if (!savedSet.contains(key))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 break;
             }
             savedSet.erase(key);
         }
-        BOOST_CHECK(savedSet.empty());
+        BOOST_TEST(savedSet.empty());
     }
 
     // limitCount < USER_TABLE_MIN_LIMIT_COUNT
@@ -3202,26 +3202,26 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
+        BOOST_TEST(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
             std::string key = std::get<0>(entry);
             if (!savedSet.contains(key))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 break;
             }
             savedSet.erase(key);
         }
-        BOOST_CHECK(savedSet.empty());
+        BOOST_TEST(savedSet.empty());
     }
 
     // empty condition
     {
         LimitTuple limit = {0, 10};
         auto r1 = removeByCondition(number++, {}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // condition with undefined cmp
@@ -3229,7 +3229,7 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
         ConditionTupleV320 cond1 = {100, "id", "90"};
         LimitTuple limit = {0, 10};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // limit overflow
@@ -3237,7 +3237,7 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
         LimitTuple limit = {0, 10000};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // The index of condition out of range
@@ -3250,7 +3250,7 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
         // index out of range  0 <= idx <= 1
         ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
         auto r1 = removeByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // remove, non numeric key
@@ -3258,22 +3258,22 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
         LimitTuple limit = {0, 50};
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
         auto r2 = removeByCondition(number++, {cond2}, limit, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond3 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
         auto r3 = removeByCondition(number++, {cond3}, limit, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MIN - 1
         ConditionTupleV320 cond4 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
         auto r4 = removeByCondition(number++, {cond4}, limit, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // remove, negative key
@@ -3293,17 +3293,17 @@ BOOST_AUTO_TEST_CASE(removeByCondTest)
         auto r1 = count(number++, {cond3}, callAddress);
         uint32_t countRes = 0;
         codec->decode(r1->data(), countRes);
-        BOOST_CHECK(countRes == 4);
+        BOOST_TEST(countRes == 4);
 
         auto r2 = removeByCondition(number++, {cond1, cond2}, limit, callAddress);
         uint32_t removedRows = 0;
         codec->decode(r2->data(), removedRows);
-        BOOST_CHECK(removedRows == 4);
+        BOOST_TEST(removedRows == 4);
 
         auto r3 = count(number++, {cond3}, callAddress);
         countRes = 0;
         codec->decode(r3->data(), countRes);
-        BOOST_CHECK(countRes == 0);
+        BOOST_TEST(countRes == 0);
     }
 }
 
@@ -3410,19 +3410,19 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
+        BOOST_TEST(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
             std::string key = std::get<0>(entry);
             if (!savedSet.contains(key))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 break;
             }
             savedSet.erase(key);
         }
-        BOOST_CHECK(savedSet.empty());
+        BOOST_TEST(savedSet.empty());
         // recover data
         recoverFunc(removedSet);
     }
@@ -3465,19 +3465,19 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
+        BOOST_TEST(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
             std::string key = std::get<0>(entry);
             if (!savedSet.contains(key))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 break;
             }
             savedSet.erase(key);
         }
-        BOOST_CHECK(savedSet.empty());
+        BOOST_TEST(savedSet.empty());
     }
 
     // limitCount < USER_TABLE_MIN_LIMIT_COUNT
@@ -3518,26 +3518,26 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
             removeFunc(std::to_string(low), std::to_string(INSERT_COUNT), 0, limitCount, "yes");
         std::vector<EntryTuple> entries;
         selectFunc("yes", entries);
-        BOOST_CHECK(removedRows1 == VALID_COUNT - entries.size());
+        BOOST_TEST(removedRows1 == VALID_COUNT - entries.size());
 
         for (auto& entry : entries)
         {
             std::string key = std::get<0>(entry);
             if (!savedSet.contains(key))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 break;
             }
             savedSet.erase(key);
         }
-        BOOST_CHECK(savedSet.empty());
+        BOOST_TEST(savedSet.empty());
     }
 
     // empty condition
     {
         LimitTuple limit = {0, 10};
         auto r1 = removeByCondition(number++, {}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // condition with undefined cmp
@@ -3545,7 +3545,7 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
         ConditionTupleV320 cond1 = {100, "id", "90"};
         LimitTuple limit = {0, 10};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // limit overflow
@@ -3553,7 +3553,7 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "90"};
         LimitTuple limit = {0, 10000};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // The index of condition out of range
@@ -3566,7 +3566,7 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
         // index out of range  0 <= idx <= 1
         ConditionTupleV320 cond3 = {(uint8_t)storage::Condition::Comparator::EQ, "idx", "yes"};
         auto r1 = removeByCondition(number++, {cond1, cond2, cond3}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // remove, non numeric key
@@ -3574,22 +3574,22 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
         LimitTuple limit = {0, 50};
         ConditionTupleV320 cond1 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "01"};
         auto r1 = removeByCondition(number++, {cond1}, limit, callAddress);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond2 = {(uint8_t)storage::Condition::Comparator::EQ, "id", "aa"};
         auto r2 = removeByCondition(number++, {cond2}, limit, callAddress);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         ConditionTupleV320 cond3 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "9223372036854775808"};
         auto r3 = removeByCondition(number++, {cond3}, limit, callAddress);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
 
         // LONG_MIN - 1
         ConditionTupleV320 cond4 = {
             (uint8_t)storage::Condition::Comparator::EQ, "id", "-9223372036854775809"};
         auto r4 = removeByCondition(number++, {cond4}, limit, callAddress);
-        BOOST_CHECK(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(r4->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // remove, negative key
@@ -3609,17 +3609,17 @@ BOOST_AUTO_TEST_CASE(removeByCondWasmTest)
         auto r1 = count(number++, {cond3}, callAddress);
         uint32_t countRes = 0;
         codec->decode(r1->data(), countRes);
-        BOOST_CHECK(countRes == 4);
+        BOOST_TEST(countRes == 4);
 
         auto r2 = removeByCondition(number++, {cond1, cond2}, limit, callAddress);
         uint32_t removedRows = 0;
         codec->decode(r2->data(), removedRows);
-        BOOST_CHECK(removedRows == 4);
+        BOOST_TEST(removedRows == 4);
 
         auto r3 = count(number++, {cond3}, callAddress);
         countRes = 0;
         codec->decode(r3->data(), countRes);
-        BOOST_CHECK(countRes == 0);
+        BOOST_TEST(countRes == 0);
     }
 }
 
@@ -3673,9 +3673,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
             codec->decode(r1->data(), countPrefix);
             codec->decode(r2->data(), countSuffix);
             codec->decode(r3->data(), countContains);
-            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
-            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
-            BOOST_CHECK(countContains == INSERT_COUNT);
+            BOOST_TEST(countPrefix == INSERT_COUNT / 2);
+            BOOST_TEST(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_TEST(countContains == INSERT_COUNT);
 
             auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
             auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
@@ -3700,9 +3700,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
                 if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
                     ++count3;
             }
-            BOOST_CHECK(count1 == entries1.size());
-            BOOST_CHECK(count2 == entries2.size());
-            BOOST_CHECK(count3 == entries3.size());
+            BOOST_TEST(count1 == entries1.size());
+            BOOST_TEST(count2 == entries2.size());
+            BOOST_TEST(count3 == entries3.size());
         }
 
         {
@@ -3721,9 +3721,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
             codec->decode(r1->data(), countPrefix);
             codec->decode(r2->data(), countSuffix);
             codec->decode(r3->data(), countContains);
-            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
-            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
-            BOOST_CHECK(countContains == INSERT_COUNT);
+            BOOST_TEST(countPrefix == INSERT_COUNT / 2);
+            BOOST_TEST(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_TEST(countContains == INSERT_COUNT);
 
             auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
             auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
@@ -3748,9 +3748,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
                 if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
                     ++count3;
             }
-            BOOST_CHECK(count1 == entries1.size());
-            BOOST_CHECK(count2 == entries2.size());
-            BOOST_CHECK(count3 == entries3.size());
+            BOOST_TEST(count1 == entries1.size());
+            BOOST_TEST(count2 == entries2.size());
+            BOOST_TEST(count3 == entries3.size());
         }
     }
 
@@ -3770,9 +3770,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
         codec->decode(r2->data(), countSuffix);
         codec->decode(r3->data(), countContains);
 
-        BOOST_CHECK(countPrefix == INSERT_COUNT);
-        BOOST_CHECK(countSuffix == INSERT_COUNT);
-        BOOST_CHECK(countContains == INSERT_COUNT);
+        BOOST_TEST(countPrefix == INSERT_COUNT);
+        BOOST_TEST(countSuffix == INSERT_COUNT);
+        BOOST_TEST(countContains == INSERT_COUNT);
     }
 
     // error key
@@ -3794,9 +3794,9 @@ BOOST_AUTO_TEST_CASE(containsTest)
         codec->decode(r2->data(), countSuffix);
         codec->decode(r3->data(), countContains);
 
-        BOOST_CHECK(countPrefix == 0);
-        BOOST_CHECK(countSuffix == 0);
-        BOOST_CHECK(countContains == 0);
+        BOOST_TEST(countPrefix == 0);
+        BOOST_TEST(countSuffix == 0);
+        BOOST_TEST(countContains == 0);
     }
 }
 
@@ -3852,9 +3852,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
             codec->decode(r1->data(), countPrefix);
             codec->decode(r2->data(), countSuffix);
             codec->decode(r3->data(), countContains);
-            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
-            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
-            BOOST_CHECK(countContains == INSERT_COUNT);
+            BOOST_TEST(countPrefix == INSERT_COUNT / 2);
+            BOOST_TEST(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_TEST(countContains == INSERT_COUNT);
 
             auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
             auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
@@ -3879,9 +3879,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
                 if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
                     ++count3;
             }
-            BOOST_CHECK(count1 == entries1.size());
-            BOOST_CHECK(count2 == entries2.size());
-            BOOST_CHECK(count3 == entries3.size());
+            BOOST_TEST(count1 == entries1.size());
+            BOOST_TEST(count2 == entries2.size());
+            BOOST_TEST(count3 == entries3.size());
         }
 
         {
@@ -3900,9 +3900,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
             codec->decode(r1->data(), countPrefix);
             codec->decode(r2->data(), countSuffix);
             codec->decode(r3->data(), countContains);
-            BOOST_CHECK(countPrefix == INSERT_COUNT / 2);
-            BOOST_CHECK(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
-            BOOST_CHECK(countContains == INSERT_COUNT);
+            BOOST_TEST(countPrefix == INSERT_COUNT / 2);
+            BOOST_TEST(countSuffix == INSERT_COUNT - INSERT_COUNT / 2);
+            BOOST_TEST(countContains == INSERT_COUNT);
 
             auto r4 = selectByCondition(number++, {cond1}, limit, callAddress);
             auto r5 = selectByCondition(number++, {cond2}, limit, callAddress);
@@ -3927,9 +3927,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
                 if (std::get<1>(entries3[j / 2])[0] == _fillZeros(j + 1))
                     ++count3;
             }
-            BOOST_CHECK(count1 == entries1.size());
-            BOOST_CHECK(count2 == entries2.size());
-            BOOST_CHECK(count3 == entries3.size());
+            BOOST_TEST(count1 == entries1.size());
+            BOOST_TEST(count2 == entries2.size());
+            BOOST_TEST(count3 == entries3.size());
         }
     }
 
@@ -3949,9 +3949,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
         codec->decode(r2->data(), countSuffix);
         codec->decode(r3->data(), countContains);
 
-        BOOST_CHECK(countPrefix == INSERT_COUNT);
-        BOOST_CHECK(countSuffix == INSERT_COUNT);
-        BOOST_CHECK(countContains == INSERT_COUNT);
+        BOOST_TEST(countPrefix == INSERT_COUNT);
+        BOOST_TEST(countSuffix == INSERT_COUNT);
+        BOOST_TEST(countContains == INSERT_COUNT);
     }
 
     // error key
@@ -3973,9 +3973,9 @@ BOOST_AUTO_TEST_CASE(containsWasmTest)
         codec->decode(r2->data(), countSuffix);
         codec->decode(r3->data(), countContains);
 
-        BOOST_CHECK(countPrefix == 0);
-        BOOST_CHECK(countSuffix == 0);
-        BOOST_CHECK(countContains == 0);
+        BOOST_TEST(countPrefix == 0);
+        BOOST_TEST(countSuffix == 0);
+        BOOST_TEST(countContains == 0);
     }
 }
 
@@ -4020,21 +4020,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(10));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(10));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4042,7 +4042,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LE(_fillZeros(10));
             cond.LT(_fillZeros(10));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // update condition
@@ -4050,7 +4050,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(5));
             cond.GE(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4058,7 +4058,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LT(_fillZeros(10));
             cond.GE(_fillZeros(5));
             cond.GE(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4066,7 +4066,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LE(_fillZeros(10));
             cond.GE(_fillZeros(5));
             cond.GE(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4075,7 +4075,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LT(_fillZeros(10));
             cond.GE(_fillZeros(5));
             cond.GE(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // conflict condition
@@ -4083,21 +4083,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(5));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(4));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(4));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
@@ -4105,7 +4105,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LT(_fillZeros(5));
             cond.LE(_fillZeros(4));
             cond.GE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
     }
 
@@ -4114,21 +4114,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(10));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(10));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4136,7 +4136,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LE(_fillZeros(10));
             cond.LT(_fillZeros(10));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // update condition
@@ -4144,7 +4144,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(5));
             cond.GT(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4152,7 +4152,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LT(_fillZeros(10));
             cond.GT(_fillZeros(5));
             cond.GT(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4160,7 +4160,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LE(_fillZeros(10));
             cond.GT(_fillZeros(5));
             cond.GT(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4169,7 +4169,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LT(_fillZeros(10));
             cond.GT(_fillZeros(5));
             cond.GT(_fillZeros(6));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // conflict condition
@@ -4177,28 +4177,28 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(5));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(4));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(5));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(4));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
@@ -4206,7 +4206,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.LT(_fillZeros(5));
             cond.LE(_fillZeros(5));
             cond.GT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
     }
 
@@ -4215,21 +4215,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(10));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(10));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4237,7 +4237,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GE(_fillZeros(10));
             cond.GT(_fillZeros(10));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // update condition
@@ -4245,7 +4245,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.LT(_fillZeros(16));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4253,7 +4253,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GT(_fillZeros(10));
             cond.LT(_fillZeros(16));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4261,7 +4261,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GE(_fillZeros(10));
             cond.LT(_fillZeros(16));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4270,7 +4270,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GT(_fillZeros(10));
             cond.LT(_fillZeros(16));
             cond.LT(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // conflict condition
@@ -4278,28 +4278,28 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(5));
             cond.LT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(5));
             cond.LT(_fillZeros(4));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(5));
             cond.LT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(5));
             cond.LT(_fillZeros(4));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
@@ -4307,7 +4307,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GT(_fillZeros(5));
             cond.GE(_fillZeros(5));
             cond.LT(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
     }
 
@@ -4316,21 +4316,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(10));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(10));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4338,7 +4338,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GE(_fillZeros(10));
             cond.GT(_fillZeros(10));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // update condition
@@ -4346,7 +4346,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.LE(_fillZeros(16));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4354,7 +4354,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GT(_fillZeros(10));
             cond.LE(_fillZeros(16));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4362,7 +4362,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GE(_fillZeros(10));
             cond.LE(_fillZeros(16));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
@@ -4371,7 +4371,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GT(_fillZeros(10));
             cond.LE(_fillZeros(16));
             cond.LE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         // conflict condition
@@ -4379,21 +4379,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(5));
             cond.LE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GT(_fillZeros(5));
             cond.LE(_fillZeros(4));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.GE(_fillZeros(5));
             cond.LE(_fillZeros(4));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
 
         {
@@ -4401,7 +4401,7 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.GT(_fillZeros(5));
             cond.GE(_fillZeros(5));
             cond.LE(_fillZeros(5));
-            BOOST_CHECK(cond.isEquivalent(record, true));
+            BOOST_TEST(cond.isEquivalent(record, true));
         }
     }
 
@@ -4413,14 +4413,14 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
             cond.NE(_fillZeros(16));
             cond.NE(_fillZeros(17));
             cond.NE(_fillZeros(100));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.NE(_fillZeros(15));
             cond.NE(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
     }
 
@@ -4429,21 +4429,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.EQ(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.EQ(_fillZeros(15));
             cond.EQ(_fillZeros(15));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.EQ(_fillZeros(15));
             cond.EQ(_fillZeros(16));
-            BOOST_CHECK(cond.isEquivalent(record));
+            BOOST_TEST(cond.isEquivalent(record));
         }
     }
 
@@ -4461,28 +4461,28 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.startsWith("abcd");
-            BOOST_CHECK(cond.isEquivalent(recordStartsWith));
+            BOOST_TEST(cond.isEquivalent(recordStartsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.startsWith("abc");
             cond.startsWith("abcd");
-            BOOST_CHECK(cond.isEquivalent(recordStartsWith));
+            BOOST_TEST(cond.isEquivalent(recordStartsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.startsWith("abcd");
             cond.startsWith("abc");
-            BOOST_CHECK(cond.isEquivalent(recordStartsWith));
+            BOOST_TEST(cond.isEquivalent(recordStartsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.startsWith("abcd");
             cond.startsWith("abce");
-            BOOST_CHECK(cond.isEquivalent(recordStartsWith, true));
+            BOOST_TEST(cond.isEquivalent(recordStartsWith, true));
         }
     }
 
@@ -4500,21 +4500,21 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.contains("abcd");
-            BOOST_CHECK(cond.isEquivalent(recordContainsWith));
+            BOOST_TEST(cond.isEquivalent(recordContainsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.contains("abc");
             cond.contains("abcd");
-            BOOST_CHECK(cond.isEquivalent(recordContainsWith));
+            BOOST_TEST(cond.isEquivalent(recordContainsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.contains("abc");
             cond.contains("bcf");
-            BOOST_CHECK(cond.isEquivalent(recordContainsWith));
+            BOOST_TEST(cond.isEquivalent(recordContainsWith));
         }
     }
 
@@ -4532,28 +4532,28 @@ BOOST_AUTO_TEST_CASE(mixConditionTest)
         {
             ConditionTest cond("id", selectFunc);
             cond.endsWith("dcba");
-            BOOST_CHECK(cond.isEquivalent(recordEndsWith));
+            BOOST_TEST(cond.isEquivalent(recordEndsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.endsWith("cba");
             cond.endsWith("dcba");
-            BOOST_CHECK(cond.isEquivalent(recordEndsWith));
+            BOOST_TEST(cond.isEquivalent(recordEndsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.endsWith("dcba");
             cond.endsWith("cba");
-            BOOST_CHECK(cond.isEquivalent(recordEndsWith));
+            BOOST_TEST(cond.isEquivalent(recordEndsWith));
         }
 
         {
             ConditionTest cond("id", selectFunc);
             cond.endsWith("dcba");
             cond.endsWith("ecba");
-            BOOST_CHECK(cond.isEquivalent(recordEndsWith));
+            BOOST_TEST(cond.isEquivalent(recordEndsWith));
         }
     }
 }

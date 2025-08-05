@@ -69,53 +69,53 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
 
     BOOST_CHECK_EQUAL(activeEndpoints.size(), 0);
     BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 0);
-    BOOST_CHECK(!cb.available());
+    BOOST_TEST(!cb.available());
 
     auto p = cb.addActiveEndpoint(ep);
-    BOOST_CHECK(p.first);
-    BOOST_CHECK(p.second == 1);
+    BOOST_TEST(p.first);
+    BOOST_TEST(p.second == 1);
     BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 1);
 
     p = cb.addActiveEndpoint(ep);
-    BOOST_CHECK(!p.first);
-    BOOST_CHECK(p.second == 1);
+    BOOST_TEST(!p.first);
+    BOOST_TEST(p.second == 1);
     BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 1);
 
     p = cb.addActiveEndpoint(ep);
-    BOOST_CHECK(!p.first);
-    BOOST_CHECK(p.second == 1);
+    BOOST_TEST(!p.first);
+    BOOST_TEST(p.second == 1);
     BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 1);
 
     p = cb.addInactiveEndpoint(ep);
-    BOOST_CHECK(p.first);
+    BOOST_TEST(p.first);
     BOOST_CHECK_EQUAL(p.second, 1);
     BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 0);
     BOOST_CHECK_EQUAL(cb.inactiveEndpoints().size(), 1);
 
     p = cb.addInactiveEndpoint(ep);
-    BOOST_CHECK(!p.first);
-    BOOST_CHECK(p.second == 1);
+    BOOST_TEST(!p.first);
+    BOOST_TEST(p.second == 1);
     BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 0);
     BOOST_CHECK_EQUAL(cb.inactiveEndpoints().size(), 1);
 
     p = cb.addInactiveEndpoint(ep);
-    BOOST_CHECK(!p.first);
-    BOOST_CHECK(p.second == 1);
+    BOOST_TEST(!p.first);
+    BOOST_TEST(p.second == 1);
     BOOST_CHECK_EQUAL(cb.activeEndpoints().size(), 0);
     BOOST_CHECK_EQUAL(cb.inactiveEndpoints().size(), 1);
 
-    BOOST_CHECK(!cb.available());
+    BOOST_TEST(!cb.available());
 
     cb.onConnect(ep);
-    BOOST_CHECK(cb.available());
+    BOOST_TEST(cb.available());
     BOOST_CHECK_EQUAL(conCount, 1);
 
     cb.onConnect(ep0);
-    BOOST_CHECK(cb.available());
+    BOOST_TEST(cb.available());
     BOOST_CHECK_EQUAL(conCount, 2);
 
     cb.onConnect(ep1);
-    BOOST_CHECK(cb.available());
+    BOOST_TEST(cb.available());
     BOOST_CHECK_EQUAL(conCount, 3);
 
     activeEndpoints = cb.activeEndpoints();
@@ -125,15 +125,15 @@ BOOST_AUTO_TEST_CASE(testTarsServantProxyCallbackTest)
     BOOST_CHECK_EQUAL(inactiveEndpoints.size(), 0);
 
     cb.onClose(ep);
-    BOOST_CHECK(cb.available());
+    BOOST_TEST(cb.available());
     BOOST_CHECK_EQUAL(closeCount, 1);
 
     cb.onClose(ep0);
-    BOOST_CHECK(cb.available());
+    BOOST_TEST(cb.available());
     BOOST_CHECK_EQUAL(closeCount, 2);
 
     cb.onClose(ep1);
-    BOOST_CHECK(!cb.available());
+    BOOST_TEST(!cb.available());
     BOOST_CHECK_EQUAL(closeCount, 3);
 
     activeEndpoints = cb.activeEndpoints();

@@ -46,21 +46,21 @@ void testSyncConfig(CryptoSuite::Ptr _cryptoSuite)
     faker->init();
     // check the config
     auto config = faker->syncConfig();
-    BOOST_CHECK(config->ledger());
-    BOOST_CHECK(config->nodeID()->data() == faker->nodeID()->data());
-    BOOST_CHECK(config->blockFactory());
-    BOOST_CHECK(config->frontService());
-    BOOST_CHECK(config->scheduler());
-    BOOST_CHECK(config->consensus());
-    BOOST_CHECK(config->msgFactory());
+    BOOST_TEST(config->ledger());
+    BOOST_TEST(config->nodeID()->data() == faker->nodeID()->data());
+    BOOST_TEST(config->blockFactory());
+    BOOST_TEST(config->frontService());
+    BOOST_TEST(config->scheduler());
+    BOOST_TEST(config->consensus());
+    BOOST_TEST(config->msgFactory());
 
     auto ledgerData = faker->ledger()->ledgerData();
     auto genesisBlock = (ledgerData[0]);
     auto genesisBlockHeader = genesisBlock->blockHeader();
-    BOOST_CHECK(config->genesisHash().asBytes() == genesisBlockHeader->hash().asBytes());
-    BOOST_CHECK(config->blockNumber() == faker->ledger()->blockNumber());
-    BOOST_CHECK(config->nextBlock() == faker->ledger()->blockNumber() + 1);
-    BOOST_CHECK(config->hash().asBytes() == faker->ledger()->ledgerConfig()->hash().asBytes());
+    BOOST_TEST(config->genesisHash().asBytes() == genesisBlockHeader->hash().asBytes());
+    BOOST_TEST(config->blockNumber() == faker->ledger()->blockNumber());
+    BOOST_TEST(config->nextBlock() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(config->hash().asBytes() == faker->ledger()->ledgerConfig()->hash().asBytes());
 }
 
 BOOST_AUTO_TEST_CASE(testNonSMSyncConfig)

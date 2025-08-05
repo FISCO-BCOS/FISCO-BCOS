@@ -88,12 +88,12 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
         auto result = executePromise.get_future().get();
-        BOOST_CHECK(result);
+        BOOST_TEST(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
@@ -101,7 +101,7 @@ public:
         BOOST_CHECK_EQUAL(result->newEVMContractAddress(), testAddress);
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), testAddress);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
         BOOST_CHECK_LT(result->gasAvailable(), gas);
         commitBlock(1);
     }
@@ -135,7 +135,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();

@@ -36,57 +36,57 @@ BOOST_FIXTURE_TEST_SUITE(GatewayConfigTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(test_validPort)
 {
     auto config = std::make_shared<GatewayConfig>();
-    BOOST_CHECK(!config->isValidPort(1024));
-    BOOST_CHECK(!config->isValidPort(65536));
-    BOOST_CHECK(config->isValidPort(30300));
+    BOOST_TEST(!config->isValidPort(1024));
+    BOOST_TEST(!config->isValidPort(65536));
+    BOOST_TEST(config->isValidPort(30300));
 }
 
 BOOST_AUTO_TEST_CASE(test_validIP)
 {
     auto config = std::make_shared<GatewayConfig>();
 
-    BOOST_CHECK(!config->isValidIP("a"));
-    BOOST_CHECK(!config->isValidIP("127"));
-    BOOST_CHECK(!config->isValidIP("127.0"));
-    BOOST_CHECK(!config->isValidIP("127.0.0"));
-    BOOST_CHECK(!config->isValidIP("127.0.0.1.0"));
+    BOOST_TEST(!config->isValidIP("a"));
+    BOOST_TEST(!config->isValidIP("127"));
+    BOOST_TEST(!config->isValidIP("127.0"));
+    BOOST_TEST(!config->isValidIP("127.0.0"));
+    BOOST_TEST(!config->isValidIP("127.0.0.1.0"));
 
     // ipv4
-    BOOST_CHECK(config->isValidIP("127.0.0.1"));
-    BOOST_CHECK(config->isValidIP("192.168.0.1"));
-    BOOST_CHECK(config->isValidIP("64.120.121.206"));
+    BOOST_TEST(config->isValidIP("127.0.0.1"));
+    BOOST_TEST(config->isValidIP("192.168.0.1"));
+    BOOST_TEST(config->isValidIP("64.120.121.206"));
 
     // ipv6
-    BOOST_CHECK(config->isValidIP("::1"));
-    BOOST_CHECK(config->isValidIP("fe80::58da:28ff:fe08:5d91"));
-    BOOST_CHECK(config->isValidIP("1111::1111:1111:1111:1111"));
+    BOOST_TEST(config->isValidIP("::1"));
+    BOOST_TEST(config->isValidIP("fe80::58da:28ff:fe08:5d91"));
+    BOOST_TEST(config->isValidIP("1111::1111:1111:1111:1111"));
 }
 
 BOOST_AUTO_TEST_CASE(test_isIPAddress)
 {
     auto config = std::make_shared<GatewayConfig>();
 
-    BOOST_CHECK(!config->isIPAddress("a"));
-    BOOST_CHECK(!config->isIPAddress("127"));
-    BOOST_CHECK(!config->isIPAddress("127.0"));
-    BOOST_CHECK(!config->isIPAddress("127.0.0"));
-    BOOST_CHECK(!config->isIPAddress("127.0.0.1.0"));
+    BOOST_TEST(!config->isIPAddress("a"));
+    BOOST_TEST(!config->isIPAddress("127"));
+    BOOST_TEST(!config->isIPAddress("127.0"));
+    BOOST_TEST(!config->isIPAddress("127.0.0"));
+    BOOST_TEST(!config->isIPAddress("127.0.0.1.0"));
 
     // ipv4
-    BOOST_CHECK(config->isIPAddress("127.0.0.1"));
-    BOOST_CHECK(config->isIPAddress("192.168.0.1"));
-    BOOST_CHECK(config->isIPAddress("64.120.121.206"));
+    BOOST_TEST(config->isIPAddress("127.0.0.1"));
+    BOOST_TEST(config->isIPAddress("192.168.0.1"));
+    BOOST_TEST(config->isIPAddress("64.120.121.206"));
 
     // ipv6
-    BOOST_CHECK(config->isIPAddress("::1"));
-    BOOST_CHECK(config->isIPAddress("fe80::58da:28ff:fe08:5d91"));
-    BOOST_CHECK(config->isIPAddress("1111::1111:1111:1111:1111"));
+    BOOST_TEST(config->isIPAddress("::1"));
+    BOOST_TEST(config->isIPAddress("fe80::58da:28ff:fe08:5d91"));
+    BOOST_TEST(config->isIPAddress("1111::1111:1111:1111:1111"));
 }
 
 BOOST_AUTO_TEST_CASE(test_isHostname)
 {
     auto config = std::make_shared<GatewayConfig>();
-    BOOST_CHECK(config->isHostname("localhost"));
+    BOOST_TEST(config->isHostname("localhost"));
 }
 
 BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
@@ -98,13 +98,13 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("127.0.0.1:1111", endpoint));
         BOOST_CHECK_EQUAL(endpoint.address(), "127.0.0.1");
         BOOST_CHECK_EQUAL(endpoint.port(), 1111);
-        BOOST_CHECK(!endpoint.isIPv6());
+        BOOST_TEST(!endpoint.isIPv6());
     }
 
     {
         NodeIPEndpoint endpoint;
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("localhost:2333", endpoint));
-        BOOST_CHECK(endpoint.address() == "127.0.0.1" || endpoint.address() == "::1");
+        BOOST_TEST(endpoint.address() == "127.0.0.1" || endpoint.address() == "::1");
         BOOST_CHECK_EQUAL(endpoint.port(), 2333);
     }
 
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("[::1]:1234", endpoint));
         BOOST_CHECK_EQUAL(endpoint.address(), "::1");
         BOOST_CHECK_EQUAL(endpoint.port(), 1234);
-        BOOST_CHECK(endpoint.isIPv6());
+        BOOST_TEST(endpoint.isIPv6());
     }
 
     {
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
         BOOST_CHECK_NO_THROW(config->hostAndPort2Endpoint("8.129.188.218:12345", endpoint));
         BOOST_CHECK_EQUAL(endpoint.address(), "8.129.188.218");
         BOOST_CHECK_EQUAL(endpoint.port(), 12345);
-        BOOST_CHECK(!endpoint.isIPv6());
+        BOOST_TEST(!endpoint.isIPv6());
     }
 
     {
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(test_hostAndPort2Endpoint)
             config->hostAndPort2Endpoint("[fe80::1a9d:50ae:3207:80d9]:54321", endpoint));
         BOOST_CHECK_EQUAL(endpoint.address(), "fe80::1a9d:50ae:3207:80d9");
         BOOST_CHECK_EQUAL(endpoint.port(), 54321);
-        BOOST_CHECK(endpoint.isIPv6());
+        BOOST_TEST(endpoint.isIPv6());
     }
 
     {
@@ -191,9 +191,9 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
         BOOST_CHECK_EQUAL(config->connectedNodes().size(), 3);
 
         auto certConfig = config->certConfig();
-        BOOST_CHECK(!certConfig.caCert->empty());
-        BOOST_CHECK(!certConfig.nodeCert->empty());
-        BOOST_CHECK(!certConfig.nodeKey->empty());
+        BOOST_TEST(!certConfig.caCert->empty());
+        BOOST_TEST(!certConfig.nodeCert->empty());
+        BOOST_TEST(!certConfig.nodeKey->empty());
     }
 }
 
@@ -214,11 +214,11 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
         BOOST_CHECK_EQUAL(config->connectedNodes().size(), 1);
 
         auto smCertConfig = config->smCertConfig();
-        BOOST_CHECK(!smCertConfig.caCert->empty());
-        BOOST_CHECK(!smCertConfig.nodeCert->empty());
-        BOOST_CHECK(!smCertConfig.nodeKey->empty());
-        BOOST_CHECK(!smCertConfig.enNodeCert->empty());
-        BOOST_CHECK(!smCertConfig.enNodeKey->empty());
+        BOOST_TEST(!smCertConfig.caCert->empty());
+        BOOST_TEST(!smCertConfig.nodeCert->empty());
+        BOOST_TEST(!smCertConfig.nodeKey->empty());
+        BOOST_TEST(!smCertConfig.enNodeCert->empty());
+        BOOST_TEST(!smCertConfig.enNodeKey->empty());
     }
 }
 
@@ -301,14 +301,14 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
     {
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
-        BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+        BOOST_TEST(!rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_TEST(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_TEST(!rateLimiterConfig.enableOutRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableInRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_TEST(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
     }
 
     {
@@ -318,14 +318,14 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         auto rateLimiterConfig = config->rateLimiterConfig();
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
-        BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableOutGroupRateLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableInP2pBasicMsgLimit());
-        BOOST_CHECK(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+        BOOST_TEST(!rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_TEST(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_TEST(!rateLimiterConfig.enableOutRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableInRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_TEST(!rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_TEST(!rateLimiterConfig.enableInP2pModuleMsgLimit(1));
     }
 
     {
@@ -341,36 +341,36 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         auto timeWindowSec = rateLimiterConfig.timeWindowSec;
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 3);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+        BOOST_TEST(rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_TEST(rateLimiterConfig.enableDistributedRateLimitCache);
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
 
-        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableInRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableInP2pBasicMsgLimit());
-        BOOST_CHECK(rateLimiterConfig.enableOutConnRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
-        BOOST_CHECK(rateLimiterConfig.allowExceedMaxPermitSize);
+        BOOST_TEST(rateLimiterConfig.enableOutRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableInRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableInP2pBasicMsgLimit());
+        BOOST_TEST(rateLimiterConfig.enableOutConnRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_TEST(rateLimiterConfig.allowExceedMaxPermitSize);
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, config->doubleMBToBit(10));
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(5));
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 6);
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::TxsSync) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::TxsSync) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::AMOP) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::AMOP) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5001) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(5001) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5002) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(5002) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(5003) ==
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(5003) ==
                     rateLimiterConfig.modulesWithoutLimit.end());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.ip2BwLimit.size(), 3);
@@ -389,14 +389,14 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         BOOST_CHECK_EQUAL(
             rateLimiterConfig.group2BwLimit.find("group2")->second, config->doubleMBToBit(2));
 
-        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
-        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(5));
-        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(7));
-        BOOST_CHECK(rateLimiterConfig.enableInP2pModuleMsgLimit(8));
+        BOOST_TEST(rateLimiterConfig.enableInP2pModuleMsgLimit(1));
+        BOOST_TEST(rateLimiterConfig.enableInP2pModuleMsgLimit(5));
+        BOOST_TEST(rateLimiterConfig.enableInP2pModuleMsgLimit(7));
+        BOOST_TEST(rateLimiterConfig.enableInP2pModuleMsgLimit(8));
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgTypes.size(), 5);  // 1,2,3,6,9
-        BOOST_CHECK(rateLimiterConfig.p2pBasicMsgTypes.contains(1));
-        BOOST_CHECK(!rateLimiterConfig.p2pBasicMsgTypes.contains(4));
+        BOOST_TEST(rateLimiterConfig.p2pBasicMsgTypes.contains(1));
+        BOOST_TEST(!rateLimiterConfig.p2pBasicMsgTypes.contains(4));
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pBasicMsgQPS, 123);
         BOOST_CHECK_EQUAL(rateLimiterConfig.p2pModuleMsgQPS, 555);
         BOOST_CHECK_EQUAL(rateLimiterConfig.moduleMsg2QPSSize, 3);
@@ -417,27 +417,27 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
 
         auto rateLimiterConfig = config->rateLimiterConfig();
 
-        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableOutRateLimit());
 
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
+        BOOST_TEST(!rateLimiterConfig.enableDistributedRatelimit);
+        BOOST_TEST(rateLimiterConfig.enableDistributedRateLimitCache);
         BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
 
-        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
-        BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableOutRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
+        BOOST_TEST(rateLimiterConfig.enableOutGroupRateLimit());
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.totalOutgoingBwLimit, config->doubleMBToBit(3));
         BOOST_CHECK_EQUAL(rateLimiterConfig.connOutgoingBwLimit, config->doubleMBToBit(2));
         BOOST_CHECK_EQUAL(rateLimiterConfig.groupOutgoingBwLimit, config->doubleMBToBit(1));
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.modulesWithoutLimit.size(), 4);
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::Raft) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
+        BOOST_TEST(rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::PBFT) !=
                     rateLimiterConfig.modulesWithoutLimit.end());
-        BOOST_CHECK(
+        BOOST_TEST(
             rateLimiterConfig.modulesWithoutLimit.find(bcos::protocol::ModuleID::ConsTxsSync) !=
             rateLimiterConfig.modulesWithoutLimit.end());
 

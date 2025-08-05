@@ -228,7 +228,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         auto options = std::make_shared<P2PMessageOptions>();
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
     }
 
     {
@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         options->setGroupID(groupID);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
     }
 
     {
@@ -250,7 +250,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         options->setSrcNodeID(srcNodeIDPtr);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(!r);  // groupID overflow
+        BOOST_TEST(!r);  // groupID overflow
     }
 
     {
@@ -262,7 +262,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         options->setSrcNodeID(srcNodeIDPtr);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(!r);  // srcNodeID overflow
+        BOOST_TEST(!r);  // srcNodeID overflow
     }
 
     {
@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
 
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(!r);  // srcNodeID overflow
+        BOOST_TEST(!r);  // srcNodeID overflow
     }
 
     {
@@ -295,11 +295,11 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
         options->setSrcNodeID(srcNodeIDPtr);
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
 
         auto decodeOptions = std::make_shared<P2PMessageOptions>();
         auto ret = decodeOptions->decode(bytesConstRef(buffer->data(), buffer->size()));
-        BOOST_CHECK(ret > 0);
+        BOOST_TEST(ret > 0);
         BOOST_CHECK_EQUAL(groupID, decodeOptions->groupID());
         BOOST_CHECK_EQUAL(moduleID, decodeOptions->moduleID());
         BOOST_CHECK_EQUAL(srcNodeID,
@@ -327,11 +327,11 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
 
         auto buffer = std::make_shared<bytes>();
         auto r = options->encode(*buffer.get());
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
 
         auto decodeOptions = std::make_shared<P2PMessageOptions>();
         auto ret = decodeOptions->decode(bytesConstRef(buffer->data(), buffer->size()));
-        BOOST_CHECK(ret > 0);
+        BOOST_TEST(ret > 0);
         BOOST_CHECK_EQUAL(groupID, decodeOptions->groupID());
         BOOST_CHECK_EQUAL(moduleID, decodeOptions->moduleID());
         BOOST_CHECK_EQUAL(srcNodeID,
@@ -380,11 +380,11 @@ void testP2PMessageCodec(std::shared_ptr<MessageFactory> factory, uint32_t _vers
 
     auto buffer = std::make_shared<bytes>();
     auto r = encodeMsg->encode(*buffer.get());
-    BOOST_CHECK(r);
+    BOOST_TEST(r);
 
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK(ret > 0);
+    BOOST_TEST(ret > 0);
 
     BOOST_CHECK_EQUAL(decodeMsg->version(), version);
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), packetType);
@@ -455,7 +455,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     // compress payload
     bcos::bytes compressData;
     auto r = encodeMsg->tryToCompressPayload(compressData);
-    BOOST_CHECK(r);
+    BOOST_TEST(r);
     /*
     // encodeMsg->setExt(encodeMsg->ext() & bcos::protocol::MessageExtFieldFlag::Compress);
 
@@ -467,7 +467,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_compress)
     encodeMsg->setPayload(smallPayload);
     auto buffer = std::make_shared<bytes>();
     auto retWithoutCompress = encodeMsg->encode(*buffer.get());
-    BOOST_CHECK(retWithoutCompress);
+    BOOST_TEST(retWithoutCompress);
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
     BOOST_CHECK_EQUAL(ret, MessageDecodeStatus::MESSAGE_ERROR);

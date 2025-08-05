@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::UINT);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::UINT);
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Uint>(sPtr->value()[0])->value(), u256(111111));
 
         bcos::bytes buffer;
@@ -217,15 +217,15 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::FIXED_LIST);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::FIXED_LIST);
 
         auto p = std::dynamic_pointer_cast<FixedList>(sPtr->value()[0]);
         BOOST_CHECK_EQUAL(p->dimension(), 3);
         BOOST_CHECK_EQUAL(p->value().size(), 3);
 
-        BOOST_CHECK(p->value()[0]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[1]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[2]->type() == Type::UINT);
+        BOOST_TEST(p->value()[0]->type() == Type::UINT);
+        BOOST_TEST(p->value()[1]->type() == Type::UINT);
+        BOOST_TEST(p->value()[2]->type() == Type::UINT);
 
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Uint>(p->value()[0])->value(), u256(1));
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Uint>(p->value()[1])->value(), u256(2));
@@ -261,21 +261,21 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::DYNAMIC_LIST);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::DYNAMIC_LIST);
 
         auto p = std::dynamic_pointer_cast<DynamicList>(sPtr->value()[0]);
         BOOST_CHECK_EQUAL(p->value().size(), 10);
 
-        BOOST_CHECK(p->value()[0]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[1]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[2]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[3]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[4]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[5]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[6]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[7]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[8]->type() == Type::UINT);
-        BOOST_CHECK(p->value()[9]->type() == Type::UINT);
+        BOOST_TEST(p->value()[0]->type() == Type::UINT);
+        BOOST_TEST(p->value()[1]->type() == Type::UINT);
+        BOOST_TEST(p->value()[2]->type() == Type::UINT);
+        BOOST_TEST(p->value()[3]->type() == Type::UINT);
+        BOOST_TEST(p->value()[4]->type() == Type::UINT);
+        BOOST_TEST(p->value()[5]->type() == Type::UINT);
+        BOOST_TEST(p->value()[6]->type() == Type::UINT);
+        BOOST_TEST(p->value()[7]->type() == Type::UINT);
+        BOOST_TEST(p->value()[8]->type() == Type::UINT);
+        BOOST_TEST(p->value()[9]->type() == Type::UINT);
 
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Uint>(p->value()[0])->value(), u256(1));
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Uint>(p->value()[1])->value(), u256(2));
@@ -320,7 +320,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::INT);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::INT);
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Int>(sPtr->value()[0])->value(),
             s256("-11111111111111111111111"));
 
@@ -356,15 +356,15 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::FIXED_LIST);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::FIXED_LIST);
 
         auto p = std::dynamic_pointer_cast<FixedList>(sPtr->value()[0]);
         BOOST_CHECK_EQUAL(p->dimension(), 3);
         BOOST_CHECK_EQUAL(p->value().size(), 3);
 
-        BOOST_CHECK(p->value()[0]->type() == Type::INT);
-        BOOST_CHECK(p->value()[1]->type() == Type::INT);
-        BOOST_CHECK(p->value()[2]->type() == Type::INT);
+        BOOST_TEST(p->value()[0]->type() == Type::INT);
+        BOOST_TEST(p->value()[1]->type() == Type::INT);
+        BOOST_TEST(p->value()[2]->type() == Type::INT);
 
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Int>(p->value()[0])->value(), s256(-1));
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Int>(p->value()[1])->value(), s256(-2));
@@ -400,21 +400,21 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::DYNAMIC_LIST);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::DYNAMIC_LIST);
 
         auto p = std::dynamic_pointer_cast<DynamicList>(sPtr->value()[0]);
         BOOST_CHECK_EQUAL(p->value().size(), 10);
 
-        BOOST_CHECK(p->value()[0]->type() == Type::INT);
-        BOOST_CHECK(p->value()[1]->type() == Type::INT);
-        BOOST_CHECK(p->value()[2]->type() == Type::INT);
-        BOOST_CHECK(p->value()[3]->type() == Type::INT);
-        BOOST_CHECK(p->value()[4]->type() == Type::INT);
-        BOOST_CHECK(p->value()[5]->type() == Type::INT);
-        BOOST_CHECK(p->value()[6]->type() == Type::INT);
-        BOOST_CHECK(p->value()[7]->type() == Type::INT);
-        BOOST_CHECK(p->value()[8]->type() == Type::INT);
-        BOOST_CHECK(p->value()[9]->type() == Type::INT);
+        BOOST_TEST(p->value()[0]->type() == Type::INT);
+        BOOST_TEST(p->value()[1]->type() == Type::INT);
+        BOOST_TEST(p->value()[2]->type() == Type::INT);
+        BOOST_TEST(p->value()[3]->type() == Type::INT);
+        BOOST_TEST(p->value()[4]->type() == Type::INT);
+        BOOST_TEST(p->value()[5]->type() == Type::INT);
+        BOOST_TEST(p->value()[6]->type() == Type::INT);
+        BOOST_TEST(p->value()[7]->type() == Type::INT);
+        BOOST_TEST(p->value()[8]->type() == Type::INT);
+        BOOST_TEST(p->value()[9]->type() == Type::INT);
 
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Int>(p->value()[0])->value(), s256(-1));
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Int>(p->value()[1])->value(), s256(-2));
@@ -459,7 +459,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::BOOL);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::BOOL);
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Boolean>(sPtr->value()[0])->value(), false);
     }
 
@@ -486,15 +486,15 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::FIXED_LIST);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::FIXED_LIST);
 
         auto p = std::dynamic_pointer_cast<FixedList>(sPtr->value()[0]);
         BOOST_CHECK_EQUAL(p->dimension(), 3);
         BOOST_CHECK_EQUAL(p->value().size(), 3);
 
-        BOOST_CHECK(p->value()[0]->type() == Type::BOOL);
-        BOOST_CHECK(p->value()[1]->type() == Type::BOOL);
-        BOOST_CHECK(p->value()[2]->type() == Type::BOOL);
+        BOOST_TEST(p->value()[0]->type() == Type::BOOL);
+        BOOST_TEST(p->value()[1]->type() == Type::BOOL);
+        BOOST_TEST(p->value()[2]->type() == Type::BOOL);
 
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Boolean>(p->value()[0])->value(), true);
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Boolean>(p->value()[1])->value(), false);
@@ -519,14 +519,14 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::DYNAMIC_LIST);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::DYNAMIC_LIST);
 
         auto p = std::dynamic_pointer_cast<DynamicList>(sPtr->value()[0]);
         BOOST_CHECK_EQUAL(p->value().size(), 3);
 
-        BOOST_CHECK(p->value()[0]->type() == Type::BOOL);
-        BOOST_CHECK(p->value()[1]->type() == Type::BOOL);
-        BOOST_CHECK(p->value()[2]->type() == Type::BOOL);
+        BOOST_TEST(p->value()[0]->type() == Type::BOOL);
+        BOOST_TEST(p->value()[1]->type() == Type::BOOL);
+        BOOST_TEST(p->value()[2]->type() == Type::BOOL);
 
 
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Boolean>(p->value()[0])->value(), true);
@@ -548,7 +548,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::ADDRESS);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::ADDRESS);
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<Addr>(sPtr->value()[0])->value(),
             "0xbe5422d15f39373eb0a97ff8c10fbd0e40e29338");
     }
@@ -575,7 +575,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
 
         codec.initAbstractTypeWithJsonParams(*sPtr, jParams);
 
-        BOOST_CHECK(sPtr->value()[0]->type() == Type::STRING);
+        BOOST_TEST(sPtr->value()[0]->type() == Type::STRING);
         BOOST_CHECK_EQUAL(std::dynamic_pointer_cast<String>(sPtr->value()[0])->value(),
             "0xbe5422d15f39373eb0a97ff8c10fbd0e40e29338");
     }

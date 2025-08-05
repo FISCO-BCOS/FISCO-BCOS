@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(test_transaction)
     BOOST_CHECK_EQUAL(txHash, "0359a5588c5e9c9dcfd2f4ece850d6f4c41bc88e2c27cc051890f26ef0ef118f");
 
     auto json = txBuilder->decodeTransactionDataToJsonObj(*txDataBytes);
-    BOOST_CHECK(json.find("0x6849f21d1e455e9f0712b1e99fa4fcd23758e8f1") != std::string::npos);
+    BOOST_TEST(json.find("0x6849f21d1e455e9f0712b1e99fa4fcd23758e8f1") != std::string::npos);
     auto newTxData = TarsTransactionDataReadFromJsonString(json);
 
     auto hash2 = txBuilder->calculateTransactionDataHash(CryptoType::Secp256K1, *newTxData).hex();
@@ -99,8 +99,8 @@ BOOST_AUTO_TEST_CASE(test_transaction_v1)
 
     auto hex1 = hash.hex();
     std::string hex = toHex(tx->dataHash);
-    BOOST_CHECK(hex == hex1);
-    BOOST_CHECK(hex == "f03b8fdfa96a9b2128a83c22ddc691e6f1d9e0589b7c34088675e33cb059dbb2");
+    BOOST_TEST(hex == hex1);
+    BOOST_TEST(hex == "f03b8fdfa96a9b2128a83c22ddc691e6f1d9e0589b7c34088675e33cb059dbb2");
 
     bytes txDataInput;
     txDataInput.insert(txDataInput.begin(), txData.input.begin(), txData.input.end());
@@ -112,13 +112,13 @@ BOOST_AUTO_TEST_CASE(test_transaction_v1)
 
     auto newHash = transactionBuilderV1.TransactionBuilder::calculateTransactionDataHash(
         CryptoType::Secp256K1, *newTxData);
-    BOOST_CHECK(newHash.hex() == hex);
+    BOOST_TEST(newHash.hex() == hex);
 
     auto newHash2 = transactionBuilderV1.calculateTransactionDataHash(CryptoType::Secp256K1,
         txData.version, txData.groupID, txData.chainID, txData.to, txData.nonce, txDataInput,
         txData.abi, txData.blockLimit, txData.value, txData.gasPrice, txData.gasLimit,
         txData.maxFeePerGas, txData.maxPriorityFeePerGas);
-    BOOST_CHECK(newHash2.hex() == hex);
+    BOOST_TEST(newHash2.hex() == hex);
 }
 
 BOOST_AUTO_TEST_CASE(test_transaction_v2)
@@ -146,8 +146,8 @@ BOOST_AUTO_TEST_CASE(test_transaction_v2)
 
     auto hex1 = hash.hex();
     std::string hex = toHex(tx->dataHash);
-    BOOST_CHECK(hex == hex1);
-    BOOST_CHECK(hex == "f03b8fdfa96a9b2128a83c22ddc691e6f1d9e0589b7c34088675e33cb059dbb2");
+    BOOST_TEST(hex == hex1);
+    BOOST_TEST(hex == "f03b8fdfa96a9b2128a83c22ddc691e6f1d9e0589b7c34088675e33cb059dbb2");
 
     bytes txDataInput;
     txDataInput.insert(txDataInput.begin(), txData.input.begin(), txData.input.end());
@@ -159,27 +159,27 @@ BOOST_AUTO_TEST_CASE(test_transaction_v2)
 
     auto newHash = transactionBuilderV2.TransactionBuilder::calculateTransactionDataHash(
         CryptoType::Secp256K1, *newTxData);
-    BOOST_CHECK(newHash.hex() == hex);
+    BOOST_TEST(newHash.hex() == hex);
 
     auto newHash2 = transactionBuilderV2.calculateTransactionDataHash(CryptoType::Secp256K1,
         txData.version, txData.groupID, txData.chainID, txData.to, txData.nonce, txDataInput,
         txData.abi, txData.blockLimit, txData.value, txData.gasPrice, txData.gasLimit,
         txData.maxFeePerGas, txData.maxPriorityFeePerGas);
-    BOOST_CHECK(newHash2.hex() == hex);
+    BOOST_TEST(newHash2.hex() == hex);
 
 
     auto [txHash, _] = transactionBuilderV2.createSignedTransaction(*keyPair1, txData);
-    BOOST_CHECK(newHash2.hex() == toHex(txHash));
+    BOOST_TEST(newHash2.hex() == toHex(txHash));
 
     // set extension
     std::string_view extension = "Hello World!";
     txData.extension.insert(txData.extension.begin(), extension.begin(), extension.end());
     txData.version = (uint32_t)protocol::TransactionVersion::V2_VERSION;
     auto [txHash2, signedTx] = transactionBuilderV2.createSignedTransaction(*keyPair1, txData);
-    BOOST_CHECK(newHash2.hex() != toHex(txHash2));
+    BOOST_TEST(newHash2.hex() != toHex(txHash2));
 
     auto newTx = transactionBuilderV2.decodeTransaction(signedTx);
-    BOOST_CHECK(newTx->data.extension == txData.extension);
+    BOOST_TEST(newTx->data.extension == txData.extension);
 
     HashType v2Hash(txHash2);
     auto signature = transactionBuilderV2.signTransactionDataHash(*keyPair1, v2Hash);
@@ -195,21 +195,21 @@ BOOST_AUTO_TEST_CASE(test_transaction_v2)
 
     auto newSignedTx =
         transactionBuilderV2.createSignedTransactionWithSign(*signature, v2Hash, txData);
-    BOOST_CHECK(newSignedTx == signedTx);
+    BOOST_TEST(newSignedTx == signedTx);
 
     auto jsonTx = TarsTransactionWriteToJsonString(newTx);
     auto txDecodeFromJson = TarsTransactionReadFromJsonString(jsonTx);
     {
         auto txBytes1 = transactionBuilderV2.encodeTransaction(*txDecodeFromJson);
         auto txBytes2 = transactionBuilderV2.encodeTransaction(*newTx);
-        BOOST_CHECK(toHex(*txBytes1) == toHex(*txBytes2));
+        BOOST_TEST(toHex(*txBytes1) == toHex(*txBytes2));
     }
     auto jsonTxData = TarsTransactionDataWriteToJsonString(newTx->data);
     auto txDataDecodeFromJson = TarsTransactionDataReadFromJsonString(jsonTxData);
     {
         auto txDataBytes1 = transactionBuilderV2.encodeTransactionData(*txDataDecodeFromJson);
         auto txDataBytes2 = transactionBuilderV2.encodeTransactionData(newTx->data);
-        BOOST_CHECK(toHex(*txDataBytes1) == toHex(*txDataBytes2));
+        BOOST_TEST(toHex(*txDataBytes1) == toHex(*txDataBytes2));
     }
 }
 
@@ -233,7 +233,7 @@ BOOST_AUTO_TEST_CASE(test_receipt)
 
     auto receiptDataByte = receiptBuilder->encodeReceipt(*receiptData);
     auto json = receiptBuilder->decodeReceiptDataToJsonObj(*receiptDataByte);
-    BOOST_CHECK(json.find("0102e8b6fc8cdf9626fddc1c3ea8c1e79b3fce94") != std::string::npos);
+    BOOST_TEST(json.find("0102e8b6fc8cdf9626fddc1c3ea8c1e79b3fce94") != std::string::npos);
     auto newReceipt = TarsReceiptDataReadFromJsonString(json);
     auto hash3 = receiptBuilder->calculateReceiptDataHash(CryptoType::Secp256K1, *newReceipt).hex();
     BOOST_CHECK_EQUAL(hash3, "296b4598a56d6e2a295e5fe913e6c55459bef0c290f0e713744be8ade2ceec51");

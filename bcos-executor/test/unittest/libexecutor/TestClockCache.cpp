@@ -54,26 +54,26 @@ BOOST_AUTO_TEST_CASE(InsertSameKey)
     BOOST_CHECK_EQUAL(tinyCache->insert(1, new int(1)), true);
     BOOST_CHECK_EQUAL(tinyCache->insert(1, new int(2)), true);
     auto handle = tinyCache->lookup(1);
-    BOOST_CHECK(handle.isValid());
+    BOOST_TEST(handle.isValid());
     BOOST_CHECK_EQUAL(handle.value(), 2);
 }
 
 BOOST_AUTO_TEST_CASE(HitAndMiss)
 {
     auto handle = tinyCache->lookup(100);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
 
     BOOST_CHECK_EQUAL(tinyCache->insert(100, new int(101)), true);
     handle = tinyCache->lookup(100);
-    BOOST_CHECK(handle.isValid());
+    BOOST_TEST(handle.isValid());
     BOOST_CHECK_EQUAL(handle.value(), 101);
     handle = tinyCache->lookup(200);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
     handle = tinyCache->lookup(300);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
 
     handle = tinyCache->lookup(100);
-    BOOST_CHECK(handle.isValid());
+    BOOST_TEST(handle.isValid());
     // For now, the tinyCache is full and the item in it cannot be
     // replaced due to `handle` reference to it.
     BOOST_CHECK_EQUAL(tinyCache->insert(200, new int(201)), false);
@@ -82,46 +82,46 @@ BOOST_AUTO_TEST_CASE(HitAndMiss)
     handle.release();
     BOOST_CHECK_EQUAL(tinyCache->insert(200, new int(201)), true);
     handle = tinyCache->lookup(100);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
     handle = tinyCache->lookup(200);
-    BOOST_CHECK(handle.isValid());
+    BOOST_TEST(handle.isValid());
     BOOST_CHECK_EQUAL(handle.value(), 201);
     handle = tinyCache->lookup(300);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
 
     // Pair (200, 201) still exists in tinyCache, but it isn't referenced
     // by any handle, so we can insert new entry to replace it.
     BOOST_CHECK_EQUAL(tinyCache->insert(100, new int(102)), true);
     handle = tinyCache->lookup(100);
-    BOOST_CHECK(handle.isValid());
+    BOOST_TEST(handle.isValid());
     BOOST_CHECK_EQUAL(handle.value(), 102);
     handle = tinyCache->lookup(200);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
     handle = tinyCache->lookup(300);
-    BOOST_CHECK(!handle.isValid());
+    BOOST_TEST(!handle.isValid());
 }
 
 BOOST_AUTO_TEST_CASE(EvictionPolicy)
 {
-    BOOST_CHECK(bigCache->insert(100, new int(101)));
-    BOOST_CHECK(bigCache->insert(101, new int(102)));
-    BOOST_CHECK(bigCache->insert(102, new int(103)));
-    BOOST_CHECK(bigCache->insert(103, new int(104)));
+    BOOST_TEST(bigCache->insert(100, new int(101)));
+    BOOST_TEST(bigCache->insert(101, new int(102)));
+    BOOST_TEST(bigCache->insert(102, new int(103)));
+    BOOST_TEST(bigCache->insert(103, new int(104)));
 
-    BOOST_CHECK(bigCache->insert(200, new int(201)));
-    BOOST_CHECK(bigCache->insert(201, new int(202)));
-    BOOST_CHECK(bigCache->insert(202, new int(203)));
-    BOOST_CHECK(bigCache->insert(203, new int(204)));
+    BOOST_TEST(bigCache->insert(200, new int(201)));
+    BOOST_TEST(bigCache->insert(201, new int(202)));
+    BOOST_TEST(bigCache->insert(202, new int(203)));
+    BOOST_TEST(bigCache->insert(203, new int(204)));
 
     auto h200 = bigCache->lookup(200);
     auto h201 = bigCache->lookup(201);
     auto h202 = bigCache->lookup(202);
     auto h203 = bigCache->lookup(203);
 
-    BOOST_CHECK(bigCache->insert(300, new int(301)));
-    BOOST_CHECK(bigCache->insert(301, new int(302)));
-    BOOST_CHECK(bigCache->insert(302, new int(303)));
-    BOOST_CHECK(bigCache->insert(303, new int(304)));
+    BOOST_TEST(bigCache->insert(300, new int(301)));
+    BOOST_TEST(bigCache->insert(301, new int(302)));
+    BOOST_TEST(bigCache->insert(302, new int(303)));
+    BOOST_TEST(bigCache->insert(303, new int(304)));
 
     // Insert entries much more than cache capacity.
     bool insertResult = true;
@@ -129,25 +129,25 @@ BOOST_AUTO_TEST_CASE(EvictionPolicy)
     {
         insertResult = insertResult && bigCache->insert(1000 + i, new int(2000 + i));
     }
-    BOOST_CHECK(insertResult);
+    BOOST_TEST(insertResult);
 
     // Check whether the entries inserted in the beginning
     // are evicted. Ones without extra ref are evicted and
     // those with are not.
-    BOOST_CHECK(!bigCache->lookup(100).isValid());
-    BOOST_CHECK(!bigCache->lookup(101).isValid());
-    BOOST_CHECK(!bigCache->lookup(102).isValid());
-    BOOST_CHECK(!bigCache->lookup(103).isValid());
+    BOOST_TEST(!bigCache->lookup(100).isValid());
+    BOOST_TEST(!bigCache->lookup(101).isValid());
+    BOOST_TEST(!bigCache->lookup(102).isValid());
+    BOOST_TEST(!bigCache->lookup(103).isValid());
 
-    BOOST_CHECK(!bigCache->lookup(300).isValid());
-    BOOST_CHECK(!bigCache->lookup(301).isValid());
-    BOOST_CHECK(!bigCache->lookup(302).isValid());
-    BOOST_CHECK(!bigCache->lookup(303).isValid());
+    BOOST_TEST(!bigCache->lookup(300).isValid());
+    BOOST_TEST(!bigCache->lookup(301).isValid());
+    BOOST_TEST(!bigCache->lookup(302).isValid());
+    BOOST_TEST(!bigCache->lookup(303).isValid());
 
-    BOOST_CHECK(bigCache->lookup(200).value() == 201);
-    BOOST_CHECK(bigCache->lookup(201).value() == 202);
-    BOOST_CHECK(bigCache->lookup(202).value() == 203);
-    BOOST_CHECK(bigCache->lookup(203).value() == 204);
+    BOOST_TEST(bigCache->lookup(200).value() == 201);
+    BOOST_TEST(bigCache->lookup(201).value() == 202);
+    BOOST_TEST(bigCache->lookup(202).value() == 203);
+    BOOST_TEST(bigCache->lookup(203).value() == 204);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

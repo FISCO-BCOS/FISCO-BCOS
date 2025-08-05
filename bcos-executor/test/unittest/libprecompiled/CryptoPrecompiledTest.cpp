@@ -90,12 +90,12 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
         auto result = executePromise.get_future().get();
-        BOOST_CHECK(result);
+        BOOST_TEST(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
@@ -103,7 +103,7 @@ public:
         BOOST_CHECK_EQUAL(result->newEVMContractAddress(), cryptoAddress);
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), cryptoAddress);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
         BOOST_CHECK_LT(result->gasAvailable(), gas);
 
         // --------------------------------
@@ -115,12 +115,12 @@ public:
         executor->executeTransaction(std::make_unique<decltype(paramsBak)>(paramsBak),
             [&](bcos::Error::UniquePtr&& error,
                 bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
 
         auto result2 = executePromise2.get_future().get();
-        BOOST_CHECK(result2);
+        BOOST_TEST(result2);
         BOOST_CHECK_EQUAL(result2->type(), ExecutionMessage::REVERT);
         BOOST_CHECK_EQUAL(
             result2->status(), (int32_t)TransactionStatus::ContractAddressAlreadyUsed);
@@ -222,7 +222,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         std::cout << "== testHash-sm3: decodedHash: " << codec::fromString32(decodedHash).hex()
                   << std::endl;
         std::cout << "== testHash-sm3: hash:" << hash.hex() << std::endl;
-        BOOST_CHECK(hash == codec::fromString32(decodedHash));
+        BOOST_TEST(hash == codec::fromString32(decodedHash));
 
         commitBlock(2);
     }
@@ -267,7 +267,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
         std::cout << "== testHash-keccak256Hash: decodedHash: "
                   << codec::fromString32(decodedHash).hex() << std::endl;
         std::cout << "== testHash-keccak256Hash: hash:" << hash.hex() << std::endl;
-        BOOST_CHECK(hash == codec::fromString32(decodedHash));
+        BOOST_TEST(hash == codec::fromString32(decodedHash));
         commitBlock(3);
     }
 }
@@ -339,8 +339,8 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
     bool verifySucc;
     Address accountAddress;
     fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, accountAddress);
-    BOOST_CHECK(verifySucc == true);
-    BOOST_CHECK(accountAddress.hex() == keyPair->address(smHashImpl).hex());
+    BOOST_TEST(verifySucc == true);
+    BOOST_TEST(accountAddress.hex() == keyPair->address(smHashImpl).hex());
 
     // mismatch case
     in = fixture.m_abi->abiIn(fixture.m_sm2VerifyFunction, codec::toString32(mismatchHash),
@@ -351,8 +351,8 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
     execResult = fixture.m_cryptoPrecompiled->call(fixture.m_executive, parameters);
     out = execResult->execResult();
     fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, accountAddress);
-    BOOST_CHECK(verifySucc == false);
-    BOOST_CHECK(accountAddress.hex() == Address().hex());
+    BOOST_TEST(verifySucc == false);
+    BOOST_TEST(accountAddress.hex() == Address().hex());
 }
 
 BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
@@ -387,7 +387,7 @@ BOOST_AUTO_TEST_CASE(testEVMPrecompiled)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();

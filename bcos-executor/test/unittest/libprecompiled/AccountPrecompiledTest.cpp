@@ -89,7 +89,7 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
@@ -110,7 +110,7 @@ public:
         BOOST_CHECK_EQUAL(result->create(), false);
         BOOST_CHECK_EQUAL(result->origin(), sender);
         BOOST_CHECK_EQUAL(result->from(), newAddress);
-        BOOST_CHECK(result->to() == sender);
+        BOOST_TEST(result->to() == sender);
 
         commitBlock(_number);
 
@@ -148,14 +148,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
 
@@ -193,14 +193,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -238,7 +238,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -248,7 +248,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
+                BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             }
             commitBlock(_number);
             return result2;
@@ -256,7 +256,7 @@ public:
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -293,7 +293,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->call(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -302,7 +302,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
+                BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             }
             commitBlock(_number);
             return result2;
@@ -310,7 +310,7 @@ public:
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -344,14 +344,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -376,10 +376,10 @@ BOOST_AUTO_TEST_CASE(createAccountTest)
     bcos::protocol::BlockNumber number = 2;
     {
         auto response = setAccountStatus(number++, newAccount, 0);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
     }
 
     // check create
@@ -388,19 +388,19 @@ BOOST_AUTO_TEST_CASE(createAccountTest)
         int32_t ret;
         std::vector<BfsTuple> bfsInfos;
         codec->decode(response2->data(), ret, bfsInfos);
-        BOOST_CHECK(ret == 0);
-        BOOST_CHECK(bfsInfos.size() == 1);
+        BOOST_TEST(ret == 0);
+        BOOST_TEST(bfsInfos.size() == 1);
         auto fileInfo = bfsInfos[0];
-        BOOST_CHECK(std::get<0>(fileInfo) == "27505f128bd4d00c2698441b1f54ef843b837215");
-        BOOST_CHECK(std::get<1>(fileInfo) == bcos::executor::FS_TYPE_LINK);
+        BOOST_TEST(std::get<0>(fileInfo) == "27505f128bd4d00c2698441b1f54ef843b837215");
+        BOOST_TEST(std::get<1>(fileInfo) == bcos::executor::FS_TYPE_LINK);
 
         auto response3 = list(number++, "/usr/27505f128bd4d00c2698441b1f54ef843b837215");
         int32_t ret2;
         std::vector<BfsTuple> bfsInfos2;
         codec->decode(response3->data(), ret2, bfsInfos2);
-        BOOST_CHECK(ret2 == 0);
-        BOOST_CHECK(bfsInfos2.size() == 1);
-        BOOST_CHECK(std::get<0>(bfsInfos2[0]) == "27505f128bd4d00c2698441b1f54ef843b837215");
+        BOOST_TEST(ret2 == 0);
+        BOOST_TEST(bfsInfos2.size() == 1);
+        BOOST_TEST(std::get<0>(bfsInfos2[0]) == "27505f128bd4d00c2698441b1f54ef843b837215");
     }
 
     // setAccount exist again
@@ -411,28 +411,28 @@ BOOST_AUTO_TEST_CASE(createAccountTest)
     // check status is 0
     {
         auto response = getAccountStatusByManager(number++, newAccount);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         uint8_t status = UINT8_MAX;
         codec->decode(response->data(), status);
-        BOOST_CHECK(status == 0);
+        BOOST_TEST(status == 0);
 
         // not exist account in chain, return 0 by default
         auto response2 = getAccountStatusByManager(number++, errorAccount);
-        BOOST_CHECK(response2->status() == 0);
+        BOOST_TEST(response2->status() == 0);
         uint8_t status2 = UINT8_MAX;
         codec->decode(response2->data(), status2);
-        BOOST_CHECK(status2 == 0);
+        BOOST_TEST(status2 == 0);
     }
 
     // check status by account contract
     {
         auto response = getAccountStatus(number++, newAccount);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         uint8_t status = UINT8_MAX;
         codec->decode(response->data(), status);
-        BOOST_CHECK(status == 0);
+        BOOST_TEST(status == 0);
         auto response2 = getAccountStatus(number++, errorAccount);
-        BOOST_CHECK(response2->status() == (int32_t)TransactionStatus::CallAddressError);
+        BOOST_TEST(response2->status() == (int32_t)TransactionStatus::CallAddressError);
     }
 }
 
@@ -446,48 +446,48 @@ BOOST_AUTO_TEST_CASE(setAccountStatusTest)
     // setAccountStatus account not exist
     {
         auto response = setAccountStatus(number++, newAccount, 0);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
     }
 
     // use account to deploy
     {
         auto response1 = deployHelloInAuthCheck(helloAddress, number++, newAccount);
-        BOOST_CHECK(response1->status() == 0);
+        BOOST_TEST(response1->status() == 0);
         auto response2 = helloSet(number++, "test1", 0, newAccount);
-        BOOST_CHECK(response2->status() == 0);
+        BOOST_TEST(response2->status() == 0);
         auto response3 = helloGet(number++, 0, newAccount);
         std::string hello;
         codec->decode(response3->data(), hello);
-        BOOST_CHECK(hello == "test1");
+        BOOST_TEST(hello == "test1");
     }
 
     // setAccountStatus account exist
     {
         auto response = setAccountStatus(number++, newAccount, 1, 0, true);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
 
         auto rsp2 = getAccountStatus(number++, newAccount);
-        BOOST_CHECK(rsp2->status() == 0);
+        BOOST_TEST(rsp2->status() == 0);
         uint8_t status = UINT8_MAX;
         codec->decode(rsp2->data(), status);
-        BOOST_CHECK(status == 1);
+        BOOST_TEST(status == 1);
     }
 
     // use freeze account to use
     {
         auto response1 = deployHelloInAuthCheck(h1.hex(), number++, newAccount, true);
-        BOOST_CHECK(response1->status() == (uint32_t)TransactionStatus::AccountFrozen);
+        BOOST_TEST(response1->status() == (uint32_t)TransactionStatus::AccountFrozen);
         auto response2 = helloSet(number++, "test2", 0, newAccount);
-        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::AccountFrozen);
+        BOOST_TEST(response2->status() == (uint32_t)TransactionStatus::AccountFrozen);
 
         auto response3 = helloGet(number++, 0);
-        BOOST_CHECK(response3->status() == (uint32_t)TransactionStatus::CallAddressError);
+        BOOST_TEST(response3->status() == (uint32_t)TransactionStatus::CallAddressError);
     }
 
     // use error account to setAccountStatus
@@ -496,7 +496,7 @@ BOOST_AUTO_TEST_CASE(setAccountStatusTest)
             setAccountStatus(number++, newAccount, 1, 0, true, true, errorAccount.hex());
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == CODE_NO_AUTHORIZED);
+        BOOST_TEST(result == CODE_NO_AUTHORIZED);
     }
 }
 
@@ -509,24 +509,24 @@ BOOST_AUTO_TEST_CASE(setAccountStatusErrorTest)
     // setAccountStatus account not exist
     {
         auto response = setAccountStatus(number++, newAccount, 0);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
     }
 
     // use not governor account set
     {
         auto response = setAccountStatus(
             number++, newAccount, 1, CODE_NO_AUTHORIZED, false, true, errorAccount.hex());
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
     }
 
     // set governor account status
     {
         auto response = setAccountStatus(number++, Address(admin), 1, 0, false, true);
-        BOOST_CHECK(response->status() == 15);
-        BOOST_CHECK(response->message() == "Should not set governor's status.");
+        BOOST_TEST(response->status() == 15);
+        BOOST_TEST(response->message() == "Should not set governor's status.");
     }
 }
 
@@ -539,69 +539,69 @@ BOOST_AUTO_TEST_CASE(abolishTest)
     // setAccountStatus account not exist
     {
         auto response = setAccountStatus(number++, newAccount, 0);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
     }
 
     // use account to deploy
     {
         auto response1 = deployHelloInAuthCheck(helloAddress, number++, newAccount);
-        BOOST_CHECK(response1->status() == 0);
+        BOOST_TEST(response1->status() == 0);
         auto response2 = helloSet(number++, "test1", 0, newAccount);
-        BOOST_CHECK(response2->status() == 0);
+        BOOST_TEST(response2->status() == 0);
         auto response3 = helloGet(number++, 0, newAccount);
         std::string hello;
         codec->decode(response3->data(), hello);
-        BOOST_CHECK(hello == "test1");
+        BOOST_TEST(hello == "test1");
     }
 
     // setAccountStatus account exist, abolish account
     {
         auto response = setAccountStatus(number++, newAccount, 2, 0, true);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
 
         auto rsp2 = getAccountStatus(number++, newAccount);
-        BOOST_CHECK(rsp2->status() == 0);
+        BOOST_TEST(rsp2->status() == 0);
         uint8_t status = UINT8_MAX;
         codec->decode(rsp2->data(), status);
-        BOOST_CHECK(status == 2);
+        BOOST_TEST(status == 2);
     }
 
     // use abolish account to use
     {
         auto response1 = deployHelloInAuthCheck(h1.hex(), number++, newAccount, true);
-        BOOST_CHECK(response1->status() == (uint32_t)TransactionStatus::AccountAbolished);
+        BOOST_TEST(response1->status() == (uint32_t)TransactionStatus::AccountAbolished);
         auto response2 = helloSet(number++, "test2", 0, newAccount);
-        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::AccountAbolished);
+        BOOST_TEST(response2->status() == (uint32_t)TransactionStatus::AccountAbolished);
     }
 
     // freeze/unfreeze abolish account status
     {
         auto response = setAccountStatus(number++, newAccount, 1, 0, true);
-        BOOST_CHECK(response->status() == (uint32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(response->status() == (uint32_t)TransactionStatus::PrecompiledError);
 
         auto response2 = setAccountStatus(number++, newAccount, 0, 0, true);
-        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::PrecompiledError);
+        BOOST_TEST(response2->status() == (uint32_t)TransactionStatus::PrecompiledError);
     }
 
     // abolish account again, success
     {
         auto response = setAccountStatus(number++, newAccount, 2, 0, true);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
 
         auto rsp2 = getAccountStatus(number++, newAccount);
-        BOOST_CHECK(rsp2->status() == 0);
+        BOOST_TEST(rsp2->status() == 0);
         uint8_t status = UINT8_MAX;
         codec->decode(rsp2->data(), status);
-        BOOST_CHECK(status == 2);
+        BOOST_TEST(status == 2);
     }
 }
 
@@ -613,22 +613,22 @@ BOOST_AUTO_TEST_CASE(parallelSetTest)
     // setAccountStatus account not exist
     {
         auto response = setAccountStatus(number++, newAccount, 0);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
     }
 
     // use account to deploy
     {
         auto response1 = deployHelloInAuthCheck(helloAddress, number++, newAccount);
-        BOOST_CHECK(response1->status() == 0);
+        BOOST_TEST(response1->status() == 0);
         auto response2 = helloSet(number++, "test1", 0, newAccount);
-        BOOST_CHECK(response2->status() == 0);
+        BOOST_TEST(response2->status() == 0);
         auto response3 = helloGet(number++, 0, newAccount);
         std::string hello;
         codec->decode(response3->data(), hello);
-        BOOST_CHECK(hello == "test1");
+        BOOST_TEST(hello == "test1");
     }
 
     // setAccountStatus account exist, freeze account, in the same block, still can call
@@ -636,31 +636,31 @@ BOOST_AUTO_TEST_CASE(parallelSetTest)
         auto num = number++;
         nextBlock(num);
         auto response = setAccountStatus(-1, newAccount, 1, 0, true);
-        BOOST_CHECK(response->status() == 0);
+        BOOST_TEST(response->status() == 0);
         int32_t result = -1;
         codec->decode(response->data(), result);
-        BOOST_CHECK(result == 0);
+        BOOST_TEST(result == 0);
 
         // get last status
         auto rsp2 = getAccountStatus(-1, newAccount);
-        BOOST_CHECK(rsp2->status() == 0);
+        BOOST_TEST(rsp2->status() == 0);
         uint8_t status = UINT8_MAX;
         codec->decode(rsp2->data(), status);
-        BOOST_CHECK(status == 0);
+        BOOST_TEST(status == 0);
 
         auto response2 = helloSet(-1, "test2", 0, newAccount);
-        BOOST_CHECK(response2->status() == 0);
+        BOOST_TEST(response2->status() == 0);
         auto response3 = helloGet(-1, 0, newAccount);
         std::string hello;
         codec->decode(response3->data(), hello);
-        BOOST_CHECK(hello == "test2");
+        BOOST_TEST(hello == "test2");
         commitBlock(num);
     }
 
     // next block will be frozen
     {
         auto response2 = helloSet(number++, "test2", 0, newAccount);
-        BOOST_CHECK(response2->status() == (uint32_t)TransactionStatus::AccountFrozen);
+        BOOST_TEST(response2->status() == (uint32_t)TransactionStatus::AccountFrozen);
     }
 }
 

@@ -55,9 +55,9 @@ BOOST_AUTO_TEST_CASE(test_existsKeyLock)
     std::vector<std::string> keyLocks = {"70b93b07646fd256572d3c8efeef3c8de4a7e7a4-key1",
         "bf158a2ae101139d73a0eab88127905eefd3d2b7-key2"};
     locks.importExistsKeyLocks(keyLocks);
-    BOOST_CHECK(locks.existsKeyLock("70b93b07646fd256572d3c8efeef3c8de4a7e7a4", "key1"));
-    BOOST_CHECK(locks.existsKeyLock("bf158a2ae101139d73a0eab88127905eefd3d2b7", "key2"));
-    BOOST_CHECK(!locks.existsKeyLock("070410a34a92d856b53db2c5c700244724597300", "key3"));
+    BOOST_TEST(locks.existsKeyLock("70b93b07646fd256572d3c8efeef3c8de4a7e7a4", "key1"));
+    BOOST_TEST(locks.existsKeyLock("bf158a2ae101139d73a0eab88127905eefd3d2b7", "key2"));
+    BOOST_TEST(!locks.existsKeyLock("070410a34a92d856b53db2c5c700244724597300", "key3"));
 }
 
 BOOST_AUTO_TEST_CASE(test_importMyKeyLock)

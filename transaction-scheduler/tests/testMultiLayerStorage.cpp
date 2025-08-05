@@ -113,11 +113,11 @@ BOOST_AUTO_TEST_CASE(merge)
         {
             if (index >= 20 && index < 30)
             {
-                BOOST_CHECK(!value);
+                BOOST_TEST(!value);
             }
             else
             {
-                BOOST_CHECK(value);
+                BOOST_TEST(value);
             }
         }
 
@@ -205,18 +205,18 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
         view2.newMutable();
         co_await storage2::removeOne(view2, key);
 
-        BOOST_CHECK(!co_await storage2::existsOne(view2, key));
+        BOOST_TEST(!co_await storage2::existsOne(view2, key));
 
         auto values = co_await storage2::readSome(view2, ::ranges::views::single(key));
-        BOOST_CHECK(!values[0]);
+        BOOST_TEST(!values[0]);
 
         auto range = co_await storage2::range(view2);
         auto keyValue = co_await range.next();
-        BOOST_CHECK(keyValue);
+        BOOST_TEST(keyValue);
         BOOST_CHECK_EQUAL(std::get<0>(*keyValue), key);
-        BOOST_CHECK(std::holds_alternative<DELETED_TYPE>(std::get<1>(*keyValue)));
+        BOOST_TEST(std::holds_alternative<DELETED_TYPE>(std::get<1>(*keyValue)));
         keyValue = co_await range.next();
-        BOOST_CHECK(keyValue);
+        BOOST_TEST(keyValue);
         BOOST_CHECK_EQUAL(std::get<0>(*keyValue), key2);
     }());
 }

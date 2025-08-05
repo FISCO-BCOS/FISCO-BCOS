@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(testCreatFileColletctor)
 {
     boost::filesystem::path targetDir("./testCreatFileColletctor");
     auto collector = bcos::log::make_collector(targetDir, 0, 0, 0, false);
-    BOOST_CHECK(collector != nullptr);
+    BOOST_TEST(collector != nullptr);
 }
 }  // namespace test
 }  // namespace bcos

@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(test_EventSubTask)
     BOOST_CHECK_EQUAL(group, task->group());
     BOOST_CHECK_EQUAL(params, task->params());
     BOOST_CHECK_EQUAL(state, task->state());
-    BOOST_CHECK(task->callback());
+    BOOST_TEST(task->callback());
 }
 
 

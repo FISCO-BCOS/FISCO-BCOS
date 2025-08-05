@@ -94,14 +94,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -139,14 +139,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -184,14 +184,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -229,14 +229,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -269,7 +269,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise;
         executor->executeTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
         auto result = executePromise.get_future().get();
@@ -305,7 +305,7 @@ public:
         vrfProof.resize(proofSize);
         COutputBuffer proof{(char*)vrfProof.data(), proofSize};
         ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
-        BOOST_CHECK(ret == WEDPR_SUCCESS);
+        BOOST_TEST(ret == WEDPR_SUCCESS);
 
         return {vrfPublicKey, vrfProof, vrfInput};
     }
@@ -314,7 +314,7 @@ public:
     {
         std::promise<storage::Entry> p;
         storage->asyncGetRow(ledger::SYS_CONSENSUS, "key", [&p](auto&& error, auto&& entry) {
-            BOOST_CHECK(entry.has_value());
+            BOOST_TEST(entry.has_value());
             p.set_value(entry.value());
         });
         auto entry = p.get_future().get();
@@ -326,7 +326,7 @@ public:
     {
         std::promise<storage::Entry> p;
         storage->asyncGetRow(ledger::SYS_CONFIG, _key, [&p](auto&& error, auto&& entry) {
-            BOOST_CHECK(entry.has_value());
+            BOOST_TEST(entry.has_value());
             p.set_value(entry.value());
         });
         auto entry = p.get_future().get();
@@ -373,12 +373,12 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
-        BOOST_CHECK(result2->status() == (int32_t)_errorCode);
+        BOOST_TEST(result2->status() == (int32_t)_errorCode);
         commitBlock(_number);
     };
     bcos::protocol::BlockNumber number = 2;
@@ -414,12 +414,12 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(std::string("1000000"), u256(3)));
+        BOOST_TEST(result2->data().toBytes() == codec->encode(std::string("1000000"), u256(3)));
         commitBlock(3);
     }
 
@@ -465,11 +465,11 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(std::string(""), s256(-1)));
+        BOOST_TEST(result2->data().toBytes() == codec->encode(std::string(""), s256(-1)));
         commitBlock(9);
     }
 
@@ -495,7 +495,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
             getValueByKey(number++, std::string(ledger::SYSTEM_KEY_TX_GAS_PRICE));
 
         BCOS_LOG(DEBUG) << LOG_BADGE("sysConfig_test") << LOG_KV("gasPriceStr", gasPriceStr);
-        BOOST_CHECK(gasPriceStr == "0xa");
+        BOOST_TEST(gasPriceStr == "0xa");
     }
     // set SYSTEM_KEY_TX_GAS_PRICE error
     {
@@ -569,14 +569,14 @@ BOOST_AUTO_TEST_CASE(consensus_test)
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             if (result2->data().toBytes() != codec->encode(int32_t(_errorCode)))
             {
                 PRECOMPILED_LOG(TRACE) << "Mismatch result: " << toHex(result2->data().toBytes())
@@ -612,7 +612,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
     // set weigh to observer
     {
         auto r = callFunc(number++, "setWeight(string,uint256)", node2, 123, 0);
-        BOOST_CHECK(r->status() == 15);
+        BOOST_TEST(r->status() == 15);
     }
 
     // add errorNode
@@ -678,7 +678,7 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
         auto nodeID = KeyImpl(fromHex(node1));
 
-        BOOST_CHECK(::ranges::any_of(nodeList, [&](const consensus::ConsensusNode& node) {
+        BOOST_TEST(::ranges::any_of(nodeList, [&](const consensus::ConsensusNode& node) {
             return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
         }));
     }
@@ -721,9 +721,9 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     BOOST_CHECK_EQUAL(result->status(), 0);
 
     auto nodeList = getNodeList();
-    BOOST_CHECK(nodeList.size() == 4);
+    BOOST_TEST(nodeList.size() == 4);
     std::for_each(nodeList.begin(), nodeList.end(), [&](const ledger::ConsensusNode& node) {
-        BOOST_CHECK(node.type == ledger::CONSENSUS_SEALER);
+        BOOST_TEST(node.type == ledger::CONSENSUS_SEALER);
     });
 
     // case2: valid proof, but the origin is not exist in the workingSealers
@@ -731,18 +731,18 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     setValueByKey(blockNumber++, std::string(ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM), "1");
     blockHash = h256(blockNumber - 1);
     result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof);
-    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
-    BOOST_CHECK(result->message() == "ConsensusPrecompiled call undefined function!");
+    BOOST_TEST(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_TEST(result->message() == "ConsensusPrecompiled call undefined function!");
     auto notifyRotate =
         getValueByKey(blockNumber++, std::string(ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE));
     // FIXME: here is a bug
-    //    BOOST_CHECK(notifyRotate == "1");
+    //    BOOST_TEST(notifyRotate == "1");
 
     // case3: invalid input(must be lastest hash)
     result = rotate(blockNumber++, vrfPublicKey, blockHash.asBytes(), vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));
-    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
-    BOOST_CHECK(result->message() == "Invalid VRFInput, must be the parentHash!");
+    BOOST_TEST(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_TEST(result->message() == "Invalid VRFInput, must be the parentHash!");
 
     // case4: invalid public key(the origin is not one of the sealers)
     auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
@@ -751,8 +751,8 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
         reinterpret_cast<const char*>(&blockNumberBigEndian) + sizeof(blockNumberBigEndian));
     result = rotate(blockNumber++, keyPair->publicKey()->data(), input, vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));
-    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
-    BOOST_CHECK(result->message() == "Invalid VRF Public Key!");
+    BOOST_TEST(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_TEST(result->message() == "Invalid VRF Public Key!");
 
     // case5: invalid proof
     // vrfProof invalid now
@@ -761,8 +761,8 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
         reinterpret_cast<const char*>(&blockNumberBigEndian) + sizeof(blockNumberBigEndian));
     result = rotate(blockNumber++, vrfPublicKey, input, vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));
-    BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
-    BOOST_CHECK(result->message() == "Verify VRF proof failed!");
+    BOOST_TEST(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
+    BOOST_TEST(result->message() == "Verify VRF proof failed!");
 
     // case6: valid proof now
     blockNumberBigEndian = boost::endian::native_to_big(blockNumber);

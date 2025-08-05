@@ -154,10 +154,10 @@ private:
 void checkSelectedNodes(SyncTreeToplogyFixture::Ptr fakeSyncTreeTopology,
     bcos::crypto::NodeIDSet const& _selectedNodes, std::vector<std::size_t> _idxVec)
 {
-    BOOST_CHECK(_selectedNodes.size() == _idxVec.size());
+    BOOST_TEST(_selectedNodes.size() == _idxVec.size());
     for (const auto& idx : _idxVec)
     {
-        BOOST_CHECK(
+        BOOST_TEST(
             _selectedNodes.contains(fakeSyncTreeTopology->syncTreeRouter()->nodeList()[idx]));
     }
 }
@@ -171,34 +171,34 @@ BOOST_AUTO_TEST_CASE(testFreeNode)
 
     // updateConsensusNodeInfo and check consensusList
     fakeSyncTreeTopology->updateConsensusNodeInfo();
-    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+    BOOST_TEST(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
                             fakeSyncTreeTopology->consensusList(),
                             fakeSyncTreeTopology->syncTreeRouter()->currentConsensusNodes()));
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
     // check node list
-    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+    BOOST_TEST(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
                             fakeSyncTreeTopology->syncTreeRouter()->nodeList(),
                             fakeSyncTreeTopology->nodeList()));
     // check startIndex and endIndex
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
 
     // updateNodeInfo and check NodeInfo
     fakeSyncTreeTopology->updateNodeListInfo();
-    BOOST_CHECK(
+    BOOST_TEST(
         true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->nodeList(),
                     fakeSyncTreeTopology->syncTreeRouter()->nodeList()));
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == -1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
 
     // selectNodes: no need to send blocks to any nodes
     auto selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
         -1, fakeSyncTreeTopology->peers());
-    BOOST_CHECK(true == selectedNodeSet->empty());
+    BOOST_TEST(true == selectedNodeSet->empty());
 }
 
 /// case2: the node locates in the observerList
@@ -210,31 +210,31 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     fakeSyncTreeTopology->updateConsensusNodeInfo();
     fakeSyncTreeTopology->updateNodeListInfo();
 
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == -1);
 
     // push the node into the observerList
     /// case1: nodeIndex is 2, no need to broadcast to any node
     fakeSyncTreeTopology->addNodeIntoObserverList(fakeSyncTreeTopology->syncTreeRouter()->nodeId());
     fakeSyncTreeTopology->updateNodeListInfo();
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 2);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 2);
     // check NodeList
-    BOOST_CHECK(
+    BOOST_TEST(
         true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(fakeSyncTreeTopology->nodeList(),
                     fakeSyncTreeTopology->syncTreeRouter()->nodeList()));
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
 
     // select target nodes from peers for this node
     auto selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
         2, fakeSyncTreeTopology->peers());
-    BOOST_CHECK(true == selectedNodeSet->empty());
+    BOOST_TEST(true == selectedNodeSet->empty());
 
     // select parent for the 2th nodes
     selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
         fakeSyncTreeTopology->peers(), 1);
-    BOOST_CHECK(true == selectedNodeSet->empty());
+    BOOST_TEST(true == selectedNodeSet->empty());
 
     /// case2: nodeIndex is 0
     fakeSyncTreeTopology->clearNodeList();
@@ -243,15 +243,15 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     fakeSyncTreeTopology->fakeConsensusList(2);
     fakeSyncTreeTopology->updateConsensusNodeInfo();
     fakeSyncTreeTopology->updateNodeListInfo();
-    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+    BOOST_TEST(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
                             fakeSyncTreeTopology->syncTreeRouter()->nodeList(),
                             fakeSyncTreeTopology->nodeList()));
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 0);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 7);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 0);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 0);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 7);
 
     // check and select nodes for the 0th node
     selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
@@ -283,7 +283,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     {
         selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             fakeSyncTreeTopology->peers(), i);
-        BOOST_CHECK(true == selectedNodeSet->empty());
+        BOOST_TEST(true == selectedNodeSet->empty());
     }
     // check parent for 2th node
     for (std::size_t i = 2; i <= 2; ++i)
@@ -324,10 +324,10 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
     fakeSyncTreeTopology->updateConsensusNodeInfo();
     fakeSyncTreeTopology->updateNodeListInfo();
 
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 7);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == -1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 7);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
 
     // check the 7th nodes
     selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
@@ -378,15 +378,15 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
         fakeSyncTreeTopology->syncTreeRouter()->nodeId());
     fakeSyncTreeTopology->updateConsensusNodeInfo();
     fakeSyncTreeTopology->updateNodeListInfo();
-    BOOST_CHECK(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
+    BOOST_TEST(true == bcos::crypto::KeyCompareTools::compareTwoNodeIDs(
                             fakeSyncTreeTopology->syncTreeRouter()->nodeList(),
                             fakeSyncTreeTopology->nodeList()));
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeNum() ==
                 (std::int64_t)fakeSyncTreeTopology->nodeList().size());
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == 1);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 7);
-    BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->nodeIndex() == 12);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->consIndex() == 1);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->startIndex() == 7);
+    BOOST_TEST(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
 
     // get childNodes and parentNodes for this node
     auto selectedNodeSet = fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
@@ -399,7 +399,7 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
     selectedNodeSet->insert(fakeSyncTreeTopology->syncTreeRouter()->nodeId());
     for (const auto& node : fakeSyncTreeTopology->syncTreeRouter()->currentConsensusNodes())
     {
-        BOOST_CHECK(selectedNodeSet->contains(node));
+        BOOST_TEST(selectedNodeSet->contains(node));
     }
 }
 

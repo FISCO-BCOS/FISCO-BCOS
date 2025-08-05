@@ -49,9 +49,9 @@ BOOST_AUTO_TEST_CASE(testLegacyTransactionDecode)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(!e);
-    BOOST_CHECK(tx.type == rpc::TransactionType::Legacy);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(!e);
+    BOOST_TEST(tx.type == rpc::TransactionType::Legacy);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1);
     BOOST_CHECK_EQUAL(tx.nonce, 12);
     BOOST_CHECK_EQUAL(tx.nonce, 12);
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(testConstructTx)
     bcos::bytes toData;
     bcos::codec::rlp::encode(toData, testTx);
     auto const newTx = toHexStringWithPrefix(toData);
-    BOOST_CHECK(!newTx.empty());
+    BOOST_TEST(!newTx.empty());
 }
 
 BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
@@ -119,9 +119,9 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == rpc::TransactionType::EIP2930);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(e == nullptr);
+    BOOST_TEST(tx.type == rpc::TransactionType::EIP2930);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 5);
     BOOST_CHECK_EQUAL(tx.nonce, 7);
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 30000000000);
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureS), "5edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094");
-    BOOST_CHECK(tx.accessList == s_accessList);
+    BOOST_TEST(tx.accessList == s_accessList);
 
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
@@ -152,9 +152,9 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(e == nullptr);
+    BOOST_TEST(tx.type == rpc::TransactionType::EIP1559);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 5);
     BOOST_CHECK_EQUAL(tx.nonce, 7);
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 10000000000);
@@ -168,7 +168,7 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureS), "5edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094");
-    BOOST_CHECK(tx.accessList == s_accessList);
+    BOOST_TEST(tx.accessList == s_accessList);
 
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
@@ -184,9 +184,9 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction2)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(e == nullptr);
+    BOOST_TEST(tx.type == rpc::TransactionType::EIP1559);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 20200);
     BOOST_CHECK_EQUAL(tx.nonce, 9);
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 10);
@@ -224,9 +224,9 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == rpc::TransactionType::EIP4844);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(e == nullptr);
+    BOOST_TEST(tx.type == rpc::TransactionType::EIP4844);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 5);
     BOOST_CHECK_EQUAL(tx.nonce, 7);
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 10000000000);
@@ -246,7 +246,7 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
         toHex(tx.signatureR), "36b241b061a36a32ab7fe86c7aa9eb592dd59018cd0443adc0903590c16b02b0");
     BOOST_CHECK_EQUAL(
         toHex(tx.signatureS), "5edcc541b4741c5cc6dd347c5ed9577ef293a62787b4510465fadbfe39ee4094");
-    BOOST_CHECK(tx.accessList == s_accessList);
+    BOOST_TEST(tx.accessList == s_accessList);
 
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
@@ -263,8 +263,8 @@ BOOST_AUTO_TEST_CASE(recoverAddress)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(!e);
-    BOOST_CHECK(tx.type == rpc::TransactionType::Legacy);
+    BOOST_TEST(!e);
+    BOOST_TEST(tx.type == rpc::TransactionType::Legacy);
     bcos::bytes encoded{};
     codec::rlp::encode(encoded, tx);
     auto rawTx2 = toHexStringWithPrefix(encoded);
@@ -279,7 +279,7 @@ BOOST_AUTO_TEST_CASE(recoverAddress)
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto [re, addr] = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
-    BOOST_CHECK(re);
+    BOOST_TEST(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xec5e7dec9d2d6bfa1f2221ace01ae3deb6906fb0");
 }
@@ -294,9 +294,9 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == rpc::TransactionType::EIP1559);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(e == nullptr);
+    BOOST_TEST(tx.type == rpc::TransactionType::EIP1559);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1);
     BOOST_CHECK_EQUAL(tx.nonce, 88852);
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 0);
@@ -324,7 +324,7 @@ BOOST_AUTO_TEST_CASE(EIP1559Recover)
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto [re, addr] = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
-    BOOST_CHECK(re);
+    BOOST_TEST(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0x595063172c85b1e8ac2fe74fcb6b7dc26844cc2d");
 }
@@ -339,9 +339,9 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     auto bRef = bcos::ref(bytes);
     Web3Transaction tx{};
     auto e = codec::rlp::decode(bRef, tx);
-    BOOST_CHECK(e == nullptr);
-    BOOST_CHECK(tx.type == rpc::TransactionType::EIP4844);
-    BOOST_CHECK(tx.chainId.has_value());
+    BOOST_TEST(e == nullptr);
+    BOOST_TEST(tx.type == rpc::TransactionType::EIP4844);
+    BOOST_TEST(tx.chainId.has_value());
     BOOST_CHECK_EQUAL(tx.chainId.value(), 1);
     BOOST_CHECK_EQUAL(tx.nonce, 536312);
     BOOST_CHECK_EQUAL(tx.maxPriorityFeePerGas, 1000000000);
@@ -397,7 +397,7 @@ BOOST_AUTO_TEST_CASE(EIP4844Recover)
     auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto [re, addr] = signatureImpl->recoverAddress(*hashImpl, hash, ref(sign));
-    BOOST_CHECK(re);
+    BOOST_TEST(re);
     auto address = toHexStringWithPrefix(addr);
     BOOST_CHECK_EQUAL(address, "0xc1b634853cb333d3ad8663715b08f41a3aec47cc");
 }

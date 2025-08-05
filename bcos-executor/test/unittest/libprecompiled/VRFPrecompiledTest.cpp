@@ -124,10 +124,10 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
         auto out = execResult->execResult();
 
         _fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, randomValue);
-        BOOST_CHECK(verifySucc == true);
+        BOOST_TEST(verifySucc == true);
         if (i > 0)
         {
-            BOOST_CHECK(lastRandomValue == randomValue);
+            BOOST_TEST(lastRandomValue == randomValue);
         }
         lastRandomValue = randomValue;
     }
@@ -142,8 +142,8 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
     auto execResult = _fixture.m_cryptoPrecompiled->call(_fixture.m_executive, parameters);
     auto out = execResult->execResult();
     _fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, randomValue);
-    BOOST_CHECK(verifySucc == false);
-    BOOST_CHECK(randomValue == 0);
+    BOOST_TEST(verifySucc == false);
+    BOOST_TEST(randomValue == 0);
 
     // case3: mismatch input data
     fakeData = "abc^5%@@bc$";
@@ -154,8 +154,8 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
     execResult = _fixture.m_cryptoPrecompiled->call(_fixture.m_executive, parameters);
     out = execResult->execResult();
     _fixture.m_abi->abiOut(bytesConstRef(&out), verifySucc, randomValue);
-    BOOST_CHECK(verifySucc == false);
-    BOOST_CHECK(randomValue == 0);
+    BOOST_TEST(verifySucc == false);
+    BOOST_TEST(randomValue == 0);
 }
 
 BOOST_AUTO_TEST_CASE(testCurve25519VRFVerify)

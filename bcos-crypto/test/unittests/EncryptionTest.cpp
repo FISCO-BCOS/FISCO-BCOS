@@ -44,7 +44,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     auto decryptedData = _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(),
         ciperData->size(), (const unsigned char*)key.c_str(), key.size());
     bytes plainDataBytes(plainData.begin(), plainData.end());
-    BOOST_CHECK(*decryptedData == plainDataBytes);
+    BOOST_TEST(*decryptedData == plainDataBytes);
 
     // invalid key
     std::string invalidKey = "ABCDCD";
@@ -52,7 +52,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     {
         _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(), ciperData->size(),
             (const unsigned char*)invalidKey.c_str(), invalidKey.size());
-        BOOST_CHECK(std::string_view((const char*)ciperData->data(), ciperData->size()) !=
+        BOOST_TEST(std::string_view((const char*)ciperData->data(), ciperData->size()) !=
                     std::string_view(plainData));
     }
     catch (std::exception& e)
@@ -68,7 +68,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     decryptedData = _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(),
         ciperData->size(), (const unsigned char*)key.c_str(), key.size());
     plainDataBytes = bytes(plainData.begin(), plainData.end());
-    BOOST_CHECK(*decryptedData != plainDataBytes);
+    BOOST_TEST(*decryptedData != plainDataBytes);
     // test encrypt/decrypt with given ivData
     std::string ivData = "adfwerivswerwerwerpi9werlwerwasdfa234523423dsfa";
     key = "werwlerewkrjewwwwwwwr4234981034%wer23423&3453453453465646778)7897678";
@@ -81,7 +81,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
         ciperData->size(), (const unsigned char*)key.c_str(), key.size(),
         (const unsigned char*)ivData.c_str(), ivData.size());
     plainDataBytes = bytes(plainData.begin(), plainData.end());
-    BOOST_CHECK(*decryptedData == plainDataBytes);
+    BOOST_TEST(*decryptedData == plainDataBytes);
 
     // invalid ivData
     std::string invalidIVData = "bdfwerivswerwerwerpi9werlwerwasdfa234523423dsf";
@@ -89,7 +89,7 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
         ciperData->size(), (const unsigned char*)key.c_str(), key.size(),
         (const unsigned char*)invalidIVData.c_str(), invalidIVData.size());
     plainDataBytes = bytes(plainData.begin(), plainData.end());
-    BOOST_CHECK(*decryptedData != plainDataBytes);
+    BOOST_TEST(*decryptedData != plainDataBytes);
 }
 BOOST_AUTO_TEST_CASE(testAES)
 {

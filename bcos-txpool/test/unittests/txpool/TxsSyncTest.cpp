@@ -161,7 +161,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
         for (auto txpoolPeer : txpoolPeerList)
         {
             // all the peers has received the txsStatus, and fetch txs from other peers
-            BOOST_CHECK(faker->frontService()->getAsyncSendSizeByNodeID(txpoolPeer->nodeID()) >= 1);
+            BOOST_TEST(faker->frontService()->getAsyncSendSizeByNodeID(txpoolPeer->nodeID()) >= 1);
             auto startT = utcTime();
             while (txpoolPeer->txpool()->txpoolStorage()->size() < txsNum &&
                    (utcTime() - startT <= 10000))
@@ -172,25 +172,25 @@ void testTransactionSync(bool _onlyTxsStatus = false)
             std::cout << "### txpoolSize: " << txpoolPeer->txpool()->txpoolStorage()->size()
                       << ", txsNum:" << txsNum << ", peer: " << txpoolPeer->nodeID()->shortHex()
                       << std::endl;
-            BOOST_CHECK(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
+            BOOST_TEST(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
         }
         // maintain transactions again
         auto originSendSize = faker->frontService()->totalSendMsgSize();
-        BOOST_CHECK(faker->frontService()->totalSendMsgSize() == originSendSize);
+        BOOST_TEST(faker->frontService()->totalSendMsgSize() == originSendSize);
         return;
     }
     // check the transactions has been broadcasted to all the node
     // maintainDownloadingTransactions and check the size
     for (auto txpoolPeer : txpoolPeerList)
     {
-        BOOST_CHECK(faker->frontService()->getAsyncSendSizeByNodeID(txpoolPeer->nodeID()) >= 1);
+        BOOST_TEST(faker->frontService()->getAsyncSendSizeByNodeID(txpoolPeer->nodeID()) >= 1);
         auto startT = utcTime();
         while (
             txpoolPeer->txpool()->txpoolStorage()->size() < txsNum && (utcTime() - startT <= 10000))
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
-        BOOST_CHECK(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
+        BOOST_TEST(txpoolPeer->txpool()->txpoolStorage()->size() == txsNum);
     }
     // +1 for include the node self
     auto forwardSize =
@@ -206,7 +206,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
               << std::endl;
     std::cout << "#### txpoolPeerList size:" << txpoolPeerList.size() << std::endl;
     std::cout << "##### forwardSize:" << forwardSize << std::endl;
-    BOOST_CHECK(faker->frontService()->totalSendMsgSize() == originSendSize);
+    BOOST_TEST(faker->frontService()->totalSendMsgSize() == originSendSize);
 
     // test forward txs status
     auto syncPeer = txpoolPeerList[0];
@@ -257,8 +257,8 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     finish = false;
     faker->txpool()->asyncVerifyBlock(
         syncPeer->nodeID(), block, [&](Error::Ptr _error, bool _result) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_result == true);
+            BOOST_TEST(_error == nullptr);
+            BOOST_TEST(_result == true);
             finish = true;
         });
     while (!finish)

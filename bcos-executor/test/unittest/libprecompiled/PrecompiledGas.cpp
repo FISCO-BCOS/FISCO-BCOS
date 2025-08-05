@@ -32,7 +32,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(precompiledGasTest, TestPromptFixture)
 void checkGasCost(GasMetrics::Ptr _metric, InterfaceOpcode const& _key, int64_t _value)
 {
-    BOOST_CHECK(_metric->OpCode2GasCost[_key] == _value);
+    BOOST_TEST(_metric->OpCode2GasCost[_key] == _value);
 }
 
 void checkBasicGasCost(GasMetrics::Ptr _metric)
@@ -58,7 +58,7 @@ void checkBasicGasCost(GasMetrics::Ptr _metric)
 BOOST_AUTO_TEST_CASE(testPrecompiledGasFactory)
 {
     auto precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
-    BOOST_CHECK(precompiledGasFactory->gasMetric() != nullptr);
+    BOOST_TEST(precompiledGasFactory->gasMetric() != nullptr);
     auto metric = precompiledGasFactory->gasMetric();
     // check gas cost
     checkBasicGasCost(metric);
@@ -76,21 +76,21 @@ BOOST_AUTO_TEST_CASE(testPrecompiledGas)
     auto precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
     auto gasPricer = precompiledGasFactory->createPrecompiledGas();
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
-    BOOST_CHECK(gasPricer->calTotalGas() == 16000);
+    BOOST_TEST(gasPricer->calTotalGas() == 16000);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
-    BOOST_CHECK(gasPricer->calTotalGas() == 16200);
+    BOOST_TEST(gasPricer->calTotalGas() == 16200);
     gasPricer->appendOperation(InterfaceOpcode::Insert);
-    BOOST_CHECK(gasPricer->calTotalGas() == 26200);
+    BOOST_TEST(gasPricer->calTotalGas() == 26200);
     gasPricer->appendOperation(InterfaceOpcode::Select);
-    BOOST_CHECK(gasPricer->calTotalGas() == 26400);
+    BOOST_TEST(gasPricer->calTotalGas() == 26400);
     gasPricer->appendOperation(InterfaceOpcode::Update);
-    BOOST_CHECK(gasPricer->calTotalGas() == 36400);
+    BOOST_TEST(gasPricer->calTotalGas() == 36400);
     gasPricer->setMemUsed(256);
-    BOOST_CHECK(gasPricer->calTotalGas() == 36424);
+    BOOST_TEST(gasPricer->calTotalGas() == 36424);
     gasPricer->updateMemUsed(15000);
-    BOOST_CHECK(gasPricer->calTotalGas() == 38236);
+    BOOST_TEST(gasPricer->calTotalGas() == 38236);
     gasPricer->appendOperation(InterfaceOpcode::LE);
-    BOOST_CHECK(gasPricer->calTotalGas() == 38239);
+    BOOST_TEST(gasPricer->calTotalGas() == 38239);
 
     // with bad instructions
     auto metric = precompiledGasFactory->gasMetric();
@@ -98,11 +98,11 @@ BOOST_AUTO_TEST_CASE(testPrecompiledGas)
     gasPricer->appendOperation(InterfaceOpcode::LT);
     gasPricer->appendOperation(InterfaceOpcode::GetString);
     // only calculate the memory gas for bad instructions
-    BOOST_CHECK(gasPricer->calTotalGas() == 1836);
+    BOOST_TEST(gasPricer->calTotalGas() == 1836);
     metric->init();
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
-    BOOST_CHECK(gasPricer->calTotalGas() == 54445);
+    BOOST_TEST(gasPricer->calTotalGas() == 54445);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -38,7 +38,7 @@ public:
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features> features) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
     };
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,
         bcos::protocol::Block::ConstPtr, std::function<void(Error::UniquePtr&&)> _callback) override
@@ -53,7 +53,7 @@ public:
     bcos::Error::Ptr storeTransactionsAndReceipts(
         bcos::protocol::ConstTransactionsPtr, bcos::protocol::Block::ConstPtr) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
         return nullptr;
     };
 
@@ -96,7 +96,7 @@ public:
     void asyncGetBlockNumberByHash(crypto::HashType const& _blockHash,
         std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
     };
 
     void asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _withProof,
@@ -104,7 +104,7 @@ public:
             std::shared_ptr<std::map<std::string, bcos::ledger::MerkleProofPtr>>)>
             _onGetTx) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
     };
 
 
@@ -113,7 +113,7 @@ public:
             Error::Ptr, protocol::TransactionReceipt::ConstPtr, bcos::ledger::MerkleProofPtr)>
             _onGetTx) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
     };
 
 
@@ -121,7 +121,7 @@ public:
             int64_t _failedTxCount, protocol::BlockNumber _latestBlockNumber)>
             _callback) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
     };
 
     void asyncGetCurrentStateByKey(std::string_view const& _key,
@@ -182,7 +182,7 @@ public:
             Error::Ptr, std::shared_ptr<std::map<protocol::BlockNumber, protocol::NonceListPtr>>)>
             _onGetList) override
     {
-        BOOST_CHECK(false);  // Need implementations
+        BOOST_TEST(false);  // Need implementations
     };
 
     void removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync) override {}

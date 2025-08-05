@@ -297,15 +297,15 @@ BOOST_AUTO_TEST_CASE(test_corsDisabledTest)
         boost::beast::http::status::ok, true, 11, std::move(content), disabledCorsConfig);
 
     // 验证CORS头部都没有被设置
-    BOOST_CHECK(
+    BOOST_TEST(
         response->find(boost::beast::http::field::access_control_allow_origin) == response->end());
-    BOOST_CHECK(
+    BOOST_TEST(
         response->find(boost::beast::http::field::access_control_allow_methods) == response->end());
-    BOOST_CHECK(
+    BOOST_TEST(
         response->find(boost::beast::http::field::access_control_allow_headers) == response->end());
-    BOOST_CHECK(
+    BOOST_TEST(
         response->find(boost::beast::http::field::access_control_max_age) == response->end());
-    BOOST_CHECK(response->find(boost::beast::http::field::access_control_allow_credentials) ==
+    BOOST_TEST(response->find(boost::beast::http::field::access_control_allow_credentials) ==
                 response->end());
 }
 

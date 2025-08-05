@@ -37,10 +37,10 @@ BOOST_AUTO_TEST_CASE(readWriteSet)
         co_await storage2::readOne(secondStorage, 500);
         co_await storage2::readOne(secondStorage, 600);
 
-        BOOST_CHECK(!hasRAWIntersection(firstStorage, secondStorage));
+        BOOST_TEST(!hasRAWIntersection(firstStorage, secondStorage));
 
         co_await storage2::readOne(secondStorage, 200);
-        BOOST_CHECK(hasRAWIntersection(firstStorage, secondStorage));
+        BOOST_TEST(hasRAWIntersection(firstStorage, secondStorage));
 
         co_return;
     }());
@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(directFlag)
         ReadWriteSetStorage<decltype(lhsStorage)> firstStorage(lhsStorage);
 
         auto value = co_await storage2::readOne(firstStorage, 100, storage2::DIRECT);
-        BOOST_CHECK(value);
+        BOOST_TEST(value);
         BOOST_CHECK_EQUAL(*value, 100);
     }());
 }

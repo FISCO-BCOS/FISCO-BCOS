@@ -56,22 +56,22 @@ inline void checkReceipts(Hash::Ptr hashImpl, bcos::protocol::TransactionReceipt
     TransactionReceipt::ConstPtr decodedReceipt)
 {
     // check the decodedReceipt
-    BOOST_CHECK(decodedReceipt->version() == receipt->version());
-    BOOST_CHECK(decodedReceipt->gasUsed() == receipt->gasUsed());
-    BOOST_CHECK(decodedReceipt->contractAddress() == receipt->contractAddress());
-    BOOST_CHECK(decodedReceipt->status() == receipt->status());
-    BOOST_CHECK(decodedReceipt->output().toBytes() == receipt->output().toBytes());
-    // BOOST_CHECK(decodedReceipt->hash() == receipt->hash());
+    BOOST_TEST(decodedReceipt->version() == receipt->version());
+    BOOST_TEST(decodedReceipt->gasUsed() == receipt->gasUsed());
+    BOOST_TEST(decodedReceipt->contractAddress() == receipt->contractAddress());
+    BOOST_TEST(decodedReceipt->status() == receipt->status());
+    BOOST_TEST(decodedReceipt->output().toBytes() == receipt->output().toBytes());
+    // BOOST_TEST(decodedReceipt->hash() == receipt->hash());
     // check LogEntries
-    BOOST_CHECK(decodedReceipt->logEntries().size() == 2);
-    BOOST_CHECK(decodedReceipt->logEntries().size() == receipt->logEntries().size());
+    BOOST_TEST(decodedReceipt->logEntries().size() == 2);
+    BOOST_TEST(decodedReceipt->logEntries().size() == receipt->logEntries().size());
     auto logEntries = decodedReceipt->logEntries();
     const auto& logEntry = logEntries[1];
     auto expectedTopic = hashImpl->hash(std::to_string(1));
-    BOOST_CHECK(logEntry.topics()[0] == expectedTopic);
+    BOOST_TEST(logEntry.topics()[0] == expectedTopic);
 
-    // BOOST_CHECK(std::string(logEntry.address()) == right160(expectedTopic));
-    // BOOST_CHECK(logEntry.data().toBytes() == expectedTopic.asBytes());
+    // BOOST_TEST(std::string(logEntry.address()) == right160(expectedTopic));
+    // BOOST_TEST(logEntry.data().toBytes() == expectedTopic.asBytes());
 }
 
 inline TransactionReceipt::Ptr testPBTransactionReceipt(
@@ -121,7 +121,7 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
 
     auto encodedDataCache = std::make_shared<bytes>();
     receipt->encode(*encodedDataCache);
-    BOOST_CHECK(*encodedData == *encodedDataCache);
+    BOOST_TEST(*encodedData == *encodedDataCache);
 
     // decode
     std::shared_ptr<TransactionReceipt> decodedReceipt;

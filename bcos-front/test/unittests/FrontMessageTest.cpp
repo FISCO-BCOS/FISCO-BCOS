@@ -40,8 +40,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_0)
 
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer);
-    BOOST_CHECK(r);
-    BOOST_CHECK(buffer->size() == FrontMessage::HEADER_MIN_LENGTH);
+    BOOST_TEST(r);
+    BOOST_TEST(buffer->size() == FrontMessage::HEADER_MIN_LENGTH);
 }
 
 BOOST_AUTO_TEST_CASE(testFrontMessage_1)
@@ -62,8 +62,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_1)
     // encode
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer.get());
-    BOOST_CHECK(r);
-    BOOST_CHECK(!buffer->empty());
+    BOOST_TEST(r);
+    BOOST_TEST(!buffer->empty());
 
     // decode
     auto decodeMessage = factory->buildMessage();
@@ -99,8 +99,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_2)
     // encode
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer.get());
-    BOOST_CHECK(r);
-    BOOST_CHECK(!buffer->empty());
+    BOOST_TEST(r);
+    BOOST_TEST(!buffer->empty());
 
     // decode
     auto decodeMessage = factory->buildMessage();
@@ -136,8 +136,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_3)
     // encode
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer.get());
-    BOOST_CHECK(r);
-    BOOST_CHECK(!buffer->empty());
+    BOOST_TEST(r);
+    BOOST_TEST(!buffer->empty());
 
     // decode
     auto decodeMessage = factory->buildMessage();
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_4)
     // encode
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer);
-    BOOST_CHECK(!r);
+    BOOST_TEST(!r);
 
     buffer->clear();
     auto decodeMessage = factory->buildMessage();
@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_5)
     // encode
     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer.get());
-    BOOST_CHECK(r);
+    BOOST_TEST(r);
 
     auto decodeMessage = factory->buildMessage();
     auto r1 = decodeMessage->decode(bytesConstRef(buffer->data(), buffer->size()));

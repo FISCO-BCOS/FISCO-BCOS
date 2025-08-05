@@ -135,7 +135,7 @@ public:
         {
             if (_buffer[i] != uint8_t(0xff))
             {
-                BOOST_CHECK(false);
+                BOOST_TEST(false);
                 return MessageDecodeStatus::MESSAGE_ERROR;
             }
         }
@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE(fakeClassTest)
             });
     }
 
-    BOOST_CHECK(messageBuilder.isSameSendBuffer(ref(recvBuffer)));
+    BOOST_TEST(messageBuilder.isSameSendBuffer(ref(recvBuffer)));
 }
 
 BOOST_AUTO_TEST_CASE(doReadTest)
@@ -326,8 +326,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
                     static bcos::SharedMutex x_mutex;
                     bcos::WriteGuard guard(x_mutex);
                     BOOST_CHECK_EQUAL(e.errorCode(), P2PExceptionType::Success);
-                    BOOST_CHECK(message);
-                    BOOST_CHECK(message->lengthDirect() > 0);
+                    BOOST_TEST(message);
+                    BOOST_TEST(message->lengthDirect() > 0);
                 }
 
                 recvBufferSize += message->lengthDirect();
@@ -350,7 +350,7 @@ BOOST_AUTO_TEST_CASE(doReadTest)
             std::cout << "waiting " << restPacket << " packets" << std::endl;
             retryTimes++;
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            BOOST_CHECK(retryTimes < 100);
+            BOOST_TEST(retryTimes < 100);
         }
 
         BOOST_CHECK_EQUAL(recvPacketCnt, totalPacketNum);

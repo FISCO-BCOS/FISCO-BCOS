@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
     for (auto&& sender : senders)
     {
         auto nonce = task::syncWait(checker.getPendingNonce(toHex(sender)));
-        BOOST_CHECK(nonce.has_value());
+        BOOST_TEST(nonce.has_value());
         BOOST_CHECK_EQUAL(nonce.value(), *commitMap[sender].rbegin() + 1);
     }
 
@@ -107,7 +107,7 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
     {
         task::syncWait(checker.insertMemoryNonce(sender, (*commitMap[sender].rbegin() + 2).str()));
         auto nonce = task::syncWait(checker.getPendingNonce(toHex(sender)));
-        BOOST_CHECK(nonce.has_value());
+        BOOST_TEST(nonce.has_value());
         BOOST_CHECK_EQUAL(nonce.value(), *commitMap[sender].rbegin() + 2 + 1);
     }
 
@@ -115,11 +115,11 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
     {
         auto&& newSender = Address::generateRandomFixedBytes().toRawString();
         auto nonce = task::syncWait(checker.getPendingNonce(toHex(newSender)));
-        BOOST_CHECK(!nonce.has_value());
+        BOOST_TEST(!nonce.has_value());
 
         task::syncWait(checker.insertMemoryNonce(newSender, "1"));
         nonce = task::syncWait(checker.getPendingNonce(toHex(newSender)));
-        BOOST_CHECK(nonce.has_value());
+        BOOST_TEST(nonce.has_value());
         BOOST_CHECK_EQUAL(nonce.value(), 2);
     }
 }

@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func0)
 
     auto r = ct.abiInHex("", a, b, c, d);
     auto rb = ct.abiIn("", a, b, c, d);
-    BOOST_CHECK(r == *toHexString(rb));
+    BOOST_TEST(r == *toHexString(rb));
 
     BOOST_CHECK_EQUAL(
         r, std::string("0000000000000000000000000000000000000000000000000000000000000123"
@@ -72,11 +72,11 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func0)
     string32 outC;
     std::string outD;
     auto Ok = ct.abiOutHex(r, outA, outB, outC, outD);
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func1)
@@ -104,10 +104,10 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func1)
     bool outB;
     std::vector<u256> outC;
     auto Ok = ct.abiOutHex(r, outA, outB, outC);
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func2)
@@ -132,13 +132,13 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func2)
     Address outF;
 
     auto Ok = ct.abiOutHex(r, outA, outB, outC, outD, outE, outF);
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
-    BOOST_CHECK(e == outE);
-    BOOST_CHECK(f == outF);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
+    BOOST_TEST(e == outE);
+    BOOST_TEST(f == outF);
 }
 
 
@@ -168,11 +168,11 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func3)
     s256 outD;
 
     auto Ok = ct.abiOutHex(r, outA, outB, outC, outD);
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
 }
 
 
@@ -198,13 +198,13 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func4)
     std::vector<std::array<std::string, 3>> outF;
 
     auto Ok = ct.abiOutHex(r, outA, outB, outC, outD, outE, outF);
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
-    BOOST_CHECK(e == outE);
-    BOOST_CHECK(f == outF);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
+    BOOST_TEST(e == outE);
+    BOOST_TEST(f == outF);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABIType_u256)
@@ -214,19 +214,19 @@ BOOST_AUTO_TEST_CASE(ContractABIType_u256)
 
     u256 x = 0;
     std::string r = *toHexString(ct.serialise(x));
-    BOOST_CHECK(r == "0000000000000000000000000000000000000000000000000000000000000000");
+    BOOST_TEST(r == "0000000000000000000000000000000000000000000000000000000000000000");
 
     u256 y("0x7fffffffffffffff");
     r = *toHexString(ct.serialise(y));
-    BOOST_CHECK(r == "0000000000000000000000000000000000000000000000007fffffffffffffff");
+    BOOST_TEST(r == "0000000000000000000000000000000000000000000000007fffffffffffffff");
 
     u256 z("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
     r = *toHexString(ct.serialise(z));
-    BOOST_CHECK(r == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    BOOST_TEST(r == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
     u256 u("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
     r = *toHexString(ct.serialise(u));
-    BOOST_CHECK(r == "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
+    BOOST_TEST(r == "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
 }
 
 BOOST_AUTO_TEST_CASE(ContractABIType_s256)
@@ -264,14 +264,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000000000000000007f");
         int8_t ri8;
         codec.decode(ref(b), ri8);
-        BOOST_CHECK(i8 == ri8);
+        BOOST_TEST(i8 == ri8);
 
         i8 = INT8_MIN;
         b = codec.encode(i8);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80");
         codec.decode(ref(b), ri8);
-        BOOST_CHECK(i8 == ri8);
+        BOOST_TEST(i8 == ri8);
     }
 
     // int16
@@ -282,14 +282,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000007fff");
         int16_t ri16;
         codec.decode(ref(b), ri16);
-        BOOST_CHECK(i16 == ri16);
+        BOOST_TEST(i16 == ri16);
 
         i16 = INT16_MIN;
         b = codec.encode(i16);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8000");
         codec.decode(ref(b), ri16);
-        BOOST_CHECK(i16 == ri16);
+        BOOST_TEST(i16 == ri16);
     }
 
     // int32
@@ -300,14 +300,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000000000007fffffff");
         int32_t ri32;
         codec.decode(ref(b), ri32);
-        BOOST_CHECK(i32 == ri32);
+        BOOST_TEST(i32 == ri32);
 
         i32 = INT32_MIN;
         b = codec.encode(i32);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000");
         codec.decode(ref(b), ri32);
-        BOOST_CHECK(i32 == ri32);
+        BOOST_TEST(i32 == ri32);
     }
 
     // int64
@@ -318,14 +318,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000007fffffffffffffff");
         int64_t ri64;
         codec.decode(ref(b), ri64);
-        BOOST_CHECK(i64 == ri64);
+        BOOST_TEST(i64 == ri64);
 
         i64 = INT64_MIN;
         b = codec.encode(i64);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000");
         codec.decode(ref(b), ri64);
-        BOOST_CHECK(i64 == ri64);
+        BOOST_TEST(i64 == ri64);
     }
 
     // uint8
@@ -336,14 +336,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "00000000000000000000000000000000000000000000000000000000000000ff");
         uint8_t ru8;
         codec.decode(ref(b), ru8);
-        BOOST_CHECK(u8 == ru8);
+        BOOST_TEST(u8 == ru8);
 
         u8 = 0;
         b = codec.encode(u8);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
         codec.decode(ref(b), ru8);
-        BOOST_CHECK(u8 == ru8);
+        BOOST_TEST(u8 == ru8);
     }
 
     // uint16
@@ -354,14 +354,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000000000000000ffff");
         uint16_t ru16;
         codec.decode(ref(b), ru16);
-        BOOST_CHECK(u16 == ru16);
+        BOOST_TEST(u16 == ru16);
 
         u16 = 0;
         b = codec.encode(u16);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
         codec.decode(ref(b), ru16);
-        BOOST_CHECK(u16 == ru16);
+        BOOST_TEST(u16 == ru16);
     }
 
     // uint32
@@ -372,14 +372,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "00000000000000000000000000000000000000000000000000000000ffffffff");
         uint32_t ru32;
         codec.decode(ref(b), ru32);
-        BOOST_CHECK(u32 == ru32);
+        BOOST_TEST(u32 == ru32);
 
         u32 = 0;
         b = codec.encode(u32);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
         codec.decode(ref(b), ru32);
-        BOOST_CHECK(u32 == ru32);
+        BOOST_TEST(u32 == ru32);
     }
 
     // uint64
@@ -390,14 +390,14 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000ffffffffffffffff");
         uint64_t ru64;
         codec.decode(ref(b), ru64);
-        BOOST_CHECK(u64 == ru64);
+        BOOST_TEST(u64 == ru64);
 
         u64 = 0;
         b = codec.encode(u64);
         r = *toHexString(b);
         BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
         codec.decode(ref(b), ru64);
-        BOOST_CHECK(u64 == ru64);
+        BOOST_TEST(u64 == ru64);
     }
 
     {
@@ -407,7 +407,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_integer)
         auto r2 = codec.encode(sv);
         auto rs1 = toHexStringWithPrefix(r1);
         auto rs2 = toHexStringWithPrefix(r2);
-        BOOST_CHECK(rs1 == rs2);
+        BOOST_TEST(rs1 == rs2);
     }
 }
 
@@ -502,11 +502,11 @@ BOOST_AUTO_TEST_CASE(ContractABITest0)
     string32 outD;
 
     bool Ok = ct.abiOutHex(r, outA, outB, outC, outD);
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABITest1)
@@ -553,11 +553,11 @@ BOOST_AUTO_TEST_CASE(ContractABITest1)
     bool Ok = ct.abiOutHex(r, outA, outB, outC, outD, outE);
 
     BOOST_CHECK_EQUAL(Ok, true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
-    BOOST_CHECK(e == outE);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
+    BOOST_TEST(e == outE);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABITest2)
@@ -582,13 +582,13 @@ BOOST_AUTO_TEST_CASE(ContractABITest2)
     auto rb = ct.abiIn("", a);
     auto r = *toHexString(rb);
 
-    BOOST_CHECK(r == expect);
+    BOOST_TEST(r == expect);
 
     std::array<std::vector<u256>, 3> outA;
     bool Ok = ct.abiOutHex(r, outA);
 
     BOOST_CHECK_EQUAL(Ok, true);
-    BOOST_CHECK(a == outA);
+    BOOST_TEST(a == outA);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABITest3)
@@ -670,16 +670,16 @@ BOOST_AUTO_TEST_CASE(ContractABITest3)
     std::vector<std::array<u256, 3>> outI;
     bool Ok = ct.abiOutHex(r, outA, outB, outC, outD, outE, outF, outG, outH, outI);
 
-    BOOST_CHECK(Ok == true);
-    BOOST_CHECK(a == outA);
-    BOOST_CHECK(b == outB);
-    BOOST_CHECK(c == outC);
-    BOOST_CHECK(d == outD);
-    BOOST_CHECK(e == outE);
-    BOOST_CHECK(f == outF);
-    BOOST_CHECK(g == outG);
-    BOOST_CHECK(h == outH);
-    BOOST_CHECK(i == outI);
+    BOOST_TEST(Ok == true);
+    BOOST_TEST(a == outA);
+    BOOST_TEST(b == outB);
+    BOOST_TEST(c == outC);
+    BOOST_TEST(d == outD);
+    BOOST_TEST(e == outE);
+    BOOST_TEST(f == outF);
+    BOOST_TEST(g == outG);
+    BOOST_TEST(h == outH);
+    BOOST_TEST(i == outI);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABI_ABIType)
@@ -687,66 +687,66 @@ BOOST_AUTO_TEST_CASE(ContractABI_ABIType)
     std::string s = "string";
     ABIInType at;
     auto ok = at.reset(s);
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(at.getType() == "string");
-    BOOST_CHECK(at.dynamic() == true);
-    BOOST_CHECK(at.getEleType() == "string");
-    BOOST_CHECK(at.rank() == 0);
+    BOOST_TEST(ok == true);
+    BOOST_TEST(at.getType() == "string");
+    BOOST_TEST(at.dynamic() == true);
+    BOOST_TEST(at.getEleType() == "string");
+    BOOST_TEST(at.rank() == 0);
 
     ok = at.reset("adf");
-    BOOST_CHECK(ok == false);
+    BOOST_TEST(ok == false);
 
     ok = at.reset("uint256");
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(at.getType() == "uint256");
-    BOOST_CHECK(at.dynamic() == false);
-    BOOST_CHECK(at.getEleType() == "uint256");
-    BOOST_CHECK(at.rank() == 0);
+    BOOST_TEST(ok == true);
+    BOOST_TEST(at.getType() == "uint256");
+    BOOST_TEST(at.dynamic() == false);
+    BOOST_TEST(at.getEleType() == "uint256");
+    BOOST_TEST(at.rank() == 0);
 
 
     ok = at.reset("bool");
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(at.getType() == "bool");
-    BOOST_CHECK(at.dynamic() == false);
-    BOOST_CHECK(at.getEleType() == "bool");
-    BOOST_CHECK(at.rank() == 0);
+    BOOST_TEST(ok == true);
+    BOOST_TEST(at.getType() == "bool");
+    BOOST_TEST(at.dynamic() == false);
+    BOOST_TEST(at.getEleType() == "bool");
+    BOOST_TEST(at.rank() == 0);
 
     ok = at.reset("bool[]");
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(at.getType() == "bool[]");
-    BOOST_CHECK(at.dynamic() == true);
-    BOOST_CHECK(at.getEleType() == "bool");
-    BOOST_CHECK(at.rank() == 1);
+    BOOST_TEST(ok == true);
+    BOOST_TEST(at.getType() == "bool[]");
+    BOOST_TEST(at.dynamic() == true);
+    BOOST_TEST(at.getEleType() == "bool");
+    BOOST_TEST(at.rank() == 1);
 
     ok = at.reset("bool[10]");
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(at.getType() == "bool[10]");
-    BOOST_CHECK(at.dynamic() == false);
-    BOOST_CHECK(at.getEleType() == "bool");
-    BOOST_CHECK(at.extent(1) == 10);
-    BOOST_CHECK(at.rank() == 1);
+    BOOST_TEST(ok == true);
+    BOOST_TEST(at.getType() == "bool[10]");
+    BOOST_TEST(at.dynamic() == false);
+    BOOST_TEST(at.getEleType() == "bool");
+    BOOST_TEST(at.extent(1) == 10);
+    BOOST_TEST(at.rank() == 1);
 
     ok = at.reset("string[10][][20]");
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(at.getType() == "string[10][][20]");
-    BOOST_CHECK(at.dynamic() == true);
-    BOOST_CHECK(at.getEleType() == "string");
-    BOOST_CHECK(at.extent(1) == 10);
-    BOOST_CHECK(at.extent(2) == 0);
-    BOOST_CHECK(at.extent(3) == 20);
-    BOOST_CHECK(at.rank() == 3);
+    BOOST_TEST(ok == true);
+    BOOST_TEST(at.getType() == "string[10][][20]");
+    BOOST_TEST(at.dynamic() == true);
+    BOOST_TEST(at.getEleType() == "string");
+    BOOST_TEST(at.extent(1) == 10);
+    BOOST_TEST(at.extent(2) == 0);
+    BOOST_TEST(at.extent(3) == 20);
+    BOOST_TEST(at.rank() == 3);
 
     at.removeExtent();
-    BOOST_CHECK(at.extent(1) == 10);
-    BOOST_CHECK(at.extent(2) == 0);
-    BOOST_CHECK(at.rank() == 2);
+    BOOST_TEST(at.extent(1) == 10);
+    BOOST_TEST(at.extent(2) == 0);
+    BOOST_TEST(at.rank() == 2);
 
     at.removeExtent();
-    BOOST_CHECK(at.extent(1) == 10);
-    BOOST_CHECK(at.rank() == 1);
+    BOOST_TEST(at.extent(1) == 10);
+    BOOST_TEST(at.rank() == 1);
 
     at.removeExtent();
-    BOOST_CHECK(at.rank() == 0);
+    BOOST_TEST(at.rank() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABI_ABIFunc0)
@@ -754,11 +754,11 @@ BOOST_AUTO_TEST_CASE(ContractABI_ABIFunc0)
     std::string s = "transfer (string, uint256, int256, string[])";
     ABIFunc afunc;
     auto ok = afunc.parser(s);
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(afunc.getFuncName() == "transfer");
-    BOOST_CHECK(afunc.getSignature() == "transfer(string,uint256,int256,string[])");
+    BOOST_TEST(ok == true);
+    BOOST_TEST(afunc.getFuncName() == "transfer");
+    BOOST_TEST(afunc.getSignature() == "transfer(string,uint256,int256,string[])");
     std::vector<std::string> exp{"string", "uint256", "int256", "string[]"};
-    BOOST_CHECK(afunc.getParamsType() == exp);
+    BOOST_TEST(afunc.getParamsType() == exp);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABI_ABIFunc1)
@@ -766,15 +766,15 @@ BOOST_AUTO_TEST_CASE(ContractABI_ABIFunc1)
     std::string s0 = "register(string,uint25)";
     ABIFunc afunc0;
     auto ok = afunc0.parser(s0);
-    BOOST_CHECK(ok == false);
+    BOOST_TEST(ok == false);
 
 
     std::string s1 = "f()";
     ABIFunc afunc1;
     ok = afunc1.parser(s1);
-    BOOST_CHECK(ok == true);
-    BOOST_CHECK(afunc1.getFuncName() == "f");
-    BOOST_CHECK(afunc1.getSignature() == "f()");
+    BOOST_TEST(ok == true);
+    BOOST_TEST(afunc1.getFuncName() == "f");
+    BOOST_TEST(afunc1.getSignature() == "f()");
 }
 
 BOOST_AUTO_TEST_CASE(ContractABI_ABIFunc2)
@@ -783,12 +783,12 @@ BOOST_AUTO_TEST_CASE(ContractABI_ABIFunc2)
 
     ABIFunc afunc;
     auto ok = afunc.parser(s);
-    BOOST_CHECK(ok == true);
+    BOOST_TEST(ok == true);
 
-    BOOST_CHECK(afunc.getFuncName() == "trans");
-    BOOST_CHECK(afunc.getSignature() == "trans(string,uint256)");
+    BOOST_TEST(afunc.getFuncName() == "trans");
+    BOOST_TEST(afunc.getSignature() == "trans(string,uint256)");
     std::vector<std::string> exp{"string", "uint256"};
-    BOOST_CHECK(afunc.getParamsType() == exp);
+    BOOST_TEST(afunc.getParamsType() == exp);
 }
 
 BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString0)
@@ -801,19 +801,19 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString0)
 
     ABIFunc afunc;
     auto ok = afunc.parser("test(uint256,string)");
-    BOOST_CHECK(ok == true);
+    BOOST_TEST(ok == true);
 
     auto allTypes = afunc.getParamsType();
 
-    BOOST_CHECK(allTypes.size() == 2);
-    BOOST_CHECK(allTypes[0] == "uint256");
-    BOOST_CHECK(allTypes[1] == "string");
+    BOOST_TEST(allTypes.size() == 2);
+    BOOST_TEST(allTypes[0] == "uint256");
+    BOOST_TEST(allTypes[1] == "string");
 
     std::vector<std::string> allOut;
     ct.abiOutByFuncSelector(bytesConstRef(&in), allTypes, allOut);
-    BOOST_CHECK(allOut.size() == 2);
-    BOOST_CHECK(allOut[0] == "111111111");
-    BOOST_CHECK(allOut[1] == "test string");
+    BOOST_TEST(allOut.size() == 2);
+    BOOST_TEST(allOut[0] == "111111111");
+    BOOST_TEST(allOut[1] == "test string");
 }
 
 BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString1)
@@ -827,21 +827,21 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString1)
 
     ABIFunc afunc;
     auto ok = afunc.parser("f(string,uint256,int256)");
-    BOOST_CHECK(ok == true);
+    BOOST_TEST(ok == true);
 
     auto allTypes = afunc.getParamsType();
 
-    BOOST_CHECK(allTypes.size() == 3);
-    BOOST_CHECK(allTypes[0] == "string");
-    BOOST_CHECK(allTypes[1] == "uint256");
-    BOOST_CHECK(allTypes[2] == "int256");
+    BOOST_TEST(allTypes.size() == 3);
+    BOOST_TEST(allTypes[0] == "string");
+    BOOST_TEST(allTypes[1] == "uint256");
+    BOOST_TEST(allTypes[2] == "int256");
 
     std::vector<std::string> allOut;
     ct.abiOutByFuncSelector(bytesConstRef(&in), allTypes, allOut);
-    BOOST_CHECK(allOut.size() == 3);
-    BOOST_CHECK(allOut[1] == "111111111");
-    BOOST_CHECK(allOut[2] == "-11111111");
-    BOOST_CHECK(allOut[0] == "aaaaaaa");
+    BOOST_TEST(allOut.size() == 3);
+    BOOST_TEST(allOut[1] == "111111111");
+    BOOST_TEST(allOut[2] == "-11111111");
+    BOOST_TEST(allOut[0] == "aaaaaaa");
 }
 
 BOOST_AUTO_TEST_CASE(testABIOutBytes)
@@ -853,13 +853,13 @@ BOOST_AUTO_TEST_CASE(testABIOutBytes)
     bytes plainBytes = *fromHexString(*toHexString(plainText));
     ABIFunc afunc;
     auto ok = afunc.parser("f(bytes32,bytes,bytes32)");
-    BOOST_CHECK(ok == true);
+    BOOST_TEST(ok == true);
     auto allTypes = afunc.getParamsType();
 
-    BOOST_CHECK(allTypes.size() == 3);
-    BOOST_CHECK(allTypes[0] == "bytes32");
-    BOOST_CHECK(allTypes[1] == "bytes");
-    BOOST_CHECK(allTypes[2] == "bytes32");
+    BOOST_TEST(allTypes.size() == 3);
+    BOOST_TEST(allTypes[0] == "bytes32");
+    BOOST_TEST(allTypes[1] == "bytes");
+    BOOST_TEST(allTypes[2] == "bytes32");
 
     auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec abi(*hashImpl);
@@ -869,12 +869,12 @@ BOOST_AUTO_TEST_CASE(testABIOutBytes)
     string32 decodedParam3;
     abi.abiOut(ref(paramData), decodedParam1, decodedParam2, decodedParam3);
 
-    BOOST_CHECK(*toHexString(fromString32(decodedParam1)) == hashStr);
-    BOOST_CHECK(*toHexString(fromString32(decodedParam3)) == hashStr);
+    BOOST_TEST(*toHexString(fromString32(decodedParam1)) == hashStr);
+    BOOST_TEST(*toHexString(fromString32(decodedParam3)) == hashStr);
     std::cout << "decodedParam1: " << *toHexString(decodedParam1) << std::endl;
     std::cout << "decodedParam2: " << *toHexString(decodedParam2) << std::endl;
     std::cout << "decodedParam3: " << *toHexString(decodedParam3) << std::endl;
-    BOOST_CHECK(*toHexString(decodedParam2) == *toHexString(plainText));
+    BOOST_TEST(*toHexString(decodedParam2) == *toHexString(plainText));
 
     // test bytes
     plainText = "testabcxxd";
@@ -882,7 +882,7 @@ BOOST_AUTO_TEST_CASE(testABIOutBytes)
     paramData = abi.abiIn("", refPlainBytes.toBytes());
     bytes decodedParam;
     abi.abiOut(ref(paramData), decodedParam);
-    BOOST_CHECK(*toHexString(decodedParam) == *toHexString(plainText));
+    BOOST_TEST(*toHexString(decodedParam) == *toHexString(plainText));
 }
 
 BOOST_AUTO_TEST_CASE(testABITuple)
@@ -898,7 +898,7 @@ BOOST_AUTO_TEST_CASE(testABITuple)
 
         auto encodedBytes = abi.abiIn("", tupleV, staticTuple);
         auto s = toHexStringWithPrefix(encodedBytes);
-        BOOST_CHECK(
+        BOOST_TEST(
             s ==
             "0x000000000000000000000000000000000000000000000000000000000000006000000000000000000000"
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
@@ -911,11 +911,11 @@ BOOST_AUTO_TEST_CASE(testABITuple)
         decltype(tupleV) resultV;
         decltype(staticTuple) resultStatic;
         abi.abiOut(ref(encodedBytes), resultV, resultStatic);
-        BOOST_CHECK(resultV.size() == 1);
-        BOOST_CHECK(std::get<0>(resultV.at(0)) == uint8_t(0));
-        BOOST_CHECK(std::get<1>(resultV.at(0)) == std::string("990"));
-        BOOST_CHECK(std::get<0>(resultStatic) == uint32_t(0));
-        BOOST_CHECK(std::get<1>(resultStatic) == uint32_t(10));
+        BOOST_TEST(resultV.size() == 1);
+        BOOST_TEST(std::get<0>(resultV.at(0)) == uint8_t(0));
+        BOOST_TEST(std::get<1>(resultV.at(0)) == std::string("990"));
+        BOOST_TEST(std::get<0>(resultStatic) == uint32_t(0));
+        BOOST_TEST(std::get<1>(resultStatic) == uint32_t(10));
     }
 
     // static tuple(uint32,uint32,int8)
@@ -927,7 +927,7 @@ BOOST_AUTO_TEST_CASE(testABITuple)
 
         auto encodedBytes = abi.abiIn("", tupleV, staticTuple, tupleV);
         auto s = toHexStringWithPrefix(encodedBytes);
-        BOOST_CHECK(
+        BOOST_TEST(
             s ==
             "0x00000000000000000000000000000000000000000000000000000000000000a000000000000000000000"
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
@@ -954,21 +954,21 @@ BOOST_AUTO_TEST_CASE(testABITuple)
         decltype(tupleV) resultV1, resultV2;
         decltype(staticTuple) resultStatic;
         abi.abiOut(ref(encodedBytes), resultV1, resultStatic, resultV2);
-        BOOST_CHECK(resultV1.size() == 2);
-        BOOST_CHECK(std::get<0>(resultV1.at(0)) == uint8_t(0));
-        BOOST_CHECK(std::get<1>(resultV1.at(0)) == std::string("990"));
-        BOOST_CHECK(std::get<0>(resultV1.at(1)) == uint8_t(1));
-        BOOST_CHECK(std::get<1>(resultV1.at(1)) == std::string("991"));
+        BOOST_TEST(resultV1.size() == 2);
+        BOOST_TEST(std::get<0>(resultV1.at(0)) == uint8_t(0));
+        BOOST_TEST(std::get<1>(resultV1.at(0)) == std::string("990"));
+        BOOST_TEST(std::get<0>(resultV1.at(1)) == uint8_t(1));
+        BOOST_TEST(std::get<1>(resultV1.at(1)) == std::string("991"));
 
-        BOOST_CHECK(std::get<0>(resultStatic) == uint32_t(0));
-        BOOST_CHECK(std::get<1>(resultStatic) == uint32_t(10));
-        BOOST_CHECK(std::get<2>(resultStatic) == int8_t(-1));
+        BOOST_TEST(std::get<0>(resultStatic) == uint32_t(0));
+        BOOST_TEST(std::get<1>(resultStatic) == uint32_t(10));
+        BOOST_TEST(std::get<2>(resultStatic) == int8_t(-1));
 
-        BOOST_CHECK(resultV2.size() == 2);
-        BOOST_CHECK(std::get<0>(resultV2.at(0)) == uint8_t(0));
-        BOOST_CHECK(std::get<1>(resultV2.at(0)) == std::string("990"));
-        BOOST_CHECK(std::get<0>(resultV2.at(1)) == uint8_t(1));
-        BOOST_CHECK(std::get<1>(resultV2.at(1)) == std::string("991"));
+        BOOST_TEST(resultV2.size() == 2);
+        BOOST_TEST(std::get<0>(resultV2.at(0)) == uint8_t(0));
+        BOOST_TEST(std::get<1>(resultV2.at(0)) == std::string("990"));
+        BOOST_TEST(std::get<0>(resultV2.at(1)) == uint8_t(1));
+        BOOST_TEST(std::get<1>(resultV2.at(1)) == std::string("991"));
     }
 
     // tuple(vector(tuple(u256,string,string,u256)))
@@ -1017,24 +1017,24 @@ BOOST_AUTO_TEST_CASE(testABITuple)
             "0000"
             "000000";
         std::string hexString = *toHexString(encodedBytes);
-        BOOST_CHECK(hexString == bytesString);
+        BOOST_TEST(hexString == bytesString);
 
         decltype(testEncode) testDecode;
         std::string testString;
         abi.abiOut(ref(encodedBytes), testString, testDecode);
 
-        BOOST_CHECK(std::get<0>(testDecode).size() == 2);
+        BOOST_TEST(std::get<0>(testDecode).size() == 2);
         auto tupleDecode1 = std::get<0>(testDecode).at(0);
         auto tupleDecode2 = std::get<0>(testDecode).at(1);
-        BOOST_CHECK(std::get<0>(tupleDecode1) == std::get<0>(tuple1));
-        BOOST_CHECK(std::get<1>(tupleDecode1) == std::get<1>(tuple1));
-        BOOST_CHECK(std::get<2>(tupleDecode1) == std::get<2>(tuple1));
-        BOOST_CHECK(std::get<3>(tupleDecode1) == std::get<3>(tuple1));
+        BOOST_TEST(std::get<0>(tupleDecode1) == std::get<0>(tuple1));
+        BOOST_TEST(std::get<1>(tupleDecode1) == std::get<1>(tuple1));
+        BOOST_TEST(std::get<2>(tupleDecode1) == std::get<2>(tuple1));
+        BOOST_TEST(std::get<3>(tupleDecode1) == std::get<3>(tuple1));
 
-        BOOST_CHECK(std::get<0>(tupleDecode2) == std::get<0>(tuple2));
-        BOOST_CHECK(std::get<1>(tupleDecode2) == std::get<1>(tuple2));
-        BOOST_CHECK(std::get<2>(tupleDecode2) == std::get<2>(tuple2));
-        BOOST_CHECK(std::get<3>(tupleDecode2) == std::get<3>(tuple2));
+        BOOST_TEST(std::get<0>(tupleDecode2) == std::get<0>(tuple2));
+        BOOST_TEST(std::get<1>(tupleDecode2) == std::get<1>(tuple2));
+        BOOST_TEST(std::get<2>(tupleDecode2) == std::get<2>(tuple2));
+        BOOST_TEST(std::get<3>(tupleDecode2) == std::get<3>(tuple2));
     }
 
     // simple tuple
@@ -1047,12 +1047,12 @@ BOOST_AUTO_TEST_CASE(testABITuple)
         decltype(test1) test1Decode;
         abi.abiOut(ref(test1Encode), test1Decode);
 
-        BOOST_CHECK(std::get<0>(test1) == std::get<0>(test1Decode));
-        BOOST_CHECK(std::get<1>(test1) == std::get<1>(test1Decode));
-        BOOST_CHECK(std::get<2>(test1) == std::get<2>(test1Decode));
-        BOOST_CHECK(std::get<3>(test1) == std::get<3>(test1Decode));
-        BOOST_CHECK(std::get<4>(test1)[0] == std::get<4>(test1Decode)[0]);
-        BOOST_CHECK(std::get<4>(test1)[1] == std::get<4>(test1Decode)[1]);
+        BOOST_TEST(std::get<0>(test1) == std::get<0>(test1Decode));
+        BOOST_TEST(std::get<1>(test1) == std::get<1>(test1Decode));
+        BOOST_TEST(std::get<2>(test1) == std::get<2>(test1Decode));
+        BOOST_TEST(std::get<3>(test1) == std::get<3>(test1Decode));
+        BOOST_TEST(std::get<4>(test1)[0] == std::get<4>(test1Decode)[0]);
+        BOOST_TEST(std::get<4>(test1)[1] == std::get<4>(test1Decode)[1]);
     }
 
     // tuple(u256,bool,vector(tuple(string,s256,Address,bytes,vector)),vector(tuple(string,s256,Address,bytes,vector)))
@@ -1076,45 +1076,45 @@ BOOST_AUTO_TEST_CASE(testABITuple)
         decltype(tupleTest1) test1Decode;
         abi.abiOut(ref(test1Encode), tuple1Decode, test1Decode);
 
-        BOOST_CHECK(std::get<0>(tuple1Decode) == std::get<0>(tuple1));
-        BOOST_CHECK(std::get<1>(tuple1Decode) == std::get<1>(tuple1));
-        BOOST_CHECK(std::get<2>(tuple1Decode) == std::get<2>(tuple1));
-        BOOST_CHECK(std::get<3>(tuple1Decode) == std::get<3>(tuple1));
-        BOOST_CHECK(std::get<4>(tuple1Decode)[0] == std::get<4>(tuple1)[0]);
-        BOOST_CHECK(std::get<4>(tuple1Decode)[1] == std::get<4>(tuple1)[1]);
+        BOOST_TEST(std::get<0>(tuple1Decode) == std::get<0>(tuple1));
+        BOOST_TEST(std::get<1>(tuple1Decode) == std::get<1>(tuple1));
+        BOOST_TEST(std::get<2>(tuple1Decode) == std::get<2>(tuple1));
+        BOOST_TEST(std::get<3>(tuple1Decode) == std::get<3>(tuple1));
+        BOOST_TEST(std::get<4>(tuple1Decode)[0] == std::get<4>(tuple1)[0]);
+        BOOST_TEST(std::get<4>(tuple1Decode)[1] == std::get<4>(tuple1)[1]);
 
-        BOOST_CHECK(std::get<0>(test1Decode) == std::get<0>(tupleTest1));
-        BOOST_CHECK(std::get<1>(test1Decode) == std::get<1>(tupleTest1));
+        BOOST_TEST(std::get<0>(test1Decode) == std::get<0>(tupleTest1));
+        BOOST_TEST(std::get<1>(test1Decode) == std::get<1>(tupleTest1));
         auto test1DecodeTupleV1 = std::get<2>(test1Decode);
         auto test1DecodeTupleV2 = std::get<3>(test1Decode);
 
-        BOOST_CHECK(std::get<0>(test1DecodeTupleV1[0]) == std::get<0>(tuple1));
-        BOOST_CHECK(std::get<1>(test1DecodeTupleV1[0]) == std::get<1>(tuple1));
-        BOOST_CHECK(std::get<2>(test1DecodeTupleV1[0]) == std::get<2>(tuple1));
-        BOOST_CHECK(std::get<3>(test1DecodeTupleV1[0]) == std::get<3>(tuple1));
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV1[0])[0] == std::get<4>(tuple1)[0]);
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV1[0])[1] == std::get<4>(tuple1)[1]);
+        BOOST_TEST(std::get<0>(test1DecodeTupleV1[0]) == std::get<0>(tuple1));
+        BOOST_TEST(std::get<1>(test1DecodeTupleV1[0]) == std::get<1>(tuple1));
+        BOOST_TEST(std::get<2>(test1DecodeTupleV1[0]) == std::get<2>(tuple1));
+        BOOST_TEST(std::get<3>(test1DecodeTupleV1[0]) == std::get<3>(tuple1));
+        BOOST_TEST(std::get<4>(test1DecodeTupleV1[0])[0] == std::get<4>(tuple1)[0]);
+        BOOST_TEST(std::get<4>(test1DecodeTupleV1[0])[1] == std::get<4>(tuple1)[1]);
 
-        BOOST_CHECK(std::get<0>(test1DecodeTupleV1[1]) == std::get<0>(tuple2));
-        BOOST_CHECK(std::get<1>(test1DecodeTupleV1[1]) == std::get<1>(tuple2));
-        BOOST_CHECK(std::get<2>(test1DecodeTupleV1[1]) == std::get<2>(tuple2));
-        BOOST_CHECK(std::get<3>(test1DecodeTupleV1[1]) == std::get<3>(tuple2));
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV1[1])[0] == std::get<4>(tuple2)[0]);
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV1[1])[1] == std::get<4>(tuple2)[1]);
+        BOOST_TEST(std::get<0>(test1DecodeTupleV1[1]) == std::get<0>(tuple2));
+        BOOST_TEST(std::get<1>(test1DecodeTupleV1[1]) == std::get<1>(tuple2));
+        BOOST_TEST(std::get<2>(test1DecodeTupleV1[1]) == std::get<2>(tuple2));
+        BOOST_TEST(std::get<3>(test1DecodeTupleV1[1]) == std::get<3>(tuple2));
+        BOOST_TEST(std::get<4>(test1DecodeTupleV1[1])[0] == std::get<4>(tuple2)[0]);
+        BOOST_TEST(std::get<4>(test1DecodeTupleV1[1])[1] == std::get<4>(tuple2)[1]);
 
-        BOOST_CHECK(std::get<0>(test1DecodeTupleV2[0]) == std::get<0>(tuple2));
-        BOOST_CHECK(std::get<1>(test1DecodeTupleV2[0]) == std::get<1>(tuple2));
-        BOOST_CHECK(std::get<2>(test1DecodeTupleV2[0]) == std::get<2>(tuple2));
-        BOOST_CHECK(std::get<3>(test1DecodeTupleV2[0]) == std::get<3>(tuple2));
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV2[0])[0] == std::get<4>(tuple2)[0]);
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV2[0])[1] == std::get<4>(tuple2)[1]);
+        BOOST_TEST(std::get<0>(test1DecodeTupleV2[0]) == std::get<0>(tuple2));
+        BOOST_TEST(std::get<1>(test1DecodeTupleV2[0]) == std::get<1>(tuple2));
+        BOOST_TEST(std::get<2>(test1DecodeTupleV2[0]) == std::get<2>(tuple2));
+        BOOST_TEST(std::get<3>(test1DecodeTupleV2[0]) == std::get<3>(tuple2));
+        BOOST_TEST(std::get<4>(test1DecodeTupleV2[0])[0] == std::get<4>(tuple2)[0]);
+        BOOST_TEST(std::get<4>(test1DecodeTupleV2[0])[1] == std::get<4>(tuple2)[1]);
 
-        BOOST_CHECK(std::get<0>(test1DecodeTupleV2[1]) == std::get<0>(tuple1));
-        BOOST_CHECK(std::get<1>(test1DecodeTupleV2[1]) == std::get<1>(tuple1));
-        BOOST_CHECK(std::get<2>(test1DecodeTupleV2[1]) == std::get<2>(tuple1));
-        BOOST_CHECK(std::get<3>(test1DecodeTupleV2[1]) == std::get<3>(tuple1));
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV2[1])[0] == std::get<4>(tuple1)[0]);
-        BOOST_CHECK(std::get<4>(test1DecodeTupleV2[1])[1] == std::get<4>(tuple1)[1]);
+        BOOST_TEST(std::get<0>(test1DecodeTupleV2[1]) == std::get<0>(tuple1));
+        BOOST_TEST(std::get<1>(test1DecodeTupleV2[1]) == std::get<1>(tuple1));
+        BOOST_TEST(std::get<2>(test1DecodeTupleV2[1]) == std::get<2>(tuple1));
+        BOOST_TEST(std::get<3>(test1DecodeTupleV2[1]) == std::get<3>(tuple1));
+        BOOST_TEST(std::get<4>(test1DecodeTupleV2[1])[0] == std::get<4>(tuple1)[0]);
+        BOOST_TEST(std::get<4>(test1DecodeTupleV2[1])[1] == std::get<4>(tuple1)[1]);
     }
 }
 

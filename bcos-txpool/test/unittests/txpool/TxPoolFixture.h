@@ -386,7 +386,7 @@ inline void checkTxSubmit(TxPoolInterface::Ptr _txpool, TxPoolStorageInterface::
                       << std::endl;
             if (_maybeExpired)
             {
-                BOOST_CHECK(
+                BOOST_TEST(
                     (submitResult->status() == _expectedStatus) ||
                     (submitResult->status() == (int32_t)TransactionStatus::TransactionPoolTimeout));
             }

@@ -76,22 +76,22 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
     pbftConfig->storage()->asyncCommitProposal(fakedProposal);
     faker->init();
 
-    BOOST_CHECK(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
     auto cacheProcessor =
         std::dynamic_pointer_cast<FakeCacheProcessor>(pbftEngine->cacheProcessor());
-    BOOST_CHECK(cacheProcessor->stableCheckPointQueueSize() == 0);
+    BOOST_TEST(cacheProcessor->stableCheckPointQueueSize() == 0);
 
     fakedProposal = pbftMsgFixture->fakePBFTProposal(faker->ledger()->blockNumber(),
         ledgerConfig->hash(), *blockData, std::vector<int64_t>(), std::vector<bytes>());
     pbftConfig->storage()->asyncCommitProposal(fakedProposal);
     faker->init();
 
-    BOOST_CHECK(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
-    BOOST_CHECK(cacheProcessor->stableCheckPointQueueSize() == 0);
+    BOOST_TEST(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(cacheProcessor->stableCheckPointQueueSize() == 0);
 
     faker->init();
-    BOOST_CHECK(pbftConfig->nodeIndex() == 0);
-    BOOST_CHECK(pbftConfig->getConsensusNodeByIndex(0)->nodeID->data() == faker->nodeID()->data());
+    BOOST_TEST(pbftConfig->nodeIndex() == 0);
+    BOOST_TEST(pbftConfig->getConsensusNodeByIndex(0)->nodeID->data() == faker->nodeID()->data());
 
     // check nodeIndex
     size_t consensusNodesSize = 9;
@@ -102,35 +102,35 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
         faker->init();
         auto nodeIndex = pbftConfig->nodeIndex();
         auto node = pbftConfig->getConsensusNodeByIndex(nodeIndex);
-        BOOST_CHECK(node->nodeID->data() == faker->nodeID()->data());
+        BOOST_TEST(node->nodeID->data() == faker->nodeID()->data());
     }
-    BOOST_CHECK(pbftConfig->consensusNodeList().size() == (consensusNodesSize + 1));
-    BOOST_CHECK(pbftConfig->nodeID()->data() == faker->nodeID()->data());
+    BOOST_TEST(pbftConfig->consensusNodeList().size() == (consensusNodesSize + 1));
+    BOOST_TEST(pbftConfig->nodeID()->data() == faker->nodeID()->data());
 
     // check params
-    BOOST_CHECK(pbftConfig->isConsensusNode());
+    BOOST_TEST(pbftConfig->isConsensusNode());
     pbftConfig->setConsensusTimeout(consensusTimeout);
-    BOOST_CHECK(pbftConfig->consensusTimeout() == consensusTimeout);
+    BOOST_TEST(pbftConfig->consensusTimeout() == consensusTimeout);
     BOOST_CHECK_EQUAL(pbftConfig->blockTxCountLimit(), txCountLimit);
     // Note: should update this check if consensusNodesSize has been changed
-    BOOST_CHECK(pbftConfig->minRequiredQuorum() == 7);
-    BOOST_CHECK(pbftConfig->committedProposal()->index() == faker->ledger()->blockNumber());
-    BOOST_CHECK(pbftConfig->committedProposal()->hash() == ledgerConfig->hash());
+    BOOST_TEST(pbftConfig->minRequiredQuorum() == 7);
+    BOOST_TEST(pbftConfig->committedProposal()->index() == faker->ledger()->blockNumber());
+    BOOST_TEST(pbftConfig->committedProposal()->hash() == ledgerConfig->hash());
     // check PBFT related information
-    BOOST_CHECK(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
-    BOOST_CHECK(pbftConfig->view() == 0);
-    BOOST_CHECK(pbftConfig->toView() == 0);
+    BOOST_TEST(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(pbftConfig->view() == 0);
+    BOOST_TEST(pbftConfig->toView() == 0);
     // check object
-    BOOST_CHECK(pbftConfig->cryptoSuite());
-    BOOST_CHECK(pbftConfig->pbftMessageFactory());
-    BOOST_CHECK(pbftConfig->frontService());
-    BOOST_CHECK(pbftConfig->codec());
-    BOOST_CHECK(pbftConfig->validator());
-    BOOST_CHECK(pbftConfig->storage());
-    BOOST_CHECK(pbftConfig->highWaterMark() ==
+    BOOST_TEST(pbftConfig->cryptoSuite());
+    BOOST_TEST(pbftConfig->pbftMessageFactory());
+    BOOST_TEST(pbftConfig->frontService());
+    BOOST_TEST(pbftConfig->codec());
+    BOOST_TEST(pbftConfig->validator());
+    BOOST_TEST(pbftConfig->storage());
+    BOOST_TEST(pbftConfig->highWaterMark() ==
                 pbftConfig->progressedIndex() + pbftConfig->waterMarkLimit());
-    BOOST_CHECK(pbftConfig->stateMachine());
-    BOOST_CHECK(pbftConfig->expectedCheckPoint() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(pbftConfig->stateMachine());
+    BOOST_TEST(pbftConfig->expectedCheckPoint() == faker->ledger()->blockNumber() + 1);
 
 
 #if 0
@@ -140,9 +140,9 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
         bytes(), std::vector<int64_t>(), std::vector<bytes>());
     pbftConfig->storage()->asyncCommitProposal(fakedProposal);
     faker->init();
-    BOOST_CHECK(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
-    BOOST_CHECK(pbftEngine->cacheProcessor()->committedQueue() == 0);
-    BOOST_CHECK(pbftConfig->expectedCheckPoint() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(pbftConfig->progressedIndex() == faker->ledger()->blockNumber() + 1);
+    BOOST_TEST(pbftEngine->cacheProcessor()->committedQueue() == 0);
+    BOOST_TEST(pbftConfig->expectedCheckPoint() == faker->ledger()->blockNumber() + 1);
 #endif
 
     // case5: with new committed index and valid data, collect enough checkpoint proposal and commit
@@ -155,17 +155,17 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
         std::vector<int64_t>(), std::vector<bytes>());
     pbftConfig->storage()->asyncCommitProposal(fakedProposal);
     faker->init();
-    BOOST_CHECK(pbftConfig->minRequiredQuorum() == 1);
+    BOOST_TEST(pbftConfig->minRequiredQuorum() == 1);
     auto startT = utcTime();
     while (pbftConfig->committedProposal()->index() != proposalIndex &&
            (utcTime() - startT <= 60 * 1000))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    BOOST_CHECK(faker->ledger()->blockNumber() == proposalIndex);
-    BOOST_CHECK(pbftConfig->progressedIndex() == proposalIndex + 1);
-    BOOST_CHECK(cacheProcessor->committedQueueSize() == 0);
-    BOOST_CHECK(cacheProcessor->stableCheckPointQueueSize() == 0);
+    BOOST_TEST(faker->ledger()->blockNumber() == proposalIndex);
+    BOOST_TEST(pbftConfig->progressedIndex() == proposalIndex + 1);
+    BOOST_TEST(cacheProcessor->committedQueueSize() == 0);
+    BOOST_TEST(cacheProcessor->stableCheckPointQueueSize() == 0);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

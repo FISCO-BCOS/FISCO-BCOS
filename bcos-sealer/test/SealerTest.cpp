@@ -103,16 +103,16 @@ BOOST_AUTO_TEST_CASE(executeWorker)
     sealer->setSealingManager(std::make_shared<MockSealingManager>(nullptr));
     sealer->setFetchTimeout(1);
     sealer->executeWorker();
-    BOOST_CHECK(!txpool->trySynced);
+    BOOST_TEST(!txpool->trySynced);
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
     sealer->executeWorker();
-    BOOST_CHECK(txpool->trySynced);
+    BOOST_TEST(txpool->trySynced);
 
     txpool->trySynced = false;
     sealer->executeWorker();
-    BOOST_CHECK(!txpool->trySynced);
+    BOOST_TEST(!txpool->trySynced);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

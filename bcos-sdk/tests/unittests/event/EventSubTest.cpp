@@ -46,18 +46,18 @@ BOOST_AUTO_TEST_CASE(test_EventSub_suspendTask)
     task->setId(id);
 
     auto r = es->addSuspendTask(task);
-    BOOST_CHECK(r);
+    BOOST_TEST(r);
     BOOST_CHECK_EQUAL(es->suspendTasksCount(), 1);
     r = es->addSuspendTask(task);
-    BOOST_CHECK(!r);
+    BOOST_TEST(!r);
     BOOST_CHECK_EQUAL(es->suspendTasksCount(), 1);
 
     r = es->removeSuspendTask(id);
-    BOOST_CHECK(r);
+    BOOST_TEST(r);
     BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
 
     r = es->removeSuspendTask(id);
-    BOOST_CHECK(!r);
+    BOOST_TEST(!r);
     BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
 }
 
@@ -75,68 +75,68 @@ BOOST_AUTO_TEST_CASE(test_EventSub_addTask)
     {
         // addTask
         auto r = es->addTask(task1);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = es->addTask(task1);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         // getAndRemove
         auto task = es->getTask(id1);
-        BOOST_CHECK(task);
+        BOOST_TEST(task);
         task = es->getTaskAndRemove(id1);
-        BOOST_CHECK(task);
+        BOOST_TEST(task);
         task = es->getTask(id1);
-        BOOST_CHECK(!task);
+        BOOST_TEST(!task);
         task = es->getTaskAndRemove(id1);
-        BOOST_CHECK(!task);
+        BOOST_TEST(!task);
     }
 
     {
         // addTask
         auto r = es->addTask(task1);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = es->addTask(task1);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
 
         // getAndRemove
         auto task = es->getTask(id1);
-        BOOST_CHECK(task);
+        BOOST_TEST(task);
         task = es->getTaskAndRemove(id1);
-        BOOST_CHECK(task);
+        BOOST_TEST(task);
         task = es->getTask(id1);
-        BOOST_CHECK(!task);
+        BOOST_TEST(!task);
         task = es->getTaskAndRemove(id1);
-        BOOST_CHECK(!task);
+        BOOST_TEST(!task);
     }
 
     {
         auto r = es->addSuspendTask(task2);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         r = es->addSuspendTask(task2);
-        BOOST_CHECK(!r);
+        BOOST_TEST(!r);
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 1);
 
         auto task = es->getTask(id2, false);
-        BOOST_CHECK(!task);
+        BOOST_TEST(!task);
 
         task = es->getTask(id2);
-        BOOST_CHECK(task);
+        BOOST_TEST(task);
 
         task = es->getTaskAndRemove(id2, false);
-        BOOST_CHECK(!task);
+        BOOST_TEST(!task);
 
         task = es->getTaskAndRemove(id2);
-        BOOST_CHECK(task);
+        BOOST_TEST(task);
 
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 
     {
         auto r = es->addSuspendTask(task2);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 1);
 
         r = es->addTask(task2);
-        BOOST_CHECK(r);
+        BOOST_TEST(r);
 
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
@@ -158,15 +158,15 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         std::promise<bool> p;
         auto f = p.get_future();
 
-        BOOST_CHECK(!es->getTask(id, false));
+        BOOST_TEST(!es->getTask(id, false));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 1);
 
-        BOOST_CHECK(es->getTask(id));
+        BOOST_TEST(es->getTask(id));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 1);
 
         es->unsubscribeEvent(id);
 
-        BOOST_CHECK(!es->getTask(id));
+        BOOST_TEST(!es->getTask(id));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 
@@ -184,7 +184,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         // callback error
         es->unsubscribeEvent(id);
 
-        BOOST_CHECK(!es->getTask(id));
+        BOOST_TEST(!es->getTask(id));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 
         es->unsubscribeEvent(id);
 
-        BOOST_CHECK(!es->getTask(id));
+        BOOST_TEST(!es->getTask(id));
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 }

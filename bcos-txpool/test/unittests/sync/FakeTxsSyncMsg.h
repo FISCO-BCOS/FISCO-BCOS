@@ -45,16 +45,16 @@ public:
         // check encode/decode
         auto encodedData = msg->encode();
         auto decodedMsg = m_msgFactory->createTxsSyncMsg(ref(*encodedData));
-        BOOST_CHECK(msg->type() == decodedMsg->type());
-        BOOST_CHECK(msg->version() == decodedMsg->version());
-        BOOST_CHECK(msg->txsHash() == decodedMsg->txsHash());
-        BOOST_CHECK(msg->txsData().toBytes() == decodedMsg->txsData().toBytes());
+        BOOST_TEST(msg->type() == decodedMsg->type());
+        BOOST_TEST(msg->version() == decodedMsg->version());
+        BOOST_TEST(msg->txsHash() == decodedMsg->txsHash());
+        BOOST_TEST(msg->txsData().toBytes() == decodedMsg->txsData().toBytes());
 
         // compare with the origin data
-        BOOST_CHECK(_type == decodedMsg->type());
-        BOOST_CHECK(_version == decodedMsg->version());
-        BOOST_CHECK(_txsHash == decodedMsg->txsHash());
-        BOOST_CHECK(_txsData == decodedMsg->txsData().toBytes());
+        BOOST_TEST(_type == decodedMsg->type());
+        BOOST_TEST(_version == decodedMsg->version());
+        BOOST_TEST(_txsHash == decodedMsg->txsHash());
+        BOOST_TEST(_txsData == decodedMsg->txsData().toBytes());
         return msg;
     }
 

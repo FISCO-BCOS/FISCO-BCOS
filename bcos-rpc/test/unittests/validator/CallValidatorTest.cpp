@@ -75,8 +75,8 @@ BOOST_AUTO_TEST_CASE(verifyTest)
         auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::NON_SM_NODE);
-        BOOST_CHECK(result);
-        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+        BOOST_TEST(result);
+        BOOST_TEST(bcos::toHex(recoverAdd) == address.hex());
     }
 
     // error
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(verifyTest)
         auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::NON_SM_NODE);
-        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+        BOOST_TEST(bcos::toHex(recoverAdd) != address.hex());
     }
 }
 
@@ -117,8 +117,8 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
         auto [result, recoverAdd] = callValidator.verify(precompiled::SYS_CONFIG_ADDRESS,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::SM_NODE);
-        BOOST_CHECK(result);
-        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+        BOOST_TEST(result);
+        BOOST_TEST(bcos::toHex(recoverAdd) == address.hex());
     }
 
     // error
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(smVerifyTest)
         auto [result, recoverAdd] = callValidator.verify(precompiled::CONSENSUS_ADDRESS,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::SM_NODE);
-        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+        BOOST_TEST(bcos::toHex(recoverAdd) != address.hex());
     }
 }
 
@@ -160,8 +160,8 @@ BOOST_AUTO_TEST_CASE(wasmTest)
         auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::SYS_CONFIG_NAME,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::NON_SM_NODE);
-        BOOST_CHECK(result);
-        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+        BOOST_TEST(result);
+        BOOST_TEST(bcos::toHex(recoverAdd) == address.hex());
     }
 
     // error
@@ -169,7 +169,7 @@ BOOST_AUTO_TEST_CASE(wasmTest)
         auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::CONSENSUS_ADDRESS,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::NON_SM_NODE);
-        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+        BOOST_TEST(bcos::toHex(recoverAdd) != address.hex());
     }
 }
 
@@ -202,8 +202,8 @@ BOOST_AUTO_TEST_CASE(wasmSmTest)
         auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::SYS_CONFIG_NAME,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::SM_NODE);
-        BOOST_CHECK(result);
-        BOOST_CHECK(bcos::toHex(recoverAdd) == address.hex());
+        BOOST_TEST(result);
+        BOOST_TEST(bcos::toHex(recoverAdd) == address.hex());
     }
 
     // error
@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(wasmSmTest)
         auto [result, recoverAdd] = bcos::rpc::CallValidator::verify(precompiled::CONSENSUS_ADDRESS,
             "0xbcec428d5205abe0f0cc8a734083908d9eb8563e31f943d760786edf42ad67dd", signStr,
             group::SM_NODE);
-        BOOST_CHECK(bcos::toHex(recoverAdd) != address.hex());
+        BOOST_TEST(bcos::toHex(recoverAdd) != address.hex());
     }
 }
 

@@ -52,8 +52,8 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
         condition.GT("5");
         legacyStorage.asyncGetPrimaryKeys(
             "t_test", condition, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(!keys.empty());
+                BOOST_TEST(!error);
+                BOOST_TEST(!keys.empty());
                 BOOST_CHECK_EQUAL(keys.size(), 4);
                 auto expectedKeys = std::vector<std::string>{"6", "7", "8", "9"};
                 BOOST_CHECK_EQUAL_COLLECTIONS(
@@ -63,12 +63,12 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
         bcos::storage::Entry deletedEntry;
         deletedEntry.setStatus(bcos::storage::Entry::DELETED);
         legacyStorage.asyncSetRow(
-            "t_test", "9", deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_CHECK(!error); });
+            "t_test", "9", deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_TEST(!error); });
 
         legacyStorage.asyncGetPrimaryKeys(
             "t_test", {}, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(!keys.empty());
+                BOOST_TEST(!error);
+                BOOST_TEST(!keys.empty());
                 BOOST_CHECK_EQUAL(keys.size(), 9);
                 auto expectedKeys = std::vector<std::string>{
                     "0",
@@ -117,8 +117,8 @@ BOOST_AUTO_TEST_CASE(balanceCase)
 
         legacyStorage.asyncGetPrimaryKeys("s_balance_caller", {},
             [&](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(!gotKeys.empty());
+                BOOST_TEST(!error);
+                BOOST_TEST(!gotKeys.empty());
                 BOOST_CHECK_EQUAL(gotKeys.size(), 500);
                 ::ranges::sort(gotKeys);
                 BOOST_CHECK_EQUAL_COLLECTIONS(
@@ -133,12 +133,12 @@ BOOST_AUTO_TEST_CASE(balanceCase)
         bcos::storage::Entry deletedEntry;
         deletedEntry.setStatus(bcos::storage::Entry::DELETED);
         legacyStorage.asyncSetRow("s_balance_caller", "d24180cc0fef2f3e545de4f9aafc09345cd08903",
-            deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_CHECK(!error); });
+            deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_TEST(!error); });
 
         legacyStorage.asyncGetPrimaryKeys("s_balance_caller", {},
             [](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(!gotKeys.empty());
+                BOOST_TEST(!error);
+                BOOST_TEST(!gotKeys.empty());
                 BOOST_CHECK_EQUAL(gotKeys.size(), 3);
                 auto expectedKeys =
                     std::vector<std::string>{"00000000000000000000000000000195cb2ccc38",

@@ -70,16 +70,16 @@ inline void checkTransaction(
     Transaction::ConstPtr pbTransaction, Transaction::ConstPtr decodedTransaction)
 {
     // check the fields
-    BOOST_CHECK(decodedTransaction->hash() == pbTransaction->hash());
-    BOOST_CHECK(decodedTransaction->sender() == pbTransaction->sender());
-    BOOST_CHECK(decodedTransaction->txOp() == pbTransaction->txOp());
-    BOOST_CHECK(decodedTransaction->to() == pbTransaction->to());
+    BOOST_TEST(decodedTransaction->hash() == pbTransaction->hash());
+    BOOST_TEST(decodedTransaction->sender() == pbTransaction->sender());
+    BOOST_TEST(decodedTransaction->txOp() == pbTransaction->txOp());
+    BOOST_TEST(decodedTransaction->to() == pbTransaction->to());
     // check the transaction hash fields
-    BOOST_CHECK(decodedTransaction->input().toBytes() == pbTransaction->input().toBytes());
-    BOOST_CHECK(decodedTransaction->nonce() == pbTransaction->nonce());
-    BOOST_CHECK(decodedTransaction->blockLimit() == pbTransaction->blockLimit());
-    BOOST_CHECK(decodedTransaction->chainId() == pbTransaction->chainId());
-    BOOST_CHECK(decodedTransaction->groupId() == pbTransaction->groupId());
+    BOOST_TEST(decodedTransaction->input().toBytes() == pbTransaction->input().toBytes());
+    BOOST_TEST(decodedTransaction->nonce() == pbTransaction->nonce());
+    BOOST_TEST(decodedTransaction->blockLimit() == pbTransaction->blockLimit());
+    BOOST_TEST(decodedTransaction->chainId() == pbTransaction->chainId());
+    BOOST_TEST(decodedTransaction->groupId() == pbTransaction->groupId());
 }
 
 inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
@@ -95,18 +95,18 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     {
         if (_to.empty())
         {
-            BOOST_CHECK(pbTransaction->txOp() == TransactionOp::ContractCreation);
+            BOOST_TEST(pbTransaction->txOp() == TransactionOp::ContractCreation);
         }
         else
         {
-            BOOST_CHECK(pbTransaction->txOp() == TransactionOp::MessageCall);
+            BOOST_TEST(pbTransaction->txOp() == TransactionOp::MessageCall);
         }
-        BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
+        BOOST_TEST(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
     }
     bcos::bytes encodedData;
     pbTransaction->encode(encodedData);
     // auto encodedDataCache = pbTransaction->encode();
-    // BOOST_CHECK(encodedData.toBytes() == encodedDataCache.toBytes());
+    // BOOST_TEST(encodedData.toBytes() == encodedDataCache.toBytes());
 #if 0
     std::cout << "#### encodedData is:" << *toHexString(encodedData) << std::endl;
     std::cout << "### hash:" << pbTransaction->hash().hex() << std::endl;

@@ -86,15 +86,15 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeaderPromise.set_value(std::move(header));
         });
 
     bcos::protocol::BlockHeader::Ptr executedHeader = executedHeaderPromise.get_future().get();
 
-    BOOST_CHECK(executedHeader);
+    BOOST_TEST(executedHeader);
     BOOST_CHECK_NE(executedHeader->stateRoot(), h256());
 
     bcos::protocol::BlockNumber notifyBlockNumber = 0;
@@ -104,8 +104,8 @@ BOOST_AUTO_TEST_CASE(executeBlock)
     std::promise<bool> committedPromise;
     scheduler->commitBlock(
         executedHeader, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(config);
+            BOOST_TEST(!error);
+            BOOST_TEST(config);
             BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
             BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
             BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
         });
 
     bool committed = committedPromise.get_future().get();
-    BOOST_CHECK(committed);
+    BOOST_TEST(committed);
     BOOST_CHECK_EQUAL(notifyBlockNumber, 100);
 }
 
@@ -144,15 +144,15 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
 
     scheduler->executeBlock(
         block, false, [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeader.set_value(std::move(header));
         });
 
     auto header = executedHeader.get_future().get();
 
-    BOOST_CHECK(header);
+    BOOST_TEST(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
 
     bcos::protocol::BlockNumber notifyBlockNumber = 0;
@@ -161,8 +161,8 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     std::promise<void> commitPromise;
     scheduler->commitBlock(
         header, [&](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&& config) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(config);
+            BOOST_TEST(!error);
+            BOOST_TEST(config);
             BOOST_CHECK_EQUAL(config->blockTxCountLimit(), 100);
             BOOST_CHECK_EQUAL(config->leaderSwitchPeriod(), 300);
             BOOST_CHECK_EQUAL(config->consensusNodeList().size(), 1);
@@ -217,8 +217,8 @@ BOOST_AUTO_TEST_CASE(call)
 
         scheduler->call(tx,
             [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(receiptResponse);
+                BOOST_TEST(!error);
+                BOOST_TEST(receiptResponse);
 
                 receipt = std::move(receiptResponse);
             });
@@ -236,9 +236,9 @@ BOOST_AUTO_TEST_CASE(call)
     {
         scheduler->call(empty_to,
             [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
-                BOOST_CHECK(error);
-                BOOST_CHECK(error->errorMessage() == "Call address is empty");
-                BOOST_CHECK(receiptResponse == nullptr);
+                BOOST_TEST(error);
+                BOOST_TEST(error->errorMessage() == "Call address is empty");
+                BOOST_TEST(receiptResponse == nullptr);
             });
     }
 }
@@ -262,13 +262,13 @@ BOOST_AUTO_TEST_CASE(createContract)
     bcos::protocol::BlockHeader::Ptr executedHeader;
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeader = std::move(header);
         });
 
-    BOOST_CHECK(executedHeader);
+    BOOST_TEST(executedHeader);
     BOOST_CHECK_NE(executedHeader->stateRoot(), h256());
 }
 
@@ -292,15 +292,15 @@ BOOST_AUTO_TEST_CASE(dag)
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeader.set_value(std::move(header));
         });
 
     auto header = executedHeader.get_future().get();
 
-    BOOST_CHECK(header);
+    BOOST_TEST(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
 }
 
@@ -329,15 +329,15 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeader.set_value(std::move(header));
         });
 
     auto header = executedHeader.get_future().get();
 
-    BOOST_CHECK(header);
+    BOOST_TEST(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
 }
 
@@ -366,15 +366,15 @@ BOOST_AUTO_TEST_CASE(executedBlock)
         std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
         scheduler->executeBlock(block, false,
             [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-                BOOST_CHECK(!error);
-                BOOST_CHECK(header);
+                BOOST_TEST(!error);
+                BOOST_TEST(header);
 
                 executedHeader.set_value(std::move(header));
             });
 
         auto header = executedHeader.get_future().get();
 
-        BOOST_CHECK(header);
+        BOOST_TEST(header);
         BOOST_CHECK_NE(header->stateRoot(), h256());
 
         SCHEDULER_LOG(TRACE) << "StateRoot: " << header->stateRoot();
@@ -392,7 +392,7 @@ BOOST_AUTO_TEST_CASE(executedBlock)
 
         scheduler->executeBlock(block, false,
             [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 BOOST_CHECK_EQUAL(header->stateRoot().hex(), hashes[blockNumber].hex());
             });
     }
@@ -418,13 +418,13 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
             // callback(BCOS_ERROR_UNIQUE_PTR(-1, "deploy sys contract!"), nullptr);
-            BOOST_CHECK(error == nullptr);
+            BOOST_TEST(error == nullptr);
             executedHeader.set_value(std::move(header));
         });
 
     auto header = executedHeader.get_future().get();
 
-    BOOST_CHECK(header);
+    BOOST_TEST(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
 }
 
@@ -441,8 +441,8 @@ BOOST_AUTO_TEST_CASE(testCallSysContract)
 
     scheduler->call(
         tx, [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(receiptResponse);
+            BOOST_TEST(!error);
+            BOOST_TEST(receiptResponse);
 
             receipt = std::move(receiptResponse);
         });
@@ -473,15 +473,15 @@ BOOST_AUTO_TEST_CASE(checkCommittedBlock)
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(header);
+            BOOST_TEST(!error);
+            BOOST_TEST(header);
 
             executedHeader.set_value(std::move(header));
         });
 
     auto header = executedHeader.get_future().get();
 
-    BOOST_CHECK(header);
+    BOOST_TEST(header);
     BOOST_CHECK_NE(header->stateRoot(), h256());
 
     SCHEDULER_LOG(TRACE) << "StateRoot: " << header->stateRoot();
@@ -489,7 +489,7 @@ BOOST_AUTO_TEST_CASE(checkCommittedBlock)
     commitHeader->setNumber(blockNumber);
 
     scheduler->commitBlock(commitHeader,
-        [](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&&) { BOOST_CHECK(!error); });
+        [](bcos::Error::Ptr&& error, bcos::ledger::LedgerConfig::Ptr&&) { BOOST_TEST(!error); });
 
     // Try execute a same block
     auto newHeader = blockHeaderFactory->createBlockHeader();
@@ -498,7 +498,7 @@ BOOST_AUTO_TEST_CASE(checkCommittedBlock)
 
     scheduler->executeBlock(
         block, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&&, bool) {
-            BOOST_CHECK(error);
+            BOOST_TEST(error);
             BOOST_CHECK_EQUAL(
                 error->errorCode(), bcos::scheduler::SchedulerError::InvalidBlockNumber);
             BOOST_CHECK_GT(error->errorMessage().size(), 0);
@@ -532,10 +532,10 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     std::promise<void> executedHeader;
     scheduler->executeBlock(block, false,
         [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
-            BOOST_CHECK(error);
+            BOOST_TEST(error);
             BOOST_CHECK_EQUAL(error->errorCode(), bcos::scheduler::SchedulerError::UnknownError);
             BOOST_CHECK_GT(error->errorMessage().size(), 0);
-            BOOST_CHECK(!header);
+            BOOST_TEST(!header);
 
             executedHeader.set_value();
         });
@@ -550,8 +550,8 @@ BOOST_AUTO_TEST_CASE(getCode)
     executorManager->addExecutor("executor1", executor);
 
     scheduler->getCode("hello world!", [](Error::Ptr error, bcos::bytes code) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(code.empty());
+        BOOST_TEST(!error);
+        BOOST_TEST(code.empty());
     });
 }
 
@@ -571,8 +571,8 @@ BOOST_AUTO_TEST_CASE(executeWithDeadLock)
 
     scheduler->executeBlock(block, false,
         [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader, bool) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(blockHeader);
+            BOOST_TEST(!error);
+            BOOST_TEST(blockHeader);
         });
 }
 

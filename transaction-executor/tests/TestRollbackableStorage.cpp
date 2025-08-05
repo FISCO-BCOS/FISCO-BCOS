@@ -71,13 +71,13 @@ BOOST_AUTO_TEST_CASE(addRollback)
             rollbackableStorage, StateKey{tableID, "Key1"s}, storage::Entry{"OK3!"});
         auto value3 =
             co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
-        BOOST_CHECK(value3);
+        BOOST_TEST(value3);
         BOOST_CHECK_EQUAL(value3->get(), "OK3!");
 
         co_await rollbackableStorage.rollback(savepoint2);
         auto value4 =
             co_await storage2::readOne(rollbackableStorage, StateKeyView{tableID, "Key1"sv});
-        BOOST_CHECK(value4);
+        BOOST_TEST(value4);
         BOOST_CHECK_EQUAL(value4->get(), "OK!");
 
         co_return;

@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(object)
 
     auto out = entry.getObject<std::tuple<int, std::string, std::string>>();
 
-    BOOST_CHECK(out == value);
+    BOOST_TEST(out == value);
 }
 
 BOOST_AUTO_TEST_CASE(largeObject)

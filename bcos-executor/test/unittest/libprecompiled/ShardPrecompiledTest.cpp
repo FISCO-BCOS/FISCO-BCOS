@@ -52,16 +52,16 @@ public:
         if (_isWasm)
         {
             auto result1 = creatKVTable(1, "test1", "id", "item1", "/tables/test1");
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
+            BOOST_TEST(result1->data().toBytes() == codec->encode(int32_t(0)));
             auto result2 = creatKVTable(2, "test2", "id", "item1", "/tables/test2");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(0)));
         }
         else
         {
             auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
+            BOOST_TEST(result1->data().toBytes() == codec->encode(int32_t(0)));
             auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(int32_t(0)));
         }
 
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
@@ -140,13 +140,13 @@ public:
         executor->executeTransaction(
             std::move(params), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise.set_value(std::move(result));
             });
 
         auto result = executePromise.get_future().get();
         commitBlock(_number);
-        BOOST_CHECK(result);
+        BOOST_TEST(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
@@ -185,7 +185,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -194,7 +194,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+                BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
             }
             commitBlock(_number);
             return result2;
@@ -208,7 +208,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -218,7 +218,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -229,7 +229,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(std::move(result4),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise5.set_value(std::move(result));
             });
         auto result5 = executePromise5.get_future().get();
@@ -240,14 +240,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(std::move(result5),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise6.set_value(std::move(result));
             });
         auto result6 = executePromise6.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result6->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result6->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
         return result6;
@@ -279,7 +279,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -293,7 +293,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -303,7 +303,7 @@ public:
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 // if _errorCode not 0, error should has value
-                BOOST_CHECK(!error == (_errorCode == 0));
+                BOOST_TEST(!error == (_errorCode == 0));
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -312,12 +312,12 @@ public:
                 {
                     if (isWasm && versionCompareTo(m_blockVersion, BlockVersion::V3_2_VERSION) >= 0)
                     {
-                        BOOST_CHECK(result4->data().toBytes() ==
+                        BOOST_TEST(result4->data().toBytes() ==
            codec->encode(int32_t(_errorCode)));
                     }
                     else
                     {
-                        BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+                        BOOST_TEST(result4->data().toBytes() == codec->encode(s256(_errorCode)));
                     }
                 }
         */
@@ -351,7 +351,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -365,7 +365,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -375,7 +375,7 @@ public:
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 // if _errorCode not 0, error should has value
-                BOOST_CHECK(!error == (_errorCode == 0));
+                BOOST_TEST(!error == (_errorCode == 0));
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -384,12 +384,12 @@ public:
                 {
                     if (isWasm && versionCompareTo(m_blockVersion, BlockVersion::V3_2_VERSION) >= 0)
                     {
-                        BOOST_CHECK(result4->data().toBytes() ==
+                        BOOST_TEST(result4->data().toBytes() ==
            codec->encode(int32_t(_errorCode)));
                     }
                     else
                     {
-                        BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+                        BOOST_TEST(result4->data().toBytes() == codec->encode(s256(_errorCode)));
                     }
                 }
         */
@@ -429,7 +429,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -449,7 +449,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -460,7 +460,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -470,7 +470,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise5;
         executor->dmcExecuteTransaction(std::move(result4),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise5.set_value(std::move(result));
             });
         auto result5 = executePromise5.get_future().get();
@@ -480,14 +480,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise6;
         executor->dmcExecuteTransaction(std::move(result5),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise6.set_value(std::move(result));
             });
         auto result6 = executePromise6.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result6->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result6->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -522,7 +522,7 @@ public:
         executor->dmcExecuteTransaction(std::move(params1),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
                 // if _errorCode not 0, error should has value
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise1.set_value(std::move(result));
             });
         auto result2 = executePromise1.get_future().get();
@@ -537,7 +537,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -547,7 +547,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
@@ -591,7 +591,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -602,7 +602,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+                BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
             }
 
             commitBlock(_number);
@@ -614,7 +614,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -624,14 +624,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -664,13 +664,13 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -706,13 +706,13 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -748,7 +748,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
@@ -759,7 +759,7 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
         executor->dmcExecuteTransaction(std::move(result2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
@@ -770,14 +770,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise4;
         executor->dmcExecuteTransaction(std::move(result3),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
 
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_TEST(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
@@ -811,14 +811,14 @@ public:
         std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->dmcExecuteTransaction(std::move(params2),
             [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
+                BOOST_TEST(!error);
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
         if (_errorCode != 0)
         {
             std::vector<BfsTuple> empty;
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
+            BOOST_TEST(result2->data().toBytes() == codec->encode(s256(_errorCode), empty));
         }
 
         commitBlock(_number);
@@ -850,9 +850,9 @@ BOOST_AUTO_TEST_CASE(makeShardTest)
         std::vector<BfsTuple> ls;
         s256 code;
         codec->decode(lsResult->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(std::get<0>(ls[0]) == "hello");
-        BOOST_CHECK(std::get<1>(ls[0]) == executor::FS_TYPE_DIR);
+        BOOST_TEST(code == (int)CODE_SUCCESS);
+        BOOST_TEST(std::get<0>(ls[0]) == "hello");
+        BOOST_TEST(std::get<1>(ls[0]) == executor::FS_TYPE_DIR);
     }
 
     {
@@ -908,9 +908,9 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
         std::vector<BfsTuple> ls;
         s256 code;
         codec->decode(lsResult->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(std::get<0>(ls[0]) == "hello");
-        BOOST_CHECK(std::get<1>(ls[0]) == executor::FS_TYPE_DIR);
+        BOOST_TEST(code == (int)CODE_SUCCESS);
+        BOOST_TEST(std::get<0>(ls[0]) == "hello");
+        BOOST_TEST(std::get<1>(ls[0]) == executor::FS_TYPE_DIR);
     }
 
     // check empty shard
@@ -929,9 +929,9 @@ BOOST_AUTO_TEST_CASE(linkShardTest)
         s256 code;
         std::vector<BfsTuple> ls;
         codec->decode(result->data(), code, ls);
-        BOOST_CHECK(ls.size() == 1);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == addressString);
-        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
+        BOOST_TEST(ls.size() == 1);
+        BOOST_TEST(std::get<0>(ls.at(0)) == addressString);
+        BOOST_TEST(std::get<1>(ls.at(0)) == tool::FS_TYPE_LINK);
 
         auto shardInfo = getContractShard(number++, addressString, 0);
         std::string shardCmp;

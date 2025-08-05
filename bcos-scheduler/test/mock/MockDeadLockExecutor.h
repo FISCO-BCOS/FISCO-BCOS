@@ -19,8 +19,8 @@ public:
             callback) override
     {
         std::set<std::string, std::less<>> contracts = {"contract1", "contract2"};
-        BOOST_CHECK(contracts.count(input->to()) == 1);
-        BOOST_CHECK(input->contextID() == 0 || input->contextID() == 1);
+        BOOST_TEST(contracts.count(input->to()) == 1);
+        BOOST_TEST(input->contextID() == 0 || input->contextID() == 1);
 
         if (input->type() == protocol::ExecutionMessage::REVERT)
         {

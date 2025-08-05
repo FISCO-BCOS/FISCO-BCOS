@@ -74,7 +74,7 @@ BOOST_AUTO_TEST_CASE(testTimer)
         auto eclipse = utcTime() - startT;
         if (eclipse > timeoutInterval)
         {
-            BOOST_CHECK(timer->triggerTimeout() == true);
+            BOOST_TEST(timer->triggerTimeout() == true);
         }
     }
 
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(testTimer)
     auto eclipse = utcTime() - startT;
     if (eclipse < timeoutInterval)
     {
-        BOOST_CHECK(timer->triggerTimeout() == false);
+        BOOST_TEST(timer->triggerTimeout() == false);
     }
     timer->stop();
 
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(testTimer)
     startT = utcTime();
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     std::cout << "#### sleep eclipse:" << utcTime() - startT;
-    BOOST_CHECK(timer->triggerTimeout() == true);
+    BOOST_TEST(timer->triggerTimeout() == true);
     timer->stop();
 }
 BOOST_AUTO_TEST_CASE(testPBFTTimer)

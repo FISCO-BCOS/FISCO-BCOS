@@ -174,7 +174,7 @@ BOOST_AUTO_TEST_CASE(prepareTest)
         0, transactionSubmitResultFactory, false, blockFactory, txPool, 3000000000, gasPrice,
         false);
     blockExecutive->prepare();
-    // BOOST_CHECK();
+    // BOOST_TEST();
 }
 
 BOOST_AUTO_TEST_CASE(asyncExecuteTest1)
@@ -204,10 +204,10 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest1)
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
     blockExecutive->stop();
     blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(error); });
+                                     bool) { BOOST_TEST(error); });
     blockExecutive->start();
     blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(!error); });
+                                     bool) { BOOST_TEST(!error); });
 }
 BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
 {
@@ -241,10 +241,10 @@ BOOST_AUTO_TEST_CASE(asyncExecuteTest2)
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
     blockExecutive->stop();
     blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(error); });
+                                     bool) { BOOST_TEST(error); });
     blockExecutive->start();
     blockExecutive->asyncExecute([&](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(error); });
+                                     bool) { BOOST_TEST(error); });
 }
 
 BOOST_AUTO_TEST_CASE(asyncCommitTest1)
@@ -276,9 +276,9 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest1)
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
     blockExecutive->stop();
-    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_CHECK(error); });
+    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_TEST(error); });
     blockExecutive->start();
-    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_CHECK(!error); });
+    blockExecutive->asyncCommit([&](Error::UniquePtr error) { BOOST_TEST(!error); });
 }
 
 BOOST_AUTO_TEST_CASE(asyncCommitTest2)
@@ -313,12 +313,12 @@ BOOST_AUTO_TEST_CASE(asyncCommitTest2)
     SCHEDULER_LOG(DEBUG) << LOG_KV("blockExecutive", blockExecutive);
     blockExecutive->stop();
     blockExecutive->asyncCommit([&](Error::UniquePtr error) {
-        BOOST_CHECK(error);
+        BOOST_TEST(error);
         SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
     });
     blockExecutive->start();
     blockExecutive->asyncCommit([&](Error::UniquePtr error) {
-        BOOST_CHECK(error);
+        BOOST_TEST(error);
         SCHEDULER_LOG(DEBUG) << "----------asyncCommitTest2  END----------------";
     });
 }
@@ -362,7 +362,7 @@ BOOST_AUTO_TEST_CASE(asyncNotify)
 
     };
     blockExecutive->asyncNotify(
-        m_txNotifier, [&](Error::Ptr _error) mutable { BOOST_CHECK(!_error); });
+        m_txNotifier, [&](Error::Ptr _error) mutable { BOOST_TEST(!_error); });
 }
 
 BOOST_AUTO_TEST_CASE(dagTest)
@@ -396,13 +396,13 @@ BOOST_AUTO_TEST_CASE(dagTest)
     blockExecutive->stop();
     blockExecutive->asyncExecute(
         [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
-            BOOST_CHECK(error);
+            BOOST_TEST(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
     blockExecutive->start();
     blockExecutive->asyncExecute(
         [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
 }
@@ -436,13 +436,13 @@ BOOST_AUTO_TEST_CASE(dagTest2)
     blockExecutive->stop();
     blockExecutive->asyncExecute(
         [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
-            BOOST_CHECK(error);
+            BOOST_TEST(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
     blockExecutive->start();
     blockExecutive->asyncExecute(
         [](Error::UniquePtr error, protocol::BlockHeader::Ptr header, bool) {
-            BOOST_CHECK(error);
+            BOOST_TEST(error);
             SCHEDULER_LOG(DEBUG) << "----------dagTest  END----------------";
         });
 }
@@ -472,10 +472,10 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
         block, scheduler.get(), 0, transactionSubmitResultFactory, false, blockFactory, txPool);
     blockExecutive->stop();
     blockExecutive->asyncExecute([](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(error); });
+                                     bool) { BOOST_TEST(error); });
     blockExecutive->start();
     blockExecutive->asyncExecute([](Error::UniquePtr error, protocol::BlockHeader::Ptr header,
-                                     bool) { BOOST_CHECK(!error); });
+                                     bool) { BOOST_TEST(!error); });
 }
 
 BOOST_AUTO_TEST_CASE(callTest)
@@ -510,11 +510,11 @@ BOOST_AUTO_TEST_CASE(callTest)
                                       bcos::protocol::TransactionReceipt::Ptr&& receiptResponse) {
             if (error)
             {
-                BOOST_CHECK(error);
+                BOOST_TEST(error);
                 return;
             }
-            BOOST_CHECK(!error);
-            BOOST_CHECK(receiptResponse);
+            BOOST_TEST(!error);
+            BOOST_TEST(receiptResponse);
             receipt = std::move(receiptResponse);
         });
     }
@@ -547,7 +547,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
             if (error)
             {
                 SCHEDULER_LOG(DEBUG) << "I am executeWithSystemError";
-                BOOST_CHECK(error);
+                BOOST_TEST(error);
                 errorFlag = true;
                 return;
             }
@@ -556,7 +556,7 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
                 executedHeader = std::move(header);
             }
         });
-    BOOST_CHECK(errorFlag);
+    BOOST_TEST(errorFlag);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

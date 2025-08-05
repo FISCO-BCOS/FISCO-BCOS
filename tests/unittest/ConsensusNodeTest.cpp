@@ -48,96 +48,96 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     // test set
     std::set<ConsensusNode> consensusNodeList;
     consensusNodeList.insert(consensusNode1);
-    BOOST_CHECK(consensusNodeList.count(consensusNode1));
-    BOOST_CHECK(consensusNodeList.size() == 1);
+    BOOST_TEST(consensusNodeList.count(consensusNode1));
+    BOOST_TEST(consensusNodeList.size() == 1);
 
     consensusNodeList.insert(consensusNode2);
-    BOOST_CHECK(consensusNodeList.count(consensusNode2));
-    BOOST_CHECK(consensusNodeList.size() == 2);
+    BOOST_TEST(consensusNodeList.count(consensusNode2));
+    BOOST_TEST(consensusNodeList.size() == 2);
 
     consensusNodeList.insert(consensusNode3);
-    BOOST_CHECK(consensusNodeList.count(consensusNode3));
-    BOOST_CHECK(consensusNodeList.size() == 2);
+    BOOST_TEST(consensusNodeList.count(consensusNode3));
+    BOOST_TEST(consensusNodeList.size() == 2);
 
     // check map
     std::map<NodeIDPtr, ConsensusNode, KeyCompare> nodeId2ConsensusNode;
     nodeId2ConsensusNode.insert(std::make_pair(consensusNode1.nodeID, consensusNode1));
-    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode1.nodeID));
-    BOOST_CHECK(!nodeId2ConsensusNode.count(consensusNode2.nodeID));
-    BOOST_CHECK(nodeId2ConsensusNode.size() == 1);
+    BOOST_TEST(nodeId2ConsensusNode.count(consensusNode1.nodeID));
+    BOOST_TEST(!nodeId2ConsensusNode.count(consensusNode2.nodeID));
+    BOOST_TEST(nodeId2ConsensusNode.size() == 1);
 
     nodeId2ConsensusNode.insert(std::make_pair(consensusNode2.nodeID, consensusNode2));
-    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode2.nodeID));
-    BOOST_CHECK(nodeId2ConsensusNode.count(consensusNode3.nodeID));
-    BOOST_CHECK(nodeId2ConsensusNode.size() == 2);
+    BOOST_TEST(nodeId2ConsensusNode.count(consensusNode2.nodeID));
+    BOOST_TEST(nodeId2ConsensusNode.count(consensusNode3.nodeID));
+    BOOST_TEST(nodeId2ConsensusNode.size() == 2);
     nodeId2ConsensusNode.insert(std::make_pair(consensusNode3.nodeID, consensusNode3));
-    BOOST_CHECK(nodeId2ConsensusNode.size() == 2);
+    BOOST_TEST(nodeId2ConsensusNode.size() == 2);
 
     // test NodeIDSet
     NodeIDSet nodeIdSet;
     nodeIdSet.insert(nodeId);
-    BOOST_CHECK(nodeIdSet.count(nodeId));
-    BOOST_CHECK(nodeIdSet.size() == 1);
+    BOOST_TEST(nodeIdSet.count(nodeId));
+    BOOST_TEST(nodeIdSet.size() == 1);
 
     nodeIdSet.insert(nodeId2);
-    BOOST_CHECK(nodeIdSet.count(nodeId2));
-    BOOST_CHECK(nodeIdSet.size() == 2);
+    BOOST_TEST(nodeIdSet.count(nodeId2));
+    BOOST_TEST(nodeIdSet.size() == 2);
 
     nodeIdSet.insert(nodeId3);
-    BOOST_CHECK(nodeIdSet.count(nodeId3));
-    BOOST_CHECK(nodeIdSet.size() == 2);
+    BOOST_TEST(nodeIdSet.count(nodeId3));
+    BOOST_TEST(nodeIdSet.size() == 2);
 }
 
 BOOST_AUTO_TEST_CASE(test_stringToModuleID)
 {
-    BOOST_CHECK(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("raft").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("Raft").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("RAFT").value());
+    BOOST_TEST(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("raft").value());
+    BOOST_TEST(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("Raft").value());
+    BOOST_TEST(bcos::protocol::ModuleID::Raft == protocol::stringToModuleID("RAFT").value());
 
-    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("pbft").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("Pbft").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("PBFT").value());
+    BOOST_TEST(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("pbft").value());
+    BOOST_TEST(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("Pbft").value());
+    BOOST_TEST(bcos::protocol::ModuleID::PBFT == protocol::stringToModuleID("PBFT").value());
 
-    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("amop").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("Amop").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("AMOP").value());
+    BOOST_TEST(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("amop").value());
+    BOOST_TEST(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("Amop").value());
+    BOOST_TEST(bcos::protocol::ModuleID::AMOP == protocol::stringToModuleID("AMOP").value());
 
-    BOOST_CHECK(
+    BOOST_TEST(
         bcos::protocol::ModuleID::BlockSync == protocol::stringToModuleID("block_sync").value());
-    BOOST_CHECK(
+    BOOST_TEST(
         bcos::protocol::ModuleID::BlockSync == protocol::stringToModuleID("Block_sync").value());
-    BOOST_CHECK(
+    BOOST_TEST(
         bcos::protocol::ModuleID::BlockSync == protocol::stringToModuleID("BLOCK_SYNC").value());
 
-    BOOST_CHECK(
+    BOOST_TEST(
         bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("txs_sync").value());
-    BOOST_CHECK(
+    BOOST_TEST(
         bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("Txs_sync").value());
-    BOOST_CHECK(
+    BOOST_TEST(
         bcos::protocol::ModuleID::TxsSync == protocol::stringToModuleID("TXS_SYNC").value());
 
-    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+    BOOST_TEST(bcos::protocol::ModuleID::ConsTxsSync ==
                 protocol::stringToModuleID("cons_txs_sync").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+    BOOST_TEST(bcos::protocol::ModuleID::ConsTxsSync ==
                 protocol::stringToModuleID("cons_Txs_sync").value());
-    BOOST_CHECK(bcos::protocol::ModuleID::ConsTxsSync ==
+    BOOST_TEST(bcos::protocol::ModuleID::ConsTxsSync ==
                 protocol::stringToModuleID("CONS_TXS_SYNC").value());
 
 
-    BOOST_CHECK(!protocol::stringToModuleID("aa").has_value());
+    BOOST_TEST(!protocol::stringToModuleID("aa").has_value());
 }
 
 
 BOOST_AUTO_TEST_CASE(test_moduleIDToString)
 {
-    BOOST_CHECK("raft" == protocol::moduleIDToString(protocol::ModuleID::Raft));
-    BOOST_CHECK("pbft" == protocol::moduleIDToString(protocol::ModuleID::PBFT));
-    BOOST_CHECK("amop" == protocol::moduleIDToString(protocol::ModuleID::AMOP));
-    BOOST_CHECK("block_sync" == protocol::moduleIDToString(protocol::ModuleID::BlockSync));
-    BOOST_CHECK("txs_sync" == protocol::moduleIDToString(protocol::ModuleID::TxsSync));
-    BOOST_CHECK(
+    BOOST_TEST("raft" == protocol::moduleIDToString(protocol::ModuleID::Raft));
+    BOOST_TEST("pbft" == protocol::moduleIDToString(protocol::ModuleID::PBFT));
+    BOOST_TEST("amop" == protocol::moduleIDToString(protocol::ModuleID::AMOP));
+    BOOST_TEST("block_sync" == protocol::moduleIDToString(protocol::ModuleID::BlockSync));
+    BOOST_TEST("txs_sync" == protocol::moduleIDToString(protocol::ModuleID::TxsSync));
+    BOOST_TEST(
         "light_node" == protocol::moduleIDToString(protocol::ModuleID::LIGHTNODE_GET_BLOCK));
-    BOOST_CHECK("cons_txs_sync" == protocol::moduleIDToString(protocol::ModuleID::ConsTxsSync));
+    BOOST_TEST("cons_txs_sync" == protocol::moduleIDToString(protocol::ModuleID::ConsTxsSync));
 }
 
 

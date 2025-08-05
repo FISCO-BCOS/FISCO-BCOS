@@ -38,21 +38,21 @@ class ObjectCounterB : public bcos::ObjectCounter<ObjectCounterB<T>>
 
 BOOST_AUTO_TEST_CASE(testObjectCounter)
 {
-    BOOST_CHECK(ObjectCounterA::aliveObjCount() == 0);
-    BOOST_CHECK(ObjectCounterA::createdObjCount() == 0);
-    BOOST_CHECK(ObjectCounterA::destroyedObjCount() == 0);
+    BOOST_TEST(ObjectCounterA::aliveObjCount() == 0);
+    BOOST_TEST(ObjectCounterA::createdObjCount() == 0);
+    BOOST_TEST(ObjectCounterA::destroyedObjCount() == 0);
 
     {
         ObjectCounterA a1;
 
-        BOOST_CHECK(ObjectCounterA::aliveObjCount() == 1);
-        BOOST_CHECK(ObjectCounterA::createdObjCount() == 1);
-        BOOST_CHECK(ObjectCounterA::destroyedObjCount() == 0);
+        BOOST_TEST(ObjectCounterA::aliveObjCount() == 1);
+        BOOST_TEST(ObjectCounterA::createdObjCount() == 1);
+        BOOST_TEST(ObjectCounterA::destroyedObjCount() == 0);
     }
 
-    BOOST_CHECK(ObjectCounterA::aliveObjCount() == 0);
-    BOOST_CHECK(ObjectCounterA::createdObjCount() == 1);
-    BOOST_CHECK(ObjectCounterA::destroyedObjCount() == 1);
+    BOOST_TEST(ObjectCounterA::aliveObjCount() == 0);
+    BOOST_TEST(ObjectCounterA::createdObjCount() == 1);
+    BOOST_TEST(ObjectCounterA::destroyedObjCount() == 1);
 
 
     {
@@ -60,34 +60,34 @@ BOOST_AUTO_TEST_CASE(testObjectCounter)
         ObjectCounterA a3;
         ObjectCounterA a4;
 
-        BOOST_CHECK(ObjectCounterA::aliveObjCount() == 3);
-        BOOST_CHECK(ObjectCounterA::createdObjCount() == 4);
-        BOOST_CHECK(ObjectCounterA::destroyedObjCount() == 1);
+        BOOST_TEST(ObjectCounterA::aliveObjCount() == 3);
+        BOOST_TEST(ObjectCounterA::createdObjCount() == 4);
+        BOOST_TEST(ObjectCounterA::destroyedObjCount() == 1);
     }
 
-    BOOST_CHECK(ObjectCounterA::aliveObjCount() == 0);
-    BOOST_CHECK(ObjectCounterA::createdObjCount() == 4);
-    BOOST_CHECK(ObjectCounterA::destroyedObjCount() == 4);
+    BOOST_TEST(ObjectCounterA::aliveObjCount() == 0);
+    BOOST_TEST(ObjectCounterA::createdObjCount() == 4);
+    BOOST_TEST(ObjectCounterA::destroyedObjCount() == 4);
 }
 
 
 BOOST_AUTO_TEST_CASE(testObjectCounterTemplate)
 {
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 0);
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::createdObjCount() == 0);
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 0);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 0);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::createdObjCount() == 0);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 0);
 
     {
         ObjectCounterB<ObjectCounterA> b1;
 
-        BOOST_CHECK(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 1);
-        BOOST_CHECK(ObjectCounterB<ObjectCounterA>::createdObjCount() == 1);
-        BOOST_CHECK(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 0);
+        BOOST_TEST(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 1);
+        BOOST_TEST(ObjectCounterB<ObjectCounterA>::createdObjCount() == 1);
+        BOOST_TEST(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 0);
     }
 
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 0);
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::createdObjCount() == 1);
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 1);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 0);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::createdObjCount() == 1);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 1);
 
 
     {
@@ -95,14 +95,14 @@ BOOST_AUTO_TEST_CASE(testObjectCounterTemplate)
         ObjectCounterB<ObjectCounterA> b3;
         ObjectCounterB<ObjectCounterA> b4;
 
-        BOOST_CHECK(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 3);
-        BOOST_CHECK(ObjectCounterB<ObjectCounterA>::createdObjCount() == 4);
-        BOOST_CHECK(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 1);
+        BOOST_TEST(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 3);
+        BOOST_TEST(ObjectCounterB<ObjectCounterA>::createdObjCount() == 4);
+        BOOST_TEST(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 1);
     }
 
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 0);
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::createdObjCount() == 4);
-    BOOST_CHECK(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 4);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::aliveObjCount() == 0);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::createdObjCount() == 4);
+    BOOST_TEST(ObjectCounterB<ObjectCounterA>::destroyedObjCount() == 4);
 }
 
 

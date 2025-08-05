@@ -61,10 +61,10 @@ BOOST_AUTO_TEST_CASE(goTest)
                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             // EXECUTOR_LOG(DEBUG) << executiveState->getStatus();
             auto output = executiveState->go();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::PAUSED);
+            BOOST_TEST(executiveState->getStatus() == ExecutiveState::PAUSED);
             executiveState->setResumeParam(std::move(input));
             EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::NEED_RESUME);
+            BOOST_TEST(executiveState->getStatus() == ExecutiveState::NEED_RESUME);
             executiveState->go();
             EXECUTOR_LOG(DEBUG) << "i == 0  end!";
         }
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(goTest)
             EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             executiveState->go();
             EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::FINISHED);
+            BOOST_TEST(executiveState->getStatus() == ExecutiveState::FINISHED);
             // executiveState->go();
             EXECUTOR_LOG(DEBUG) << "goTest: " << executiveState->getStatus();
             EXECUTOR_LOG(DEBUG) << "i == 1  end!";
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
             callParameters->keyLocks = {"987"};
             auto executiveState =
                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::NEED_RUN);
+            BOOST_TEST(executiveState->getStatus() == ExecutiveState::NEED_RUN);
             executiveState->appendKeyLocks(keyLocks);
             EXECUTOR_LOG(DEBUG) << "i == 1 end ! status is :" << executiveState->getStatus();
         }
@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE(appendKeyLocksTest)
             auto executiveState =
                 std::make_shared<ExecutiveState>(executiveFactory, std::move(callParameters));
             executiveState->go();
-            BOOST_CHECK(executiveState->getStatus() == ExecutiveState::FINISHED);
+            BOOST_TEST(executiveState->getStatus() == ExecutiveState::FINISHED);
             executiveState->appendKeyLocks(keyLocks);
             EXECUTOR_LOG(DEBUG) << "i == 3 end ! status is :" << executiveState->getStatus();
         }

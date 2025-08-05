@@ -26,11 +26,11 @@ BOOST_AUTO_TEST_CASE(acquireKeyLock)
 
     for (int64_t seq = 0; seq < 10; ++seq)
     {
-        BOOST_CHECK(keyLocks.acquireKeyLock(to, key, contextID, seq));
+        BOOST_TEST(keyLocks.acquireKeyLock(to, key, contextID, seq));
     }
 
     // Test another contextID
-    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key, 1001, 0));
+    BOOST_TEST(!keyLocks.acquireKeyLock(to, key, 1001, 0));
 
     // Release 5 times
     for (int64_t seq = 0; seq < 5; ++seq)
@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(acquireKeyLock)
     }
 
     // Test another contextID
-    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key, 1001, 0));
+    BOOST_TEST(!keyLocks.acquireKeyLock(to, key, 1001, 0));
 
     // Release all
     for (int64_t seq = 5; seq < 10; ++seq)
@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(acquireKeyLock)
         keyLocks.releaseKeyLocks(contextID, seq);
     }
 
-    BOOST_CHECK(keyLocks.acquireKeyLock(to, key, 1001, 0));
+    BOOST_TEST(keyLocks.acquireKeyLock(to, key, 1001, 0));
 }
 
 BOOST_AUTO_TEST_CASE(getKeyLocksNotHoldingByContext)
@@ -86,28 +86,28 @@ BOOST_AUTO_TEST_CASE(deadLock)
     std::string key2 = "key2";
 
     // No dead lock
-    BOOST_CHECK(keyLocks.acquireKeyLock(to, key1, 1000, 1));
-    BOOST_CHECK(keyLocks.acquireKeyLock(to, key2, 1001, 1));
+    BOOST_TEST(keyLocks.acquireKeyLock(to, key1, 1000, 1));
+    BOOST_TEST(keyLocks.acquireKeyLock(to, key2, 1001, 1));
 
-    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key2, 1000, 2));
-    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key2, 1000, 4));
+    BOOST_TEST(!keyLocks.acquireKeyLock(to, key2, 1000, 2));
+    BOOST_TEST(!keyLocks.acquireKeyLock(to, key2, 1000, 4));
 
-    BOOST_CHECK(!keyLocks.detectDeadLock(1000));
-    BOOST_CHECK(!keyLocks.detectDeadLock(1000));
-    BOOST_CHECK(!keyLocks.detectDeadLock(1001));
+    BOOST_TEST(!keyLocks.detectDeadLock(1000));
+    BOOST_TEST(!keyLocks.detectDeadLock(1000));
+    BOOST_TEST(!keyLocks.detectDeadLock(1001));
 
     // Add more duplicate edge
-    BOOST_CHECK(keyLocks.acquireKeyLock(to, key1, 1000, 3));
-    BOOST_CHECK(keyLocks.acquireKeyLock(to, key2, 1001, 3));
+    BOOST_TEST(keyLocks.acquireKeyLock(to, key1, 1000, 3));
+    BOOST_TEST(keyLocks.acquireKeyLock(to, key2, 1001, 3));
 
-    BOOST_CHECK(!keyLocks.detectDeadLock(1000));
-    BOOST_CHECK(!keyLocks.detectDeadLock(1001));
+    BOOST_TEST(!keyLocks.detectDeadLock(1000));
+    BOOST_TEST(!keyLocks.detectDeadLock(1001));
 
     // Add a dead lock
-    BOOST_CHECK(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
+    BOOST_TEST(!keyLocks.acquireKeyLock(to, key1, 1001, 2));
 
-    BOOST_CHECK(keyLocks.detectDeadLock(1000));
-    BOOST_CHECK(keyLocks.detectDeadLock(1001));
+    BOOST_TEST(keyLocks.detectDeadLock(1000));
+    BOOST_TEST(keyLocks.detectDeadLock(1001));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

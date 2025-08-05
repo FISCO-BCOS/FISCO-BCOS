@@ -31,7 +31,7 @@ BOOST_FIXTURE_TEST_SUITE(EventSubTaskStateTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(test_EventSubTaskStateTest)
 {
     auto state = std::make_shared<bcos::cppsdk::event::EventSubTaskState>();
-    BOOST_CHECK(state->currentBlockNumber() < 0);
+    BOOST_TEST(state->currentBlockNumber() < 0);
     int64_t blockNumber = 10;
     state->setCurrentBlockNumber(blockNumber);
     BOOST_CHECK_EQUAL(state->currentBlockNumber(), blockNumber);

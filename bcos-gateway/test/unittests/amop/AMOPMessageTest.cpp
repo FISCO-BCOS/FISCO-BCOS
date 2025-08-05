@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(test_initAMOPMessage)
 
         auto decodeMessage = messageFactory->buildMessage();
         auto r = decodeMessage->decode(bytesConstRef(buffer->data(), buffer->size()));
-        BOOST_CHECK(r > 0);
+        BOOST_TEST(r > 0);
         BOOST_CHECK_EQUAL(decodeMessage->type(), 0);
         BOOST_CHECK_EQUAL(decodeMessage->data().size(), 0);
     }
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(test_initAMOPMessage)
 
         auto decodeMessage = messageFactory->buildMessage();
         auto r = decodeMessage->decode(bytesConstRef(buffer->data(), buffer->size()));
-        BOOST_CHECK(r > 0);
+        BOOST_TEST(r > 0);
         BOOST_CHECK_EQUAL(decodeMessage->type(), type);
         BOOST_CHECK_EQUAL(
             data, std::string(decodeMessage->data().begin(), decodeMessage->data().end()));
@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(test_initAMOPMessage)
 
         auto decodeMessage = messageFactory->buildMessage();
         auto r = decodeMessage->decode(bytesConstRef(buffer->data(), buffer->size()));
-        BOOST_CHECK(r > 0);
+        BOOST_TEST(r > 0);
         BOOST_CHECK_EQUAL(decodeMessage->type(), type);
         BOOST_CHECK_EQUAL(
             data, std::string(decodeMessage->data().begin(), decodeMessage->data().end()));
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(test_initAMOPMessage)
     {
         auto decodeMessage = messageFactory->buildMessage();
         auto r = decodeMessage->decode(bytesConstRef(""));
-        BOOST_CHECK(r < 0);
+        BOOST_TEST(r < 0);
     }
 }
 
@@ -99,6 +99,6 @@ BOOST_AUTO_TEST_CASE(test_AMOPMessageTopicOverflow)
     message->setData(bytesConstRef((byte*)data.data(), data.size()));
     auto buffer = std::make_shared<bytes>();
     auto r = message->encode(*buffer.get());
-    BOOST_CHECK(r);
+    BOOST_TEST(r);
 }
 BOOST_AUTO_TEST_SUITE_END()

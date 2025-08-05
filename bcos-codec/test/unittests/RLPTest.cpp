@@ -68,7 +68,7 @@ static T decode(std::string_view hex, int32_t expectedErrorCode = 0)
     auto&& error = bcos::codec::rlp::decode(bytesRef, result);
     if (expectedErrorCode == 0)
     {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
     }
     else
     {
@@ -87,7 +87,7 @@ static std::tuple<T, T2> decode(std::string_view hex, int32_t expectedErrorCode 
     auto&& error = bcos::codec::rlp::decode(bytesRef, r1, r2);
     if (expectedErrorCode == 0)
     {
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
     }
     else
     {
@@ -279,14 +279,14 @@ BOOST_AUTO_TEST_CASE(uint256Decode)
 
 BOOST_AUTO_TEST_CASE(vectorsDecode)
 {
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<uint64_t>>("c0"sv), std::vector<uint64_t>{}));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<uint64_t>>("c883ffccb583ffc0b5"sv),
+    BOOST_TEST(checkVectorEqual(decode<std::vector<uint64_t>>("c0"sv), std::vector<uint64_t>{}));
+    BOOST_TEST(checkVectorEqual(decode<std::vector<uint64_t>>("c883ffccb583ffc0b5"sv),
         std::vector<uint64_t>({0xFFCCB5, 0xFFC0B5})));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<uint32_t>>("c883ffccb583ffc0b5"sv),
+    BOOST_TEST(checkVectorEqual(decode<std::vector<uint32_t>>("c883ffccb583ffc0b5"sv),
         std::vector<uint32_t>({0xFFCCB5, 0xFFC0B5})));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<std::string>>("c88363617483646f67"sv),
+    BOOST_TEST(checkVectorEqual(decode<std::vector<std::string>>("c88363617483646f67"sv),
         std::vector<std::string>({"cat", "dog"})));
-    BOOST_CHECK(checkVectorEqual(decode<std::vector<std::string>>("cc83646f6783676f6483636174"sv),
+    BOOST_TEST(checkVectorEqual(decode<std::vector<std::string>>("cc83646f6783676f6483636174"sv),
         std::vector<std::string>({"dog", "god", "cat"})));
     // multi vector test 1
     {
@@ -294,7 +294,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
         std::vector<uint64_t> v;
         uint16_t one;
         auto error = decode("c6827a77c10401"sv, zw, v, one);
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         BOOST_CHECK_EQUAL(zw, "zw");
         BOOST_CHECK_EQUAL(v.size(), 1u);
         BOOST_CHECK_EQUAL(v[0], 4u);
@@ -305,7 +305,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
         std::vector<std::vector<std::string>> a;
         std::vector<uint64_t> b;
         auto error = decode("c4c2c0c0c0"sv, a, b);
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         BOOST_CHECK_EQUAL(a.size(), 2u);
         BOOST_CHECK_EQUAL(a[0].size(), 0u);
         BOOST_CHECK_EQUAL(a[1].size(), 0u);
@@ -317,7 +317,7 @@ BOOST_AUTO_TEST_CASE(vectorsDecode)
         std::vector<std::vector<std::string>> a2;
         std::vector<std::vector<std::vector<std::string>>> a3;
         auto error = decode("c7c0c1c0c3c0c1c0"sv, b, a2, a3);
-        BOOST_CHECK(!error);
+        BOOST_TEST(!error);
         BOOST_CHECK_EQUAL(a2.size(), 1u);
         BOOST_CHECK_EQUAL(a2[0].size(), 0u);
         BOOST_CHECK_EQUAL(a3.size(), 2u);

@@ -68,7 +68,7 @@ struct TestRocksDBStorageFixture
         rocksDBStorage =
             std::make_shared<RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db), nullptr);
         rocksDBStorage->asyncOpenTable(testTableName, [&](auto&& error, auto&& table) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
 
             if (error)
             {
@@ -325,8 +325,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         [&](Error::UniquePtr error, std::optional<Entry> entry) {
             // SetRow doesn't need create table
 
-            BOOST_CHECK(!error);
-            BOOST_CHECK(entry);
+            BOOST_TEST(!error);
+            BOOST_TEST(entry);
         });
 
     rocksDBStorage->asyncGetRow(tableInfo->name(),
@@ -334,8 +334,8 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         [&](Error::UniquePtr error, std::optional<Entry> entry) {
             // SetRow doesn't need create table
 
-            BOOST_CHECK(!error);
-            BOOST_CHECK(!entry);
+            BOOST_TEST(!error);
+            BOOST_TEST(!entry);
         });
 
     // clean new data
@@ -407,8 +407,8 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
     auto hashImpl = std::make_shared<Header256Hash>();
     auto storage = std::make_shared<bcos::storage::StateStorage>(rocksDBStorage, false);
-    BOOST_CHECK(storage->createTable("table1", "value1,value2,value3"));
-    BOOST_CHECK(storage->createTable("table2", "value1,value2,value3,value4,value5"));
+    BOOST_TEST(storage->createTable("table1", "value1,value2,value3"));
+    BOOST_TEST(storage->createTable("table2", "value1,value2,value3,value4,value5"));
 
     auto table1 = storage->openTable("table1");
     auto table2 = storage->openTable("table2");
@@ -597,22 +597,22 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
     initState->asyncCreateTable(
         "test_table1", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             if (error)
             {
                 std::cout << boost::diagnostic_information(*error) << std::endl;
             }
-            BOOST_CHECK(table);
+            BOOST_TEST(table);
         });
 
     initState->asyncCreateTable(
         "test_table2", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
+            BOOST_TEST(!error);
             if (error)
             {
                 std::cout << boost::diagnostic_information(*error) << std::endl;
             }
-            BOOST_CHECK(table);
+            BOOST_TEST(table);
         });
 
     for (size_t keyIndex = 0; keyIndex < 100; ++keyIndex)
@@ -622,14 +622,14 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
 
         auto key = fmt::format("key_{}", keyIndex);
         initState->asyncSetRow("test_table1", key, std::move(entry),
-            [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+            [](Error::UniquePtr error) { BOOST_TEST(!error); });
     }
 
     bcos::protocol::TwoPCParams params;
     params.number = 1;
     rocksDBStorage->asyncPrepare(params, *initState,
-        [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
-    rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+        [](Error::Ptr error, uint64_t, const std::string&) { BOOST_TEST(!error); });
+    rocksDBStorage->asyncCommit(params, [](Error::Ptr error, uint64_t) { BOOST_TEST(!error); });
 
     STORAGE_LOG(INFO) << "Init state finished";
 
@@ -645,7 +645,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
             size_t num = 0;
             state->asyncGetRow(
                 "test_table1", key, [&num](Error::UniquePtr error, std::optional<Entry> entry) {
-                    BOOST_CHECK(!error);
+                    BOOST_TEST(!error);
                     num = boost::lexical_cast<size_t>(entry->getField(0));
                 });
 
@@ -657,7 +657,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
             newEntry.importFields({boost::lexical_cast<std::string>(num)});
 
             state->asyncSetRow("test_table1", key, std::move(newEntry),
-                [](Error::UniquePtr error) { BOOST_CHECK(!error); });
+                [](Error::UniquePtr error) { BOOST_TEST(!error); });
         }
 
         tbb::concurrent_vector<std::function<void()>> checks;
@@ -669,7 +669,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
                 BOOST_CHECK_EQUAL(tableName, "test_table1");
                 auto [it, inserted] = keySet->emplace(key);
                 boost::ignore_unused(it);
-                BOOST_CHECK(inserted);
+                BOOST_TEST(inserted);
                 auto num = boost::lexical_cast<size_t>(entry.getField(0));
                 BOOST_CHECK_EQUAL(i + 100, num);
             });
@@ -685,9 +685,9 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
         bcos::protocol::TwoPCParams params;
         params.number = i;
         rocksDBStorage->asyncPrepare(params, *state,
-            [](Error::Ptr error, uint64_t, const std::string&) { BOOST_CHECK(!error); });
+            [](Error::Ptr error, uint64_t, const std::string&) { BOOST_TEST(!error); });
         rocksDBStorage->asyncCommit(
-            params, [](Error::Ptr error, uint64_t) { BOOST_CHECK(!error); });
+            params, [](Error::Ptr error, uint64_t) { BOOST_TEST(!error); });
     }
 }
 BOOST_AUTO_TEST_SUITE_END()

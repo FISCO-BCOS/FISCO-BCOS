@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(buildTest)
 {
     auto rpc = factory->buildRpc("gateway", "rpc", nullptr);
     auto groupManager = rpc->groupManager();
-    BOOST_CHECK(groupManager != nullptr);
+    BOOST_TEST(groupManager != nullptr);
 
     nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
     nodeConfig->loadConfigFromString(wrongConfigini);
@@ -65,10 +65,10 @@ BOOST_AUTO_TEST_CASE(jsonRpcTest)
 
     rpc->groupManager()->updateGroupInfo(groupInfo);
     rpc->jsonRpcImpl()->getBlockNumber(groupId, "", [](auto&& error, Json::Value& value) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(!value.empty());
+        BOOST_TEST(!error);
+        BOOST_TEST(!value.empty());
         auto intValue = value.asInt();
-        BOOST_CHECK(intValue > 0);
+        BOOST_TEST(intValue > 0);
     });
 }
 BOOST_AUTO_TEST_SUITE_END()
