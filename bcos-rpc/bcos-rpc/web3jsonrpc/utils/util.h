@@ -30,6 +30,9 @@ void buildJsonError(
     Json::Value const& request, int32_t code, std::string message, Json::Value& response);
 void buildJsonErrorWithData(
     Json::Value& data, int32_t code, std::string message, Json::Value& response);
+
+bcos::bytes toBytesResponse(Json::Value const& jResp);
+
 inline auto printJson(const Json::Value& value)
 {
     Json::StreamWriterBuilder builder;
