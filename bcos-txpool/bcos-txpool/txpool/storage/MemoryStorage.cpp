@@ -19,6 +19,7 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
@@ -880,24 +881,28 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
 {
-    auto handle = [&](auto& accessor) {
-        if (auto& tx = accessor.value())
-        {
-            tx->setSealed(_sealFlag);
-            if (!_sealFlag)
-            {
-                tx->setBatchId(-1);
-                tx->setBatchHash(HashType());
-            }
-        }
-    };
-    for (auto& accessor : m_sealedTransactions.range<TxsMap::ReadAccessor>())
+    TxsMap* fromMap =
+        _sealFlag ? std::addressof(m_unsealTransactions) : std::addressof(m_sealedTransactions);
+    TxsMap* toMap =
+        _sealFlag ? std::addressof(m_sealedTransactions) : std::addressof(m_unsealTransactions);
+    std::vector<std::pair<HashType, Transaction::Ptr>> moveTxs;
+    moveTxs.reserve((fromMap->size()));
+    for (auto& accessor : fromMap->range<TxsMap::ReadAccessor>())
     {
-        handle(accessor);
+        moveTxs.emplace_back(accessor.key(), accessor.value());
     }
-    for (auto& accessor : m_unsealTransactions.range<TxsMap::ReadAccessor>())
+
+    fromMap->batchRemove(::ranges::views::keys(moveTxs));
+    toMap->batchInsert(::ranges::views::all(moveTxs));
+    for (auto& accessor : toMap->range<TxsMap::ReadAccessor>())
     {
-        handle(accessor);
+        const auto& tx = accessor.value();
+        tx->setSealed(_sealFlag);
+        if (!_sealFlag)
+        {
+            tx->setBatchId(-1);
+            tx->setBatchHash(HashType());
+        }
     }
 }
 
