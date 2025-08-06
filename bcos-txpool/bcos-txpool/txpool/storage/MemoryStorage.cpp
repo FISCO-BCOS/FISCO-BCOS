@@ -191,8 +191,8 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
             std::move(hashes));
     return ::ranges::views::zip(sealedTransactions, unsealTransactions) |
            ::ranges::views::transform([](auto const& tuple) -> protocol::Transaction::ConstPtr {
-               auto& [lhs, rhs] = tuple;
-               return protocol::Transaction::ConstPtr(lhs.value_or(rhs.value_or(nullptr)));
+               auto& [sealed, unseal] = tuple;
+               return protocol::Transaction::ConstPtr(sealed.value_or(unseal.value_or(nullptr)));
            }) |
            ::ranges::to<std::vector>();
 }
@@ -200,9 +200,10 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
 TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
+    auto hash = transaction.hash();
     if (TxsMap::ReadAccessor accessor;
-        m_unsealTransactions.find<TxsMap::ReadAccessor>(accessor, transaction.hash()) ||
-        m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, transaction.hash()))
+        m_unsealTransactions.find<TxsMap::ReadAccessor>(accessor, hash) ||
+        m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, hash))
     {
         if (txSubmitCallback && !accessor.value()->submitCallback())
         {
@@ -232,7 +233,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         return TransactionStatus::NonceCheckFail;
     }
 
-    Transaction::ConstPtr tx = nullptr;
+    Transaction::Ptr tx = nullptr;
     if (TxsMap::ReadAccessor accessor;
         m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, txHash) ||
         m_unsealTransactions.find<TxsMap::ReadAccessor>(accessor, txHash))
@@ -247,6 +248,12 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
             if (!tx->sealed())
             {
                 tx->setSealed(true);
+                if (TxsMap::WriteAccessor accessor; m_unsealTransactions.find(accessor, tx->hash()))
+                {
+                    m_unsealTransactions.remove(accessor);
+                }
+                TxsMap::WriteAccessor accessor;
+                m_sealedTransactions.insert(accessor, std::make_pair(tx->hash(), tx));
             }
             tx->setBatchId(_tx->batchId());
             tx->setBatchHash(_tx->batchHash());
@@ -447,8 +454,8 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
     m_sealedTransactions.batchRemove(txHashes);
     auto removedTxs = ::ranges::views::zip(removedUnsealTxs, removedSealedTxs) |
                       ::ranges::views::transform([](auto const& tuple) -> Transaction::Ptr {
-                          auto& [lhs, rhs] = tuple;
-                          return lhs.value_or(rhs.value_or(nullptr));
+                          auto& [unseal, sealed] = tuple;
+                          return unseal.value_or(sealed.value_or(nullptr));
                       }) |
                       ::ranges::to<std::vector>();
 
@@ -685,7 +692,7 @@ bool MemoryStorage::batchSealTransactions(Block::Ptr _txsList, Block::Ptr _sysTx
                      << LOG_KV("time", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
-                     << LOG_KV("pendingTxs", m_sealedTransactions.size())
+                     << LOG_KV("pendingTxs", m_unsealTransactions.size())
                      << LOG_KV("limit", _txsLimit) << LOG_KV("fetchTxsT", fetchTxsT)
                      << LOG_KV("lockT", lockT) << LOG_KV("invalidBefore", invalidTxsSize)
                      << LOG_KV("sealed", sealed) << LOG_KV("traverseCount", traverseCount);
@@ -762,19 +769,20 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
 void MemoryStorage::clear()
 {
     m_sealedTransactions.clear();
+    m_unsealTransactions.clear();
 }
 
 HashList MemoryStorage::filterUnknownTxs(crypto::HashListView _txsHashList, NodeIDPtr _peer)
 {
     auto unSealValues = m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
     auto sealedValues = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
-    auto missList = ::ranges::views::concat(unSealValues, sealedValues) |
-                    ::ranges::views::enumerate | ::ranges::views::filter([](const auto& tuple) {
-                        auto&& [index, transaction] = tuple;
-                        return !transaction.has_value();
+    auto missList = ::ranges::views::zip(::ranges::views::iota(0), unSealValues, sealedValues) |
+                    ::ranges::views::filter([](const auto& tuple) {
+                        auto&& [index, unseal, sealed] = tuple;
+                        return !unseal.has_value() && !sealed.has_value();
                     }) |
                     ::ranges::views::transform([&](const auto& tuple) {
-                        auto&& [index, transaction] = tuple;
+                        auto&& [index, _, __] = tuple;
                         return _txsHashList[index];
                     }) |
                     ::ranges::to<std::vector>();
