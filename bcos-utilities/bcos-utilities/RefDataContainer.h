@@ -40,9 +40,9 @@ public:
     ~RefDataContainer() noexcept = default;
     RefDataContainer(T* _data, size_t _count) : m_dataPointer(_data), m_dataCount(_count) {}
     using RequiredStringPointerType =
-        std::conditional_t<std::is_const<T>::value, std::string const*, std::string*>;
-    using RequiredVecType = std::conditional_t<std::is_const<T>::value,
-        std::vector<typename std::remove_const<T>::type> const*, std::vector<T>*>;
+        std::conditional_t<std::is_const_v<T>, std::string const*, std::string*>;
+    using RequiredVecType = std::conditional_t<std::is_const_v<T>,
+        std::vector<std::remove_const_t<T>> const*, std::vector<T>*>;
     using RequiredStringRefType =
         std::conditional_t<std::is_const<T>::value, std::string const, std::string>;
 

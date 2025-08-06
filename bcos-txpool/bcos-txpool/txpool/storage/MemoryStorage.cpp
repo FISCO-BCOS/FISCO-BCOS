@@ -184,16 +184,16 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
     crypto::HashListView hashes)
 {
-    auto values = m_sealedTransactions.batchFind<decltype(m_sealedTransactions)::ReadAccessor>(
-        std::move(hashes));
-    return ::ranges::views::transform(values,
-               [](auto const& value) -> protocol::Transaction::ConstPtr {
-                   if (value)
-                   {
-                       return protocol::Transaction::ConstPtr(std::move(*value));
-                   }
-                   return {};
-               }) |
+    auto sealedTransactions =
+        m_sealedTransactions.batchFind<decltype(m_sealedTransactions)::ReadAccessor>(hashes);
+    auto unsealTransactions =
+        m_unsealTransactions.batchFind<decltype(m_unsealTransactions)::ReadAccessor>(
+            std::move(hashes));
+    return ::ranges::views::zip(sealedTransactions, unsealTransactions) |
+           ::ranges::views::transform([](auto const& tuple) -> protocol::Transaction::ConstPtr {
+               auto& [lhs, rhs] = tuple;
+               return protocol::Transaction::ConstPtr(lhs.value_or(rhs.value_or(nullptr)));
+           }) |
            ::ranges::to<std::vector>();
 }
 
