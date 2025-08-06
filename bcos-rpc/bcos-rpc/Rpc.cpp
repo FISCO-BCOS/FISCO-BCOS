@@ -139,6 +139,12 @@ void Rpc::asyncNotifyBlockNumber(std::string const& _groupID, std::string const&
         _callback(nullptr);
     }
     m_jsonRpcImpl->groupManager()->updateGroupBlockInfo(_groupID, _nodeName, _blockNumber);
+
+    if (m_onNewBlock)
+    {
+        m_onNewBlock(_groupID, _blockNumber);
+    }
+
     RPC_LOG(TRACE) << LOG_BADGE("asyncNotifyBlockNumber") << LOG_KV("group", _groupID)
                    << LOG_KV("blockNumber", _blockNumber) << LOG_KV("sessions", ss.size());
 }

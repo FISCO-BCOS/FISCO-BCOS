@@ -410,7 +410,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
 
             // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
 
-            web3JsonRpc->onRPCRequest(strRequest, [session, msg](bcos::bytes _respData) {
+            web3JsonRpc->onRPCRequest(strRequest, session, [session, msg](bcos::bytes _respData) {
                 msg->setPayload(std::make_shared<bcos::bytes>(std::move(_respData)));
                 session->asyncSendMessage(msg);
             });
@@ -466,10 +466,54 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     {
         auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
         auto web3WsService = buildWsService(std::move(web3Config));
+
         auto web3JsonRpc =
             buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
-        rpc->setWeb3Service(std::move(web3WsService));
+
+        auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
+
+        auto web3Subscribe = std::make_shared<Web3Subscribe>(weakPtrWeb3JsonRpc);
+        auto weakPtrWeb3Subscribe = std::weak_ptr<Web3Subscribe>(web3Subscribe);
+        web3JsonRpc->setWeb3Subscribe(web3Subscribe);
+
+        rpc->setWeb3Service(web3WsService);
         rpc->setWeb3JsonRpcImpl(std::move(web3JsonRpc));
+        rpc->setWeb3Subscribe(web3Subscribe);
+        // register for new block
+        rpc->setOnNewBlock([weakPtrWeb3Subscribe](std::string const& _groupID,
+                               bcos::protocol::BlockNumber _blockNumber) {
+            auto web3Subscribe = weakPtrWeb3Subscribe.lock();
+            if (web3Subscribe)
+            {
+                try
+                {
+                    web3Subscribe->onNewBlock(_blockNumber);
+                }
+                catch (std::exception& e)
+                {
+                    RPC_LOG(ERROR) << LOG_BADGE("setOnNewBlock") << LOG_DESC("onNewBlock exception")
+                                   << LOG_KV("e", boost::diagnostic_information(e));
+                }
+            }
+        });
+        // register disconnect handler
+        web3WsService->registerDisconnectHandler(
+            [weakPtrWeb3Subscribe](std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
+                auto web3Subscribe = weakPtrWeb3Subscribe.lock();
+                if (web3Subscribe)
+                {
+                    try
+                    {
+                        web3Subscribe->onRemoveSubscribeBySession(std::move(_session));
+                    }
+                    catch (std::exception& e)
+                    {
+                        RPC_LOG(ERROR) << LOG_BADGE("registerDisconnectHandler")
+                                       << LOG_DESC("onRemoveSubscribeBySession exception")
+                                       << LOG_KV("e", boost::diagnostic_information(e));
+                    }
+                }
+            });
     }
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();

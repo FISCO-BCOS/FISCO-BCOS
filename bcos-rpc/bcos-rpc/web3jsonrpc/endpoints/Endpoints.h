@@ -27,7 +27,7 @@
 
 namespace bcos::rpc
 {
-class Endpoints : protected EthEndpoint, NetEndpoint, Web3Endpoint
+class Endpoints : public EthEndpoint, public NetEndpoint, public Web3Endpoint
 {
 public:
     explicit Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem)

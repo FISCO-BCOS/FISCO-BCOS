@@ -52,3 +52,18 @@ void bcos::rpc::buildJsonErrorWithData(
     error["data"].swap(data);
     response["error"] = std::move(error);
 }
+
+bcos::bytes bcos::rpc::toBytesResponse(Json::Value const& jResp)
+{
+    auto builder = Json::StreamWriterBuilder();
+    builder["commentStyle"] = "None";
+    builder["indentation"] = "";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+
+    bcos::bytes out;
+    boost::iostreams::stream<JsonSink> outputStream(out);
+
+    writer->write(jResp, &outputStream);
+    writer.reset();
+    return out;
+}
