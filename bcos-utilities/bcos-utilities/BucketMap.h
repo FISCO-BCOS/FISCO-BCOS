@@ -126,15 +126,12 @@ public:
     bool find(AccessorType& accessor, const KeyType& key)
     {
         accessor.emplaceLock(m_mutex);
-
-        auto it = m_values.find(key);
-        if (it == m_values.end())
+        if (auto it = m_values.find(key); it != m_values.end())
         {
-            return false;
+            accessor.setIterator(it, this);
+            return true;
         }
-
-        accessor.setIterator(it, this);
-        return true;
+        return false;
     }
 
     // return true if insert happen

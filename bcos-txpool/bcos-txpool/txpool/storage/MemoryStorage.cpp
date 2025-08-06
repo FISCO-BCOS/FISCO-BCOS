@@ -438,9 +438,18 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
 
     auto txHashes = ::ranges::views::transform(txsResult,
         [](TransactionSubmitResult::Ptr const& _txResult) { return _txResult->txHash(); });
-    auto removedTxs =
+    auto removedUnsealTxs =
         m_unsealTransactions.batchFind<decltype(m_unsealTransactions)::ReadAccessor>(txHashes);
     m_unsealTransactions.batchRemove(txHashes);
+    auto removedSealedTxs =
+        m_sealedTransactions.batchFind<decltype(m_sealedTransactions)::ReadAccessor>(txHashes);
+    m_sealedTransactions.batchRemove(txHashes);
+    auto removedTxs = ::ranges::views::zip(removedUnsealTxs, removedSealedTxs) |
+                      ::ranges::views::transform([](auto const& tuple) -> Transaction::Ptr {
+                          auto& [lhs, rhs] = tuple;
+                          return lhs.value_or(rhs.value_or(nullptr));
+                      }) |
+                      ::ranges::to<std::vector>();
 
     auto results = ::ranges::views::transform(txsResult,
                        [](TransactionSubmitResult::Ptr const& _txResult) {
@@ -456,7 +465,7 @@ void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults co
         }
 
         ++succCount;
-        results[i].first = std::move(*tx);
+        results[i].first = std::move(tx);
     }
 
     if (batchId > m_blockNumber)
@@ -781,8 +790,10 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
     std::atomic_size_t reSealed = 0;
     std::atomic_int64_t knownLatestSealedTxIndex = -1;
 
-    TxsMap* fromMap = _sealFlag ? &m_unsealTransactions : &m_sealedTransactions;
-    TxsMap* toMap = _sealFlag ? &m_sealedTransactions : &m_unsealTransactions;
+    TxsMap* fromMap =
+        _sealFlag ? std::addressof(m_unsealTransactions) : std::addressof(m_sealedTransactions);
+    TxsMap* toMap =
+        _sealFlag ? std::addressof(m_sealedTransactions) : std::addressof(m_unsealTransactions);
     std::vector<Transaction::Ptr> moveTransactions(_txsHashList.size());
     fromMap->traverse<TxsMap::ReadAccessor, true>(
         _txsHashList, [&](TxsMap::ReadAccessor& accessor, const auto& range, auto& bucket) {
@@ -792,20 +803,33 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
             int64_t localKnownLatestSealedTxIndex = -1;
             for (auto index : range)
             {
-                if (!bucket.find(accessor, _txsHashList[index]))
+                auto hash = _txsHashList[index];
+                protocol::Transaction::Ptr transaction;
+                if (bucket.find(accessor, hash))
+                {
+                    transaction = accessor.value();
+                    moveTransactions[index] = transaction;
+                }
+                else if (TxsMap::ReadAccessor toAccessor;
+                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                {
+                    transaction = toAccessor.value();
+                }
+                else
                 {
                     ++localNotFound;
                     continue;
                 }
 
-                const auto& transaction = accessor.value();
-                if ((transaction->batchId() != _batchId || transaction->batchHash() != _batchHash))
+                if ((transaction->batchId() != _batchId ||
+                        transaction->batchHash() != _batchHash) &&
+                    transaction->sealed() && !_sealFlag)
                 {
                     ++localReSealed;
                     continue;
                 }
+
                 transaction->setSealed(_sealFlag);
-                moveTransactions[index] = accessor.value();
                 ++localSuccess;
                 // set the block information for the transaction
                 if (_sealFlag)
@@ -1165,5 +1189,5 @@ bool bcos::txpool::MemoryStorage::exist(bcos::crypto::HashType const& _txHash)
 }
 size_t bcos::txpool::MemoryStorage::size() const
 {
-    return m_unsealTransactions.size();
+    return m_unsealTransactions.size() + m_sealedTransactions.size();
 }

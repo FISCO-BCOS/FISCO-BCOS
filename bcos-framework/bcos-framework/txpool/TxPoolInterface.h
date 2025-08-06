@@ -71,7 +71,7 @@ public:
     }
 
     virtual task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
+        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented!"));
     }
