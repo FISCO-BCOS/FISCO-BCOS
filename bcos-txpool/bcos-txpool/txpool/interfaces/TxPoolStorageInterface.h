@@ -53,7 +53,7 @@ public:
      * @param _txsLimit Maximum number of transactions that can be obtained at a time
      * @return List of new transactions
      */
-    virtual bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList,
+    virtual bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
         bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
         bool _avoidDuplicate = true) = 0;
 

@@ -126,15 +126,12 @@ public:
     bool find(AccessorType& accessor, const KeyType& key)
     {
         accessor.emplaceLock(m_mutex);
-
-        auto it = m_values.find(key);
-        if (it == m_values.end())
+        if (auto it = m_values.find(key); it != m_values.end())
         {
-            return false;
+            accessor.setIterator(it, this);
+            return true;
         }
-
-        accessor.setIterator(it, this);
-        return true;
+        return false;
     }
 
     // return true if insert happen
@@ -234,7 +231,6 @@ public:
 
             Accessor accessor;
             bucket->acquireAccessor(accessor);
-
             handler(accessor, ::ranges::views::keys(chunk), *bucket);
         };
 
@@ -259,8 +255,7 @@ public:
     }
 
     template <class KeyValues>
-        requires ::ranges::random_access_range<KeyValues> && ::ranges::sized_range<KeyValues> &&
-                 std::is_lvalue_reference_v<::ranges::range_reference_t<KeyValues>>
+        requires ::ranges::random_access_range<KeyValues> && ::ranges::sized_range<KeyValues>
     void batchInsert(KeyValues keyValues)
     {
         traverse<WriteAccessor, true>(::ranges::views::keys(keyValues),
@@ -292,38 +287,20 @@ public:
         return values;
     }
 
-    template <class Keys, bool returnRemoved>
+    template <class Keys>
         requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys>
-    auto batchRemove(Keys keys)
+    void batchRemove(Keys keys)
     {
-        std::conditional_t<returnRemoved,
-            std::vector<std::optional<ValueType>,
-                tbb::cache_aligned_allocator<std::optional<ValueType>>>,
-            EmptyType>
-            values;
-        if constexpr (returnRemoved)
-        {
-            values.resize(::ranges::size(keys));
-        }
         traverse<WriteAccessor, true>(
             keys, [&](WriteAccessor& accessor, const auto& range, BucketType& bucket) {
                 for (auto index : range)
                 {
                     if (bucket.find(accessor, keys[index]))
                     {
-                        if constexpr (returnRemoved)
-                        {
-                            values[index].emplace(std::move(accessor.value()));
-                        }
                         bucket.remove(accessor);
                     }
                 }
             });
-
-        if constexpr (returnRemoved)
-        {
-            return values;
-        }
     }
 
     bool insert(WriteAccessor& accessor, std::pair<KeyType, ValueType> keyValue)

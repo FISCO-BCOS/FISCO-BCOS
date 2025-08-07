@@ -72,7 +72,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         promise.set_value(std::move(_error));
     });
     auto error = promise.get_future().get();
-    BOOST_CHECK(error->errorCode() == CommonError::TransactionsMissing);
+    BOOST_TEST(error->errorCode() == CommonError::TransactionsMissing);
 
     // verify block with invalid txsHash
     auto blockData = std::make_shared<bytes>();
@@ -83,8 +83,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
             promise2.set_value({std::move(_error), _result});
         });
     auto [e, r] = promise2.get_future().get();
-    BOOST_CHECK(e->errorCode() == CommonError::TransactionsMissing);
-    BOOST_CHECK(r == false);
+    BOOST_TEST(e->errorCode() == CommonError::TransactionsMissing);
+    BOOST_TEST(r == false);
 
     // case3: with some txs hitted
     auto txHash = _cryptoSuite->hashImpl()->hash("test"sv);
@@ -99,7 +99,7 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     _txpool->asyncFillBlock(
         txsHash, [&promise5](Error::Ptr _error, auto&&) { promise5.set_value(std::move(_error)); });
     e = promise5.get_future().get();
-    BOOST_CHECK(e->errorCode() == CommonError::TransactionsMissing);
+    BOOST_TEST(e->errorCode() == CommonError::TransactionsMissing);
 
     blockData = std::make_shared<bytes>();
     block->encode(*blockData);
@@ -109,8 +109,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     _txpool->asyncVerifyBlock(_faker->nodeID(), block,
         [&](Error::Ptr _error, bool _result) { promise6.set_value({std::move(_error), _result}); });
     std::tie(e, r) = promise6.get_future().get();
-    BOOST_CHECK(e->errorCode() == CommonError::TransactionsMissing);
-    BOOST_CHECK(r == false);
+    BOOST_TEST(e->errorCode() == CommonError::TransactionsMissing);
+    BOOST_TEST(r == false);
 
     // case4: duplicate tx in block, and tx in txpool, verify failed
     auto tx = fakeTransaction(_cryptoSuite, std::to_string(utcTime()));
@@ -132,8 +132,8 @@ void testAsyncFillBlock(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         [&](Error::Ptr _error, bool _result) { promise7.set_value({std::move(_error), _result}); });
     std::tie(e, r) = promise7.get_future().get();
     // FIXME: duplicate tx in block, verify failed
-    BOOST_CHECK(e->errorCode() == CommonError::VerifyProposalFailed);
-    BOOST_CHECK(r == false);
+    BOOST_TEST(e->errorCode() == CommonError::VerifyProposalFailed);
+    BOOST_TEST(r == false);
 
     dynamic_cast<MemoryStorage&>(*_txpoolStorage).remove(tx->hash());
 }
@@ -149,23 +149,23 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // seal 10 txs
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(txsLimit, nullptr);
-        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == txsLimit);
+        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == txsLimit);
         for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
         {
             sealedTxs->emplace_back(_txsMetaDataList->transactionHash(i));
         }
-        BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
+        BOOST_TEST(_txpoolStorage->size() == originTxsSize);
     }
     // seal again to fetch all unsealed txs
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
-        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == (originTxsSize - txsLimit));
-        BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
+        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == (originTxsSize - txsLimit));
+        BOOST_TEST(_txpoolStorage->size() == originTxsSize);
         std::set<HashType> txsSet(sealedTxs->begin(), sealedTxs->end());
         for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
         {
             auto const& hash = _txsMetaDataList->transactionHash(i);
-            BOOST_CHECK(!txsSet.contains(hash));
+            BOOST_TEST(!txsSet.contains(hash));
         }
     }
 
@@ -173,8 +173,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
         _txpool->asyncMarkTxs(*sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
-            BOOST_CHECK(_error == nullptr);
-            BOOST_CHECK(_txpoolStorage->size() == originTxsSize);
+            BOOST_TEST(_error == nullptr);
+            BOOST_TEST(_txpoolStorage->size() == originTxsSize);
             promise.set_value();
         });
         promise.get_future().get();
@@ -183,8 +183,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // seal again
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
-        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
     }
     auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash"sv);
     auto blockNumber = 10;
@@ -192,7 +192,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     {
         std::promise<void> promise;
         _txpool->asyncMarkTxs(*sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             promise.set_value();
         });
         promise.get_future().get();
@@ -211,7 +211,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         std::promise<void> promise;
 
         _txpool->asyncMarkTxs(*sealedTxs, false, -1, HashType(), [&](Error::Ptr _error) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             promise.set_value();
         });
         promise.get_future().get();
@@ -219,8 +219,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // re-seal success
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
-        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
     }
 
     // mark txs to given proposal as true
@@ -228,17 +228,25 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         std::promise<void> promise;
 
         _txpool->asyncMarkTxs(*sealedTxs, true, blockNumber, blockHash, [&](Error::Ptr _error) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             promise.set_value();
         });
         promise.get_future().get();
+
+        // batch mark failed, manual set the transaction number and blockHash
+        // auto txs = task::syncWait(_txpool->getTransactions(*sealedTxs));
+        // for (auto& tx : txs)
+        // {
+        //     tx->setBatchId(blockNumber);
+        //     tx->setBatchHash(blockHash);
+        // }
     }
 
     // reseal failed
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
-        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == 0);
-        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == 0);
+        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == 0);
+        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == 0);
     }
 
     // mark txs to given proposal as false, expect success
@@ -246,7 +254,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         std::promise<void> promise;
 
         _txpool->asyncMarkTxs(*sealedTxs, false, blockNumber, blockHash, [&](Error::Ptr _error) {
-            BOOST_CHECK(_error == nullptr);
+            BOOST_TEST(_error == nullptr);
             promise.set_value();
         });
         promise.get_future().get();
@@ -255,8 +263,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // re-seal success
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
-        BOOST_CHECK(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-        BOOST_CHECK(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
     }
 
     // test asyncNotifyBlockResult
@@ -270,12 +278,12 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         txsResult->emplace_back(txResult);
     }
     auto notifiedTxs = _txpoolStorage->getTransactions(*sealedTxs);
-    BOOST_CHECK(!::ranges::any_of(notifiedTxs, [](auto& tx) { return !tx; }));
-    BOOST_CHECK(notifiedTxs.size() == sealedTxs->size());
+    BOOST_TEST(!::ranges::any_of(notifiedTxs, [](auto& tx) { return !tx; }));
+    BOOST_TEST(notifiedTxs.size() == sealedTxs->size());
 
     auto finish = false;
     _faker->asyncNotifyBlockResult(blockNumber, txsResult, [&](Error::Ptr _error) {
-        BOOST_CHECK(_error == nullptr);
+        BOOST_TEST(_error == nullptr);
         finish = true;
     });
     auto startT = utcTime();
@@ -285,25 +293,25 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     // check the txpool size
-    BOOST_CHECK(_txpoolStorage->size() == originTxsSize - sealedTxs->size());
+    BOOST_TEST(_txpoolStorage->size() == originTxsSize - sealedTxs->size());
     // check the txpoolNonce
     auto txPoolNonceChecker = _faker->txpool()->txpoolConfig()->txPoolNonceChecker();
     auto validator =
         std::dynamic_pointer_cast<TxValidator>(_faker->txpool()->txpoolConfig()->txValidator());
     auto ledgerNonceChecker = validator->ledgerNonceChecker();
-    for (auto tx : notifiedTxs | ::ranges::views::filter([](auto const& tx) {
+    for (const auto& tx : notifiedTxs | ::ranges::views::filter([](auto const& tx) {
              return tx->type() != static_cast<uint8_t>(TransactionType::Web3Transaction);
          }))
     {
-        BOOST_CHECK(txPoolNonceChecker->checkNonce(*tx) == TransactionStatus::None);
-        BOOST_CHECK(ledgerNonceChecker->checkNonce(*tx) == TransactionStatus::NonceCheckFail);
+        BOOST_TEST(txPoolNonceChecker->checkNonce(*tx) == TransactionStatus::None);
+        BOOST_TEST(ledgerNonceChecker->checkNonce(*tx) == TransactionStatus::NonceCheckFail);
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();
     auto const& nonceList = blockData[_faker->ledger()->blockNumber()]->nonces();
     for (auto const& nonce : *nonceList)
     {
-        BOOST_CHECK(ledgerNonceChecker->exists(nonce) == false);
+        BOOST_TEST(ledgerNonceChecker->exists(nonce) == false);
     }
 
     // case: the other left txs expired for invalid blockLimit
@@ -318,7 +326,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     auto [_txsMetaDataList, _] = _txpool->sealTxs(100000, nullptr);
     BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsMetaDataSize(), 0);
     BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
-    BOOST_CHECK(_txpoolStorage->size() == 0);
+    BOOST_TEST(_txpoolStorage->size() == 0);
 }
 
 void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
@@ -336,11 +344,11 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
 
     // check the txpool config
     auto txpoolConfig = faker->txpool()->txpoolConfig();
-    BOOST_CHECK(txpoolConfig->txPoolNonceChecker());
-    BOOST_CHECK(txpoolConfig->txValidator());
-    BOOST_CHECK(txpoolConfig->blockFactory());
-    BOOST_CHECK(txpoolConfig->txFactory());
-    BOOST_CHECK(txpoolConfig->ledger());
+    BOOST_TEST(txpoolConfig->txPoolNonceChecker());
+    BOOST_TEST(txpoolConfig->txValidator());
+    BOOST_TEST(txpoolConfig->blockFactory());
+    BOOST_TEST(txpoolConfig->txFactory());
+    BOOST_TEST(txpoolConfig->ledger());
 
     auto txpool = faker->txpool();
     auto txpoolStorage = txpool->txpoolStorage();
@@ -476,10 +484,10 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     catch (bcos::Error& e)
     {
         // TODO: Put TransactionStatus::Malformed into bcos::Error
-        // BOOST_CHECK(e.errorCode() == _result->status());
+        // BOOST_TEST(e.errorCode() == _result->status());
         std::cout << "#### error info:" << e.errorMessage() << std::endl;
-        // BOOST_CHECK(_result->txHash() == HashType());
-        // BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malform));
+        // BOOST_TEST(_result->txHash() == HashType());
+        // BOOST_TEST(_result->status() == (uint32_t)(TransactionStatus::Malform));
     }
     std::cout << "#### testAsyncFillBlock" << std::endl;
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
@@ -607,10 +615,10 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     catch (bcos::Error& e)
     {
         // TODO: Put TransactionStatus::Malformed into bcos::Error
-        // BOOST_CHECK(e.errorCode() == _result->status());
+        // BOOST_TEST(e.errorCode() == _result->status());
         std::cout << "#### error info:" << e.errorMessage() << std::endl;
-        // BOOST_CHECK(_result->txHash() == HashType());
-        // BOOST_CHECK(_result->status() == (uint32_t)(TransactionStatus::Malform));
+        // BOOST_TEST(_result->txHash() == HashType());
+        // BOOST_TEST(_result->status() == (uint32_t)(TransactionStatus::Malform));
     }
     std::cout << "#### testAsyncFillBlock" << std::endl;
     testAsyncFillBlock(faker, txpool, txpoolStorage, _cryptoSuite);
@@ -665,11 +673,11 @@ BOOST_AUTO_TEST_CASE(fillWithSubmit)
 
     // // check the txpool config
     // auto txpoolConfig = faker->txpool()->txpoolConfig();
-    // BOOST_CHECK(txpoolConfig->txPoolNonceChecker());
-    // BOOST_CHECK(txpoolConfig->txValidator());
-    // BOOST_CHECK(txpoolConfig->blockFactory());
-    // BOOST_CHECK(txpoolConfig->txFactory());
-    // BOOST_CHECK(txpoolConfig->ledger());
+    // BOOST_TEST(txpoolConfig->txPoolNonceChecker());
+    // BOOST_TEST(txpoolConfig->txValidator());
+    // BOOST_TEST(txpoolConfig->blockFactory());
+    // BOOST_TEST(txpoolConfig->txFactory());
+    // BOOST_TEST(txpoolConfig->ledger());
 
     // auto txpool = faker->txpool();
     // auto txpoolStorage = txpool->txpoolStorage();
@@ -687,8 +695,8 @@ BOOST_AUTO_TEST_CASE(fillWithSubmit)
     // std::promise<void> fillPromise;
     // txpool->asyncFillBlock(hashList,
     //     [originTx = tx, &fillPromise](Error::Ptr error, bcos::protocol::TransactionsPtr tx) {
-    //         BOOST_CHECK(!error);
-    //         BOOST_CHECK(tx);
+    //         BOOST_TEST(!error);
+    //         BOOST_TEST(tx);
     //         BOOST_CHECK_EQUAL(tx->size(), 1);
     //         BOOST_CHECK_EQUAL((*tx)[0].get(), originTx.get());
     //         fillPromise.set_value();
