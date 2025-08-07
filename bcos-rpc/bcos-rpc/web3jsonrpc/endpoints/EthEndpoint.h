@@ -39,7 +39,7 @@ public:
     {}
     virtual ~EthEndpoint() = default;
 
-protected:
+public:
     task::Task<void> protocolVersion(const Json::Value&, Json::Value&);
     task::Task<void> syncing(const Json::Value&, Json::Value&);
     task::Task<void> coinbase(const Json::Value&, Json::Value&);
