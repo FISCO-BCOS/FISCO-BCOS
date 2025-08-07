@@ -233,20 +233,27 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         return TransactionStatus::NonceCheckFail;
     }
 
-    // tx already in txpool
-    if (TxsMap::WriteAccessor accessor;
-        m_sealedTransactions.find<TxsMap::WriteAccessor>(accessor, txHash) ||
-        m_unsealTransactions.find<TxsMap::WriteAccessor>(accessor, txHash))
+    Transaction::Ptr tx = nullptr;
+    if (TxsMap::ReadAccessor accessor;
+        m_sealedTransactions.find<TxsMap::ReadAccessor>(accessor, txHash) ||
+        m_unsealTransactions.find<TxsMap::ReadAccessor>(accessor, txHash))
     {
-        auto tx = accessor.value();
+        tx = accessor.value();
+    }
+    // tx already in txpool
+    if (tx)
+    {
         if (!tx->sealed() || tx->batchHash() == HashType())
         {
             if (!tx->sealed())
             {
                 tx->setSealed(true);
-                m_unsealTransactions.remove(accessor);
-                TxsMap::WriteAccessor sealAccessor;
-                m_sealedTransactions.insert(sealAccessor, std::make_pair(tx->hash(), tx));
+                if (TxsMap::WriteAccessor accessor; m_unsealTransactions.find(accessor, tx->hash()))
+                {
+                    m_unsealTransactions.remove(accessor);
+                }
+                TxsMap::WriteAccessor accessor;
+                m_sealedTransactions.insert(accessor, std::make_pair(tx->hash(), tx));
             }
             tx->setBatchId(_tx->batchId());
             tx->setBatchHash(_tx->batchHash());
