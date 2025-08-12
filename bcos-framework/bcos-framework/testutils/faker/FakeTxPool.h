@@ -77,8 +77,7 @@ public:
     void notifyConnectedNodes(
         bcos::crypto::NodeIDSet const&, std::function<void(Error::Ptr)>) override
     {}
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t, TxsHashSetPtr) override
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(uint64_t) override
     {
         return {};
     }

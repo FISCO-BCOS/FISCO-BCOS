@@ -48,14 +48,13 @@ public:
         crypto::HashListView hashes) override;
 
     // invoke when scheduler finished block executed and notify txpool new block result
-    void batchRemove(bcos::protocol::BlockNumber _batchId,
+    void batchRemoveSealedTxs(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
     bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
-        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
-        bool _avoidDuplicate = true) override;
+        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit) override;
 
-    bool exist(bcos::crypto::HashType const& _txHash) override;
+    bool exists(bcos::crypto::HashType const& _txHash) override;
     bool batchExists(crypto::HashListView _txsHashList) override;
 
     size_t size() const override;
@@ -124,10 +123,6 @@ protected:
     std::shared_ptr<Timer> m_cleanUpTimer;
     // timer to notify txs size
     std::shared_ptr<Timer> m_txsSizeNotifierTimer;
-
-    // for tps stat
-    std::atomic_uint64_t m_tpsStatstartTime = {0};
-    std::atomic_uint64_t m_onChainTxsCount = {0};
     bcos::crypto::HashType m_knownLatestSealedTxHash;
 };
 }  // namespace bcos::txpool

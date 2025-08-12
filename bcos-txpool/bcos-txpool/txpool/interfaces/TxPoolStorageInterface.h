@@ -40,7 +40,7 @@ public:
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
         crypto::HashListView hashes) = 0;
 
-    virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
+    virtual void batchRemoveSealedTxs(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
     virtual bool batchVerifyAndSubmitTransaction(
@@ -54,10 +54,9 @@ public:
      * @return List of new transactions
      */
     virtual bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
-        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
-        bool _avoidDuplicate = true) = 0;
+        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit) = 0;
 
-    virtual bool exist(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bool exists(bcos::crypto::HashType const& _txHash) = 0;
     virtual bool batchExists(crypto::HashListView _txsHashList) = 0;
 
     virtual bcos::crypto::HashList filterUnknownTxs(

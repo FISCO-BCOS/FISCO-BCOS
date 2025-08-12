@@ -411,10 +411,9 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
     auto recordT = utcTime();
     auto startT = utcTime();
     // verify the transactions signature
-    std::atomic_bool verifySuccess = {true};
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, txsSize),
-        [&_txs, &_verifiedProposal, &proposalHeader, this, &verifySuccess](
-            const tbb::blocked_range<size_t>& _range) {
+    std::atomic_bool verifySuccess = true;
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, txsSize), [&](const tbb::blocked_range<size_t>& _range) {
             for (size_t i = _range.begin(); i < _range.end(); i++)
             {
                 auto& tx = (*_txs)[i];
@@ -427,7 +426,7 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                     tx->setBatchId(proposalHeader->number());
                     tx->setBatchHash(proposalHeader->hash());
                 }
-                if (m_config->txpoolStorage()->exist(tx->hash()))
+                if (m_config->txpoolStorage()->exists(tx->hash()))
                 {
                     continue;
                 }

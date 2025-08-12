@@ -95,7 +95,7 @@ public:
      * triggered
      */
     virtual std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit, TxsHashSetPtr _avoidTxs) = 0;
+        uint64_t _txsLimit) = 0;
 
     virtual void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
