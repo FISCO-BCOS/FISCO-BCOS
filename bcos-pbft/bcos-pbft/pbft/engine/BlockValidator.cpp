@@ -109,7 +109,7 @@ bool BlockValidator::checkSealerListAndWeightList(Block::Ptr _block)
     size_t i = 0;
     for (auto const& blockSealer : blockSealerList)
     {
-        auto consNodePtr = consensusNodeList[i];
+        const auto& consNodePtr = consensusNodeList[i];
         if (consNodePtr.nodeID->data() != blockSealer)
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: inconsistent sealerList")

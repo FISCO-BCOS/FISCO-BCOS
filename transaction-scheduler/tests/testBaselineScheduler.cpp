@@ -110,7 +110,7 @@ struct MockTxPool : public txpool::TxPoolInterface
     void start() override {}
     void stop() override {}
     std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs) override
+        uint64_t _txsLimit) override
     {
         return {};
     }

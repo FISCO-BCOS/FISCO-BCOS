@@ -27,8 +27,7 @@ public:
         co_return nullptr;
     }
 
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t, bcos::txpool::TxsHashSetPtr) override
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(uint64_t) override
     {
         return {};
     }

@@ -188,19 +188,19 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions
 }
 
 std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> TxPool::sealTxs(
-    uint64_t _txsLimit, TxsHashSetPtr _avoidTxs)
+    uint64_t _txsLimit)
 {
     auto fetchedTxs = m_config->blockFactory()->createBlock();
     auto sysTxs = m_config->blockFactory()->createBlock();
 
-    m_txpoolStorage->batchSealTransactions(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+    m_txpoolStorage->batchSealTransactions(fetchedTxs, sysTxs, _txsLimit);
     return {std::move(fetchedTxs), std::move(sysTxs)};
 }
 
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
     std::function<void(Error::Ptr)> _onNotifyFinished)
 {
-    m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
+    m_txpoolStorage->batchRemoveSealedTxs(_blockNumber, *txsResult);
 
     if (_onNotifyFinished)
     {

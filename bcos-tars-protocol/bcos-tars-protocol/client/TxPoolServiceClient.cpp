@@ -139,17 +139,9 @@ bcos::task::Task<void> bcostars::TxPoolServiceClient::broadcastTransactionBuffer
     co_return;
 }
 std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr>
-bcostars::TxPoolServiceClient::sealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs)
+bcostars::TxPoolServiceClient::sealTxs(uint64_t _txsLimit)
 {
     vector<vector<tars::Char>> tarsAvoidTxs;
-    if (_avoidTxs && _avoidTxs->size() > 0)
-    {
-        for (const auto& it : *_avoidTxs)
-        {
-            tarsAvoidTxs.emplace_back(it.begin(), it.end());
-        }
-    }
-
     auto txs = std::make_shared<bcostars::protocol::BlockImpl>();
     auto sysTxs = std::make_shared<bcostars::protocol::BlockImpl>();
     m_proxy->asyncSealTxs(_txsLimit, tarsAvoidTxs, txs->inner(), sysTxs->inner());

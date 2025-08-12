@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "TxPoolConfig.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionFactory.h"
@@ -51,13 +52,12 @@ public:
         bcos::crypto::NodeIDPtr fromNode = nullptr) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
-        override;
+        crypto::HashListView hashes) override;
     // ===============================
 
     // sealer module call this method for seal a block
     std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit, TxsHashSetPtr _avoidTxs) override;
+        uint64_t _txsLimit) override;
 
     // hook for scheduler, invoke notify when block execute finished
     void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
