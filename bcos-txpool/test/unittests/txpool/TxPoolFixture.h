@@ -289,7 +289,7 @@ public:
     void asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr _txsResult,
         std::function<void(Error::Ptr)> _onNotifyFinished)
     {
-        m_txpool->txpoolStorage()->batchRemove(_blockNumber, *_txsResult);
+        m_txpool->txpoolStorage()->batchRemoveSealedTxs(_blockNumber, *_txsResult);
         if (_onNotifyFinished)
         {
             _onNotifyFinished(nullptr);

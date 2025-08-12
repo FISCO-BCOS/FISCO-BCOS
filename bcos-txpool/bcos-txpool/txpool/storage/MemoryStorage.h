@@ -48,7 +48,7 @@ public:
         crypto::HashListView hashes) override;
 
     // invoke when scheduler finished block executed and notify txpool new block result
-    void batchRemove(bcos::protocol::BlockNumber _batchId,
+    void batchRemoveSealedTxs(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
     bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,

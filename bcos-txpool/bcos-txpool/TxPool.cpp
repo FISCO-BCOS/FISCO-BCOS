@@ -200,7 +200,7 @@ std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> TxPool::sealT
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitResultsPtr txsResult,
     std::function<void(Error::Ptr)> _onNotifyFinished)
 {
-    m_txpoolStorage->batchRemove(_blockNumber, *txsResult);
+    m_txpoolStorage->batchRemoveSealedTxs(_blockNumber, *txsResult);
 
     if (_onNotifyFinished)
     {

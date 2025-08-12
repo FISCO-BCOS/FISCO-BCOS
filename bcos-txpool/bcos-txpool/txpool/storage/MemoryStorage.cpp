@@ -427,7 +427,8 @@ void MemoryStorage::printPendingTxs()
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandled finish");
 }
 
-void MemoryStorage::batchRemove(BlockNumber batchId, TransactionSubmitResults const& txsResult)
+void MemoryStorage::batchRemoveSealedTxs(
+    BlockNumber batchId, TransactionSubmitResults const& txsResult)
 {
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_REMOVE_TXS);

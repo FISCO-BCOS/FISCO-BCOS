@@ -40,7 +40,7 @@ public:
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
         crypto::HashListView hashes) = 0;
 
-    virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
+    virtual void batchRemoveSealedTxs(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
     virtual bool batchVerifyAndSubmitTransaction(
