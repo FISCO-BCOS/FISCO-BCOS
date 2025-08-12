@@ -179,16 +179,9 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
 {
     current->setResponse(false);
 
-    auto bcosAvoidTxs = std::make_shared<bcos::txpool::TxsHashSet>();
-    for (auto tx : avoidTxs)
-    {
-        bcosAvoidTxs->insert(bcos::crypto::HashType(bcos::bytes(tx.begin(), tx.end())));
-    }
-
     try
     {
-        auto [_txsList, _sysTxsList] =
-            m_txpoolInitializer->txpool()->sealTxs(txsLimit, bcosAvoidTxs);
+        auto [_txsList, _sysTxsList] = m_txpoolInitializer->txpool()->sealTxs(txsLimit);
 
         async_response_asyncSealTxs(current, toTarsError({}),
             std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_txsList)->inner(),

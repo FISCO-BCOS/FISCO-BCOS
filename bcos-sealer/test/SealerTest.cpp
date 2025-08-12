@@ -20,7 +20,7 @@ struct MockTxPool : public txpool::TxPoolInterface
     bool trySynced = false;
 
     std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit, txpool::TxsHashSetPtr _avoidTxs) override
+        uint64_t _txsLimit) override
     {
         return {};
     }
