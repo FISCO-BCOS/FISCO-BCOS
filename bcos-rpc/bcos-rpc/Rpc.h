@@ -21,6 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
 #include "web3jsonrpc/Web3JsonRpcImpl.h"
 
 #include <bcos-framework/rpc/RPCInterface.h>
@@ -97,6 +98,28 @@ public:
         m_web3JsonRpcImpl = std::move(_web3JsonRpcImpl);
     }
 
+    void setWeb3Subscribe(bcos::rpc::Web3Subscribe::Ptr _web3Subscribe)
+    {
+        m_web3Subscribe = std::move(_web3Subscribe);
+    }
+
+    bcos::rpc::Web3Subscribe::Ptr web3Subscribe() const { return m_web3Subscribe; }
+
+    void setOnNewBlock(
+        std::function<void(std::string const& _groupID, bcos::protocol::BlockNumber _blockNumber)>
+            _onNewBlock)
+    {
+        m_onNewBlock = std::move(_onNewBlock);
+    }
+
+    void onNewBlock(std::string const& _groupID, bcos::protocol::BlockNumber _blockNumber)
+    {
+        if (m_onNewBlock)
+        {
+            m_onNewBlock(_groupID, _blockNumber);
+        }
+    }
+
     GroupManager::Ptr groupManager() { return m_groupManager; }
 
     bcos::rpc::Web3JsonRpcImpl::Ptr web3JsonRpc() const { return m_web3JsonRpcImpl; }
@@ -118,8 +141,14 @@ private:
     GroupManager::Ptr m_groupManager;
     boostssl::ws::WsService::Ptr m_web3Service = nullptr;
     bcos::rpc::Web3JsonRpcImpl::Ptr m_web3JsonRpcImpl = nullptr;
+    bcos::rpc::Web3Subscribe::Ptr m_web3Subscribe = nullptr;
+
 
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
+
+    // callback for new block
+    std::function<void(std::string const& _groupID, bcos::protocol::BlockNumber _blockNumber)>
+        m_onNewBlock;
 };
 
 }  // namespace rpc

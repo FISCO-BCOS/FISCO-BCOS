@@ -38,8 +38,9 @@ bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string _groupId, uint32_t _batc
     RPC_LOG(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
 }
 
-void Web3JsonRpcImpl::handleRequest(
-    Json::Value _request, const std::function<void(Json::Value)>& _callback)
+void Web3JsonRpcImpl::handleRequest(Json::Value _request,
+    std::shared_ptr<boostssl::ws::WsSession> _session,
+    const std::function<void(Json::Value)>& _callback)
 {
     Json::Value response;
     try
@@ -59,6 +60,12 @@ void Web3JsonRpcImpl::handleRequest(
 
         std::string method = _request["method"].asString();
         response["id"] = _request["id"];
+
+        if (m_web3Subscribe->isSubscribeRequest(method))
+        {
+            handleSubscribeRequest(_request, std::move(method), std::move(_session), _callback);
+            return;
+        }
 
         auto optHandler = m_endpointsMapping.findHandler(method);
         if (!optHandler.has_value())
@@ -121,15 +128,17 @@ void Web3JsonRpcImpl::handleRequest(
     _callback(std::move(response));
 }
 
-void Web3JsonRpcImpl::handleRequest(Json::Value _request, const Sender& _sender)
+void Web3JsonRpcImpl::handleRequest(
+    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
 {
-    handleRequest(std::move(_request), [_sender](Json::Value _response) {
+    handleRequest(std::move(_request), std::move(_session), [_sender](Json::Value _response) {
         auto respBytes = toBytesResponse(_response);
         _sender(std::move(respBytes));
     });
 }
 
-void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, const Sender& _sender)
+void Web3JsonRpcImpl::handleBatchRequest(
+    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
 {
     auto respJsonValuePtr = std::make_shared<Json::Value>(Json::arrayValue);
     auto requestSize = _request.size();
@@ -143,7 +152,7 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, const Sender& _se
 
     for (auto& reqItem : _request)
     {
-        handleRequest(std::move(reqItem),
+        handleRequest(std::move(reqItem), _session,
             [respJsonValuePtr, requestSize, _sender, startT](Json::Value response) {
                 respJsonValuePtr->append(std::move(response));
                 if (respJsonValuePtr->size() < requestSize)
@@ -165,7 +174,49 @@ void Web3JsonRpcImpl::handleBatchRequest(Json::Value _request, const Sender& _se
     }
 }
 
+void Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request, std::string _method,
+    std::shared_ptr<boostssl::ws::WsSession> _session,
+    const std::function<void(Json::Value)>& _callback)
+{
+    if (!_session)
+    {
+        // Note: eth_subscribe request only support websocket protocol
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidRequest, "Subscribe request only support websocket protocol"));
+    }
+
+    // https://ethereum.org/en/developers/tutorials/using-websockets/#subscription-api
+    Json::Value response;
+    if (_request.isObject() && _request.isMember("id"))
+    {
+        response["id"] = _request["id"];
+    }
+
+    if (_method == Web3Subscribe::SUBSCRIBE_METHOD)
+    {
+        Json::Value result = m_web3Subscribe->onSubscribeRequest(std::move(_request), _session);
+        buildJsonContent(result, response);
+    }
+    else if (_method == Web3Subscribe::UNSUBSCRIBE_METHOD)
+    {
+        Json::Value result = m_web3Subscribe->onUnsubscribeRequest(std::move(_request), _session);
+        buildJsonContent(result, response);
+    }
+    else
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, "Invalid subscribe method"));
+    }
+
+    _callback(std::move(response));
+}
+
 void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& _sender)
+{
+    onRPCRequest(_requestBody, nullptr, _sender);
+}
+
+void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
+    std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
 {
     auto startT = utcTime();
     auto batchRequestSizeLimit = m_batchRequestSizeLimit;
@@ -224,12 +275,12 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& 
         if (isBatchRequest)
         {
             // handle batch request
-            handleBatchRequest(std::move(request), _sender);
+            handleBatchRequest(std::move(request), _session, _sender);
         }
         else
         {
             // handle single request
-            handleRequest(std::move(request), _sender);
+            handleRequest(std::move(request), _session, _sender);
         }
 
         return;
@@ -261,19 +312,4 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& 
     }
 
     _sender(std::move(respBytes));
-}
-
-bcos::bytes Web3JsonRpcImpl::toBytesResponse(Json::Value const& jResp)
-{
-    auto builder = Json::StreamWriterBuilder();
-    builder["commentStyle"] = "None";
-    builder["indentation"] = "";
-    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
-
-    bcos::bytes out;
-    boost::iostreams::stream<JsonSink> outputStream(out);
-
-    writer->write(jResp, &outputStream);
-    writer.reset();
-    return out;
 }

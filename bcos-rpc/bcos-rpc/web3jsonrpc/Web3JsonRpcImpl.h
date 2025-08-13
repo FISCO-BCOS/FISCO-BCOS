@@ -23,6 +23,7 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/validator/JsonValidator.h>
+#include <bcos-rpc/web3jsonrpc/Web3Subscribe.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
@@ -33,6 +34,7 @@ class Web3JsonRpcImpl : public std::enable_shared_from_this<Web3JsonRpcImpl>
 {
 public:
     using Ptr = std::shared_ptr<Web3JsonRpcImpl>;
+    using WeakPtr = std::weak_ptr<Web3JsonRpcImpl>;
     using Sender = std::function<void(bcos::bytes)>;
     Web3JsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
         bcos::rpc::GroupManager::Ptr _groupManager,
@@ -41,16 +43,35 @@ public:
     ~Web3JsonRpcImpl() = default;
 
     void onRPCRequest(std::string_view _requestBody, const Sender& _sender);
-    void handleRequest(Json::Value _request, const std::function<void(Json::Value)>& _callback);
-    void handleRequest(Json::Value _request, const Sender& _sender);
-    void handleBatchRequest(Json::Value _request, const Sender& _sender);
+
+    void onRPCRequest(std::string_view _requestBody,
+        std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender);
+
+    void handleRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
+        const Sender& _sender);
+    void handleRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
+        const std::function<void(Json::Value)>& _callback);
+    void handleBatchRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
+        const Sender& _sender);
+
+    void handleSubscribeRequest(Json::Value _request, std::string _method,
+        std::shared_ptr<boostssl::ws::WsSession> _session,
+        const std::function<void(Json::Value)>& _callback);
+
+    void setWeb3Subscribe(Web3Subscribe::Ptr _web3Subscribe)
+    {
+        m_web3Subscribe = std::move(_web3Subscribe);
+    }
+    Web3Subscribe::Ptr web3Subscribe() const { return m_web3Subscribe; }
+
+    Endpoints& endpoints() { return m_endpoints; }
 
 private:
-    static bcos::bytes toBytesResponse(Json::Value const& jResp);
     // Note: only use in one group
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
+    Web3Subscribe::Ptr m_web3Subscribe;
     std::string m_groupId;
     uint32_t m_batchRequestSizeLimit;
     Endpoints m_endpoints;
