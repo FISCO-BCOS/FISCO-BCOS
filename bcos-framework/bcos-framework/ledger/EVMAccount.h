@@ -156,12 +156,16 @@ public:
             executor_v1::StateKey{m_tableName, ACCOUNT_TABLE_FIELDS::NONCE}, std::move(nonceEntry));
     }
 
-    task::Task<void> increaseNonce()
+    task::Task<void> increaseNonce(bool emptyInitialize)
     {
         if (auto currentNonce = co_await nonce())
         {
             const auto newNonce = u256(currentNonce.value()) + 1;
             co_await setNonce(newNonce.convert_to<std::string>());
+        }
+        else if (emptyInitialize)
+        {
+            co_await setNonce("1");
         }
     }
 
@@ -257,6 +261,17 @@ public:
             }
         }
     }
+
+    EVMAccount(Storage& storage, const bcos::Address& address, bool binaryAddress)
+      : EVMAccount(
+            storage,
+            [](const bcos::Address& address) {
+                evmc_address evmcAddress;
+                ::ranges::copy(address, evmcAddress.bytes);
+                return evmcAddress;
+            }(address),
+            binaryAddress)
+    {}
     ~EVMAccount() noexcept = default;
 
     std::string_view address() const { return m_tableName; }

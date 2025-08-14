@@ -542,11 +542,24 @@ private:
                 m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
         }
 
-        if (m_web3Tx && m_level != 0)
+        auto senderAccount = getAccount(*this, ref.sender);
+        auto bugfixNest = m_ledgerConfig.get().features().get(
+            ledger::Features::Flag::bugfix_nest_constructor_nonce);
+        if (bugfixNest)
         {
-            auto senderAccount = getAccount(*this, ref.sender);
-            co_await senderAccount.increaseNonce();
+            if (m_web3Tx)
+            {
+                co_await senderAccount.increaseNonce(bugfixNest);
+            }
         }
+        else
+        {
+            if (m_web3Tx && m_level != 0)
+            {
+                co_await senderAccount.increaseNonce(bugfixNest);
+            }
+        }
+
 
         co_await m_recipientAccount.create();
         auto result = m_executable->m_vmInstance.execute(
@@ -556,7 +569,17 @@ private:
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
-            co_await m_recipientAccount.setNonce("1");
+            if (bugfixNest)
+            {
+                if (!co_await m_recipientAccount.nonce())
+                {
+                    co_await m_recipientAccount.setNonce("1");
+                }
+            }
+            else
+            {
+                co_await m_recipientAccount.setNonce("1");
+            }
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 
