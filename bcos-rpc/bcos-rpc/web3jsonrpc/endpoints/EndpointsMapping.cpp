@@ -81,6 +81,7 @@ void EndpointsMapping::addEthHandlers()
     m_handlers[methodString(EthMethod::eth_getTransactionByBlockHashAndIndex)] = &Endpoints::getTransactionByBlockHashAndIndex;
     m_handlers[methodString(EthMethod::eth_getTransactionByBlockNumberAndIndex)] = &Endpoints::getTransactionByBlockNumberAndIndex;
     m_handlers[methodString(EthMethod::eth_getTransactionReceipt)] = &Endpoints::getTransactionReceipt;
+    m_handlers[methodString(EthMethod::debug_getTransactionReceipt)] = &Endpoints::debug_getTransactionReceipt;
     m_handlers[methodString(EthMethod::eth_getUncleByBlockHashAndIndex)] = &Endpoints::getUncleByBlockHashAndIndex;
     m_handlers[methodString(EthMethod::eth_getUncleByBlockNumberAndIndex)] = &Endpoints::getUncleByBlockNumberAndIndex;
     m_handlers[methodString(EthMethod::eth_newFilter)] = &Endpoints::newFilter;

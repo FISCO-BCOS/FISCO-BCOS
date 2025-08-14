@@ -101,6 +101,8 @@ void Web3Subscribe::onRemoveSubscribeBySession(
 {
     auto endpoint = session->endPoint();
 
+    std::vector<std::string> subscriptionIds;
+
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         auto it = m_endpoint2SubscriptionIds.find(endpoint);
@@ -109,15 +111,29 @@ void Web3Subscribe::onRemoveSubscribeBySession(
             for (const auto& subscriptionId : it->second)
             {
                 m_newHeads2Session.erase(subscriptionId);
+                subscriptionIds.push_back(subscriptionId);
             }
             m_endpoint2SubscriptionIds.erase(it);
         }
     }
 
-    WEB3_LOG(INFO)
-        << LOG_BADGE("onRemoveSubscribeBySession")
-        << LOG_DESC("remove all subscriptions on this session for the session has been inactive")
-        << LOG_KV("session", endpoint);
+    if (!subscriptionIds.empty())
+    {
+        WEB3_LOG(INFO)
+            << LOG_BADGE("onRemoveSubscribeBySession")
+            << LOG_DESC(
+                   "remove all subscriptions on this session for the session has been inactive")
+            << LOG_KV("session", endpoint)
+            << LOG_KV("subscriptionIds", boost::join(subscriptionIds, ", "));
+    }
+    else
+    {
+        WEB3_LOG(TRACE)
+            << LOG_BADGE("onRemoveSubscribeBySession")
+            << LOG_DESC(
+                   "remove all subscriptions on this session for the session has been inactive")
+            << LOG_KV("session", endpoint);
+    }
 }
 
 void Web3Subscribe::onNewBlock(int64_t blockNumber)

@@ -748,8 +748,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     buildJsonContent(result, response);
     co_return;
 }
-task::Task<void> EthEndpoint::getTransactionReceipt(
-    const Json::Value& request, Json::Value& response)
+
+task::Task<void> EthEndpoint::getTransactionReceiptInner(
+    const Json::Value& request, Json::Value& response, bool withInputAndOutput)
 {
     // params: transactionHash(DATA)
     // result: transactionReceipt(RECEIPT)
@@ -770,7 +771,8 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
             bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS);
-        combineReceiptResponse(result, std::move(receipt), txs->at(0), std::move(block));
+        combineReceiptResponse(
+            result, std::move(receipt), txs->at(0), std::move(block), withInputAndOutput);
     }
     catch (std::exception const& e)
     {
@@ -782,6 +784,21 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
     buildJsonContent(result, response);
     co_return;
 }
+
+task::Task<void> EthEndpoint::debug_getTransactionReceipt(
+    const Json::Value& request, Json::Value& response)
+{
+    co_await getTransactionReceiptInner(request, response, true);
+    co_return;
+}
+
+task::Task<void> EthEndpoint::getTransactionReceipt(
+    const Json::Value& request, Json::Value& response)
+{
+    co_await getTransactionReceiptInner(request, response, false);
+    co_return;
+}
+
 task::Task<void> EthEndpoint::getUncleByBlockHashAndIndex(const Json::Value&, Json::Value& response)
 {
     Json::Value result = "null";

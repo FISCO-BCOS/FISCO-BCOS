@@ -34,7 +34,7 @@ namespace bcos::rpc
 {
 [[maybe_unused]] static void combineReceiptResponse(Json::Value& result,
     protocol::TransactionReceipt::ConstPtr&& receipt, bcos::protocol::Transaction::ConstPtr&& tx,
-    bcos::protocol::Block::Ptr&& block)
+    bcos::protocol::Block::Ptr&& block, bool withInputAndOutput)
 {
     if (!result.isObject())
     {
@@ -65,6 +65,13 @@ namespace bcos::rpc
             }
         }
     }
+
+    if (withInputAndOutput)
+    {
+        result["input"] = toHexStringWithPrefix(tx->input());
+        result["output"] = toHexStringWithPrefix(receipt->output());
+    }
+
     result["transactionIndex"] = toQuantity(transactionIndex);
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);

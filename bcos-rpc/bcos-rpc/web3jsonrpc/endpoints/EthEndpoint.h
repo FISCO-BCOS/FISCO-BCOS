@@ -69,6 +69,7 @@ public:
     task::Task<void> getTransactionByBlockHashAndIndex(const Json::Value&, Json::Value&);
     task::Task<void> getTransactionByBlockNumberAndIndex(const Json::Value&, Json::Value&);
     task::Task<void> getTransactionReceipt(const Json::Value&, Json::Value&);
+    task::Task<void> debug_getTransactionReceipt(const Json::Value&, Json::Value&);
     task::Task<void> getUncleByBlockHashAndIndex(const Json::Value&, Json::Value&);
     task::Task<void> getUncleByBlockNumberAndIndex(const Json::Value&, Json::Value&);
     task::Task<void> newFilter(const Json::Value&, Json::Value&);
@@ -81,6 +82,9 @@ public:
     task::Task<std::tuple<protocol::BlockNumber, bool>> getBlockNumberByTag(
         std::string_view blockTag);
     task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
+
+
+    task::Task<void> getTransactionReceiptInner(const Json::Value&, Json::Value&, bool);
 
 private:
     NodeService::Ptr m_nodeService;
