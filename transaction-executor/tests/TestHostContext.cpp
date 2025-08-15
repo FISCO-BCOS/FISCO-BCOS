@@ -99,8 +99,8 @@ public:
         BCOS_LOG(INFO) << "Hello world address: " << bcos::address2HexString(helloworldAddress);
     }
 
-    Task<EVMCResult> call(
-        const evmc_address& address, std::string_view abi, evmc_address sender, auto&&... args)
+    Task<EVMCResult> call(const evmc_address& address, std::string_view abi, evmc_address sender,
+        bool web3, auto&&... args)
     {
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn(std::string(abi), std::forward<decltype(args)>(args)...);
@@ -132,7 +132,7 @@ public:
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
             hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
-                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, web3, 0,
                 bcos::task::syncWait);
         co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
@@ -140,18 +140,19 @@ public:
         co_return result;
     }
 
-    Task<EVMCResult> call(
-        const bcos::Address& address, std::string_view abi, evmc_address sender, auto&&... args)
+    Task<EVMCResult> call(const bcos::Address& address, std::string_view abi, evmc_address sender,
+        bool web3, auto&&... args)
     {
         evmc_address evmcAddress{};
         std::copy(address.begin(), address.end(), evmcAddress.bytes);
-        co_return co_await call(evmcAddress, abi, sender, std::forward<decltype(args)>(args)...);
+        co_return co_await call(
+            evmcAddress, abi, sender, web3, std::forward<decltype(args)>(args)...);
     }
 
-    Task<EVMCResult> call(std::string_view abi, evmc_address sender, auto&&... args)
+    Task<EVMCResult> call(std::string_view abi, evmc_address sender, bool web3, auto&&... args)
     {
         co_return co_await call(
-            helloworldAddress, abi, sender, std::forward<decltype(args)>(args)...);
+            helloworldAddress, abi, sender, web3, std::forward<decltype(args)>(args)...);
     }
 
     bcos::task::Task<void> initBFS(
@@ -205,7 +206,7 @@ BOOST_AUTO_TEST_CASE(bits)
 BOOST_AUTO_TEST_CASE(simpleCall)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call("getInt()", {});
+        auto result = co_await call("getInt()", {}, false);
 
         BOOST_CHECK_EQUAL(result.status_code, 0);
         bcos::s256 getIntResult = -1;
@@ -220,11 +221,11 @@ BOOST_AUTO_TEST_CASE(simpleCall)
 BOOST_AUTO_TEST_CASE(executeAndCall)
 {
     syncWait([this]() -> Task<void> {
-        auto result1 = co_await call("setInt(int256)", {}, bcos::s256(10000));
-        auto result2 = co_await call("getInt()", {});
+        auto result1 = co_await call("setInt(int256)", {}, false, bcos::s256(10000));
+        auto result2 = co_await call("getInt()", {}, false);
         auto result3 =
-            co_await call("setString(string)", {}, std::string("Hello world, fisco-bcos!"));
-        auto result4 = co_await call("getString()", {});
+            co_await call("setString(string)", {}, false, std::string("Hello world, fisco-bcos!"));
+        auto result4 = co_await call("getString()", {}, false);
 
         BOOST_CHECK_EQUAL(result1.status_code, 0);
         BOOST_CHECK_EQUAL(result2.status_code, 0);
@@ -247,7 +248,7 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
 BOOST_AUTO_TEST_CASE(contractDeploy)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call("deployAndCall(int256)", {}, bcos::s256(999));
+        auto result = co_await call("deployAndCall(int256)", {}, false, bcos::s256(999));
 
         BOOST_CHECK_EQUAL(result.status_code, 0);
         bcos::s256 getIntResult = -1;
@@ -262,7 +263,7 @@ BOOST_AUTO_TEST_CASE(contractDeploy)
 BOOST_AUTO_TEST_CASE(createTwice)
 {
     syncWait([this]() -> Task<void> {
-        auto result = co_await call("createTwice()", {});
+        auto result = co_await call("createTwice()", {}, false);
         BOOST_CHECK_EQUAL(result.status_code, 0);
 
         co_return;
@@ -274,20 +275,20 @@ BOOST_AUTO_TEST_CASE(failure)
     syncWait([this]() -> Task<void> {
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
-        auto result1 = co_await call("returnRequire()", {});
+        auto result1 = co_await call("returnRequire()", {}, false);
         BOOST_CHECK_EQUAL(result1.status_code, 2);
 
-        auto result2 = co_await call("getInt()", {});
+        auto result2 = co_await call("getInt()", {}, false);
         BOOST_CHECK_EQUAL(result2.status_code, 0);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(
             bcos::bytesConstRef(result2.output_data, result2.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 0);
 
-        auto result3 = co_await call("returnRevert()", {});
+        auto result3 = co_await call("returnRevert()", {}, false);
         BOOST_CHECK_EQUAL(result3.status_code, 2);
 
-        auto result4 = co_await call("getInt()", {});
+        auto result4 = co_await call("getInt()", {}, false);
         BOOST_CHECK_EQUAL(result4.status_code, 0);
         abiCodec.abiOut(
             bcos::bytesConstRef(result4.output_data, result4.output_size), getIntResult);
@@ -303,16 +304,16 @@ BOOST_AUTO_TEST_CASE(delegateCall)
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
         evmc_address sender = bcos::unhexAddress("0x0000000000000000000000000000000000000050");
-        auto result1 = co_await call("delegateCall()", sender);
+        auto result1 = co_await call("delegateCall()", sender, false);
         BOOST_CHECK_EQUAL(result1.status_code, 0);
 
-        auto result2 = co_await call("getInt()", sender);
+        auto result2 = co_await call("getInt()", sender, false);
         bcos::s256 getIntResult = -1;
         abiCodec.abiOut(
             bcos::bytesConstRef(result2.output_data, result2.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 19876);
 
-        auto result3 = co_await call("getString()", sender);
+        auto result3 = co_await call("getString()", sender, false);
         std::string strResult;
         abiCodec.abiOut(bcos::bytesConstRef(result3.output_data, result3.output_size), strResult);
         BOOST_CHECK_EQUAL(strResult, "hi!");
@@ -401,36 +402,66 @@ BOOST_AUTO_TEST_CASE(precompiled)
     BOOST_CHECK_EQUAL(getIntResult, 0);
 }
 
-BOOST_AUTO_TEST_CASE(nestConstructor)
+static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 {
-    syncWait([this]() -> Task<void> {
-        auto result1 = co_await call("deployWithDeploy()", {});
+    auto features = self->ledgerConfig.features();
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    self->ledgerConfig.setFeatures(features);
 
-        BOOST_REQUIRE_EQUAL(result1.status_code, 0);
-        bcos::Address address1{};
-        bcos::codec::abi::ContractABICodec abiCodec(*hashImpl);
-        abiCodec.abiOut(bcos::bytesConstRef(result1.output_data, result1.output_size), address1);
-        BOOST_REQUIRE_NE(address1, bcos::Address{});
+    auto result1 = co_await self->call("deployWithDeploy()", {}, web3);
 
-        auto result2 = co_await call(address1, "all()", {});
-        std::vector<bcos::Address> addresses;
-        bcos::codec::abi::ContractABICodec abiCodec2(*hashImpl);
-        abiCodec2.abiOut(bcos::bytesConstRef(result2.output_data, result2.output_size), addresses);
+    BOOST_TEST(result1.status_code == 0);
+    bcos::Address address1{};
+    bcos::codec::abi::ContractABICodec abiCodec(*self->hashImpl);
+    abiCodec.abiOut(bcos::bytesConstRef(result1.output_data, result1.output_size), address1);
+    BOOST_TEST(address1 != bcos::Address{});
 
-        BOOST_REQUIRE_EQUAL(addresses.size(), 10);
-        for (auto& address2 : addresses)
+    if (web3)
+    {
+        bcos::ledger::account::EVMAccount account(self->storage, address1, false);
+        auto nonce = co_await account.nonce();
+        BOOST_REQUIRE(nonce.has_value());
+        BOOST_TEST(nonce.value() == "11");
+    }
+
+    auto result2 = co_await self->call(address1, "all()", {}, web3);
+    std::vector<bcos::Address> addresses;
+    bcos::codec::abi::ContractABICodec abiCodec2(*self->hashImpl);
+    abiCodec2.abiOut(bcos::bytesConstRef(result2.output_data, result2.output_size), addresses);
+
+    // 检查新建的合约地址不重复
+    // Verify the new contract address is unique
+    BOOST_TEST(addresses.size() == 10);
+    ::ranges::sort(addresses);
+    auto last = ::ranges::unique(addresses);
+    BOOST_TEST(::ranges::distance(addresses.begin(), last) == 10);
+
+    for (auto& address2 : addresses)
+    {
+        BOOST_CHECK_NE(address2, bcos::Address{});
+        if (web3)
         {
-            BOOST_CHECK_NE(address2, bcos::Address{});
-            auto result3 = co_await call(address1, "get(address)", {}, address2);
-
-            bcos::codec::abi::ContractABICodec abiCodec3(*hashImpl);
-            bcos::s256 num;
-            abiCodec3.abiOut(
-                bcos::bytesConstRef(result3.output_data, result3.output_size), addresses);
+            bcos::ledger::account::EVMAccount account(self->storage, address2, false);
+            auto nonce = co_await account.nonce();
+            BOOST_REQUIRE(nonce.has_value());
+            BOOST_TEST(nonce.value() == "1");
         }
 
-        co_return;
-    }());
+        auto result3 = co_await self->call(address1, "get(address)", {}, web3, address2);
+        BOOST_TEST(result3.status_code == 0);
+
+        bcos::codec::abi::ContractABICodec abiCodec3(*self->hashImpl);
+        bcos::s256 num;
+        abiCodec3.abiOut(bcos::bytesConstRef(result3.output_data, result3.output_size), addresses);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(nestConstructor)
+{
+    syncWait([](decltype(this) self) -> Task<void> {
+        co_await testNestConstructor(self, true);
+        co_await testNestConstructor(self, false);
+    }(this));
 }
 
 BOOST_AUTO_TEST_CASE(codeSize)

@@ -38,6 +38,11 @@ public:
 
     static_assert(bcos::executor_v1::TransactionExecutor<bcos::executor_v1::TransactionExecutorImpl,
         MutableStorage>);
+
+    TestTransactionExecutorImplFixture()
+    {
+        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(TransactionExecutorImpl, TestTransactionExecutorImplFixture)
@@ -201,24 +206,28 @@ BOOST_AUTO_TEST_CASE(costBalance)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(nonce)
+BOOST_AUTO_TEST_CASE(web3Nonce)
 {
+    using namespace std::string_view_literals;
     task::syncWait([this]() mutable -> task::Task<void> {
         bcostars::protocol::BlockHeaderImpl blockHeader;
-        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_15_0_VERSION);
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+        ledgerConfig.setFeatures(features);
 
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
         // First deploy
         auto transaction = transactionFactory.createTransaction(
             0, "", helloworldBytecodeBinary, "0x5", 0, "", "", 0, std::string{}, {}, {}, 1000);
-        using namespace std::string_view_literals;
+
         evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
         transaction->forceSender(
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
-        auto& tarsTransaction = dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction);
-        tarsTransaction.mutableInner().type = 1;
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
         auto receipt = co_await executor.executeTransaction(
             storage, blockHeader, *transaction, 0, ledgerConfig, false);
         BOOST_CHECK_EQUAL(
@@ -226,21 +235,22 @@ BOOST_AUTO_TEST_CASE(nonce)
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
         auto nonce = co_await senderAccount.nonce();
-        BOOST_CHECK_EQUAL(nonce.value(), "6");
+        BOOST_TEST(nonce.value() == "6");
 
-        ledger::account::EVMAccount contractAccount(storage, receipt->contractAddress(), false);
-        auto contractNonce = co_await contractAccount.nonce();
+        ledger::account::EVMAccount helloworldAccount(storage, receipt->contractAddress(), false);
+        auto contractNonce = co_await helloworldAccount.nonce();
         BOOST_CHECK_EQUAL(contractNonce.value(), "1");
 
         bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
 
-        auto newAddress = unhexAddress(receipt->contractAddress());
-        auto expectAddress = newLegacyEVMAddress(bytesConstRef{newAddress.bytes}, 1);
+        std::string hexHelloworldAddress(receipt->contractAddress());
+        auto helloworldAddress = unhexAddress(hexHelloworldAddress);
+        auto expectAddress = newLegacyEVMAddress(bytesConstRef{helloworldAddress.bytes}, 1);
         ledger::account::EVMAccount expectAccount(storage, expectAddress, false);
 
         auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(90));
         auto deployCallTx = transactionFactory.createTransaction(0,
-            std::string(receipt->contractAddress()), input, "0x5", 0, "", "", 0, {}, {}, {}, 1001);
+            std::string(receipt->contractAddress()), input, "0x6", 0, "", "", 0, {}, {}, {}, 1001);
         deployCallTx->forceSender(
             bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
         dynamic_cast<bcostars::protocol::TransactionImpl&>(*deployCallTx).mutableInner().type = 1;
@@ -248,12 +258,8 @@ BOOST_AUTO_TEST_CASE(nonce)
             storage, blockHeader, *deployCallTx, 0, ledgerConfig, false);
 
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        nonce = co_await senderAccount.nonce();
-        BOOST_CHECK_EQUAL(nonce.value(), "7");
-
-        contractNonce = co_await contractAccount.nonce();
-        BOOST_REQUIRE(contractNonce);
-        BOOST_CHECK_EQUAL(*contractNonce, "2");
+        BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "7");
+        BOOST_CHECK_EQUAL((co_await helloworldAccount.nonce()).value(), "2");
 
         BOOST_REQUIRE(co_await expectAccount.exists());
         auto expectNonce = co_await expectAccount.nonce();
@@ -270,8 +276,34 @@ BOOST_AUTO_TEST_CASE(nonce)
 
         BOOST_CHECK_NE(receipt->status(), 0);
         BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "17");
-        BOOST_CHECK_EQUAL((co_await contractAccount.nonce()).value(), "2");
+        BOOST_CHECK_EQUAL((co_await helloworldAccount.nonce()).value(), "2");
         BOOST_CHECK_EQUAL((co_await expectAccount.nonce()).value(), "1");
+
+        // Contract deploy 10 contracts
+        input = abiCodec.abiIn("deployWithDeploy()");
+        auto deployDeployTx = transactionFactory.createTransaction(
+            0, hexHelloworldAddress, input, "0x1a", 0, "", "", 0, {}, {}, {}, 1001);
+        deployDeployTx->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*deployDeployTx).mutableInner().type = 1;
+
+        receipt = co_await executor.executeTransaction(
+            storage, blockHeader, *deployDeployTx, 0, ledgerConfig, false);
+
+        BOOST_TEST(receipt->status() == 0);
+        bcos::Address address1{};
+        abiCodec.abiOut(receipt->output(), address1);
+        bcos::ledger::account::EVMAccount deployAccount(storage, address1, false);
+        BOOST_CHECK_EQUAL((co_await deployAccount.nonce()).value(), "11");
+
+        for (auto i : ::ranges::views::iota(1, 11))
+        {
+            auto expectAddress =
+                newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
+            ledger::account::EVMAccount account(storage, expectAddress, false);
+            BOOST_TEST(co_await account.exists());
+            BOOST_TEST((co_await account.nonce()).value() == "1");
+        }
     }());
 }
 
@@ -339,6 +371,7 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
 
         ledger::Features features = ledgerConfig.features();
         features.set(bcos::ledger::Features::Flag::bugfix_delegatecall_transfer);
+        features.set(bcos::ledger::Features::Flag::bugfix_nonce_initialize);
         ledgerConfig.setBalanceTransfer(true);
         ledgerConfig.setFeatures(features);
 
