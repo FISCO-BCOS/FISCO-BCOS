@@ -353,7 +353,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
                 callParameters->senderAddress,
                 m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
             task::wait([](decltype(address) addr) -> task::Task<void> {
-                co_await addr.increaseNonce(false);
+                co_await addr.increaseNonce();
             }(std::move(address)));
         }
     }

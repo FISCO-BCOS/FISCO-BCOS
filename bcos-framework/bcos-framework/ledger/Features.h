@@ -50,7 +50,7 @@ public:
         bugfix_method_auth_sender,
         bugfix_precompiled_evm_status,
         bugfix_delegatecall_transfer,
-        bugfix_nest_constructor_nonce,
+        bugfix_nonce_initialize,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -275,8 +275,7 @@ public:
                             Flag::bugfix_precompiled_evm_status,
                         }},
                 {.to = protocol::BlockVersion::V3_16_0_VERSION,
-                    .flags = {
-                        Flag::bugfix_delegatecall_transfer, Flag::bugfix_nest_constructor_nonce}}});
+                    .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

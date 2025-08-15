@@ -504,8 +504,10 @@ public:
         ++m_seq;
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
         auto senderAccount = getAccount(*this, message.sender);
+
+        u256 nonce;
         auto nonceStr = co_await senderAccount.nonce();
-        auto nonce = u256(nonceStr.value_or(std::string("0")));
+        nonce = u256(nonceStr.value_or(std::string("0")));
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
@@ -542,26 +544,19 @@ private:
                 m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
         }
 
-        auto senderAccount = getAccount(*this, ref.sender);
-        auto bugfixNest = m_ledgerConfig.get().features().get(
-            ledger::Features::Flag::bugfix_nest_constructor_nonce);
-        if (bugfixNest)
+        if (m_web3Tx && m_level != 0)
         {
-            if (m_web3Tx)
-            {
-                co_await senderAccount.increaseNonce(bugfixNest);
-            }
+            auto senderAccount = getAccount(*this, ref.sender);
+            co_await senderAccount.increaseNonce();
         }
-        else
-        {
-            if (m_web3Tx && m_level != 0)
-            {
-                co_await senderAccount.increaseNonce(bugfixNest);
-            }
-        }
-
 
         co_await m_recipientAccount.create();
+        auto bugfixNest =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_nonce_initialize);
+        if (bugfixNest)
+        {
+            co_await m_recipientAccount.setNonce("1");
+        }
         auto result = m_executable->m_vmInstance.execute(
             interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
         if (result.status_code == 0)
@@ -569,14 +564,7 @@ private:
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
-            if (bugfixNest)
-            {
-                if (!co_await m_recipientAccount.nonce())
-                {
-                    co_await m_recipientAccount.setNonce("1");
-                }
-            }
-            else
+            if (!bugfixNest)
             {
                 co_await m_recipientAccount.setNonce("1");
             }

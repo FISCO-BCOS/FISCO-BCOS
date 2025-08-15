@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_method_auth_sender",
         "bugfix_precompiled_evm_status",
         "bugfix_delegatecall_transfer",
-        "bugfix_nest_constructor_nonce",
+        "bugfix_nonce_initialize",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",

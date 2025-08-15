@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
 
 static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
 {
-    bcos::ledger::Features features;
+    auto features = self->ledgerConfig.features();
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     self->ledgerConfig.setFeatures(features);
 
@@ -421,7 +421,7 @@ static bcos::task::Task<void> testNestConstructor(auto* self, bool web3)
         bcos::ledger::account::EVMAccount account(self->storage, address1, false);
         auto nonce = co_await account.nonce();
         BOOST_REQUIRE(nonce.has_value());
-        BOOST_TEST(nonce.value() == "10");
+        BOOST_TEST(nonce.value() == "11");
     }
 
     auto result2 = co_await self->call(address1, "all()", {}, web3);
