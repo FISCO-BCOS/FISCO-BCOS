@@ -505,9 +505,8 @@ public:
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
         auto senderAccount = getAccount(*this, message.sender);
 
-        u256 nonce;
         auto nonceStr = co_await senderAccount.nonce();
-        nonce = u256(nonceStr.value_or(std::string("0")));
+        auto nonce = u256(nonceStr.value_or(std::string("0")));
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
