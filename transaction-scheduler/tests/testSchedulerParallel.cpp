@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(simple)
             }) |
             ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-        auto view = fork(multiLayerStorage);
+        auto view = multiLayerStorage.fork();
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts = co_await scheduler.executeBlock(view, executor, blockHeader,
@@ -170,10 +170,10 @@ BOOST_AUTO_TEST_CASE(conflict)
         MockConflictExecutor executor;
         SchedulerParallelImpl<MutableStorage> scheduler;
 
-        auto view1 = fork(multiLayerStorage);
+        auto view1 = multiLayerStorage.fork();
         view1.newMutable();
         auto& front = mutableStorage(view1);
-        pushView(multiLayerStorage, std::move(view1));
+        multiLayerStorage.pushView(std::move(view1));
 
         constexpr static int INITIAL_VALUE = 100000;
         for (auto i : ::ranges::views::iota(0LU, MOCK_USER_COUNT))
@@ -199,13 +199,13 @@ BOOST_AUTO_TEST_CASE(conflict)
 
         auto transactionRefs =
             transactions | ::ranges::views::transform([](auto& ptr) -> auto& { return *ptr; });
-        auto view = fork(multiLayerStorage);
+        auto view = multiLayerStorage.fork();
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
         auto receipts = co_await scheduler.executeBlock(
             view, executor, blockHeader, transactionRefs, ledgerConfig);
         auto& front2 = mutableStorage(view);
-        pushView(multiLayerStorage, std::move(view));
+        multiLayerStorage.pushView(std::move(view));
 
         for (auto i : ::ranges::views::iota(0LU, MOCK_USER_COUNT))
         {

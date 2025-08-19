@@ -29,8 +29,8 @@ struct MockExecutorSerial
 
     auto createExecuteContext(auto& storage, protocol::BlockHeader const& blockHeader,
         protocol::Transaction const& transaction, int32_t contextID,
-        ledger::LedgerConfig const& ledgerConfig,
-        bool call) -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
+        ledger::LedgerConfig const& ledgerConfig, bool call)
+        -> task::Task<ExecuteContext<std::decay_t<decltype(storage)>>>
     {
         co_return {};
     }
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(executeBlock)
             ::ranges::to<std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
         MockExecutorSerial executor;
-        auto view = fork(multiLayerStorage);
+        auto view = multiLayerStorage.fork();
         view.newMutable();
         ledger::LedgerConfig ledgerConfig;
 

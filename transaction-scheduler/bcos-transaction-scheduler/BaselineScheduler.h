@@ -324,7 +324,7 @@ private:
             }
 
             auto now = current();
-            auto view = fork(m_multiLayerStorage.get());
+            auto view = m_multiLayerStorage.get().fork();
             view.newMutable();
             auto transactions = co_await getTransactions(m_txpool.get(), *block);
 
@@ -364,7 +364,7 @@ private:
                     nullptr, false};
             }
 
-            pushView(m_multiLayerStorage.get(), std::move(view));
+            m_multiLayerStorage.get().pushView(std::move(view));
             m_lastExecutedBlockNumber = blockHeader->number();
 
             resultsLock.lock();
@@ -585,7 +585,7 @@ public:
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = fork(self->m_multiLayerStorage.get());
+            auto view = self->m_multiLayerStorage.get().fork();
             view.newMutable();
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
             auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
@@ -608,7 +608,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = fork(self->m_multiLayerStorage.get());
+            auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
             auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
@@ -632,7 +632,7 @@ public:
     {
         task::wait([](decltype(this) self, std::string_view contract,
                        decltype(callback) callback) -> task::Task<void> {
-            auto view = fork(self->m_multiLayerStorage.get());
+            auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
             auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
