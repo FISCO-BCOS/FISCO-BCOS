@@ -326,7 +326,7 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
         {
             co_await m_p2pInterface->sendMessageByNodeID(peer, forkMessage, payloads);
         }
-        catch (std::exception& e)
+        catch (const std::exception& e)
         {
             ROUTER_LOG(WARNING) << "send message to nodeid: " << peer << " failed, "
                                 << boost::diagnostic_information(e);
