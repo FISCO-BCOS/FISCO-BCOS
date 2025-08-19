@@ -3,10 +3,14 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-task/Task.h"
+#include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
+#include <boost/throw_exception.hpp>
 
 namespace bcos::ledger::account
 {
+
+DERIVE_BCOS_EXCEPTION(NonceNotInitialized);
 
 template <class Storage>
 class EVMAccount
@@ -163,6 +167,10 @@ public:
             const auto newNonce = u256(currentNonce.value()) + 1;
             co_await setNonce(newNonce.convert_to<std::string>());
         }
+        else
+        {
+            BOOST_THROW_EXCEPTION(NonceNotInitialized{});
+        }
     }
 
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key)
@@ -257,6 +265,17 @@ public:
             }
         }
     }
+
+    EVMAccount(Storage& storage, const bcos::Address& address, bool binaryAddress)
+      : EVMAccount(
+            storage,
+            [](const bcos::Address& address) {
+                evmc_address evmcAddress;
+                ::ranges::copy(address, evmcAddress.bytes);
+                return evmcAddress;
+            }(address),
+            binaryAddress)
+    {}
     ~EVMAccount() noexcept = default;
 
     std::string_view address() const { return m_tableName; }
