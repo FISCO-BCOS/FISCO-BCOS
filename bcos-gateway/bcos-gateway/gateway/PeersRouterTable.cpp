@@ -19,6 +19,8 @@
  */
 #include "PeersRouterTable.h"
 #include "bcos-utilities/BoostLog.h"
+#include <boost/exception/diagnostic_information.hpp>
+#include <exception>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -320,6 +322,14 @@ bcos::task::Task<void> bcos::gateway::PeersRouterTable::broadcastMessage(uint16_
                               << LOG_KV("dst", printShortP2pID(peer));
         }
         auto forkMessage = message;
-        co_await m_p2pInterface->sendMessageByNodeID(peer, forkMessage, payloads);
+        try
+        {
+            co_await m_p2pInterface->sendMessageByNodeID(peer, forkMessage, payloads);
+        }
+        catch (std::exception& e)
+        {
+            ROUTER_LOG(WARNING) << "send message to nodeid: " << peer << " failed, "
+                                << boost::diagnostic_information(e);
+        }
     }
 }

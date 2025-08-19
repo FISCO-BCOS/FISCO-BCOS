@@ -500,5 +500,5 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     }
 
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
-        type, groupID, moduleID, *message, payloads);
+        type, groupID, moduleID, *message, std::move(payloads));
 }
