@@ -504,6 +504,7 @@ public:
         ++m_seq;
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
         auto senderAccount = getAccount(*this, message.sender);
+
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
@@ -549,7 +550,12 @@ private:
         }
 
         co_await m_recipientAccount.create();
-        co_await m_recipientAccount.setNonce("1");
+        auto bugfixNest =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_nonce_initialize);
+        if (bugfixNest)
+        {
+            co_await m_recipientAccount.setNonce("1");
+        }
         auto result = m_executable->m_vmInstance.execute(
             interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
         if (result.status_code == 0)
@@ -557,6 +563,10 @@ private:
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
+            if (!bugfixNest)
+            {
+                co_await m_recipientAccount.setNonce("1");
+            }
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 

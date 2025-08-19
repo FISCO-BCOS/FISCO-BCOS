@@ -31,6 +31,7 @@
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
@@ -352,9 +353,22 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
             ledger::account::EVMAccount address(*m_blockContext.storage(),
                 callParameters->senderAddress,
                 m_blockContext.features().get(ledger::Features::Flag::feature_raw_address));
-            task::wait([](decltype(address) addr) -> task::Task<void> {
-                co_await addr.increaseNonce();
-            }(std::move(address)));
+            if (m_blockContext.features().get(ledger::Features::Flag::bugfix_nonce_initialize))
+            {
+                if (!precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                        std::string_view{callParameters->senderAddress}))
+                {
+                    task::wait([](decltype(address) addr) -> task::Task<void> {
+                        co_await addr.increaseNonce();
+                    }(std::move(address)));
+                }
+            }
+            else
+            {
+                task::wait([](decltype(address) addr) -> task::Task<void> {
+                    co_await addr.increaseNonce();
+                }(std::move(address)));
+            }
         }
     }
     else
