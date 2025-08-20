@@ -483,7 +483,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
     co_await txpool->broadcastTransaction(*tx);
-    auto const txResult = co_await txpool->submitTransaction(std::move(tx), true);
+    auto const txResult = co_await txpool->submitTransaction(std::move(tx), false);
     if (txResult->status() == 0)
     {
         Json::Value result = encodeTxHash.hexPrefixed();
