@@ -125,7 +125,7 @@ struct Fixture
                         auto transactions =
                             ::ranges::single_view(&createTransaction) | ::ranges::views::indirect;
 
-                        auto view = fork(m_multiLayerStorage);
+                        auto view = m_multiLayerStorage.fork();
                         view.newMutable();
                         auto receipts = co_await scheduler.executeBlock(view, m_executor,
                             *block->blockHeaderConst(), transactions, m_ledgerConfig);
@@ -135,7 +135,7 @@ struct Fixture
                                 receipts[0]->status(), receipts[0]->message());
                             co_return;
                         }
-                        pushView(m_multiLayerStorage, std::move(view));
+                        m_multiLayerStorage.pushView(std::move(view));
                         co_await m_multiLayerStorage.mergeBackStorage();
 
                         m_contractAddress = receipts[0]->contractAddress();
@@ -285,7 +285,7 @@ struct Fixture
                         ::ranges::to<
                             std::vector<std::unique_ptr<bcostars::protocol::TransactionImpl>>>();
 
-                    auto view = fork(m_multiLayerStorage);
+                    auto view = m_multiLayerStorage.fork();
                     view.newMutable();
                     auto receipts = co_await scheduler.executeBlock(view, m_executor, blockHeader,
                         ::ranges::views::indirect(checkTransactions), m_ledgerConfig);
@@ -356,7 +356,7 @@ static void noConflictTransfer(benchmark::State& state)
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
 
-                    auto view = fork(fixture.m_multiLayerStorage);
+                    auto view = fixture.m_multiLayerStorage.fork();
                     view.newMutable();
 
                     [[maybe_unused]] auto receipts = co_await scheduler.executeBlock(view,
@@ -379,7 +379,7 @@ static void noConflictTransfer(benchmark::State& state)
                     }
 
                     // Check
-                    pushView(fixture.m_multiLayerStorage, std::move(view));
+                    fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& range : balances | ::ranges::views::chunk(2))
                     {
@@ -433,7 +433,7 @@ static void randomTransfer(benchmark::State& state)
                     blockHeader.setNumber(0);
                     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
 
-                    auto view = fork(fixture.m_multiLayerStorage);
+                    auto view = fixture.m_multiLayerStorage.fork();
                     view.newMutable();
 
                     [[maybe_unused]] auto receipts = co_await scheduler.executeBlock(view,
@@ -456,7 +456,7 @@ static void randomTransfer(benchmark::State& state)
                     }
 
                     // Check
-                    pushView(fixture.m_multiLayerStorage, std::move(view));
+                    fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
 
                     std::vector<s256> expectbalances(count, singleIssue);
@@ -501,7 +501,7 @@ static void conflictTransfer(benchmark::State& state)
             else
             {
                 int i = 0;
-                auto view = fork(fixture.m_multiLayerStorage);
+                auto view = fixture.m_multiLayerStorage.fork();
                 view.newMutable();
 
                 task::syncWait([&](benchmark::State& state) -> task::Task<void> {
@@ -533,7 +533,7 @@ static void conflictTransfer(benchmark::State& state)
                     }
 
                     // Check
-                    pushView(fixture.m_multiLayerStorage, std::move(view));
+                    fixture.m_multiLayerStorage.pushView(std::move(view));
                     auto balances = co_await fixture.balances();
                     for (auto&& [balance, index] :
                         ::ranges::views::zip(balances, ::ranges::views::iota(0LU)))

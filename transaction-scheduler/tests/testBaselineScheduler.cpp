@@ -227,7 +227,7 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(!sysBlock);
 
             task::syncWait([&]() -> task::Task<void> {
-                auto view = fork(multiLayerStorage);
+                auto view = multiLayerStorage.fork();
 
                 auto blockHash =
                     co_await ledger::getBlockHash(view, blockHeader->number(), ledger::fromStorage);
