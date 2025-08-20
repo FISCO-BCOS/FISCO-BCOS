@@ -619,7 +619,6 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     }
     else
     {
-        WEB3_LOG(TRACE) << callResponse.toStyledString();
         response = std::move(callResponse);
     }
 }
