@@ -46,6 +46,7 @@ public:
     TransactionReceiptImpl(TransactionReceiptImpl&&) = delete;
     TransactionReceiptImpl& operator=(const TransactionReceiptImpl&) = default;
     TransactionReceiptImpl& operator=(TransactionReceiptImpl&&) = delete;
+    TransactionReceiptImpl();
     explicit TransactionReceiptImpl(std::function<bcostars::TransactionReceipt*()> inner)
       : m_inner(std::move(inner))
     {}
