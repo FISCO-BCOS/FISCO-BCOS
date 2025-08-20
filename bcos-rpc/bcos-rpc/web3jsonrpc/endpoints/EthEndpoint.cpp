@@ -612,7 +612,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
     Json::Value callResponse;
     co_await call(request, callResponse, std::addressof(gasUsed));
 
-    if (callResponse["error"].empty())
+    if (!callResponse.isMember("error"))
     {
         Json::Value result = toQuantity(gasUsed);
         buildJsonContent(result, response);
