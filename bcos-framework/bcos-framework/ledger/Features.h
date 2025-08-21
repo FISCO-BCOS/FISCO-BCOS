@@ -51,6 +51,7 @@ public:
         bugfix_precompiled_evm_status,
         bugfix_delegatecall_transfer,
         bugfix_nonce_initialize,
+        bugfix_v1_timestamp,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -275,7 +276,8 @@ public:
                             Flag::bugfix_precompiled_evm_status,
                         }},
                 {.to = protocol::BlockVersion::V3_16_0_VERSION,
-                    .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize}}});
+                    .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize,
+                        Flag::bugfix_v1_timestamp}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
