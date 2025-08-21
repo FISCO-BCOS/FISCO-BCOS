@@ -339,7 +339,17 @@ public:
     }
     int64_t blockNumber() const { return m_blockHeader.get().number(); }
     uint32_t blockVersion() const { return m_blockHeader.get().version(); }
-    int64_t timestamp() const { return m_blockHeader.get().timestamp(); }
+    int64_t timestamp() const
+    {
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_timestamp) &&
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_timestamp))
+        {
+            return std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::milliseconds(m_blockHeader.get().timestamp()))
+                .count();
+        }
+        return m_blockHeader.get().timestamp();
+    }
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
     u256 gasPrice() const { return u256(std::get<0>(m_ledgerConfig.get().gasPrice())); }

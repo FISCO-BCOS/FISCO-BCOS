@@ -50,10 +50,11 @@ public:
                 bcos::storage2::memory_storage::LOGICAL_DELETION)>;
     MemoryStorageType transientStorage;
     Rollbackable<MemoryStorageType> rollbackableTransientStorage;
-    evmc_address helloworldAddress;
+    evmc_address helloworldAddress{};
     int64_t seq = 0;
     std::optional<PrecompiledManager> precompiledManager;
     bcos::ledger::LedgerConfig ledgerConfig;
+    bcostars::protocol::BlockHeaderImpl blockHeader;
 
     TestHostContextFixture()
       : rollbackableStorage(storage), rollbackableTransientStorage(transientStorage)
@@ -62,9 +63,7 @@ public:
         precompiledManager.emplace(hashImpl);
 
         // deploy the hello world contract
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
+        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));
         blockHeader.calculateHash(*hashImpl);
 
         std::string helloworldBytecodeBinary;
@@ -104,10 +103,6 @@ public:
     {
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         auto input = abiCodec.abiIn(std::string(abi), std::forward<decltype(args)>(args)...);
-
-        bcostars::protocol::BlockHeaderImpl blockHeader(
-            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_3_VERSION));
 
         static std::atomic_int64_t number = 0;
         blockHeader.setNumber(number++);
@@ -213,8 +208,6 @@ BOOST_AUTO_TEST_CASE(simpleCall)
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 0);
-
-        co_return;
     }());
 }
 
@@ -240,8 +233,6 @@ BOOST_AUTO_TEST_CASE(executeAndCall)
         std::string out;
         abiCodec.abiOut(bcos::bytesConstRef(result4.output_data, result4.output_size), out);
         BOOST_CHECK_EQUAL(out, "Hello world, fisco-bcos!");
-
-        co_return;
     }());
 }
 
@@ -255,8 +246,6 @@ BOOST_AUTO_TEST_CASE(contractDeploy)
         bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
         abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 999);
-
-        co_return;
     }());
 }
 
@@ -293,8 +282,6 @@ BOOST_AUTO_TEST_CASE(failure)
         abiCodec.abiOut(
             bcos::bytesConstRef(result4.output_data, result4.output_size), getIntResult);
         BOOST_CHECK_EQUAL(getIntResult, 0);
-
-        co_return;
     }());
 }
 
@@ -484,8 +471,6 @@ BOOST_AUTO_TEST_CASE(codeSize)
         auto builtinAddress = bcos::unhexAddress("0000000000000000000000000000000000000001");
         auto size = co_await codeSizeHostContext.codeSizeAt(builtinAddress);
         BOOST_CHECK_EQUAL(size, 0);
-
-        co_return;
     }());
 }
 
@@ -535,9 +520,26 @@ BOOST_AUTO_TEST_CASE(transferBalance)
         BOOST_CHECK_EQUAL(evmResult.status_code, EVMC_SUCCESS);
         BOOST_CHECK_EQUAL(co_await senderAccount.balance(), bcos::u256(1));
         BOOST_CHECK_EQUAL(co_await recipientAccount.balance(), bcos::u256(1000));
-
-        co_return;
     }());
+}
+
+BOOST_AUTO_TEST_CASE(evmTimestamp)
+{
+    syncWait([](decltype(this) self) -> Task<void> {
+        auto features = self->ledgerConfig.features();
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_evm_timestamp);
+        self->ledgerConfig.setFeatures(features);
+        self->blockHeader.setTimestamp(100 * 1001);
+
+        auto result = co_await self->call("timestamp()", {}, true);
+
+        BOOST_TEST(result.status_code == 0);
+        bcos::u256 getIntResult = -1;
+        bcos::codec::abi::ContractABICodec abiCodec(*bcos::executor::GlobalHashImpl::g_hashImpl);
+        abiCodec.abiOut(bcos::bytesConstRef(result.output_data, result.output_size), getIntResult);
+        BOOST_TEST(getIntResult == 100);
+    }(this));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

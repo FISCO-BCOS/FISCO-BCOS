@@ -158,6 +158,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_precompiled_evm_status",
         "bugfix_delegatecall_transfer",
         "bugfix_nonce_initialize",
+        "bugfix_v1_timestamp",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
