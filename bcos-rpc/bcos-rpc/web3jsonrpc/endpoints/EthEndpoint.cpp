@@ -483,7 +483,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
     co_await txpool->broadcastTransaction(*tx);
-    auto const txResult = co_await txpool->submitTransaction(std::move(tx), true);
+    auto const txResult = co_await txpool->submitTransaction(std::move(tx), false);
     if (txResult->status() == 0)
     {
         Json::Value result = encodeTxHash.hexPrefixed();
@@ -509,7 +509,12 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
                         << LOG_KV("rsp", printJson(response));
     }
 }
+
 task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response)
+{
+    co_await call(request, response, nullptr);
+}
+task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -538,6 +543,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         bcos::protocol::Transaction::Ptr& m_tx;
         Error::Ptr m_error;
         Json::Value& m_response;
+        u256* m_gasUsed;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
@@ -565,6 +571,11 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                         m_response["jsonrpc"] = "2.0";
                         m_response["error"] = std::move(jsonResult);
                     }
+
+                    if (m_gasUsed)
+                    {
+                        *m_gasUsed = result->gasUsed();
+                    }
                 }
 
                 handle.resume();
@@ -577,14 +588,18 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                 BOOST_THROW_EXCEPTION(*m_error);
             }
         }
-    } awaitable{.m_scheduler = *scheduler, .m_tx = tx, .m_error = {}, .m_response = response};
+    } awaitable{.m_scheduler = *scheduler,
+        .m_tx = tx,
+        .m_error = {},
+        .m_response = response,
+        .m_gasUsed = gasUsed};
     co_await awaitable;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: gas(QTY)
-    auto const tx = request[0U];
+    auto const& tx = request[0U];
     auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
@@ -593,17 +608,19 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
-    u256 estimateGas = LowestGasUsed;
-    auto const ledger = m_nodeService->ledger();
-    if (auto const config =
-            co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_LIMIT))
+    u256 gasUsed;
+    Json::Value callResponse;
+    co_await call(request, callResponse, std::addressof(gasUsed));
+
+    if (!callResponse.isMember("error"))
     {
-        auto [gasLimit, _] = config.value();
-        estimateGas = u256(gasLimit);
+        Json::Value result = toQuantity(gasUsed);
+        buildJsonContent(result, response);
     }
-    Json::Value result = toQuantity(estimateGas);
-    buildJsonContent(result, response);
-    co_return;
+    else
+    {
+        response = std::move(callResponse);
+    }
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {

@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include "bcos-framework/protocol/BlockFactory.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -52,6 +54,19 @@ using namespace bcos::rpc;
 using namespace bcos::crypto;
 namespace bcos::test
 {
+
+class FakeScheduler2 : public FakeScheduler
+{
+    using FakeScheduler::FakeScheduler;
+    void call(protocol::Transaction::Ptr,
+        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) noexcept
+        override
+    {
+        auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        callback({}, receipt);
+    }
+};
+
 class RPCFixture : public TestPromptFixture
 {
 public:
@@ -102,7 +117,7 @@ public:
         txPool = txPoolFactory->createTxPool();
         txPool->init();
         txPool->start();
-        scheduler = std::make_shared<FakeScheduler>(m_ledger, m_blockFactory);
+        scheduler = std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory);
 
         nodeService = std::make_shared<rpc::NodeService>(
             m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory);
@@ -131,7 +146,7 @@ public:
     FakeFrontService::Ptr m_frontService;
     FakeLedger::Ptr m_ledger;
     TxPool::Ptr txPool;
-    FakeScheduler::Ptr scheduler;
+    FakeScheduler2::Ptr scheduler;
     BlockFactory::Ptr m_blockFactory;
 
     rpc::NodeService::Ptr nodeService;

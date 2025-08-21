@@ -23,9 +23,8 @@
 #ifdef WITH_SM2_OPTIMIZE
 #include <wedpr-crypto/WedprUtilities.h>
 
-namespace bcos
-{
-namespace crypto
+
+namespace bcos::crypto
 {
 // C interface for 'fast_sm2_sign'.
 int8_t fast_sm2_sign(const CInputBuffer* raw_private_key, const CInputBuffer* raw_public_key,
@@ -38,6 +37,6 @@ int8_t fast_sm2_verify(const CInputBuffer* raw_public_key, const CInputBuffer* r
 // C interface for 'fast_sm2_verify'.
 int8_t fast_sm2_derive_public_key(
     const CInputBuffer* raw_private_key, COutputBuffer* output_public_key);
-}  // namespace crypto
-}  // namespace bcos
+}  // namespace bcos::crypto
+
 #endif

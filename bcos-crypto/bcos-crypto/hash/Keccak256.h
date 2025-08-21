@@ -22,7 +22,6 @@
 
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <wedpr-crypto/WedprCrypto.h>
 
 namespace bcos::crypto
 {

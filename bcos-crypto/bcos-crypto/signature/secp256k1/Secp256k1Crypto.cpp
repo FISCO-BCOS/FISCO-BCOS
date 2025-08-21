@@ -51,22 +51,6 @@ inline void checkSigLen(bytesConstRef _signatureData)
 std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
     const KeyPairInterface& _keyPair, const HashType& _hash)
 {
-#if 0
-    FixedBytes<SECP256K1_SIGNATURE_LEN> signatureDataArray;
-    CInputBuffer privateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
-    CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
-    COutputBuffer secp256k1SignatureResult{
-        (char*)signatureDataArray.data(), SECP256K1_SIGNATURE_LEN};
-    auto retCode = wedpr_secp256k1_sign(&privateKey, &msgHash, &secp256k1SignatureResult);
-    if (retCode != WEDPR_SUCCESS)
-    {
-        BOOST_THROW_EXCEPTION(SignException() << errinfo_comment(
-                                  "secp256k1Sign exception, raw data: " + _hash.hex()));
-    }
-    std::shared_ptr<bytes> signatureData = std::make_shared<bytes>();
-    *signatureData = signatureDataArray.asBytes();
-    return signatureData;
-#endif
     std::shared_ptr<bytes> signatureData = std::make_shared<bytes>(SECP256K1_SIGNATURE_LEN, 0);
     // secp256k1_ecdsa_recoverable_signature rawSig;
     auto* rawSig = (secp256k1_ecdsa_recoverable_signature*)(signatureData->data());
@@ -87,18 +71,6 @@ bool bcos::crypto::secp256k1Verify(
     const PublicPtr& _pubKey, const HashType& _hash, bytesConstRef _signatureData)
 {
     checkSigLen(_signatureData);
-#if 0
-    CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-    CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
-    CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
-    auto verifyResult = wedpr_secp256k1_verify(&publicKey, &msgHash, &signature);
-    if (verifyResult == WEDPR_SUCCESS)
-    {
-        return true;
-    }
-    return false;
-#endif
-
     if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
     {
         BOOST_THROW_EXCEPTION(
@@ -128,8 +100,10 @@ bool bcos::crypto::secp256k1Verify(
 KeyPairInterface::UniquePtr bcos::crypto::secp256k1GenerateKeyPair()
 {
     auto keyPair = std::make_unique<Secp256k1KeyPair>();
-    COutputBuffer publicKey{keyPair->publicKey()->mutableData(), keyPair->publicKey()->size()};
-    COutputBuffer privateKey{keyPair->secretKey()->mutableData(), keyPair->secretKey()->size()};
+    COutputBuffer publicKey{
+        .data = keyPair->publicKey()->mutableData(), .len = keyPair->publicKey()->size()};
+    COutputBuffer privateKey{
+        .data = keyPair->secretKey()->mutableData(), .len = keyPair->secretKey()->size()};
     auto retCode = wedpr_secp256k1_gen_key_pair(&publicKey, &privateKey);
     if (retCode != WEDPR_SUCCESS)
     {
@@ -164,20 +138,6 @@ void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstR
 PublicPtr bcos::crypto::secp256k1Recover(const HashType& _hash, bytesConstRef _signatureData)
 {
     checkSigLen(_signatureData);
-#if 0
-    CInputBuffer msgHash{(const char*)_hash.data(), HashType::SIZE};
-    CInputBuffer signature{(const char*)_signatureData.data(), _signatureData.size()};
-    auto pubKey = std::make_shared<KeyImpl>(SECP256K1_PUBLIC_LEN);
-    COutputBuffer publicKeyResult{pubKey->mutableData(), pubKey->size()};
-    auto retCode = wedpr_secp256k1_recover_public_key(&msgHash, &signature, &publicKeyResult);
-    if (retCode != WEDPR_SUCCESS)
-    {
-        BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
-                                  "invalid signature: secp256k1Recover failed, msgHash : " +
-                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
-    }
-    return pubKey;
-#endif
     if ((uint8_t)_signatureData[SECP256K1_SIGNATURE_V] > 3)
     {
         BOOST_THROW_EXCEPTION(

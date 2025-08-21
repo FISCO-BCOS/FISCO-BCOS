@@ -42,4 +42,4 @@ SEPOLIA_URL=https://sepolia.infura.io/v3/your_infura_api_key_here
 GOERLI_URL=https://goerli.infura.io/v3/your_infura_api_key_here
 EOF
 
-npx hardhat test test/tx/eth_sendRawTransaction* --network bcosnet
+# npx hardhat test test/tx/eth_sendRawTransaction* --network bcosnet

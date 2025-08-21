@@ -39,7 +39,6 @@ public:
     {}
     virtual ~EthEndpoint() = default;
 
-public:
     task::Task<void> protocolVersion(const Json::Value&, Json::Value&);
     task::Task<void> syncing(const Json::Value&, Json::Value&);
     task::Task<void> coinbase(const Json::Value&, Json::Value&);
@@ -85,6 +84,8 @@ public:
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
+
+    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed);
 };
 
 }  // namespace bcos::rpc

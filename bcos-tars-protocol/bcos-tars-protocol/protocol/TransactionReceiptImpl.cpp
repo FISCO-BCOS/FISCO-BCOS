@@ -29,6 +29,12 @@ using namespace bcostars::protocol;
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
+bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl()
+  : m_inner([m_receipt = bcostars::TransactionReceipt()]() mutable {
+        return std::addressof(m_receipt);
+    })
+{}
+
 void TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
 {
     bcos::concepts::serialize::decode(_receiptData, *m_inner());
