@@ -26,9 +26,9 @@ using namespace bcos::rpc;
 bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
     bcos::protocol::TransactionFactory::Ptr const& factory) noexcept
 {
-    auto tx = factory->createTransaction(0, std::move(this->to), std::move(this->data), "", 0, {},
-        {}, 0, "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0),
-        maxFeePerGas.value_or(""), maxPriorityFeePerGas.value_or(""));
+    auto tx = factory->createTransaction(1, std::move(this->to), this->data, "", 0, {}, {}, 0, "",
+        value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),
+        maxPriorityFeePerGas.value_or(""));
     if (from.has_value())
     {
         if (auto const sender = safeFromHexWithPrefix(from.value()))
@@ -47,43 +47,41 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root) n
     {
         return {false, _request};
     }
-    if (!_root.isMember("data") && !_root.isMember("input"))
+    const auto* dataValue = _root.find("data");
+    if (dataValue == nullptr)
     {
-        return {false, _request};
+        dataValue = _root.find("input");
     }
-    auto const& data = _root.isMember("data") ? _root["data"] : _root["input"];
-
-    auto const dataBytes = bcos::safeFromHexWithPrefix(data.asString());
-    if (!dataBytes.has_value())
+    if (dataValue != nullptr)
     {
-        return {false, _request};
+        auto const dataBytes = bcos::safeFromHexWithPrefix(dataValue->asString());
+        _request.data = dataBytes.value();
     }
-    _request.data = dataBytes.value();
     _request.to = _root.isMember("to") ? _root["to"].asString() : "";
 
-    if (_root.isMember("from"))
+    if (const auto* value = _root.find("from"))
     {
-        _request.from = _root["from"].asString();
+        _request.from = value->asString();
     }
-    if (_root.isMember("gas"))
+    if (const auto* value = _root.find("gas"))
     {
-        _request.gas = fromQuantity(_root["gas"].asString());
+        _request.gas = fromQuantity(value->asString());
     }
-    if (_root.isMember("gasPrice"))
+    if (const auto* value = _root.find("gasPrice"))
     {
-        _request.gasPrice = _root["gasPrice"].asString();
+        _request.gasPrice = value->asString();
     }
-    if (_root.isMember("value"))
+    if (const auto* value = _root.find("value"))
     {
-        _request.value = _root["value"].asString();
+        _request.value = value->asString();
     }
-    if (_root.isMember("maxPriorityFeePerGas"))
+    if (const auto* value = _root.find("maxPriorityFeePerGas"))
     {
-        _request.maxPriorityFeePerGas = _root["maxPriorityFeePerGas"].asString();
+        _request.maxPriorityFeePerGas = value->asString();
     }
-    if (_root.isMember("maxFeePerGas"))
+    if (const auto* value = _root.find("maxFeePerGas"))
     {
-        _request.maxFeePerGas = _root["maxFeePerGas"].asString();
+        _request.maxFeePerGas = value->asString();
     }
     return {true, std::move(_request)};
 }

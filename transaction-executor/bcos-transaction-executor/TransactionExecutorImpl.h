@@ -153,12 +153,11 @@ public:
 
         task::Task<void> consumeBalance()
         {
+            auto& evmcResult = *m_data->m_evmcResult;
+            m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
             if (!m_data->m_call)
             {
-                auto& evmcResult = *m_data->m_evmcResult;
                 auto& evmcMessage = m_data->m_hostContext.message();
-                m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
-
                 if (auto gasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     gasPrice > 0)
                 {

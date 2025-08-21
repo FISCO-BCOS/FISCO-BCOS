@@ -22,6 +22,8 @@
 #include "bcos-framework/sealer/VrfCurveType.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
+#include <wedpr-crypto/WedprCrypto.h>
+#include <wedpr-crypto/WedprUtilities.h>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -59,9 +61,9 @@ bool VRFInfo::verifyProof()
 
 HashType VRFInfo::getHashFromProof()
 {
-    CInputBuffer rawProof{(const char*)m_vrfProof.data(), m_vrfProof.size()};
+    CInputBuffer rawProof{.data = (const char*)m_vrfProof.data(), .len = m_vrfProof.size()};
     HashType vrfHash;
-    COutputBuffer outputHash{(char*)vrfHash.data(), vrfHash.size()};
+    COutputBuffer outputHash{.data = (char*)vrfHash.data(), .len = vrfHash.size()};
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:

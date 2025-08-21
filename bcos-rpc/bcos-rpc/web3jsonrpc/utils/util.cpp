@@ -37,7 +37,7 @@ void bcos::rpc::buildJsonError(
         request.isObject() && request.isMember("id") ? request["id"] : Json::Value::null;
     Json::Value error;
     error["code"] = code;
-    error["message"] = std::move(message);
+    error["message"] = message;
     response["error"] = std::move(error);
 }
 
