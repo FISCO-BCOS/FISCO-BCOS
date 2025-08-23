@@ -1,6 +1,7 @@
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <benchmark/benchmark.h>
+#include <utility>
 
 struct Fixture
 {
@@ -11,6 +12,7 @@ struct Fixture
         for (auto i : ::ranges::views::iota(0, 10 * 10000))
         {
             auto transaction = std::make_shared<bcostars::protocol::TransactionImpl>();
+            transaction->mutableInner().importTime = i;
             block->appendTransaction(std::move(transaction));
         }
     }
@@ -24,7 +26,9 @@ static void testByIndex(benchmark::State& state)
     auto totalSize = fixture.block->transactionsSize();
     for (auto const& i : state)
     {
-        auto tx = fixture.block->transaction(index++ % totalSize);
+        auto currentIndex = index++ % totalSize;
+        auto tx = fixture.block->transaction(currentIndex);
+        assert(std::cmp_equal(tx->importTime(), currentIndex));
     }
 }
 
@@ -35,7 +39,9 @@ static void testByRange(benchmark::State& state)
     auto range = fixture.block->transactions();
     for (auto const& i : state)
     {
-        auto tx = range[index++ % totalSize];
+        auto currentIndex = index++ % totalSize;
+        auto tx = range[currentIndex];
+        assert(std::cmp_equal(tx->importTime(), currentIndex));
     }
 }
 
