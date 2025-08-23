@@ -8,27 +8,21 @@
 namespace bcos
 {
 
-template <class T>
-concept HasMoveMethod = requires(T* from, T* toObj) {
-    { from->moveAssign(toObj) };
-    { from->moveConstruct(toObj) };
-};
-
 template <class Base>
 struct MoveBase
 {
-    virtual void moveAssign(Base*) noexcept = 0;
-    virtual void moveConstruct(Base*) noexcept = 0;
+    virtual void moveAssignTo(Base*) noexcept = 0;
+    virtual void moveConstructTo(Base*) noexcept = 0;
 };
 
 template <class Derived, class Base>
 struct MoveImpl : public virtual MoveBase<Base>
 {
-    void moveAssign(Base* toObj) noexcept override
+    void moveAssignTo(Base* toObj) noexcept override
     {
         static_cast<Derived*>(toObj)->operator=(std::move(*dynamic_cast<Derived*>(this)));
     }
-    void moveConstruct(Base* toObj) noexcept override
+    void moveConstructTo(Base* toObj) noexcept override
     {
         new (toObj) Derived(std::move(*dynamic_cast<Derived*>(this)));
     }
@@ -37,18 +31,17 @@ struct MoveImpl : public virtual MoveBase<Base>
 template <class HoldType>
 struct InPlace
 {
-    using Type = HoldType;
 };
 
 template <class Type, std::size_t maxSize>
-    requires HasMoveMethod<Type>
+    requires std::derived_from<Type, MoveBase<Type>>
 class AnyHolder
 {
 private:
     std::array<std::byte, maxSize> m_data;
 
-    Type* convertTo() & { return reinterpret_cast<Type*>(m_data.data()); }
-    const Type* convertTo() const& { return reinterpret_cast<const Type*>(m_data.data()); }
+    Type* get() & { return reinterpret_cast<Type*>(m_data.data()); }
+    const Type* get() const& { return reinterpret_cast<const Type*>(m_data.data()); }
 
 public:
     template <class HoldType>
@@ -58,17 +51,15 @@ public:
     {
         new (m_data.data()) HoldType(std::forward<decltype(args)>(args)...);
     }
-    ~AnyHolder() noexcept { convertTo()->~Type(); }
+    ~AnyHolder() noexcept { get()->~Type(); }
     AnyHolder(const AnyHolder&) = delete;
-    AnyHolder(AnyHolder&& other) noexcept { other.convertTo()->moveConstruct(convertTo()); }
+    AnyHolder(AnyHolder&& other) noexcept { other.get()->moveConstructTo(get()); }
     AnyHolder& operator=(const AnyHolder&) = delete;
-    AnyHolder& operator=(AnyHolder&& other) noexcept { other.convertTo()->moveAssign(convertTo()); }
+    AnyHolder& operator=(AnyHolder&& other) noexcept { other.get()->moveAssignTo(get()); }
 
-    Type& get() & { return *convertTo(); };
-    const Type& get() const& { return *convertTo(); };
-    Type& operator*() & { return get(); }
-    const Type& operator*() const& { return get(); }
-    Type* operator->() & { return convertTo(); }
-    const Type* operator->() const& { return convertTo(); }
+    Type& operator*() & { return *get(); }
+    const Type& operator*() const& { return *get(); }
+    Type* operator->() & { return get(); }
+    const Type* operator->() const& { return get(); }
 };
 }  // namespace bcos

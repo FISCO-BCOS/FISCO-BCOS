@@ -260,26 +260,26 @@ bcos::protocol::ViewResult<bcos::protocol::AnyTransactionMetaData>
 bcostars::protocol::BlockImpl::transactionMetaDatas() const
 {
     return ::ranges::views::transform(m_inner.transactionsMetaData, [](auto& inner) {
-        return bcos::protocol::AnyTransactionMetaData{
+        return bcos::protocol::AnyTransactionMetaData(
             bcos::InPlace<bcostars::protocol::TransactionMetaDataImpl>{},
-            [&]() mutable { return &inner; }};
+            [&]() mutable { return &inner; });
     });
 }
 bcos::protocol::ViewResult<bcos::protocol::AnyTransaction>
 bcostars::protocol::BlockImpl::transactions() const
 {
     return ::ranges::views::transform(m_inner.transactions, [](auto& inner) {
-        return bcos::protocol::AnyTransaction{
-            bcos::InPlace<bcostars::protocol::TransactionImpl>{}, [&]() mutable { return &inner; }};
+        return bcos::protocol::AnyTransaction(
+            bcos::InPlace<bcostars::protocol::TransactionImpl>{}, [&]() mutable { return &inner; });
     });
 }
 bcos::protocol::ViewResult<bcos::protocol::AnyTransactionReceipt>
 bcostars::protocol::BlockImpl::receipts() const
 {
     return ::ranges::views::transform(m_inner.receipts, [](auto& receipt) {
-        return bcos::protocol::AnyTransactionReceipt{
+        return bcos::protocol::AnyTransactionReceipt(
             bcos::InPlace<bcostars::protocol::TransactionReceiptImpl>{},
-            [&]() mutable { return std::addressof(receipt); }};
+            [&]() mutable { return std::addressof(receipt); });
     });
 }
 size_t bcostars::protocol::BlockImpl::size() const
