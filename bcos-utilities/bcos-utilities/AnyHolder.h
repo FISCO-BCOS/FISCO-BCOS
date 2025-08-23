@@ -60,9 +60,9 @@ public:
     }
     ~AnyHolder() noexcept { convertTo()->~Type(); }
     AnyHolder(const AnyHolder&) = delete;
-    AnyHolder(AnyHolder&& toObj) noexcept { toObj.convertTo()->moveConstruct(convertTo()); }
+    AnyHolder(AnyHolder&& other) noexcept { other.convertTo()->moveConstruct(convertTo()); }
     AnyHolder& operator=(const AnyHolder&) = delete;
-    AnyHolder& operator=(AnyHolder&& toObj) noexcept { toObj.convertTo()->moveAssign(convertTo()); }
+    AnyHolder& operator=(AnyHolder&& other) noexcept { other.convertTo()->moveAssign(convertTo()); }
 
     Type& get() & { return *convertTo(); };
     const Type& get() const& { return *convertTo(); };
