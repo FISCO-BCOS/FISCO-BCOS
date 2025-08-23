@@ -34,7 +34,8 @@
 namespace bcostars::protocol
 {
 
-class TransactionImpl : public bcos::protocol::Transaction
+class TransactionImpl : public bcos::protocol::Transaction,
+                        public virtual bcos::MoveImpl<TransactionImpl, bcos::protocol::Transaction>
 {
 public:
     explicit TransactionImpl(std::function<bcostars::Transaction*()> inner);
@@ -42,8 +43,8 @@ public:
     ~TransactionImpl() override = default;
     TransactionImpl& operator=(const TransactionImpl& _tx) = delete;
     TransactionImpl(const TransactionImpl& _tx) = delete;
-    TransactionImpl& operator=(TransactionImpl&& _tx) = delete;
-    TransactionImpl(TransactionImpl&& _tx) = delete;
+    TransactionImpl& operator=(TransactionImpl&& _tx) = default;
+    TransactionImpl(TransactionImpl&& _tx) = default;
 
     friend class TransactionFactoryImpl;
 

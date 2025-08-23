@@ -99,12 +99,10 @@ public:
     bcos::crypto::HashType calculateReceiptRoot(const bcos::crypto::Hash& hashImpl) const override;
 
     bcos::protocol::ViewResult<bcos::crypto::HashType> transactionHashes() const override;
-    bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionMetaData>>
-    transactionMetaDatas() const override;
-    bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::Transaction>> transactions()
+    bcos::protocol::ViewResult<bcos::protocol::AnyTransactionMetaData> transactionMetaDatas()
         const override;
-    bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionReceipt>> receipts()
-        const override;
+    bcos::protocol::ViewResult<bcos::protocol::AnyTransaction> transactions() const override;
+    bcos::protocol::ViewResult<bcos::protocol::AnyTransactionReceipt> receipts() const override;
     size_t size() const override;
 
 private:

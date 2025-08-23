@@ -55,19 +55,12 @@ public:
     size_t size() const override { return 0; }
 
     protocol::ViewResult<crypto::HashType> transactionHashes() const override { return {}; }
-    protocol::ViewResult<std::unique_ptr<protocol::TransactionMetaData>> transactionMetaDatas()
-        const override
+    protocol::ViewResult<protocol::AnyTransactionMetaData> transactionMetaDatas() const override
     {
         return {};
     }
-    protocol::ViewResult<std::unique_ptr<protocol::Transaction>> transactions() const override
-    {
-        return {};
-    }
-    protocol::ViewResult<std::unique_ptr<protocol::TransactionReceipt>> receipts() const override
-    {
-        return {};
-    }
+    protocol::ViewResult<protocol::AnyTransaction> transactions() const override { return {}; }
+    protocol::ViewResult<protocol::AnyTransactionReceipt> receipts() const override { return {}; }
 
 private:
     protocol::BlockHeader::Ptr m_blockHeader = std::make_shared<MockBlockHeader>(1);

@@ -27,6 +27,7 @@
 #if !ONLY_CPP_SDK
 #include <bcos-utilities/ITTAPI.h>
 #endif
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <boost/throw_exception.hpp>
 #include <utility>
@@ -53,16 +54,9 @@ constexpr bool operator==(bcos::protocol::TransactionType const& _lhs, auto _rhs
     return static_cast<uint8_t>(_lhs) == static_cast<uint8_t>(_rhs);
 }
 
-enum TransactionOp
-{
-    NullTransaction = 0,
-    ContractCreation,
-    MessageCall,
-};
-
 using TxSubmitCallback =
     std::function<void(Error::Ptr, bcos::protocol::TransactionSubmitResult::Ptr)>;
-class Transaction
+class Transaction : public virtual MoveBase<Transaction>
 {
 public:
     enum Attribute : int32_t
@@ -78,10 +72,10 @@ public:
     using ConstPtr = std::shared_ptr<const Transaction>;
 
     Transaction() = default;
-    Transaction(const Transaction&) = delete;
-    Transaction(Transaction&&) = delete;
-    Transaction& operator=(const Transaction&) = delete;
-    Transaction& operator=(Transaction&&) = delete;
+    Transaction(const Transaction&) = default;
+    Transaction(Transaction&&) = default;
+    Transaction& operator=(const Transaction&) = default;
+    Transaction& operator=(Transaction&&) = default;
     virtual ~Transaction() noexcept = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
@@ -145,14 +139,6 @@ public:
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual uint8_t type() const = 0;
 
-    virtual TransactionOp txOp() const
-    {
-        if (!to().empty())
-        {
-            return TransactionOp::MessageCall;
-        }
-        return TransactionOp::ContractCreation;
-    }
     virtual void forceSender(const bcos::bytes& _sender) const = 0;
     virtual bcos::bytesConstRef signatureData() const = 0;
 
@@ -198,15 +184,15 @@ private:
     // the number of proposal that the tx batched into
     mutable bcos::protocol::BlockNumber m_batchId = {-1};
 
-    mutable std::atomic_bool m_synced = {false};
+    mutable bool m_synced = {false};
     // the tx has been sealed by the leader of not
-    mutable std::atomic_bool m_sealed = {false};
+    mutable bool m_sealed = {false};
     // the tx is invalid for verify failed
-    mutable std::atomic_bool m_invalid = {false};
+    mutable bool m_invalid = {false};
     // the transaction is the system transaction or not
-    mutable std::atomic_bool m_systemTx = {false};
+    mutable bool m_systemTx = {false};
     // the transaction has been stored to the storage or not
-    mutable std::atomic_bool m_storeToBackend = {false};
+    mutable bool m_storeToBackend = {false};
 };
 
 using Transactions = std::vector<Transaction::Ptr>;
@@ -214,6 +200,7 @@ using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
+using AnyTransaction = AnyHolder<bcos::protocol::Transaction, 128>;
 
 inline std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 {
