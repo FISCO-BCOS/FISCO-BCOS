@@ -18,13 +18,13 @@ struct MoveBase
 template <class Derived, class Base>
 struct MoveImpl : public virtual MoveBase<Base>
 {
-    void moveAssignTo(Base* toObj) noexcept override
+    void moveAssignTo(Base* other) noexcept override
     {
-        static_cast<Derived*>(toObj)->operator=(std::move(*dynamic_cast<Derived*>(this)));
+        static_cast<Derived*>(other)->operator=(std::move(*dynamic_cast<Derived*>(this)));
     }
-    void moveConstructTo(Base* toObj) noexcept override
+    void moveConstructTo(Base* other) noexcept override
     {
-        new (toObj) Derived(std::move(*dynamic_cast<Derived*>(this)));
+        new (other) Derived(std::move(*dynamic_cast<Derived*>(this)));
     }
 };
 
@@ -49,7 +49,7 @@ public:
                  (sizeof(HoldType) <= maxSize)
     AnyHolder(InPlace<HoldType> /*unused*/, auto&&... args)
     {
-        new (m_data.data()) HoldType(std::forward<decltype(args)>(args)...);
+        new (m_data.data()) HoldType{std::forward<decltype(args)>(args)...};
     }
     ~AnyHolder() noexcept { get()->~Type(); }
     AnyHolder(const AnyHolder&) = delete;
