@@ -25,9 +25,7 @@
 #include <bcos-rpc/event/EventSubParams.h>
 #include <json/json.h>
 
-namespace bcos
-{
-namespace event
+namespace bcos::event
 {
 class EventSubMatcher
 {
@@ -35,19 +33,16 @@ public:
     using Ptr = std::shared_ptr<EventSubMatcher>;
     using ConstPtr = std::shared_ptr<const EventSubMatcher>;
 
-    virtual ~EventSubMatcher() {}
+    virtual ~EventSubMatcher() = default;
 
-public:
     virtual bool matches(
         EventSubParams::ConstPtr _params, const bcos::protocol::LogEntry& _logEntry);
 
-public:
     uint32_t matches(EventSubParams::ConstPtr _params,
-        bcos::protocol::TransactionReceipt::ConstPtr _receipt,
-        bcos::protocol::Transaction::ConstPtr _tx, std::size_t _txIndex, Json::Value& _result);
+        const bcos::protocol::TransactionReceipt& _receipt, const bcos::protocol::Transaction& _tx,
+        std::size_t _txIndex, Json::Value& _result);
     uint32_t matches(EventSubParams::ConstPtr _params, bcos::protocol::Block::ConstPtr _block,
         Json::Value& _result);
 };
 
-}  // namespace event
-}  // namespace bcos
+}  // namespace bcos::event

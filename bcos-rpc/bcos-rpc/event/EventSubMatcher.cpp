@@ -29,21 +29,23 @@ uint32_t EventSubMatcher::matches(
     EventSubParams::ConstPtr _params, bcos::protocol::Block::ConstPtr _block, Json::Value& _result)
 {
     uint32_t count = 0;
-    for (std::size_t index = 0; index < _block->transactionsSize(); index++)
+    auto transactions = _block->transactions();
+    auto receipts = _block->receipts();
+    for (auto [index, transaction, receipt] :
+        ::ranges::views::zip(::ranges::views::iota(0), transactions, receipts))
     {
-        count +=
-            matches(_params, _block->receipt(index), _block->transaction(index), index, _result);
+        count += matches(_params, *receipt, *transaction, index, _result);
     }
 
     return count;
 }
 
 uint32_t EventSubMatcher::matches(EventSubParams::ConstPtr _params,
-    bcos::protocol::TransactionReceipt::ConstPtr _receipt,
-    bcos::protocol::Transaction::ConstPtr _tx, std::size_t _txIndex, Json::Value& _result)
+    const bcos::protocol::TransactionReceipt& _receipt, const bcos::protocol::Transaction& _tx,
+    std::size_t _txIndex, Json::Value& _result)
 {
     uint32_t count = 0;
-    const auto& logEntries = _receipt->logEntries();
+    const auto& logEntries = _receipt.logEntries();
     std::size_t logIndex = 0;
     for (const auto& logEntry : logEntries)
     {
@@ -52,11 +54,11 @@ uint32_t EventSubMatcher::matches(EventSubParams::ConstPtr _params,
             count++;
 
             Json::Value jResp;
-            jResp["blockNumber"] = _receipt->blockNumber();
+            jResp["blockNumber"] = _receipt.blockNumber();
             jResp["address"] = std::string(logEntry.address());
             jResp["data"] = toHexStringWithPrefix(logEntry.data());
             jResp["logIndex"] = (uint64_t)logIndex;
-            jResp["transactionHash"] = _tx->hash().hexPrefixed();
+            jResp["transactionHash"] = _tx.hash().hexPrefixed();
             jResp["transactionIndex"] = (uint64_t)_txIndex;
             jResp["topics"] = Json::Value(Json::arrayValue);
             for (const auto& topic : logEntry.topics())
