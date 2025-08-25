@@ -23,6 +23,7 @@
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
 #include "bcos-concepts/Serialize.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
@@ -255,28 +256,30 @@ bcostars::protocol::BlockImpl::transactionHashes() const
             bcos::bytesConstRef((const bcos::byte*)txMetaData.hash.data(), txMetaData.hash.size())};
     });
 }
-bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionMetaData>>
+bcos::protocol::ViewResult<bcos::protocol::AnyTransactionMetaData>
 bcostars::protocol::BlockImpl::transactionMetaDatas() const
 {
     return ::ranges::views::transform(m_inner.transactionsMetaData, [](auto& inner) {
-        return std::make_unique<bcostars::protocol::TransactionMetaDataImpl>(
-            [&]() mutable { return &inner; });
+        return bcos::protocol::AnyTransactionMetaData{
+            bcos::InPlace<bcostars::protocol::TransactionMetaDataImpl>{},
+            [&]() mutable { return &inner; }};
     });
 }
-bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::Transaction>>
+bcos::protocol::ViewResult<bcos::protocol::AnyTransaction>
 bcostars::protocol::BlockImpl::transactions() const
 {
     return ::ranges::views::transform(m_inner.transactions, [](auto& inner) {
-        return std::make_unique<bcostars::protocol::TransactionImpl>(
-            [&]() mutable { return &inner; });
+        return bcos::protocol::AnyTransaction{
+            bcos::InPlace<bcostars::protocol::TransactionImpl>{}, [&]() mutable { return &inner; }};
     });
 }
-bcos::protocol::ViewResult<std::unique_ptr<bcos::protocol::TransactionReceipt>>
+bcos::protocol::ViewResult<bcos::protocol::AnyTransactionReceipt>
 bcostars::protocol::BlockImpl::receipts() const
 {
     return ::ranges::views::transform(m_inner.receipts, [](auto& receipt) {
-        return std::make_unique<TransactionReceiptImpl>(
-            [&]() mutable { return std::addressof(receipt); });
+        return bcos::protocol::AnyTransactionReceipt{
+            bcos::InPlace<bcostars::protocol::TransactionReceiptImpl>{},
+            [&]() mutable { return std::addressof(receipt); }};
     });
 }
 size_t bcostars::protocol::BlockImpl::size() const

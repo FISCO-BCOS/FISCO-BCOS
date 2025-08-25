@@ -186,3 +186,7 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
     size += m_inner()->message.size();
     return size;
 }
+bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl(
+    std::function<bcostars::TransactionReceipt*()> inner)
+  : m_inner(std::move(inner))
+{}

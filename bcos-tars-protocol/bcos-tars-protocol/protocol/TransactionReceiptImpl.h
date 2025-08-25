@@ -35,21 +35,20 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <utility>
 
 namespace bcostars::protocol
 {
-class TransactionReceiptImpl : public bcos::protocol::TransactionReceipt
+class TransactionReceiptImpl
+  : public bcos::protocol::TransactionReceipt,
+    public virtual bcos::MoveImpl<TransactionReceiptImpl, bcos::protocol::TransactionReceipt>
 {
 public:
     TransactionReceiptImpl(const TransactionReceiptImpl&) = default;
-    TransactionReceiptImpl(TransactionReceiptImpl&&) = delete;
+    TransactionReceiptImpl(TransactionReceiptImpl&&) noexcept = default;
     TransactionReceiptImpl& operator=(const TransactionReceiptImpl&) = default;
-    TransactionReceiptImpl& operator=(TransactionReceiptImpl&&) = delete;
+    TransactionReceiptImpl& operator=(TransactionReceiptImpl&&) noexcept = default;
     TransactionReceiptImpl();
-    explicit TransactionReceiptImpl(std::function<bcostars::TransactionReceipt*()> inner)
-      : m_inner(std::move(inner))
-    {}
+    explicit TransactionReceiptImpl(std::function<bcostars::TransactionReceipt*()> inner);
 
     ~TransactionReceiptImpl() override = default;
     void decode(bcos::bytesConstRef _receiptData) override;
