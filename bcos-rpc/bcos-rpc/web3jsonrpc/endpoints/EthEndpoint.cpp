@@ -694,7 +694,7 @@ task::Task<void> EthEndpoint::getTransactionByHash(
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
             bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
-        combineTxResponse(result, txs->at(0), std::move(receipt), block);
+        combineTxResponse(result, *txs->at(0), receipt.get(), block.get());
     }
     catch (std::exception const& e)
     {
@@ -730,8 +730,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
         buildJsonContent(result, response);
         co_return;
     }
-    auto tx = block->transaction(transactionIndex);
-    combineTxResponse(result, std::move(tx), nullptr, block);
+    auto transactions = block->transactions();
+    auto tx = transactions.at(transactionIndex);
+    combineTxResponse(result, *tx, nullptr, block.get());
     buildJsonContent(result, response);
     co_return;
 }
@@ -753,8 +754,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        auto tx = block->transaction(transactionIndex);
-        combineTxResponse(result, std::move(tx), nullptr, block);
+        auto transactions = block->transactions();
+        auto tx = transactions.at(transactionIndex);
+        combineTxResponse(result, *tx, nullptr, block.get());
     }
     catch (std::exception const& e)
     {

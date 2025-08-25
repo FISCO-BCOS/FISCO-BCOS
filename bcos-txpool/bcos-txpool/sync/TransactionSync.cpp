@@ -360,10 +360,11 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
             false);
         return;
     }
+    auto txs2 = transactions->transactions();
     // check the transaction hash
     for (size_t i = 0; i < _missedTxs->size(); i++)
     {
-        if ((*_missedTxs)[i] != transactions->transaction(i)->hash())
+        if ((*_missedTxs)[i] != txs2[i]->hash())
         {
             _onVerifyFinished(
                 BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
