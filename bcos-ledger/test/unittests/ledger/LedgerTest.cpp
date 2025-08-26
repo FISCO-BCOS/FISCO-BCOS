@@ -1061,7 +1061,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
         auto f1 = p1.get_future();
         m_ledger->asyncGetTransactionReceiptByHash(
             m_fakeBlocks->at(blockNumber)->transactionHash(hashIndex), true,
-            [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
+            [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
                 BOOST_CHECK_EQUAL(_error, nullptr);
                 BOOST_CHECK_EQUAL(_receipt->hash().hex(),
                     m_fakeBlocks->at(blockNumber)->receipt(hashIndex)->hash().hex());
@@ -1095,7 +1095,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetTransactionReceiptByHash(m_fakeBlocks->at(3)->transactionHash(0), true,
-        [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
+        [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(
                 _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
@@ -1114,7 +1114,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     auto f2 = p2.get_future();
     // without proof
     m_ledger->asyncGetTransactionReceiptByHash(m_fakeBlocks->at(3)->transactionHash(0), false,
-        [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
+        [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(
                 _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
@@ -1126,7 +1126,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     auto f3 = p3.get_future();
     // error hash
     m_ledger->asyncGetTransactionReceiptByHash(HashType(), false,
-        [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
+        [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
             BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_receipt, nullptr);
             BOOST_CHECK(_proof == nullptr);
@@ -1136,7 +1136,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
     std::promise<bool> p4;
     auto f4 = p4.get_future();
     m_ledger->asyncGetTransactionReceiptByHash(HashType("123"), true,
-        [&](Error::Ptr _error, TransactionReceipt::ConstPtr _receipt, MerkleProofPtr _proof) {
+        [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
             BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_receipt, nullptr);
             BOOST_CHECK(_proof == nullptr);

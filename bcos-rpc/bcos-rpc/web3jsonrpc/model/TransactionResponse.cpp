@@ -2,13 +2,13 @@
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
-    const protocol::TransactionReceipt* receipt, const bcos::protocol::Block* block)
+    const protocol::TransactionReceipt* receipt, const bcos::protocol::Block* block,
+    std::optional<int64_t> transactionIndex)
 {
     if (!result.isObject())
     {
         return;
     }
-    size_t transactionIndex = 0;
     crypto::HashType blockHash;
     uint64_t blockNumber = 0;
     if (block != nullptr)
@@ -17,20 +17,24 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         blockNumber = block->blockHeaderConst()->number();
         auto transactionHashes = block->transactionHashes();
         auto transactions = block->transactions();
-        if (auto it = ::ranges::find(transactionHashes, tx.hash()); it != transactionHashes.end())
+        if (!transactionIndex)
         {
-            transactionIndex = ::ranges::distance(transactionHashes.begin(), it);
-        }
-        else if (auto it = ::ranges::find_if(
-                     transactions, [&](const auto& tx2) { return tx2->hash() == tx.hash(); });
-            it != transactions.end())
-        {
-            transactionIndex = ::ranges::distance(transactions.begin(), it);
+            if (auto it = ::ranges::find(transactionHashes, tx.hash());
+                it != transactionHashes.end())
+            {
+                transactionIndex = ::ranges::distance(transactionHashes.begin(), it);
+            }
+            else if (auto it = ::ranges::find_if(
+                         transactions, [&](const auto& tx2) { return tx2->hash() == tx.hash(); });
+                it != transactions.end())
+            {
+                transactionIndex = ::ranges::distance(transactions.begin(), it);
+            }
         }
     }
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
-    result["transactionIndex"] = toQuantity(transactionIndex);
+    result["transactionIndex"] = toQuantity(transactionIndex.value_or(0));
     auto from = toHex(tx.sender());
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);

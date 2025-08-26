@@ -1,11 +1,16 @@
 #include "BlockResponse.h"
+#include "Bloom.h"
+#include "Log.h"
+#include <range/v3/view/enumerate.hpp>
+
 void bcos::rpc::combineBlockResponse(
-    Json::Value& result, bcos::protocol::Block::Ptr&& block, bool fullTxs)
+    Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
 {
-    result["number"] = toQuantity(block->blockHeader()->number());
-    result["hash"] = block->blockHeader()->hash().hexPrefixed();
+    auto blockHeader = block.blockHeaderConst();
+    result["number"] = toQuantity(blockHeader->number());
+    result["hash"] = blockHeader->hash().hexPrefixed();
     // Only one parent block in BCOS. It is empty for genesis block
-    for (const auto& info : block->blockHeader()->parentInfo())
+    for (const auto& info : blockHeader->parentInfo())
     {
         result["parentHash"] = info.blockHash.hexPrefixed();
     }
@@ -13,7 +18,7 @@ void bcos::rpc::combineBlockResponse(
     // empty uncle hash: keccak256(RLP([]))
     result["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
     rpc::Logs logs;
-    for (auto receipt : block->receipts())
+    for (auto receipt : block.receipts())
     {
         for (auto const& log : receipt->logEntries())
         {
@@ -27,12 +32,12 @@ void bcos::rpc::combineBlockResponse(
     }
     auto logsBloom = getLogsBloom(logs);
     result["logsBloom"] = toHexStringWithPrefix(logsBloom);
-    result["transactionsRoot"] = block->blockHeader()->txsRoot().hexPrefixed();
-    result["stateRoot"] = block->blockHeader()->stateRoot().hexPrefixed();
-    result["receiptsRoot"] = block->blockHeader()->receiptsRoot().hexPrefixed();
-    if (std::cmp_greater(block->blockHeader()->sealerList().size(), block->blockHeader()->sealer()))
+    result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();
+    result["stateRoot"] = blockHeader->stateRoot().hexPrefixed();
+    result["receiptsRoot"] = blockHeader->receiptsRoot().hexPrefixed();
+    if (std::cmp_greater(blockHeader->sealerList().size(), blockHeader->sealer()))
     {
-        auto pk = block->blockHeader()->sealerList()[block->blockHeader()->sealer()];
+        auto pk = blockHeader->sealerList()[blockHeader->sealer()];
         auto hash = crypto::keccak256Hash(bcos::ref(pk));
         Address address = right160(hash);
         auto addrString = address.hex();
@@ -41,26 +46,26 @@ void bcos::rpc::combineBlockResponse(
         result["miner"] = "0x" + addrString;
     }
     // genesis block
-    if (block->blockHeader()->number() == 0)
+    if (blockHeader->number() == 0)
     {
         result["miner"] = "0x0000000000000000000000000000000000000000";
         result["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
     }
     result["difficulty"] = "0x0";
     result["totalDifficulty"] = "0x0";
-    result["extraData"] = toHexStringWithPrefix(block->blockHeader()->extraData());
-    result["size"] = toQuantity(block->size());
+    result["extraData"] = toHexStringWithPrefix(blockHeader->extraData());
+    result["size"] = toQuantity(block.size());
     // TODO: change it wen block gas limit apply
     result["gasLimit"] = toQuantity(30000000ULL);
-    result["gasUsed"] = toQuantity((uint64_t)block->blockHeader()->gasUsed());
-    result["timestamp"] = toQuantity(block->blockHeader()->timestamp() / 1000);  // to seconds
+    result["gasUsed"] = toQuantity((uint64_t)blockHeader->gasUsed());
+    result["timestamp"] = toQuantity(blockHeader->timestamp() / 1000);  // to seconds
     if (fullTxs)
     {
         Json::Value txList = Json::arrayValue;
-        for (auto tx : block->transactions())
+        for (auto [index, tx] : ::ranges::views::enumerate(block.transactions()))
         {
             Json::Value txJson = Json::objectValue;
-            combineTxResponse(txJson, *tx, nullptr, block.get());
+            combineTxResponse(txJson, *tx, nullptr, std::addressof(block), index);
             txList.append(txJson);
         }
         result["transactions"] = std::move(txList);
@@ -68,9 +73,9 @@ void bcos::rpc::combineBlockResponse(
     else
     {
         Json::Value txHashesList = Json::arrayValue;
-        for (size_t i = 0; i < block->transactionsHashSize(); i++)
+        for (auto hash : block.transactionHashes())
         {
-            txHashesList.append(block->transactionHash(i).hexPrefixed());
+            txHashesList.append(hash.hexPrefixed());
         }
         result["transactions"] = std::move(txHashesList);
     }

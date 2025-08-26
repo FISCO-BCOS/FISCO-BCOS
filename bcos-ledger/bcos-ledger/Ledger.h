@@ -87,8 +87,7 @@ public:
             _onGetTx) override;
 
     void asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(
-            Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr, MerkleProofPtr)>
+        std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::Ptr, MerkleProofPtr)>
             _onGetTx) override;
 
     void asyncGetTotalTransactionCount(
