@@ -21,6 +21,7 @@
 #include "LogEntry.h"
 #include "ProtocolTypeDef.h"
 #include "bcos-utilities/AnyHolder.h"
+#include "bcos-utilities/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
@@ -56,6 +57,13 @@ public:
     virtual std::string const& message() const = 0;
     virtual void setMessage(std::string message) = 0;
     virtual size_t size() const = 0;
+
+    virtual std::string_view cumulativeGasUsed() const = 0;
+    virtual void setCumulativeGasUsed(std::string cumulativeGasUsed) = 0;
+    virtual bcos::bytesConstRef logsBloom() const = 0;
+    virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
+    virtual int index() const = 0;
+    virtual void setIndex(int index) = 0;
 
     friend std::ostream& operator<<(std::ostream& output, const TransactionReceipt& receipt)
     {

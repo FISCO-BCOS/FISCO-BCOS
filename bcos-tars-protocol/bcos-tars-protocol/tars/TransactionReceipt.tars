@@ -18,7 +18,11 @@ module bcostars {
 
     struct TransactionReceipt {
         1 optional TransactionReceiptData data;
-        2 optional vector<byte> dataHash;
-        3 optional string message;
+        2 optional vector<byte>           dataHash;
+        3 optional string                 message;
+
+        4 optional string                 cumulativeGasUsed;
+        5 optional vector<byte>           logsBloom;
+        6 optional int                    index;
     };
 };

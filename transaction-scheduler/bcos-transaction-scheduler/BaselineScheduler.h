@@ -14,7 +14,6 @@
 #include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/BlockHeader.h"
-#include "bcos-framework/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
@@ -40,6 +39,8 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <range/v3/iterator/operations.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <type_traits>
 
 namespace bcos::scheduler_v1
@@ -126,34 +127,16 @@ std::tuple<u256, h256> calculateReceiptRoot(
     u256 gasUsed;
     h256 receiptRoot;
 
-    tbb::parallel_invoke(
-        [&]() {
-            for (auto&& [receipt, index] :
-                ::ranges::views::zip(receipts, ::ranges::views::iota(0UL)))
-            {
-                gasUsed += receipt->gasUsed();
-                if (index < block.receiptsSize())
-                {
-                    block.setReceipt(index, receipt);
-                }
-                else
-                {
-                    block.appendReceipt(receipt);
-                }
-            }
-        },
-        [&]() {
-            bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
-            auto hashesRange = receipts | ::ranges::views::transform(
-                                              [](const auto& receipt) { return receipt->hash(); });
+    bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
+    auto hashesRange =
+        receipts | ::ranges::views::transform([](const auto& receipt) { return receipt->hash(); });
 
-            if (!::ranges::empty(hashesRange))
-            {
-                std::vector<bcos::h256> merkleTrie;
-                merkle.generateMerkle(hashesRange, merkleTrie);
-                receiptRoot = *::ranges::rbegin(merkleTrie);
-            }
-        });
+    if (!::ranges::empty(hashesRange))
+    {
+        std::vector<bcos::h256> merkleTrie;
+        merkle.generateMerkle(hashesRange, merkleTrie);
+        receiptRoot = *::ranges::rbegin(merkleTrie);
+    }
 
     return {gasUsed, receiptRoot};
 }
@@ -168,13 +151,13 @@ std::tuple<u256, h256> calculateReceiptRoot(
  * @param newBlock The updated block.
  * @param hashImpl The hash implementation used to calculate the block hash.
  */
-task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receipts,
+task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
-    ::ranges::input_range auto const& transactions, bool& sysBlock, crypto::Hash const& hashImpl)
+    ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
-    u256 gasUsed;
+    u256 totalGasUsed;
     h256 transactionRoot;
     h256 stateRoot;
     h256 receiptRoot;
@@ -184,7 +167,26 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeaderConst()->version(), hashImpl));
         },
-        [&]() { std::tie(gasUsed, receiptRoot) = calculateReceiptRoot(receipts, block, hashImpl); },
+        [&]() {
+            std::tie(totalGasUsed, receiptRoot) = calculateReceiptRoot(receipts, block, hashImpl);
+        },
+        [&]() {
+            for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
+            {
+                receipt->setIndex(index);
+                totalGasUsed += receipt->gasUsed();
+                receipt->setCumulativeGasUsed(totalGasUsed.str());
+
+                if (index < block.receiptsSize())
+                {
+                    block.setReceipt(index, receipt);
+                }
+                else
+                {
+                    block.appendReceipt(receipt);
+                }
+            }
+        },
         [&]() {
             sysBlock = ::ranges::any_of(transactions, [](auto const& transaction) {
                 return precompiled::contains(
@@ -192,7 +194,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
             });
         });
 
-    newBlockHeader.setGasUsed(gasUsed);
+    newBlockHeader.setGasUsed(totalGasUsed);
     newBlockHeader.setTxsRoot(transactionRoot);
     newBlockHeader.setStateRoot(stateRoot);
     newBlockHeader.setReceiptsRoot(receiptRoot);
@@ -335,8 +337,9 @@ private:
             auto executedBlockHeader =
                 m_blockFactory.get().blockHeaderFactory()->populateBlockHeader(blockHeader);
             bool sysBlock = false;
-            co_await finishExecute(mutableStorage(view), receipts, *executedBlockHeader, *block,
-                transactions, sysBlock, m_hashImpl.get());
+            co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
+                *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
+                m_hashImpl.get());
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {

@@ -186,7 +186,34 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
     size += m_inner()->message.size();
     return size;
 }
+
 bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl(
     std::function<bcostars::TransactionReceipt*()> inner)
   : m_inner(std::move(inner))
 {}
+
+int bcostars::protocol::TransactionReceiptImpl::index() const
+{
+    return m_inner()->index;
+}
+void bcostars::protocol::TransactionReceiptImpl::setIndex(int index)
+{
+    m_inner()->index = index;
+}
+std::string_view bcostars::protocol::TransactionReceiptImpl::cumulativeGasUsed() const
+{
+    return m_inner()->cumulativeGasUsed;
+}
+void bcostars::protocol::TransactionReceiptImpl::setCumulativeGasUsed(std::string cumulativeGasUsed)
+{
+    m_inner()->cumulativeGasUsed = std::move(cumulativeGasUsed);
+}
+bcos::bytesConstRef bcostars::protocol::TransactionReceiptImpl::logsBloom() const
+{
+    auto* inner = m_inner();
+    return {(bcos::byte*)inner->logsBloom.data(), inner->logsBloom.size()};
+}
+void bcostars::protocol::TransactionReceiptImpl::setLogsBloom(bcos::bytesConstRef logsBloom)
+{
+    m_inner()->logsBloom.assign(logsBloom.data(), logsBloom.data() + logsBloom.size());
+}
