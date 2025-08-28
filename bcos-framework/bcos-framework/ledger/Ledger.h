@@ -206,7 +206,7 @@ inline constexpr struct GetFeatures
 
 inline constexpr struct GetReceipt
 {
-    task::Task<protocol::TransactionReceipt::ConstPtr> operator()(
+    task::Task<protocol::TransactionReceipt::Ptr> operator()(
         auto& ledger, crypto::HashType hash) const
     {
         co_return co_await tag_invoke(*this, ledger, hash);

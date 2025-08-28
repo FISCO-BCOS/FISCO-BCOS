@@ -77,7 +77,7 @@ public:
     {}
 
     void asyncGetTransactionReceiptByHash(crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(Error::Ptr, protocol::TransactionReceipt::ConstPtr, MerkleProofPtr)>
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr, MerkleProofPtr)>
             _onGetTx) override
     {}
 

@@ -361,8 +361,7 @@ public:
     }
 
     void asyncGetTransactionReceiptByHash(crypto::HashType const&, bool,
-        std::function<void(Error::Ptr, TransactionReceipt::ConstPtr, MerkleProofPtr)> _onGetTx)
-        override
+        std::function<void(Error::Ptr, TransactionReceipt::Ptr, MerkleProofPtr)> _onGetTx) override
     {
         _onGetTx(nullptr, nullptr, nullptr);
     }

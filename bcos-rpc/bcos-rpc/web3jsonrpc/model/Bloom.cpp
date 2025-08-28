@@ -45,7 +45,7 @@ Bloom rpc::getLogsBloom(Logs const& logs)
     for (auto const& log : logs)
     {
         bytesToBloom(log.address, bloom);
-        for (auto& topic : log.topics)
+        for (const auto& topic : log.topics)
         {
             bytesToBloom(topic, bloom);
         }

@@ -207,14 +207,14 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
 
 void LedgerServiceClient::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash,
     bool _withProof,
-    std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr,
-        bcos::ledger::MerkleProofPtr)>
+    std::function<void(
+        bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr, bcos::ledger::MerkleProofPtr)>
         _onGetTx)
 {
     class Callback : public LedgerServicePrxCallback
     {
     public:
-        Callback(std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr,
+        Callback(std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr,
                      bcos::ledger::MerkleProofPtr)>
                      _callback,
             bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
@@ -239,7 +239,7 @@ void LedgerServiceClient::asyncGetTransactionReceiptByHash(bcos::crypto::HashTyp
         }
 
     private:
-        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr,
             bcos::ledger::MerkleProofPtr)>
             m_callback;
         bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

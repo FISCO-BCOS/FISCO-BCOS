@@ -63,7 +63,7 @@ public:
             _onGetTx) override;
 
     void asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr,
+        std::function<void(bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr,
             bcos::ledger::MerkleProofPtr)>
             _onGetTx) override;
 

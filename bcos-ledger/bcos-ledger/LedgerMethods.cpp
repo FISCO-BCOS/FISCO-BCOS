@@ -490,7 +490,7 @@ bcos::task::Task<bcos::ledger::Features> bcos::ledger::tag_invoke(
     co_return features;
 }
 
-bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag_invoke(
+bcos::task::Task<bcos::protocol::TransactionReceipt::Ptr> bcos::ledger::tag_invoke(
     ledger::tag_t<getReceipt> /*unused*/, LedgerInterface& ledger, crypto::HashType const& txHash)
 {
     struct Awaitable
@@ -498,32 +498,32 @@ bcos::task::Task<bcos::protocol::TransactionReceipt::ConstPtr> bcos::ledger::tag
         bcos::ledger::LedgerInterface& m_ledger;
         bcos::crypto::HashType m_hash;
 
-        std::variant<bcos::Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr> m_result;
+        std::variant<bcos::Error::Ptr, bcos::protocol::TransactionReceipt::Ptr> m_result;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
         {
             m_ledger.asyncGetTransactionReceiptByHash(m_hash, false,
                 [this, handle](bcos::Error::Ptr error,
-                    const bcos::protocol::TransactionReceipt::ConstPtr& receipt, MerkleProofPtr) {
+                    const bcos::protocol::TransactionReceipt::Ptr& receipt, MerkleProofPtr) {
                     if (error)
                     {
                         m_result.emplace<bcos::Error::Ptr>(std::move(error));
                     }
                     else
                     {
-                        m_result.emplace<bcos::protocol::TransactionReceipt::ConstPtr>(receipt);
+                        m_result.emplace<bcos::protocol::TransactionReceipt::Ptr>(receipt);
                     }
                     handle.resume();
                 });
         }
-        bcos::protocol::TransactionReceipt::ConstPtr await_resume()
+        bcos::protocol::TransactionReceipt::Ptr await_resume()
         {
             if (std::holds_alternative<bcos::Error::Ptr>(m_result))
             {
                 BOOST_THROW_EXCEPTION(*std::get<bcos::Error::Ptr>(m_result));
             }
-            return std::get<bcos::protocol::TransactionReceipt::ConstPtr>(m_result);
+            return std::get<bcos::protocol::TransactionReceipt::Ptr>(m_result);
         }
     };
 
