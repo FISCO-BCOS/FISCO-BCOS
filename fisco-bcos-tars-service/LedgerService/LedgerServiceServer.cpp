@@ -191,7 +191,7 @@ bcostars::Error LedgerServiceServer::asyncGetTransactionReceiptByHash(
     }
 
     m_ledger->asyncGetTransactionReceiptByHash(txHash, _withProof,
-        [current](bcos::Error::Ptr _error, bcos::protocol::TransactionReceipt::ConstPtr _receipt,
+        [current](bcos::Error::Ptr _error, bcos::protocol::TransactionReceipt::Ptr _receipt,
             bcos::ledger::MerkleProofPtr _merkleProofList) {
             // get tars receipt
             bcostars::TransactionReceipt tarsReceipt;

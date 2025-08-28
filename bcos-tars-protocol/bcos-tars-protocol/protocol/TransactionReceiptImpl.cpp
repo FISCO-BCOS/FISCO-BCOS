@@ -101,7 +101,7 @@ gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceipt
 
     return {m_logEntries.data(), m_logEntries.size()};
 }
-bcos::protocol::LogEntries&& bcostars::protocol::TransactionReceiptImpl::takeLogEntries()
+bcos::protocol::LogEntries bcostars::protocol::TransactionReceiptImpl::takeLogEntries()
 {
     if (m_logEntries.empty())
     {

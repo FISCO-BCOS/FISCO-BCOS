@@ -19,10 +19,6 @@
  */
 
 #pragma once
-#include "Bloom.h"
-#include "Log.h"
-
-
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
@@ -33,5 +29,5 @@
 namespace bcos::rpc
 {
 void combineBlockResponse(
-    Json::Value& result, bcos::protocol::Block::Ptr&& block, bool fullTxs = false);
+    Json::Value& result, const bcos::protocol::Block& block, bool fullTxs = false);
 }  // namespace bcos::rpc

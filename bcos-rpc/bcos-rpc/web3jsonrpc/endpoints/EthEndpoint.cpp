@@ -637,7 +637,7 @@ task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::V
         auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, number, flag);
-        combineBlockResponse(result, std::move(block), fullTransaction);
+        combineBlockResponse(result, *block, fullTransaction);
     }
     catch (std::exception const& e)
     {
@@ -661,7 +661,7 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
         auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
-        combineBlockResponse(result, std::move(block), fullTransaction);
+        combineBlockResponse(result, *block, fullTransaction);
     }
     catch (std::exception const& e)
     {
@@ -694,7 +694,7 @@ task::Task<void> EthEndpoint::getTransactionByHash(
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
             bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
-        combineTxResponse(result, *txs->at(0), receipt.get(), block.get());
+        combineTxResponse(result, *txs->at(0), receipt.get(), block.get(), {});
     }
     catch (std::exception const& e)
     {
@@ -732,7 +732,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     }
     auto transactions = block->transactions();
     auto tx = transactions.at(transactionIndex);
-    combineTxResponse(result, *tx, nullptr, block.get());
+    combineTxResponse(result, *tx, nullptr, block.get(), {});
     buildJsonContent(result, response);
     co_return;
 }
@@ -756,7 +756,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         }
         auto transactions = block->transactions();
         auto tx = transactions.at(transactionIndex);
-        combineTxResponse(result, *tx, nullptr, block.get());
+        combineTxResponse(result, *tx, nullptr, block.get(), {});
     }
     catch (std::exception const& e)
     {
@@ -789,11 +789,11 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
             bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS);
-        combineReceiptResponse(result, std::move(receipt), txs->at(0), std::move(block));
+        combineReceiptResponse(result, *receipt, *txs->at(0), block.get());
     }
     catch (std::exception const& e)
     {
-        WEB3_LOG(DEBUG) << "getTransactionReceipt failed: " << boost::diagnostic_information(e);
+        WEB3_LOG(DEBUG) << "getTransactionReceipt failed: " << boost::diagnostic_information(e);/*  */
         result = Json::nullValue;
         buildJsonContent(result, response);
         co_return;
