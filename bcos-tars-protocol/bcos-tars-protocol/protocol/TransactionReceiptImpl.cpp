@@ -192,11 +192,11 @@ bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl(
   : m_inner(std::move(inner))
 {}
 
-int bcostars::protocol::TransactionReceiptImpl::index() const
+size_t bcostars::protocol::TransactionReceiptImpl::transactionIndex() const
 {
     return m_inner()->index;
 }
-void bcostars::protocol::TransactionReceiptImpl::setIndex(int index)
+void bcostars::protocol::TransactionReceiptImpl::setTransactionIndex(size_t index)
 {
     m_inner()->index = index;
 }
@@ -217,3 +217,8 @@ void bcostars::protocol::TransactionReceiptImpl::setLogsBloom(bcos::bytesConstRe
 {
     m_inner()->logsBloom.assign(logsBloom.data(), logsBloom.data() + logsBloom.size());
 }
+size_t bcostars::protocol::TransactionReceiptImpl::logIndex() const
+{
+    return 0;
+}
+void bcostars::protocol::TransactionReceiptImpl::setLogIndex(size_t index) {}

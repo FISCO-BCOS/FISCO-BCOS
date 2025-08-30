@@ -72,8 +72,10 @@ public:
     void setCumulativeGasUsed(std::string cumulativeGasUsed) override;
     bcos::bytesConstRef logsBloom() const override;
     void setLogsBloom(bcos::bytesConstRef logsBloom) override;
-    int index() const override;
-    void setIndex(int index) override;
+    size_t transactionIndex() const override;
+    void setTransactionIndex(size_t index) override;
+    size_t logIndex() const override;
+    void setLogIndex(size_t index) override;
 
     const bcostars::TransactionReceipt& inner() const;
     bcostars::TransactionReceipt& mutableInner();

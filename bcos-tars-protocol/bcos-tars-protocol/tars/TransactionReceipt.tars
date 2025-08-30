@@ -23,6 +23,7 @@ module bcostars {
 
         4 optional string                 cumulativeGasUsed;
         5 optional vector<byte>           logsBloom;
-        6 optional int                    index;
+        6 optional unsigned int           transactionIndex;
+        7 optional unsigned int           logIndex;
     };
 };

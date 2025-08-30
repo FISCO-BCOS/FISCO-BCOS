@@ -171,9 +171,12 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             std::tie(totalGasUsed, receiptRoot) = calculateReceiptRoot(receipts, block, hashImpl);
         },
         [&]() {
+            size_t logIndex = 0;
             for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
             {
-                receipt->setIndex(index);
+                receipt->setTransactionIndex(index);
+                receipt->setLogIndex(logIndex);
+                logIndex += receipt->logEntries().size();
                 totalGasUsed += receipt->gasUsed();
                 receipt->setCumulativeGasUsed(totalGasUsed.str());
 

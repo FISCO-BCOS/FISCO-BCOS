@@ -31,6 +31,5 @@ namespace bcos::rpc
 {
 // block and receipt are nullable
 void combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
-    const protocol::TransactionReceipt* receipt, const bcos::protocol::Block* block,
-    std::optional<int64_t> transactionIndex);
+    const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash);
 }  // namespace bcos::rpc

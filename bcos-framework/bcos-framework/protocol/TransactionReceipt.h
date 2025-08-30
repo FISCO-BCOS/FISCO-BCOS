@@ -58,12 +58,15 @@ public:
     virtual void setMessage(std::string message) = 0;
     virtual size_t size() const = 0;
 
+    // Fields after block execution
     virtual std::string_view cumulativeGasUsed() const = 0;
     virtual void setCumulativeGasUsed(std::string cumulativeGasUsed) = 0;
     virtual bcos::bytesConstRef logsBloom() const = 0;
     virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
-    virtual int index() const = 0;
-    virtual void setIndex(int index) = 0;
+    virtual size_t transactionIndex() const = 0;
+    virtual void setTransactionIndex(size_t index) = 0;
+    virtual size_t logIndex() const = 0;
+    virtual void setLogIndex(size_t index) = 0;
 
     friend std::ostream& operator<<(std::ostream& output, const TransactionReceipt& receipt)
     {
