@@ -101,7 +101,6 @@ task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
         result = "0x0";  // 0 for default
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::mining(const Json::Value&, Json::Value& response)
 {
@@ -133,7 +132,6 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         result = "0x0";
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::accounts(const Json::Value&, Json::Value& response)
 {
@@ -147,7 +145,6 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
     auto number = co_await ledger::getCurrentBlockNumber(*ledger);
     Json::Value result = toQuantity(number);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
 {
@@ -184,7 +181,6 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     Json::Value result = toQuantity(std::move(balance));
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Value& response)
 {
@@ -229,7 +225,6 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
         result = "0x0000000000000000000000000000000000000000000000000000000000000000";
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Json::Value& response)
 {
@@ -275,7 +270,6 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getBlockTxCountByHash(
     const Json::Value& request, Json::Value& response)
@@ -298,7 +292,6 @@ task::Task<void> EthEndpoint::getBlockTxCountByHash(
         result = "0x0";
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getBlockTxCountByNumber(
     const Json::Value& request, Json::Value& response)
@@ -483,7 +476,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
     co_await txpool->broadcastTransaction(*tx);
-    auto const txResult = co_await txpool->submitTransaction(std::move(tx), false);
+    auto const txResult = co_await txpool->submitTransaction(std::move(tx), m_syncTransaction);
     if (txResult->status() == 0)
     {
         Json::Value result = encodeTxHash.hexPrefixed();
@@ -702,7 +695,6 @@ task::Task<void> EthEndpoint::getTransactionByHash(
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     const Json::Value& request, Json::Value& response)
@@ -734,7 +726,6 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     auto tx = transactions.at(transactionIndex);
     combineTxResponse(result, *tx, nullptr, block.get(), {});
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     const Json::Value& request, Json::Value& response)
@@ -765,7 +756,6 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionReceipt(
     const Json::Value& request, Json::Value& response)
@@ -793,13 +783,11 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
     }
     catch (std::exception const& e)
     {
-        WEB3_LOG(DEBUG) << "getTransactionReceipt failed: " << boost::diagnostic_information(e);/*  */
+        WEB3_LOG(DEBUG) << "getTransactionReceipt failed: " << boost::diagnostic_information(e);
         result = Json::nullValue;
         buildJsonContent(result, response);
-        co_return;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getUncleByBlockHashAndIndex(const Json::Value&, Json::Value& response)
 {
@@ -823,21 +811,18 @@ task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value&
     params->fromJson(jParams);
     Json::Value result = co_await m_filterSystem->newFilter(params);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::newBlockFilter(const Json::Value&, Json::Value& response)
 {
     // result: filterId(QTY)
     Json::Value result = co_await m_filterSystem->newBlockFilter();
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::newPendingTransactionFilter(const Json::Value&, Json::Value& response)
 {
     // result: filterId(QTY)
     Json::Value result = co_await m_filterSystem->newPendingTxFilter();
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::uninstallFilter(const Json::Value& request, Json::Value& response)
 {
@@ -846,7 +831,6 @@ task::Task<void> EthEndpoint::uninstallFilter(const Json::Value& request, Json::
     auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->uninstallFilter(id);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getFilterChanges(const Json::Value& request, Json::Value& response)
 {
@@ -855,7 +839,6 @@ task::Task<void> EthEndpoint::getFilterChanges(const Json::Value& request, Json:
     auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->getFilterChanges(id);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getFilterLogs(const Json::Value& request, Json::Value& response)
 {
@@ -864,7 +847,6 @@ task::Task<void> EthEndpoint::getFilterLogs(const Json::Value& request, Json::Va
     auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->getFilterLogs(id);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& response)
 {
@@ -875,7 +857,6 @@ task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& r
     params->fromJson(jParams);
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberByTag(
     std::string_view blockTag)
@@ -893,3 +874,9 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     buildJsonContent(result, response);
     co_return;
 }
+bcos::rpc::EthEndpoint::EthEndpoint(
+    NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
+  : m_nodeService(std::move(nodeService)),
+    m_filterSystem(std::move(filterSystem)),
+    m_syncTransaction(syncTransaction)
+{}

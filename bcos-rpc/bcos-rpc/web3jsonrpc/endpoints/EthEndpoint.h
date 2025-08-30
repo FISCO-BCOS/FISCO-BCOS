@@ -34,9 +34,7 @@ namespace bcos::rpc
 class EthEndpoint
 {
 public:
-    EthEndpoint(NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem)
-      : m_nodeService(std::move(nodeService)), m_filterSystem(std::move(filterSystem))
-    {}
+    EthEndpoint(NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction);
     virtual ~EthEndpoint() = default;
 
     task::Task<void> protocolVersion(const Json::Value&, Json::Value&);
@@ -84,6 +82,7 @@ public:
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
+    bool m_syncTransaction;
 
     task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed);
 };

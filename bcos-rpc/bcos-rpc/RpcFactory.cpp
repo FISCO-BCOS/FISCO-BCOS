@@ -392,7 +392,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
             m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
         m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager), m_gateway, _wsService,
-        web3FilterSystem);
+        web3FilterSystem, m_nodeConfig->web3SyncTransaction());
 
     if (auto httpServer = _wsService->httpServer())
     {
