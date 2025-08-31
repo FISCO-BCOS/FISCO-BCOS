@@ -8,7 +8,8 @@ void bcos::rpc::combineBlockResponse(
 {
     auto blockHeader = block.blockHeaderConst();
     auto blockHash = blockHeader->hash();
-    result["number"] = toQuantity(blockHeader->number());
+    auto blockNumber = blockHeader->number();
+    result["number"] = toQuantity(blockNumber);
     result["hash"] = blockHash.hexPrefixed();
     // Only one parent block in BCOS. It is empty for genesis block
     for (const auto& info : blockHeader->parentInfo())
@@ -66,7 +67,7 @@ void bcos::rpc::combineBlockResponse(
         for (auto [index, tx] : ::ranges::views::enumerate(block.transactions()))
         {
             Json::Value txJson = Json::objectValue;
-            combineTxResponse(txJson, *tx, nullptr, blockHash, index);
+            combineTxResponse(txJson, *tx, index, blockNumber, blockHash);
             txList.append(txJson);
         }
         result["transactions"] = std::move(txList);

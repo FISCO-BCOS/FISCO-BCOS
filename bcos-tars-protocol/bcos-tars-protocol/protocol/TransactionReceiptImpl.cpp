@@ -194,11 +194,11 @@ bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl(
 
 size_t bcostars::protocol::TransactionReceiptImpl::transactionIndex() const
 {
-    return m_inner()->index;
+    return m_inner()->transactionIndex;
 }
 void bcostars::protocol::TransactionReceiptImpl::setTransactionIndex(size_t index)
 {
-    m_inner()->index = index;
+    m_inner()->transactionIndex = index;
 }
 std::string_view bcostars::protocol::TransactionReceiptImpl::cumulativeGasUsed() const
 {

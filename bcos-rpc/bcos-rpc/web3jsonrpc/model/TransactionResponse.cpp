@@ -4,12 +4,22 @@
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
 {
+    combineTxResponse(result, tx, receipt.transactionIndex(), receipt.blockNumber(), blockHash);
+    // TODO: Check
+    if (!receipt.effectiveGasPrice().empty())
+    {
+        auto gasPrice = receipt.effectiveGasPrice();
+        result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+    }
+}
+
+void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
+    size_t transactionIndex, protocol::BlockNumber blockNumber, const crypto::HashType& blockHash)
+{
     if (!result.isObject())
     {
         return;
     }
-    auto blockNumber = receipt.blockNumber();
-    auto transactionIndex = receipt.transactionIndex();
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
     result["transactionIndex"] = toQuantity(transactionIndex);
@@ -29,10 +39,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
-    if (!receipt.effectiveGasPrice().empty())
-    {
-        gasPrice = receipt.effectiveGasPrice();
-    }
+
     // FIXME)): return will case coredump in executor
     result["gasPrice"] = std::string(gasPrice.empty() ? "0x0" : gasPrice);
     result["hash"] = tx.hash().hexPrefixed();
