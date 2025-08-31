@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(dupNonce)
     tx->setNonce("12345");
     tx->calculateHash(hashImpl);
     txs->emplace_back(tx);
-    BOOST_CHECK_EQUAL(txpoolStorage.batchVerifyAndSubmitTransaction(blockHeader, txs), true);
+    BOOST_CHECK_EQUAL(txpoolStorage.batchVerifyAndSubmitTransaction(*blockHeader, txs), true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

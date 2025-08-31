@@ -51,10 +51,10 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
         });
 }
 
-bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeader() const
+bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
 {
-    return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
+    return {bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
+        [&]() mutable { return std::addressof(m_inner.blockHeader); }};
 }
 
 bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const

@@ -891,8 +891,8 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
         return missedTxs;
     }
     auto blockHeader = _block->blockHeader();
-    auto batchId = (_block && blockHeader) ? blockHeader->number() : -1;
-    auto batchHash = (_block && blockHeader) ? blockHeader->hash() : bcos::crypto::HashType();
+    auto batchId = blockHeader->number();
+    auto batchHash = blockHeader->hash();
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();
@@ -1087,7 +1087,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 }
 
 bool MemoryStorage::batchVerifyAndSubmitTransaction(
-    bcos::protocol::BlockHeader::ConstPtr _header, TransactionsPtr _txs)
+    const bcos::protocol::BlockHeader& _header, TransactionsPtr _txs)
 {
     // use writeGuard here in case of the transaction status will be modified by other
     // interfaces
@@ -1109,8 +1109,8 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
                                 << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("result", result)
                                 << LOG_KV("txBatchID", tx->batchId())
                                 << LOG_KV("txBatchHash", tx->batchHash().abridged())
-                                << LOG_KV("consIndex", _header ? _header->number() : -1)
-                                << LOG_KV("propHash", _header ? _header->hash().abridged() : "");
+                                << LOG_KV("consIndex", _header.number())
+                                << LOG_KV("propHash", _header.hash().abridged());
             return false;
         }
     }

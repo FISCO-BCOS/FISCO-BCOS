@@ -7,6 +7,10 @@ class MockBlockHeader : public bcos::protocol::BlockHeader,
                         public virtual bcos::MoveImpl<MockBlockHeader, bcos::protocol::BlockHeader>
 {
 public:
+    MockBlockHeader(const MockBlockHeader&) = default;
+    MockBlockHeader(MockBlockHeader&&) = default;
+    MockBlockHeader& operator=(const MockBlockHeader&) = default;
+    MockBlockHeader& operator=(MockBlockHeader&&) = default;
     MockBlockHeader(protocol::BlockNumber _number) : m_blockNumber(_number) {}
     ~MockBlockHeader() override = default;
 

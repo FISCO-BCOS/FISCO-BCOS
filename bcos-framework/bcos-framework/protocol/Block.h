@@ -62,8 +62,8 @@ public:
     virtual int32_t version() const = 0;
     virtual void setVersion(int32_t _version) = 0;
     virtual BlockType blockType() const = 0;
-    // blockHeader gets blockHeader
-    virtual BlockHeader::ConstPtr blockHeader() const = 0;
+
+    virtual AnyBlockHeader blockHeader() const = 0;
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transactions
     virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;

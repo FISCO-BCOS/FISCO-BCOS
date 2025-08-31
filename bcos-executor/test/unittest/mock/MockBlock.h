@@ -8,7 +8,11 @@ class MockBlock : public bcos::protocol::Block
 {
 public:
     MockBlock() = default;
-    ~MockBlock() override {}
+    MockBlock(const MockBlock&) = default;
+    MockBlock(MockBlock&&) = default;
+    MockBlock& operator=(const MockBlock&) = default;
+    MockBlock& operator=(MockBlock&&) = default;
+    ~MockBlock() override = default;
 
     void setBlockHeader(protocol::BlockHeader::Ptr blockHeader) override
     {
@@ -27,7 +31,10 @@ public:
     int32_t version() const override { return m_blockHeader->version(); }
     void setVersion(int32_t _version) override { m_blockHeader->setVersion(_version); }
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }
-    protocol::BlockHeader::ConstPtr blockHeader() const override { return m_blockHeader; }
+    protocol::AnyBlockHeader blockHeader() const override
+    {
+        return {bcos::InPlace<MockBlockHeader>{}, dynamic_cast<MockBlockHeader&>(*m_blockHeader)};
+    }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
     protocol::Transaction::ConstPtr transaction(uint64_t _index) const override { return {}; }
     protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override { return {}; }

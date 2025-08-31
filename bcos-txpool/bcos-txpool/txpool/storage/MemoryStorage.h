@@ -73,8 +73,8 @@ public:
     std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
         bcos::protocol::Block::ConstPtr _block) override;
 
-    bool batchVerifyAndSubmitTransaction(bcos::protocol::BlockHeader::ConstPtr _header,
-        bcos::protocol::TransactionsPtr _txs) override;
+    bool batchVerifyAndSubmitTransaction(
+        const bcos::protocol::BlockHeader& _header, bcos::protocol::TransactionsPtr _txs) override;
     void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
 
     // return true if all txs have been marked

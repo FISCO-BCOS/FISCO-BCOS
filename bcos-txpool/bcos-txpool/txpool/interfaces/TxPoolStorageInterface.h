@@ -44,7 +44,7 @@ public:
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
     virtual bool batchVerifyAndSubmitTransaction(
-        bcos::protocol::BlockHeader::ConstPtr _header, bcos::protocol::TransactionsPtr _txs) = 0;
+        const bcos::protocol::BlockHeader& _header, bcos::protocol::TransactionsPtr _txs) = 0;
     virtual void batchImportTxs(bcos::protocol::TransactionsPtr _txs) = 0;
 
     /**

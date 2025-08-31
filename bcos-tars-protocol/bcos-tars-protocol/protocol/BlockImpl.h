@@ -55,7 +55,7 @@ public:
 
     bcos::protocol::BlockType blockType() const override;
     bcos::protocol::BlockHeader::Ptr blockHeader() override;
-    bcos::protocol::BlockHeader::ConstPtr blockHeader() const override;
+    bcos::protocol::AnyBlockHeader blockHeader() const override;
 
     bcos::protocol::Transaction::ConstPtr transaction(uint64_t _index) const override;
     bcos::protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override;
