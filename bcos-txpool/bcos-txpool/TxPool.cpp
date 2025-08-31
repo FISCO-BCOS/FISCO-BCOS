@@ -211,7 +211,7 @@ void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber, TransactionSubmitR
 void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::ConstPtr _block,
     std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
-    auto blockHeader = _block->blockHeaderConst();
+    auto blockHeader = _block->blockHeader();
     TXPOOL_LOG(INFO) << LOG_DESC("begin asyncVerifyBlock")
                      << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                      << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null");
@@ -278,7 +278,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                     // Note: here storeVerifiedBlock will block m_verifier and decrease the
                     // proposal-verify-perf, so we async the storeVerifiedBlock here using
                     // m_txsPreStore
-                    if (!verifyError && verifyRet && block && block->blockHeaderConst())
+                    if (!verifyError && verifyRet && block && block->blockHeader())
                     {
                         txpool->m_txsPreStore->enqueue(
                             [txpool, block]() { txpool->storeVerifiedBlock(block); });
@@ -565,7 +565,7 @@ void TxPool::initSendResponseHandler()
 
 void TxPool::storeVerifiedBlock(bcos::protocol::Block::ConstPtr _block)
 {
-    auto blockHeader = _block->blockHeaderConst();
+    auto blockHeader = _block->blockHeader();
 
     // return if block has been committed
     TXPOOL_LOG(INFO) << LOG_DESC("storeVerifiedBlock fetch block number from LedgerConfig");

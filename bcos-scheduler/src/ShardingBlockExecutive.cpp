@@ -283,7 +283,7 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
         if (m_keyPageSize > 0)
         {
             stateStorage = std::make_shared<bcos::storage::KeyPageStorage>(getStorage(), false,
-                m_keyPageSize, m_block->blockHeaderConst()->version(), nullptr, true);
+                m_keyPageSize, m_block->blockHeader()->version(), nullptr, true);
         }
         else
         {

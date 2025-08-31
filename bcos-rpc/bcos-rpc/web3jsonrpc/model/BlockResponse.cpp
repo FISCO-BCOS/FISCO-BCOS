@@ -6,7 +6,7 @@
 void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
 {
-    auto blockHeader = block.blockHeaderConst();
+    auto blockHeader = block.blockHeader();
     result["number"] = toQuantity(blockHeader->number());
     result["hash"] = blockHeader->hash().hexPrefixed();
     // Only one parent block in BCOS. It is empty for genesis block

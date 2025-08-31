@@ -3,7 +3,8 @@
 
 namespace bcos::test
 {
-class MockBlockHeader : public bcos::protocol::BlockHeader
+class MockBlockHeader : public bcos::protocol::BlockHeader,
+                        public virtual bcos::MoveImpl<MockBlockHeader, bcos::protocol::BlockHeader>
 {
 public:
     MockBlockHeader(protocol::BlockNumber _number) : m_blockNumber(_number) {}

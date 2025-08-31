@@ -23,7 +23,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     uint64_t transactionIndex = 0;
     if (block != nullptr)
     {
-        auto blockHeader = block->blockHeaderConst();
+        auto blockHeader = block->blockHeader();
         blockHash = blockHeader->hash();
         blockNumber = blockHeader->number();
         auto hashes = block->transactionHashes();

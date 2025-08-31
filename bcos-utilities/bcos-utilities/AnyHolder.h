@@ -20,7 +20,7 @@ struct MoveImpl : public virtual MoveBase<Base>
 {
     void moveAssignTo(Base* other) noexcept override
     {
-        static_cast<Derived*>(other)->operator=(std::move(*dynamic_cast<Derived*>(this)));
+        dynamic_cast<Derived*>(other)->operator=(std::move(*dynamic_cast<Derived*>(this)));
     }
     void moveConstructTo(Base* other) noexcept override
     {

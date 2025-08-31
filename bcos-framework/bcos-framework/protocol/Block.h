@@ -63,7 +63,7 @@ public:
     virtual void setVersion(int32_t _version) = 0;
     virtual BlockType blockType() const = 0;
     // blockHeader gets blockHeader
-    virtual BlockHeader::ConstPtr blockHeaderConst() const = 0;
+    virtual BlockHeader::ConstPtr blockHeader() const = 0;
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transactions
     virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
@@ -117,7 +117,7 @@ public:
     virtual ViewResult<AnyTransactionReceipt> receipts() const = 0;
     bool operator<(const Block& block) const
     {
-        return blockHeaderConst()->number() < block.blockHeaderConst()->number();
+        return blockHeader()->number() < block.blockHeader()->number();
     }
     virtual size_t size() const = 0;
 };

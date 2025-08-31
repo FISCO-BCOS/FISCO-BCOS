@@ -13,8 +13,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     uint64_t blockNumber = 0;
     if (block != nullptr)
     {
-        blockHash = block->blockHeaderConst()->hash();
-        blockNumber = block->blockHeaderConst()->number();
+        blockHash = block->blockHeader()->hash();
+        blockNumber = block->blockHeader()->number();
         auto transactionHashes = block->transactionHashes();
         auto transactions = block->transactions();
         if (!transactionIndex)

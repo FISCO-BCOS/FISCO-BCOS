@@ -182,7 +182,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto const& receip
     tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
         [&]() {
             stateRoot = task::tbb::syncWait(
-                calculateStateRoot(storage, block.blockHeaderConst()->version(), hashImpl));
+                calculateStateRoot(storage, block.blockHeader()->version(), hashImpl));
         },
         [&]() { std::tie(gasUsed, receiptRoot) = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
@@ -272,7 +272,7 @@ private:
             ittapi::ITT_DOMAINS::instance().EXECUTE_BLOCK);
         try
         {
-            auto blockHeader = block->blockHeaderConst();
+            auto blockHeader = block->blockHeader();
             BASELINE_SCHEDULER_LOG(INFO)
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
@@ -451,7 +451,7 @@ private:
 
             result.m_block->setBlockHeader(header);
             typename MultiLayerStorage::MutableStorage prewriteStorage;
-            if (result.m_block->blockHeaderConst()->number() != 0)
+            if (result.m_block->blockHeader()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
@@ -592,7 +592,7 @@ public:
             auto block = co_await ledger::getBlockData(
                 view, blockNumber, ledger::HEADER, self->m_blockFactory.get(), ledger::fromStorage);
             auto receipt = co_await self->m_executor.get().executeTransaction(
-                view, *block->blockHeaderConst(), *transaction, 0, *ledgerConfig, true);
+                view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
 
             callback(nullptr, std::move(receipt));
         }(this, std::move(transaction), std::move(callback)));

@@ -21,13 +21,15 @@
 #pragma once
 #include "Exceptions.h"
 #include "ProtocolTypeDef.h"
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-crypto/interfaces/crypto/Signature.h"
+#include "bcos-utilities/AnyHolder.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <gsl/span>
 
 namespace bcos::protocol
 {
-class BlockHeader
+class BlockHeader : public virtual bcos::MoveBase<BlockHeader>
 {
 public:
     using Ptr = std::shared_ptr<BlockHeader>;
@@ -102,7 +104,7 @@ public:
     // version returns the version of the blockHeader
     virtual uint32_t version() const = 0;
     // parentInfo returns the parent information, including (parentBlockNumber, parentHash)
-    virtual RANGES::any_view<ParentInfo, RANGES::category::input | RANGES::category::sized>
+    virtual ::ranges::any_view<ParentInfo, ::ranges::category::input | ::ranges::category::sized>
     parentInfo() const = 0;
     // txsRoot returns the txsRoot of the current block
     virtual bcos::crypto::HashType txsRoot() const = 0;
@@ -123,7 +125,7 @@ public:
     virtual gsl::span<const uint64_t> consensusWeights() const = 0;
 
     virtual void setVersion(uint32_t _version) = 0;
-    virtual void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
+    virtual void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
 
     virtual void setTxsRoot(bcos::crypto::HashType _txsRoot) = 0;
     virtual void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) = 0;
@@ -147,4 +149,7 @@ public:
 
     virtual size_t size() const = 0;
 };
+
+using AnyBlockHeader = AnyHolder<BlockHeader, 48>;
+
 }  // namespace bcos::protocol
