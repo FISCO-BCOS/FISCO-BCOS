@@ -205,6 +205,7 @@ public:
     std::string web3CorsAllowedHeaders() const { return m_web3CorsAllowedHeaders; }
     int32_t web3CorsMaxAge() const { return m_web3CorsMaxAge; }
     bool web3CorsAllowCredentials() const { return m_web3CorsAllowCredentials; }
+    bool web3SyncTransaction() const { return m_web3SyncTransaction; }
 
     // the gateway configurations
     const std::string& p2pListenIP() const { return m_p2pListenIP; }
@@ -499,6 +500,7 @@ private:
     std::string m_web3CorsAllowedHeaders = "Content-Type, Authorization, X-Requested-With";
     int32_t m_web3CorsMaxAge = 86400;
     bool m_web3CorsAllowCredentials = true;
+    bool m_web3SyncTransaction = false;
 
     // config for gateway
     std::string m_p2pListenIP;
