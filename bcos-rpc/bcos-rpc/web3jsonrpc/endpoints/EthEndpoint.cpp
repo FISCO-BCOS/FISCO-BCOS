@@ -766,7 +766,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
+    co_return;
 }
+
 task::Task<void> EthEndpoint::getTransactionReceipt(
     const Json::Value& request, Json::Value& response)
 {
