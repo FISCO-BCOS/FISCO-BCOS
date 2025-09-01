@@ -47,7 +47,7 @@ public:
     MockWeb3JsonRpcImpl()
       : Web3JsonRpcImpl("test-group", 1000,
             std::make_shared<GroupManager>("test-group", "1", nullptr, nullptr), nullptr, nullptr,
-            nullptr)
+            nullptr, false)
     {}
 
     ~MockWeb3JsonRpcImpl() = default;
