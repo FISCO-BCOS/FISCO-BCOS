@@ -729,6 +729,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     combineTxResponse(result, *tx, *receipt, hash);
     buildJsonContent(result, response);
 }
+
 task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     const Json::Value& request, Json::Value& response)
 {
@@ -749,8 +750,9 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         }
         auto txHashes = block->transactionMetaDatas();
         auto txHash = txHashes[transactionIndex]->hash();
-        auto tx = co_await ledger::getTransactions(
-            *ledger, std::make_shared<crypto::HashList>(crypto::HashList{{txHash}}));
+        auto txList = std::make_shared<crypto::HashList>();
+        txList->emplace_back(txHash);
+        auto tx = co_await ledger::getTransactions(*ledger, std::move(txList));
         if (tx->empty())
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
@@ -766,7 +768,6 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 
 task::Task<void> EthEndpoint::getTransactionReceipt(
