@@ -838,7 +838,7 @@ bool PBFTEngine::checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _p
                    << LOG_KV("txSize", block->transactionsMetaDataSize())
                    << LOG_KV("needCheckSign", needCheckSign);
 
-    auto rotatingTx = block->transactionMetaData(0);
+    auto rotatingTx = block->transactionMetaDatas()[0];
     if (rotatingTx->to() != bcos::precompiled::CONSENSUS_ADDRESS &&
         rotatingTx->to() != bcos::precompiled::CONSENSUS_TABLE_NAME) [[unlikely]]
     {

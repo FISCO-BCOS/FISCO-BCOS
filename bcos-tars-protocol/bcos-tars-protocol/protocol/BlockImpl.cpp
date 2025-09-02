@@ -105,21 +105,6 @@ RANGES::any_view<std::string> BlockImpl::nonceList() const
     return m_inner.nonceList;
 }
 
-bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
-{
-    if (_index >= transactionsMetaDataSize())
-    {
-        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaData index out of range"));
-    }
-
-    auto txMetaData = std::make_shared<const bcostars::protocol::TransactionMetaDataImpl>(
-        [self = shared_from_this(), _index]() {
-            return &self->m_inner.transactionsMetaData[_index];
-        });
-
-    return txMetaData;
-}
-
 TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) const
 {
     if (_index >= transactionsMetaDataSize())

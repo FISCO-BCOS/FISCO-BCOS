@@ -69,8 +69,6 @@ public:
     virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
     // get receipts
     virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
-    // get transaction metaData
-    virtual TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const = 0;
     // get transaction hash
     virtual bcos::crypto::HashType transactionHash(uint64_t _index) const = 0;
 

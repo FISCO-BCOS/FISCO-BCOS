@@ -282,7 +282,7 @@ bcos::protocol::ConstTransactionsPtr BlockExecutive::fetchBlockTxsFromTxPool(
         auto txHashes = std::make_shared<protocol::HashList>();
         for (size_t i = 0; i < block->transactionsMetaDataSize(); ++i)
         {
-            txHashes->emplace_back(block->transactionMetaData(i)->hash());
+            txHashes->emplace_back(block->transactionMetaDatas()[i]->hash());
         }
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {

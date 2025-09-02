@@ -268,7 +268,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {
         for (size_t i = 0; i < block->transactionsMetaDataSize(); ++i)
         {
-            auto originTransactionMetaData = block->transactionMetaData(i);
+            auto originTransactionMetaData = block->transactionMetaDatas()[i];
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));

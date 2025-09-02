@@ -339,10 +339,10 @@ BOOST_AUTO_TEST_CASE(block)
             BOOST_CHECK_EQUAL(lhs->importTime(), rhs->importTime());
 
             // check the txMetaData
-            BOOST_CHECK_EQUAL(block->transactionMetaData(i)->hash(),
-                decodedBlock->transactionMetaData(i)->hash());
+            BOOST_CHECK_EQUAL(block->transactionMetaDatas()[i]->hash(),
+                decodedBlock->transactionMetaDatas()[i]->hash());
             BOOST_CHECK_EQUAL(
-                block->transactionMetaData(i)->to(), decodedBlock->transactionMetaData(i)->to());
+                block->transactionMetaDatas()[i]->to(), decodedBlock->transactionMetaDatas()[i]->to());
             BOOST_CHECK_EQUAL(block->transactionHash(i), block->transactionHash(i));
         }
 
