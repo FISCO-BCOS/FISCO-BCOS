@@ -39,7 +39,8 @@ public:
     Web3JsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
         bcos::rpc::GroupManager::Ptr _groupManager,
         bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem);
+        std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
+        bool syncTransaction);
     ~Web3JsonRpcImpl() = default;
 
     void onRPCRequest(std::string_view _requestBody, const Sender& _sender);
