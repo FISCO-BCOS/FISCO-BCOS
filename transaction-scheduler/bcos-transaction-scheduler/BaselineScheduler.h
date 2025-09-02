@@ -121,10 +121,9 @@ task::Task<h256> calculateStateRoot(
     co_return totalHash;
 }
 
-std::tuple<u256, h256> calculateReceiptRoot(
+h256 calculateReceiptRoot(
     ::ranges::range auto const& receipts, protocol::Block& block, crypto::Hash const& hashImpl)
 {
-    u256 gasUsed;
     h256 receiptRoot;
 
     bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
@@ -138,7 +137,7 @@ std::tuple<u256, h256> calculateReceiptRoot(
         receiptRoot = *::ranges::rbegin(merkleTrie);
     }
 
-    return {gasUsed, receiptRoot};
+    return receiptRoot;
 }
 
 /**
@@ -167,9 +166,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             stateRoot = task::tbb::syncWait(
                 calculateStateRoot(storage, block.blockHeaderConst()->version(), hashImpl));
         },
-        [&]() {
-            std::tie(totalGasUsed, receiptRoot) = calculateReceiptRoot(receipts, block, hashImpl);
-        },
+        [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
             size_t logIndex = 0;
             for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
