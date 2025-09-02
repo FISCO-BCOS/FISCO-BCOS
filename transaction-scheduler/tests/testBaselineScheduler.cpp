@@ -36,7 +36,7 @@ struct MockExecutorBaseline
         {
             BOOST_CHECK_EQUAL(blockHeader.timestamp(), 10088);
         }
-        co_return std::shared_ptr<protocol::TransactionReceipt>();
+        co_return {};
     }
 
     template <class Storage>
@@ -66,12 +66,10 @@ struct MockScheduler
         auto receipts =
             ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |
             ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
-                auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-                    [inner = bcostars::TransactionReceipt()]() mutable {
-                        return std::addressof(inner);
-                    });
+                auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
                 constexpr static std::string_view str = "abc";
                 receipt->mutableInner().dataHash.assign(str.begin(), str.end());
+                receipt->mutableInner().data.gasUsed = "100";
                 return receipt;
             }) |
             ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
@@ -217,6 +215,8 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
     bcos::bytes input;
     block->appendTransaction(
         transactionFactory->createTransaction(0, "to", input, "12345", 100, "chain", "group", 0));
+    block->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "12346", 100, "chain", "group", 0));
 
     std::promise<void> end;
     baselineScheduler.executeBlock(block, false,
@@ -225,6 +225,7 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(!error);
             BOOST_CHECK(blockHeader);
             BOOST_CHECK(!sysBlock);
+            BOOST_TEST(blockHeader->gasUsed() == 200);
 
             task::syncWait([&]() -> task::Task<void> {
                 auto view = multiLayerStorage.fork();

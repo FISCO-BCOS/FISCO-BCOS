@@ -7,7 +7,7 @@
 #include <cstdint>
 
 void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
-    const bcos::protocol::Transaction& tx, const bcos::protocol::Block* block)
+    const bcos::protocol::Transaction& tx, const crypto::HashType& blockHash)
 {
     if (!result.isObject())
     {
@@ -15,35 +15,15 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     }
     uint8_t status = (receipt.status() == 0 ? 1 : 0);
     result["status"] = toQuantity(status);
-    result["transactionHash"] = tx.hash().hexPrefixed();
-    crypto::HashType blockHash;
-    uint64_t blockNumber = 0;
-    u256 cumulativeGasUsed = 0;
-    size_t logIndex = 0;
-    uint64_t transactionIndex = 0;
-    if (block != nullptr)
-    {
-        auto blockHeader = block->blockHeaderConst();
-        blockHash = blockHeader->hash();
-        blockNumber = blockHeader->number();
-        auto hashes = block->transactionHashes();
-        auto receipts = block->receipts();
-        for (; transactionIndex < block->transactionsHashSize(); transactionIndex++)
-        {
-            if (transactionIndex < block->receiptsSize())
-            {
-                auto currentReceipt = receipts[transactionIndex];
-                cumulativeGasUsed += currentReceipt->gasUsed();
-                logIndex += currentReceipt->logEntries().size();
-            }
-            if (hashes[transactionIndex] == tx.hash())
-            {
-                break;
-            }
-        }
-    }
-    result["transactionIndex"] = toQuantity(transactionIndex);
-    result["blockHash"] = blockHash.hexPrefixed();
+    auto txHashHex = tx.hash().hexPrefixed();
+    result["transactionHash"] = txHashHex;
+    u256 cumulativeGasUsed = boost::lexical_cast<u256>(receipt.cumulativeGasUsed());
+    size_t logIndex = receipt.logIndex();
+    auto transactionIndex = toQuantity(receipt.transactionIndex());
+    result["transactionIndex"] = transactionIndex;
+    auto blockHashHex = blockHash.hexPrefixed();
+    result["blockHash"] = blockHashHex;
+    auto blockNumber = receipt.blockNumber();
     result["blockNumber"] = toQuantity(blockNumber);
     auto from = toHex(tx.sender());
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
@@ -93,9 +73,9 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
         log["data"] = toHexStringWithPrefix(receiptLog[i].data());
         log["logIndex"] = toQuantity(logIndex + i);
         log["blockNumber"] = toQuantity(blockNumber);
-        log["blockHash"] = blockHash.hexPrefixed();
+        log["blockHash"] = blockHashHex;
         log["transactionIndex"] = toQuantity(transactionIndex);
-        log["transactionHash"] = tx.hash().hexPrefixed();
+        log["transactionHash"] = txHashHex;
         log["removed"] = false;
         result["logs"].append(std::move(log));
         rpc::Log logObj{.address = receiptLog[i].takeAddress(),

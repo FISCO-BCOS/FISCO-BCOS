@@ -46,5 +46,6 @@ module bcostars {
         
         9 optional vector<vector<byte>> transactionsMerkle;
         10 optional vector<vector<byte>> receiptsMerkle;
+        11 optional vector<byte> logsBloom;
     };
 };
