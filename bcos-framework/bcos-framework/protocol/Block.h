@@ -88,28 +88,14 @@ public:
     // FIXME: appendTransactionMetaData will create, parameter should be object instead of pointer
     virtual void appendTransactionMetaData(TransactionMetaData::Ptr _txMetaData) = 0;
 
-    // get transactions size
     virtual uint64_t transactionsSize() const = 0;
     virtual uint64_t transactionsMetaDataSize() const = 0;
     virtual uint64_t transactionsHashSize() const { return transactionsMetaDataSize(); }
-
-    // get receipts size
     virtual uint64_t receiptsSize() const = 0;
 
     // for nonceList
     virtual void setNonceList(::ranges::any_view<std::string> nonces) = 0;
     virtual ::ranges::any_view<std::string> nonceList() const = 0;
-
-    virtual NonceListPtr nonces() const
-    {
-        return std::make_shared<NonceList>(
-            ::ranges::iota_view<size_t, size_t>(0LU, transactionsSize()) |
-            ::ranges::views::transform([this](uint64_t index) {
-                auto transaction = this->transaction(index);
-                return transaction->nonce();
-            }) |
-            ::ranges::to<NonceList>());
-    }
 
     virtual ViewResult<crypto::HashType> transactionHashes() const = 0;
     virtual ViewResult<AnyTransactionMetaData> transactionMetaDatas() const = 0;

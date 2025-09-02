@@ -52,7 +52,6 @@ public:
     void setReceipt(uint64_t _index, protocol::TransactionReceipt::Ptr _receipt) override {}
     void appendReceipt(protocol::TransactionReceipt::Ptr _receipt) override {}
     void appendTransactionMetaData(protocol::TransactionMetaData::Ptr _txMetaData) override {}
-    protocol::NonceListPtr nonces() const override { return {}; }
     uint64_t transactionsSize() const override { return 0; }
     uint64_t transactionsMetaDataSize() const override { return 0; }
     uint64_t transactionsHashSize() const override { return Block::transactionsHashSize(); }
