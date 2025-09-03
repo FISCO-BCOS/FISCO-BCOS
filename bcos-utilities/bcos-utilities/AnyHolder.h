@@ -63,12 +63,24 @@ public:
     Type* operator->() & { return get(); }
     const Type* operator->() const& { return get(); }
 
+    std::unique_ptr<Type> toUnique() &&
+    {
+        auto ptr = std::unique_ptr<Type>(reinterpret_cast<Type*>(
+            std::make_unique_for_overwrite<std::byte[]>(maxSize).release()));
+        get()->moveConstructTo(ptr.get());
+        return ptr;
+    }
+
     std::shared_ptr<Type> toShared() &&
     {
+#ifdef __cpp_lib_smart_ptr_for_overwrite
         auto ptr = std::reinterpret_pointer_cast<Type>(
             std::make_shared_for_overwrite<std::byte[]>(maxSize));
         get()->moveConstructTo(ptr.get());
         return ptr;
+#else
+        return {std::move(*this).toUnique()};
+#endif
     }
 };
 }  // namespace bcos
