@@ -66,8 +66,7 @@ inline auto fakeTransaction(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr
 }
 
 
-inline void checkTransaction(
-    Transaction::ConstPtr pbTransaction, Transaction::ConstPtr decodedTransaction)
+inline void checkTransaction(auto pbTransaction, auto decodedTransaction)
 {
     // check the fields
     BOOST_CHECK(decodedTransaction->hash() == pbTransaction->hash());

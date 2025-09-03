@@ -27,7 +27,7 @@ static void testByIndex(benchmark::State& state)
     for (auto const& i : state)
     {
         auto currentIndex = index++ % totalSize;
-        auto tx = fixture.block->transaction(currentIndex);
+        auto tx = fixture.block->transactions()[currentIndex];
         assert(std::cmp_equal(tx->importTime(), currentIndex));
     }
 }

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <concepts>
 #include <cstddef>
+#include <memory>
 
 namespace bcos
 {
@@ -40,10 +41,10 @@ class AnyHolder
 private:
     std::array<std::byte, maxSize> m_data;
 
+public:
     Type* get() & { return reinterpret_cast<Type*>(m_data.data()); }
     const Type* get() const& { return reinterpret_cast<const Type*>(m_data.data()); }
 
-public:
     template <class HoldType>
         requires std::movable<HoldType> && std::derived_from<HoldType, Type> &&
                  (sizeof(HoldType) <= maxSize)
@@ -61,5 +62,13 @@ public:
     const Type& operator*() const& { return *get(); }
     Type* operator->() & { return get(); }
     const Type* operator->() const& { return get(); }
+
+    std::shared_ptr<Type> toShared() &&
+    {
+        auto ptr = std::reinterpret_pointer_cast<Type>(
+            std::make_shared_for_overwrite<std::byte[]>(maxSize));
+        get()->moveConstructTo(ptr.get());
+        return ptr;
+    }
 };
 }  // namespace bcos

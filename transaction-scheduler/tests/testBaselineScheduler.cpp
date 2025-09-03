@@ -61,7 +61,7 @@ struct MockScheduler
 {
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(auto& storage,
         auto& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::input_range auto const& transactions, ledger::LedgerConfig const& /*unused*/)
+        ::ranges::input_range auto transactions, ledger::LedgerConfig const& /*unused*/)
     {
         auto receipts =
             ::ranges::iota_view<size_t, size_t>(0, ::ranges::size(transactions)) |

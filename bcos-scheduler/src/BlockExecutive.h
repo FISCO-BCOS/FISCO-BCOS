@@ -153,7 +153,7 @@ protected:
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     bcos::protocol::ExecutionMessage::UniquePtr buildMessage(
-        ContextID contextID, bcos::protocol::Transaction::ConstPtr tx);
+        ContextID contextID, const bcos::protocol::Transaction* tx);
     void buildExecutivesFromMetaData();
     void buildExecutivesFromNormalTransaction();
 

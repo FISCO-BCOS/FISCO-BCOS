@@ -65,8 +65,6 @@ public:
 
     virtual AnyBlockHeader blockHeader() const = 0;
     virtual BlockHeader::Ptr blockHeader() = 0;
-    // get transactions
-    virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
     // get receipts
     virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
     // get transaction hash

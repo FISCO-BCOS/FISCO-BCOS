@@ -40,10 +40,11 @@ void SealingManager::appendTransactions(
 {
     WriteGuard lock(x_pendingTxs);
     // append the system transactions
+    auto transactionMetaDatas = _fetchedTxs.transactionMetaDatas();
     for (size_t i = 0; i < _fetchedTxs.transactionsMetaDataSize(); i++)
     {
         _txsQueue.emplace_back(
-            std::const_pointer_cast<TransactionMetaData>(_fetchedTxs.transactionMetaData(i)));
+            std::const_pointer_cast<TransactionMetaData>(transactionMetaDatas[i].toShared()));
     }
     m_onReady();
 }

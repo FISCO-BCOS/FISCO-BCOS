@@ -20,6 +20,7 @@
  */
 #include "FrontServiceInitializer.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/txpool/TxPoolTypeDef.h"
 #include "bcos-task/Wait.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>

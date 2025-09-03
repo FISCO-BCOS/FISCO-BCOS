@@ -9,7 +9,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-utilities/Error.h>
@@ -100,7 +99,7 @@ void BlockExecutive::prepare()
 }
 
 bcos::protocol::ExecutionMessage::UniquePtr BlockExecutive::buildMessage(
-    ContextID contextID, bcos::protocol::Transaction::ConstPtr tx)
+    ContextID contextID, const bcos::protocol::Transaction* tx)
 {
     auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
     message->setType(protocol::ExecutionMessage::MESSAGE);
@@ -190,27 +189,24 @@ void BlockExecutive::buildExecutivesFromMetaData()
     std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
         m_block->transactionsMetaDataSize());
 
-    auto blockImpl = std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(m_block);
+    auto transactionMetaDatas = m_block->transactionMetaDatas();
     if (m_blockTxs)
     {
         tbb::parallel_for(tbb::blocked_range<size_t>(0U, m_block->transactionsMetaDataSize()),
             [&](auto const& range) {
                 for (auto i = range.begin(); i < range.end(); ++i)
                 {
-                    auto metaData = blockImpl->transactionMetaDataImpl(i);
-                    // if (metaData)
-                    {
-                        m_executiveResults[i].transactionHash = metaData.hash();
-                        m_executiveResults[i].source = metaData.source();
-                    }
+                    auto metaData = transactionMetaDatas[i];
+                    m_executiveResults[i].transactionHash = metaData->hash();
+                    m_executiveResults[i].source = metaData->source();
                     auto contextID = i + m_startContextID;
 
                     auto& [toAddress, message, enableDAG] = results[i];
-                    message = buildMessage(contextID, (*m_blockTxs)[i]);
+                    message = buildMessage(contextID, (*m_blockTxs)[i].get());
                     // recoder tx version
                     m_executiveResults[i].version = (*m_blockTxs)[i]->version();
                     toAddress = {message->to().data(), message->to().size()};
-                    enableDAG = metaData.attribute() & bcos::protocol::Transaction::Attribute::DAG;
+                    enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
                 }
             });
     }
@@ -242,17 +238,18 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
     std::vector<std::tuple<std::string, protocol::ExecutionMessage::UniquePtr, bool>> results(
         m_block->transactionsSize());
 
+    auto transactions = m_block->transactions();
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0U, m_block->transactionsSize(), 256), [&](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
-                auto tx = m_block->transaction(i);
+                auto tx = transactions[i];
                 m_executiveResults[i].transactionHash = tx->hash();
                 m_executiveResults[i].version = tx->version();
 
                 auto contextID = i + m_startContextID;
                 auto& [to, message, enableDAG] = results[i];
-                message = buildMessage(contextID, tx);
+                message = buildMessage(contextID, tx.get());
                 to = {message->to().data(), message->to().size()};
                 enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
             }
@@ -669,7 +666,7 @@ void BlockExecutive::asyncNotify(
         submitResult->setTransactionReceipt(it.receipt);
         if (m_syncBlock)
         {
-            auto tx = m_block->transaction(index);
+            auto tx = m_block->transactions()[index];
             submitResult->setNonce(std::string(tx->nonce()));
         }
         index++;

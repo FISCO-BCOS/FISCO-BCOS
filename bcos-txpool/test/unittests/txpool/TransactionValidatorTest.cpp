@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     size_t importedTxNum = 1;
 
     auto duplicatedNonce =
-        blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+        blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
     std::string duplicatedNonceStr(duplicatedNonce);
     auto tx = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKey);
     // bcos nonce not effect web3 nonce

@@ -375,9 +375,11 @@ bool TransactionSync::importDownloadedTxsByBlock(
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
+    auto transactions = _txsBuffer->transactions();
     for (size_t i = 0; i < _txsBuffer->transactionsSize(); i++)
     {
-        txs->emplace_back(std::const_pointer_cast<Transaction>(_txsBuffer->transaction(i)));
+        auto anyTx = transactions[i];
+        txs->emplace_back(std::move(anyTx).toShared());
     }
     return importDownloadedTxs(std::move(txs), std::move(_verifiedProposal));
 }

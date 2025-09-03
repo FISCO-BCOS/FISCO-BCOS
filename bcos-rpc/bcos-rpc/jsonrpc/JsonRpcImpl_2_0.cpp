@@ -398,6 +398,8 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, boo
     auto txSize = _onlyTxHash ? block.transactionsMetaDataSize() : block.transactionsSize();
 
     Json::Value jTxs(Json::arrayValue);
+    auto transactionMetaDatas = block.transactionMetaDatas();
+    auto transactions = block.transactions();
     for (std::size_t index = 0; index < txSize; ++index)
     {
         Json::Value jTx;
@@ -405,11 +407,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, boo
         {
             // Note: should not call transactionHash for in the common cases transactionHash maybe
             // empty
-            jTx = toHexStringWithPrefix(block.transactionMetaData(index)->hash());
+            jTx = toHexStringWithPrefix(transactionMetaDatas[index]->hash());
         }
         else
         {
-            auto transaction = block.transaction(index);
+            auto transaction = transactions[index];
             toJsonResp(jTx, *transaction);
         }
         jTxs.append(jTx);

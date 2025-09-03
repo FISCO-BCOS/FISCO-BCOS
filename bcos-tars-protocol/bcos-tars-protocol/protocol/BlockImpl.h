@@ -57,7 +57,6 @@ public:
     bcos::protocol::BlockHeader::Ptr blockHeader() override;
     bcos::protocol::AnyBlockHeader blockHeader() const override;
 
-    bcos::protocol::Transaction::ConstPtr transaction(uint64_t _index) const override;
     bcos::protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override;
 
     TransactionMetaDataImpl transactionMetaDataImpl(uint64_t _index) const;
