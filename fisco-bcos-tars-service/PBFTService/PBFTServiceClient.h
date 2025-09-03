@@ -137,6 +137,12 @@ public:
             "PBFTServiceClient: asyncNoteLatestBlockHash: unimplemented interface!");
     }
 
+    void asyncNoteLatestBlockTimestamp(int64_t _timestamp) override
+    {
+        throw std::runtime_error(
+            "PBFTServiceClient: asyncNoteLatestBlockHash: unimplemented interface!");
+    }
+
     // the consensus module notify the sealer to reset sealing when viewchange
     void asyncResetSealing(std::function<void(bcos::Error::Ptr)> _onRecvResponse) override
     {

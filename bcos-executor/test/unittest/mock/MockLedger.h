@@ -75,6 +75,8 @@ public:
             block->setBlockHeader(m_blockHeader);
         }
         block->blockHeader()->setNumber(m_blockNumber);
+        auto hashImpl = std::make_shared<crypto::Keccak256>();
+        block->blockHeader()->calculateHash(*hashImpl);
         _onGetBlock(nullptr, block);
     };
 

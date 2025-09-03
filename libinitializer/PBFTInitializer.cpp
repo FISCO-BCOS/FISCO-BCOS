@@ -274,25 +274,26 @@ void PBFTInitializer::registerHandlers()
         });
 
     // the consensus module notify the latest blockNumber to the sealer
-    m_pbft->registerStateNotifier(
-        [weakedSealer](bcos::protocol::BlockNumber _blockNumber, crypto::HashType const& _hash) {
-            try
+    m_pbft->registerStateNotifier([weakedSealer](bcos::protocol::BlockNumber _blockNumber,
+                                      crypto::HashType const& _hash, int64_t timestamp) {
+        try
+        {
+            auto sealer = weakedSealer.lock();
+            if (!sealer)
             {
-                auto sealer = weakedSealer.lock();
-                if (!sealer)
-                {
-                    return;
-                }
-                sealer->asyncNoteLatestBlockNumber(_blockNumber);
-                sealer->asyncNoteLatestBlockHash(_hash);
+                return;
             }
-            catch (std::exception const& e)
-            {
-                INITIALIZER_LOG(WARNING)
-                    << LOG_DESC("call notify the latest block number to the sealer exception")
-                    << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
+            sealer->asyncNoteLatestBlockNumber(_blockNumber);
+            sealer->asyncNoteLatestBlockHash(_hash);
+            sealer->asyncNoteLatestBlockTimestamp(timestamp);
+        }
+        catch (std::exception const& e)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("call notify the latest block number to the sealer exception")
+                << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    });
 
     // the consensus moudle notify new block to the sync module
     std::weak_ptr<BlockSyncInterface> weakedSync = m_blockSync;

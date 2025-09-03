@@ -72,7 +72,8 @@ public:
 
     // notify the sealer the latest blockNumber
     void registerStateNotifier(
-        std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&)> _stateNotifier)
+        std::function<void(bcos::protocol::BlockNumber, crypto::HashType const&, int64_t)>
+            _stateNotifier)
     {
         m_pbftEngine->pbftConfig()->registerStateNotifier(std::move(_stateNotifier));
     }
