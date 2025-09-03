@@ -36,16 +36,13 @@ public:
     ValidatorInterface() = default;
     virtual ~ValidatorInterface() = default;
     virtual void verifyProposal(bcos::crypto::PublicPtr _fromNode,
-        PBFTProposalInterface::Ptr _proposal,
+        bcos::protocol::BlockNumber index, protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) = 0;
 
     virtual void asyncResetTxsFlag(
         const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash = false) = 0;
     virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
-
-    // virtual void notifyTransactionsResult(
-    //     bcos::protocol::Block::Ptr _block, bcos::protocol::BlockHeader::Ptr _header) = 0;
 
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         bcos::consensus::ConsensusNodeList const& _observerNodeList) = 0;
@@ -75,7 +72,8 @@ public:
     void init() override;
 
     void asyncResetTxPool() override;
-    void verifyProposal(bcos::crypto::PublicPtr _fromNode, PBFTProposalInterface::Ptr _proposal,
+    void verifyProposal(bcos::crypto::PublicPtr _fromNode, bcos::protocol::BlockNumber index,
+        protocol::Block::ConstPtr block,
         std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override;
 
     void asyncResetTxsFlag(

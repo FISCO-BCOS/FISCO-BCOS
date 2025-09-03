@@ -20,7 +20,6 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
-#include "bcos-framework/protocol/CommonError.h"
 
 using namespace bcos;
 using namespace bcos::sealer;
@@ -257,7 +256,7 @@ bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
 
     try
     {
-        auto [_txsHashList, _sysTxsList] = m_config->txpool()->sealTxs(txsToFetch, nullptr);
+        auto [_txsHashList, _sysTxsList] = m_config->txpool()->sealTxs(txsToFetch);
         if (_txsHashList->transactionsHashSize() == 0 && _sysTxsList->transactionsHashSize() == 0)
         {
             return FetchResult::NO_TRANSACTION;

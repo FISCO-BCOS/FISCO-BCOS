@@ -21,10 +21,12 @@
 #include "Timer.h"
 #include "BoostLog.h"
 #include "Common.h"
+#include "bcos-utilities/Overloaded.h"
+#include <boost/asio/executor_work_guard.hpp>
 
 using namespace bcos;
 
-bcos::Timer::Timer(boost::asio::io_service& ioService, int64_t timeout, std::string threadName)
+bcos::Timer::Timer(boost::asio::io_context& ioService, int64_t timeout, std::string threadName)
   : m_timeout(timeout),
     m_working(true),
     m_ioService(std::addressof(ioService)),
@@ -36,23 +38,27 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
   : m_timeout(_timeout),
     m_working(true),
     m_ioService(std::in_place_index_t<1>{}),
-    m_work(this->ioService()),
     m_timer(this->ioService()),
     m_threadName(std::move(_threadName)),
     m_worker(std::make_unique<std::thread>([&]() {
         bcos::pthread_setThreadName(m_threadName);
         while (m_working)
         {
+            auto& ioContext = ioService();
+            if (ioContext.stopped())
+            {
+                ioContext.restart();
+            }
             try
             {
-                ioService().run();
+                auto work = boost::asio::make_work_guard(ioContext);
+                ioContext.run();
             }
             catch (std::exception const& e)
             {
                 BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
                                   << LOG_KV("message", boost::diagnostic_information(e));
             }
-            ioService().reset();
         }
     }))
 {}
@@ -82,7 +88,7 @@ void Timer::startTimer()
     {
         return;
     }
-    m_timer.expires_from_now(std::chrono::milliseconds(adjustTimeout()));
+    m_timer.expires_after(std::chrono::milliseconds(adjustTimeout()));
     // calls the timeout handler
     m_timer.async_wait([timerWeak = std::weak_ptr<Timer>(shared_from_this())](
                            const boost::system::error_code& error) {
@@ -188,4 +194,14 @@ uint64_t bcos::Timer::adjustTimeout()
 void bcos::Timer::setTimeout(int64_t timeout)
 {
     m_timeout = timeout;
+}
+bool bcos::Timer::borrowedIoService() const
+{
+    return std::holds_alternative<boost::asio::io_context*>(m_ioService);
+}
+boost::asio::io_context& bcos::Timer::ioService()
+{
+    return std::visit(bcos::overloaded([](boost::asio::io_context* ptr) -> auto& { return *ptr; },
+                          [](boost::asio::io_context& ref) -> auto& { return ref; }),
+        m_ioService);
 }

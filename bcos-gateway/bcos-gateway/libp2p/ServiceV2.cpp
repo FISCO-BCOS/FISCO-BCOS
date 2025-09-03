@@ -43,18 +43,25 @@ ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTab
     m_routerTable->setUnreachableDistance(c_unreachableDistance);
     // process router packet related logic
     registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
-        boost::bind(&ServiceV2::onReceiveRouterSeq, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
-
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceiveRouterSeq(std::move(exception), std::move(session), std::move(message));
+        });
     registerHandlerByMsgType(GatewayMessageType::RouterTableResponse,
-        boost::bind(&ServiceV2::onReceivePeersRouterTable, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceivePeersRouterTable(std::move(exception), std::move(session), std::move(message));
+        });
 
     registerHandlerByMsgType(GatewayMessageType::RouterTableRequest,
-        boost::bind(&ServiceV2::onReceiveRouterTableRequest, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
-    registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(_session); });
-    registerOnDeleteSession([this](P2PSession::Ptr _session) { onEraseSession(_session); });
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceiveRouterTableRequest(
+                std::move(exception), std::move(session), std::move(message));
+        });
+    registerOnNewSession([this](P2PSession::Ptr _session) { onNewSession(std::move(_session)); });
+    registerOnDeleteSession(
+        [this](P2PSession::Ptr _session) { onEraseSession(std::move(_session)); });
 
     m_routerTimer->registerTimeoutHandler([this]() { broadcastRouterSeq(); });
 }
@@ -429,12 +436,12 @@ void ServiceV2::sendRespMessageBySession(
 }
 
 bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
-    P2pID nodeID, P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    P2pID nodeID, P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
-    message.setSrcP2PNodeID(m_nodeID);
-    message.setDstP2PNodeID(nodeID);
+    header.setSrcP2PNodeID(m_nodeID);
+    header.setDstP2PNodeID(nodeID);
 
-    auto dstNodeID = message.dstP2PNodeID();
+    auto dstNodeID = header.dstP2PNodeID();
     // without nextHop: maybe network unreachable or with distance equal to 1
     auto nextHop = m_routerTable->getNextHop(dstNodeID);
     if (nextHop.empty())
@@ -443,28 +450,28 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
         {
             SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
-                                << LOG_KV("from", message.printSrcP2PNodeID())
-                                << LOG_KV("to", message.printDstP2PNodeID())
-                                << LOG_KV("type", message.packetType())
-                                << LOG_KV("seq", message.seq())
-                                << LOG_KV("rsp", message.isRespPacket());
+                                << LOG_KV("from", header.printSrcP2PNodeID())
+                                << LOG_KV("to", header.printDstP2PNodeID())
+                                << LOG_KV("type", header.packetType())
+                                << LOG_KV("seq", header.seq())
+                                << LOG_KV("rsp", header.isRespPacket());
         }
         co_return co_await Service::sendMessageByNodeID(
-            std::move(dstNodeID), message, std::move(payloads), options);
+            std::move(dstNodeID), header, std::move(payloads), options);
     }
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
                             << LOG_DESC("forwardMessage to nextHop")
-                            << LOG_KV("from", message.printSrcP2PNodeID())
-                            << LOG_KV("to", message.printDstP2PNodeID())
+                            << LOG_KV("from", header.printSrcP2PNodeID())
+                            << LOG_KV("to", header.printDstP2PNodeID())
                             << LOG_KV("nextHop", printShortP2pID(nextHop))
-                            << LOG_KV("type", message.packetType()) << LOG_KV("seq", message.seq())
-                            << LOG_KV("rsp", message.isRespPacket());
+                            << LOG_KV("type", header.packetType()) << LOG_KV("seq", header.seq())
+                            << LOG_KV("rsp", header.isRespPacket());
     }
     co_return co_await Service::sendMessageByNodeID(
-        std::move(nextHop), message, std::move(payloads), options);
+        std::move(nextHop), header, std::move(payloads), options);
 }
 
 void bcos::gateway::ServiceV2::registerUnreachableHandler(std::function<void(std::string)> _handler)

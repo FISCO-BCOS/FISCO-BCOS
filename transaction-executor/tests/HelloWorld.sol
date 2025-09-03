@@ -132,4 +132,8 @@ contract HelloWorld {
     function deployWithDeploy() public returns (address) {
         return address(new ToBeDeployWithMapping());
     }
+
+    function timestamp() public view returns (uint) {
+        return block.timestamp;
+    }
 }

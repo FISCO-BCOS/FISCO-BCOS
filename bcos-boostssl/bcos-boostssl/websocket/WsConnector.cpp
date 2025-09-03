@@ -28,7 +28,6 @@
 #include <boost/thread/thread.hpp>
 #include <cstddef>
 #include <memory>
-#include <utility>
 
 using namespace bcos;
 using namespace bcos::boostssl;

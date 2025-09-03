@@ -20,8 +20,6 @@
 #pragma once
 #include <bcos-boostssl/httpserver/Common.h>
 
-#include <utility>
-
 namespace bcos::boostssl::http
 {
 // The queue for http request pipeline
@@ -31,45 +29,27 @@ private:
     // the maximum number size of queue
     std::size_t m_limit;
     // messages to be send
-    std::vector<HttpResponsePtr> m_allResp;
+    std::deque<HttpResponsePtr> m_allResp;
     // send handler
     std::function<void(HttpResponsePtr)> m_sender;
 
 public:
-    explicit Queue(std::size_t _limit = 16) : m_limit(_limit) { m_allResp.reserve(m_limit); }
+    explicit Queue(std::size_t _limit = 16);
 
-    void setSender(std::function<void(HttpResponsePtr)> _sender) { m_sender = std::move(_sender); }
-    std::function<void(HttpResponsePtr)> sender() const { return m_sender; }
+    void setSender(std::function<void(HttpResponsePtr)> _sender);
+    std::function<void(HttpResponsePtr)> sender() const;
 
-    std::size_t limit() const { return m_limit; }
-    void setLimit(std::size_t _limit) { m_limit = _limit; }
+    std::size_t limit() const;
+    void setLimit(std::size_t _limit);
 
     // if the queue reached the m_limit
-    bool isFull() const { return m_allResp.size() >= m_limit; }
+    bool isFull() const;
 
     // called when a message finishes sending
     // returns `true` if the caller should initiate a read
-    bool onWrite()
-    {
-        BOOST_ASSERT(!m_allResp.empty());
-        auto const was_full = isFull();
-        m_allResp.erase(m_allResp.begin());
-        if (!m_allResp.empty())
-        {
-            m_sender(m_allResp.front());
-        }
-        return was_full;
-    }
+    bool onWrite();
 
     // enqueue and waiting called by the HTTP handler to send a response.
-    void enqueue(HttpResponsePtr _msg)
-    {
-        m_allResp.push_back(std::move(_msg));
-        // there was no previous work, start this one
-        if (m_allResp.size() == 1)
-        {
-            m_sender(m_allResp.front());
-        }
-    }
+    void enqueue(HttpResponsePtr _msg);
 };
 }  // namespace bcos::boostssl::http

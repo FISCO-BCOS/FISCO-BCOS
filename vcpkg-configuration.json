@@ -8,18 +8,16 @@
         "openssl",
         "evmone",
         "evmc",
-        "tarscpp",
         "ethash",
         "intx",
         "fiscobcos",
-        "etcd-cpp-apiv3",
         "wedprcrypto",
-        "jemalloc",
-        "secp256k1",
-        "tbb",
-        "hsm-crypto",
-        "boost-beast"
+        "hsm-crypto"
       ]
     }
+  ],
+  "overlay-ports": [
+    "./ports/boost-context",
+    "./ports/tarscpp"
   ]
 }

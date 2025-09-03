@@ -5,25 +5,22 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/SessionCallback.h"
-#include "bcos-utilities/ThreadPool.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
-#include <bcos-gateway/libnetwork/Message.h>  // for Message
+#include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-gateway/libnetwork/PeerBlacklist.h>
 #include <bcos-gateway/libnetwork/PeerWhitelist.h>
-#include <bcos-utilities/Common.h>  // for Guard, Mutex
+#include <bcos-utilities/Common.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
-#include <boost/asio/deadline_timer.hpp>  // for deadline_timer
+#include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/ssl/stream_base.hpp>
-#include <boost/system/error_code.hpp>  // for error_code
+#include <boost/system/error_code.hpp>
 #include <memory>
-#include <set>      // for set
-#include <string>   // for string
-#include <thread>   // for thread
-#include <utility>  // for swap, move
-#include <vector>   // for vector
+#include <set>
+#include <string>
+#include <utility>
 
 
 namespace boost::asio::ssl
@@ -51,16 +48,12 @@ public:
     Host& operator=(const Host&) = delete;
     Host& operator=(Host&&) = delete;
     Host(bcos::crypto::Hash::Ptr _hash, std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory)
-      : m_hashImpl(std::move(_hash)),
-        m_asioInterface(std::move(_asioInterface)),
-        m_sessionFactory(std::move(_sessionFactory)),
-        m_messageFactory(std::move(_messageFactory)) {};
-    virtual ~Host() { stop(); };
+        std::shared_ptr<SessionFactory> _sessionFactory, MessageFactory::Ptr _messageFactory);
+    virtual ~Host();
 
     using Ptr = std::shared_ptr<Host>;
 
-    virtual uint16_t listenPort() const { return m_listenPort; }
+    virtual uint16_t listenPort() const;
 
     virtual void start();
     virtual void stop();
@@ -69,84 +62,48 @@ public:
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
             callback);
 
-    virtual bool haveNetwork() const { return m_run; }
+    virtual bool haveNetwork() const;
 
-    virtual std::string listenHost() const { return m_listenHost; }
-    virtual void setHostPort(std::string host, uint16_t port)
-    {
-        m_listenHost = std::move(host);
-        m_listenPort = port;
-    }
+    virtual std::string listenHost() const;
+    virtual void setHostPort(std::string host, uint16_t port);
 
     virtual std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-    connectionHandler() const
-    {
-        return m_connectionHandler;
-    }
+    connectionHandler() const;
     virtual void setConnectionHandler(
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
-            connectionHandler)
-    {
-        m_connectionHandler = std::move(connectionHandler);
-    }
+            connectionHandler);
 
-    virtual std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler()
-    {
-        return m_sslContextPubHandler;
-    }
+    virtual std::function<bool(X509* x509, std::string& pubHex)> sslContextPubHandler();
 
     virtual void setSSLContextPubHandler(
-        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler)
-    {
-        m_sslContextPubHandler = std::move(_sslContextPubHandler);
-    }
+        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler);
 
     virtual std::function<bool(X509* x509, std::string& pubHex)>
-    sslContextPubHandlerWithoutExtInfo()
-    {
-        return m_sslContextPubHandlerWithoutExtInfo;
-    }
+    sslContextPubHandlerWithoutExtInfo();
 
     virtual void setSSLContextPubHandlerWithoutExtInfo(
-        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo)
-    {
-        m_sslContextPubHandlerWithoutExtInfo = std::move(_sslContextPubHandlerWithoutExtInfo);
-    }
+        std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo);
 
     virtual void setSessionCallbackManager(
-        SessionCallbackManagerInterface::Ptr sessionCallbackManager)
-    {
-        m_sessionCallbackManager = std::move(sessionCallbackManager);
-    }
+        SessionCallbackManagerInterface::Ptr sessionCallbackManager);
 
-    virtual std::shared_ptr<ASIOInterface> asioInterface() const { return m_asioInterface; }
-    virtual std::shared_ptr<SessionFactory> sessionFactory() const { return m_sessionFactory; }
-    virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
+    virtual std::shared_ptr<ASIOInterface> asioInterface() const;
+    virtual std::shared_ptr<SessionFactory> sessionFactory() const;
+    virtual MessageFactory::Ptr messageFactory() const;
     virtual P2PInfo p2pInfo();
 
-    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist)
-    {
-        m_peerBlacklist = std::move(_peerBlacklist);
-    }
-    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist() { return m_peerBlacklist; }
-    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist)
-    {
-        m_peerWhitelist = std::move(_peerWhitelist);
-    }
-    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist() { return m_peerWhitelist; }
+    virtual void setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist);
+    virtual PeerBlackWhitelistInterface::Ptr peerBlacklist();
+    virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
+    virtual PeerBlackWhitelistInterface::Ptr peerWhitelist();
 
     template <class F>
     void asyncTo(F f)
     {
-        m_asyncGroup.template run(std::move(f));
+        m_asyncGroup.run(std::move(f));
     }
 
-    void setEnableSslVerify(bool _enableSSLVerify)
-    {
-        m_enableSSLVerify = _enableSSLVerify;
-        HOST_LOG(INFO) << LOG_DESC("setEnableSslVerify")
-                       << LOG_KV("enableSSLVerify", m_enableSSLVerify);
-    }
+    void setEnableSslVerify(bool _enableSSLVerify);
 
 protected:
     /// obtain the common name from the subject:
@@ -180,25 +137,9 @@ protected:
             callback,
         NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
 
-    void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint)
-    {
-        bcos::Guard lock(x_pendingConns);
-        auto it = m_pendingConns.find(nodeIPEndpoint);
-        if (it != m_pendingConns.end())
-        {
-            m_pendingConns.erase(it);
-        }
-    }
+    void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
-    void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint)
-    {
-        bcos::Guard lock(x_pendingConns);
-        auto it = m_pendingConns.lower_bound(nodeIPEndpoint);
-        if (it == m_pendingConns.end() || *it != nodeIPEndpoint)
-        {
-            m_pendingConns.emplace_hint(it, nodeIPEndpoint);
-        }
-    }
+    void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
     tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;

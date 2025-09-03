@@ -23,7 +23,7 @@
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
 #endif
 #include <bcos-pbft/pbft/PBFTFactory.h>
@@ -176,10 +176,10 @@ void PBFTInitializer::initChainNodeInfo(
     m_nodeInfo->setCompatibilityVersion(m_pbft->compatibilityVersion());
     m_nodeInfo->setFeatureKeys(
         ledger::Features::featureKeys() |
-        RANGES::views::transform([](std::string_view view) { return std::string(view); }));
+        ::ranges::views::transform([](std::string_view view) { return std::string(view); }));
     m_nodeInfo->setSupportConfigs(
         ledger::SystemConfigs::supportConfigs() |
-        RANGES::views::transform([](std::string_view view) { return std::string(view); }));
+        ::ranges::views::transform([](std::string_view view) { return std::string(view); }));
     m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", m_nodeInfo->nodeType())
@@ -564,7 +564,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 {
     m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
 
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
     auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
 #endif
     // leader key: /${chainID}/consensus/${nodeID}
@@ -574,7 +574,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
     std::string nodeConfig;
     m_groupInfoCodec->serialize(nodeConfig, m_groupInfo);
 
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
         m_nodeConfig->leaseTTL(), m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(),

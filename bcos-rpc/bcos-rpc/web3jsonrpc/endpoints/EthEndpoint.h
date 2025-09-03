@@ -24,7 +24,6 @@
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <json/json.h>
-#include <boost/core/ignore_unused.hpp>
 
 namespace bcos::rpc
 {
@@ -35,12 +34,9 @@ namespace bcos::rpc
 class EthEndpoint
 {
 public:
-    EthEndpoint(NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem)
-      : m_nodeService(std::move(nodeService)), m_filterSystem(std::move(filterSystem))
-    {}
+    EthEndpoint(NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction);
     virtual ~EthEndpoint() = default;
 
-protected:
     task::Task<void> protocolVersion(const Json::Value&, Json::Value&);
     task::Task<void> syncing(const Json::Value&, Json::Value&);
     task::Task<void> coinbase(const Json::Value&, Json::Value&);
@@ -81,10 +77,14 @@ protected:
     task::Task<void> getLogs(const Json::Value&, Json::Value&);
     task::Task<std::tuple<protocol::BlockNumber, bool>> getBlockNumberByTag(
         std::string_view blockTag);
+    task::Task<void> maxPriorityFeePerGas(const Json::Value&, Json::Value&);
 
 private:
     NodeService::Ptr m_nodeService;
     FilterSystem::Ptr m_filterSystem;
+    bool m_syncTransaction;
+
+    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed);
 };
 
 }  // namespace bcos::rpc

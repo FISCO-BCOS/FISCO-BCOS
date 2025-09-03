@@ -20,10 +20,7 @@
 
 #include "EthEndpoint.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-rpc/groupmgr/NodeService.h"
 #include "bcos-rpc/validator/TransactionValidator.h"
-#include "bcos-task/Wait.h"
-
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -43,7 +40,6 @@
 #include <boost/throw_exception.hpp>
 #include <cstdint>
 #include <string>
-#include <variant>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -105,7 +101,6 @@ task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
         result = "0x0";  // 0 for default
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::mining(const Json::Value&, Json::Value& response)
 {
@@ -137,7 +132,6 @@ task::Task<void> EthEndpoint::gasPrice(const Json::Value&, Json::Value& response
         result = "0x0";
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::accounts(const Json::Value&, Json::Value& response)
 {
@@ -151,13 +145,12 @@ task::Task<void> EthEndpoint::blockNumber(const Json::Value&, Json::Value& respo
     auto number = co_await ledger::getCurrentBlockNumber(*ledger);
     Json::Value result = toQuantity(number);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value& response)
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: balance(QTY)
-    auto address = toView(request[0u]);
+    auto address = toView(request[0U]);
     if (address.starts_with("0x") || address.starts_with("0X"))
     {
         address.remove_prefix(2);
@@ -165,7 +158,7 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
-    auto const blockTag = toView(request[1u]);
+    auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
@@ -188,13 +181,12 @@ task::Task<void> EthEndpoint::getBalance(const Json::Value& request, Json::Value
     }
     Json::Value result = toQuantity(std::move(balance));
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Value& response)
 {
     // params: address(DATA), position(QTY), blockNumber(QTY|TAG)
     // result: value(DATA)
-    auto address = toView(request[0u]);
+    auto address = toView(request[0U]);
     if (address.starts_with("0x") || address.starts_with("0X"))
     {
         address.remove_prefix(2);
@@ -210,7 +202,7 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
     }
     const auto positionBytes = FixedBytes<32>(positionStr, FixedBytes<32>::FromHex);
     // TODO)): blockNumber is ignored nowadays
-    auto const blockTag = toView(request[2u]);
+    auto const blockTag = toView(request[2U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
@@ -233,7 +225,6 @@ task::Task<void> EthEndpoint::getStorageAt(const Json::Value& request, Json::Val
         result = "0x0000000000000000000000000000000000000000000000000000000000000000";
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Json::Value& response)
 {
@@ -247,7 +238,7 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     std::string addressStr(address);
     boost::algorithm::to_lower(addressStr);
     // TODO)): blockNumber is ignored nowadays
-    auto const blockTag = toView(request[1u]);
+    auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
@@ -279,7 +270,6 @@ task::Task<void> EthEndpoint::getTransactionCount(const Json::Value& request, Js
     }
     Json::Value result = toQuantity(nonce);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getBlockTxCountByHash(
     const Json::Value& request, Json::Value& response)
@@ -292,7 +282,7 @@ task::Task<void> EthEndpoint::getBlockTxCountByHash(
     Json::Value result;
     try
     {
-        auto number = co_await ledger::getBlockNumber(*ledger, std::move(hash));
+        auto number = co_await ledger::getBlockNumber(*ledger, hash);
         auto block =
             co_await ledger::getBlockData(*ledger, number, bcos::ledger::TRANSACTIONS_HASH);
         result = toQuantity(block->transactionsHashSize());
@@ -302,7 +292,6 @@ task::Task<void> EthEndpoint::getBlockTxCountByHash(
         result = "0x0";
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getBlockTxCountByNumber(
     const Json::Value& request, Json::Value& response)
@@ -341,7 +330,7 @@ task::Task<void> EthEndpoint::getCode(const Json::Value& request, Json::Value& r
 {
     // params: address(DATA), blockNumber(QTY|TAG)
     // result: code(DATA)
-    auto address = toView(request[0u]);
+    auto address = toView(request[0U]);
     if (address.starts_with("0x") || address.starts_with("0X"))
     {
         address.remove_prefix(2);
@@ -461,21 +450,25 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         }
     }
 
-    auto tarsTx = web3Tx.takeToTarsTransaction();
-
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
-        [m_tx = std::move(tarsTx)]() mutable { return &m_tx; });
+        [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
     // check transaction validator
     TransactionValidator::checkTransaction(*tx, true);
 
-    // for web3.eth.sendRawTransaction, return the hash of raw transaction
+// for web3.eth.sendRawTransaction, return the hash of raw transaction
+#if 0
     if (auto web3TxHash = bcos::crypto::keccak256Hash(bcos::ref(rawTxBytes));
-        c_fileLogLevel == DEBUG && web3TxHash != encodeTxHash) [[unlikely]]
+        web3TxHash != encodeTxHash) [[unlikely]]
     {
-        WEB3_LOG(DEBUG) << "sendRawTransaction hash not match"
-                        << LOG_KV("inputHash", web3TxHash.hexPrefixed())
-                        << LOG_KV("encodedHash", encodeTxHash.hexPrefixed());
+        bytes web3Encoded;
+        codec::rlp::encode(web3Encoded, web3Tx);
+        WEB3_LOG(WARNING) << "sendRawTransaction hash not match"
+                          << LOG_KV("inputHash", web3TxHash.hexPrefixed())
+                          << LOG_KV("encodedHash", encodeTxHash.hexPrefixed())
+                          << " payload: " << web3Tx.toString() << " origin: " << toHex(rawTxBytes)
+                          << " encoded: " << toHex(web3Encoded);
     }
+#endif
     tx->mutableInner().extraTransactionHash.assign(encodeTxHash.begin(), encodeTxHash.end());
 
     if (c_fileLogLevel == TRACE)
@@ -483,7 +476,7 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         WEB3_LOG(TRACE) << LOG_DESC("sendRawTransaction") << web3Tx.toString();
     }
     co_await txpool->broadcastTransaction(*tx);
-    auto const txResult = co_await txpool->submitTransaction(std::move(tx));
+    auto const txResult = co_await txpool->submitTransaction(std::move(tx), m_syncTransaction);
     if (txResult->status() == 0)
     {
         Json::Value result = encodeTxHash.hexPrefixed();
@@ -491,15 +484,14 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     }
     else
     {
-        protocol::TransactionStatus status =
-            static_cast<protocol::TransactionStatus>(txResult->status());
+        auto status = static_cast<protocol::TransactionStatus>(txResult->status());
         Json::Value errorData = Json::objectValue;
         errorData["txHash"] = encodeTxHash.hexPrefixed();
         auto output = toHex(txResult->transactionReceipt()->output(), "0x");
         auto msg = fmt::format("VM Exception while processing transaction, reason: {}, msg: {}",
             protocol::toString(status), output);
         errorData["message"] = msg;
-        errorData["data"] = std::move(output);
+        errorData["data"] = output;
         buildJsonErrorWithData(errorData, InternalError, std::move(msg), response);
     }
     if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -509,9 +501,13 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
                         << LOG_KV("hash", encodeTxHash.hexPrefixed())
                         << LOG_KV("rsp", printJson(response));
     }
-    co_return;
 }
+
 task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response)
+{
+    co_await call(request, response, nullptr);
+}
+task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -540,6 +536,7 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         bcos::protocol::Transaction::Ptr& m_tx;
         Error::Ptr m_error;
         Json::Value& m_response;
+        u256* m_gasUsed;
 
         constexpr static bool await_ready() noexcept { return false; }
         void await_suspend(std::coroutine_handle<> handle)
@@ -567,6 +564,11 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                         m_response["jsonrpc"] = "2.0";
                         m_response["error"] = std::move(jsonResult);
                     }
+
+                    if (m_gasUsed)
+                    {
+                        *m_gasUsed = result->gasUsed();
+                    }
                 }
 
                 handle.resume();
@@ -579,17 +581,19 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
                 BOOST_THROW_EXCEPTION(*m_error);
             }
         }
-    };
-    Awaitable awaitable{
-        .m_scheduler = *scheduler, .m_tx = tx, .m_error = {}, .m_response = response};
+    } awaitable{.m_scheduler = *scheduler,
+        .m_tx = tx,
+        .m_error = {},
+        .m_response = response,
+        .m_gasUsed = gasUsed};
     co_await awaitable;
 }
 task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Value& response)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: gas(QTY)
-    auto const tx = request[0u];
-    auto const blockTag = toView(request[1u]);
+    auto const& tx = request[0U];
+    auto const blockTag = toView(request[1U]);
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     if (c_fileLogLevel == TRACE)
     {
@@ -597,37 +601,40 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
 
-    u256 estimateGas = LowestGasUsed;
-    auto const ledger = m_nodeService->ledger();
-    if (auto const config =
-            co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_TX_GAS_LIMIT))
+    u256 gasUsed;
+    Json::Value callResponse;
+    co_await call(request, callResponse, std::addressof(gasUsed));
+
+    if (!callResponse.isMember("error"))
     {
-        auto [gasLimit, _] = config.value();
-        estimateGas = u256(gasLimit);
+        Json::Value result = toQuantity(gasUsed);
+        buildJsonContent(result, response);
     }
-    Json::Value result = toQuantity(estimateGas);
-    buildJsonContent(result, response);
-    co_return;
+    else
+    {
+        response = std::move(callResponse);
+    }
 }
 task::Task<void> EthEndpoint::getBlockByHash(const Json::Value& request, Json::Value& response)
 {
     // params: blockHash(DATA), fullTransaction(Boolean)
     // result: block(BLOCK)
-    auto const blockHash = toView(request[0u]);
-    auto const fullTransaction = request[1u].asBool();
+    auto const blockHash = toView(request[0U]);
+    auto const fullTransaction = request[1U].asBool();
     auto const ledger = m_nodeService->ledger();
     Json::Value result = Json::objectValue;
     try
     {
         auto const number = co_await ledger::getBlockNumber(
             *ledger, crypto::HashType(blockHash, crypto::HashType::FromHex));
-        auto flag = bcos::ledger::HEADER;
+        auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, number, flag);
-        combineBlockResponse(result, std::move(block), fullTransaction);
+        combineBlockResponse(result, *block, fullTransaction);
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        WEB3_LOG(DEBUG) << "getBlockByHash failed: " << boost::diagnostic_information(e);
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
@@ -637,20 +644,21 @@ task::Task<void> EthEndpoint::getBlockByNumber(const Json::Value& request, Json:
 {
     // params: blockNumber(QTY|TAG), fullTransaction(Boolean)
     // result: block(BLOCK)
-    auto const blockTag = toView(request[0u]);
-    auto const fullTransaction = request[1u].asBool();
+    auto const blockTag = toView(request[0U]);
+    auto const fullTransaction = request[1U].asBool();
     Json::Value result = Json::objectValue;
     try
     {
         auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
         auto const ledger = m_nodeService->ledger();
-        auto flag = bcos::ledger::HEADER;
+        auto flag = bcos::ledger::HEADER | bcos::ledger::RECEIPTS;
         flag |= fullTransaction ? bcos::ledger::TRANSACTIONS : bcos::ledger::TRANSACTIONS_HASH;
         auto block = co_await ledger::getBlockData(*ledger, blockNumber, flag);
-        combineBlockResponse(result, std::move(block), fullTransaction);
+        combineBlockResponse(result, *block, fullTransaction);
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        WEB3_LOG(DEBUG) << "getBlockByNumber failed: " << boost::diagnostic_information(e);
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
@@ -661,7 +669,7 @@ task::Task<void> EthEndpoint::getTransactionByHash(
 {
     // params: transactionHash(DATA)
     // result: transaction(TX)
-    auto const txHash = toView(request[0u]);
+    auto const txHash = toView(request[0U]);
     auto const hash = crypto::HashType(txHash, crypto::HashType::FromHex);
     auto hashList = std::make_shared<crypto::HashList>();
     hashList->push_back(hash);
@@ -679,22 +687,22 @@ task::Task<void> EthEndpoint::getTransactionByHash(
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
             bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
-        combineTxResponse(result, txs->at(0), std::move(receipt), std::move(block));
+        combineTxResponse(result, *txs->at(0), receipt.get(), block.get(), {});
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        WEB3_LOG(DEBUG) << "getTransactionByHash failed: " << boost::diagnostic_information(e);
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     const Json::Value& request, Json::Value& response)
 {
     // params: blockHash(DATA), transactionIndex(QTY)
     // result: transaction(TX)
-    auto const blockHash = toView(request[0u]);
-    auto const transactionIndex = fromQuantity(std::string(toView(request[1u])));
+    auto const blockHash = toView(request[0U]);
+    auto const transactionIndex = fromQuantity(std::string(toView(request[1U])));
     auto const hash = crypto::HashType(blockHash, crypto::HashType::FromHex);
     auto const ledger = m_nodeService->ledger();
     Json::Value result = Json::objectValue;
@@ -714,18 +722,18 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
         buildJsonContent(result, response);
         co_return;
     }
-    auto tx = block->transaction(transactionIndex);
-    combineTxResponse(result, std::move(tx), nullptr, std::move(block));
+    auto transactions = block->transactions();
+    auto tx = transactions.at(transactionIndex);
+    combineTxResponse(result, *tx, nullptr, block.get(), {});
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     const Json::Value& request, Json::Value& response)
 {
     // params: blockNumber(QTY|TAG), transactionIndex(QTY)
     // result: transaction(TX)
-    auto const blockTag = toView(request[0u]);
-    auto const transactionIndex = fromQuantity(std::string(toView(request[1u])));
+    auto const blockTag = toView(request[0U]);
+    auto const transactionIndex = fromQuantity(std::string(toView(request[1U])));
     auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
     auto const ledger = m_nodeService->ledger();
     Json::Value result = Json::objectValue;
@@ -737,15 +745,17 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        auto tx = block->transaction(transactionIndex);
-        combineTxResponse(result, std::move(tx), nullptr, std::move(block));
+        auto transactions = block->transactions();
+        auto tx = transactions.at(transactionIndex);
+        combineTxResponse(result, *tx, nullptr, block.get(), {});
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        WEB3_LOG(DEBUG) << "getTransactionByBlockNumberAndIndex failed: "
+                        << boost::diagnostic_information(e);
         result = Json::nullValue;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getTransactionReceipt(
     const Json::Value& request, Json::Value& response)
@@ -769,16 +779,15 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
         }
         auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
             bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS);
-        combineReceiptResponse(result, std::move(receipt), txs->at(0), std::move(block));
+        combineReceiptResponse(result, *receipt, *txs->at(0), block.get());
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        WEB3_LOG(DEBUG) << "getTransactionReceipt failed: " << boost::diagnostic_information(e);
         result = Json::nullValue;
         buildJsonContent(result, response);
-        co_return;
     }
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getUncleByBlockHashAndIndex(const Json::Value&, Json::Value& response)
 {
@@ -797,26 +806,23 @@ task::Task<void> EthEndpoint::newFilter(const Json::Value& request, Json::Value&
 {
     // params: filter(FILTER)
     // result: filterId(QTY)
-    Json::Value jParams = request[0U];
+    const Json::Value& jParams = request[0U];
     auto params = m_filterSystem->requestFactory()->create();
     params->fromJson(jParams);
     Json::Value result = co_await m_filterSystem->newFilter(params);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::newBlockFilter(const Json::Value&, Json::Value& response)
 {
     // result: filterId(QTY)
     Json::Value result = co_await m_filterSystem->newBlockFilter();
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::newPendingTransactionFilter(const Json::Value&, Json::Value& response)
 {
     // result: filterId(QTY)
     Json::Value result = co_await m_filterSystem->newPendingTxFilter();
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::uninstallFilter(const Json::Value& request, Json::Value& response)
 {
@@ -825,7 +831,6 @@ task::Task<void> EthEndpoint::uninstallFilter(const Json::Value& request, Json::
     auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->uninstallFilter(id);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getFilterChanges(const Json::Value& request, Json::Value& response)
 {
@@ -834,7 +839,6 @@ task::Task<void> EthEndpoint::getFilterChanges(const Json::Value& request, Json:
     auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->getFilterChanges(id);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getFilterLogs(const Json::Value& request, Json::Value& response)
 {
@@ -843,18 +847,16 @@ task::Task<void> EthEndpoint::getFilterLogs(const Json::Value& request, Json::Va
     auto const id = fromBigQuantity(toView(request[0U]));
     Json::Value result = co_await m_filterSystem->getFilterLogs(id);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<void> EthEndpoint::getLogs(const Json::Value& request, Json::Value& response)
 {
     // params: filter(FILTER)
     // result: logs(ARRAY)
-    Json::Value jParams = request[0U];
+    const Json::Value& jParams = request[0U];
     auto params = m_filterSystem->requestFactory()->create();
     params->fromJson(jParams);
     Json::Value result = co_await m_filterSystem->getLogs(params);
     buildJsonContent(result, response);
-    co_return;
 }
 task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberByTag(
     std::string_view blockTag)
@@ -864,3 +866,17 @@ task::Task<std::tuple<protocol::BlockNumber, bool>> EthEndpoint::getBlockNumberB
     auto [number, _] = bcos::rpc::getBlockNumberByTag(latest, blockTag);
     co_return std::make_tuple(number, std::cmp_equal(latest, number));
 }
+
+task::Task<void> EthEndpoint::maxPriorityFeePerGas(
+    const Json::Value& request, Json::Value& response)
+{
+    Json::Value result = "0x0";
+    buildJsonContent(result, response);
+    co_return;
+}
+bcos::rpc::EthEndpoint::EthEndpoint(
+    NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
+  : m_nodeService(std::move(nodeService)),
+    m_filterSystem(std::move(filterSystem)),
+    m_syncTransaction(syncTransaction)
+{}

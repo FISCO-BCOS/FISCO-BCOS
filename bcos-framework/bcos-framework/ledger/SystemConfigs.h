@@ -21,7 +21,7 @@
 #pragma once
 #include "../protocol/ProtocolTypeDef.h"
 #include <boost/throw_exception.hpp>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/transform.hpp>
 

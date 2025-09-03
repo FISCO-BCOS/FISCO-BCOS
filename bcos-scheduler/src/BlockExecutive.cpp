@@ -21,7 +21,6 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/asio/defer.hpp>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <atomic>

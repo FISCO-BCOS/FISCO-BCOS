@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <string>
 namespace bcos::rpc
 {
@@ -68,7 +68,8 @@ enum class EthMethod
     eth_uninstallFilter,
     eth_getFilterChanges,
     eth_getFilterLogs,
-    eth_getLogs
+    eth_getLogs,
+    eth_maxPriorityFeePerGas
 };
 
 [[maybe_unused]] static std::string methodString(EthMethod _method)

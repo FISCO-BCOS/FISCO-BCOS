@@ -161,30 +161,22 @@ void bcostars::GatewayServiceClient::asyncSendMessageByNodeIDs(const std::string
         std::vector<char>(srcNodeID.begin(), srcNodeID.end()), tarsNodeIDs,
         std::vector<char>(_payload.begin(), _payload.end()));
 }
-void bcostars::GatewayServiceClient::asyncSendBroadcastMessage(uint16_t _type,
-    const std::string& _groupID, int _moduleID, bcos::crypto::NodeIDPtr _srcNodeID,
-    bcos::bytesConstRef _payload)
+bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t type,
+    std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
+    ::ranges::any_view<bcos::bytesConstRef> payloads)
 {
     auto shouldBlockCall = shouldStopCall();
     auto ret =
         checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_prx, nullptr, shouldBlockCall);
     if (!ret && shouldBlockCall)
     {
-        return;
+        co_return;
     }
-    auto srcNodeID = _srcNodeID->data();
-    m_prx->async_asyncSendBroadcastMessage(nullptr, _type, _groupID, _moduleID,
-        std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
-        std::vector<char>(_payload.begin(), _payload.end()));
-}
-bcos::task::Task<void> bcostars::GatewayServiceClient::broadcastMessage(uint16_t type,
-    std::string_view groupID, int moduleID, const bcos::crypto::NodeID& srcNodeID,
-    ::ranges::any_view<bcos::bytesConstRef> payloads)
-{
     bcos::bytes data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
-    asyncSendBroadcastMessage(type, std::string(groupID), moduleID,
-        std::make_shared<bcos::crypto::KeyImpl>(srcNodeID.data()), bcos::ref(data));
-    co_return;
+    auto srcNodeIDBytes = srcNodeID.data();
+    m_prx->async_asyncSendBroadcastMessage(nullptr, type, std::string{groupID}, moduleID,
+        std::vector<char>(srcNodeIDBytes.begin(), srcNodeIDBytes.end()),
+        std::vector<char>(data.begin(), data.end()));
 };
 void bcostars::GatewayServiceClient::asyncGetGroupNodeInfo(
     const std::string& _groupID, bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo)
@@ -418,3 +410,5 @@ bool bcostars::GatewayServiceClient::shouldStopCall()
 {
     return (s_tarsTimeoutCount >= c_maxTarsTimeoutCount);
 }
+void bcostars::GatewayServiceClient::start() {}
+void bcostars::GatewayServiceClient::stop() {}

@@ -54,7 +54,7 @@ public:
 
     using VerifyResponseCallback = std::function<void(Error::Ptr, bool)>;
     void requestMissedTxs(bcos::crypto::PublicPtr _generatedNodeID,
-        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
+        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::ConstPtr _verifiedProposal,
         VerifyResponseCallback _onVerifyFinished) override;
 
     void onEmptyTxs() override;
@@ -73,20 +73,22 @@ protected:
     // functions called by requestMissedTxs
     virtual void verifyFetchedTxs(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, bcos::crypto::HashListPtr _missedTxs,
-        bcos::protocol::Block::Ptr _verifiedProposal, VerifyResponseCallback _onVerifyFinished);
+        bcos::protocol::Block::ConstPtr _verifiedProposal,
+        VerifyResponseCallback _onVerifyFinished);
     virtual void requestMissedTxsFromPeer(bcos::crypto::PublicPtr _generatedNodeID,
-        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
+        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::ConstPtr _verifiedProposal,
         VerifyResponseCallback _onVerifyFinished);
 
     virtual size_t onGetMissedTxsFromLedger(std::set<bcos::crypto::HashType>& _missedTxs,
         Error::Ptr _error, bcos::protocol::TransactionsPtr _fetchedTxs,
-        bcos::protocol::Block::Ptr _verifiedProposal, VerifyResponseCallback _onVerifyFinished);
+        bcos::protocol::Block::ConstPtr _verifiedProposal,
+        VerifyResponseCallback _onVerifyFinished);
 
     virtual bool importDownloadedTxsByBlock(bcos::protocol::Block::Ptr _txsBuffer,
-        bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
+        bcos::protocol::Block::ConstPtr _verifiedProposal = nullptr);
 
     virtual bool importDownloadedTxs(bcos::protocol::TransactionsPtr _txs,
-        bcos::protocol::Block::Ptr _verifiedProposal = nullptr);
+        bcos::protocol::Block::ConstPtr _verifiedProposal = nullptr);
 
 private:
     bcos::crypto::Hash::Ptr m_hashImpl;

@@ -40,12 +40,11 @@ public:
         if (pool)
         {
             // m_callback(std::move(args)...);
-            pool->template enqueue(
-                [callback = std::move(m_callback),
-                    m_args = std::make_shared<std::tuple<Args...>>(
-                        std::make_tuple(std::forward<Args>(args)...))]() mutable {
-                    std::apply(callback, std::move(*m_args));
-                });
+            pool->enqueue([callback = std::move(m_callback),
+                              m_args = std::make_shared<std::tuple<Args...>>(
+                                  std::make_tuple(std::forward<Args>(args)...))]() mutable {
+                std::apply(callback, std::move(*m_args));
+            });
         }
     }
 
@@ -636,3 +635,9 @@ void ExecutorServiceClient::updateEoaNonce(std::unordered_map<std::string, bcos:
 {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented"));
 }
+bcostars::ExecutorServiceClient::ExecutorServiceClient(ExecutorServicePrx _prx)
+  : m_prx(_prx),
+    m_callbackPool(
+        std::make_shared<bcos::ThreadPool>("executorCallback", std::thread::hardware_concurrency()))
+{}
+bcostars::ExecutorServiceClient::~ExecutorServiceClient() {}

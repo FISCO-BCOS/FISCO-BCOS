@@ -11,8 +11,11 @@ using namespace bcos::security;
 void printUsage(const char* programName)
 {
     std::cerr << "Usage: " << programName
-              << " <mode: encrypt|decrypt> <kms_type> <access_key> <secret_key> <region> <key_id> <inputFilePath> <outputFilePath>\n"
-              << "Example: " << programName << " encrypt/decrypt AWS <access_key> <secret_key> <region> <key_id> input.txt output.enc\n";
+              << " <mode: encrypt|decrypt> <kms_type> <access_key> <secret_key> <region> <key_id> "
+                 "<inputFilePath> <outputFilePath>\n"
+              << "Example: " << programName
+              << " encrypt/decrypt AWS <access_key> <secret_key> <region> <key_id> input.txt "
+                 "output.enc\n";
 }
 
 int saveFile(const std::string& filePath, const std::shared_ptr<bytes>& content)

@@ -47,71 +47,18 @@ public:
     SessionRecvBuffer& operator=(const SessionRecvBuffer&) = delete;
     ~SessionRecvBuffer() = default;
 
-    inline std::size_t readPos() const { return m_readPos; }
-    inline std::size_t writePos() const { return m_writePos; }
-    inline std::size_t dataSize() const { return m_writePos - m_readPos; }
+    std::size_t readPos() const;
+    std::size_t writePos() const;
+    std::size_t dataSize() const;
 
-    inline size_t recvBufferSize() const { return m_recvBufferSize; }
+    size_t recvBufferSize() const;
 
-    bool onRead(std::size_t _dataSize)
-    {
-        if (m_readPos + _dataSize <= m_writePos)
-        {
-            m_readPos += _dataSize;
-            return true;
-        }
-        return false;
-    }
-
-
-    bool onWrite(std::size_t _dataSize)
-    {
-        if (m_writePos + _dataSize <= m_recvBufferSize)
-        {
-            m_writePos += _dataSize;
-            return true;
-        }
-        return false;
-    }
-
-
-    bool resizeBuffer(size_t _bufferSize)
-    {
-        if (_bufferSize > m_recvBufferSize)
-        {
-            m_recvBuffer.resize(_bufferSize);
-            m_recvBufferSize = _bufferSize;
-
-            return true;
-        }
-
-        return false;
-    }
-
-    void moveToHeader()
-    {
-        if (m_writePos > m_readPos)
-        {
-            memmove(m_recvBuffer.data(), m_recvBuffer.data() + m_readPos, m_writePos - m_readPos);
-            m_writePos -= m_readPos;
-            m_readPos = 0;
-        }
-        else if (m_writePos == m_readPos)
-        {
-            m_readPos = 0;
-            m_writePos = 0;
-        }
-    }
-
-    inline bcos::bytesConstRef asReadBuffer() const
-    {
-        return {m_recvBuffer.data() + m_readPos, m_writePos - m_readPos};
-    }
-
-    inline bcos::bytesConstRef asWriteBuffer() const
-    {
-        return {m_recvBuffer.data() + m_writePos, m_recvBufferSize - m_writePos};
-    }
+    bool onRead(std::size_t _dataSize);
+    bool onWrite(std::size_t _dataSize);
+    bool resizeBuffer(size_t _bufferSize);
+    void moveToHeader();
+    bcos::bytesConstRef asReadBuffer() const;
+    bcos::bytesConstRef asWriteBuffer() const;
 
 private:
     // 0         readPos    writePos       m_recvBufferSize
@@ -187,65 +134,48 @@ public:
 
     std::size_t writeQueueSize() override;
 
-    virtual Host& host() { return m_server; }
+    virtual Host& host();
 
-    std::shared_ptr<SocketFace> socket() override { return m_socket; }
-    virtual void setSocket(const std::shared_ptr<SocketFace>& socket) { m_socket = socket; }
+    std::shared_ptr<SocketFace> socket() override;
+    virtual void setSocket(const std::shared_ptr<SocketFace>& socket);
 
-    virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
-    virtual void setMessageFactory(const MessageFactory::Ptr& _messageFactory)
-    {
-        m_messageFactory = _messageFactory;
-    }
+    virtual MessageFactory::Ptr messageFactory() const;
+    virtual void setMessageFactory(const MessageFactory::Ptr& _messageFactory);
 
-    SessionCallbackManagerInterface::Ptr sessionCallbackManager() const
-    {
-        return m_sessionCallbackManager;
-    }
+    SessionCallbackManagerInterface::Ptr sessionCallbackManager() const;
     void setSessionCallbackManager(
-        const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
-    {
-        m_sessionCallbackManager = _sessionCallbackManager;
-    }
+        const SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
 
-    virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler()
-    {
-        return m_messageHandler;
-    }
+    virtual const std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)>&
+    messageHandler();
     void setMessageHandler(
         std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
-        override
-    {
-        m_messageHandler = messageHandler;
-    }
+        override;
 
     // handle before sending message, if the check fails, meaning false is returned, the message
     // is not sent, and the SessionCallbackFunc will be performed
     void setBeforeMessageHandler(
-        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) override
-    {
-        m_beforeMessageHandler = handler;
-    }
+        std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) override;
 
-    void setHostInfo(P2PInfo const& _hostInfo) { m_hostInfo = _hostInfo; }
+    void setHostInfo(P2PInfo _hostInfo);
 
-    uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
-    void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
+    uint32_t maxReadDataSize() const;
+    void setMaxReadDataSize(uint32_t _maxReadDataSize);
 
-    uint32_t maxSendDataSize() const { return m_maxSendDataSize; }
-    void setMaxSendDataSize(uint32_t _maxSendDataSize) { m_maxSendDataSize = _maxSendDataSize; }
+    uint32_t maxSendDataSize() const;
+    void setMaxSendDataSize(uint32_t _maxSendDataSize);
 
-    uint32_t maxSendMsgCountS() const { return m_maxSendMsgCountS; }
-    void setMaxSendMsgCountS(uint32_t _maxSendMsgCountS) { m_maxSendMsgCountS = _maxSendMsgCountS; }
+    uint32_t maxSendMsgCountS() const;
+    void setMaxSendMsgCountS(uint32_t _maxSendMsgCountS);
 
-    uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
-    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
+    uint32_t allowMaxMsgSize() const;
+    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize);
 
-    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
-    bool enableCompress() const { return m_enableCompress; }
+    void setEnableCompress(bool _enableCompress);
+    bool enableCompress() const;
 
-    SessionRecvBuffer& recvBuffer() { return m_recvBuffer; }
-    const SessionRecvBuffer& recvBuffer() const { return m_recvBuffer; }
+    SessionRecvBuffer& recvBuffer();
+    const SessionRecvBuffer& recvBuffer() const;
     /**
      * @brief The packets that can be sent are obtained based on the configured policy
      *
@@ -347,27 +277,7 @@ public:
 
     virtual std::shared_ptr<SessionFace> createSession(Host& _server,
         std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr& _messageFactory,
-        SessionCallbackManagerInterface::Ptr& _sessionCallbackManager)
-    {
-        std::shared_ptr<Session> session =
-            std::make_shared<Session>(_socket, _server, m_sessionRecvBufferSize);
-        session->setHostInfo(m_hostInfo);
-        session->setMessageFactory(_messageFactory);
-        session->setSessionCallbackManager(_sessionCallbackManager);
-        session->setAllowMaxMsgSize(m_allowMaxMsgSize);
-        session->setMaxReadDataSize(m_maxReadDataSize);
-        session->setMaxSendDataSize(m_maxSendDataSize);
-        session->setMaxSendMsgCountS(m_maxSendMsgCountS);
-        session->setEnableCompress(m_enableCompress);
-        BCOS_LOG(INFO) << LOG_BADGE("SessionFactory") << LOG_DESC("create new session")
-                       << LOG_KV("sessionRecvBufferSize", m_sessionRecvBufferSize)
-                       << LOG_KV("allowMaxMsgSize", m_allowMaxMsgSize)
-                       << LOG_KV("maxReadDataSize", m_maxReadDataSize)
-                       << LOG_KV("maxSendDataSize", m_maxSendDataSize)
-                       << LOG_KV("maxSendMsgCountS", m_maxSendMsgCountS)
-                       << LOG_KV("enableCompress", m_enableCompress);
-        return session;
-    }
+        SessionCallbackManagerInterface::Ptr& _sessionCallbackManager);
 
 private:
     P2PInfo m_hostInfo;

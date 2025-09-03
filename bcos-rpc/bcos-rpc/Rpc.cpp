@@ -62,7 +62,7 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
         });
 
     // handshake msgHandler
-    m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDESHAKE,
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::HANDSHAKE,
         boost::bind(
             &Rpc::onRecvHandshakeRequest, this, boost::placeholders::_1, boost::placeholders::_2));
 }
@@ -139,6 +139,12 @@ void Rpc::asyncNotifyBlockNumber(std::string const& _groupID, std::string const&
         _callback(nullptr);
     }
     m_jsonRpcImpl->groupManager()->updateGroupBlockInfo(_groupID, _nodeName, _blockNumber);
+
+    if (m_onNewBlock)
+    {
+        m_onNewBlock(_groupID, _blockNumber);
+    }
+
     RPC_LOG(TRACE) << LOG_BADGE("asyncNotifyBlockNumber") << LOG_KV("group", _groupID)
                    << LOG_KV("blockNumber", _blockNumber) << LOG_KV("sessions", ss.size());
 }

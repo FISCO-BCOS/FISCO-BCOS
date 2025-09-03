@@ -41,7 +41,7 @@ private:
             [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
 
         auto submitResult = co_await concepts::getRef(m_transactionPool)
-                                .submitTransaction(std::move(transactionImpl));
+                                .submitTransaction(std::move(transactionImpl), true);
 
         if (submitResult && submitResult->transactionReceipt())
         {

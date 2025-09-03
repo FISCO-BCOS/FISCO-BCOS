@@ -19,7 +19,7 @@ bcostars::Error TxPoolServiceServer::submit(const bcostars::Transaction& tx,
                          tars::TarsCurrentPtr current) -> bcos::task::Task<void> {
         try
         {
-            auto submitResult = co_await txpool->submitTransaction(std::move(transaction));
+            auto submitResult = co_await txpool->submitTransaction(std::move(transaction), true);
             async_response_submit(current, {},
                 std::dynamic_pointer_cast<bcostars::protocol::TransactionSubmitResultImpl>(
                     submitResult)
@@ -179,16 +179,9 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
 {
     current->setResponse(false);
 
-    auto bcosAvoidTxs = std::make_shared<bcos::txpool::TxsHashSet>();
-    for (auto tx : avoidTxs)
-    {
-        bcosAvoidTxs->insert(bcos::crypto::HashType(bcos::bytes(tx.begin(), tx.end())));
-    }
-
     try
     {
-        auto [_txsList, _sysTxsList] =
-            m_txpoolInitializer->txpool()->sealTxs(txsLimit, bcosAvoidTxs);
+        auto [_txsList, _sysTxsList] = m_txpoolInitializer->txpool()->sealTxs(txsLimit);
 
         async_response_asyncSealTxs(current, toTarsError({}),
             std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_txsList)->inner(),
@@ -207,15 +200,15 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
 }
 
 bcostars::Error TxPoolServiceServer::asyncVerifyBlock(const vector<tars::Char>& generatedNodeID,
-    const vector<tars::Char>& block, tars::Bool& result, tars::TarsCurrentPtr current)
+    const bcostars::Block& block, tars::Bool& result, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
     bcos::crypto::PublicPtr pk = m_txpoolInitializer->cryptoSuite()->keyFactory()->createKey(
         bcos::bytesConstRef((const bcos::byte*)generatedNodeID.data(), generatedNodeID.size()));
-    m_txpoolInitializer->txpool()->asyncVerifyBlock(pk,
-        bcos::bytesConstRef((const bcos::byte*)block.data(), block.size()),
-        [current](bcos::Error::Ptr error, bool result) {
+    auto blockImpl = std::make_shared<bcostars::protocol::BlockImpl>(block);
+    m_txpoolInitializer->txpool()->asyncVerifyBlock(
+        pk, blockImpl, [current](bcos::Error::Ptr error, bool result) {
             async_response_asyncVerifyBlock(current, toTarsError(error), result);
         });
 

@@ -114,7 +114,7 @@ void P2PSession::asyncSendP2PMessage(
 }
 
 bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
-    P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
+    const P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
     if (!m_session || !m_session->active()) [[unlikely]]
     {
@@ -130,6 +130,6 @@ bcos::task::Task<Message::Ptr> P2PSession::fastSendP2PMessage(
     }
     // reset message using original long nodeID or short nodeID according to the protocol version
     // Note: m_protocolInfo be setted when create P2PSession
-    service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
+    // service->resetP2pID(message, (ProtocolVersion)m_protocolInfo->version());
     co_return co_await m_session->fastSendMessage(message, payloads, options);
 }

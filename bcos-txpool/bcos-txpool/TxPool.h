@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "TxPoolConfig.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionFactory.h"
@@ -43,13 +44,7 @@ public:
 
     // New interfaces ==================
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) override;
-
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
-        protocol::Transaction::Ptr transaction) override;
-
-    task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> onTxSubmitted) override;
+        protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
 
     task::Task<void> broadcastTransaction(const protocol::Transaction& transaction) override;
     task::Task<void> broadcastTransactionBuffer(bytesConstRef data) override;
@@ -57,13 +52,12 @@ public:
         bcos::crypto::NodeIDPtr fromNode = nullptr) override;
 
     task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes)
-        override;
+        crypto::HashListView hashes) override;
     // ===============================
 
     // sealer module call this method for seal a block
     std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit, TxsHashSetPtr _avoidTxs) override;
+        uint64_t _txsLimit) override;
 
     // hook for scheduler, invoke notify when block execute finished
     void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
@@ -72,7 +66,8 @@ public:
 
     // for consensus module, to verify whether block's txs in txpool or not, invoke when consensus
     // receive proposal
-    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID, bytesConstRef const& _block,
+    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
+        protocol::Block::ConstPtr _block,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override;
 
     // hook for tx/consensus sync message receive
@@ -122,35 +117,23 @@ public:
 
     task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
 
-    bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override
-    {
-        return m_transactionSync->config()->existsInGroup(_nodeId);
-    }
+    bool existsInGroup(bcos::crypto::NodeIDPtr _nodeId) override;
 
     // for UT
     void setTxPoolStorage(TxPoolStorageInterface::Ptr _txpoolStorage);
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch) override;
 
-    void clearAllTxs() override;
+    void setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter);
 
-    void setTreeRouter(bcos::tool::TreeTopology::Ptr _treeRouter)
-    {
-        m_treeRouter = std::move(_treeRouter);
-    }
+    tool::TreeTopology::Ptr treeRouter() const;
 
-    auto treeRouter() const { return m_treeRouter; }
-
-    void setCheckBlockLimit(bool _checkBlockLimit) { m_checkBlockLimit = _checkBlockLimit; }
+    void setCheckBlockLimit(bool _checkBlockLimit);
 
     void registerTxsNotifier(
-        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override
-    {
-        m_txpoolStorage->registerTxsNotifier(_txsNotifier);
-    }
+        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override;
 
 protected:
-    virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
         bcos::crypto::HashListPtr _missedTxs,
         std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled);
@@ -161,7 +144,7 @@ protected:
 
     void initSendResponseHandler();
 
-    virtual void storeVerifiedBlock(bcos::protocol::Block::Ptr _block);
+    virtual void storeVerifiedBlock(bcos::protocol::Block::ConstPtr _block);
 
 private:
     TxPoolConfig::Ptr m_config;

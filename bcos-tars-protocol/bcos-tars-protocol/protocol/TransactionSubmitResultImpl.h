@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "../Common.h"
 #include "TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"

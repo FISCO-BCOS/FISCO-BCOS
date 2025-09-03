@@ -33,7 +33,6 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/system/detail/error_code.hpp>
 #include <cstddef>
-#include <memory>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -97,8 +96,9 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         }
 
         auto httpServerFactory = std::make_shared<HttpServerFactory>();
-        auto httpServer = httpServerFactory->buildHttpServer(
-            _config->listenIP(), _config->listenPort(), ioServicePool->getIOService(), srvCtx);
+        auto httpServer = httpServerFactory->buildHttpServer(_config->listenIP(),
+            _config->listenPort(), ioServicePool->getIOService(), srvCtx, _config->maxMsgSize(),
+            _config->corsConfig());
 
         httpServer->setIOServicePool(ioServicePool);
         httpServer->setDisableSsl(_config->disableSsl());
@@ -108,9 +108,9 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
                 auto service = wsServiceWeakPtr.lock();
                 if (service)
                 {
-                    std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId.get();
+                    std::string nodeIdString = _nodeId == nullptr ? "" : *_nodeId;
                     auto session = service->newSession(_httpStream->wsStream(), nodeIdString);
-                    session->startAsServer(_httpRequest);
+                    session->startAsServer(std::move(_httpRequest));
                 }
             });
 
@@ -134,10 +134,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
                     boost::system::error_code err;
 
                     // test if the address domain name
-                    boost::asio::ip::tcp::resolver::query qry(
-                        peer.address(), boost::lexical_cast<std::string>(0));
-                    resolver->resolve(qry, err);
-
+                    resolver->resolve(peer.address(), boost::lexical_cast<std::string>(0), err);
                     if (err)
                     {
                         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
@@ -185,6 +182,7 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     WEBSOCKET_INITIALIZER(INFO)
         << LOG_BADGE("initWsService") << LOG_DESC("initializer for websocket service")
         << LOG_KV("listenIP", _config->listenIP()) << LOG_KV("listenPort", _config->listenPort())
+        << LOG_KV("corsConfig", _config->corsConfig().toString())
         << LOG_KV("disableSsl", _config->disableSsl()) << LOG_KV("server", _config->asServer())
         << LOG_KV("client", _config->asClient()) << LOG_KV("maxMsgSize", _config->maxMsgSize())
         << LOG_KV("threadPoolSize", _config->threadPoolSize())

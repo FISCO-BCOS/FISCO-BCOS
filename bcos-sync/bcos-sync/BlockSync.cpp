@@ -982,9 +982,12 @@ void BlockSync::broadcastSyncStatus()
     // Broadcast to all nodes if turn on allow_free_nodes_sync
     if (m_allowFreeNode)
     {
-        m_config->frontService()->asyncSendBroadcastMessage(
-            LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
-            bcos::ref(*encodedData));
+        task::wait([](decltype(encodedData) encodedData,
+                       bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
+            co_await front->broadcastMessage(
+                LIGHT_NODE | CONSENSUS_NODE | OBSERVER_NODE | FREE_NODE, ModuleID::BlockSync,
+                ::ranges::views::single(bcos::ref(*encodedData)));
+        }(std::move(encodedData), m_config->frontService()));
     }
     else
     {
@@ -1201,7 +1204,7 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         WriteGuard lock(x_archivedBlockQueue);
         for (auto topNumber = m_archivedBlockQueue.top()->blockHeader()->number();
-             topNumber >= topBlockNumber;)
+            topNumber >= topBlockNumber;)
         {
             m_archivedBlockQueue.pop();
             if (!m_archivedBlockQueue.empty())

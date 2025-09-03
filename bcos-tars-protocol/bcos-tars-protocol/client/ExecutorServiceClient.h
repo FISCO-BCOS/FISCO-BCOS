@@ -30,12 +30,8 @@ class ExecutorServiceClient : public bcos::executor::ParallelTransactionExecutor
 {
 public:
     using Ptr = std::shared_ptr<ExecutorServiceClient>;
-    ExecutorServiceClient(ExecutorServicePrx _prx)
-      : m_prx(_prx),
-        m_callbackPool(std::make_shared<bcos::ThreadPool>(
-            "executorCallback", std::thread::hardware_concurrency()))
-    {}
-    ~ExecutorServiceClient() override {}
+    ExecutorServiceClient(ExecutorServicePrx _prx);
+    ~ExecutorServiceClient() override;
 
     void status(
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>

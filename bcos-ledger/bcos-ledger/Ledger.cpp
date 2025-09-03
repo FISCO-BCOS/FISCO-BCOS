@@ -931,7 +931,7 @@ void Ledger::asyncGetBatchTxsByHashList(crypto::HashListPtr _txHashList, bool _w
 
 void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txHash,
     bool _withProof,
-    std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::ConstPtr, MerkleProofPtr)>
+    std::function<void(Error::Ptr, bcos::protocol::TransactionReceipt::Ptr, MerkleProofPtr)>
         _onGetTx)
 {
     auto key = bcos::concepts::bytebuffer::toView(_txHash);

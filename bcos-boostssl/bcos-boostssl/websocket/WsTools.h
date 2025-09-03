@@ -18,17 +18,14 @@
  * @date 2021-10-10
  */
 #pragma once
-#include "bcos-boostssl/websocket/WsConfig.h"
+#include "../interfaces/NodeInfoDef.h"
 #include <bcos-utilities/Common.h>
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/thread/thread.hpp>
-#include <atomic>
 #include <regex>
-#include <unordered_map>
-#include <utility>
 
 namespace bcos::boostssl::ws
 {

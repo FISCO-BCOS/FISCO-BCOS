@@ -31,18 +31,18 @@ namespace bcos::rpc
 struct CallRequest
 {
     // Address
-    std::optional<std::string> from{};
+    std::optional<std::string> from;
     // Address
-    std::string to{};
-    bcos::bytes data{};
+    std::string to;
+    bcos::bytes data;
     // Quantity
-    std::optional<uint64_t> gas{};
+    std::optional<uint64_t> gas;
     // Quantity
-    std::optional<std::string> gasPrice{};
+    std::optional<std::string> gasPrice;
     // Quantity
-    std::optional<std::string> value{};
-    std::optional<std::string> maxPriorityFeePerGas{};
-    std::optional<std::string> maxFeePerGas{};
+    std::optional<std::string> value;
+    std::optional<std::string> maxPriorityFeePerGas;
+    std::optional<std::string> maxFeePerGas;
 
 
     friend std::ostream& operator<<(std::ostream& _out, const CallRequest& _in)

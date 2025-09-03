@@ -19,6 +19,7 @@
  * @date 2021-04-21
  */
 #include "PBFTCacheProcessor.h"
+#include "bcos-task/Wait.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <boost/bind/bind.hpp>
@@ -69,7 +70,8 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
     }
     // Note: to fetch the remote proposal(the from node hits all transactions)
     auto self = weak_from_this();
-    m_config->validator()->verifyProposal(_fromNode, _proposal,
+    auto block = m_config->blockFactory().createBlock(_proposal->data(), false, false);
+    m_config->validator()->verifyProposal(_fromNode, _proposal->index(), block,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try
             {
@@ -694,8 +696,11 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(newViewMsg);
     // only broadcast message to the consensus nodes
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    task::wait(
+        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
+            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
+                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
+        }(m_config->frontService(), std::move(encodedData)));
     m_newViewGenerated = true;
     PBFT_LOG(INFO) << LOG_DESC("The next leader broadcast NewView request")
                    << printPBFTMsgInfo(newViewMsg) << LOG_KV("Idx", m_config->nodeIndex());

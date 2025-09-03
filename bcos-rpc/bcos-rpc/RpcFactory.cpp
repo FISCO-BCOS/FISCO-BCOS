@@ -19,9 +19,8 @@
  * @date 2021-07-15
  */
 
-#include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-rpc/groupmgr/TarsGroupManager.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
+#include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -31,6 +30,7 @@
 #include <bcos-framework/security/KeyEncryptInterface.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
+#include <bcos-rpc/groupmgr/TarsGroupManager.h>
 #include <bcos-rpc/jsonrpc/JsonRpcFilterSystem.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
@@ -44,6 +44,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
 using namespace bcos;
@@ -331,11 +332,23 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
     wsConfig->setListenPort(_nodeConfig->web3RpcListenPort());
     wsConfig->setThreadPoolSize(_nodeConfig->web3RpcThreadSize());
     wsConfig->setDisableSsl(true);
+    wsConfig->setMaxMsgSize(_nodeConfig->web3HttpBodySizeLimit());
+    wsConfig->setCorsConfig(
+        bcos::boostssl::http::CorsConfig{.enableCORS = _nodeConfig->web3EnableCors(),
+            .allowCredentials = _nodeConfig->web3CorsAllowCredentials(),
+            .allowedOrigins = _nodeConfig->web3CorsAllowedOrigins(),
+            .allowedMethods = _nodeConfig->web3CorsAllowedMethods(),
+            .allowedHeaders = _nodeConfig->web3CorsAllowedHeaders(),
+            .maxAge = _nodeConfig->web3CorsMaxAge()});
+
     RPC_LOG(INFO) << LOG_BADGE("initWeb3RpcServiceConfig")
                   << LOG_KV("listenIP", wsConfig->listenIP())
                   << LOG_KV("listenPort", wsConfig->listenPort())
                   << LOG_KV("threadCount", wsConfig->threadPoolSize())
-                  << LOG_KV("asServer", wsConfig->asServer());
+                  << LOG_KV("asServer", wsConfig->asServer())
+                  << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
+                  << LOG_KV("corsConfig", wsConfig->corsConfig().toString());
+
     return wsConfig;
 }
 
@@ -361,11 +374,12 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
         _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
-    auto httpServer = _wsService->httpServer();
-    if (httpServer)
+
+    if (auto httpServer = _wsService->httpServer())
     {
-        httpServer->setHttpReqHandler(std::bind(&bcos::rpc::JsonRpcInterface::onRPCRequest,
-            jsonRpcInterface, std::placeholders::_1, std::placeholders::_2));
+        httpServer->setHttpReqHandler([jsonRpcInterface](std::string_view body, auto sender) {
+            jsonRpcInterface->onRPCRequest(body, std::move(sender));
+        });
     }
     return jsonRpcInterface;
 }
@@ -376,14 +390,36 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     auto web3FilterSystem =
         std::make_shared<Web3FilterSystem>(_groupManager, m_nodeConfig->groupId(),
             m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
-    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(
-        m_nodeConfig->groupId(), std::move(_groupManager), m_gateway, _wsService, web3FilterSystem);
-    auto httpServer = _wsService->httpServer();
-    if (httpServer)
+    auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
+        m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager), m_gateway, _wsService,
+        web3FilterSystem, m_nodeConfig->web3SyncTransaction());
+
+    if (auto httpServer = _wsService->httpServer())
     {
-        httpServer->setHttpReqHandler(std::bind(&bcos::rpc::Web3JsonRpcImpl::onRPCRequest,
-            web3JsonRpc, std::placeholders::_1, std::placeholders::_2));
+        httpServer->setHttpReqHandler([web3JsonRpc](std::string_view body, auto sender) {
+            web3JsonRpc->onRPCRequest(body, std::move(sender));
+        });
     }
+
+    // register web3 json websocket message handler
+    _wsService->registerMsgHandler(
+        WS_RAW_MESSAGE_TYPE, [web3JsonRpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
+                                 std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
+            auto payload = msg->payload();
+            std::string_view strRequest((char*)payload->data(), payload->size());
+
+            // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
+
+            web3JsonRpc->onRPCRequest(strRequest, session, [session, msg](bcos::bytes _respData) {
+                msg->setPayload(std::make_shared<bcos::bytes>(std::move(_respData)));
+                session->asyncSendMessage(msg);
+            });
+        });
+
+    auto messageFactory = std::make_shared<RawWsMessageFactory>();
+    // reset message factory
+    _wsService->setMessageFactory(messageFactory);
+
     return web3JsonRpc;
 }
 
@@ -430,10 +466,54 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     {
         auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
         auto web3WsService = buildWsService(std::move(web3Config));
+
         auto web3JsonRpc =
             buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
-        rpc->setWeb3Service(std::move(web3WsService));
+
+        auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
+
+        auto web3Subscribe = std::make_shared<Web3Subscribe>(weakPtrWeb3JsonRpc);
+        auto weakPtrWeb3Subscribe = std::weak_ptr<Web3Subscribe>(web3Subscribe);
+        web3JsonRpc->setWeb3Subscribe(web3Subscribe);
+
+        rpc->setWeb3Service(web3WsService);
         rpc->setWeb3JsonRpcImpl(std::move(web3JsonRpc));
+        rpc->setWeb3Subscribe(web3Subscribe);
+        // register for new block
+        rpc->setOnNewBlock([weakPtrWeb3Subscribe](std::string const& _groupID,
+                               bcos::protocol::BlockNumber _blockNumber) {
+            auto web3Subscribe = weakPtrWeb3Subscribe.lock();
+            if (web3Subscribe)
+            {
+                try
+                {
+                    web3Subscribe->onNewBlock(_blockNumber);
+                }
+                catch (std::exception& e)
+                {
+                    RPC_LOG(ERROR) << LOG_BADGE("setOnNewBlock") << LOG_DESC("onNewBlock exception")
+                                   << LOG_KV("e", boost::diagnostic_information(e));
+                }
+            }
+        });
+        // register disconnect handler
+        web3WsService->registerDisconnectHandler(
+            [weakPtrWeb3Subscribe](std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
+                auto web3Subscribe = weakPtrWeb3Subscribe.lock();
+                if (web3Subscribe)
+                {
+                    try
+                    {
+                        web3Subscribe->onRemoveSubscribeBySession(std::move(_session));
+                    }
+                    catch (std::exception& e)
+                    {
+                        RPC_LOG(ERROR) << LOG_BADGE("registerDisconnectHandler")
+                                       << LOG_DESC("onRemoveSubscribeBySession exception")
+                                       << LOG_KV("e", boost::diagnostic_information(e));
+                    }
+                }
+            });
     }
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();

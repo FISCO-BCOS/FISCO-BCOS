@@ -25,7 +25,6 @@
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <iostream>
-#include <memory>
 
 #define RPC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("RPC")
 
@@ -55,10 +54,10 @@ public:
     bcos::bytes& m_buffer;
 };
 
-constexpr const std::string_view EarliestBlock{"earliest"};
-constexpr const std::string_view LatestBlock{"latest"};
-constexpr const std::string_view PendingBlock{"pending"};
-constexpr const std::string_view SafeBlock{"safe"};
-constexpr const std::string_view FinalizedBlock{"finalized"};
+constexpr static std::string_view EarliestBlock{"earliest"};
+constexpr static std::string_view LatestBlock{"latest"};
+constexpr static std::string_view PendingBlock{"pending"};
+constexpr static std::string_view SafeBlock{"safe"};
+constexpr static std::string_view FinalizedBlock{"finalized"};
 
 }  // namespace bcos::rpc

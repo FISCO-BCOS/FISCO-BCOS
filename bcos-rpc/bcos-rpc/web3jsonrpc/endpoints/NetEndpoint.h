@@ -34,7 +34,7 @@ public:
     virtual ~NetEndpoint() = default;
 
 protected:
-    task::Task<void> verison(const Json::Value&, Json::Value&);
+    task::Task<void> version(const Json::Value&, Json::Value&);
     task::Task<void> listening(const Json::Value&, Json::Value&);
     task::Task<void> peerCount(const Json::Value&, Json::Value&);
 

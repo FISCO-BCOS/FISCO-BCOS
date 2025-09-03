@@ -19,11 +19,13 @@
  */
 
 #include "Web3Transaction.h"
-
+#include "bcos-utilities/Common.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <range/v3/algorithm/find_if.hpp>
+#include <utility>
 
 namespace bcos
 {
@@ -33,6 +35,13 @@ using codec::rlp::decode;
 using codec::rlp::encode;
 using codec::rlp::header;
 using codec::rlp::length;
+
+static bytesConstRef getSignatureRef(bytesConstRef input)
+{
+    const auto* it = ::ranges::find_if(input, [](byte b) { return b != 0; });
+    return {it, input.size() - (it - input.begin())};
+}
+
 bcos::bytes Web3Transaction::encodeForSign() const
 {
     bcos::bytes out;
@@ -58,8 +67,8 @@ bcos::bytes Web3Transaction::encodeForSign() const
         {
             // EIP-155
             codec::rlp::encode(out, chainId.value());
-            codec::rlp::encode(out, 0u);
-            codec::rlp::encode(out, 0u);
+            codec::rlp::encode(out, 0U);
+            codec::rlp::encode(out, 0U);
         }
     }
     else
@@ -120,7 +129,7 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     bcostars::Transaction tarsTx{};
     tarsTx.data.to = (this->to.has_value()) ? this->to.value().hexPrefixed() : "";
     tarsTx.data.input.reserve(this->data.size());
-    RANGES::move(this->data, std::back_inserter(tarsTx.data.input));
+    ::ranges::move(this->data, std::back_inserter(tarsTx.data.input));
 
     tarsTx.data.value = "0x" + this->value.str(0, std::ios_base::hex);
     tarsTx.data.gasLimit = this->gasLimit;
@@ -139,12 +148,12 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     auto encodedForSign = this->encodeForSign();
     // FISCO BCOS signature is r||s||v
     tarsTx.signature.reserve(crypto::SECP256K1_SIGNATURE_LEN);
-    RANGES::move(this->signatureR, std::back_inserter(tarsTx.signature));
-    RANGES::move(this->signatureS, std::back_inserter(tarsTx.signature));
+    ::ranges::move(this->signatureR, std::back_inserter(tarsTx.signature));
+    ::ranges::move(this->signatureS, std::back_inserter(tarsTx.signature));
     tarsTx.signature.push_back(static_cast<tars::Char>(this->signatureV));
 
     tarsTx.extraTransactionBytes.reserve(encodedForSign.size());
-    RANGES::move(encodedForSign, std::back_inserter(tarsTx.extraTransactionBytes));
+    ::ranges::move(encodedForSign, std::back_inserter(tarsTx.extraTransactionBytes));
 
     const bcos::crypto::Secp256k1Crypto signatureImpl;
     bcos::crypto::Keccak256 hashImpl;
@@ -154,10 +163,55 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
     tarsTx.data.nonce = toQuantity(this->nonce);
     tarsTx.data.chainID = std::to_string(this->chainId.value_or(0));
     tarsTx.dataHash.reserve(crypto::HashType::SIZE);
-    RANGES::move(hashForSign, std::back_inserter(tarsTx.dataHash));
+    ::ranges::move(hashForSign, std::back_inserter(tarsTx.dataHash));
     tarsTx.sender.reserve(sender.size());
-    RANGES::move(sender, std::back_inserter(tarsTx.sender));
+    ::ranges::move(sender, std::back_inserter(tarsTx.sender));
     return tarsTx;
+}
+std::ostream& operator<<(std::ostream& _out, const TransactionType& _in)
+{
+    _out << magic_enum::enum_name(_in);
+    return _out;
+}
+uint64_t Web3Transaction::getSignatureV() const
+{
+    // EIP-155: Simple replay attack protection
+    if (chainId.has_value())
+    {
+        return chainId.value() * 2 + 35 + signatureV;
+    }
+    return signatureV + 27;
+}
+std::string Web3Transaction::sender() const
+{
+    bcos::bytes sign{};
+    sign.reserve(crypto::SECP256K1_SIGNATURE_LEN);
+    sign.insert(sign.end(), signatureR.begin(), signatureR.end());
+    sign.insert(sign.end(), signatureS.begin(), signatureS.end());
+    sign.push_back(signatureV);
+    bcos::crypto::Keccak256 hashImpl;
+    auto encodeForSign = this->encodeForSign();
+    auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
+    const bcos::crypto::Secp256k1Crypto signatureImpl;
+    auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
+    return toHexStringWithPrefix(addr);
+}
+std::string Web3Transaction::toString() const noexcept
+{
+    std::stringstream stringstream{};
+    stringstream << " chainId: " << this->chainId.value_or(0) << " hash:" << this->txHash().hex()
+                 << " type: " << static_cast<uint16_t>(this->type)
+                 << " to: " << this->to.value_or(Address()).hex() << " data: " << toHex(this->data)
+                 << " value: " << this->value << " nonce: " << this->nonce
+                 << " gasLimit: " << this->gasLimit
+                 << " maxPriorityFeePerGas: " << this->maxPriorityFeePerGas
+                 << " maxFeePerGas: " << this->maxFeePerGas
+                 << " maxFeePerBlobGas: " << this->maxFeePerBlobGas
+                 << " blobVersionedHashes: " << this->blobVersionedHashes
+                 << " sender: " << this->sender() << " signatureR: " << toHex(this->signatureR)
+                 << " signatureS: " << toHex(this->signatureS)
+                 << " signatureV: " << this->signatureV;
+    return stringstream.str();
 }
 }  // namespace rpc
 
@@ -211,8 +265,8 @@ Header header(Web3Transaction const& tx) noexcept
 {
     auto header = headerTxBase(tx);
     header.payloadLength += (tx.type == TransactionType::Legacy) ? length(tx.getSignatureV()) : 1;
-    header.payloadLength += length(tx.signatureR);
-    header.payloadLength += length(tx.signatureS);
+    header.payloadLength += length(getSignatureRef(ref(tx.signatureR)));
+    header.payloadLength += length(getSignatureRef(ref(tx.signatureS)));
     return header;
 }
 Header headerForSign(Web3Transaction const& tx) noexcept
@@ -258,8 +312,8 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
         encode(out, tx.value);
         encode(out, tx.data);
         encode(out, tx.getSignatureV());
-        encode(out, tx.signatureR);
-        encode(out, tx.signatureS);
+        encode(out, getSignatureRef(ref(tx.signatureR)));
+        encode(out, getSignatureRef(ref(tx.signatureS)));
     }
     else
     {
@@ -301,8 +355,8 @@ void encode(bcos::bytes& out, const Web3Transaction& tx) noexcept
             encode(out, tx.blobVersionedHashes);
         }
         encode(out, tx.signatureV);
-        encode(out, tx.signatureR);
-        encode(out, tx.signatureS);
+        encode(out, getSignatureRef(ref(tx.signatureR)));
+        encode(out, getSignatureRef(ref(tx.signatureS)));
     }
 }
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, AccessListEntry& out) noexcept

@@ -5,6 +5,7 @@
 
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
@@ -41,12 +42,16 @@ Service::Service(P2PInfo const& _p2pInfo) : m_selfInfo(_p2pInfo), m_nodeID(m_sel
     // the version, when handshake finished the version field of P2PMessage
     // should be set
     registerHandlerByMsgType(GatewayMessageType::Handshake,
-        boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceiveProtocol(std::move(exception), std::move(session), std::move(message));
+        });
 
     registerHandlerByMsgType(GatewayMessageType::Heartbeat,
-        boost::bind(&Service::onReceiveHeartbeat, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException exception, std::shared_ptr<P2PSession> session,
+            P2PMessage::Ptr message) {
+            onReceiveHeartbeat(std::move(exception), std::move(session), std::move(message));
+        });
 }
 
 void Service::start()
@@ -61,7 +66,7 @@ void Service::start()
             auto service = self.lock();
             if (service)
             {
-                service->onConnect(e, p2pInfo, session);
+                service->onConnect(e, p2pInfo, std::move(session));
             }
         });
         m_host->start();
@@ -747,6 +752,11 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
     {
         // ignore myself
         co_return {};
+    }
+
+    if (header.seq() == 0)
+    {
+        header.setSeq(m_messageFactory->newSeq());
     }
 
     auto session = getP2PSessionByNodeId(nodeID);

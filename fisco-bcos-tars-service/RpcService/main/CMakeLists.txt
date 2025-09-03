@@ -7,7 +7,7 @@ find_package(Boost REQUIRED program_options)
 
 aux_source_directory(../ SRC_LIST)
 add_executable(${RPC_BINARY_NAME} ${SRC_LIST})
-if(WITH_TIKV)
+if(WITH_LEDGER_ELECTION)
     target_link_libraries(${RPC_BINARY_NAME} ${PROTOCOL_INIT_LIB} ${RPC_TARGET} ${LEDGER_TARGET} ${TOOL_TARGET} ${PROTOCOL_INIT_LIB} ${COMMAND_HELPER_LIB} ${LEADER_ELECTION_TARGET})
 else()
     target_link_libraries(${RPC_BINARY_NAME} ${PROTOCOL_INIT_LIB} ${RPC_TARGET} ${LEDGER_TARGET} ${TOOL_TARGET} ${PROTOCOL_INIT_LIB} ${COMMAND_HELPER_LIB})

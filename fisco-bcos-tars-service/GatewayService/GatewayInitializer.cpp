@@ -26,11 +26,9 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
-
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
 #include <bcos-leader-election/src/LeaderEntryPoint.h>
 #endif
-
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
@@ -55,7 +53,7 @@ void GatewayInitializer::init(std::string const& _configPath)
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
-#ifdef WITH_TIKV
+#ifdef WITH_LEDGER_ELECTION
     if (nodeConfig->enableFailOver())
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
@@ -123,4 +121,33 @@ void GatewayInitializer::stop()
         m_gateway->stop();
     }
     TLOGINFO(LOG_DESC("[GATEWAYSERVICE] Stop the GatewayService success") << std::endl);
+}
+bcostars::GatewayInitializer::GatewayInitializer(
+    std::string const& _configPath, bcos::gateway::GatewayConfig::Ptr _gatewayConfig)
+  : m_gatewayConfig(_gatewayConfig),
+    m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>()),
+    m_groupInfoFactory(std::make_shared<bcos::group::GroupInfoFactory>()),
+    m_chainNodeInfoFactory(std::make_shared<bcos::group::ChainNodeInfoFactory>())
+{
+    init(_configPath);
+}
+bcostars::GatewayInitializer::~GatewayInitializer()
+{
+    stop();
+}
+bcos::gateway::GatewayInterface::Ptr bcostars::GatewayInitializer::gateway()
+{
+    return m_gateway;
+}
+bcos::group::ChainNodeInfoFactory::Ptr bcostars::GatewayInitializer::chainNodeInfoFactory()
+{
+    return m_chainNodeInfoFactory;
+}
+bcos::group::GroupInfoFactory::Ptr bcostars::GatewayInitializer::groupInfoFactory()
+{
+    return m_groupInfoFactory;
+}
+bcos::crypto::KeyFactory::Ptr bcostars::GatewayInitializer::keyFactory()
+{
+    return m_keyFactory;
 }

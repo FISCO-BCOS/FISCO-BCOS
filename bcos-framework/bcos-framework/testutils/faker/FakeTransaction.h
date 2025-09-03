@@ -72,7 +72,6 @@ inline void checkTransaction(
     // check the fields
     BOOST_CHECK(decodedTransaction->hash() == pbTransaction->hash());
     BOOST_CHECK(decodedTransaction->sender() == pbTransaction->sender());
-    BOOST_CHECK(decodedTransaction->txOp() == pbTransaction->txOp());
     BOOST_CHECK(decodedTransaction->to() == pbTransaction->to());
     // check the transaction hash fields
     BOOST_CHECK(decodedTransaction->input().toBytes() == pbTransaction->input().toBytes());
@@ -89,18 +88,10 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
 {
     auto factory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(_cryptoSuite);
     auto pbTransaction = fakeTransaction(
-        _cryptoSuite, _keyPair, _to, _input, _nonce, _blockLimit, _chainId, _groupId, "", 0 ,value);
+        _cryptoSuite, _keyPair, _to, _input, _nonce, _blockLimit, _chainId, _groupId, "", 0, value);
     auto addr = _keyPair->address(_cryptoSuite->hashImpl());
     if (isCheck)
     {
-        if (_to.empty())
-        {
-            BOOST_CHECK(pbTransaction->txOp() == TransactionOp::ContractCreation);
-        }
-        else
-        {
-            BOOST_CHECK(pbTransaction->txOp() == TransactionOp::MessageCall);
-        }
         BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
     }
     bcos::bytes encodedData;

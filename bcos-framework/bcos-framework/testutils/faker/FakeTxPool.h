@@ -29,9 +29,8 @@ using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::consensus;
 
-namespace bcos
-{
-namespace test
+
+namespace bcos::test
 {
 class FakeTxPool : public TxPoolInterface
 {
@@ -45,7 +44,7 @@ public:
 
     // useless for PBFT, maybe needed by RPC
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) override
+        protocol::Transaction::Ptr transaction, bool /*unused*/) override
     {
         co_return nullptr;
     }
@@ -78,8 +77,7 @@ public:
     void notifyConnectedNodes(
         bcos::crypto::NodeIDSet const&, std::function<void(Error::Ptr)>) override
     {}
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t, TxsHashSetPtr) override
+    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(uint64_t) override
     {
         return {};
     }
@@ -88,7 +86,7 @@ public:
         bcos::crypto::HashType const&, std::function<void(Error::Ptr)>) override
     {}
 
-    void asyncVerifyBlock(PublicPtr, bytesConstRef const&,
+    void asyncVerifyBlock(PublicPtr, protocol::Block::ConstPtr,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
     {
         m_worker->enqueue([this, _onVerifyFinished]() {
@@ -112,5 +110,4 @@ private:
     bool m_verifyResult = true;
     std::shared_ptr<ThreadPool> m_worker = nullptr;
 };
-}  // namespace test
-}  // namespace bcos
+}  // namespace bcos::test

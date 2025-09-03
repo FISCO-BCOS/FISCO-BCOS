@@ -158,7 +158,7 @@ public:
             bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data, decltype(tx) tx,
                                  decltype(_fromNode) fromNode) -> bcos::task::Task<void> {
                 co_await txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
-                auto submit = co_await txpool->submitTransaction(tx);
+                auto submit = co_await txpool->submitTransaction(tx, true);
                 assert(submit->status() == (uint32_t)TransactionStatus::None);
             }(txpool, _data, tx, _fromNode));
         }
@@ -171,7 +171,7 @@ public:
             auto tx = txFactory->createTransaction(_data);
             bcos::task::wait(
                 [](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
-                    auto submit = co_await txpool->submitTransaction(tx);
+                    auto submit = co_await txpool->submitTransaction(tx, true);
                     assert(submit->status() == (uint32_t)TransactionStatus::None);
                 }(txpool, tx));
         }
@@ -263,9 +263,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, const NodeIDs& _dstNodeIDs,
         bytesConstRef _payload) override
     {}
-    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override
-    {}
     task::Task<void> broadcastMessage(uint16_t type, std::string_view groupID, int moduleID,
         const bcos::crypto::NodeID& srcNodeID, ::ranges::any_view<bytesConstRef> payloads) override
     {
@@ -317,19 +314,6 @@ public:
         int _moduleId, const std::vector<NodeIDPtr>& _nodeIdList, bytesConstRef _data) override
     {
         for (const auto& node : _nodeIdList)
-        {
-            if (node->data() == m_nodeId->data())
-            {
-                continue;
-            }
-            asyncSendMessageByNodeID(_moduleId, node, _data, 0, nullptr);
-        }
-    }
-
-    // useless for sync/pbft/txpool
-    void asyncSendBroadcastMessage(uint16_t, int _moduleId, bytesConstRef _data) override
-    {
-        for (const auto& node : m_nodeIDList)
         {
             if (node->data() == m_nodeId->data())
             {

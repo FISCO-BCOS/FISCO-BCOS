@@ -102,26 +102,27 @@ public:
         if (socket->isConnected())
         {
             auto& ioService = socket->ioService();
-            ioService.post([type, socket, &buffers, handler = std::move(handler)]() mutable {
-                switch (type)
-                {
-                case TCP_ONLY:
-                {
-                    ba::async_write(socket->ref(), buffers, std::move(handler));
-                    break;
-                }
-                case SSL:
-                {
-                    ba::async_write(socket->sslref(), buffers, std::move(handler));
-                    break;
-                }
-                }
-            });
+            boost::asio::post(
+                ioService, [type, socket, &buffers, handler = std::move(handler)]() mutable {
+                    switch (type)
+                    {
+                    case TCP_ONLY:
+                    {
+                        ba::async_write(socket->ref(), buffers, std::move(handler));
+                        break;
+                    }
+                    case SSL:
+                    {
+                        ba::async_write(socket->sslref(), buffers, std::move(handler));
+                        break;
+                    }
+                    }
+                });
         }
     }
 
     virtual void asyncRead(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+        boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
     {
         switch (m_type)
         {
@@ -139,7 +140,7 @@ public:
     }
 
     virtual void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
-        boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
+        boost::asio::mutable_buffer buffers, ReadWriteHandler handler)
     {
         switch (m_type)
         {
@@ -168,7 +169,10 @@ public:
         socket->sslref().set_verify_callback(std::move(callback));
     }
 
-    virtual void strandPost(Base_Handler handler) { m_strand->post(handler); }
+    virtual void strandPost(Base_Handler handler)
+    {
+        m_strand->post(handler, std::allocator<void>());
+    }
 
 protected:
     IOServicePool::Ptr m_ioServicePool;

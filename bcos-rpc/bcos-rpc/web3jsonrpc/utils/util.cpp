@@ -33,10 +33,11 @@ void bcos::rpc::buildJsonError(
 {
     response["jsonrpc"] = "2.0";
     // maybe request not init
-    response["id"] = request.isMember("id") ? request["id"] : Json::Value::null;
+    response["id"] =
+        request.isObject() && request.isMember("id") ? request["id"] : Json::Value::null;
     Json::Value error;
     error["code"] = code;
-    error["message"] = std::move(message);
+    error["message"] = message;
     response["error"] = std::move(error);
 }
 
@@ -50,4 +51,19 @@ void bcos::rpc::buildJsonErrorWithData(
     error["message"] = std::move(message);
     error["data"].swap(data);
     response["error"] = std::move(error);
+}
+
+bcos::bytes bcos::rpc::toBytesResponse(Json::Value const& jResp)
+{
+    auto builder = Json::StreamWriterBuilder();
+    builder["commentStyle"] = "None";
+    builder["indentation"] = "";
+    std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+
+    bcos::bytes out;
+    boost::iostreams::stream<JsonSink> outputStream(out);
+
+    writer->write(jResp, &outputStream);
+    writer.reset();
+    return out;
 }

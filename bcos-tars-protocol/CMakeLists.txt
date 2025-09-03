@@ -46,6 +46,7 @@ if(TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
+    add_subdirectory(benchmark)
 endif()
 
 include(GNUInstallDirs)

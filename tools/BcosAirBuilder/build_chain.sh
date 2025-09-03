@@ -39,7 +39,7 @@ ca_dir=""
 prometheus_dir=""
 config_path=""
 docker_mode=
-default_version="v3.15.2"
+default_version="v3.16.0"
 compatibility_version=${default_version}
 default_mtail_version="3.0.0-rc49"
 compatibility_mtail_version=${default_mtail_version}
@@ -1390,6 +1390,14 @@ generate_config_ini() {
     listen_ip=0.0.0.0
     listen_port=8545
     thread_count=8
+    request_body_size_limit=10240000
+    ; cors config for web3 rpc
+    enable_cors=true
+    cors_allow_credentials=true
+    cors_allowed_origins=*
+    cors_allowed_methods=GET, POST, OPTIONS
+    cors_allowed_headers=Content-Type, Authorization, X-Requested-With
+    cors_max_age=86400
 
 [cert]
     ; directory the certificates located in
@@ -1613,6 +1621,14 @@ generate_sm_config_ini() {
     listen_ip=0.0.0.0
     listen_port=8545
     thread_count=8
+    http_body_size_limit=10240000
+    ; cors config for web3 rpc
+    enable_cors=true
+    cors_allow_credentials=true
+    cors_allowed_origins=*
+    cors_allowed_methods=GET, POST, OPTIONS
+    cors_allowed_headers=Content-Type, Authorization, X-Requested-With
+    cors_max_age=86400
 
 [cert]
     ; directory the certificates located in

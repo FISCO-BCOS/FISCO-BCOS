@@ -24,7 +24,6 @@
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/CallbackCollectionHandler.h>
 #include <utility>
 
 namespace bcos::txpool
@@ -37,33 +36,15 @@ public:
     virtual ~TxPoolStorageInterface() = default;
 
     virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
-        protocol::Transaction::Ptr transaction) = 0;
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithoutReceipt(
-        protocol::Transaction::Ptr transaction) = 0;
+        protocol::Transaction::Ptr transaction, bool waitForReceipt) = 0;
     virtual std::vector<protocol::Transaction::ConstPtr> getTransactions(
-        RANGES::any_view<bcos::h256, RANGES::category::mask | RANGES::category::sized> hashes) = 0;
+        crypto::HashListView hashes) = 0;
 
-    virtual task::Task<protocol::TransactionSubmitResult::Ptr> submitTransactionWithHook(
-        protocol::Transaction::Ptr transaction, std::function<void()> afterInsertHook) = 0;
-
-    virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr _tx) = 0;
-    [[deprecated(
-        "do not use raw insert tx pool without check, use "
-        "batchVerifyAndSubmitTransaction")]] virtual void
-    batchInsert(bcos::protocol::Transactions const& _txs) = 0;
-
-    virtual bcos::protocol::Transaction::Ptr remove(bcos::crypto::HashType const& _txHash) = 0;
-    virtual bcos::protocol::Transaction::Ptr removeSubmittedTx(
-        bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) = 0;
-    virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
+    virtual void batchRemoveSealedTxs(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
 
-    // Note: the transactions may be missing from the transaction pool
-    virtual bcos::protocol::ConstTransactionsPtr fetchTxs(
-        bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) = 0;
-
     virtual bool batchVerifyAndSubmitTransaction(
-        bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) = 0;
+        bcos::protocol::BlockHeader::ConstPtr _header, bcos::protocol::TransactionsPtr _txs) = 0;
     virtual void batchImportTxs(bcos::protocol::TransactionsPtr _txs) = 0;
 
     /**
@@ -72,21 +53,20 @@ public:
      * @param _txsLimit Maximum number of transactions that can be obtained at a time
      * @return List of new transactions
      */
-    virtual bcos::protocol::ConstTransactionsPtr fetchNewTxs(size_t _txsLimit) = 0;
-    virtual bool batchFetchTxs(bcos::protocol::Block::Ptr _txsList,
-        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit, TxsHashSetPtr _avoidTxs,
-        bool _avoidDuplicate = true) = 0;
+    virtual bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
+        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit) = 0;
 
-    virtual bool exist(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bool exists(bcos::crypto::HashType const& _txHash) = 0;
+    virtual bool batchExists(crypto::HashListView _txsHashList) = 0;
 
-    virtual bcos::crypto::HashListPtr filterUnknownTxs(
-        bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
+    virtual bcos::crypto::HashList filterUnknownTxs(
+        crypto::HashListView _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
 
     virtual size_t size() const = 0;
     virtual void clear() = 0;
 
     // return true if all txs have been marked
-    virtual bool batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
+    virtual bool batchMarkTxs(crypto::HashListView _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) = 0;
     virtual void batchMarkAllTxs(bool _sealFlag) = 0;
@@ -96,9 +76,8 @@ public:
     virtual void printPendingTxs() {}
 
     virtual std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
-        bcos::protocol::Block::Ptr _block) = 0;
+        bcos::protocol::Block::ConstPtr _block) = 0;
 
-    virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
     virtual bcos::crypto::HashListPtr getTxsHash(int _limit) = 0;
 
     void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)

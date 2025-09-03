@@ -22,16 +22,15 @@
 #include "EthEndpoint.h"
 #include "NetEndpoint.h"
 #include "Web3Endpoint.h"
-
 #include <bcos-rpc/groupmgr/NodeService.h>
 
 namespace bcos::rpc
 {
-class Endpoints : protected EthEndpoint, NetEndpoint, Web3Endpoint
+class Endpoints : public EthEndpoint, public NetEndpoint, public Web3Endpoint
 {
 public:
-    explicit Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem)
-      : EthEndpoint(_nodeService, filterSystem),
+    Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
+      : EthEndpoint(_nodeService, filterSystem, syncTransaction),
         NetEndpoint(_nodeService),
         Web3Endpoint(_nodeService)
     {}

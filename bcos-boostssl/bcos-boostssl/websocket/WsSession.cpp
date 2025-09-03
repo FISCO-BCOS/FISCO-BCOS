@@ -168,8 +168,9 @@ void WsSession::onReadPacket()
     uint64_t size = 0;
     try
     {
-        auto* data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(m_buffer->data()));
-        auto size = boost::asio::buffer_size(m_buffer->data());
+        auto buffer = boost::beast::buffers_front(m_buffer->data());
+        auto* data = static_cast<byte*>(const_cast<void*>(buffer.data()));
+        auto size = buffer.size();
 
         auto message = m_messageFactory->buildMessage();
         if (message->decode(bytesConstRef(data, size)) < 0)
@@ -177,7 +178,8 @@ void WsSession::onReadPacket()
             WEBSOCKET_SESSION(WARNING)
                 << LOG_BADGE("onReadPacket") << LOG_DESC("decode packet failed")
                 << LOG_KV("endpoint", endPoint()) << LOG_KV("session", this);
-            return drop(WsError::PacketError);
+            drop(WsError::PacketError);
+            return;
         }
 
         m_buffer->consume(m_buffer->size());

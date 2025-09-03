@@ -1,5 +1,6 @@
 #include "FrontServiceServer.h"
 #include "../Common/TarsUtils.h"
+#include "bcos-task/Wait.h"
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 
 using namespace bcostars;
@@ -31,8 +32,11 @@ bcostars::Error FrontServiceServer::asyncGetGroupNodeInfo(
 void FrontServiceServer::asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::Int32 moduleID,
     const vector<tars::Char>& data, tars::TarsCurrentPtr)
 {
-    m_frontServiceInitializer->front()->asyncSendBroadcastMessage(
-        _nodeType, moduleID, bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
+    bcos::task::wait([](auto front, auto nodeType, auto moduleID,
+                         auto data) -> bcos::task::Task<void> {
+        co_await front->broadcastMessage(nodeType, moduleID,
+            ::ranges::views::single(bcos::bytesConstRef((bcos::byte*)data.data(), data.size())));
+    }(m_frontServiceInitializer->front(), _nodeType, moduleID, data));
 }
 
 bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleID,

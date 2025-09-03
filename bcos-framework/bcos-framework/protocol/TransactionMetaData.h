@@ -21,16 +21,17 @@
 #pragma once
 
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-utilities/AnyHolder.h"
 namespace bcos::protocol
 {
-class TransactionMetaData
+class TransactionMetaData : public virtual MoveBase<TransactionMetaData>
 {
 public:
     TransactionMetaData() = default;
     TransactionMetaData(const TransactionMetaData&) = default;
-    TransactionMetaData(TransactionMetaData&&) = delete;
+    TransactionMetaData(TransactionMetaData&&) = default;
     TransactionMetaData& operator=(const TransactionMetaData&) = default;
-    TransactionMetaData& operator=(TransactionMetaData&&) = delete;
+    TransactionMetaData& operator=(TransactionMetaData&&) = default;
     using Ptr = std::shared_ptr<TransactionMetaData>;
     using ConstPtr = std::shared_ptr<const TransactionMetaData>;
 
@@ -51,4 +52,5 @@ public:
 
 using TransactionMetaDataList = std::vector<TransactionMetaData::Ptr>;
 using TransactionMetaDataListPtr = std::shared_ptr<TransactionMetaDataList>;
+using AnyTransactionMetaData = AnyHolder<TransactionMetaData, 48>;
 }  // namespace bcos::protocol

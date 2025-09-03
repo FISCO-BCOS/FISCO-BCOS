@@ -111,8 +111,8 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
     // Init the AUTH_COMMITTEE_ADDRESS
 }
 
-bcos::executor_v1::Precompiled const*
-bcos::executor_v1::PrecompiledManager::getPrecompiled(unsigned long contractAddress) const
+bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
+    unsigned long contractAddress) const
 {
     auto it = std::lower_bound(m_address2Precompiled.begin(), m_address2Precompiled.end(),
         contractAddress,
@@ -127,8 +127,8 @@ bcos::executor_v1::PrecompiledManager::getPrecompiled(unsigned long contractAddr
     return nullptr;
 }
 
-bcos::executor_v1::Precompiled const*
-bcos::executor_v1::PrecompiledManager::getPrecompiled(const evmc_address& address) const
+bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
+    const evmc_address& address) const
 {
     constexpr static unsigned long MAX_PRECOMPILED_ADDRESS = 100000;
 

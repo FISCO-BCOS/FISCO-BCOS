@@ -91,14 +91,6 @@ public:
     void asyncSendMessageByNodeIDs(
         int _moduleID, const crypto::NodeIDs& _nodeIDs, bytesConstRef _data) override;
 
-    /**
-     * @brief: send broadcast message
-     * @param _moduleID: moduleID
-     * @param _data: send message data
-     * @return void
-     */
-    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) override;
-
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
 
@@ -182,8 +174,8 @@ public:
         m_gatewayInterface = std::move(_gatewayInterface);
     }
 
-    std::shared_ptr<boost::asio::io_service> ioService() const { return m_ioService; }
-    void setIoService(std::shared_ptr<boost::asio::io_service> _ioService)
+    std::shared_ptr<boost::asio::io_context> ioService() const { return m_ioService; }
+    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
     {
         m_ioService = std::move(_ioService);
     }
@@ -275,7 +267,7 @@ private:
     tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
     // timer
-    std::shared_ptr<boost::asio::io_service> m_ioService;
+    std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
     FrontMessageFactory::Ptr m_messageFactory;

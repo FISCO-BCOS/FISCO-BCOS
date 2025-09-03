@@ -20,15 +20,7 @@
 
 
 #include "../common/RPCFixture.h"
-#include "bcos-crypto/encrypt/AESCrypto.h"
-#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
-#include "bcos-crypto/signature/sm2/SM2Crypto.h"
-#include "bcos-crypto/signature/sm2/SM2KeyPair.h"
-#include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-rpc/bcos-rpc/RpcFactory.h"
 #include "bcos-utilities/DataConvertUtility.h"
-
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -37,21 +29,23 @@
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
+#include <bcos-rpc/filter/LogMatcher.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-rpc/validator/CallValidator.h>
+#include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
-
-#include <bcos-rpc/filter/LogMatcher.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
+#include <ostream>
 #include <string_view>
 
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;
+
 namespace bcos::test
 {
+
 class Web3TestFixture : public RPCFixture
 {
 public:
@@ -59,7 +53,7 @@ public:
     {
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
-        BOOST_CHECK(web3JsonRpc != nullptr);
+        BOOST_TEST(web3JsonRpc != nullptr);
     }
     Json::Value onRPCRequestWrapper(std::string_view request, rpc::Sender _diySender = nullptr)
     {
@@ -83,11 +77,11 @@ public:
     }
     static void validRespCheck(Json::Value const& resp)
     {
-        BOOST_CHECK(!resp.isMember("error"));
-        BOOST_CHECK(resp.isMember("result"));
-        BOOST_CHECK(resp.isMember("id"));
-        BOOST_CHECK(resp.isMember("jsonrpc"));
-        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+        BOOST_TEST(!resp.isMember("error"));
+        BOOST_TEST(resp.isMember("result"));
+        BOOST_TEST(resp.isMember("id"));
+        BOOST_TEST(resp.isMember("jsonrpc"));
+        BOOST_TEST(resp["jsonrpc"].asString() == "2.0");
     };
 
     Rpc::Ptr rpc;
@@ -100,33 +94,33 @@ BOOST_AUTO_TEST_CASE(handleInvalidTest)
     {
         const auto request = R"({"jsonrpc":"2.0","id":1})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
     }
 
     // invalid json
     {
         const auto request = R"({{"jsonrpc":"2.0","id":1, "method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
     }
 
     // invalid params type
     {
         const auto request = R"({"jsonrpc":"2.0","id":1, "method":"eth_blockNumber","params":{}})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == InvalidRequest);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == InvalidRequest);
     }
 
     // invalid method
     {
         const auto request = R"({"jsonrpc":"2.0","id":1, "method":"eth_AAA","params":[]})";
         auto response = onRPCRequestWrapper(request);
-        BOOST_CHECK(response.isMember("error"));
-        BOOST_CHECK(response["error"]["code"].asInt() == MethodNotFound);
-        BOOST_CHECK(response["error"]["message"].asString() == "Method not found");
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == MethodNotFound);
+        BOOST_TEST(response["error"]["message"].asString() == "Method not found");
     }
 }
 
@@ -137,8 +131,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":123, "method":"eth_chainId","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 123);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 0);
+        BOOST_TEST(response["id"].asInt64() == 123);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
     }
 
     // method eth_mining
@@ -146,8 +140,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_mining","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 3214);
-        BOOST_CHECK(response["result"].asBool() == false);
+        BOOST_TEST(response["id"].asInt64() == 3214);
+        BOOST_TEST(response["result"].asBool() == false);
     }
 
     // method eth_hashrate
@@ -155,8 +149,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_hashrate","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 3214);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 0);
+        BOOST_TEST(response["id"].asInt64() == 3214);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 0);
     }
 
     // method eth_gasPrice
@@ -166,11 +160,11 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"jsonrpc":"2.0","id":541321, "method":"eth_gasPrice","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 541321);
+        BOOST_TEST(response["id"].asInt64() == 541321);
         auto b = fromQuantity(response["result"].asString());
         std::cout << b << std::endl;
-        BOOST_CHECK(b == 10086000);
-        BOOST_CHECK(fromQuantity(response["result"].asString()) == 10086000);
+        BOOST_TEST(b == 10086000);
+        BOOST_TEST(fromQuantity(response["result"].asString()) == 10086000);
     }
 
     // method eth_accounts
@@ -178,8 +172,8 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
         const auto request = R"({"jsonrpc":"2.0","id":3214, "method":"eth_accounts","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 3214);
-        BOOST_CHECK(response["result"].size() == 0);
+        BOOST_TEST(response["id"].asInt64() == 3214);
+        BOOST_TEST(response["result"].size() == 0);
     }
 
     // method eth_blockNumber
@@ -188,9 +182,9 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"jsonrpc":"2.0","id":996886, "method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 996886);
+        BOOST_TEST(response["id"].asInt64() == 996886);
         auto const blkNum = toQuantity(m_ledger->blockNumber());
-        BOOST_CHECK(response["result"].asString() == blkNum);
+        BOOST_TEST(response["result"].asString() == blkNum);
     }
 
     // method eth_blockNumber
@@ -199,9 +193,9 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"id":1655516568316917,"jsonrpc":"2.0","method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asUInt64() == 1655516568316917);
+        BOOST_TEST(response["id"].asUInt64() == 1655516568316917);
         auto const blkNum = toQuantity(m_ledger->blockNumber());
-        BOOST_CHECK(response["result"].asString() == blkNum);
+        BOOST_TEST(response["result"].asString() == blkNum);
     }
 
     // method eth_blockNumber
@@ -210,42 +204,47 @@ BOOST_AUTO_TEST_CASE(handleValidTest)
             R"({"id":"e4df2b99-f80b-4e23-91c7-b9471b46af26","jsonrpc":"2.0","method":"eth_blockNumber","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asString() == "e4df2b99-f80b-4e23-91c7-b9471b46af26");
+        BOOST_TEST(response["id"].asString() == "e4df2b99-f80b-4e23-91c7-b9471b46af26");
         auto const blkNum = toQuantity(m_ledger->blockNumber());
-        BOOST_CHECK(response["result"].asString() == blkNum);
+        BOOST_TEST(response["result"].asString() == blkNum);
     }
 
-    // method eth_blockNumber
+    // method eth_estimateGas
     {
         // clang-format off
         std::string rawTx = "0xf902ee83031ae9850256506a88831b40d094d56e4eab23cb81f43168f9f45211eb027b9ac7cc80b90284b143044b00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000650000000000000000000000004d73adb72bc3dd368966edd0f0b2148401a178e200000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000661d084300000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000084704316e5000000000000000000000000000000000000000000000000000000000000006e740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a0000000000000000000000000000000000000000000000000000000000000014740e551c6ee78d757128b8e476b390f891c54e96538e1bb4469a62105220215a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000082ce44cffc92754f8825e1c60cadc5f54a504b769ee616e9f28a9797c2a4b84d11542a1aa4a06a6aa60ee062a36c4fb467145b8914959e42323a13068e2475bff41c67af8dd96034675776cb78036711c1f320b82085df5ee005ffca77959f29a0a07a226241787f06b57483d509e0befd84e5ac84d960e881c7b0853ee1d7c63dff1b00000000000000000000000000000000000000000000000000000000000026a04932608e9743aaa76626f082cedb5da11ff8a1ebe6b5a62a372c81393b5912aea012f36de80608ba3b0f72f3e8f299379ce2802e64b1cbb55275ad9aaa81190b44";
         // clang-format on
-        const auto request =
+        auto request =
             R"({"id":"e4df2b99-f80b-4e23-123231","jsonrpc":"2.0","method":"eth_estimateGas","params":[")" +
             rawTx + R"("]})";
         auto response = onRPCRequestWrapper(request);
-        validRespCheck(response);
-        BOOST_CHECK(response["id"].asString() == "e4df2b99-f80b-4e23-123231");
-        // before set config, return lowest gas limit
-        BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(LowestGasUsed));
+        BOOST_TEST(response["id"].asString() == "e4df2b99-f80b-4e23-123231");
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == -32602);
 
         // after set config, return config
         auto txGasLimit = 3000000U;
         m_ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_LIMIT, std::to_string(txGasLimit));
         response = onRPCRequestWrapper(request);
+        BOOST_TEST(response.isMember("error"));
+        BOOST_TEST(response["error"]["code"].asInt() == -32602);
+
+        using namespace std::string_literals;
+        auto request2 =
+            R"({"jsonrpc":"2.0","method":"eth_estimateGas","params":[{"from":"0x2a09be8823b80f337170650802d1a0f8a99fe2d8","data":"0x608060405234801561000f575f5ffd5b5060408051808201909152600b81526a12195b1b1bc815dbdc9b1960aa1b60208201525f9061003e90826100dc565b50610196565b634e487b7160e01b5f52604160045260245ffd5b600181811c9082168061006c57607f821691505b60208210810361008a57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156100d757805f5260205f20601f840160051c810160208510156100b55750805b601f840160051c820191505b818110156100d4575f81556001016100c1565b50505b505050565b81516001600160401b038111156100f5576100f5610044565b610109816101038454610058565b84610090565b6020601f82116001811461013b575f83156101245750848201515b5f19600385901b1c1916600184901b1784556100d4565b5f84815260208120601f198516915b8281101561016a578785015182556020948501946001909201910161014a565b508482101561018757868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b61037a806101a35f395ff3fe608060405234801561000f575f5ffd5b5060043610610034575f3560e01c80634ed3885e146100385780636d4ce63c1461004d575b5f5ffd5b61004b61004636600461011d565b61006b565b005b61005561007a565b60405161006291906101d0565b60405180910390f35b5f6100768282610289565b5050565b60605f805461008890610205565b80601f01602080910402602001604051908101604052809291908181526020018280546100b490610205565b80156100ff5780601f106100d6576101008083540402835291602001916100ff565b820191905f5260205f20905b8154815290600101906020018083116100e257829003601f168201915b5050505050905090565b634e487b7160e01b5f52604160045260245ffd5b5f6020828403121561012d575f5ffd5b813567ffffffffffffffff811115610143575f5ffd5b8201601f81018413610153575f5ffd5b803567ffffffffffffffff81111561016d5761016d610109565b604051601f8201601f19908116603f0116810167ffffffffffffffff8111828210171561019c5761019c610109565b6040528181528282016020018610156101b3575f5ffd5b816020840160208301375f91810160200191909152949350505050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b600181811c9082168061021957607f821691505b60208210810361023757634e487b7160e01b5f52602260045260245ffd5b50919050565b601f82111561028457805f5260205f20601f840160051c810160208510156102625750805b601f840160051c820191505b81811015610281575f815560010161026e565b50505b505050565b815167ffffffffffffffff8111156102a3576102a3610109565b6102b7816102b18454610205565b8461023d565b6020601f8211600181146102e9575f83156102d25750848201515b5f19600385901b1c1916600184901b178455610281565b5f84815260208120601f198516915b8281101561031857878501518255602094850194600190920191016102f8565b508482101561033557868401515f19600387901b60f8161c191681555b50505050600190811b0190555056fea2646970667358221220a57cc7c4c4b178df95e2a8c140734de9e3c49c8623eccd4425c20df3902a074f64736f6c634300081c0033"},"pending"],"id":4}))"s;
+        response = onRPCRequestWrapper(request2);
         validRespCheck(response);
-        BOOST_CHECK_EQUAL(response["result"].asString(), toQuantity(txGasLimit));
     }
 }
 
 BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
 {
     auto validRespCheck = [](Json::Value const& resp) {
-        BOOST_CHECK(!resp.isMember("error"));
-        BOOST_CHECK(resp.isMember("result"));
-        BOOST_CHECK(resp.isMember("id"));
-        BOOST_CHECK(resp.isMember("jsonrpc"));
-        BOOST_CHECK(resp["jsonrpc"].asString() == "2.0");
+        BOOST_TEST(!resp.isMember("error"));
+        BOOST_TEST(resp.isMember("result"));
+        BOOST_TEST(resp.isMember("id"));
+        BOOST_TEST(resp.isMember("jsonrpc"));
+        BOOST_TEST(resp["jsonrpc"].asString() == "2.0");
     };
 
     // method web3_clientVersion
@@ -254,9 +253,9 @@ BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
             R"({"jsonrpc":"2.0","id":24243, "method":"web3_clientVersion","params":[]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 24243);
+        BOOST_TEST(response["id"].asInt64() == 24243);
         std::string result = response["result"].asString();
-        BOOST_CHECK(result.find("FISCO-BCOS-Web3RPC") != std::string::npos);
+        BOOST_TEST(result.find("FISCO-BCOS-Web3RPC") != std::string::npos);
     }
 
     // method web3_sha3
@@ -265,9 +264,9 @@ BOOST_AUTO_TEST_CASE(handleWeb3NamespaceValidTest)
             R"({"jsonrpc":"2.0","id":321314, "method":"web3_sha3","params":["0x68656c6c6f20776f726c64"]})";
         auto response = onRPCRequestWrapper(request);
         validRespCheck(response);
-        BOOST_CHECK(response["id"].asInt64() == 321314);
-        BOOST_CHECK(response["result"].asString() ==
-                    "0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad");
+        BOOST_TEST(response["id"].asInt64() == 321314);
+        BOOST_TEST(response["result"].asString() ==
+                   "0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad");
     }
 }
 
@@ -275,41 +274,41 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
 {
     // method eth_sendRawTransaction
     auto testLegacyTx = [&](std::string const& rawTx, std::string const& expectHash) {
-        // clang-format off
-    const std::string request = R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" + rawTx + R"("]})";
-        // clang-format on
+        const std::string request =
+            R"({"jsonrpc":"2.0","id":1132123, "method":"eth_sendRawTransaction","params":[")" +
+            rawTx + R"("]})";
         auto rawTxBytes = fromHexWithPrefix(rawTx);
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
         Web3Transaction rawWeb3Tx;
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
         onRPCRequestWrapper(request, [](auto&&) {});
         // validRespCheck(response);
-        // BOOST_CHECK(response["id"].asInt64() == 1132123);
-        // BOOST_CHECK(response["result"].asString() == expectHash);
+        // BOOST_TEST(response["id"].asInt64() == 1132123);
+        // BOOST_TEST(response["result"].asString() == expectHash);
 
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([](Web3TestFixture* self, decltype(hashes) m_hashes,
                        decltype(rawWeb3Tx) rawWeb3Tx) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_CHECK(txs.size() == 1);
-            BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
-            BOOST_CHECK(txs[0]->type() == 1);
-            BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());
+            BOOST_TEST(txs.size() == 1);
+            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
+            BOOST_TEST(txs[0]->type() == 1);
+            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             auto const chainId = txs[0]->chainId();
-            BOOST_CHECK(chainId == std::to_string(rawWeb3Tx.chainId.value_or(0)));
+            BOOST_TEST(chainId == std::to_string(rawWeb3Tx.chainId.value_or(0)));
             Web3Transaction tx;
             bcos::codec::rlp::decode(ref, tx);
-            BOOST_CHECK(tx.type == rawWeb3Tx.type);
-            BOOST_CHECK(tx.data == rawWeb3Tx.data);
-            BOOST_CHECK(tx.nonce == rawWeb3Tx.nonce);
+            BOOST_TEST(tx.type == rawWeb3Tx.type);
+            BOOST_TEST(tx.data == rawWeb3Tx.data);
+            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
             BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_CHECK(tx.value == rawWeb3Tx.value);
-            BOOST_CHECK(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_CHECK(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_CHECK(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_CHECK(tx.accessList == rawWeb3Tx.accessList);
+            BOOST_TEST(tx.value == rawWeb3Tx.value);
+            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
+            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
+            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
+            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
         }(this, std::move(hashes), std::move(rawWeb3Tx)));
     };
 
@@ -353,30 +352,30 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
         onRPCRequestWrapper(request, [](auto&&) {});
         // validRespCheck(response);
-        // BOOST_CHECK(response["id"].asInt64() == 1132123);
-        // BOOST_CHECK(response["result"].asString() == expectHash);
+        // BOOST_TEST(response["id"].asInt64() == 1132123);
+        // BOOST_TEST(response["result"].asString() == expectHash);
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([&rawWeb3Tx](
                        Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_CHECK(txs.size() == 1);
-            BOOST_CHECK(txs[0] != nullptr);
-            BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
-            BOOST_CHECK(txs[0]->type() == 1);
-            BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());
+            BOOST_TEST(txs.size() == 1);
+            BOOST_TEST(txs[0] != nullptr);
+            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
+            BOOST_TEST(txs[0]->type() == 1);
+            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             Web3Transaction tx;
             bcos::codec::rlp::decode(ref, tx);
-            BOOST_CHECK(tx.type == rawWeb3Tx.type);
-            BOOST_CHECK(tx.data == rawWeb3Tx.data);
-            BOOST_CHECK(tx.nonce == rawWeb3Tx.nonce);
+            BOOST_TEST(tx.type == rawWeb3Tx.type);
+            BOOST_TEST(tx.data == rawWeb3Tx.data);
+            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
             BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_CHECK(tx.value == rawWeb3Tx.value);
-            BOOST_CHECK(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_CHECK(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_CHECK(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_CHECK(tx.accessList == rawWeb3Tx.accessList);
+            BOOST_TEST(tx.value == rawWeb3Tx.value);
+            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
+            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
+            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
+            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
             BOOST_CHECK(tx.chainId == rawWeb3Tx.chainId);
         }(this, std::move(hashes)));
         return rawWeb3Tx;
@@ -416,32 +415,32 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
         onRPCRequestWrapper(request, [](auto&&) {});
         // validRespCheck(response);
-        // BOOST_CHECK(response["id"].asInt64() == 1132123);
-        // BOOST_CHECK(response["result"].asString() == expectHash);
+        // BOOST_TEST(response["id"].asInt64() == 1132123);
+        // BOOST_TEST(response["result"].asString() == expectHash);
         std::vector<crypto::HashType> hashes = {HashType(expectHash)};
         task::wait([&rawWeb3Tx](
                        Web3TestFixture* self, decltype(hashes) m_hashes) -> task::Task<void> {
             auto txs = co_await self->txPool->getTransactions(m_hashes);
-            BOOST_CHECK(txs.size() == 1);
-            BOOST_CHECK(txs[0]->hash() == m_hashes[0]);
-            BOOST_CHECK(txs[0]->type() == 1);
-            BOOST_CHECK(!txs[0]->extraTransactionBytes().empty());
+            BOOST_TEST(txs.size() == 1);
+            BOOST_TEST(txs[0]->hash() == m_hashes[0]);
+            BOOST_TEST(txs[0]->type() == 1);
+            BOOST_TEST(!txs[0]->extraTransactionBytes().empty());
             auto ref = bytesRef(const_cast<unsigned char*>(txs[0]->extraTransactionBytes().data()),
                 txs[0]->extraTransactionBytes().size());
             Web3Transaction tx;
             bcos::codec::rlp::decode(ref, tx);
-            BOOST_CHECK(tx.type == rawWeb3Tx.type);
-            BOOST_CHECK(tx.data == rawWeb3Tx.data);
-            BOOST_CHECK(tx.nonce == rawWeb3Tx.nonce);
+            BOOST_TEST(tx.type == rawWeb3Tx.type);
+            BOOST_TEST(tx.data == rawWeb3Tx.data);
+            BOOST_TEST(tx.nonce == rawWeb3Tx.nonce);
             BOOST_CHECK(tx.to == rawWeb3Tx.to);
-            BOOST_CHECK(tx.value == rawWeb3Tx.value);
-            BOOST_CHECK(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
-            BOOST_CHECK(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
-            BOOST_CHECK(tx.gasLimit == rawWeb3Tx.gasLimit);
-            BOOST_CHECK(tx.accessList == rawWeb3Tx.accessList);
+            BOOST_TEST(tx.value == rawWeb3Tx.value);
+            BOOST_TEST(tx.maxFeePerGas == rawWeb3Tx.maxFeePerGas);
+            BOOST_TEST(tx.maxPriorityFeePerGas == rawWeb3Tx.maxPriorityFeePerGas);
+            BOOST_TEST(tx.gasLimit == rawWeb3Tx.gasLimit);
+            BOOST_TEST(tx.accessList == rawWeb3Tx.accessList);
             BOOST_CHECK(tx.chainId == rawWeb3Tx.chainId);
-            BOOST_CHECK(tx.maxFeePerBlobGas == rawWeb3Tx.maxFeePerBlobGas);
-            BOOST_CHECK(tx.blobVersionedHashes == rawWeb3Tx.blobVersionedHashes);
+            BOOST_TEST(tx.maxFeePerBlobGas == rawWeb3Tx.maxFeePerBlobGas);
+            BOOST_TEST(tx.blobVersionedHashes == rawWeb3Tx.blobVersionedHashes);
         }(this, std::move(hashes)));
         return rawWeb3Tx;
     };
@@ -487,10 +486,10 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         auto params1 = std::make_shared<Web3FilterRequest>();
         auto params2 = std::make_shared<Web3FilterRequest>();
         params2->addAddress(toHexStringWithPrefix(address1));
-        BOOST_CHECK(matcher.matches(params1, log1));
-        BOOST_CHECK(matcher.matches(params1, log2));
-        BOOST_CHECK(!matcher.matches(params2, log1));
-        BOOST_CHECK(!matcher.matches(params2, log2));
+        BOOST_TEST(matcher.matches(params1, log1));
+        BOOST_TEST(matcher.matches(params1, log2));
+        BOOST_TEST(!matcher.matches(params2, log1));
+        BOOST_TEST(!matcher.matches(params2, log2));
     }
     // 2.[A] "A in first position (and anything after)"
     {
@@ -500,16 +499,16 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         protocol::LogEntry log;
         // [A]
         log = protocol::LogEntry(address1, {A}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B]
         log = protocol::LogEntry(address1, {A, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C]
         log = protocol::LogEntry(address1, {C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, D]
         log = protocol::LogEntry(address1, {C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
     }
     // 3.[null, B] "anything in first position AND B in second position (and anything after)"
     {
@@ -520,41 +519,41 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         // matched
         // [A, B]
         log = protocol::LogEntry(address1, {A, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C, B]
         log = protocol::LogEntry(address1, {C, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, F]
         log = protocol::LogEntry(address1, {A, B, F}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, E]
         log = protocol::LogEntry(address1, {A, B, E}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C, B, F]
         log = protocol::LogEntry(address1, {C, B, F}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [C, B, E]
         log = protocol::LogEntry(address1, {C, B, E}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // mismatched
         // [A, G]
         log = protocol::LogEntry(address1, {A, G}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, G]
         log = protocol::LogEntry(address1, {C, G}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, G, F]
         log = protocol::LogEntry(address1, {A, G, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, G, E]
         log = protocol::LogEntry(address1, {A, G, E}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, G, F]
         log = protocol::LogEntry(address1, {C, G, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [C, G, E]
         log = protocol::LogEntry(address1, {C, G, E}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
     }
     // 4.[A, B] "A in first position AND B in second position (and anything after)"
     {
@@ -567,33 +566,33 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         // matched
         // [A, B]
         log = protocol::LogEntry(address1, {A, B}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, C]
         log = protocol::LogEntry(address1, {A, B, C}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
         // [A, B, E]
         log = protocol::LogEntry(address1, {A, B, E}, bytes());
-        BOOST_CHECK(matcher.matches(params, log));
+        BOOST_TEST(matcher.matches(params, log));
 
         // mismatched
         // [A]
         log = protocol::LogEntry(address1, {A}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, C]
         log = protocol::LogEntry(address1, {A, C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [A, C, F]
         log = protocol::LogEntry(address1, {A, C, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [B]
         log = protocol::LogEntry(address1, {B}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [B, C]
         log = protocol::LogEntry(address1, {B, C}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
         // [B, C, F]
         log = protocol::LogEntry(address1, {B, C, F}, bytes());
-        BOOST_CHECK(!matcher.matches(params, log));
+        BOOST_TEST(!matcher.matches(params, log));
     }
     // 5.[[A, B], [A, B]] "(A OR B) in first position AND (A OR B) in second position (and anything
     // after)"
@@ -610,109 +609,109 @@ BOOST_AUTO_TEST_CASE(logMatcherTest)
         {
             // [A, C]
             log = protocol::LogEntry(address1, {A, C}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [A, D]
             log = protocol::LogEntry(address1, {A, D}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, C]
             log = protocol::LogEntry(address1, {B, C}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, D]
             log = protocol::LogEntry(address1, {B, D}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
         }
         {
             // [A, C, E]
             log = protocol::LogEntry(address1, {A, C, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [A, D, E]
             log = protocol::LogEntry(address1, {A, D, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, C, E]
             log = protocol::LogEntry(address1, {B, C, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, D, E]
             log = protocol::LogEntry(address1, {B, D, E}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
         }
         {
             // [A, C, F]
             log = protocol::LogEntry(address1, {A, C, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [A, D, F]
             log = protocol::LogEntry(address1, {A, D, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, C, F]
             log = protocol::LogEntry(address1, {B, C, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
             // [B, D, F]
             log = protocol::LogEntry(address1, {B, D, F}, bytes());
-            BOOST_CHECK(matcher.matches(params, log));
+            BOOST_TEST(matcher.matches(params, log));
         }
         // mismatched
         {
             // [A]
             log = protocol::LogEntry(address1, {A}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B]
             log = protocol::LogEntry(address1, {B}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [E, C]
             log = protocol::LogEntry(address1, {E, C}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [E, D]
             log = protocol::LogEntry(address1, {E, D}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, C]
             log = protocol::LogEntry(address1, {F, C}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, D]
             log = protocol::LogEntry(address1, {F, D}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [A, E]
             log = protocol::LogEntry(address1, {A, E}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [A, F]
             log = protocol::LogEntry(address1, {A, F}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, E]
             log = protocol::LogEntry(address1, {B, E}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, F]
             log = protocol::LogEntry(address1, {B, F}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [E, C, G]
             log = protocol::LogEntry(address1, {E, C, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [E, D, G]
             log = protocol::LogEntry(address1, {E, D, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, C, G]
             log = protocol::LogEntry(address1, {F, C, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [F, D, G]
             log = protocol::LogEntry(address1, {F, D, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
         {
             // [A, E, G]
             log = protocol::LogEntry(address1, {A, E, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [A, F, G]
             log = protocol::LogEntry(address1, {A, F, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, E, G]
             log = protocol::LogEntry(address1, {B, E, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
             // [B, F, G]
             log = protocol::LogEntry(address1, {B, F, G}, bytes());
-            BOOST_CHECK(!matcher.matches(params, log));
+            BOOST_TEST(!matcher.matches(params, log));
         }
     }
 }

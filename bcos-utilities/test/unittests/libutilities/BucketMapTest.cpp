@@ -313,7 +313,7 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
             auto ks = RANGES::iota_view<int, int>(range.begin(), range.end()) |
                       ::ranges::to<std::vector>();
 
-            bucketMap.batchRemove<decltype(ks), false>(ks);
+            bucketMap.batchRemove(ks);
         });
     BOOST_CHECK_EQUAL(0, bucketMap.size());
 

@@ -29,6 +29,12 @@ using namespace bcostars::protocol;
 
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
+bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl()
+  : m_inner([m_receipt = bcostars::TransactionReceipt()]() mutable {
+        return std::addressof(m_receipt);
+    })
+{}
+
 void TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
 {
     bcos::concepts::serialize::decode(_receiptData, *m_inner());
@@ -95,7 +101,7 @@ gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceipt
 
     return {m_logEntries.data(), m_logEntries.size()};
 }
-bcos::protocol::LogEntries&& bcostars::protocol::TransactionReceiptImpl::takeLogEntries()
+bcos::protocol::LogEntries bcostars::protocol::TransactionReceiptImpl::takeLogEntries()
 {
     if (m_logEntries.empty())
     {
@@ -180,3 +186,7 @@ size_t bcostars::protocol::TransactionReceiptImpl::size() const
     size += m_inner()->message.size();
     return size;
 }
+bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl(
+    std::function<bcostars::TransactionReceipt*()> inner)
+  : m_inner(std::move(inner))
+{}

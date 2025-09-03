@@ -78,11 +78,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
-    if(ONLY_CPP_SDK)
-        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-    else ()
-        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
-    endif ()
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
     if("${LINKER}" MATCHES "gold")
@@ -97,8 +93,8 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     endif()
 
     if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        # Check that we've got GCC 10.0 or newer.
-        set(GCC_MIN_VERSION "10.0")
+        # Check that we've got GCC 11.0 or newer.
+        set(GCC_MIN_VERSION "11.0")
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
 
@@ -108,11 +104,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
         add_compile_options(-fstack-protector-strong)
         add_compile_options(-fstack-protector)
-
-        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11.0)
-            add_compile_options(-fcoroutines)
-            add_compile_options(-Wno-error=unused-value)
-        endif()
 
         add_compile_options(-fPIC)
         add_compile_options(-Wno-error=nonnull)
@@ -161,6 +152,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
     if(SANITIZE_ADDRESS)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
+        # add_compile_options(-DBOOST_USE_ASAN)
     endif()
 
     if(SANITIZE_THREAD)
@@ -185,6 +177,7 @@ elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
     add_compile_definitions(NOMINMAX)
     add_compile_options(/std:c++latest)
     add_compile_options(-bigobj)
+    add_compile_options(/utf-8)
 
     # MSVC only support static build
     set(CMAKE_CXX_FLAGS_DEBUG "/MTd /DEBUG")

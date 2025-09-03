@@ -97,10 +97,9 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             limiter.acquire(1);
             bcos::codec::abi::ContractABICodec abiCodec1(*cryptoSuite->hashImpl());
             auto input = abiCodec1.abiIn(
-                "availableBalance(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
+                "balanceOf(address)", users[i].keyPair->address(cryptoSuite->hashImpl()));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0);
-
 
             handles[i].emplace(rpcClient);
             handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
@@ -118,7 +117,7 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             auto receipt = handles[i]->get();
             if (receipt->status() != 0)
             {
-                std::cout << "Query with error! " << receipt->status() << std::endl;
+                std::cout << "Query with error! " << receipt->status() << "\n";
                 BOOST_THROW_EXCEPTION(std::runtime_error("Query with error!"));
             }
 
@@ -132,8 +131,7 @@ void query(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
 }
 
 void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite,
-    std::string contractAddress, std::shared_ptr<bcos::crypto::KeyPairInterface> adminKeyPair,
-    std::vector<User>& users, int qps)
+    std::string contractAddress, std::vector<User>& users, int qps)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
@@ -150,7 +148,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
                 users[i].keyPair->address(cryptoSuite->hashImpl()), bcos::u256(initialValue));
             auto transaction = transactionFactory.createTransaction(0, contractAddress, input,
                 rpcClient.generateNonce(), g_blockNumber + blockLimit, "chain0", "group0", 0,
-                *adminKeyPair);
+                *users[i].keyPair);
 
             handles[i].emplace(rpcClient);
             handles[i]->setCallback(std::make_shared<PerformanceCallback>(latch, collector));
@@ -171,7 +169,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
             auto receipt = handles[i]->get();
             if (receipt->status() != 0)
             {
-                std::cout << "Issue with error! " << receipt->status() << std::endl;
+                std::cout << "Issue with error! " << receipt->status() << "\n";
                 BOOST_THROW_EXCEPTION(std::runtime_error("Issue with error!"));
             }
         }
@@ -180,8 +178,7 @@ void issue(bcos::sdk::RPCClient& rpcClient, std::shared_ptr<bcos::crypto::Crypto
 
 void transfer(bcos::sdk::RPCClient& rpcClient,
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, std::string contractAddress,
-    std::shared_ptr<bcos::crypto::KeyPairInterface> keyPair, std::vector<User>& users,
-    int transactionCount, int qps)
+    std::vector<User>& users, int transactionCount, int qps)
 {
     bcostars::protocol::TransactionFactoryImpl transactionFactory(cryptoSuite);
     bcos::ratelimiter::TimeWindowRateLimiter limiter(qps);
@@ -222,7 +219,7 @@ void transfer(bcos::sdk::RPCClient& rpcClient,
             auto receipt = handles[i]->get();
             if (receipt->status() != 0)
             {
-                std::cout << "Transfer with error! " << receipt->status() << std::endl;
+                std::cout << "Transfer with error! " << receipt->status() << "\n";
                 BOOST_THROW_EXCEPTION(std::runtime_error("Transfer with error!"));
             }
         }
@@ -235,7 +232,12 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
     {
         try
         {
-            g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+            auto blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+            auto expect = g_blockNumber.load();
+            while (
+                blockNumber > expect && !g_blockNumber.compare_exchange_strong(expect, blockNumber))
+            {
+            }
         }
         catch (std::exception& e)
         {
@@ -245,38 +247,9 @@ void loopFetchBlockNumber(bcos::sdk::RPCClient& rpcClient, boost::atomic_flag co
     }
 }
 
-int main(int argc, char* argv[])
+bcos::task::Task<std::string> newContract(bcos::sdk::RPCClient& rpcClient,
+    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite, size_t userCount, int qps, bool proxy)
 {
-    if (argc < 6)
-    {
-        std::cout << "Usage: " << argv[0]
-                  << " <connectionString> <userCount> <transactionCount> <qps> <proxy>" << std::endl
-                  << "Example: " << argv[0]
-                  << " \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 1000 100 0"
-                  << std::endl;
-
-        return 1;
-    }
-
-    std::string connectionString = argv[1];
-    int userCount = boost::lexical_cast<int>(argv[2]);
-    int transactionCount = boost::lexical_cast<int>(argv[3]);
-    int qps = boost::lexical_cast<int>(argv[4]);
-    bool proxy = boost::lexical_cast<bool>(argv[5]);
-
-    bcos::sdk::Config config = {
-        .connectionString = connectionString,
-        .sendQueueSize = std::max(userCount, transactionCount),
-        .timeoutMs = 600000,
-    };
-    bcos::sdk::RPCClient rpcClient(config);
-    boost::atomic_flag stopFlag{};
-
-    g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
-    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
-    auto cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
-            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
     auto adminKeyPair = std::shared_ptr<bcos::crypto::KeyPairInterface>(
         cryptoSuite->signatureImpl()->generateKeyPair());
 
@@ -291,16 +264,15 @@ int main(int argc, char* argv[])
     auto deployTransfer20Transaction =
         transactionFactory.createTransaction(0, "", transfer20Bin, rpcClient.generateNonce(),
             g_blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
-    auto receipt = bcos::task::syncWait(
-        bcos::sdk::async::sendTransaction(rpcClient, *deployTransfer20Transaction))
-                       .get();
+    auto receipt =
+        (co_await bcos::sdk::async::sendTransaction(rpcClient, *deployTransfer20Transaction)).get();
     if (receipt->status() != 0)
     {
-        std::cout << "Deploy contract failed" << receipt->status() << std::endl;
-        return 1;
+        std::cout << "Deploy contract failed" << receipt->status() << "\n";
+        BOOST_THROW_EXCEPTION(std::runtime_error("Deploy contract failed"));
     }
     auto transfer20ContractAddress = receipt->contractAddress();
-    std::cout << "Transfer20 contract address is:" << transfer20ContractAddress << std::endl;
+    std::cout << "Transfer20 contract address is:" << transfer20ContractAddress << "\n";
 
     bcos::bytes tupBin;
     boost::algorithm::unhex(TRANSPARENT_UPGRADEABLE_PROXY_BYTECODE, std::back_inserter(tupBin));
@@ -315,12 +287,11 @@ int main(int argc, char* argv[])
         transactionFactory.createTransaction(0, "", tupBin, rpcClient.generateNonce(),
             g_blockNumber + blockLimit, "chain0", "group0", 0, *adminKeyPair);
     auto receipt2 =
-        bcos::task::syncWait(bcos::sdk::async::sendTransaction(rpcClient, *deployTupTransaction))
-            .get();
+        (co_await bcos::sdk::async::sendTransaction(rpcClient, *deployTupTransaction)).get();
     if (receipt2->status() != 0)
     {
-        std::cout << "Deploy tup failed" << receipt2->status() << std::endl;
-        return 1;
+        std::cout << "Deploy tup failed" << receipt2->status() << "\n";
+        BOOST_THROW_EXCEPTION(std::runtime_error("Deploy tup failed"));
     }
     std::string contractAddress;
     if (proxy)
@@ -331,16 +302,81 @@ int main(int argc, char* argv[])
     {
         contractAddress = transfer20ContractAddress;
     }
-    std::cout << "Target contract address is:" << contractAddress << std::endl;
+    std::cout << "Target contract address is:" << contractAddress << "\n";
+    co_return contractAddress;
+}
 
+void usage(std::string_view programName)
+{
+    std::cout << "Usage: " << programName
+              << "\n    new <connectionString> <userCount> <use proxy> <transactionCount> <qps>"
+              << "\n    load <connectionString> <userCount> <contractAddress> <transactionCount> "
+                 "<qps>\n"
+              << "Example: " << programName
+              << "\n    new \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 0 1000 100"
+              << "\n    load \"fiscobcos.rpc.RPCObj@tcp -h 127.0.0.1 -p 20021\" 100 "
+                 "<contractAddress> 1000 100\n";
+}
+
+int main(int argc, char* argv[])
+{
+    if (argc < 7)
+    {
+        usage(argv[0]);
+        return 1;
+    }
+
+    std::string type = argv[1];
+    std::string connectionString = argv[2];
+    int userCount{};
+    bool proxy{};
+    std::string usersPath;
+    std::string contractAddress;
+    userCount = boost::lexical_cast<int>(argv[3]);
+    // mode new
+    if (type == "new")
+    {
+        proxy = boost::lexical_cast<bool>(argv[4]);
+    }
+    else if (type == "load")
+    {
+        contractAddress = argv[4];
+    }
+    else
+    {
+        usage(argv[0]);
+        return 1;
+    }
+
+    int transactionCount = boost::lexical_cast<int>(argv[5]);
+    int qps = boost::lexical_cast<int>(argv[6]);
+
+    bcos::sdk::Config config = {
+        .connectionString = connectionString,
+        .sendQueueSize = std::max(userCount, transactionCount),
+        .timeoutMs = 600000,
+    };
+    bcos::sdk::RPCClient rpcClient(config);
+    boost::atomic_flag stopFlag{};
+
+    g_blockNumber = bcos::sdk::BlockNumber(rpcClient).send().get();
+    std::thread getBlockNumber([&]() { loopFetchBlockNumber(rpcClient, stopFlag); });
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+            std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr);
+
+    if (type == "new")
+    {
+        contractAddress =
+            bcos::task::syncWait(newContract(rpcClient, cryptoSuite, userCount, qps, proxy));
+    }
     auto users = initUsers(userCount, *cryptoSuite);
-    query(rpcClient, cryptoSuite, std::string(contractAddress), users, qps);
-    issue(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users, qps);
-    transfer(rpcClient, cryptoSuite, std::string(contractAddress), adminKeyPair, users,
-        transactionCount, qps);
+    query(rpcClient, cryptoSuite, contractAddress, users, qps);
+    issue(rpcClient, cryptoSuite, contractAddress, users, qps);
+    transfer(rpcClient, cryptoSuite, contractAddress, users, transactionCount, qps);
 
     auto resultUsers = users;
-    query(rpcClient, cryptoSuite, std::string(contractAddress), resultUsers, qps);
+    query(rpcClient, cryptoSuite, contractAddress, resultUsers, qps);
 
     // Compare the result
     for (int i = 0; i < userCount; ++i)
@@ -348,7 +384,7 @@ int main(int argc, char* argv[])
         if (users[i].balance != resultUsers[i].balance)
         {
             std::cout << "Balance not match! " << users[i].balance << " " << resultUsers[i].balance
-                      << std::endl;
+                      << "\n";
             exit(1);
         }
     }

@@ -18,16 +18,13 @@
  * @date: 2021-05-07
  */
 #pragma once
-#include "../Common.h"
-#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 
 #define TXPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL")
 
-namespace bcos
-{
-namespace txpool
+
+namespace bcos::txpool
 {
 using TxsHashSet = std::set<bcos::crypto::HashType>;
 using TxsHashSetPtr = std::shared_ptr<TxsHashSet>;
-}  // namespace txpool
-}  // namespace bcos
+}  // namespace bcos::txpool

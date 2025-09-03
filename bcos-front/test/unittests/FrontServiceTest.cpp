@@ -19,6 +19,7 @@
  * @date 2021-04-26
  */
 
+#include "bcos-task/Wait.h"
 #define BOOST_TEST_MAIN
 
 #include "FakeGateway.h"
@@ -238,8 +239,9 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendBroadcastMessage)
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().find(moduleID) !=
                 frontService->moduleID2MessageDispatcher().end());
 
-    frontService->asyncSendBroadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, moduleID,
-        bytesConstRef((unsigned char*)data.data(), data.size()));
+    task::syncWait(
+        frontService->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, moduleID,
+            ::ranges::views::single(bytesConstRef((unsigned char*)data.data(), data.size()))));
     BOOST_CHECK(frontService->callback().empty());
     f.get();
 }

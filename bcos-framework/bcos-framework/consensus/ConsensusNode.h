@@ -24,7 +24,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/Common.h>
 #include <compare>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <ostream>
 
 namespace bcos::consensus

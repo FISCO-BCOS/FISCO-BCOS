@@ -54,7 +54,7 @@ struct StringHash
     using is_transparent = void;
 
     template <std::convertible_to<std::string_view> T>
-    std::size_t operator()(T&& str) const
+    std::size_t operator()(const T& str) const
     {
         return std::hash<std::decay_t<T>>{}(str);
     }
@@ -126,15 +126,12 @@ public:
     bool find(AccessorType& accessor, const KeyType& key)
     {
         accessor.emplaceLock(m_mutex);
-
-        auto it = m_values.find(key);
-        if (it == m_values.end())
+        if (auto it = m_values.find(key); it != m_values.end())
         {
-            return false;
+            accessor.setIterator(it, this);
+            return true;
         }
-
-        accessor.setIterator(it, this);
-        return true;
+        return false;
     }
 
     // return true if insert happen
@@ -174,6 +171,15 @@ template <class KeyType, class ValueType, class BucketHasher = std::hash<KeyType
     class BucketType = Bucket<KeyType, ValueType>>
 class BucketMap
 {
+private:
+    int getBucketIndex(auto const& key)
+    {
+        auto hash = BucketHasher{}(key);
+        return hash % m_buckets.size();
+    }
+
+    std::vector<typename BucketType::Ptr> m_buckets;
+
 public:
     using Ptr = std::shared_ptr<BucketMap>;
     using WriteAccessor = typename BucketType::WriteAccessor;
@@ -204,10 +210,9 @@ public:
 
     template <class Accessor, bool parallel, class Keys, class Handler>
         requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys> &&
-                 std::is_lvalue_reference_v<::ranges::range_reference_t<Keys>> &&
                  std::invocable<Handler, Accessor&, std::span<::ranges::range_size_t<Keys>>,
                      BucketType&>
-    auto traverse(const Keys& keys, Handler handler)
+    auto traverse(Keys keys, Handler handler)
     {
         auto sortedKeys = ::ranges::views::enumerate(keys) |
                           ::ranges::views::transform([&](const auto& tuple) {
@@ -226,7 +231,6 @@ public:
 
             Accessor accessor;
             bucket->acquireAccessor(accessor);
-
             handler(accessor, ::ranges::views::keys(chunk), *bucket);
         };
 
@@ -250,23 +254,22 @@ public:
         }
     }
 
-    template <class Keys>
-        requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys> &&
-                 std::is_lvalue_reference_v<::ranges::range_reference_t<Keys>>
-    void batchInsert(const Keys& kvs)
+    template <class KeyValues>
+        requires ::ranges::random_access_range<KeyValues> && ::ranges::sized_range<KeyValues>
+    void batchInsert(KeyValues keyValues)
     {
-        traverse<WriteAccessor, true>(::ranges::views::keys(kvs),
+        traverse<WriteAccessor, true>(::ranges::views::keys(keyValues),
             [&](WriteAccessor& accessor, const auto& range, BucketType& bucket) {
                 for (auto index : range)
                 {
-                    bucket.insert(accessor, kvs[index]);
+                    bucket.insert(accessor, keyValues[index]);
                 }
             });
     }
 
     // handler: accessor is nullptr if not found, handler return false to break to find
-    template <class AccessorType>
-    auto batchFind(auto&& keys)
+    template <class AccessorType, class Keys>
+    auto batchFind(Keys keys)
     {
         std::vector<std::optional<ValueType>,
             tbb::cache_aligned_allocator<std::optional<ValueType>>>
@@ -284,45 +287,27 @@ public:
         return values;
     }
 
-    template <class Keys, bool returnRemoved>
+    template <class Keys>
         requires ::ranges::random_access_range<Keys> && ::ranges::sized_range<Keys>
-    auto batchRemove(const Keys& keys)
+    void batchRemove(Keys keys)
     {
-        std::conditional_t<returnRemoved,
-            std::vector<std::optional<ValueType>,
-                tbb::cache_aligned_allocator<std::optional<ValueType>>>,
-            EmptyType>
-            values;
-        if constexpr (returnRemoved)
-        {
-            values.resize(::ranges::size(keys));
-        }
         traverse<WriteAccessor, true>(
             keys, [&](WriteAccessor& accessor, const auto& range, BucketType& bucket) {
                 for (auto index : range)
                 {
                     if (bucket.find(accessor, keys[index]))
                     {
-                        if constexpr (returnRemoved)
-                        {
-                            values[index].emplace(std::move(accessor.value()));
-                        }
                         bucket.remove(accessor);
                     }
                 }
             });
-
-        if constexpr (returnRemoved)
-        {
-            return values;
-        }
     }
 
-    bool insert(WriteAccessor& accessor, std::pair<KeyType, ValueType> kv)
+    bool insert(WriteAccessor& accessor, std::pair<KeyType, ValueType> keyValue)
     {
-        auto idx = getBucketIndex(kv.first);
+        auto idx = getBucketIndex(keyValue.first);
         auto& bucket = m_buckets[idx];
-        return bucket->insert(accessor, std::move(kv));
+        return bucket->insert(accessor, std::move(keyValue));
     }
 
     void remove(WriteAccessor& accessor) { accessor.bucket()->remove(accessor); }
@@ -393,15 +378,6 @@ public:
         auto startIndex = getBucketIndex(startKey);
         return range<AccessorType>(startIndex);
     }
-
-protected:
-    int getBucketIndex(auto const& key)
-    {
-        auto hash = BucketHasher{}(key);
-        return hash % m_buckets.size();
-    }
-
-    std::vector<typename BucketType::Ptr> m_buckets;
 };
 
 template <class KeyType, class BucketHasher = std::hash<KeyType>>
@@ -425,8 +401,8 @@ public:
             accessor, {std::move(key), EmptyType()});
     }
 
-    template <bool returnInsertResult>
-    auto batchInsert(const auto& keys)
+    template <bool returnInsertResult, class Keys>
+    auto batchInsert(Keys keys)
     {
         std::conditional_t<returnInsertResult,
             std::vector<int8_t, tbb::cache_aligned_allocator<int8_t>>, EmptyType>

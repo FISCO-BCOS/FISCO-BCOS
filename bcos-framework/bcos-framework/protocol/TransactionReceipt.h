@@ -20,6 +20,7 @@
 
 #include "LogEntry.h"
 #include "ProtocolTypeDef.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
@@ -27,7 +28,7 @@
 namespace bcos::protocol
 {
 class LogEntry;
-class TransactionReceipt
+class TransactionReceipt : public virtual MoveBase<TransactionReceipt>
 {
 public:
     using Ptr = std::shared_ptr<TransactionReceipt>;
@@ -45,7 +46,7 @@ public:
     virtual int32_t status() const = 0;
     virtual bcos::bytesConstRef output() const = 0;
     virtual gsl::span<const LogEntry> logEntries() const = 0;
-    virtual LogEntries&& takeLogEntries() = 0;
+    virtual LogEntries takeLogEntries() = 0;
     virtual protocol::BlockNumber blockNumber() const = 0;
     virtual std::string_view effectiveGasPrice() const = 0;
     virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
@@ -74,5 +75,6 @@ public:
 using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
+using AnyTransactionReceipt = AnyHolder<TransactionReceipt, 72>;
 
 }  // namespace bcos::protocol

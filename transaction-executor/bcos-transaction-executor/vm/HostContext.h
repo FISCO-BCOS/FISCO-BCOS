@@ -58,7 +58,6 @@
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
-#include <magic_enum.hpp>
 #include <memory>
 #include <string_view>
 
@@ -340,7 +339,17 @@ public:
     }
     int64_t blockNumber() const { return m_blockHeader.get().number(); }
     uint32_t blockVersion() const { return m_blockHeader.get().version(); }
-    int64_t timestamp() const { return m_blockHeader.get().timestamp(); }
+    int64_t timestamp() const
+    {
+        if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_timestamp) &&
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_timestamp))
+        {
+            return std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::milliseconds(m_blockHeader.get().timestamp()))
+                .count();
+        }
+        return m_blockHeader.get().timestamp();
+    }
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
     u256 gasPrice() const { return u256(std::get<0>(m_ledgerConfig.get().gasPrice())); }
@@ -404,11 +413,26 @@ public:
             {
                 // 先转账，再执行
                 // Transfer first, then proceed execute
-                if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                    m_ledgerConfig.get().balanceTransfer())
+                if (m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_delegatecall_transfer))
                 {
-                    co_await transferBalance(*ref);
+                    if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
+                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
+                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        m_ledgerConfig.get().balanceTransfer())
+                    {
+                        co_await transferBalance(*ref);
+                    }
                 }
+                else
+                {
+                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        m_ledgerConfig.get().balanceTransfer())
+                    {
+                        co_await transferBalance(*ref);
+                    }
+                }
+
 
                 if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                 {
@@ -490,6 +514,7 @@ public:
         ++m_seq;
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
         auto senderAccount = getAccount(*this, message.sender);
+
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
@@ -535,6 +560,12 @@ private:
         }
 
         co_await m_recipientAccount.create();
+        auto bugfixNest =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_nonce_initialize);
+        if (bugfixNest)
+        {
+            co_await m_recipientAccount.setNonce("1");
+        }
         auto result = m_executable->m_vmInstance.execute(
             interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
         if (result.status_code == 0)
@@ -542,7 +573,10 @@ private:
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
-            co_await m_recipientAccount.setNonce("1");
+            if (!bugfixNest)
+            {
+                co_await m_recipientAccount.setNonce("1");
+            }
             result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 

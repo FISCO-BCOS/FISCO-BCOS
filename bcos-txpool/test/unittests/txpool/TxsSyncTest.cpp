@@ -55,7 +55,7 @@ Transactions importTransactions(
             ledger->blockNumber() + 1, _faker->chainId(), _faker->groupId());
         transactions.push_back(transaction);
         task::syncWait(txpool->broadcastTransaction(*transaction));
-        task::wait(txpool->submitTransaction(transaction));
+        task::wait(txpool->submitTransaction(transaction, true));
     }
     auto startT = utcTime();
     while (txpool->txpoolStorage()->size() < _txsNum && (utcTime() - startT <= 10000))
@@ -88,7 +88,7 @@ void importTransactionsNew(
             auto& transaction = transactions[i];
             task::wait(
                 [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
-                    auto result = co_await txpool->submitTransaction(transaction);
+                    auto result = co_await txpool->submitTransaction(transaction, true);
                     BOOST_CHECK_EQUAL(result->status(), 0);
                     TXPOOL_LOG(DEBUG) << "Submit transaction successed";
                 }(txpool, transaction));
@@ -229,7 +229,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     // the syncPeer sealTxs
     HashListPtr txsHash = std::make_shared<HashList>();
     bool finish = false;
-    auto [_fetchedTxs, _] = syncPeer->txpool()->sealTxs(100000, nullptr);
+    auto [_fetchedTxs, _] = syncPeer->txpool()->sealTxs(100000);
     for (size_t i = 0; i < _fetchedTxs->transactionsMetaDataSize(); i++)
     {
         txsHash->emplace_back(_fetchedTxs->transactionHash(i));
@@ -256,7 +256,7 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     block->encode(*encodedData);
     finish = false;
     faker->txpool()->asyncVerifyBlock(
-        syncPeer->nodeID(), ref(*encodedData), [&](Error::Ptr _error, bool _result) {
+        syncPeer->nodeID(), block, [&](Error::Ptr _error, bool _result) {
             BOOST_CHECK(_error == nullptr);
             BOOST_CHECK(_result == true);
             finish = true;

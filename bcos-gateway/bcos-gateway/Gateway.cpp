@@ -230,43 +230,6 @@ void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int _module
 }
 
 /**
- * @brief: send message to all nodes
- * @param _groupID: groupID
- * @param _moduleID: moduleID
- * @param _srcNodeID: the sender nodeID
- * @param _payload: message content
- * @return void
- */
-void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID, int _moduleID,
-    NodeIDPtr _srcNodeID, bytesConstRef _payload)
-{
-    // broadcast message to the local nodes
-    auto ret = m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(
-        _type, _groupID, _moduleID, _srcNodeID, _payload);
-    auto message =
-        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-    message->setPacketType(GatewayMessageType::BroadcastMessage);
-    message->setExt(_type);
-    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->setPayload({_payload.begin(), _payload.end()});
-
-    P2PMessageOptions options;
-    options.setGroupID(_groupID);
-    options.setSrcNodeID(_srcNodeID->encode());
-    options.setModuleID(_moduleID);
-    message->setOptions(std::move(options));
-
-    auto msgExtAttr = std::make_shared<GatewayMessageExtAttributes>();
-    msgExtAttr->setGroupID(_groupID);
-    msgExtAttr->setModuleID(_moduleID);
-    message->setExtAttributes(msgExtAttr);
-
-    // broadcast message to the peers
-    m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(
-        _type, _groupID, _moduleID, message);
-}
-
-/**
  * @brief: receive p2p message from p2p network module
  * @param _groupID: groupID
  * @param _srcNodeID: the sender nodeID
@@ -537,5 +500,5 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     }
 
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
-        type, groupID, moduleID, *message, payloads);
+        type, groupID, moduleID, *message, std::move(payloads));
 }

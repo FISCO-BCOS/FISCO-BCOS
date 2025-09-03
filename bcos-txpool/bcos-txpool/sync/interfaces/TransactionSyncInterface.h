@@ -37,7 +37,7 @@ public:
     virtual ~TransactionSyncInterface() = default;
 
     virtual void requestMissedTxs(bcos::crypto::PublicPtr _generatedNodeID,
-        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
+        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::ConstPtr _verifiedProposal,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) = 0;
 
     virtual void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,

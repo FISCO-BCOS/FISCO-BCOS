@@ -15,17 +15,18 @@
  * threads it should allow to run simultaneously.") (since ethereum use 2, we
  * modify io_service from 1 to 2) 2.
  */
-#include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOIn...
-#include <bcos-gateway/libnetwork/Common.h>         // for HOST_LOG
+#include <bcos-gateway/libnetwork/ASIOInterface.h>
+#include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
-#include <bcos-gateway/libnetwork/Session.h>     // for Sessio...
-#include <bcos-gateway/libnetwork/SocketFace.h>  // for Socket...
+#include <bcos-gateway/libnetwork/Session.h>
+#include <bcos-gateway/libnetwork/SocketFace.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <functional>
 #include <memory>
 #include <set>
+#include <utility>
 
 
 using namespace std;
@@ -56,7 +57,7 @@ void Host::startAccept(boost::system::error_code boost_error)
         /// define callback after accept connections
         m_asioInterface->asyncAccept(
             socket,
-            [=, this](boost::system::error_code ec) {
+            [this, socket](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the
                 /// connections
                 auto endpoint = socket->remoteEndpoint();
@@ -133,7 +134,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
             ////  always return true when disable ssl, return preverified when enable ssl ///
             int crit = 0;
-            BASIC_CONSTRAINTS* basic =
+            auto* basic =
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
             if (!basic)
             {
@@ -163,7 +164,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             // If the node ID exists in the black and white lists at the same time, the black list
             // takes precedence
             if (nullptr != hostPtr->peerBlacklist() &&
-                true == hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
+                hostPtr->peerBlacklist()->has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID in certificate blacklist")
                                << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
@@ -171,7 +172,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
 
             if (nullptr != hostPtr->peerWhitelist() &&
-                false == hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
+                !hostPtr->peerWhitelist()->has(nodeIDOutWithoutExtInfo))
             {
                 HOST_LOG(INFO) << LOG_DESC("NodeID is not in certificate whitelist")
                                << LOG_KV("nodeID", P2PNodeID(nodeIDOutWithoutExtInfo).abridged());
@@ -210,7 +211,7 @@ P2PInfo Host::p2pInfo()
         if (m_p2pInfo.p2pID.empty())
         {
             /// get certificate
-            auto sslContext = m_asioInterface->srvContext()->native_handle();
+            auto* sslContext = m_asioInterface->srvContext()->native_handle();
             X509* cert = SSL_CTX_get0_certificate(sslContext);
 
             /// get issuer name
@@ -339,7 +340,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
         socket->close();
         return;
     }
-    std::string nodeInfo = *endpointPublicKey;
+    const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
         HOST_LOG(INFO) << LOG_DESC("handshakeServer get p2pID failed")
@@ -452,28 +453,29 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     /// if async connect timeout, close the socket directly
     auto connectTimer = std::make_shared<boost::asio::deadline_timer>(
         socket->ioService(), boost::posix_time::milliseconds(m_connectTimeThre));
-    connectTimer->async_wait([=, this](const boost::system::error_code& error) {
-        /// return when cancel has been called
-        if (error == boost::asio::error::operation_aborted)
-        {
-            HOST_LOG(DEBUG) << LOG_DESC("AsyncConnect handshake handler revoke this operation");
-            return;
-        }
-        /// connection timer error
-        if (error && error != boost::asio::error::operation_aborted)
-        {
-            HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
-                            << LOG_KV("errorValue", error.value())
-                            << LOG_KV("message", error.message());
-        }
-        if (socket->isConnected())
-        {
-            HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                              << LOG_KV("endpoint", _nodeIPEndpoint);
-            erasePendingConns(_nodeIPEndpoint);
-            socket->close();
-        }
-    });
+    connectTimer->async_wait(
+        [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
+            /// return when cancel has been called
+            if (error == boost::asio::error::operation_aborted)
+            {
+                HOST_LOG(DEBUG) << LOG_DESC("AsyncConnect handshake handler revoke this operation");
+                return;
+            }
+            /// connection timer error
+            if (error && error != boost::asio::error::operation_aborted)
+            {
+                HOST_LOG(ERROR) << LOG_DESC("AsyncConnect timer failed")
+                                << LOG_KV("errorValue", error.value())
+                                << LOG_KV("message", error.message());
+            }
+            if (socket->isConnected())
+            {
+                HOST_LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
+                                  << LOG_KV("endpoint", _nodeIPEndpoint);
+                erasePendingConns(_nodeIPEndpoint);
+                socket->close();
+            }
+        });
     /// callback async connect
     m_asioInterface->asyncResolveConnect(socket,
         [this, callback = std::move(callback), _nodeIPEndpoint, socket,
@@ -535,7 +537,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
         }
         return;
     }
-    std::string nodeInfo = *endpointPublicKey;
+    const std::string& nodeInfo = *endpointPublicKey;
     if (nodeInfo.empty())
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient get p2pID failed")
@@ -550,7 +552,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
         obtainNodeInfo(info, nodeInfo);
         HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                        << LOG_KV("local endpoint", socket->localEndpoint());
-        startPeerSession(info, socket, callback);
+        startPeerSession(info, socket, std::move(callback));
     }
 }
 
@@ -569,4 +571,119 @@ void Host::stop()
         m_asioInterface->stop();
     }
     m_asyncGroup.wait();
+}
+bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
+    std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,
+    MessageFactory::Ptr _messageFactory)
+  : m_hashImpl(std::move(_hash)),
+    m_asioInterface(std::move(_asioInterface)),
+    m_sessionFactory(std::move(_sessionFactory)),
+    m_messageFactory(std::move(_messageFactory)) {};
+bcos::gateway::Host::~Host()
+{
+    stop();
+};
+uint16_t bcos::gateway::Host::listenPort() const
+{
+    return m_listenPort;
+}
+bool bcos::gateway::Host::haveNetwork() const
+{
+    return m_run;
+}
+std::string bcos::gateway::Host::listenHost() const
+{
+    return m_listenHost;
+}
+void bcos::gateway::Host::setHostPort(std::string host, uint16_t port)
+{
+    m_listenHost = std::move(host);
+    m_listenPort = port;
+}
+std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+bcos::gateway::Host::connectionHandler() const
+{
+    return m_connectionHandler;
+}
+void bcos::gateway::Host::setConnectionHandler(
+    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
+        connectionHandler)
+{
+    m_connectionHandler = std::move(connectionHandler);
+}
+std::function<bool(X509* x509, std::string& pubHex)> bcos::gateway::Host::sslContextPubHandler()
+{
+    return m_sslContextPubHandler;
+}
+void bcos::gateway::Host::setSSLContextPubHandler(
+    std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandler)
+{
+    m_sslContextPubHandler = std::move(_sslContextPubHandler);
+}
+std::function<bool(X509* x509, std::string& pubHex)>
+bcos::gateway::Host::sslContextPubHandlerWithoutExtInfo()
+{
+    return m_sslContextPubHandlerWithoutExtInfo;
+}
+void bcos::gateway::Host::setSSLContextPubHandlerWithoutExtInfo(
+    std::function<bool(X509* x509, std::string& pubHex)> _sslContextPubHandlerWithoutExtInfo)
+{
+    m_sslContextPubHandlerWithoutExtInfo = std::move(_sslContextPubHandlerWithoutExtInfo);
+}
+void bcos::gateway::Host::setSessionCallbackManager(
+    SessionCallbackManagerInterface::Ptr sessionCallbackManager)
+{
+    m_sessionCallbackManager = std::move(sessionCallbackManager);
+}
+std::shared_ptr<ASIOInterface> bcos::gateway::Host::asioInterface() const
+{
+    return m_asioInterface;
+}
+std::shared_ptr<SessionFactory> bcos::gateway::Host::sessionFactory() const
+{
+    return m_sessionFactory;
+}
+bcos::gateway::MessageFactory::Ptr bcos::gateway::Host::messageFactory() const
+{
+    return m_messageFactory;
+}
+void bcos::gateway::Host::setPeerBlacklist(PeerBlackWhitelistInterface::Ptr _peerBlacklist)
+{
+    m_peerBlacklist = std::move(_peerBlacklist);
+}
+bcos::gateway::PeerBlackWhitelistInterface::Ptr bcos::gateway::Host::peerBlacklist()
+{
+    return m_peerBlacklist;
+}
+void bcos::gateway::Host::setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist)
+{
+    m_peerWhitelist = std::move(_peerWhitelist);
+}
+bcos::gateway::PeerBlackWhitelistInterface::Ptr bcos::gateway::Host::peerWhitelist()
+{
+    return m_peerWhitelist;
+}
+void bcos::gateway::Host::setEnableSslVerify(bool _enableSSLVerify)
+{
+    m_enableSSLVerify = _enableSSLVerify;
+    HOST_LOG(INFO) << LOG_DESC("setEnableSslVerify")
+                   << LOG_KV("enableSSLVerify", m_enableSSLVerify);
+}
+void bcos::gateway::Host::erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint)
+{
+    bcos::Guard lock(x_pendingConns);
+    auto it = m_pendingConns.find(nodeIPEndpoint);
+    if (it != m_pendingConns.end())
+    {
+        m_pendingConns.erase(it);
+    }
+}
+void bcos::gateway::Host::insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint)
+{
+    bcos::Guard lock(x_pendingConns);
+    auto it = m_pendingConns.lower_bound(nodeIPEndpoint);
+    if (it == m_pendingConns.end() || *it != nodeIPEndpoint)
+    {
+        m_pendingConns.emplace_hint(it, nodeIPEndpoint);
+    }
 }

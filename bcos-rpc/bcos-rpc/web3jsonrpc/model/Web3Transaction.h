@@ -27,7 +27,7 @@
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <magic_enum.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <ostream>
 namespace bcos
 {
@@ -43,24 +43,20 @@ enum class TransactionType : uint8_t
     EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
 };
 
-[[maybe_unused]] constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
+constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
     requires std::same_as<decltype(rtype), TransactionType> ||
              std::unsigned_integral<decltype(rtype)>
 {
     return static_cast<uint8_t>(ltype) <=> static_cast<uint8_t>(rtype);
 }
 
-[[maybe_unused]] static std::ostream& operator<<(std::ostream& _out, const TransactionType& _in)
-{
-    _out << magic_enum::enum_name(_in);
-    return _out;
-}
+std::ostream& operator<<(std::ostream& _out, const TransactionType& _in);
 
 // EIP-2930: Access lists
 struct AccessListEntry
 {
-    Address account{};
-    std::vector<crypto::HashType> storageKeys{};
+    Address account;
+    std::vector<crypto::HashType> storageKeys;
     friend bool operator==(const AccessListEntry& lhs, const AccessListEntry& rhs) noexcept
     {
         return lhs.account == rhs.account && lhs.storageKeys == rhs.storageKeys;
@@ -84,68 +80,28 @@ public:
     // hash for sign = keccak256(rlp(tx_payload))
     bcos::crypto::HashType hashForSign() const;
     bcostars::Transaction takeToTarsTransaction();
-    uint64_t getSignatureV() const
-    {
-        // EIP-155: Simple replay attack protection
-        if (chainId.has_value())
-        {
-            return chainId.value() * 2 + 35 + signatureV;
-        }
-        return signatureV + 27;
-    }
-
-    std::string sender() const
-    {
-        bcos::bytes sign{};
-        sign.reserve(crypto::SECP256K1_SIGNATURE_LEN);
-        sign.insert(sign.end(), signatureR.begin(), signatureR.end());
-        sign.insert(sign.end(), signatureS.begin(), signatureS.end());
-        sign.push_back(signatureV);
-        bcos::crypto::Keccak256 hashImpl;
-        auto encodeForSign = this->encodeForSign();
-        auto hash = bcos::crypto::keccak256Hash(ref(encodeForSign));
-        const bcos::crypto::Secp256k1Crypto signatureImpl;
-        auto [_, addr] = signatureImpl.recoverAddress(hashImpl, hash, ref(sign));
-        return toHexStringWithPrefix(addr);
-    }
-
-    std::string toString() const noexcept
-    {
-        std::stringstream stringstream{};
-        stringstream << " chainId: " << this->chainId.value_or(0)
-                     << " hash:" << this->txHash().hex()
-                     << " type: " << static_cast<uint16_t>(this->type)
-                     << " to: " << this->to.value_or(Address()).hex()
-                     << " data: " << toHex(this->data) << " value: " << this->value
-                     << " nonce: " << this->nonce << " gasLimit: " << this->gasLimit
-                     << " maxPriorityFeePerGas: " << this->maxPriorityFeePerGas
-                     << " maxFeePerGas: " << this->maxFeePerGas
-                     << " maxFeePerBlobGas: " << this->maxFeePerBlobGas
-                     << " blobVersionedHashes: " << this->blobVersionedHashes
-                     << " sender: " << this->sender() << " signatureR: " << toHex(this->signatureR)
-                     << " signatureS: " << toHex(this->signatureS)
-                     << " signatureV: " << this->signatureV;
-        return stringstream.str();
-    }
+    uint64_t getSignatureV() const;
+    std::string sender() const;
+    std::string toString() const noexcept;
 
     std::optional<uint64_t> chainId{std::nullopt};  // nullopt means a pre-EIP-155 transaction
     TransactionType type{TransactionType::Legacy};
-    std::optional<Address> to{};
-    bcos::bytes data{};
+    std::optional<Address> to;
+    bcos::bytes data;
     u256 value{0};
     uint64_t nonce{0};
     uint64_t gasLimit{0};
     // EIP-2930: Optional access lists
-    std::vector<AccessListEntry> accessList{};
+    std::vector<AccessListEntry> accessList;
     // EIP-1559: Fee market change for ETH 1.0 chain
     u256 maxPriorityFeePerGas{0};  // for legacy tx, it stands for gasPrice
     u256 maxFeePerGas{0};
     // EIP-4844: Shard Blob Transactions
     u256 maxFeePerBlobGas{0};
-    h256s blobVersionedHashes{};
+    h256s blobVersionedHashes;
     // TODO)) blob
-    bcos::bytes signatureR{};
-    bcos::bytes signatureS{};
+    bcos::bytes signatureR;
+    bcos::bytes signatureS;
     uint64_t signatureV{0};
 };
 }  // namespace rpc

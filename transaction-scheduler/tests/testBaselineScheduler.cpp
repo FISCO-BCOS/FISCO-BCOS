@@ -110,7 +110,7 @@ struct MockTxPool : public txpool::TxPoolInterface
     void start() override {}
     void stop() override {}
     std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs) override
+        uint64_t _txsLimit) override
     {
         return {};
     }
@@ -118,7 +118,8 @@ struct MockTxPool : public txpool::TxPoolInterface
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         std::function<void(Error::Ptr)> _onRecvResponse) override
     {}
-    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID, bytesConstRef const& _block,
+    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
+        protocol::Block::ConstPtr _block,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
     {}
     void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
@@ -226,7 +227,7 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
             BOOST_CHECK(!sysBlock);
 
             task::syncWait([&]() -> task::Task<void> {
-                auto view = fork(multiLayerStorage);
+                auto view = multiLayerStorage.fork();
 
                 auto blockHash =
                     co_await ledger::getBlockHash(view, blockHeader->number(), ledger::fromStorage);

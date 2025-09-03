@@ -2,10 +2,8 @@
 
 #include "PeerBlackWhitelistInterface.h"
 
-namespace bcos
-{
 
-namespace gateway
+namespace bcos::gateway
 {
 
 class PeerWhitelist : public PeerBlackWhitelistInterface
@@ -22,6 +20,4 @@ public:
     bool hasValueWhenDisable() const override { return true; }
 };
 
-}  // namespace gateway
-
-}  // namespace bcos
+}  // namespace bcos::gateway

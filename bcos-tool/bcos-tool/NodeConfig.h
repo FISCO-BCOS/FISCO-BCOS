@@ -197,6 +197,15 @@ public:
     uint32_t web3RpcThreadSize() const { return m_web3RpcThreadSize; }
     uint32_t web3FilterTimeout() const { return m_web3FilterTimeout; }
     uint32_t web3MaxProcessBlock() const { return m_web3MaxProcessBlock; }
+    uint32_t web3BatchRequestSizeLimit() const { return m_web3BatchRequestSizeLimit; }
+    uint32_t web3HttpBodySizeLimit() const { return m_web3HttpBodySizeLimit; }
+    bool web3EnableCors() const { return m_web3EnableCors; }
+    std::string web3CorsAllowedOrigins() const { return m_web3CorsAllowedOrigins; }
+    std::string web3CorsAllowedMethods() const { return m_web3CorsAllowedMethods; }
+    std::string web3CorsAllowedHeaders() const { return m_web3CorsAllowedHeaders; }
+    int32_t web3CorsMaxAge() const { return m_web3CorsMaxAge; }
+    bool web3CorsAllowCredentials() const { return m_web3CorsAllowCredentials; }
+    bool web3SyncTransaction() const { return m_web3SyncTransaction; }
 
     // the gateway configurations
     const std::string& p2pListenIP() const { return m_p2pListenIP; }
@@ -482,6 +491,16 @@ private:
     uint32_t m_web3RpcThreadSize{};
     uint32_t m_web3FilterTimeout{};
     uint32_t m_web3MaxProcessBlock{};
+    uint32_t m_web3BatchRequestSizeLimit{};
+    uint32_t m_web3HttpBodySizeLimit{};
+    // cors config for web3 rpc
+    bool m_web3EnableCors = true;
+    std::string m_web3CorsAllowedOrigins = "*";
+    std::string m_web3CorsAllowedMethods = "GET, POST, OPTIONS";
+    std::string m_web3CorsAllowedHeaders = "Content-Type, Authorization, X-Requested-With";
+    int32_t m_web3CorsMaxAge = 86400;
+    bool m_web3CorsAllowCredentials = true;
+    bool m_web3SyncTransaction = false;
 
     // config for gateway
     std::string m_p2pListenIP;
