@@ -187,11 +187,12 @@ task::Task<std::vector<protocol::Transaction::ConstPtr>> TxPool::getTransactions
     co_return m_txpoolStorage->getTransactions(std::move(hashes));
 }
 
-std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> TxPool::sealTxs(
-    uint64_t _txsLimit)
+std::tuple<std::vector<protocol::TransactionMetaData::Ptr>,
+    std::vector<protocol::TransactionMetaData::Ptr>>
+TxPool::sealTxs(uint64_t _txsLimit)
 {
-    auto fetchedTxs = m_config->blockFactory()->createBlock();
-    auto sysTxs = m_config->blockFactory()->createBlock();
+    std::vector<protocol::TransactionMetaData::Ptr> fetchedTxs;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxs;
 
     m_txpoolStorage->batchSealTransactions(fetchedTxs, sysTxs, _txsLimit);
     return {std::move(fetchedTxs), std::move(sysTxs)};

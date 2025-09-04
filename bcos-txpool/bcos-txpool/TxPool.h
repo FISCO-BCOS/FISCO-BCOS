@@ -56,8 +56,9 @@ public:
     // ===============================
 
     // sealer module call this method for seal a block
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit) override;
+    std::tuple<std::vector<protocol::TransactionMetaData::Ptr>,
+        std::vector<protocol::TransactionMetaData::Ptr>>
+    sealTxs(uint64_t _txsLimit) override;
 
     // hook for scheduler, invoke notify when block execute finished
     void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
