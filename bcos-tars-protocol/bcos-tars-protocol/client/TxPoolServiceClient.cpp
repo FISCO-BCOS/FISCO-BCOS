@@ -138,14 +138,30 @@ bcos::task::Task<void> bcostars::TxPoolServiceClient::broadcastTransactionBuffer
         std::vector<char>(_data.begin(), _data.end()));  // tars take the m_callback ownership
     co_return;
 }
-std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr>
+std::tuple<std::vector<bcos::protocol::TransactionMetaData::Ptr>,
+    std::vector<bcos::protocol::TransactionMetaData::Ptr>>
 bcostars::TxPoolServiceClient::sealTxs(uint64_t _txsLimit)
 {
     vector<vector<tars::Char>> tarsAvoidTxs;
     auto txs = std::make_shared<bcostars::protocol::BlockImpl>();
     auto sysTxs = std::make_shared<bcostars::protocol::BlockImpl>();
     m_proxy->asyncSealTxs(_txsLimit, tarsAvoidTxs, txs->inner(), sysTxs->inner());
-    return {txs, sysTxs};
+
+    auto txsList =
+        ::ranges::views::transform(txs->inner().transactionsMetaData,
+            [](auto& metaData) -> bcos::protocol::TransactionMetaData::Ptr {
+                return std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+                    [m_metaData = std::move(metaData)]() mutable { return &m_metaData; });
+            }) |
+        ::ranges::to<std::vector>();
+    auto sysTxsList =
+        ::ranges::views::transform(sysTxs->inner().transactionsMetaData,
+            [](auto& metaData) -> bcos::protocol::TransactionMetaData::Ptr {
+                return std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+                    [m_metaData = std::move(metaData)]() mutable { return &m_metaData; });
+            }) |
+        ::ranges::to<std::vector>();
+    return {txsList, sysTxsList};
 }
 void bcostars::TxPoolServiceClient::asyncMarkTxs(const bcos::crypto::HashList& _txsHash,
     bool _sealedFlag, bcos::protocol::BlockNumber _batchId,

@@ -159,7 +159,8 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
         SEAL_LOG(INFO) << LOG_DESC("submitProposal return for the block has already been committed")
                        << LOG_KV("proposalIndex", _block->blockHeader()->number())
                        << LOG_KV("currentNumber", m_sealingManager->latestNumber());
-        m_sealingManager->notifyResetProposal(*_block);
+        m_sealingManager->notifyResetTxsFlag(
+            ::ranges::to<std::vector>(_block->transactionHashes()), false);
         return;
     }
     // supplement the header info: set sealerList and weightList
