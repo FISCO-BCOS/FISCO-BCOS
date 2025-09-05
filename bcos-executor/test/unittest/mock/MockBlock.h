@@ -7,8 +7,12 @@ namespace bcos::test
 class MockBlock : public bcos::protocol::Block
 {
 public:
-    MockBlock() {}
-    ~MockBlock() override {}
+    MockBlock() = default;
+    MockBlock(const MockBlock&) = default;
+    MockBlock(MockBlock&&) = default;
+    MockBlock& operator=(const MockBlock&) = default;
+    MockBlock& operator=(MockBlock&&) = default;
+    ~MockBlock() override = default;
 
     void setBlockHeader(protocol::BlockHeader::Ptr blockHeader) override
     {
@@ -27,17 +31,15 @@ public:
     int32_t version() const override { return m_blockHeader->version(); }
     void setVersion(int32_t _version) override { m_blockHeader->setVersion(_version); }
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }
-    protocol::BlockHeader::ConstPtr blockHeaderConst() const override { return m_blockHeader; }
-    protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
-    protocol::Transaction::ConstPtr transaction(uint64_t _index) const override { return {}; }
-    protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override { return {}; }
-    protocol::TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const override
+    protocol::AnyBlockHeader blockHeader() const override
     {
-        return {};
+        return {bcos::InPlace<MockBlockHeader>{}, dynamic_cast<MockBlockHeader&>(*m_blockHeader)};
     }
+    protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
+    protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override { return {}; }
     crypto::HashType transactionHash(uint64_t _index) const override
     {
-        return transactionMetaData(_index)->hash();
+        return transactionMetaDatas()[_index]->hash();
     }
     void setBlockType(protocol::BlockType _blockType) override {}
     void setTransaction(uint64_t _index, protocol::Transaction::Ptr _transaction) override {}
@@ -45,7 +47,6 @@ public:
     void setReceipt(uint64_t _index, protocol::TransactionReceipt::Ptr _receipt) override {}
     void appendReceipt(protocol::TransactionReceipt::Ptr _receipt) override {}
     void appendTransactionMetaData(protocol::TransactionMetaData::Ptr _txMetaData) override {}
-    protocol::NonceListPtr nonces() const override { return {}; }
     uint64_t transactionsSize() const override { return 0; }
     uint64_t transactionsMetaDataSize() const override { return 0; }
     uint64_t transactionsHashSize() const override { return Block::transactionsHashSize(); }

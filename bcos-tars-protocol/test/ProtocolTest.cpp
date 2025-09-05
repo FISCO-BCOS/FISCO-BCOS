@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE(transaction)
     auto block = blockFactory->createBlock();
     block->appendTransaction(std::move(decodedTx));
 
-    auto blockTx = block->transaction(0);
+    auto blockTx = block->transactions()[0];
     BOOST_CHECK_EQUAL(blockTx->sender(), tx->sender());
 }
 
@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     for (size_t i = 0; i < 100; ++i)
     {
-        auto constHeader = block->blockHeaderConst();
+        auto constHeader = block->blockHeader();
         BOOST_CHECK(constHeader->signatureList().size() == 2);
         std::cout << "### getHash:" << constHeader->hash().abridged() << std::endl;
 
@@ -317,8 +317,8 @@ BOOST_AUTO_TEST_CASE(block)
     for (size_t i = 0; i < block->transactionsSize(); ++i)
     {
         {
-            auto lhs = block->transaction(i);
-            auto rhs = decodedBlock->transaction(i);
+            auto lhs = block->transactions()[i];
+            auto rhs = decodedBlock->transactions()[i];
 
             // check if transaction hash re-encode
             bcos::bytes reencodeBuffer;
@@ -339,33 +339,33 @@ BOOST_AUTO_TEST_CASE(block)
             BOOST_CHECK_EQUAL(lhs->importTime(), rhs->importTime());
 
             // check the txMetaData
-            BOOST_CHECK_EQUAL(block->transactionMetaData(i)->hash(),
-                decodedBlock->transactionMetaData(i)->hash());
+            BOOST_CHECK_EQUAL(block->transactionMetaDatas()[i]->hash(),
+                decodedBlock->transactionMetaDatas()[i]->hash());
             BOOST_CHECK_EQUAL(
-                block->transactionMetaData(i)->to(), decodedBlock->transactionMetaData(i)->to());
+                block->transactionMetaDatas()[i]->to(), decodedBlock->transactionMetaDatas()[i]->to());
             BOOST_CHECK_EQUAL(block->transactionHash(i), block->transactionHash(i));
         }
 
         {
             // ensure the transaction's lifetime
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->hash().hex(), decodedBlock->transaction(i)->hash().hex());
+                block->transactions()[i]->hash().hex(), decodedBlock->transactions()[i]->hash().hex());
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->version(), decodedBlock->transaction(i)->version());
-            BOOST_CHECK_EQUAL(block->transaction(i)->to(), decodedBlock->transaction(i)->to());
-            BOOST_CHECK_EQUAL(bcos::asString(block->transaction(i)->input()),
-                bcos::asString(decodedBlock->transaction(i)->input()));
+                block->transactions()[i]->version(), decodedBlock->transactions()[i]->version());
+            BOOST_CHECK_EQUAL(block->transactions()[i]->to(), decodedBlock->transactions()[i]->to());
+            BOOST_CHECK_EQUAL(bcos::asString(block->transactions()[i]->input()),
+                bcos::asString(decodedBlock->transactions()[i]->input()));
 
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->nonce(), decodedBlock->transaction(i)->nonce());
+                block->transactions()[i]->nonce(), decodedBlock->transactions()[i]->nonce());
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->blockLimit(), decodedBlock->transaction(i)->blockLimit());
+                block->transactions()[i]->blockLimit(), decodedBlock->transactions()[i]->blockLimit());
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->chainId(), decodedBlock->transaction(i)->chainId());
+                block->transactions()[i]->chainId(), decodedBlock->transactions()[i]->chainId());
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->groupId(), decodedBlock->transaction(i)->groupId());
+                block->transactions()[i]->groupId(), decodedBlock->transactions()[i]->groupId());
             BOOST_CHECK_EQUAL(
-                block->transaction(i)->importTime(), decodedBlock->transaction(i)->importTime());
+                block->transactions()[i]->importTime(), decodedBlock->transactions()[i]->importTime());
         }
     }
 

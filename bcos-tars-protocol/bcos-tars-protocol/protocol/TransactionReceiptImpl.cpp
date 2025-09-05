@@ -64,11 +64,9 @@ void bcostars::protocol::TransactionReceiptImpl::calculateHash(const bcos::crypt
 
 bcos::u256 TransactionReceiptImpl::gasUsed() const
 {
-    if (!m_inner()->data.gasUsed.empty())
-    {
-        return boost::lexical_cast<bcos::u256>(m_inner()->data.gasUsed);
-    }
-    return {};
+    return m_inner()->data.gasUsed.empty() ?
+               bcos::u256{} :
+               boost::lexical_cast<bcos::u256>(m_inner()->data.gasUsed);
 }
 int32_t bcostars::protocol::TransactionReceiptImpl::version() const
 {
@@ -105,9 +103,9 @@ bcos::protocol::LogEntries bcostars::protocol::TransactionReceiptImpl::takeLogEn
 {
     if (m_logEntries.empty())
     {
-        auto& innter = mutableInner();
-        m_logEntries.reserve(innter.data.logEntries.size());
-        for (auto& it : innter.data.logEntries)
+        auto& inner = mutableInner();
+        m_logEntries.reserve(inner.data.logEntries.size());
+        for (auto& it : inner.data.logEntries)
         {
             auto bcosLogEntry = takeToBcosLogEntry(std::move(it));
             m_logEntries.push_back(std::move(bcosLogEntry));

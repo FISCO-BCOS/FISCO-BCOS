@@ -51,16 +51,10 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
         });
 }
 
-bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
+bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
 {
-    return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
-}
-
-bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
-{
-    return std::make_shared<const bcostars::protocol::TransactionImpl>(
-        [self = shared_from_this(), _index]() { return &(self->m_inner.transactions[_index]); });
+    return {bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
+        [&]() mutable { return std::addressof(m_inner.blockHeader); }};
 }
 
 bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
@@ -103,21 +97,6 @@ void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
 RANGES::any_view<std::string> BlockImpl::nonceList() const
 {
     return m_inner.nonceList;
-}
-
-bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
-{
-    if (_index >= transactionsMetaDataSize())
-    {
-        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaData index out of range"));
-    }
-
-    auto txMetaData = std::make_shared<const bcostars::protocol::TransactionMetaDataImpl>(
-        [self = shared_from_this(), _index]() {
-            return &self->m_inner.transactionsMetaData[_index];
-        });
-
-    return txMetaData;
 }
 
 TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) const
@@ -285,10 +264,11 @@ bcostars::protocol::BlockImpl::receipts() const
 size_t bcostars::protocol::BlockImpl::size() const
 {
     size_t size = 0;
-    size += blockHeaderConst()->size();
+    size += blockHeader()->size();
+    auto txs = transactions();
     for (uint64_t i = 0; i < transactionsSize(); ++i)
     {
-        size += transaction(i)->size();
+        size += txs[i]->size();
     }
     for (uint64_t i = 0; i < receiptsSize(); ++i)
     {

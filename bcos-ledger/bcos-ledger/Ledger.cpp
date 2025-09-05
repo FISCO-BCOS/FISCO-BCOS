@@ -91,7 +91,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     auto unstoredTxsHash = std::get<1>(txsToSaveResult);
     auto unstoredTxs = std::get<2>(txsToSaveResult);
 
-    auto blockNumber = block->blockHeaderConst()->number();
+    auto blockNumber = block->blockHeader()->number();
     auto total = unstoredTxs->size();
     std::vector<std::string_view> keys(total);
     std::vector<std::string_view> values(total);
@@ -149,7 +149,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         return;
     }
 
-    if (isSysContractDeploy(block->blockHeaderConst()->number()) && block->transactionsSize() > 0)
+    if (isSysContractDeploy(block->blockHeader()->number()) && block->transactionsSize() > 0)
     {
         // sys contract deploy
         /// NOTE: write block number for 2pc storage
@@ -167,7 +167,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
         return;
     }
-    auto header = block->blockHeaderConst();
+    auto header = block->blockHeader();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
@@ -242,7 +242,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {
         for (uint64_t i = 0; i < block->transactionsSize(); i++)
         {
-            auto const& tx = block->transaction(i);
+            auto const& tx = block->transactions()[i];
             nonceList.emplace_back(tx->nonce());
         }
     }
@@ -268,7 +268,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {
         for (size_t i = 0; i < block->transactionsMetaDataSize(); ++i)
         {
-            auto originTransactionMetaData = block->transactionMetaData(i);
+            auto originTransactionMetaData = block->transactionMetaDatas()[i];
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
@@ -278,7 +278,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     {
         for (size_t i = 0; i < block->transactionsSize(); ++i)
         {
-            auto transaction = block->transaction(i);
+            auto transaction = block->transactions()[i];
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 transaction->hash(), std::string(transaction->to()));
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
@@ -337,7 +337,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         asyncPreStoreBlockTxs(_blockTxs, block, setRowCallback);
         auto writeTxsTime = utcTime() - start;
         LEDGER_LOG(INFO) << LOG_DESC("asyncPrewriteBlock")
-                         << LOG_KV("number", block->blockHeaderConst()->number())
+                         << LOG_KV("number", block->blockHeader()->number())
                          << LOG_KV("writeReceiptsTime(ms)", writeReceiptsTime)
                          << LOG_KV("writeTxsTime(ms)", writeTxsTime);
     }
@@ -389,7 +389,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 setRowCallback({}, true);
             }
             LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
-                             << LOG_KV("number", block->blockHeaderConst()->number())
+                             << LOG_KV("number", block->blockHeader()->number())
                              << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
                              << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
@@ -424,7 +424,7 @@ Ledger::needStoreUnsavedTxs(
     if (!_blockTxs || _blockTxs->size() == 0)
     {
         LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs: empty txs")
-                         << LOG_KV("number", (_block ? _block->blockHeaderConst()->number() : -1));
+                         << LOG_KV("number", (_block ? _block->blockHeader()->number() : -1));
         return std::make_tuple(false, nullptr, nullptr);
     }
     // supplement the unsaved hash_2_txs
@@ -445,7 +445,7 @@ Ledger::needStoreUnsavedTxs(
     }
     LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs")
                      << LOG_KV("txsSize", _blockTxs->size()) << LOG_KV("unstoredTxs", unstoredTxs)
-                     << LOG_KV("number", (_block ? _block->blockHeaderConst()->number() : -1));
+                     << LOG_KV("number", (_block ? _block->blockHeader()->number() : -1));
     if (txsToStore->size() == 0)
     {
         return std::make_tuple(false, nullptr, nullptr);
@@ -461,7 +461,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     {
         return BCOS_ERROR_PTR(LedgerError::ErrorArgument, "empty block");
     }
-    auto blockNumber = block->blockHeaderConst()->number();
+    auto blockNumber = block->blockHeader()->number();
     LEDGER_LOG(INFO) << LOG_DESC("storeTransactionsAndReceipts")
                      << LOG_KV("blockNumber", blockNumber);
     auto start = utcTime();
@@ -476,7 +476,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto hash = blockTxs ? blockTxs->at(i)->hash() : block->transaction(i)->hash();
+                auto hash = blockTxs ? blockTxs->at(i)->hash() : block->transactions()[i]->hash();
                 txsHash[i] = std::string((char*)hash.data(), hash.size());
                 block->receipt(i)->encode(receipts[i]);
                 receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
@@ -500,12 +500,10 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     RecursiveGuard guard(m_mutex);
     size_t unstoredTxs = 0;
     // TODO: usr block level flag to indicate whether the transactions has been stored
-    for (size_t i = 0; i < txSize; i++)
-    {
-        auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+    auto handle = [&](auto* tx) {
         if (blockTxs && tx->storeToBackend())
         {
-            continue;
+            return;
         }
         bcos::bytes encodeData;
         tx->encode(encodeData);
@@ -514,7 +512,23 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
         keys.push_back(bcos::concepts::bytebuffer::toView((*txsToStoreHash)[unstoredTxs]));
         values.push_back(bcos::concepts::bytebuffer::toView((*txsToStore)[unstoredTxs]));
         ++unstoredTxs;
+    };
+    if (blockTxs)
+    {
+        for (auto& tx : *blockTxs)
+        {
+            handle(tx.get());
+        }
     }
+    else
+    {
+        auto txs = block->transactions();
+        for (auto tx : txs)
+        {
+            handle(tx.get());
+        }
+    }
+
     if (!keys.empty())
     {
         // asyncPreStoreBlockTxs also write txs to DB, needStoreUnsavedTxs is out of lock, so

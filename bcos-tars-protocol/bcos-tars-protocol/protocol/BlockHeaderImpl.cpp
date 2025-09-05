@@ -147,7 +147,6 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
 void BlockHeaderImpl::setSignatureList(
     gsl::span<const bcos::protocol::Signature> const& _signatureList)
 {
-    bcos::WriteGuard l(x_inner);
     // Note: must clear the old signatureList when set the new signatureList
     // in case of the consensus module get the cached-sync-blockHeader with signatureList which will
     // cause redundant signature lists to be stored
@@ -174,7 +173,6 @@ bcos::bytesConstRef bcostars::protocol::BlockHeaderImpl::extraData() const
 gsl::span<const bcos::protocol::Signature> bcostars::protocol::BlockHeaderImpl::signatureList()
     const
 {
-    bcos::ReadGuard l(x_inner);
     return gsl::span(
         reinterpret_cast<const bcos::protocol::Signature*>(m_inner()->signatureList.data()),
         m_inner()->signatureList.size());
@@ -257,7 +255,6 @@ void bcostars::protocol::BlockHeaderImpl::setSignatureList(
 }
 const bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner() const
 {
-    bcos::ReadGuard l(x_inner);
     return *m_inner();
 }
 bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
@@ -266,12 +263,10 @@ bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
 }
 void bcostars::protocol::BlockHeaderImpl::setInner(const bcostars::BlockHeader& blockHeader)
 {
-    bcos::WriteGuard l(x_inner);
     *m_inner() = blockHeader;
 }
 void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader&& blockHeader)
 {
-    bcos::WriteGuard l(x_inner);
     *m_inner() = std::move(blockHeader);
 }
 void bcostars::protocol::BlockHeaderImpl::clearDataHash()

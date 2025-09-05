@@ -16,7 +16,7 @@ public:
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features>) override
     {
-        BOOST_CHECK_EQUAL(block->blockHeaderConst()->number(), 100);
+        BOOST_CHECK_EQUAL(block->blockHeader()->number(), 100);
         callback("", nullptr);
     }
     void asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr,

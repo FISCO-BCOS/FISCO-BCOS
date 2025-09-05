@@ -21,6 +21,7 @@
 
 #pragma once
 // if windows, manual include tup/Tars.h first
+#include "bcos-utilities/AnyHolder.h"
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -33,21 +34,22 @@
 
 namespace bcostars::protocol
 {
-class BlockHeaderImpl : public bcos::protocol::BlockHeader
+class BlockHeaderImpl : public bcos::protocol::BlockHeader,
+                        public virtual bcos::MoveImpl<BlockHeaderImpl, bcos::protocol::BlockHeader>
 {
 public:
     explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner)
       : m_inner(std::move(inner))
     {}
-    explicit BlockHeaderImpl()
+    BlockHeaderImpl()
       : m_inner([m_blockHeader = bcostars::BlockHeader()]() mutable {
             return std::addressof(m_blockHeader);
         })
     {}
     BlockHeaderImpl(const BlockHeaderImpl&) = delete;
-    BlockHeaderImpl(BlockHeaderImpl&&) noexcept = delete;
+    BlockHeaderImpl(BlockHeaderImpl&&) noexcept = default;
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = delete;
-    BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = delete;
+    BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = default;
     explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
       : m_inner([m_blockHeader = std::addressof(blockHeader)]() { return m_blockHeader; })
     {}
@@ -115,6 +117,5 @@ private:
     void clearDataHash();
 
     std::function<bcostars::BlockHeader*()> m_inner;
-    mutable bcos::SharedMutex x_inner;
 };
 }  // namespace bcostars::protocol

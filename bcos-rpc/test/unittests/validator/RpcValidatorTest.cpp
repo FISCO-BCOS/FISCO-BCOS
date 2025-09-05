@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(testBcosTransactionSignatureCheck)
     int64_t blockLimit = 10;
     auto const& blockData = m_ledger->ledgerData();
     auto duplicatedNonce =
-        blockData[m_ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+        blockData[m_ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
     std::string duplicatedNonceStr(duplicatedNonce);
     tx = fakeWeb3Tx(cryptoSuite, duplicatedNonceStr, eoaKey, largeInput);
     resultStatus = TransactionValidator::checkTransaction(*tx);

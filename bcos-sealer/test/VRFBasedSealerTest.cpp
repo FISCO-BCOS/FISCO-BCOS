@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(testVRFSealer)
         block, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, false);
     BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
     BOOST_CHECK(block->transactionsMetaDataSize() == 1);
-    BOOST_CHECK(block->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
+    BOOST_CHECK(block->transactionMetaDatas()[0]->to() == precompiled::CONSENSUS_ADDRESS);
 
     auto block2 = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);
     sealer->sealingManager()->resetLatestNumber(0);
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testVRFSealer)
         block2, sealer->sealerConfig(), sealer->sealingManager(), hashImpl, true);
     BOOST_CHECK(result == sealer::Sealer::SealBlockResult::SUCCESS);
     BOOST_CHECK(block2->transactionsMetaDataSize() == 1);
-    BOOST_CHECK(block2->transactionMetaData(0)->to() == precompiled::CONSENSUS_ADDRESS);
+    BOOST_CHECK(block2->transactionMetaDatas()[0]->to() == precompiled::CONSENSUS_ADDRESS);
 }
 
 BOOST_AUTO_TEST_CASE(testVRFSecp256k1)

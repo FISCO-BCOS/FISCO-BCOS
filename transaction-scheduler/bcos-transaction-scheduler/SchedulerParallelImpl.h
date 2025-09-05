@@ -318,8 +318,7 @@ public:
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
         TransactionExecutor& executor, protocol::BlockHeader const& blockHeader,
-        ::ranges::random_access_range auto const& transactions,
-        ledger::LedgerConfig const& ledgerConfig)
+        ::ranges::random_access_range auto transactions, ledger::LedgerConfig const& ledgerConfig)
     {
         auto transactionCount = ::ranges::size(transactions);
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().PARALLEL_SCHEDULER,

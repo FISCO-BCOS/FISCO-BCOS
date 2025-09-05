@@ -237,7 +237,7 @@ private:
         return (inputSize + (width - 1)) / width;
     }
 
-    void calculateLevelHashes(HashRange auto const& input, HashRange auto& output) const
+    void calculateLevelHashes(HashRange auto input, HashRange auto& output) const
     {
         assert(::ranges::size(input) > 0);
 
