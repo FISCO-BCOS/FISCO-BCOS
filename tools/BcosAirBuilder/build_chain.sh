@@ -1576,7 +1576,7 @@ generate_sm_config_ini() {
     local rpc_listen_port="${5}"
     local disable_ssl="${6}"
     local p2p_enable_ssl="${7}"
-    
+
     local enable_ssl_content="enable_ssl=true"
     if [[ "${disable_ssl}" == "true" ]]; then
         enable_ssl_content="enable_ssl=false"
@@ -1689,7 +1689,7 @@ generate_config() {
     local disable_ssl="${7}"
     local skip_generate_auth_account="${8}"
     local enable_p2p_ssl="true"
-    if [ -n "${9}" ]; then  
+    if [ -n "${9}" ]; then
         enable_p2p_ssl="${9}"
     fi
     local enable_web3_rpc="false"
@@ -2627,7 +2627,7 @@ EOF
         node_name =  "${node_name}"
         # the tikv storage pd-addresses
         pd_addrs = "${ip}:${tikv_listen_port}"
-        key_page_size=10240
+        key_page_size=0
         deploy_ip = ["$ip"]
         executor_deploy_ip=["$ip"]
         monitor_listen_port =  "${monitor_listen_port}"
@@ -2830,10 +2830,10 @@ main() {
             # config.genesis is set
             genesis_conf_path=${genesis_conf_dir}/config.genesis
             connection_file_path=${genesis_conf_dirl}/nodes.json
-            if [[ "${genesis_conf_dir}" != /* ]]; then  
+            if [[ "${genesis_conf_dir}" != /* ]]; then
                 genesis_conf_path="${dirpath}/${genesis_conf_path}"
                 connection_file_path="${dirpath}/${connection_file_path}"
-            fi  
+            fi
             LOG_INFO "* genesis_conf_path: ${genesis_conf_path}"
             LOG_INFO "* connection_file_path: ${connection_file_path}"
             file_must_exists "${genesis_conf_path}"

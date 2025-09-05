@@ -778,8 +778,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block, nullptr);
             p1.set_value(true);
         });
-    BOOST_CHECK_THROW(block = task::syncWait(ledger::getBlockData(
-                          *m_storage, 1000, FULL_BLOCK, *m_blockFactory, fromStorage)),
+    BOOST_CHECK_THROW(
+        block = task::syncWait(ledger::getBlockData(*m_storage, 1000, FULL_BLOCK, *m_blockFactory)),
         NotFoundBlockHeader);
 
     std::promise<bool> pp1;
@@ -790,8 +790,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block, nullptr);
             pp1.set_value(true);
         });
-    BOOST_CHECK_THROW(block = task::syncWait(ledger::getBlockData(
-                          *m_storage, -1, FULL_BLOCK, *m_blockFactory, fromStorage)),
+    BOOST_CHECK_THROW(
+        block = task::syncWait(ledger::getBlockData(*m_storage, -1, FULL_BLOCK, *m_blockFactory)),
         bcos::Error);
 
     std::promise<bool> p2;
@@ -805,8 +805,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->receiptsSize() != 0);
             p2.set_value(true);
         });
-    block = task::syncWait(
-        ledger::getBlockData(*m_storage, 15, FULL_BLOCK, *m_blockFactory, fromStorage));
+    block = task::syncWait(ledger::getBlockData(*m_storage, 15, FULL_BLOCK, *m_blockFactory));
     BOOST_CHECK(block->blockHeader());
     BOOST_CHECK_GT(block->transactionsSize(), 0);
     BOOST_CHECK_GT(block->receiptsSize(), 0);
@@ -822,8 +821,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->receiptsSize() != 0);
             p3.set_value(true);
         });
-    block = task::syncWait(
-        ledger::getBlockData(*m_storage, 3, FULL_BLOCK, *m_blockFactory, fromStorage));
+    block = task::syncWait(ledger::getBlockData(*m_storage, 3, FULL_BLOCK, *m_blockFactory));
     BOOST_CHECK(block->blockHeader());
     BOOST_CHECK_GT(block->transactionsSize(), 0);
     BOOST_CHECK_GT(block->receiptsSize(), 0);
@@ -836,8 +834,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->transactionsSize() != 0);
             p4.set_value(true);
         });
-    block = task::syncWait(
-        ledger::getBlockData(*m_storage, 5, TRANSACTIONS, *m_blockFactory, fromStorage));
+    block = task::syncWait(ledger::getBlockData(*m_storage, 5, TRANSACTIONS, *m_blockFactory));
     BOOST_CHECK_GT(block->transactionsSize(), 0);
 
     std::promise<bool> p5;
@@ -848,8 +845,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK(_block->receiptsSize() != 0);
             p5.set_value(true);
         });
-    block =
-        task::syncWait(ledger::getBlockData(*m_storage, 5, RECEIPTS, *m_blockFactory, fromStorage));
+    block = task::syncWait(ledger::getBlockData(*m_storage, 5, RECEIPTS, *m_blockFactory));
     BOOST_CHECK_GT(block->receiptsSize(), 0);
 
     std::promise<bool> p6;
@@ -860,8 +856,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->transactionsSize(), 0);
             p6.set_value(true);
         });
-    block = task::syncWait(
-        ledger::getBlockData(*m_storage, 0, TRANSACTIONS, *m_blockFactory, fromStorage));
+    block = task::syncWait(ledger::getBlockData(*m_storage, 0, TRANSACTIONS, *m_blockFactory));
     BOOST_CHECK_EQUAL(block->transactionsSize(), 0);
 
     std::promise<bool> p7;
@@ -872,8 +867,7 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_CHECK_EQUAL(_block->receiptsSize(), 0);
             p7.set_value(true);
         });
-    block =
-        task::syncWait(ledger::getBlockData(*m_storage, 0, RECEIPTS, *m_blockFactory, fromStorage));
+    block = task::syncWait(ledger::getBlockData(*m_storage, 0, RECEIPTS, *m_blockFactory));
     BOOST_CHECK_EQUAL(block->receiptsSize(), 0);
 
     std::promise<bool> p8;
@@ -886,8 +880,8 @@ BOOST_AUTO_TEST_CASE(getBlockDataByNumber)
             BOOST_TEST(_block->transactionsMetaDataSize() != 0);
             p8.set_value(true);
         });
-    block = task::syncWait(
-        ledger::getBlockData(*m_storage, 15, TRANSACTIONS_HASH, *m_blockFactory, fromStorage));
+    block =
+        task::syncWait(ledger::getBlockData(*m_storage, 15, TRANSACTIONS_HASH, *m_blockFactory));
     BOOST_CHECK_GT(block->transactionsMetaDataSize(), 0);
     BOOST_CHECK_EQUAL(block->transactionsSize(), 0);
     BOOST_CHECK_EQUAL(block->receiptsSize(), 0);
@@ -1390,9 +1384,9 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER}, value);
 
-        auto randomHash = crypto::HashType::generateRandomFixedBytes();
-        value.set(randomHash.asBytes());
-        co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
+        // auto randomHash = crypto::HashType::generateRandomFixedBytes();
+        // value.set(randomHash.asBytes());
+        // co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
 
         config = {"1", 0};
         value.setObject(config);
@@ -1403,6 +1397,25 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         value.setObject(config);
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
+
+        auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto blockHeader = block->blockHeader();
+        blockHeader->setNumber(10086);
+        blockHeader->setVersion(200);
+        blockHeader->setTimestamp(110);
+        auto hashImpl = std::make_shared<Keccak256>();
+        blockHeader->calculateHash(*hashImpl);
+        auto randomHash = blockHeader->hash();
+        co_await ledger::prewriteBlock(*m_ledger,
+            std::make_shared<bcos::protocol::ConstTransactions>(), block, false, m_storage);
+        bytes headerBuffer;
+        blockHeader->encode(headerBuffer);
+
+        storage::Entry number2HeaderEntry;
+        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        co_await storage2::writeOne(*m_storage,
+            KeyType{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
+            std::move(number2HeaderEntry));
 
         auto ledgerConfig = std::make_shared<LedgerConfig>();
         co_await ledger::getLedgerConfig(*m_ledger, *ledgerConfig);
