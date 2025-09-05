@@ -52,8 +52,13 @@ public:
 
     virtual void resetLatestNumber(int64_t _latestNumber);
     virtual void resetLatestHash(crypto::HashType _latestHash);
+    virtual void resetLatestTimestamp(int64_t _latestTimestamp)
+    {
+        m_latestTimestamp = _latestTimestamp;
+    }
     virtual int64_t latestNumber() const;
     virtual crypto::HashType latestHash() const;
+    virtual int64_t latestTimestamp() const { return m_latestTimestamp; }
 
     enum class FetchResult : int8_t
     {
@@ -105,5 +110,6 @@ private:
 
     std::atomic<ssize_t> m_latestNumber = {0};
     bcos::crypto::HashType m_latestHash;
+    int64_t m_latestTimestamp = 0;
 };
 }  // namespace bcos::sealer

@@ -44,6 +44,8 @@ public:
     virtual void asyncNoteLatestBlockNumber(int64_t _blockNumber) = 0;
 
     virtual void asyncNoteLatestBlockHash(crypto::HashType _hash) = 0;
+
+    virtual void asyncNoteLatestBlockTimestamp(int64_t _timestamp) = 0;
     // interface for the consensus module to notify reset the sealing transactions
     virtual void asyncResetSealing(std::function<void(Error::Ptr)> _onRecvResponse) = 0;
 

@@ -329,8 +329,8 @@ private:
             auto view = m_multiLayerStorage.get().fork();
             view.newMutable();
             auto transactions = co_await getTransactions(m_txpool.get(), *block);
-
-            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockHeader->number());
+            auto ledgerConfig =
+                co_await ledger::getLedgerConfig(view, blockHeader->number(), m_blockFactory.get());
             auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
                 *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
@@ -591,9 +591,10 @@ public:
             auto view = self->m_multiLayerStorage.get().fork();
             view.newMutable();
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
+            auto ledgerConfig =
+                co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
             auto block = co_await ledger::getBlockData(
-                view, blockNumber, ledger::HEADER, self->m_blockFactory.get(), ledger::fromStorage);
+                view, blockNumber, ledger::HEADER, self->m_blockFactory.get());
             auto receipt = co_await self->m_executor.get().executeTransaction(
                 view, *block->blockHeader(), *transaction, 0, *ledgerConfig, true);
 
@@ -614,7 +615,8 @@ public:
             auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
+            auto ledgerConfig =
+                co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
@@ -638,7 +640,8 @@ public:
             auto view = self->m_multiLayerStorage.get().fork();
             auto contractAddress = unhexAddress(contract);
             auto blockNumber = co_await ledger::getCurrentBlockNumber(view, ledger::fromStorage);
-            auto ledgerConfig = co_await ledger::getLedgerConfig(view, blockNumber);
+            auto ledgerConfig =
+                co_await ledger::getLedgerConfig(view, blockNumber, self->m_blockFactory.get());
 
             ledger::account::EVMAccount account(view, contractAddress,
                 ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));

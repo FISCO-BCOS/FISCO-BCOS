@@ -55,6 +55,7 @@ public:
     uint64_t maxTxsToSeal() const { return m_maxTxsToSeal; }
 
     void asyncNoteLatestBlockNumber(int64_t _blockNumber) override { m_blockNumber = _blockNumber; }
+    void asyncNoteLatestBlockTimestamp(int64_t _timestamp) override { m_timestamp = _timestamp; }
     int64_t blockNumber() const { return m_blockNumber; }
     void asyncResetSealing(std::function<void(Error::Ptr)>) override {}
 
@@ -64,6 +65,7 @@ private:
     uint64_t m_proposalEndIndex = 0;
     uint64_t m_maxTxsToSeal = 0;
     int64_t m_blockNumber;
+    int64_t m_timestamp;
 };
 }  // namespace test
 }  // namespace bcos

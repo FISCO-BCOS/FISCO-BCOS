@@ -276,6 +276,13 @@ void bcostars::PBFTServiceClient::asyncNoteLatestBlockHash(bcos::crypto::HashTyp
     throw std::runtime_error(
         "PBFTServiceClient: asyncNoteLatestBlockHash: unimplemented interface!");
 }
+
+void bcostars::PBFTServiceClient::asyncNoteLatestBlockTimestamp(int64_t _timestamp)
+{
+    throw std::runtime_error(
+        "PBFTServiceClient: asyncNoteLatestBlockHash: unimplemented interface!");
+}
+
 void bcostars::PBFTServiceClient::asyncResetSealing(
     std::function<void(bcos::Error::Ptr)> _onRecvResponse)
 {

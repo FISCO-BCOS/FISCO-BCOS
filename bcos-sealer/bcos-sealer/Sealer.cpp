@@ -102,6 +102,12 @@ void Sealer::asyncNoteLatestBlockHash(crypto::HashType _hash)
     m_sealingManager->resetLatestHash(_hash);
 }
 
+void Sealer::asyncNoteLatestBlockTimestamp(int64_t _timestamp)
+{
+    SEAL_LOG(INFO) << LOG_DESC("asyncNoteLatestBlockTimestamp") << LOG_KV("timestamp", _timestamp);
+    m_sealingManager->resetLatestTimestamp(_timestamp);
+}
+
 void Sealer::executeWorker()
 {
     // try to fetch transactions

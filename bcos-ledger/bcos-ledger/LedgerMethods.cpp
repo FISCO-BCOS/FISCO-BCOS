@@ -430,6 +430,13 @@ bcos::task::Task<void> bcos::ledger::tag_invoke(
     auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
     ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
 
+    // Get block header to retrieve timestamp
+    auto block = co_await getBlockData(ledger, blockNumber, HEADER);
+    if (block && block->blockHeader())
+    {
+        ledgerConfig.setTimestamp(block->blockHeader()->timestamp());
+        // ledgerConfig.setHash(block->blockHeader()->hash());
+    }
     ledgerConfig.setBlockNumber(blockNumber);
     ledgerConfig.setHash(co_await getBlockHash(ledger, blockNumber));
     ledgerConfig.setFeatures(co_await getFeatures(ledger));

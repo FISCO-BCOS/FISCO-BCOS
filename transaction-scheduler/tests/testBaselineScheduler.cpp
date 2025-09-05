@@ -26,6 +26,13 @@ using namespace bcos::storage2;
 using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
+using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
+    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
+using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
+    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
+    std::hash<StateKey>>;
+using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
+
 struct MockExecutorBaseline
 {
     task::Task<protocol::TransactionReceipt::Ptr> executeTransaction(auto& storage,
@@ -96,6 +103,14 @@ inline task::AwaitableValue<void> tag_invoke(
     return {};
 }
 
+inline task::AwaitableValue<void> tag_invoke(
+    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MyMultiLayerStorage::ViewType& storage,
+    bcos::ledger::LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
+    protocol::BlockFactory& blockFactory)
+{
+    return {};
+}
+
 task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::storeTransactionsAndReceipts>,
     MockLedger& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
     bcos::protocol::Block::ConstPtr block)
@@ -158,13 +173,6 @@ struct MockTxPool : public txpool::TxPoolInterface
 class TestBaselineSchedulerFixture
 {
 public:
-    using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
-    using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
-        std::hash<StateKey>>;
-    using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
-
     TestBaselineSchedulerFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
@@ -182,6 +190,32 @@ public:
         baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory, mockLedger,
             mockTxPool, *transactionSubmitResultFactory, *hashImpl)
     {}
+
+    void writeBlock(bcos::protocol::BlockNumber number, int64_t timestamp)
+    {
+        auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto blockHeader = block->blockHeader();
+        blockHeader->setNumber(number);
+        blockHeader->setVersion(200);
+        blockHeader->setTimestamp(timestamp);
+        blockHeader->calculateHash(*hashImpl);
+        writeBlock(block);
+    }
+
+    void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
+    {
+        auto blockHeader = block->blockHeader();
+        task::syncWait(ledger::prewriteBlock(mockLedger,
+            std::make_shared<bcos::protocol::ConstTransactions>(), block, false, backendStorage));
+        bytes headerBuffer;
+        blockHeader->encode(headerBuffer);
+
+        storage::Entry number2HeaderEntry;
+        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        task::syncWait(storage2::writeOne(backendStorage,
+            StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
+            std::move(number2HeaderEntry)));
+    }
 
     BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
@@ -208,9 +242,11 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
 {
     auto block = std::make_shared<bcostars::protocol::BlockImpl>();
     auto blockHeader = block->blockHeader();
-    blockHeader->setNumber(500);
+    auto blockNumber = 500;
+    blockHeader->setNumber(blockNumber);
     blockHeader->setVersion(200);
     blockHeader->calculateHash(*hashImpl);
+    writeBlock(block);
 
     // Prepare a transaction
     bcos::bytes input;
@@ -249,9 +285,11 @@ BOOST_AUTO_TEST_CASE(sameBlock)
 {
     auto block = std::make_shared<bcostars::protocol::BlockImpl>();
     auto blockHeader = block->blockHeader();
-    blockHeader->setNumber(500);
+    auto blockNumber = 500;
+    blockHeader->setNumber(blockNumber);
     blockHeader->setVersion(200);
     blockHeader->calculateHash(*hashImpl);
+    writeBlock(block);
 
     // Prepare a transaction
     bcos::bytes input;
@@ -302,6 +340,8 @@ BOOST_AUTO_TEST_CASE(resultCache)
         bcos::bytes input;
         block->appendTransaction(transactionFactory->createTransaction(
             0, "to", input, "12345", 100, "chain", "group", 0));
+
+        writeBlock(std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(block));
 
         baselineScheduler.executeBlock(block, false,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
@@ -361,11 +401,13 @@ BOOST_AUTO_TEST_CASE(resultCache)
     {
         auto expectBlock = std::make_shared<bcostars::protocol::BlockImpl>();
         auto expectBlockHeader = expectBlock->blockHeader();
-        expectBlockHeader->setNumber(110);
+        auto blockNumber = 110;
+        expectBlockHeader->setNumber(blockNumber);
         expectBlockHeader->setVersion(200);
         expectBlockHeader->calculateHash(*hashImpl);
         expectBlock->appendTransaction(transactionFactory->createTransaction(
             0, "to", input, "12345", 100, "chain", "group", 0));
+        writeBlock(expectBlock);
 
         baselineScheduler.executeBlock(expectBlock, false,
             [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,
@@ -377,9 +419,11 @@ BOOST_AUTO_TEST_CASE(emptyBlock)
 {
     auto block = std::make_shared<bcostars::protocol::BlockImpl>();
     auto blockHeader = block->blockHeader();
-    blockHeader->setNumber(111);
+    auto blockNumber = 111;
+    blockHeader->setNumber(blockNumber);
     blockHeader->setVersion(200);
     blockHeader->calculateHash(*hashImpl);
+    writeBlock(block);
 
     baselineScheduler.executeBlock(block, false,
         [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr gotBlockHeader,

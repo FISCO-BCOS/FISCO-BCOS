@@ -131,7 +131,12 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
-    blockHeader->setTimestamp(m_config->nodeTimeMaintenance()->getAlignedTime());
+    auto timestamp = m_config->nodeTimeMaintenance()->getAlignedTime();
+    if (timestamp <= m_latestTimestamp)
+    {  // make sure the timestamp is larger than the latestTimestamp in milliseconds
+        timestamp = m_latestTimestamp + 1;
+    }
+    blockHeader->setTimestamp(timestamp);
     blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
     auto txsSize =

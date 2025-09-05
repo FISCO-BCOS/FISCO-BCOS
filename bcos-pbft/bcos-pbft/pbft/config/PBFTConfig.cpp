@@ -77,10 +77,11 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     }
     if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
     {
-        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
-                       << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
-                       << LOG_KV("updatedVersion", (bcos::protocol::BlockVersion)(
-                                                       _ledgerConfig->compatibilityVersion()));
+        PBFT_LOG(INFO)
+            << LOG_DESC("compatibilityVersion updated")
+            << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
+            << LOG_KV("updatedVersion",
+                   (bcos::protocol::BlockVersion)(_ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {
@@ -106,7 +107,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // notify the latest block number to the sealer
     if (m_stateNotifier)
     {
-        m_stateNotifier(_ledgerConfig->blockNumber(), _ledgerConfig->hash());
+        m_stateNotifier(
+            _ledgerConfig->blockNumber(), _ledgerConfig->hash(), _ledgerConfig->timestamp());
     }
     // notify the latest block to the sync module
     if (m_newBlockNotifier && !_syncedBlock)

@@ -81,8 +81,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
 
 task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused*/,
     storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage,
-    protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory,
-    FromStorage /*unused*/)
+    protocol::BlockNumber _blockNumber, int32_t _blockFlag, protocol::BlockFactory& blockFactory)
 {
     LEDGER_LOG(TRACE) << "GetBlockDataByNumber request" << LOG_KV("blockNumber", _blockNumber)
                       << LOG_KV("blockFlag", _blockFlag);
@@ -207,7 +206,8 @@ task::Task<void> tag_invoke(
     ledger::tag_t<getLedgerConfig> /*unused*/, LedgerInterface& ledger, LedgerConfig& ledgerConfig);
 
 task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& storage,
-    LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber)
+    LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
+    protocol::BlockFactory& blockFactory)
 {
     auto nodeList = co_await ledger::getNodeList(storage);
     ledgerConfig.setConsensusNodeList(::ranges::views::filter(nodeList, [](auto& node) {
@@ -241,9 +241,20 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     auto gasPrice = sysConfig.getOrDefault(ledger::SystemConfig::tx_gas_price, "0x0");
     ledgerConfig.setGasPrice(std::make_tuple(gasPrice.first, gasPrice.second));
 
+    // Get block header to retrieve timestamp
+    auto blockNumberStr = std::to_string(blockNumber);
+    if (auto entry = co_await storage2::readOne(
+            storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
+    {
+        auto field = entry->getField(0);
+        auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
+            bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
+        ledgerConfig.setTimestamp(headerPtr->timestamp());
+        ledgerConfig.setHash(headerPtr->hash());
+    }
     ledgerConfig.setBlockNumber(blockNumber);
-    auto blockHash = co_await getBlockHash(storage, blockNumber, fromStorage);
-    ledgerConfig.setHash(blockHash.value_or(crypto::HashType{}));
+    // auto blockHash = co_await getBlockHash(storage, blockNumber, fromStorage);
+    // ledgerConfig.setHash(blockHash.value_or(crypto::HashType{}));
 
     Features features;
     co_await readFromStorage(features, storage, blockNumber);
@@ -376,7 +387,7 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
 task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /*unused*/,
     storage2::ReadableStorage<executor_v1::StateKey> auto& storage)
 {
-    LEDGER_LOG(DEBUG) << "GetNodeLis";
+    LEDGER_LOG(DEBUG) << "getNodeList";
     auto nodeListEntry =
         co_await storage2::readOne(storage, executor_v1::StateKeyView{SYS_CONSENSUS, "key"});
     if (!nodeListEntry)
