@@ -130,7 +130,7 @@ public:
             callback(nullptr);
         }
     }
-    bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    bcos::protocol::BlockNumber number() { return m_block->blockHeader()->number(); }
     bcos::protocol::Block::Ptr block() { return m_block; }
     bool sysBlock() const { return m_isSysBlock; }
 

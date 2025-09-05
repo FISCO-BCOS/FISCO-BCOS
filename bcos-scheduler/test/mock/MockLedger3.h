@@ -35,7 +35,7 @@ public:
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features> features) override
     {
-        auto blockNumber = block->blockHeaderConst()->number();
+        auto blockNumber = block->blockHeader()->number();
         if (blockNumber == 1024)
         {
             callback(
