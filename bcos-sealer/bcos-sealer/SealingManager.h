@@ -68,15 +68,17 @@ public:
     {
         return m_onReady.add(std::move(callback));
     }
-    virtual void notifyResetProposal(bcos::protocol::Block const& _block);
-
-protected:
-    virtual void appendTransactions(
-        TxsMetaDataQueue& _txsQueue, bcos::protocol::Block const& _fetchedTxs);
-    virtual bool reachMinSealTimeCondition();
-    virtual void clearPendingTxs();
+    virtual void notifyResetProposal(
+        const std::vector<protocol::TransactionMetaData::Ptr>& metaDatas);
     virtual void notifyResetTxsFlag(
         const bcos::crypto::HashList& _txsHash, bool _flag, size_t _retryTime = 0);
+
+protected:
+    virtual void appendTransactions(TxsMetaDataQueue& _txsQueue,
+        const std::vector<protocol::TransactionMetaData::Ptr>& _fetchedTxs);
+    virtual bool reachMinSealTimeCondition();
+    virtual void clearPendingTxs();
+
 
     virtual int64_t txsSizeExpectedToFetch();
     virtual size_t pendingTxsSize();

@@ -537,8 +537,8 @@ void MemoryStorage::batchRemoveSealedTxs(
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
-bool MemoryStorage::batchSealTransactions(
-    Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit)
+bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
+    std::vector<protocol::TransactionMetaData::Ptr>& _sysTxsList, size_t _txsLimit)
 {
     auto txsSize = m_unsealTransactions.size();
     if (txsSize == 0)
@@ -603,11 +603,11 @@ bool MemoryStorage::batchSealTransactions(
         txMetaData->setAttribute(tx->attribute());
         if (tx->systemTx())
         {
-            _sysTxsList->appendTransactionMetaData(std::move(txMetaData));
+            _sysTxsList.emplace_back(std::move(txMetaData));
         }
         else
         {
-            _txsList->appendTransactionMetaData(std::move(txMetaData));
+            _txsList.emplace_back(std::move(txMetaData));
         }
 #if FISCO_DEBUG
         // TODO: remove this, now just for bug tracing
@@ -628,8 +628,7 @@ bool MemoryStorage::batchSealTransactions(
     {
         const auto& tx = accessor.value();
         handleTx(tx);
-        if (!((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) <
-                _txsLimit))
+        if (!((_txsList.size() + _sysTxsList.size()) < _txsLimit))
         {
             break;
         }
@@ -637,8 +636,10 @@ bool MemoryStorage::batchSealTransactions(
     auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
 
-    auto systemHashes = _sysTxsList->transactionHashes();
-    auto txsHashes = _txsList->transactionHashes();
+    auto systemHashes =
+        ::ranges::views::transform(_sysTxsList, [](auto& metaData) { return metaData->hash(); });
+    auto txsHashes =
+        ::ranges::views::transform(_txsList, [](auto& metaData) { return metaData->hash(); });
     auto sealedHashes = ::ranges::views::concat(systemHashes, txsHashes);
     std::vector<Transaction::Ptr> values(sealedHashes.size());
     m_unsealTransactions.traverse<decltype(m_unsealTransactions)::WriteAccessor, true>(
@@ -657,9 +658,8 @@ bool MemoryStorage::batchSealTransactions(
 
     auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
-                     << LOG_KV("time", (utcTime() - recordT))
-                     << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
-                     << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("time", (utcTime() - recordT)) << LOG_KV("txsSize", _txsList.size())
+                     << LOG_KV("sysTxsSize", _sysTxsList.size())
                      << LOG_KV("pendingTxs", m_unsealTransactions.size())
                      << LOG_KV("limit", _txsLimit) << LOG_KV("fetchTxsT", fetchTxsT)
                      << LOG_KV("lockT", lockT) << LOG_KV("invalidBefore", invalidTxsSize)

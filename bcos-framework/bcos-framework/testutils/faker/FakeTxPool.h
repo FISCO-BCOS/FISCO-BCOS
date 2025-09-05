@@ -77,7 +77,9 @@ public:
     void notifyConnectedNodes(
         bcos::crypto::NodeIDSet const&, std::function<void(Error::Ptr)>) override
     {}
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(uint64_t) override
+    std::tuple<std::vector<bcos::protocol::TransactionMetaData::Ptr>,
+        std::vector<bcos::protocol::TransactionMetaData::Ptr>>
+    sealTxs(uint64_t) override
     {
         return {};
     }

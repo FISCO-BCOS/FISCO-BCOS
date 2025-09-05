@@ -36,8 +36,9 @@ public:
     bcos::task::Task<void> broadcastTransactionBuffer(
         [[maybe_unused]] bcos::bytesConstRef _data) override;
 
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit) override;
+    std::tuple<std::vector<bcos::protocol::TransactionMetaData::Ptr>,
+        std::vector<bcos::protocol::TransactionMetaData::Ptr>>
+    sealTxs(uint64_t _txsLimit) override;
 
     void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,

@@ -230,9 +230,9 @@ void testTransactionSync(bool _onlyTxsStatus = false)
     HashListPtr txsHash = std::make_shared<HashList>();
     bool finish = false;
     auto [_fetchedTxs, _] = syncPeer->txpool()->sealTxs(100000);
-    for (size_t i = 0; i < _fetchedTxs->transactionsMetaDataSize(); i++)
+    for (size_t i = 0; i < _fetchedTxs.size(); i++)
     {
-        txsHash->emplace_back(_fetchedTxs->transactionHash(i));
+        txsHash->emplace_back(_fetchedTxs[i]->hash());
     }
     finish = true;
     while (!finish)

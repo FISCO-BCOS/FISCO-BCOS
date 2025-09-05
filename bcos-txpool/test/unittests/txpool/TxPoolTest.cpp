@@ -149,22 +149,22 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // seal 10 txs
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(txsLimit);
-        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == txsLimit);
-        for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
+        BOOST_TEST(_txsMetaDataList.size() == txsLimit);
+        for (size_t i = 0; i < _txsMetaDataList.size(); i++)
         {
-            sealedTxs->emplace_back(_txsMetaDataList->transactionHash(i));
+            sealedTxs->emplace_back(_txsMetaDataList[i]->hash());
         }
         BOOST_TEST(_txpoolStorage->size() == originTxsSize);
     }
     // seal again to fetch all unsealed txs
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == (originTxsSize - txsLimit));
+        BOOST_TEST(_txsMetaDataList.size() == (originTxsSize - txsLimit));
         BOOST_TEST(_txpoolStorage->size() == originTxsSize);
         std::set<HashType> txsSet(sealedTxs->begin(), sealedTxs->end());
-        for (size_t i = 0; i < _txsMetaDataList->transactionsMetaDataSize(); i++)
+        for (size_t i = 0; i < _txsMetaDataList.size(); i++)
         {
-            auto const& hash = _txsMetaDataList->transactionHash(i);
+            auto const& hash = _txsMetaDataList[i]->hash();
             BOOST_TEST(!txsSet.contains(hash));
         }
     }
@@ -183,8 +183,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // seal again
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList.size() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList.size() == sealedTxs->size());
     }
     auto blockHash = _cryptoSuite->hashImpl()->hash("blockHash"sv);
     auto blockNumber = 10;
@@ -201,9 +201,9 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // re-seal
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-        auto size = _txsMetaDataList->transactionsMetaDataSize();
+        auto size = _txsMetaDataList.size();
         BOOST_CHECK_EQUAL(size, 0);
-        BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
+        BOOST_CHECK_EQUAL(_txsMetaDataList.size(), 0);
     }
 
     // mark txs to as false, expect mark success
@@ -219,8 +219,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // re-seal success
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList.size() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList.size() == sealedTxs->size());
     }
 
     // mark txs to given proposal as true
@@ -245,8 +245,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // reseal failed
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == 0);
-        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == 0);
+        BOOST_TEST(_txsMetaDataList.size() == 0);
+        BOOST_TEST(_txsMetaDataList.size() == 0);
     }
 
     // mark txs to given proposal as false, expect success
@@ -263,8 +263,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     // re-seal success
     {
         auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-        BOOST_TEST(_txsMetaDataList->transactionsMetaDataSize() == sealedTxs->size());
-        BOOST_TEST(_txsMetaDataList->transactionsHashSize() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList.size() == sealedTxs->size());
+        BOOST_TEST(_txsMetaDataList.size() == sealedTxs->size());
     }
 
     // test asyncNotifyBlockResult
@@ -324,8 +324,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     _txpool->asyncResetTxPool(nullptr);
     auto [_txsMetaDataList, _] = _txpool->sealTxs(100000);
-    BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsMetaDataSize(), 0);
-    BOOST_CHECK_EQUAL(_txsMetaDataList->transactionsHashSize(), 0);
+    BOOST_CHECK_EQUAL(_txsMetaDataList.size(), 0);
+    BOOST_CHECK_EQUAL(_txsMetaDataList.size(), 0);
     BOOST_TEST(_txpoolStorage->size() == 0);
 }
 

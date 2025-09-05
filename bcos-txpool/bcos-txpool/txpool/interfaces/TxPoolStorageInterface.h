@@ -53,8 +53,8 @@ public:
      * @param _txsLimit Maximum number of transactions that can be obtained at a time
      * @return List of new transactions
      */
-    virtual bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
-        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit) = 0;
+    virtual bool batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
+        std::vector<protocol::TransactionMetaData::Ptr>& _sysTxsList, size_t _txsLimit) = 0;
 
     virtual bool exists(bcos::crypto::HashType const& _txHash) = 0;
     virtual bool batchExists(crypto::HashListView _txsHashList) = 0;

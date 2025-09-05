@@ -107,8 +107,9 @@ struct MockTxPool : public txpool::TxPoolInterface
 {
     void start() override {}
     void stop() override {}
-    std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit) override
+    std::tuple<std::vector<bcos::protocol::TransactionMetaData::Ptr>,
+        std::vector<bcos::protocol::TransactionMetaData::Ptr>>
+    sealTxs(uint64_t _txsLimit) override
     {
         return {};
     }
