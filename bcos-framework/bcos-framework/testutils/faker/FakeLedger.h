@@ -457,8 +457,8 @@ public:
         ReadGuard l(x_ledger);
         for (auto index = _startNumber; index <= endNumber; index++)
         {
-            auto nonces = m_ledger[index]->nonces();
-            nonceList->insert(std::make_pair(index, nonces));
+            auto nonces = ::ranges::to<std::vector>(m_ledger[index]->nonceList());
+            nonceList->insert(std::make_pair(index, std::make_shared<NonceList>(nonces)));
         }
         _onGetList(nullptr, nonceList);
     }
