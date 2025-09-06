@@ -40,10 +40,10 @@ class AnyHolder
 private:
     std::array<std::byte, maxSize> m_data;
 
+public:
     Type* get() & { return reinterpret_cast<Type*>(m_data.data()); }
     const Type* get() const& { return reinterpret_cast<const Type*>(m_data.data()); }
 
-public:
     template <class HoldType>
         requires std::movable<HoldType> && std::derived_from<HoldType, Type> &&
                  (sizeof(HoldType) <= maxSize)
@@ -55,7 +55,11 @@ public:
     AnyHolder(const AnyHolder&) = delete;
     AnyHolder(AnyHolder&& other) noexcept { other.get()->moveConstructTo(get()); }
     AnyHolder& operator=(const AnyHolder&) = delete;
-    AnyHolder& operator=(AnyHolder&& other) noexcept { other.get()->moveAssignTo(get()); }
+    AnyHolder& operator=(AnyHolder&& other) noexcept
+    {
+        other.get()->moveAssignTo(get());
+        return *this;
+    }
 
     Type& operator*() & { return *get(); }
     const Type& operator*() const& { return *get(); }

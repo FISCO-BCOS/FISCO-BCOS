@@ -308,8 +308,8 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();
-    auto const& nonceList = blockData[_faker->ledger()->blockNumber()]->nonces();
-    for (auto const& nonce : *nonceList)
+    auto nonceList = blockData[_faker->ledger()->blockNumber()]->nonceList();
+    for (auto nonce : nonceList)
     {
         BOOST_TEST(ledgerNonceChecker->exists(nonce) == false);
     }

@@ -240,9 +240,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     // get nonce from block txs
     else
     {
-        for (uint64_t i = 0; i < block->transactionsSize(); i++)
+        for (auto tx : block->transactions())
         {
-            auto const& tx = block->transaction(i);
             nonceList.emplace_back(tx->nonce());
         }
     }
@@ -266,9 +265,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     auto transactionsBlock = m_blockFactory->createBlock();
     if (block->transactionsMetaDataSize() > 0)
     {
-        for (size_t i = 0; i < block->transactionsMetaDataSize(); ++i)
+        for (auto originTransactionMetaData : block->transactionMetaDatas())
         {
-            auto originTransactionMetaData = block->transactionMetaData(i);
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
@@ -276,9 +274,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     }
     else if (block->transactionsSize() > 0)
     {
-        for (size_t i = 0; i < block->transactionsSize(); ++i)
+        for (auto transaction : block->transactions())
         {
-            auto transaction = block->transaction(i);
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 transaction->hash(), std::string(transaction->to()));
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
@@ -305,14 +302,14 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         std::vector<std::string> txsHash(block->receiptsSize());
         std::vector<bytes> receipts(block->receiptsSize());
         std::vector<std::string_view> receiptsView(block->receiptsSize());
+        auto blockReceipts = block->receipts();
         tbb::parallel_for(tbb::blocked_range<size_t>(0, block->receiptsSize(), 256),
-            [&transactionsBlock, &block, &failedCount, &totalCount, &txsHash, &receipts,
-                &receiptsView](const tbb::blocked_range<size_t>& range) {
+            [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)
                 {
                     auto hash = transactionsBlock->transactionHash(i);
                     txsHash[i] = std::string((char*)hash.data(), hash.size());
-                    auto receipt = block->receipt(i);
+                    auto receipt = blockReceipts[i];
                     if (receipt->status() != 0)
                     {
                         failedCount++;
@@ -343,9 +340,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     }
     else
     {
-        for (size_t i = 0; i < block->receiptsSize(); ++i)
+        for (auto receipt : block->receipts())
         {
-            auto receipt = block->receipt(i);
             if (receipt->status() != 0)
             {
                 failedCount++;
@@ -471,14 +467,15 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     std::vector<std::string> txsHash(txSize);
     std::vector<bytes> receipts(txSize);
     std::vector<std::string_view> receiptsView(txSize);
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, txSize, 256),
-        [&blockTxs, &block, &txsHash, &receipts, &receiptsView](
-            const tbb::blocked_range<size_t>& range) {
+    auto transactions = block->transactions();
+    auto blockReceipts = block->receipts();
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, txSize, 256), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto hash = blockTxs ? blockTxs->at(i)->hash() : block->transaction(i)->hash();
+                auto hash = blockTxs ? blockTxs->at(i)->hash() : transactions[i]->hash();
                 txsHash[i] = std::string((char*)hash.data(), hash.size());
-                block->receipt(i)->encode(receipts[i]);
+                blockReceipts[i]->encode(receipts[i]);
                 receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
             }
         });
@@ -502,7 +499,17 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     // TODO: usr block level flag to indicate whether the transactions has been stored
     for (size_t i = 0; i < txSize; i++)
     {
-        auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+        std::optional<AnyTransaction> anyTx;
+        const Transaction* tx = nullptr;
+        if (blockTxs)
+        {
+            tx = blockTxs->at(i).get();
+        }
+        else
+        {
+            anyTx = transactions[i];
+            tx = anyTx->get();
+        }
         if (blockTxs && tx->storeToBackend())
         {
             continue;
