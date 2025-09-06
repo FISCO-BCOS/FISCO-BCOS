@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(block)
 
     for (size_t i = 0; i < 100; ++i)
     {
-        auto constHeader = block->blockHeaderConst();
+        auto constHeader = block->blockHeader();
         BOOST_CHECK(constHeader->signatureList().size() == 2);
         std::cout << "### getHash:" << constHeader->hash().abridged() << std::endl;
 

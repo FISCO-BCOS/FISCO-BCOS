@@ -172,11 +172,11 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                 << LOG_KV("txsSize", ledgerMissedTxs->size())
                 << LOG_KV("peer", _generatedNodeID->shortHex())
                 << LOG_KV("readDBTime", utcTime() - startT)
-                << LOG_KV("consNum", _verifiedProposal && _verifiedProposal->blockHeaderConst() ?
-                                         _verifiedProposal->blockHeaderConst()->number() :
+                << LOG_KV("consNum", _verifiedProposal && _verifiedProposal->blockHeader() ?
+                                         _verifiedProposal->blockHeader()->number() :
                                          -1)
-                << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeaderConst() ?
-                                      _verifiedProposal->blockHeaderConst()->hash().abridged() :
+                << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeader() ?
+                                      _verifiedProposal->blockHeader()->hash().abridged() :
                                       "null");
             txsSync->requestMissedTxsFromPeer(
                 _generatedNodeID, ledgerMissedTxs, _verifiedProposal, _onVerifyFinished);
@@ -232,7 +232,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     BlockHeader::ConstPtr proposalHeader = nullptr;
     if (_verifiedProposal)
     {
-        proposalHeader = _verifiedProposal->blockHeaderConst();
+        proposalHeader = _verifiedProposal->blockHeader();
     }
     if (_missedTxs->empty() && _onVerifyFinished)
     {
@@ -306,12 +306,12 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("code", _error->errorCode())
                        << LOG_KV("msg", _error->errorMessage())
                        << LOG_KV("propHash",
-                              (_verifiedProposal && _verifiedProposal->blockHeaderConst()) ?
-                                  _verifiedProposal->blockHeaderConst()->hash().abridged() :
+                              (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                  _verifiedProposal->blockHeader()->hash().abridged() :
                                   "unknown")
                        << LOG_KV("propIndex",
-                              (_verifiedProposal && _verifiedProposal->blockHeaderConst()) ?
-                                  _verifiedProposal->blockHeaderConst()->number() :
+                              (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                  _verifiedProposal->blockHeader()->number() :
                                   -1);
         _onVerifyFinished(_error, false);
         return;
@@ -335,7 +335,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     BlockHeader::ConstPtr proposalHeader = nullptr;
     if (_verifiedProposal)
     {
-        proposalHeader = _verifiedProposal->blockHeaderConst();
+        proposalHeader = _verifiedProposal->blockHeader();
     }
     if (_missedTxs->size() != transactions->transactionsSize())
     {
@@ -404,9 +404,9 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
     bool enforceImport = false;
     BlockHeader::ConstPtr proposalHeader = nullptr;
     // if _verifiedProposal is null, it means import txs from ledger
-    if (_verifiedProposal && _verifiedProposal->blockHeaderConst())
+    if (_verifiedProposal && _verifiedProposal->blockHeader())
     {
-        proposalHeader = _verifiedProposal->blockHeaderConst();
+        proposalHeader = _verifiedProposal->blockHeader();
         enforceImport = true;
     }
     auto recordT = utcTime();

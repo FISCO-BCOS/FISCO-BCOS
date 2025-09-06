@@ -51,7 +51,7 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
         });
 }
 
-bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
+bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeader() const
 {
     return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
         [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
@@ -285,7 +285,7 @@ bcostars::protocol::BlockImpl::receipts() const
 size_t bcostars::protocol::BlockImpl::size() const
 {
     size_t size = 0;
-    size += blockHeaderConst()->size();
+    size += blockHeader()->size();
     for (uint64_t i = 0; i < transactionsSize(); ++i)
     {
         size += transaction(i)->size();

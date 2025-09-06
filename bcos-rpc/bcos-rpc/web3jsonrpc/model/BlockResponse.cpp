@@ -6,7 +6,7 @@
 void bcos::rpc::combineBlockResponse(
     Json::Value& result, const bcos::protocol::Block& block, bool fullTxs)
 {
-    auto blockHeader = block.blockHeaderConst();
+    auto blockHeader = block.blockHeader();
     auto blockHash = blockHeader->hash();
     auto blockNumber = blockHeader->number();
     result["number"] = toQuantity(blockNumber);

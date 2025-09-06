@@ -36,21 +36,13 @@ namespace bcostars::protocol
 class BlockHeaderImpl : public bcos::protocol::BlockHeader
 {
 public:
-    explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner)
-      : m_inner(std::move(inner))
-    {}
-    explicit BlockHeaderImpl()
-      : m_inner([m_blockHeader = bcostars::BlockHeader()]() mutable {
-            return std::addressof(m_blockHeader);
-        })
-    {}
+    explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner);
+    BlockHeaderImpl();
     BlockHeaderImpl(const BlockHeaderImpl&) = delete;
     BlockHeaderImpl(BlockHeaderImpl&&) noexcept = delete;
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = delete;
     BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = delete;
-    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
-      : m_inner([m_blockHeader = std::addressof(blockHeader)]() { return m_blockHeader; })
-    {}
+    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data) override;
@@ -60,17 +52,18 @@ public:
 
     void clear() override;
 
-    uint32_t version() const override { return m_inner()->data.version; }
-    RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+    uint32_t version() const override;
+    ::ranges::any_view<bcos::protocol::ParentInfo,
+        ::ranges::category::input | ::ranges::category::sized>
     parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
     bcos::crypto::HashType stateRoot() const override;
     bcos::crypto::HashType receiptsRoot() const override;
-    bcos::protocol::BlockNumber number() const override { return m_inner()->data.blockNumber; }
+    bcos::protocol::BlockNumber number() const override;
     bcos::u256 gasUsed() const override;
-    int64_t timestamp() const override { return m_inner()->data.timestamp; }
-    int64_t sealer() const override { return m_inner()->data.sealer; }
+    int64_t timestamp() const override;
+    int64_t sealer() const override;
 
     gsl::span<const bcos::bytes> sealerList() const override;
     bcos::bytesConstRef extraData() const override;
@@ -79,9 +72,7 @@ public:
     gsl::span<const uint64_t> consensusWeights() const override;
 
     void setVersion(uint32_t _version) override;
-
-    void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) override;
-
+    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override;
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override;
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override;
     void setStateRoot(bcos::crypto::HashType _stateRoot) override;
@@ -91,11 +82,8 @@ public:
     void setSealer(int64_t _sealerId) override;
     void setSealerList(gsl::span<const bcos::bytes> const& _sealerList) override;
     void setSealerList(std::vector<bcos::bytes>&& _sealerList) override;
-
     void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) override;
-
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override;
-
     void setExtraData(bcos::bytes const& _extraData) override;
     void setExtraData(bcos::bytes&& _extraData) override;
     void setSignatureList(
@@ -105,8 +93,7 @@ public:
 
     // Notice: without lock, be aware of thread-safety issues
     bcostars::BlockHeader& mutableInner();
-    void setInner(const bcostars::BlockHeader& blockHeader);
-    void setInner(bcostars::BlockHeader&& blockHeader);
+    void setInner(bcostars::BlockHeader blockHeader);
     size_t size() const override;
 
 private:
@@ -115,6 +102,5 @@ private:
     void clearDataHash();
 
     std::function<bcostars::BlockHeader*()> m_inner;
-    mutable bcos::SharedMutex x_inner;
 };
 }  // namespace bcostars::protocol

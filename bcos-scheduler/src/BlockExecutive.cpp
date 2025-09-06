@@ -52,7 +52,7 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_staticCall(staticCall)
 {
     m_hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
-    m_blockHeader = m_block->blockHeaderConst();
+    m_blockHeader = m_block->blockHeader();
     start();
 }
 

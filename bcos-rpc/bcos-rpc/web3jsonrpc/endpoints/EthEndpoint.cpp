@@ -758,7 +758,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
         auto receipt = co_await ledger::getReceipt(*ledger, txHash);
-        auto blockHash = block->blockHeaderConst()->hash();
+        auto blockHash = block->blockHeader()->hash();
         combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)

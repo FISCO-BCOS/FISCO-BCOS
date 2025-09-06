@@ -13,7 +13,7 @@ uint32_t LogMatcher::matches(
     uint32_t count = 0;
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
-        count += matches(_params, _block->blockHeaderConst()->hash(), _block->receipt(index),
+        count += matches(_params, _block->blockHeader()->hash(), _block->receipt(index),
             _block->transactionHash(index), index, _result);
     }
 
