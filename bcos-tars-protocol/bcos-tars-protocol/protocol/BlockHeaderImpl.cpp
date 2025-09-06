@@ -259,11 +259,7 @@ bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
 {
     return *m_inner();
 }
-void bcostars::protocol::BlockHeaderImpl::setInner(const bcostars::BlockHeader& blockHeader)
-{
-    *m_inner() = blockHeader;
-}
-void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader&& blockHeader)
+void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader blockHeader)
 {
     *m_inner() = std::move(blockHeader);
 }
@@ -292,3 +288,19 @@ bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl()
 bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
   : m_inner([m_blockHeader = std::addressof(blockHeader)]() { return m_blockHeader; })
 {}
+uint32_t bcostars::protocol::BlockHeaderImpl::version() const
+{
+    return m_inner()->data.version;
+}
+bcos::protocol::BlockNumber bcostars::protocol::BlockHeaderImpl::number() const
+{
+    return m_inner()->data.blockNumber;
+}
+int64_t bcostars::protocol::BlockHeaderImpl::timestamp() const
+{
+    return m_inner()->data.timestamp;
+}
+int64_t bcostars::protocol::BlockHeaderImpl::sealer() const
+{
+    return m_inner()->data.sealer;
+}
