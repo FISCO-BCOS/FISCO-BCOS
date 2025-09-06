@@ -147,7 +147,6 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
 void BlockHeaderImpl::setSignatureList(
     gsl::span<const bcos::protocol::Signature> const& _signatureList)
 {
-    bcos::WriteGuard l(x_inner);
     // Note: must clear the old signatureList when set the new signatureList
     // in case of the consensus module get the cached-sync-blockHeader with signatureList which will
     // cause redundant signature lists to be stored
@@ -167,22 +166,19 @@ gsl::span<const bcos::bytes> bcostars::protocol::BlockHeaderImpl::sealerList() c
 }
 bcos::bytesConstRef bcostars::protocol::BlockHeaderImpl::extraData() const
 {
-    return bcos::bytesConstRef(
-        reinterpret_cast<const bcos::byte*>(m_inner()->data.extraData.data()),
-        m_inner()->data.extraData.size());
+    return {reinterpret_cast<const bcos::byte*>(m_inner()->data.extraData.data()),
+        m_inner()->data.extraData.size()};
 }
 gsl::span<const bcos::protocol::Signature> bcostars::protocol::BlockHeaderImpl::signatureList()
     const
 {
-    bcos::ReadGuard l(x_inner);
-    return gsl::span(
-        reinterpret_cast<const bcos::protocol::Signature*>(m_inner()->signatureList.data()),
-        m_inner()->signatureList.size());
+    return {reinterpret_cast<const bcos::protocol::Signature*>(m_inner()->signatureList.data()),
+        m_inner()->signatureList.size()};
 }
 gsl::span<const uint64_t> bcostars::protocol::BlockHeaderImpl::consensusWeights() const
 {
-    return gsl::span(reinterpret_cast<const uint64_t*>(m_inner()->data.consensusWeights.data()),
-        m_inner()->data.consensusWeights.size());
+    return {reinterpret_cast<const uint64_t*>(m_inner()->data.consensusWeights.data()),
+        m_inner()->data.consensusWeights.size()};
 }
 void bcostars::protocol::BlockHeaderImpl::setVersion(uint32_t _version)
 {
@@ -257,7 +253,6 @@ void bcostars::protocol::BlockHeaderImpl::setSignatureList(
 }
 const bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner() const
 {
-    bcos::ReadGuard l(x_inner);
     return *m_inner();
 }
 bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
@@ -266,12 +261,10 @@ bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
 }
 void bcostars::protocol::BlockHeaderImpl::setInner(const bcostars::BlockHeader& blockHeader)
 {
-    bcos::WriteGuard l(x_inner);
     *m_inner() = blockHeader;
 }
 void bcostars::protocol::BlockHeaderImpl::setInner(bcostars::BlockHeader&& blockHeader)
 {
-    bcos::WriteGuard l(x_inner);
     *m_inner() = std::move(blockHeader);
 }
 void bcostars::protocol::BlockHeaderImpl::clearDataHash()
@@ -288,3 +281,14 @@ size_t bcostars::protocol::BlockHeaderImpl::size() const
     size += m_inner()->data.extraData.size();
     return size;
 }
+bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner)
+  : m_inner(std::move(inner))
+{}
+bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl()
+  : m_inner([m_blockHeader = bcostars::BlockHeader()]() mutable {
+        return std::addressof(m_blockHeader);
+    })
+{}
+bcostars::protocol::BlockHeaderImpl::BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
+  : m_inner([m_blockHeader = std::addressof(blockHeader)]() { return m_blockHeader; })
+{}

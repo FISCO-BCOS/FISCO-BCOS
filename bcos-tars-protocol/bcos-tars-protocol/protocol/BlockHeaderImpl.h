@@ -36,21 +36,13 @@ namespace bcostars::protocol
 class BlockHeaderImpl : public bcos::protocol::BlockHeader
 {
 public:
-    explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner)
-      : m_inner(std::move(inner))
-    {}
-    explicit BlockHeaderImpl()
-      : m_inner([m_blockHeader = bcostars::BlockHeader()]() mutable {
-            return std::addressof(m_blockHeader);
-        })
-    {}
+    explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner);
+    BlockHeaderImpl();
     BlockHeaderImpl(const BlockHeaderImpl&) = delete;
     BlockHeaderImpl(BlockHeaderImpl&&) noexcept = delete;
     BlockHeaderImpl& operator=(const BlockHeaderImpl&) = delete;
     BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = delete;
-    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader)
-      : m_inner([m_blockHeader = std::addressof(blockHeader)]() { return m_blockHeader; })
-    {}
+    explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data) override;
@@ -61,7 +53,8 @@ public:
     void clear() override;
 
     uint32_t version() const override { return m_inner()->data.version; }
-    RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+    ::ranges::any_view<bcos::protocol::ParentInfo,
+        ::ranges::category::input | ::ranges::category::sized>
     parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
@@ -80,7 +73,7 @@ public:
 
     void setVersion(uint32_t _version) override;
 
-    void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) override;
+    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override;
 
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override;
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override;
@@ -115,6 +108,5 @@ private:
     void clearDataHash();
 
     std::function<bcostars::BlockHeader*()> m_inner;
-    mutable bcos::SharedMutex x_inner;
 };
 }  // namespace bcostars::protocol
