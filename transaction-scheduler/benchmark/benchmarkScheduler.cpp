@@ -128,7 +128,7 @@ struct Fixture
                         auto view = m_multiLayerStorage.fork();
                         view.newMutable();
                         auto receipts = co_await scheduler.executeBlock(view, m_executor,
-                            *block->blockHeaderConst(), transactions, m_ledgerConfig);
+                            *block->blockHeader(), transactions, m_ledgerConfig);
                         if (receipts[0]->status() != 0)
                         {
                             fmt::print("deployContract unexpected receipt status: {}, {}\n",

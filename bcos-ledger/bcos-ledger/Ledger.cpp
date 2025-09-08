@@ -91,7 +91,7 @@ void Ledger::asyncPreStoreBlockTxs(bcos::protocol::ConstTransactionsPtr _blockTx
     auto unstoredTxsHash = std::get<1>(txsToSaveResult);
     auto unstoredTxs = std::get<2>(txsToSaveResult);
 
-    auto blockNumber = block->blockHeaderConst()->number();
+    auto blockNumber = block->blockHeader()->number();
     auto total = unstoredTxs->size();
     std::vector<std::string_view> keys(total);
     std::vector<std::string_view> values(total);
@@ -149,7 +149,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         return;
     }
 
-    if (isSysContractDeploy(block->blockHeaderConst()->number()) && block->transactionsSize() > 0)
+    if (isSysContractDeploy(block->blockHeader()->number()) && block->transactionsSize() > 0)
     {
         // sys contract deploy
         /// NOTE: write block number for 2pc storage
@@ -167,7 +167,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             });
         return;
     }
-    auto header = block->blockHeaderConst();
+    auto header = block->blockHeader();
 
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
@@ -334,7 +334,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         asyncPreStoreBlockTxs(_blockTxs, block, setRowCallback);
         auto writeTxsTime = utcTime() - start;
         LEDGER_LOG(INFO) << LOG_DESC("asyncPrewriteBlock")
-                         << LOG_KV("number", block->blockHeaderConst()->number())
+                         << LOG_KV("number", block->blockHeader()->number())
                          << LOG_KV("writeReceiptsTime(ms)", writeReceiptsTime)
                          << LOG_KV("writeTxsTime(ms)", writeTxsTime);
     }
@@ -385,7 +385,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 setRowCallback({}, true);
             }
             LEDGER_LOG(INFO) << METRIC << LOG_DESC("asyncPrewriteBlock")
-                             << LOG_KV("number", block->blockHeaderConst()->number())
+                             << LOG_KV("number", block->blockHeader()->number())
                              << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("failedTxs", failedTxs)
                              << LOG_KV("incTxs", totalCount) << LOG_KV("incFailedTxs", failedCount);
         });
@@ -420,7 +420,7 @@ Ledger::needStoreUnsavedTxs(
     if (!_blockTxs || _blockTxs->size() == 0)
     {
         LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs: empty txs")
-                         << LOG_KV("number", (_block ? _block->blockHeaderConst()->number() : -1));
+                         << LOG_KV("number", (_block ? _block->blockHeader()->number() : -1));
         return std::make_tuple(false, nullptr, nullptr);
     }
     // supplement the unsaved hash_2_txs
@@ -441,7 +441,7 @@ Ledger::needStoreUnsavedTxs(
     }
     LEDGER_LOG(INFO) << LOG_DESC("asyncPreStoreBlockTxs: needStoreUnsavedTxs")
                      << LOG_KV("txsSize", _blockTxs->size()) << LOG_KV("unstoredTxs", unstoredTxs)
-                     << LOG_KV("number", (_block ? _block->blockHeaderConst()->number() : -1));
+                     << LOG_KV("number", (_block ? _block->blockHeader()->number() : -1));
     if (txsToStore->size() == 0)
     {
         return std::make_tuple(false, nullptr, nullptr);
@@ -457,7 +457,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
     {
         return BCOS_ERROR_PTR(LedgerError::ErrorArgument, "empty block");
     }
-    auto blockNumber = block->blockHeaderConst()->number();
+    auto blockNumber = block->blockHeader()->number();
     LEDGER_LOG(INFO) << LOG_DESC("storeTransactionsAndReceipts")
                      << LOG_KV("blockNumber", blockNumber);
     auto start = utcTime();

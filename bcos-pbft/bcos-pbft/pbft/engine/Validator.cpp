@@ -54,7 +54,7 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
     bcos::protocol::BlockNumber index, protocol::Block::ConstPtr block,
     std::function<void(Error::Ptr, bool)> _verifyFinishedHandler)
 {
-    auto blockHeader = block->blockHeaderConst();
+    auto blockHeader = block->blockHeader();
     if (blockHeader->number() != index)
     {
         if (_verifyFinishedHandler)
@@ -71,7 +71,7 @@ void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
 void TxsValidator::asyncResetTxsFlag(
     const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash)
 {
-    auto blockHeader = proposal.blockHeaderConst();
+    auto blockHeader = proposal.blockHeader();
     if (_flag)
     {
         // already has the reset request
@@ -105,7 +105,7 @@ void TxsValidator::asyncResetTxsFlag(
 void TxsValidator::asyncResetTxsFlag(
     const protocol::Block& _block, HashList _txsHashList, bool _flag, bool _emptyTxBatchHash)
 {
-    auto blockHeader = _block.blockHeaderConst();
+    auto blockHeader = _block.blockHeader();
     auto proposalNumber = blockHeader->number();
     auto proposalHash = blockHeader->hash();
     if (_emptyTxBatchHash)

@@ -890,7 +890,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     {
         return missedTxs;
     }
-    auto blockHeader = _block->blockHeaderConst();
+    auto blockHeader = _block->blockHeader();
     auto batchId = (_block && blockHeader) ? blockHeader->number() : -1;
     auto batchHash = (_block && blockHeader) ? blockHeader->hash() : bcos::crypto::HashType();
     auto startT = utcTime();

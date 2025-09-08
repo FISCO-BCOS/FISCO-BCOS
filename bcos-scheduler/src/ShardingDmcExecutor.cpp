@@ -195,7 +195,7 @@ void ShardingDmcExecutor::preExecute()
 
     std::shared_ptr<std::promise<bcos::Error::UniquePtr>> preExePromise =
         std::make_shared<std::promise<bcos::Error::UniquePtr>>();
-    m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeaderConst(),
+    m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeader(),
         m_contractAddress, *message, [preExePromise](bcos::Error::UniquePtr error) {
             preExePromise->set_value(std::move(error));
         });

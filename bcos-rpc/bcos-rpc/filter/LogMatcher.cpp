@@ -15,7 +15,7 @@ uint32_t LogMatcher::matches(
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
         auto receipt = receipts[index];
-        count += matches(_params, _block->blockHeaderConst()->hash(), *receipt,
+        count += matches(_params, _block->blockHeader()->hash(), *receipt,
             _block->transactionHash(index), index, _result);
     }
 

@@ -27,7 +27,7 @@ public:
     int32_t version() const override { return m_blockHeader->version(); }
     void setVersion(int32_t _version) override { m_blockHeader->setVersion(_version); }
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }
-    protocol::BlockHeader::ConstPtr blockHeaderConst() const override { return m_blockHeader; }
+    protocol::BlockHeader::ConstPtr blockHeader() const override { return m_blockHeader; }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
     protocol::Transaction::ConstPtr transaction(uint64_t _index) const override { return {}; }
     protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override { return {}; }

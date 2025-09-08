@@ -729,7 +729,7 @@ void BlockSync::maintainDownloadingQueue()
     }
 
     // hold header to decrease make_shared overhead
-    auto topHeader = topBlock->blockHeaderConst();
+    auto topHeader = topBlock->blockHeader();
     auto expectedBlock = executedBlock + 1;
     auto topNumber = topHeader->number();
     if (topNumber > (expectedBlock))
