@@ -63,12 +63,6 @@ bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) co
         [self = shared_from_this(), _index]() { return &(self->m_inner.transactions[_index]); });
 }
 
-bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
-{
-    return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        [self = shared_from_this(), _index]() { return &(self->m_inner.receipts[_index]); });
-}
-
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
 {
     if (_blockHeader)
@@ -103,34 +97,6 @@ void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
 RANGES::any_view<std::string> BlockImpl::nonceList() const
 {
     return m_inner.nonceList;
-}
-
-bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
-{
-    if (_index >= transactionsMetaDataSize())
-    {
-        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaData index out of range"));
-    }
-
-    auto txMetaData = std::make_shared<const bcostars::protocol::TransactionMetaDataImpl>(
-        [self = shared_from_this(), _index]() {
-            return &self->m_inner.transactionsMetaData[_index];
-        });
-
-    return txMetaData;
-}
-
-TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) const
-{
-    if (_index >= transactionsMetaDataSize())
-    {
-        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaDataImpl index out of range"));
-    }
-
-    return bcostars::protocol::TransactionMetaDataImpl(
-        [self = shared_from_this(), _index]() mutable {
-            return std::addressof(self->m_inner.transactionsMetaData[_index]);
-        });
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockImpl::transactionHash(uint64_t _index) const
@@ -286,13 +252,13 @@ size_t bcostars::protocol::BlockImpl::size() const
 {
     size_t size = 0;
     size += blockHeader()->size();
-    for (uint64_t i = 0; i < transactionsSize(); ++i)
+    for (auto transaction : transactions())
     {
-        size += transaction(i)->size();
+        size += transaction->size();
     }
-    for (uint64_t i = 0; i < receiptsSize(); ++i)
+    for (auto receipt : receipts())
     {
-        size += receipt(i)->size();
+        size += receipt->size();
     }
     return size;
 }

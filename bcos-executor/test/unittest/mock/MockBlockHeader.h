@@ -1,11 +1,17 @@
 #pragma once
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 
 namespace bcos::test
 {
-class MockBlockHeader : public bcos::protocol::BlockHeader
+class MockBlockHeader : public bcos::protocol::BlockHeader,
+                        public virtual MoveImpl<MockBlockHeader, class bcos::protocol::BlockHeader>
 {
 public:
+    MockBlockHeader(const MockBlockHeader&) = default;
+    MockBlockHeader(MockBlockHeader&&) = default;
+    MockBlockHeader& operator=(const MockBlockHeader&) = default;
+    MockBlockHeader& operator=(MockBlockHeader&&) = default;
     MockBlockHeader(protocol::BlockNumber _number) : m_blockNumber(_number) {}
     ~MockBlockHeader() override = default;
 

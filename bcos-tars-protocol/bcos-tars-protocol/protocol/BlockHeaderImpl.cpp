@@ -255,7 +255,7 @@ const bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner() const
 {
     return *m_inner();
 }
-bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::mutableInner()
+bcostars::BlockHeader& bcostars::protocol::BlockHeaderImpl::inner()
 {
     return *m_inner();
 }

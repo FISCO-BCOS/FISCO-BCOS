@@ -30,14 +30,9 @@ public:
     protocol::BlockHeader::ConstPtr blockHeader() const override { return m_blockHeader; }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
     protocol::Transaction::ConstPtr transaction(uint64_t _index) const override { return {}; }
-    protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override { return {}; }
-    protocol::TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const override
-    {
-        return {};
-    }
     crypto::HashType transactionHash(uint64_t _index) const override
     {
-        return transactionMetaData(_index)->hash();
+        return transactionMetaDatas()[_index]->hash();
     }
     void setBlockType(protocol::BlockType _blockType) override {}
     void setTransaction(uint64_t _index, protocol::Transaction::Ptr _transaction) override {}

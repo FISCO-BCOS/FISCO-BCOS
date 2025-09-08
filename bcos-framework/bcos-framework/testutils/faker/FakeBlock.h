@@ -93,7 +93,8 @@ inline void checkBlock(CryptoSuite::Ptr _cryptoSuite, Block::Ptr block, Block::P
     BOOST_CHECK_EQUAL(decodedBlock->receiptsSize(), block->receiptsSize());
     for (size_t i = 0; i < block->receiptsSize(); ++i)
     {
-        checkReceipts(_cryptoSuite->hashImpl(), block->receipt(i), decodedBlock->receipt(i));
+        checkReceipts(_cryptoSuite->hashImpl(), block->receipts()[i].toShared(),
+            decodedBlock->receipts()[i].toShared());
     }
     /*
     for (auto receipt : *(block->receipts()))
@@ -104,10 +105,10 @@ inline void checkBlock(CryptoSuite::Ptr _cryptoSuite, Block::Ptr block, Block::P
     for (size_t i = 0; i < decodedBlock->transactionsHashSize(); i++)
     {
         BOOST_CHECK(decodedBlock->transactionHash(i) == block->transactionHash(i));
-        BOOST_CHECK(
-            decodedBlock->transactionMetaData(i)->hash() == block->transactionMetaData(i)->hash());
-        BOOST_CHECK(
-            decodedBlock->transactionMetaData(i)->to() == block->transactionMetaData(i)->to());
+        BOOST_CHECK(decodedBlock->transactionMetaDatas()[i]->hash() ==
+                    block->transactionMetaDatas()[i]->hash());
+        BOOST_CHECK(decodedBlock->transactionMetaDatas()[i]->to() ==
+                    block->transactionMetaDatas()[i]->to());
     }
     // check receiptsRoot
     h256 originHash = h256();
@@ -215,7 +216,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     {
         auto hash = block->transaction(i)->hash();
         BOOST_CHECK(decodedBlock->transactionHash(i) == hash);
-        BOOST_CHECK(decodedBlock->transactionMetaData(i)->hash() == hash);
+        BOOST_CHECK(decodedBlock->transactionMetaDatas()[i]->hash() == hash);
     }
     // exception test
     /*(*encodedData)[0] += 1;

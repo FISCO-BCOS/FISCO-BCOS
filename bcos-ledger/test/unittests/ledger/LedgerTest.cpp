@@ -1058,7 +1058,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
             [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
                 BOOST_CHECK_EQUAL(_error, nullptr);
                 BOOST_CHECK_EQUAL(_receipt->hash().hex(),
-                    m_fakeBlocks->at(blockNumber)->receipt(hashIndex)->hash().hex());
+                    m_fakeBlocks->at(blockNumber)->receipts()[hashIndex]->hash().hex());
 
                 auto hash = _receipt->hash();
                 BOOST_CHECK(_proof != nullptr);
@@ -1092,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
         [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(
-                _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
+                _receipt->hash().hex(), m_fakeBlocks->at(3)->receipts()[0]->hash().hex());
 
             auto hash = _receipt->hash();
             BOOST_CHECK(_proof != nullptr);
@@ -1111,7 +1111,7 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
         [&](Error::Ptr _error, TransactionReceipt::Ptr _receipt, MerkleProofPtr _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK_EQUAL(
-                _receipt->hash().hex(), m_fakeBlocks->at(3)->receipt(0)->hash().hex());
+                _receipt->hash().hex(), m_fakeBlocks->at(3)->receipts()[0]->hash().hex());
             BOOST_CHECK(_proof == nullptr);
             p2.set_value(true);
         });
