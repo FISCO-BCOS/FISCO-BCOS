@@ -335,7 +335,10 @@ void BlockExecutive::asyncCall(
                 nullptr);
             return;
         }
-        auto receipt = executive->block()->receipts()[0].toShared();
+        auto anyReceipt = executive->block()->receipts()[0];
+        bytes buffer;
+        anyReceipt->encode(buffer);
+        auto receipt = executive->m_blockFactory->receiptFactory()->createReceipt(buffer);
         callback(std::move(_error), std::move(receipt));
     });
 }
