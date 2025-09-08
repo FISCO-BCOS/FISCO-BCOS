@@ -11,9 +11,11 @@ uint32_t LogMatcher::matches(
     FilterRequest::ConstPtr _params, bcos::protocol::Block::ConstPtr _block, Json::Value& _result)
 {
     uint32_t count = 0;
+    auto receipts = _block->receipts();
     for (std::size_t index = 0; index < _block->transactionsMetaDataSize(); index++)
     {
-        count += matches(_params, _block->blockHeader()->hash(), _block->receipt(index),
+        auto receipt = receipts[index];
+        count += matches(_params, _block->blockHeader()->hash(), *receipt,
             _block->transactionHash(index), index, _result);
     }
 
@@ -21,17 +23,16 @@ uint32_t LogMatcher::matches(
 }
 
 uint32_t LogMatcher::matches(FilterRequest::ConstPtr _params, bcos::crypto::HashType&& _blockHash,
-    bcos::protocol::TransactionReceipt::ConstPtr&& _receipt, bcos::crypto::HashType&& _txHash,
+    const bcos::protocol::TransactionReceipt& _receipt, bcos::crypto::HashType&& _txHash,
     std::size_t _txIndex, Json::Value& _result)
 {
     uint32_t count = 0;
-    auto blockNumber = _receipt->blockNumber();
-    if (_receipt->status() != int32_t(TransactionStatus::None))
+    auto blockNumber = _receipt.blockNumber();
+    if (_receipt.status() != int32_t(TransactionStatus::None))
     {
         return 0;
     }
-    auto mutableReceipt = const_cast<bcos::protocol::TransactionReceipt*>(_receipt.get());
-    auto logEntries = mutableReceipt->takeLogEntries();
+    auto logEntries = _receipt.logEntries();
     for (size_t i = 0; i < logEntries.size(); i++)
     {
         const auto& logEntry = logEntries[i];

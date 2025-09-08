@@ -56,7 +56,13 @@ public:
     AnyHolder(const AnyHolder&) = delete;
     AnyHolder(AnyHolder&& other) noexcept { other.get()->moveConstructTo(get()); }
     AnyHolder& operator=(const AnyHolder&) = delete;
-    AnyHolder& operator=(AnyHolder&& other) noexcept { other.get()->moveAssignTo(get()); }
+    AnyHolder& operator=(AnyHolder&& other) noexcept
+    {
+        if (this == &other)
+            return *this;
+        other.get()->moveAssignTo(get());
+        return *this;
+    }
 
     Type& operator*() & { return *get(); }
     const Type& operator*() const& { return *get(); }

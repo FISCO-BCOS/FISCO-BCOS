@@ -66,11 +66,12 @@ public:
     virtual BlockHeader::ConstPtr blockHeader() const = 0;
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transactions
-    virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
+    [[deprecated]] virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
     // get receipts
-    virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
+    [[deprecated]] virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
     // get transaction metaData
-    virtual TransactionMetaData::ConstPtr transactionMetaData(uint64_t _index) const = 0;
+    [[deprecated]] virtual TransactionMetaData::ConstPtr transactionMetaData(
+        uint64_t _index) const = 0;
     // get transaction hash
     virtual bcos::crypto::HashType transactionHash(uint64_t _index) const = 0;
 
@@ -99,17 +100,6 @@ public:
     // for nonceList
     virtual void setNonceList(::ranges::any_view<std::string> nonces) = 0;
     virtual ::ranges::any_view<std::string> nonceList() const = 0;
-
-    virtual NonceListPtr nonces() const
-    {
-        return std::make_shared<NonceList>(
-            ::ranges::iota_view<size_t, size_t>(0LU, transactionsSize()) |
-            ::ranges::views::transform([this](uint64_t index) {
-                auto transaction = this->transaction(index);
-                return transaction->nonce();
-            }) |
-            ::ranges::to<NonceList>());
-    }
 
     virtual ViewResult<crypto::HashType> transactionHashes() const = 0;
     virtual ViewResult<AnyTransactionMetaData> transactionMetaDatas() const = 0;
