@@ -21,6 +21,7 @@
 
 #pragma once
 // if windows, manual include tup/Tars.h first
+#include "bcos-utilities/AnyHolder.h"
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
@@ -33,15 +34,17 @@
 
 namespace bcostars::protocol
 {
-class BlockHeaderImpl : public bcos::protocol::BlockHeader
+class BlockHeaderImpl
+  : public bcos::protocol::BlockHeader,
+    public virtual bcos::MoveImpl<bcostars::protocol::BlockHeaderImpl, bcos::protocol::BlockHeader>
 {
 public:
     explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner);
     BlockHeaderImpl();
-    BlockHeaderImpl(const BlockHeaderImpl&) = delete;
-    BlockHeaderImpl(BlockHeaderImpl&&) noexcept = delete;
-    BlockHeaderImpl& operator=(const BlockHeaderImpl&) = delete;
-    BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = delete;
+    BlockHeaderImpl(const BlockHeaderImpl&) = default;
+    BlockHeaderImpl(BlockHeaderImpl&&) noexcept = default;
+    BlockHeaderImpl& operator=(const BlockHeaderImpl&) = default;
+    BlockHeaderImpl& operator=(BlockHeaderImpl&&) noexcept = default;
     explicit BlockHeaderImpl(bcostars::BlockHeader& blockHeader);
     ~BlockHeaderImpl() noexcept override = default;
 
@@ -90,9 +93,7 @@ public:
         gsl::span<const bcos::protocol::Signature> const& _signatureList) override;
     void setSignatureList(bcos::protocol::SignatureList&& _signatureList) override;
     const bcostars::BlockHeader& inner() const;
-
-    // Notice: without lock, be aware of thread-safety issues
-    bcostars::BlockHeader& mutableInner();
+    bcostars::BlockHeader& inner();
     void setInner(bcostars::BlockHeader blockHeader);
     size_t size() const override;
 

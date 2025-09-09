@@ -59,12 +59,6 @@ public:
     bcos::protocol::BlockHeader::ConstPtr blockHeader() const override;
 
     bcos::protocol::Transaction::ConstPtr transaction(uint64_t _index) const override;
-    bcos::protocol::TransactionReceipt::ConstPtr receipt(uint64_t _index) const override;
-
-    // get transaction metaData
-    bcos::protocol::TransactionMetaData::ConstPtr transactionMetaData(
-        uint64_t _index) const override;
-    TransactionMetaDataImpl transactionMetaDataImpl(uint64_t _index) const;
     bcos::crypto::HashType transactionHash(uint64_t _index) const override;
 
     void setBlockType(bcos::protocol::BlockType _blockType) override;

@@ -21,13 +21,14 @@
 #pragma once
 #include "Exceptions.h"
 #include "ProtocolTypeDef.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
 
 namespace bcos::protocol
 {
-class BlockHeader
+class BlockHeader : public virtual MoveBase<BlockHeader>
 {
 public:
     using Ptr = std::shared_ptr<BlockHeader>;
@@ -147,4 +148,6 @@ public:
 
     virtual size_t size() const = 0;
 };
+
+using AnyBlockHeader = AnyHolder<BlockHeader, 48>;
 }  // namespace bcos::protocol

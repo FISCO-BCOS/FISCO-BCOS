@@ -67,11 +67,6 @@ public:
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transactions
     [[deprecated]] virtual Transaction::ConstPtr transaction(uint64_t _index) const = 0;
-    // get receipts
-    [[deprecated]] virtual TransactionReceipt::ConstPtr receipt(uint64_t _index) const = 0;
-    // get transaction metaData
-    [[deprecated]] virtual TransactionMetaData::ConstPtr transactionMetaData(
-        uint64_t _index) const = 0;
     // get transaction hash
     virtual bcos::crypto::HashType transactionHash(uint64_t _index) const = 0;
 
