@@ -238,8 +238,9 @@ public:
             auto transactions = std::make_shared<ConstTransactions>();
             for (size_t j = 0; j < block->transactionsSize(); ++j)
             {
-                auto tx = block->transaction(j);
-                transactions->push_back(std::const_pointer_cast<Transaction>(tx));
+                auto tx = block->transactions()[j];
+                transactions->push_back(
+                    std::const_pointer_cast<Transaction>(std::move(tx).toShared()));
             }
             m_fakeTransactions.emplace_back(transactions);
         }
@@ -270,10 +271,10 @@ public:
             for (size_t j = 0; j < txSize; ++j)
             {
                 bcos::bytes txData;
-                m_fakeBlocks->at(i)->transaction(j)->encode(txData);
+                m_fakeBlocks->at(i)->transactions()[j]->encode(txData);
                 auto txPointer = std::make_shared<bytes>(txData.begin(), txData.end());
                 txDataList->push_back(txPointer);
-                txHashList->push_back(m_fakeBlocks->at(i)->transaction(j)->hash());
+                txHashList->push_back(m_fakeBlocks->at(i)->transactions()[j]->hash());
                 txList->push_back(
                     m_blockFactory->transactionFactory()->createTransaction(bcos::ref(txData)));
             }
@@ -301,7 +302,7 @@ public:
             // update nonce logic move to executor
             //            for (size_t j = 0; j < txSize; ++j)
             //            {
-            //                auto sender = block->transaction(0)->sender();
+            //                auto sender = block->transactions()[0]->sender();
             //                auto eoa = Address(sender, Address::FromBinary).hex();
             //
             //                task::syncWait(
@@ -939,7 +940,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
                 }
 
                 BOOST_CHECK(
-                    _proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
+                    _proof->at(m_fakeBlocks->at(3)->transactions()[0]->hash().hex()) != nullptr);
                 p.set_value(true);
             });
         BOOST_CHECK_EQUAL(f.get(), true);
@@ -960,19 +961,19 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
 
-            auto hash = m_fakeBlocks->at(3)->transaction(0)->hash();
+            auto hash = m_fakeBlocks->at(3)->transactions()[0]->hash();
             BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
             auto ret = merkleUtility.verifyMerkleProof(
                 *_proof->at(hash.hex()), hash, m_fakeBlocks->at(3)->blockHeader()->txsRoot());
             BOOST_CHECK(ret);
 
-            hash = m_fakeBlocks->at(3)->transaction(1)->hash();
+            hash = m_fakeBlocks->at(3)->transactions()[1]->hash();
             BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
             ret = merkleUtility.verifyMerkleProof(
                 *_proof->at(hash.hex()), hash, m_fakeBlocks->at(3)->blockHeader()->txsRoot());
             BOOST_CHECK(ret);
 
-            hash = m_fakeBlocks->at(4)->transaction(0)->hash();
+            hash = m_fakeBlocks->at(4)->transactions()[0]->hash();
             BOOST_CHECK(_proof->at(hash.hex()) != nullptr);
             ret = merkleUtility.verifyMerkleProof(
                 *_proof->at(hash.hex()), hash, m_fakeBlocks->at(4)->blockHeader()->txsRoot());
@@ -998,7 +999,8 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
                 BOOST_CHECK(ret);
             }
 
-            BOOST_CHECK(_proof->at(m_fakeBlocks->at(3)->transaction(0)->hash().hex()) != nullptr);
+            BOOST_CHECK(
+                _proof->at(m_fakeBlocks->at(3)->transactions()[0]->hash().hex()) != nullptr);
             p2.set_value(true);
         });
     BOOST_CHECK_EQUAL(f2.get(), true);
@@ -1347,7 +1349,7 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
         100, TRANSACTIONS, [tx](Error::Ptr error, bcos::protocol::Block::Ptr block) {
             BOOST_CHECK(!error);
             BOOST_CHECK_EQUAL(block->transactionsSize(), 1);
-            BOOST_CHECK_EQUAL(block->transaction(0)->hash().hex(), tx->hash().hex());
+            BOOST_CHECK_EQUAL(block->transactions()[0]->hash().hex(), tx->hash().hex());
         });
 }
 

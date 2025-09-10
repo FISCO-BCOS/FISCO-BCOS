@@ -301,7 +301,7 @@ public:
         WriteGuard l(x_txsHashToData);
         for (size_t i = 0; i < block->transactionsSize(); i++)
         {
-            auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+            auto tx = blockTxs ? blockTxs->at(i) : block->transactions()[i].toShared();
             auto txHash = tx->hash();
             std::shared_ptr<bcos::bytes> txData;
             tx->encode(*txData);

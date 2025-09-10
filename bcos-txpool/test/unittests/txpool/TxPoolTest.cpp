@@ -369,7 +369,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     // case3: transaction with invalid nonce(conflict with the ledger nonce)
     auto const& blockData = ledger->ledgerData();
     auto duplicatedNonce =
-        blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+        blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
     tx = fakeTransaction(_cryptoSuite, std::string(duplicatedNonce),
         ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
     checkTxSubmit(
@@ -521,7 +521,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     size_t importedTxNum = 1;
 
     auto duplicatedNonce =
-        blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+        blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
     auto tx = fakeWeb3Tx(_cryptoSuite, std::string(duplicatedNonce), eoaKey);
     // bcos nonce not effect web3 nonce
     checkWebTxSubmit(

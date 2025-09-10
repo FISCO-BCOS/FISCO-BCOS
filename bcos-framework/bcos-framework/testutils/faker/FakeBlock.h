@@ -81,7 +81,8 @@ inline void checkBlock(CryptoSuite::Ptr _cryptoSuite, Block::Ptr block, Block::P
     BOOST_CHECK_EQUAL(decodedBlock->transactionsSize(), block->transactionsSize());
     for (size_t i = 0; i < block->transactionsSize(); ++i)
     {
-        checkTransaction(block->transaction(i), decodedBlock->transaction(i));
+        checkTransaction(
+            block->transactions()[i].toShared(), decodedBlock->transactions()[i].toShared());
     }
     /*
     for (auto transaction : *(block->transactions()))
@@ -188,7 +189,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     for (size_t i = 0; i < _txsNum; i++)
     {
         auto transactionMetaData =
-            _blockFactory->createTransactionMetaData(block->transaction(i)->hash(), "/abc");
+            _blockFactory->createTransactionMetaData(block->transactions()[i]->hash(), "/abc");
         block->appendTransactionMetaData(std::move(transactionMetaData));
     }
     NonceList nonceList;
@@ -214,7 +215,7 @@ inline Block::Ptr fakeAndCheckBlock(CryptoSuite::Ptr _cryptoSuite, BlockFactory:
     BOOST_CHECK(decodedBlock->transactionsMetaDataSize() == _txsNum);
     for (size_t i = 0; i < _txsNum; i++)
     {
-        auto hash = block->transaction(i)->hash();
+        auto hash = block->transactions()[i]->hash();
         BOOST_CHECK(decodedBlock->transactionHash(i) == hash);
         BOOST_CHECK(decodedBlock->transactionMetaDatas()[i]->hash() == hash);
     }

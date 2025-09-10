@@ -57,12 +57,6 @@ bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeader() const
         [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
 }
 
-bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
-{
-    return std::make_shared<const bcostars::protocol::TransactionImpl>(
-        [self = shared_from_this(), _index]() { return &(self->m_inner.transactions[_index]); });
-}
-
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
 {
     if (_blockHeader)
