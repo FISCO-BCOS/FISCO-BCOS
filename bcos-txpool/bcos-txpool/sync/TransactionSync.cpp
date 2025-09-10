@@ -305,14 +305,14 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("missedTxsSize", _missedTxs->size())
                        << LOG_KV("code", _error->errorCode())
                        << LOG_KV("msg", _error->errorMessage())
-                       << LOG_KV("propHash",
-                              (_verifiedProposal && _verifiedProposal->blockHeader()) ?
-                                  _verifiedProposal->blockHeader()->hash().abridged() :
-                                  "unknown")
-                       << LOG_KV("propIndex",
-                              (_verifiedProposal && _verifiedProposal->blockHeader()) ?
-                                  _verifiedProposal->blockHeader()->number() :
-                                  -1);
+                       << LOG_KV(
+                              "propHash", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                              _verifiedProposal->blockHeader()->hash().abridged() :
+                                              "unknown")
+                       << LOG_KV(
+                              "propIndex", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                                               _verifiedProposal->blockHeader()->number() :
+                                               -1);
         _onVerifyFinished(_error, false);
         return;
     }
@@ -386,9 +386,11 @@ bool TransactionSync::importDownloadedTxsByBlock(
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
-    for (size_t i = 0; i < _txsBuffer->transactionsSize(); i++)
+    for (auto tx : _txsBuffer->transactions())
     {
-        txs->emplace_back(std::const_pointer_cast<Transaction>(_txsBuffer->transaction(i)));
+        auto newTx = m_config->blockFactory()->transactionFactory()->createTransaction();
+        tx->moveAssignTo(newTx.get());
+        txs->emplace_back(std::move(newTx));
     }
     return importDownloadedTxs(std::move(txs), std::move(_verifiedProposal));
 }

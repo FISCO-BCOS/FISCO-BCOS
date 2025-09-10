@@ -38,6 +38,8 @@ public:
     TransactionReceiptFactory& operator=(TransactionReceiptFactory&&) = default;
 
     virtual ~TransactionReceiptFactory() = default;
+
+    virtual TransactionReceipt::Ptr createReceipt() const = 0;
     virtual TransactionReceipt::Ptr createReceipt(bytesConstRef _receiptData) const = 0;
     virtual TransactionReceipt::Ptr createReceipt(bytes const& _receiptData) const = 0;
     virtual TransactionReceipt::Ptr createReceipt(u256 const& gasUsed, std::string contractAddress,

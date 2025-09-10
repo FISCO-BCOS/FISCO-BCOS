@@ -1,4 +1,5 @@
 #include "BlockFactoryImpl.h"
+#include "BlockImpl.h"
 
 bcostars::protocol::BlockFactoryImpl::BlockFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite,
     bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory,
@@ -50,11 +51,11 @@ bcostars::protocol::BlockFactoryImpl::createTransactionMetaData()
 }
 bcos::protocol::TransactionMetaData::Ptr
 bcostars::protocol::BlockFactoryImpl::createTransactionMetaData(
-    bcos::crypto::HashType const _hash, std::string const& _to)
+    bcos::crypto::HashType _hash, std::string _to)
 {
     auto txMetaData = std::make_shared<bcostars::protocol::TransactionMetaDataImpl>();
     txMetaData->setHash(_hash);
-    txMetaData->setTo(_to);
+    txMetaData->setTo(std::move(_to));
 
     return txMetaData;
 }

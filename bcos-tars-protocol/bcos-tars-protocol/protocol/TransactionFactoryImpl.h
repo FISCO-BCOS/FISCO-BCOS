@@ -35,6 +35,7 @@ public:
     TransactionFactoryImpl(bcos::crypto::CryptoSuite::Ptr cryptoSuite);
     ~TransactionFactoryImpl() noexcept override = default;
 
+    bcos::protocol::Transaction::Ptr createTransaction() override;
     bcos::protocol::Transaction::Ptr createTransaction(
         bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override;
 

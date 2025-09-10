@@ -52,7 +52,7 @@ public:
 
     virtual TransactionMetaData::Ptr createTransactionMetaData() = 0;
     virtual TransactionMetaData::Ptr createTransactionMetaData(
-        bcos::crypto::HashType _hash, std::string const& _to) = 0;
+        bcos::crypto::HashType _hash, std::string _to) = 0;
 
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
     virtual BlockHeaderFactory::Ptr blockHeaderFactory() = 0;

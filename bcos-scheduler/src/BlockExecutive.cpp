@@ -336,9 +336,8 @@ void BlockExecutive::asyncCall(
             return;
         }
         auto anyReceipt = executive->block()->receipts()[0];
-        bytes buffer;
-        anyReceipt->encode(buffer);
-        auto receipt = executive->m_blockFactory->receiptFactory()->createReceipt(buffer);
+        auto receipt = executive->m_blockFactory->receiptFactory()->createReceipt();
+        anyReceipt->moveAssignTo(receipt.get());
         callback(std::move(_error), std::move(receipt));
     });
 }

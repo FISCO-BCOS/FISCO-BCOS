@@ -6,6 +6,11 @@ bcostars::protocol::TransactionFactoryImpl::TransactionFactoryImpl(
   : m_cryptoSuite(std::move(cryptoSuite))
 {}
 
+bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction()
+{
+    return std::make_shared<TransactionImpl>();
+}
+
 bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction(
     bcos::bytesConstRef txData, bool checkSig, bool checkHash)
 {
