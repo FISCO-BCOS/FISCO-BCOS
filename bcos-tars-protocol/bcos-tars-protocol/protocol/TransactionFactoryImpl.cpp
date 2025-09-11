@@ -17,6 +17,15 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
     auto& tarsInput = dynamic_cast<bcostars::protocol::TransactionImpl&>(input);
     auto transaction = std::make_shared<TransactionImpl>(
         [m_inner = std::move(tarsInput.mutableInner())]() mutable { return &m_inner; });
+    transaction->setSynced(input.synced());
+    transaction->setSealed(input.sealed());
+    transaction->setInvalid(input.invalid());
+    transaction->setSystemTx(input.systemTx());
+    transaction->setBatchId(input.batchId());
+    transaction->setBatchHash(input.batchHash());
+    transaction->setStoreToBackend(input.storeToBackend());
+    transaction->setSubmitCallback(input.takeSubmitCallback());
+
     return transaction;
 }
 

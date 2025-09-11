@@ -5,6 +5,15 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt() const
 {
     return std::make_shared<TransactionReceiptImpl>();
 }
+bcostars::protocol::TransactionReceiptImpl::Ptr
+bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(
+    bcos::protocol::TransactionReceipt& input) const
+{
+    auto tarsInput = dynamic_cast<TransactionReceiptImpl&>(input);
+    return std::make_shared<TransactionReceiptImpl>(
+        [m_inner = std::move(tarsInput.mutableInner())]() mutable { return &m_inner; });
+}
+
 
 bcostars::protocol::TransactionReceiptImpl::Ptr
 bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(
@@ -74,3 +83,7 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt2(bcos::u256 con
     bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
     return transactionReceipt;
 }
+bcostars::protocol::TransactionReceiptFactoryImpl::TransactionReceiptFactoryImpl(
+    const bcos::crypto::CryptoSuite::Ptr& cryptoSuite)
+  : m_hashImpl(cryptoSuite->hashImpl())
+{}

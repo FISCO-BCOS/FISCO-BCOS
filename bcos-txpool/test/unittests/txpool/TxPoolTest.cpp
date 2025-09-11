@@ -308,10 +308,12 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();
-    auto nonceList = blockData[_faker->ledger()->blockNumber()]->nonceList();
+    auto nonceList =
+        ::ranges::views::transform(blockData[_faker->ledger()->blockNumber()]->transactions(),
+            [](auto tx) { return tx->nonce(); });
     for (auto nonce : nonceList)
     {
-        BOOST_TEST(ledgerNonceChecker->exists(nonce) == false);
+        BOOST_TEST(ledgerNonceChecker->exists(std::string(nonce)) == false);
     }
 
     // case: the other left txs expired for invalid blockLimit

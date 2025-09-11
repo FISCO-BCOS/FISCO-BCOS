@@ -353,18 +353,18 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
         importDownloadedTxsByBlock(transactions);
         return;
     }
-    if (!importDownloadedTxsByBlock(transactions, _verifiedProposal))
+    auto [result, txs] = importDownloadedTxsByBlock(transactions, _verifiedProposal);
+    if (!result)
     {
         _onVerifyFinished(BCOS_ERROR_PTR(CommonError::TxsSignatureVerifyFailed,
                               "invalid transaction for invalid signature or nonce or blockLimit"),
             false);
         return;
     }
-    auto txs2 = transactions->transactions();
     // check the transaction hash
     for (size_t i = 0; i < _missedTxs->size(); i++)
     {
-        if ((*_missedTxs)[i] != txs2[i]->hash())
+        if ((*_missedTxs)[i] != (*txs)[i]->hash())
         {
             _onVerifyFinished(
                 BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
@@ -381,7 +381,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                     << LOG_KV("timecost", (utcTime() - recordT));
 }
 
-bool TransactionSync::importDownloadedTxsByBlock(
+std::tuple<bool, std::shared_ptr<protocol::Transactions>>
+TransactionSync::importDownloadedTxsByBlock(
     Block::Ptr _txsBuffer, Block::ConstPtr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
@@ -391,7 +392,7 @@ bool TransactionSync::importDownloadedTxsByBlock(
     {
         txs->emplace_back(txFactory->createTransaction(*tx));
     }
-    return importDownloadedTxs(std::move(txs), std::move(_verifiedProposal));
+    return {importDownloadedTxs(txs, std::move(_verifiedProposal)), txs};
 }
 
 bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr _verifiedProposal)

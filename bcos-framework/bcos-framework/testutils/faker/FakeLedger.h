@@ -457,8 +457,10 @@ public:
         ReadGuard l(x_ledger);
         for (auto index = _startNumber; index <= endNumber; index++)
         {
-            auto nonces = ::ranges::to<std::vector>(m_ledger[index]->nonceList());
-            nonceList->insert(std::make_pair(index, std::make_shared<NonceList>(nonces)));
+            auto nonces = ::ranges::views::transform(
+                m_ledger[index]->transactions(), [](auto tx) { return std::string(tx->nonce()); });
+            nonceList->insert(std::make_pair(
+                index, std::make_shared<NonceList>(::ranges::to<std::vector>(nonces))));
         }
         _onGetList(nullptr, nonceList);
     }
