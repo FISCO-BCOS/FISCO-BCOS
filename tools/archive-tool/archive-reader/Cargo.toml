@@ -13,5 +13,5 @@ async-std = { version = "1", features = ["attributes", "tokio1"] }
 tokio = { version = "1.32.0", features = [ "sync", "rt-multi-thread", "macros" ] }
 tide = "0.16.0"
 serde = { version = "1.0", features = ["derive"] }
-rocksdb = "0.19.0"
+rocksdb = "0.24.0"
 tikv-client = { git = "https://github.com/FISCO-BCOS/tikv-client-rust.git", rev = "de5fb411a10ff92ea75d6cf382a0fdffa8c6955a" }
