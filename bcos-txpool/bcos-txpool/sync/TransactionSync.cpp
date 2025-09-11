@@ -386,11 +386,10 @@ bool TransactionSync::importDownloadedTxsByBlock(
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
+    auto txFactory = m_config->blockFactory()->transactionFactory();
     for (auto tx : _txsBuffer->transactions())
     {
-        auto newTx = m_config->blockFactory()->transactionFactory()->createTransaction();
-        tx->moveAssignTo(newTx.get());
-        txs->emplace_back(std::move(newTx));
+        txs->emplace_back(txFactory->createTransaction(*tx));
     }
     return importDownloadedTxs(std::move(txs), std::move(_verifiedProposal));
 }

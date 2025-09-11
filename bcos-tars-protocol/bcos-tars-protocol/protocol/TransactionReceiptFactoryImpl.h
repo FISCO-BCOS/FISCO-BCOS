@@ -39,6 +39,13 @@ public:
     ~TransactionReceiptFactoryImpl() override = default;
 
     TransactionReceiptImpl::Ptr createReceipt() const override;
+    TransactionReceiptImpl::Ptr createReceipt(
+        bcos::protocol::TransactionReceipt& input) const override
+    {
+        auto tarsInput = dynamic_cast<TransactionReceiptImpl&>(input);
+        return std::make_shared<TransactionReceiptImpl>(
+            [m_inner = std::move(tarsInput.mutableInner())]() mutable { return &m_inner; });
+    }
     TransactionReceiptImpl::Ptr createReceipt(bcos::bytesConstRef _receiptData) const override;
     TransactionReceiptImpl::Ptr createReceipt(bcos::bytes const& _receiptData) const override;
     TransactionReceiptImpl::Ptr createReceipt(bcos::u256 const& gasUsed,

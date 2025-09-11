@@ -12,6 +12,15 @@ bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::cre
 }
 
 bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction(
+    bcos::protocol::Transaction& input)
+{
+    auto& tarsInput = dynamic_cast<bcostars::protocol::TransactionImpl&>(input);
+    auto transaction = std::make_shared<TransactionImpl>(
+        [m_inner = std::move(tarsInput.mutableInner())]() mutable { return &m_inner; });
+    return transaction;
+}
+
+bcos::protocol::Transaction::Ptr bcostars::protocol::TransactionFactoryImpl::createTransaction(
     bcos::bytesConstRef txData, bool checkSig, bool checkHash)
 {
     auto transaction = std::make_shared<TransactionImpl>(
