@@ -1,8 +1,9 @@
 #include "TxPoolServiceServer.h"
 #include "../Common/TarsUtils.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-tars-protocol/tars/TransactionMetaData.h"
+#include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
 #include <bcos-task/Wait.h>
 using namespace bcostars;
 

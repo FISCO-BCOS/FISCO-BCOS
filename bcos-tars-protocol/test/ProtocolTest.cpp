@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE(transaction)
     auto block = blockFactory->createBlock();
     block->appendTransaction(std::move(decodedTx));
 
-    auto blockTx = block->transaction(0);
+    auto blockTx = block->transactions()[0];
     BOOST_CHECK_EQUAL(blockTx->sender(), tx->sender());
 }
 
@@ -317,8 +317,8 @@ BOOST_AUTO_TEST_CASE(block)
     for (size_t i = 0; i < block->transactionsSize(); ++i)
     {
         {
-            auto lhs = block->transaction(i);
-            auto rhs = decodedBlock->transaction(i);
+            auto lhs = block->transactions()[i];
+            auto rhs = decodedBlock->transactions()[i];
 
             // check if transaction hash re-encode
             bcos::bytes reencodeBuffer;

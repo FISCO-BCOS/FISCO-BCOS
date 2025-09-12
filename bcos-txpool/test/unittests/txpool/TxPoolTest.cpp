@@ -308,10 +308,12 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
     }
     // check the nonce of ledger->blockNumber() hash been removed from ledgerNonceChecker
     auto const& blockData = _faker->ledger()->ledgerData();
-    auto nonceList = blockData[_faker->ledger()->blockNumber()]->nonceList();
+    auto nonceList =
+        ::ranges::views::transform(blockData[_faker->ledger()->blockNumber()]->transactions(),
+            [](auto tx) { return tx->nonce(); });
     for (auto nonce : nonceList)
     {
-        BOOST_TEST(ledgerNonceChecker->exists(nonce) == false);
+        BOOST_TEST(ledgerNonceChecker->exists(std::string(nonce)) == false);
     }
 
     // case: the other left txs expired for invalid blockLimit
@@ -369,7 +371,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
     // case3: transaction with invalid nonce(conflict with the ledger nonce)
     auto const& blockData = ledger->ledgerData();
     auto duplicatedNonce =
-        blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+        blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
     tx = fakeTransaction(_cryptoSuite, std::string(duplicatedNonce),
         ledger->blockNumber() + blockLimit - 4, faker->chainId(), faker->groupId());
     checkTxSubmit(
@@ -521,7 +523,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     size_t importedTxNum = 1;
 
     auto duplicatedNonce =
-        blockData[ledger->blockNumber() - blockLimit + 1]->transaction(0)->nonce();
+        blockData[ledger->blockNumber() - blockLimit + 1]->transactions()[0]->nonce();
     auto tx = fakeWeb3Tx(_cryptoSuite, std::string(duplicatedNonce), eoaKey);
     // bcos nonce not effect web3 nonce
     checkWebTxSubmit(

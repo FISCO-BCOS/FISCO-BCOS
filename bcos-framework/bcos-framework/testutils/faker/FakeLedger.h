@@ -301,7 +301,7 @@ public:
         WriteGuard l(x_txsHashToData);
         for (size_t i = 0; i < block->transactionsSize(); i++)
         {
-            auto tx = blockTxs ? blockTxs->at(i) : block->transaction(i);
+            auto tx = blockTxs ? blockTxs->at(i) : block->transactions()[i].toShared();
             auto txHash = tx->hash();
             std::shared_ptr<bcos::bytes> txData;
             tx->encode(*txData);
@@ -457,8 +457,10 @@ public:
         ReadGuard l(x_ledger);
         for (auto index = _startNumber; index <= endNumber; index++)
         {
-            auto nonces = ::ranges::to<std::vector>(m_ledger[index]->nonceList());
-            nonceList->insert(std::make_pair(index, std::make_shared<NonceList>(nonces)));
+            auto nonces = ::ranges::views::transform(
+                m_ledger[index]->transactions(), [](auto tx) { return std::string(tx->nonce()); });
+            nonceList->insert(std::make_pair(
+                index, std::make_shared<NonceList>(::ranges::to<std::vector>(nonces))));
         }
         _onGetList(nullptr, nonceList);
     }

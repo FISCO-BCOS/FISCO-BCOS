@@ -242,7 +242,7 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
         tbb::blocked_range<size_t>(0U, m_block->transactionsSize(), 256), [&](auto const& range) {
             for (auto i = range.begin(); i < range.end(); ++i)
             {
-                auto tx = m_block->transaction(i);
+                auto tx = m_block->transactions()[i].toShared();
                 m_executiveResults[i].transactionHash = tx->hash();
                 m_executiveResults[i].version = tx->version();
 
@@ -336,9 +336,7 @@ void BlockExecutive::asyncCall(
             return;
         }
         auto anyReceipt = executive->block()->receipts()[0];
-        bytes buffer;
-        anyReceipt->encode(buffer);
-        auto receipt = executive->m_blockFactory->receiptFactory()->createReceipt(buffer);
+        auto receipt = executive->m_blockFactory->receiptFactory()->createReceipt(*anyReceipt);
         callback(std::move(_error), std::move(receipt));
     });
 }
@@ -664,7 +662,7 @@ void BlockExecutive::asyncNotify(
         submitResult->setTransactionReceipt(it.receipt);
         if (m_syncBlock)
         {
-            auto tx = m_block->transaction(index);
+            auto tx = m_block->transactions()[index];
             submitResult->setNonce(std::string(tx->nonce()));
         }
         index++;

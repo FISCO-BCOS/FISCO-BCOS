@@ -29,7 +29,6 @@ public:
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }
     protocol::BlockHeader::ConstPtr blockHeader() const override { return m_blockHeader; }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
-    protocol::Transaction::ConstPtr transaction(uint64_t _index) const override { return {}; }
     crypto::HashType transactionHash(uint64_t _index) const override
     {
         return transactionMetaDatas()[_index]->hash();
