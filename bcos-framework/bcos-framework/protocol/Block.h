@@ -63,7 +63,7 @@ public:
     virtual void setVersion(int32_t _version) = 0;
     virtual BlockType blockType() const = 0;
     // blockHeader gets blockHeader
-    virtual BlockHeader::ConstPtr blockHeader() const = 0;
+    virtual AnyBlockHeader blockHeader() const = 0;
     virtual BlockHeader::Ptr blockHeader() = 0;
     // get transaction hash
     virtual bcos::crypto::HashType transactionHash(uint64_t _index) const = 0;

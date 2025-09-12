@@ -340,22 +340,19 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     {
         return result;
     }
-    if (result == TransactionStatus::None)
+    auto const txImportTime = transaction->importTime();
+    if (txSubmitCallback)
     {
-        auto const txImportTime = transaction->importTime();
-        if (txSubmitCallback)
-        {
-            transaction->setSubmitCallback(std::move(txSubmitCallback));
-        }
-        if (c_fileLogLevel == TRACE)
-        {
-            auto const txHash = transaction->hash().hex();
-            TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
-                              << LOG_KV("result", result)
-                              << LOG_KV("insertTime", utcTime() - txImportTime);
-        }
-        result = insert(std::move(transaction));
+        transaction->setSubmitCallback(std::move(txSubmitCallback));
     }
+    if (c_fileLogLevel == TRACE)
+    {
+        auto const txHash = transaction->hash().hex();
+        TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
+                          << LOG_KV("result", result)
+                          << LOG_KV("insertTime", utcTime() - txImportTime);
+    }
+    result = insert(std::move(transaction));
 
     return result;
 }
@@ -891,8 +888,8 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
         return missedTxs;
     }
     auto blockHeader = _block->blockHeader();
-    auto batchId = (_block && blockHeader) ? blockHeader->number() : -1;
-    auto batchHash = (_block && blockHeader) ? blockHeader->hash() : bcos::crypto::HashType();
+    auto batchId = blockHeader->number();
+    auto batchHash = blockHeader->hash();
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();

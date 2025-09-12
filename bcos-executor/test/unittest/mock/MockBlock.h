@@ -1,9 +1,12 @@
 #pragma once
 #include "MockBlockHeader.h"
+#include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-framework/protocol/Block.h>
 
 namespace bcos::test
 {
+
 class MockBlock : public bcos::protocol::Block
 {
 public:
@@ -27,7 +30,11 @@ public:
     int32_t version() const override { return m_blockHeader->version(); }
     void setVersion(int32_t _version) override { m_blockHeader->setVersion(_version); }
     protocol::BlockType blockType() const override { return protocol::WithTransactionsHash; }
-    protocol::BlockHeader::ConstPtr blockHeader() const override { return m_blockHeader; }
+    protocol::AnyBlockHeader blockHeader() const override
+    {
+        return {bcos::InPlace<MockBlockHeader>{}, m_blockHeader->number()};
+        ;
+    }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
     crypto::HashType transactionHash(uint64_t _index) const override
     {
