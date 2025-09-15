@@ -130,7 +130,7 @@ void TxsValidator::asyncResetTxsFlag(
             }
             if (_error == nullptr)
             {
-                PBFT_LOG(INFO) << LOG_DESC("asyncMarkTxs success") << LOG_KV("index", proposalHash)
+                PBFT_LOG(INFO) << LOG_DESC("asyncMarkTxs success") << LOG_KV("index", proposalNumber)
                                << LOG_KV("hash", proposalHash.abridged()) << LOG_KV("flag", _flag)
                                << LOG_KV("markT", utcSteadyTime() - startT)
                                << LOG_KV("emptyTxBatchHash", _emptyTxBatchHash);

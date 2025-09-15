@@ -33,7 +33,6 @@ public:
     protocol::AnyBlockHeader blockHeader() const override
     {
         return {bcos::InPlace<MockBlockHeader>{}, m_blockHeader->number()};
-        ;
     }
     protocol::BlockHeader::Ptr blockHeader() override { return m_blockHeader; }
     crypto::HashType transactionHash(uint64_t _index) const override
