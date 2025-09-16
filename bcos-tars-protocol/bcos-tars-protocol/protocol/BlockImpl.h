@@ -56,7 +56,7 @@ public:
     bcos::protocol::BlockType blockType() const override;
     // FIXME: this will cause the same blockHeader calculate hash multiple times
     bcos::protocol::BlockHeader::Ptr blockHeader() override;
-    bcos::protocol::BlockHeader::ConstPtr blockHeader() const override;
+    bcos::protocol::AnyBlockHeader blockHeader() const override;
 
     bcos::crypto::HashType transactionHash(uint64_t _index) const override;
 

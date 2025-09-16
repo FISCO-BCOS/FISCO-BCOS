@@ -34,6 +34,10 @@ jobs:
         with:
           distribution: "zulu"
           java-version: "8.0.382"
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.28.3
+          ninjaVersion: 1.12.1
       - name: Restore vcpkg cache
         uses: actions/cache@v4
         id: vcpkg-cache
@@ -57,7 +61,7 @@ jobs:
           sudo apt update
           sudo apt install -y lcov wget python3-dev python3-pip git curl zip unzip tar
           sudo apt install -y --no-install-recommends \
-              clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates mold \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold \
               libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config uuid-runtime automake gcc-14 g++-14
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15'
