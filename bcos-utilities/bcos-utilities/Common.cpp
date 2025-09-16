@@ -33,7 +33,6 @@
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
-#include <regex>
 
 namespace bcos
 {
@@ -107,12 +106,7 @@ u256 s2u(s256 _u)
 
 bool isHexStrWithPrefix(std::string_view str)
 {
-    if (str.empty() || str.size() < 2)
-    {
-        return false;
-    }
-    std::regex pattern("^0x[0-9a-fA-F]+$");
-    return std::regex_match(str.begin(), str.end(), pattern);
+    return str.size() >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X');
 }
 
 u256 hex2u(std::string_view _hexStr)
