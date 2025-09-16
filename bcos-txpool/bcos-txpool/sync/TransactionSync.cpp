@@ -172,10 +172,9 @@ void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _
                 << LOG_KV("txsSize", ledgerMissedTxs->size())
                 << LOG_KV("peer", _generatedNodeID->shortHex())
                 << LOG_KV("readDBTime", utcTime() - startT)
-                << LOG_KV("consNum", _verifiedProposal && _verifiedProposal->blockHeader() ?
-                                         _verifiedProposal->blockHeader()->number() :
-                                         -1)
-                << LOG_KV("hash", _verifiedProposal && _verifiedProposal->blockHeader() ?
+                << LOG_KV("consNum",
+                       _verifiedProposal ? _verifiedProposal->blockHeader()->number() : -1)
+                << LOG_KV("hash", _verifiedProposal ?
                                       _verifiedProposal->blockHeader()->hash().abridged() :
                                       "null");
             txsSync->requestMissedTxsFromPeer(
@@ -229,11 +228,6 @@ size_t TransactionSync::onGetMissedTxsFromLedger(std::set<HashType>& _missedTxs,
 void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
     Block::ConstPtr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
-    BlockHeader::ConstPtr proposalHeader = nullptr;
-    if (_verifiedProposal)
-    {
-        proposalHeader = _verifiedProposal->blockHeader();
-    }
     if (_missedTxs->empty() && _onVerifyFinished)
     {
         _onVerifyFinished(nullptr, true);
@@ -248,7 +242,7 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     auto self = weak_from_this();
     m_config->frontService()->asyncSendMessageByNodeID(protocolID, std::move(_generatedNodeID),
         ref(*encodedData), m_config->networkTimeout(),
-        [self, startT, _missedTxs, _verifiedProposal, proposalHeader, _onVerifyFinished](
+        [self, startT, _missedTxs, _verifiedProposal, _onVerifyFinished](
             auto&& _error, auto&& _nodeID, bytesConstRef _data, const std::string&, auto&&) {
             try
             {
@@ -262,21 +256,22 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                 // verify fetch txs response
                 transactionSync->verifyFetchedTxs(_error, _nodeID, _data, _missedTxs,
                     _verifiedProposal,
-                    [networkT, recordT, proposalHeader, _onVerifyFinished](
+                    [networkT, recordT, _verifiedProposal, _onVerifyFinished](
                         Error::Ptr _error, bool _result) {
                         if (!_onVerifyFinished)
                         {
                             return;
                         }
                         _onVerifyFinished(std::move(_error), _result);
-                        if (!(proposalHeader))
+                        if (!(_verifiedProposal))
                         {
                             return;
                         }
                         SYNC_LOG(DEBUG)
                             << LOG_DESC("requestMissedTxs: response verify result")
-                            << LOG_KV("propIndex", proposalHeader->number())
-                            << LOG_KV("propHash", proposalHeader->hash().abridged())
+                            << LOG_KV("propIndex", _verifiedProposal->blockHeader()->number())
+                            << LOG_KV(
+                                   "propHash", _verifiedProposal->blockHeader()->hash().abridged())
                             << LOG_KV("_result", _result) << LOG_KV("networkT", networkT)
                             << LOG_KV("verifyAndSubmitT", (utcTime() - recordT));
                     });
@@ -306,13 +301,11 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("code", _error->errorCode())
                        << LOG_KV("msg", _error->errorMessage())
                        << LOG_KV(
-                              "propHash", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
+                              "propHash", _verifiedProposal ?
                                               _verifiedProposal->blockHeader()->hash().abridged() :
                                               "unknown")
-                       << LOG_KV(
-                              "propIndex", (_verifiedProposal && _verifiedProposal->blockHeader()) ?
-                                               _verifiedProposal->blockHeader()->number() :
-                                               -1);
+                       << LOG_KV("propIndex",
+                              _verifiedProposal ? _verifiedProposal->blockHeader()->number() : -1);
         _onVerifyFinished(_error, false);
         return;
     }
@@ -332,20 +325,18 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     auto transactions = m_config->blockFactory()->createBlock(txsResponse->txsData(), true, false);
     auto decodeT = utcTime() - startT;
     startT = utcTime();
-    BlockHeader::ConstPtr proposalHeader = nullptr;
-    if (_verifiedProposal)
-    {
-        proposalHeader = _verifiedProposal->blockHeader();
-    }
     if (_missedTxs->size() != transactions->transactionsSize())
     {
         SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed")
                        << LOG_KV("expectedTxs", _missedTxs->size())
                        << LOG_KV("fetchedTxs", transactions->transactionsSize())
                        << LOG_KV("peer", _nodeID->shortHex())
-                       << LOG_KV("hash",
-                              (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
-                       << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1);
+                       << LOG_KV("hash", (_verifiedProposal) ?
+                                             _verifiedProposal->blockHeader()->hash().abridged() :
+                                             "unknown")
+                       << LOG_KV("consNum", (_verifiedProposal) ?
+                                                _verifiedProposal->blockHeader()->number() :
+                                                -1);
         // response to verify result
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
@@ -374,9 +365,11 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     }
     _onVerifyFinished(error, true);
     SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
-                    << LOG_KV(
-                           "hash", (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
-                    << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1)
+                    << LOG_KV("hash", (_verifiedProposal) ?
+                                          _verifiedProposal->blockHeader()->hash().abridged() :
+                                          "unknown")
+                    << LOG_KV("consNum",
+                           (_verifiedProposal) ? _verifiedProposal->blockHeader()->number() : -1)
                     << LOG_KV("decodeT", decodeT) << LOG_KV("importT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
 }
@@ -404,11 +397,8 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
     auto txsSize = _txs->size();
     // Note: only need verify the signature for the transactions
     bool enforceImport = false;
-    BlockHeader::ConstPtr proposalHeader = nullptr;
-    // if _verifiedProposal is null, it means import txs from ledger
-    if (_verifiedProposal && _verifiedProposal->blockHeader())
+    if (_verifiedProposal)
     {
-        proposalHeader = _verifiedProposal->blockHeader();
         enforceImport = true;
     }
     auto recordT = utcTime();
@@ -424,10 +414,10 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 {
                     continue;
                 }
-                if (_verifiedProposal && proposalHeader)
+                if (_verifiedProposal)
                 {
-                    tx->setBatchId(proposalHeader->number());
-                    tx->setBatchHash(proposalHeader->hash());
+                    tx->setBatchId(_verifiedProposal->blockHeader()->number());
+                    tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
                 }
                 if (m_config->txpoolStorage()->exists(tx->hash()))
                 {
@@ -463,7 +453,8 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
     auto txpoolStorage = m_config->txpoolStorage();
     if (enforceImport)
     {
-        if (!txpoolStorage->batchVerifyAndSubmitTransaction(proposalHeader, _txs))
+        if (!txpoolStorage->batchVerifyAndSubmitTransaction(
+                _verifiedProposal->blockHeader().toShared(), _txs))
         {
             return false;
         }
@@ -473,8 +464,11 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
         txpoolStorage->batchImportTxs(_txs);
     }
     SYNC_LOG(DEBUG) << LOG_DESC("importDownloadedTxs success")
-                    << LOG_KV("hash", proposalHeader ? proposalHeader->hash().abridged() : "none")
-                    << LOG_KV("number", proposalHeader ? proposalHeader->number() : -1)
+                    << LOG_KV("hash", _verifiedProposal ?
+                                          _verifiedProposal->blockHeader()->hash().abridged() :
+                                          "none")
+                    << LOG_KV("number",
+                           _verifiedProposal ? _verifiedProposal->blockHeader()->number() : -1)
                     << LOG_KV("totalTxs", txsSize) << LOG_KV("verifyT", verifyT)
                     << LOG_KV("submitT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));

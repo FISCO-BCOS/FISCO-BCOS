@@ -27,6 +27,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <boost/throw_exception.hpp>
 
 using namespace bcostars;
@@ -50,10 +51,10 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
         });
 }
 
-bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeader() const
+bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
 {
-    return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
+    return {bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
+        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); }};
 }
 
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
