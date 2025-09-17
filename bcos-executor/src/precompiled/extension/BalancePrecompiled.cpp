@@ -95,7 +95,7 @@ std::shared_ptr<PrecompiledExecResult> BalancePrecompiled::call(
     }
     else
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("invalid function selector"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("invalid function selector"));
     }
     return _callParameters;
 }
@@ -123,7 +123,7 @@ void BalancePrecompiled::checkOriginAuth(
         PRECOMPILED_LOG(TRACE)
             << BLOCK_NUMBER(_executive->blockContext().number()) << LOG_BADGE("BalancePrecompiled")
             << LOG_DESC("checkOriginAuth, failed to register, only governor can register caller");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("only governor can register caller"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("only governor can register caller"));
     }
 }
 
@@ -147,7 +147,7 @@ void BalancePrecompiled::createAccount(
                               << LOG_DESC("createAccount failed")
                               << LOG_KV("accountTableName", accountTableName)
                               << LOG_KV("status", response->status);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Create account error."));
     }
 }
 
@@ -207,14 +207,14 @@ void BalancePrecompiled::addBalance(
                                << LOG_KV("account", accountStr) << LOG_KV("value", value)
                                << LOG_KV("caller", caller) << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+            protocol::PrecompiledError{} << errinfo_comment("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can addBalance"));
     }
     auto entry = _executive->storage().getRow(SYS_BALANCE_CALLER, caller);
     if (!entry.has_value())
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+            protocol::PrecompiledError{} << errinfo_comment("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can addBalance"));
     }
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")
@@ -274,14 +274,14 @@ void BalancePrecompiled::subBalance(
                                  << LOG_KV("caller", caller)
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+            protocol::PrecompiledError{} << errinfo_comment("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can subBalance"));
     }
     auto entry = table->getRow(caller);
     if (!entry.has_value())
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+            protocol::PrecompiledError{} << errinfo_comment("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can subBalance"));
     }
 
@@ -342,14 +342,14 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
                                  << LOG_KV("value", value) << LOG_KV("caller", caller)
                                  << LOG_KV("callerTableNotExist", "true");
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+            protocol::PrecompiledError{} << errinfo_comment("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can transferBalance"));
     }
     auto entry = table->getRow(caller);
     if (!entry)
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Permission denied. Please use \"listBalanceGovernor\" to "
+            protocol::PrecompiledError{} << errinfo_comment("Permission denied. Please use \"listBalanceGovernor\" to "
                                        "check which account(or contract) can transferBalance"));
     }
     // first subAccountBalance, then addAccountBalance
@@ -421,13 +421,13 @@ void BalancePrecompiled::transfer(const std::shared_ptr<executor::TransactionExe
                     _callParameters->m_create, _callParameters->m_gasLeft, true);
             if (addBalanceResult1->status == int32_t(CODE_SUCCESS))
             {
-                BOOST_THROW_EXCEPTION(PrecompiledError("transfer failed"));
+                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("transfer failed"));
             }
         }
     }
     else
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
             "transfer failed, account subBalance failed, please check the account balance"));
         PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                  << LOG_BADGE("BalancePrecompiled") << LOG_DESC("transfer")
@@ -477,12 +477,12 @@ void BalancePrecompiled::registerCaller(
                                << LOG_DESC("failed to register, caller table size exceed limit")
                                << LOG_KV("caller", accountStr)
                                << LOG_KV("tableKeyList size", tableKeyList.size());
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table size exceed limit"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("caller table size exceed limit"));
     }
     auto callerEntry = table->getRow(accountStr);
     if (callerEntry)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller already exist"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("caller already exist"));
     }
     Entry CallerEntry;
     CallerEntry.importFields({"1"});
@@ -526,12 +526,12 @@ void BalancePrecompiled::unregisterCaller(
                                      "unregisterCaller failed, caller table only has one entry, "
                                      "prohibit to unregister")
                               << LOG_KV("account", accountStr);
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
             "BalanceGovernor table only has one account, prohibit to unregister"));
     }
     if (!entry.has_value())
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller not exist"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("caller not exist"));
     }
 
     // unregister callers, set entry to deleted state
@@ -557,7 +557,7 @@ void BalancePrecompiled::listCaller(
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("BalancePrecompiled")
                               << LOG_DESC("listCaller failed, caller table not exist");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table not exist."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("caller table not exist."));
     }
     auto keyCondition = std::make_optional<storage::Condition>();
     keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
@@ -567,7 +567,7 @@ void BalancePrecompiled::listCaller(
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
                               << LOG_BADGE("BalancePrecompiled")
                               << LOG_DESC("listCaller failed, caller table is empty");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("caller table is empty."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("caller table is empty."));
     }
     Addresses addresses;
     for (auto& it : tableKeyList)

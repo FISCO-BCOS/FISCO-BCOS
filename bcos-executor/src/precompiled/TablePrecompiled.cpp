@@ -64,7 +64,7 @@ static std::string toNumericalOrder(std::string_view lexicographicKey)
         {
             PRECOMPILED_LOG(DEBUG) << "The key cannot be converted to a number(int64)";
             BOOST_THROW_EXCEPTION(
-                PrecompiledError("The key cannot be converted to a number(int64)"));
+                PrecompiledError{} << errinfo_comment("The key cannot be converted to a number(int64)"));
         }
         int64_t offset = std::numeric_limits<int64_t>::max();
         // map int64 to uint64 ([INT64_MIN, INT64_MAX] --> [UINT64_MIN, UINT64_MAX])
@@ -78,7 +78,7 @@ static std::string toNumericalOrder(std::string_view lexicographicKey)
     catch (boost::bad_lexical_cast& e)
     {
         PRECOMPILED_LOG(DEBUG) << "The key cannot be converted to a number(int64)";
-        BOOST_THROW_EXCEPTION(PrecompiledError("The key cannot be converted to a number(int64)"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("The key cannot be converted to a number(int64)"));
     }
 }
 
@@ -99,7 +99,7 @@ bool TablePrecompiled::isNumericalOrder(const TableInfoTupleV320& tableInfo)
     {
         PRECOMPILED_LOG(DEBUG) << std::to_string((int)keyOrder) + " KeyOrder not exist!";
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError(std::to_string((int)keyOrder) + " KeyOrder not exist!"));
+            protocol::PrecompiledError{} << errinfo_comment(std::to_string((int)keyOrder) + " KeyOrder not exist!"));
     }
     return keyOrder == 1;
 }
@@ -260,7 +260,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     auto table = _executive->storage().openTable(tableName);
     if (!table.has_value())
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError(tableName + " does not exist"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(tableName + " does not exist"));
     }
 
     auto selector = selector2Func.find(func);
@@ -282,7 +282,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
 
     PRECOMPILED_LOG(INFO) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call undefined function!");
-    BOOST_THROW_EXCEPTION(PrecompiledError("TablePrecompiled call undefined function!"));
+    BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("TablePrecompiled call undefined function!"));
 }
 
 void TablePrecompiled::desc(precompiled::TableInfo& _tableInfo, const std::string& _tableName,
@@ -323,11 +323,11 @@ void TablePrecompiled::buildKeyCondition(std::shared_ptr<storage::Condition>& ke
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("build key condition limit overflow")
                                << LOG_KV("offset", offset) << LOG_KV("count", count);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Limit overflow."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Limit overflow."));
     }
     if (conditions.empty())
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Condition is empty"));
     }
     for (const auto& condition : conditions)
     {
@@ -349,7 +349,7 @@ void TablePrecompiled::buildKeyCondition(std::shared_ptr<storage::Condition>& ke
             break;
         default:
             BOOST_THROW_EXCEPTION(
-                PrecompiledError(std::to_string(cmp) + " ConditionOP not exist!"));
+                PrecompiledError{} << errinfo_comment(std::to_string(cmp) + " ConditionOP not exist!"));
         }
     }
 
@@ -366,11 +366,11 @@ bool TablePrecompiled::buildConditions(std::optional<precompiled::Condition>& va
     {
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("build key condition limit overflow")
                                << LOG_KV("offset", offset) << LOG_KV("count", count);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Limit overflow."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Limit overflow."));
     }
     if (conditions.empty())
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Condition is empty"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Condition is empty"));
     }
 
     auto& keyField = std::get<1>(tableInfo);
@@ -386,7 +386,7 @@ bool TablePrecompiled::buildConditions(std::optional<precompiled::Condition>& va
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_DESC("Table condition field not found")
                 << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError("Table condition fields not found"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table condition fields not found"));
         }
         if (field != keyField)
         {
@@ -735,11 +735,11 @@ void TablePrecompiled::insert(const std::string& tableName,
                                << LOG_DESC("Table insert entry fields number mismatch")
                                << LOG_KV("valueSize", values.size())
                                << LOG_KV("fieldSize", columns.size());
-        BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry fields number mismatch"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table insert entry fields number mismatch"));
     }
     if (key.empty() && blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry key is empty"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table insert entry key is empty"));
     }
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
     std::for_each(values.begin(), values.end(), [](std::string_view _v) {
@@ -828,14 +828,14 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
             BOOST_THROW_EXCEPTION(
-                PrecompiledError("Table update fields cannot contains key field"));
+                PrecompiledError{} << errinfo_comment("Table update fields cannot contains key field"));
         }
         if (it == columns.end())
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table update fields not found"));
         }
         auto index = std::distance(columns.begin(), it);
         values[index] = value;
@@ -899,14 +899,14 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
             BOOST_THROW_EXCEPTION(
-                PrecompiledError("Table update fields cannot contains key field"));
+                PrecompiledError{} << errinfo_comment("Table update fields cannot contains key field"));
         }
         if (it == columns.end())
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table update fields not found"));
         }
         std::pair<uint32_t, std::string> p = {std::distance(columns.begin(), it), std::move(value)};
         updateValue.emplace_back(std::move(p));
@@ -983,7 +983,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table cannot update keyField") << LOG_KV("keyField", keyField);
             BOOST_THROW_EXCEPTION(
-                PrecompiledError("Table update fields cannot contains key field"));
+                PrecompiledError{} << errinfo_comment("Table update fields cannot contains key field"));
         }
         auto const it = std::find(columns.begin(), columns.end(), field);
         if (it == columns.end())
@@ -991,7 +991,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                 << LOG_DESC("Table update field not found") << LOG_KV("field", field);
-            BOOST_THROW_EXCEPTION(PrecompiledError("Table update fields not found"));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table update fields not found"));
         }
         std::pair<uint32_t, std::string> p = {std::distance(columns.begin(), it), std::move(value)};
         updateValue.emplace_back(std::move(p));

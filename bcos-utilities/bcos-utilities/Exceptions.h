@@ -24,6 +24,8 @@
 #include <boost/exception/exception.hpp>
 #include <boost/exception/info.hpp>
 #include <boost/exception/info_tuple.hpp>
+#include <boost/stacktrace.hpp>
+#include <boost/stacktrace/stacktrace_fwd.hpp>
 #include <boost/throw_exception.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <exception>
@@ -36,22 +38,13 @@ namespace bcos
  */
 struct Exception : virtual std::exception, virtual boost::exception
 {
-    Exception(std::string _message = std::string()) : m_message(std::move(_message)) {}
-    const char* what() const noexcept override
-    {
-        return m_message.empty() ? std::exception::what() : m_message.c_str();
-    }
-
-private:
-    std::string m_message;
 };
 
 /// construct a new exception class overriding Exception
-#define DERIVE_BCOS_EXCEPTION(X)                                    \
-    struct X : virtual ::bcos::Exception                            \
-    {                                                               \
-        X() = default;                                              \
-        X(std::string _msg) : ::bcos::Exception(std::move(_msg)) {} \
+#define DERIVE_BCOS_EXCEPTION(X)         \
+    struct X : virtual ::bcos::Exception \
+    {                                    \
+        X() = default;                   \
     }
 DERIVE_BCOS_EXCEPTION(ConstructFixedBytesFailed);
 DERIVE_BCOS_EXCEPTION(BadCast);
@@ -59,10 +52,12 @@ DERIVE_BCOS_EXCEPTION(BadHexCharacter);
 DERIVE_BCOS_EXCEPTION(InvalidAddress);
 DERIVE_BCOS_EXCEPTION(InvalidParameter);
 
-using errinfo_invalidSymbol = boost::error_info<struct tag_invalidSymbol, char>;
 using errinfo_comment = boost::error_info<struct tag_comment, std::string>;
-using errinfo_required = boost::error_info<struct tag_required, bigint>;
-using errinfo_got = boost::error_info<struct tag_got, bigint>;
-using RequirementError = boost::tuple<errinfo_required, errinfo_got>;
-using RequirementErrorComment = boost::tuple<errinfo_required, errinfo_got, errinfo_comment>;
+using errinfo_stacktrace = boost::error_info<struct tag_stack_trace, boost::stacktrace::stacktrace>;
+
+template <class Exception>
+void throwWithTrace(const Exception& error)
+{
+    throw boost::enable_error_info(error) << errinfo_stacktrace{boost::stacktrace::stacktrace()};
+}
 }  // namespace bcos

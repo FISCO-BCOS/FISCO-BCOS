@@ -113,7 +113,7 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
         }
     }
     PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
-    BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
+    BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("TableManager call undefined function!"));
 }
 
 void TableManagerPrecompiled::createTable(
@@ -211,7 +211,7 @@ void TableManagerPrecompiled::createKVTable(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManagerPrecompiled")
                               << LOG_DESC("create kv table failed")
                               << LOG_KV("tableName", newTableName) << LOG_KV("valueField", value);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Create table error."));
     }
 
     // here is a trick to set table key field info
@@ -291,7 +291,7 @@ void TableManagerPrecompiled::openTable(
     if (blockContext.isWasm())
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("TableManager") << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError("TableManager call undefined function!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("TableManager call undefined function!"));
     }
     auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
     codec.decode(_callParameters->params(), tableName);
@@ -436,7 +436,7 @@ void TableManagerPrecompiled::externalCreateTable(
                               << LOG_DESC("create table failed")
                               << LOG_KV("tableName", newTableName)
                               << LOG_KV("valueField", valueField);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Create table error."));
     }
 
     _executive->storage().createTable(getActualTableName(newTableName), valueField);
