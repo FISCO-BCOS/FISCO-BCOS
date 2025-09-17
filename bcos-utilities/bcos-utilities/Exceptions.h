@@ -33,11 +33,11 @@
 
 namespace bcos
 {
-/**
- * @brief : Base class for all exceptions
- */
+using errinfo_comment = boost::error_info<struct tag_comment, std::string>;
+using errinfo_stacktrace = boost::error_info<struct tag_stack_trace, boost::stacktrace::stacktrace>;
 struct Exception : virtual std::exception, virtual boost::exception
 {
+    const char* what() const _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_NOTHROW override;
 };
 
 /// construct a new exception class overriding Exception
@@ -49,9 +49,6 @@ struct Exception : virtual std::exception, virtual boost::exception
 
 
 DERIVE_BCOS_EXCEPTION(InvalidParameter);
-
-using errinfo_comment = boost::error_info<struct tag_comment, std::string>;
-using errinfo_stacktrace = boost::error_info<struct tag_stack_trace, boost::stacktrace::stacktrace>;
 
 template <class Exception>
 void throwWithTrace(const Exception& error)

@@ -525,8 +525,8 @@ BOOST_AUTO_TEST_CASE(setAccountStatusErrorTest)
     // set governor account status
     {
         auto response = setAccountStatus(number++, Address(admin), 1, 0, false, true);
-        BOOST_CHECK(response->status() == 15);
-        BOOST_CHECK(response->message() == "Should not set governor's status.");
+        BOOST_TEST(response->status() == 15);
+        BOOST_TEST(response->message() == "Should not set governor's status.");
     }
 }
 
