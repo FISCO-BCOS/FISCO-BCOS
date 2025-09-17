@@ -24,6 +24,8 @@
 
 namespace bcos
 {
+DERIVE_BCOS_EXCEPTION(BadCast);
+
 inline std::string toJonString(byte _data)
 {
     return "0x" + std::to_string(_data);

@@ -46,10 +46,8 @@ struct Exception : virtual std::exception, virtual boost::exception
     {                                    \
         X() = default;                   \
     }
-DERIVE_BCOS_EXCEPTION(ConstructFixedBytesFailed);
-DERIVE_BCOS_EXCEPTION(BadCast);
-DERIVE_BCOS_EXCEPTION(BadHexCharacter);
-DERIVE_BCOS_EXCEPTION(InvalidAddress);
+
+
 DERIVE_BCOS_EXCEPTION(InvalidParameter);
 
 using errinfo_comment = boost::error_info<struct tag_comment, std::string>;
