@@ -582,6 +582,8 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result == TransactionStatus::NonceCheckFail)
         {
+            TXPOOL_LOG(WARNING) << "txPool nonce check failed, hash:" << tx->hash()
+                                << " blockLimit:" << tx->blockLimit() << " nonce:" << tx->nonce();
             // in case of the same tx notified more than once
             auto transaction = std::const_pointer_cast<Transaction>(tx);
             transaction->takeSubmitCallback();
@@ -592,6 +594,8 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         // blockLimit expired
         if (result == TransactionStatus::BlockLimitCheckFail)
         {
+            TXPOOL_LOG(WARNING) << "txPool blocklimit check failed, hash:" << tx->hash()
+                                << " blockLimit:" << tx->blockLimit() << " nonce:" << tx->nonce();
             invalidTxs.emplace_back(tx);
             return false;
         }

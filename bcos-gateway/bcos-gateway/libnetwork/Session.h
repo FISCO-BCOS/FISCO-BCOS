@@ -202,7 +202,7 @@ public:
     // Maximum amount of data to be sent one time, default: 1M
     uint32_t m_maxSendDataSize = 1024 * 1024;
     // Maximum number of packets to be sent one time, default: 10
-    uint32_t m_maxSendMsgCountS = 10;
+    uint32_t m_maxSendMsgCount = 10;
     //  Maximum size of message that is allowed to send or receive, default: 32M
     uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
     //

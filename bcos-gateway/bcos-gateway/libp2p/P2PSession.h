@@ -70,7 +70,7 @@ public:
         SessionCallbackFunc callback = SessionCallbackFunc());
 
     task::Task<Message::Ptr> fastSendP2PMessage(
-        const P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
+        P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options);
 
 private:
     SessionFace::Ptr m_session;

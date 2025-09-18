@@ -19,6 +19,7 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/container/container_fwd.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -285,7 +286,7 @@ void Session::write()
             return;
         }
 
-        if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCountS))
+        if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCount))
         {
             return;
         }
@@ -528,10 +529,8 @@ void Session::doRead()
                                 if (length >= recvBuffer.recvBufferSize())
                                 {
                                     auto resizeRecvBufferSize = 2 * length;
-                                    if (resizeRecvBufferSize > session->m_maxRecvBufferSize)
-                                    {
-                                        resizeRecvBufferSize = session->m_maxRecvBufferSize;
-                                    }
+                                    resizeRecvBufferSize = std::min<std::size_t>(
+                                        resizeRecvBufferSize, session->m_maxRecvBufferSize);
                                     recvBuffer.resizeBuffer(resizeRecvBufferSize);
 
                                     SESSION_LOG(INFO)
@@ -1012,11 +1011,11 @@ void bcos::gateway::Session::setMaxSendDataSize(uint32_t _maxSendDataSize)
 }
 uint32_t bcos::gateway::Session::maxSendMsgCountS() const
 {
-    return m_maxSendMsgCountS;
+    return m_maxSendMsgCount;
 }
 void bcos::gateway::Session::setMaxSendMsgCountS(uint32_t _maxSendMsgCountS)
 {
-    m_maxSendMsgCountS = _maxSendMsgCountS;
+    m_maxSendMsgCount = _maxSendMsgCountS;
 }
 uint32_t bcos::gateway::Session::allowMaxMsgSize() const
 {
