@@ -37,7 +37,7 @@ using errinfo_comment = boost::error_info<struct tag_comment, std::string>;
 using errinfo_stacktrace = boost::error_info<struct tag_stack_trace, boost::stacktrace::stacktrace>;
 struct Exception : virtual std::exception, virtual boost::exception
 {
-    const char* what() const _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_NOTHROW override;
+    const char* what() const noexcept override;
 };
 
 /// construct a new exception class overriding Exception
