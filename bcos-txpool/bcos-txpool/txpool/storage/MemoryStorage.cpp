@@ -955,9 +955,11 @@ bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
     auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
     auto unsealTransactions =
         m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
-    return ::ranges::all_of(sealedTransactions, [](const auto& value) {
-        return value.has_value();
-    }) && ::ranges::all_of(unsealTransactions, [](const auto& value) { return value.has_value(); });
+    return ::ranges::all_of(
+        ::ranges::views::zip(sealedTransactions, unsealTransactions), [](const auto& value) {
+            auto& [lhs, rhs] = value;
+            return lhs.has_value() || rhs.has_value();
+        });
 }
 
 HashListPtr MemoryStorage::getTxsHash(int _limit)
