@@ -230,7 +230,7 @@ public:
 
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
-    boost::atomic_flag m_writing;
+    std::mutex m_writingQueueMutex;
     bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;

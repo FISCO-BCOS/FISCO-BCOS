@@ -279,12 +279,11 @@ void Session::write()
 
     try
     {
-        if (m_writing.test_and_set())
+        std::unique_lock lock(m_writingQueueMutex, std::try_to_lock);
+        if (!lock.owns_lock())
         {
             return;
         }
-        std::unique_ptr<boost::atomic_flag, decltype([](boost::atomic_flag* ptr) { ptr->clear(); })>
-            defer(std::addressof(m_writing));
 
         if (!tryPopSomeEncodedMsgs(m_writings->payloads, m_maxSendDataSize, m_maxSendMsgCountS))
         {
@@ -296,16 +295,15 @@ void Session::write()
         {
             payload.toConstBuffer(outputIt);
         }
-        defer.release();  // NOLINT
         m_server.get().asioInterface()->asyncWrite(m_socket, m_writings->buffers,
-            [self = std::weak_ptr<Session>(shared_from_this()), writings = m_writings](
+            [self = std::weak_ptr<Session>(shared_from_this()), writings = m_writings,
+                m_lock = std::move(lock)](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
                     std::vector<Payload> payloads;
                     payloads.swap(session->m_writings->payloads);
                     session->m_writings->buffers.clear();
-                    session->m_writing.clear();
                     session->onWrite(_error, _size);
 
                     for (auto& payload : payloads)
