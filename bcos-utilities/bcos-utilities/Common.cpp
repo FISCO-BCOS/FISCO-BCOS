@@ -33,7 +33,6 @@
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
-#include <regex>
 
 namespace bcos
 {
@@ -92,27 +91,24 @@ s256 u2s(u256 _u)
     static const bigint c_end = bigint(1) << 256;
     /// get the +/- symbols
     if (boost::multiprecision::bit_test(_u, 255))
+    {
         return s256(-(c_end - _u));
-    else
-        return s256(_u);
+    }
+    return s256(_u);
 }
 u256 s2u(s256 _u)
 {
     static const bigint c_end = bigint(1) << 256;
     if (_u >= 0)
+    {
         return u256(_u);
-    else
-        return u256(c_end + _u);
+    }
+    return u256(c_end + _u);
 }
 
 bool isHexStrWithPrefix(std::string_view str)
 {
-    if (str.empty() || str.size() < 2)
-    {
-        return false;
-    }
-    std::regex pattern("^0x[0-9a-fA-F]+$");
-    return std::regex_match(str.begin(), str.end(), pattern);
+    return str.size() >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X');
 }
 
 u256 hex2u(std::string_view _hexStr)
@@ -127,6 +123,7 @@ u256 hex2u(std::string_view _hexStr)
     }
     catch (...)
     {
+        BCOS_LOG(WARNING) << "Convert hex string to u256 failed, hexStr: " << _hexStr;
         return 0;
     }
 }

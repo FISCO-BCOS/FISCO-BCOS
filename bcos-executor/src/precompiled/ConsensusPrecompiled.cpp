@@ -296,7 +296,7 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     {
         if (node->type == consensus::Type::consensus_observer)
         {
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot set weight to observer."));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Cannot set weight to observer."));
         }
         if (setTermWeight)
         {
@@ -365,7 +365,7 @@ static void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecu
                                << LOG_KV("origin", _callParameters->m_origin)
                                << LOG_KV("sender", _callParameters->m_sender);
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("RotateWorkingSealer exception occurred."));
+            protocol::PrecompiledError{} << errinfo_comment("RotateWorkingSealer exception occurred."));
     }
 }
 
@@ -464,7 +464,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("ConsensusPrecompiled call undefined function!"));
+            bcos::protocol::PrecompiledError{} << errinfo_comment("ConsensusPrecompiled call undefined function!"));
     }
 
     _callParameters->setExecResult(codec.encode(int32_t(result)));

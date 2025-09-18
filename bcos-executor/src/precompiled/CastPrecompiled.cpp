@@ -146,7 +146,7 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("CastPrecompiled")
                               << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError("CastPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("CastPrecompiled call undefined function!"));
     }
     return _callParameters;
 }

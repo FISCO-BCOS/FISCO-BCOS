@@ -180,7 +180,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthMgrPrecompiled::call(
     PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthMgrPrecompiled")
                           << LOG_DESC("call undefined function") << LOG_KV("func", func);
     BOOST_THROW_EXCEPTION(
-        bcos::protocol::PrecompiledError("ContractAuthMgrPrecompiled call undefined function!"));
+        bcos::protocol::PrecompiledError{} << errinfo_comment("ContractAuthMgrPrecompiled call undefined function!"));
 }
 
 void ContractAuthMgrPrecompiled::getAdmin(
@@ -219,7 +219,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
             _callParameters->setExecResult(codec.encode(std::string(EMPTY_ADDRESS)));
             return;
         }
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Contract address not found."));
     }
     auto entry = table->getRow(ADMIN_FIELD);
     if (!entry)
@@ -227,7 +227,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("contract ACL admin entry not found")
                                << LOG_KV("path", path);
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract Admin row not found."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Contract Admin row not found."));
     }
     std::string adminStr = std::string(entry->getField(0));
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -273,7 +273,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
                 [[unlikely]]
             {
                 // not exist contract address
-                BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
+                BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Contract address not found."));
             }
             // exist contract but not init auth table
             table = _executive->storage().createTable(path, "value");
@@ -283,7 +283,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
         }
         else
         {
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Contract address not found."));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Contract address not found."));
         }
     }
     auto newEntry = table->newEntry();
@@ -661,7 +661,7 @@ MethodAuthMap ContractAuthMgrPrecompiled::getMethodAuth(
         // only precompiled contract in /sys/, or pre-built-in contract
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth table not found.") << LOG_KV("path", path);
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Auth table not found"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Auth table not found"));
     }
     auto getTypeStr =
         getMethodType == (int)AuthType::WHITE_LIST_MODE ? METHOD_AUTH_WHITE : METHOD_AUTH_BLACK;
@@ -727,7 +727,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
                                   << LOG_DESC("contract already abolish, should not set any status")
                                   << LOG_KV("contract", path);
             BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError("Contract already abolish, should not set any status."));
+                protocol::PrecompiledError{} << errinfo_comment("Contract already abolish, should not set any status."));
         }
     }
     auto status = isFreeze ? CONTRACT_FROZEN : CONTRACT_NORMAL;
@@ -772,7 +772,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
     auto statusStr = StatusToString(status);
     if (statusStr.empty()) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Unrecognized status type."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Unrecognized status type."));
     }
 
     auto existEntry = table->getRow(STATUS_FIELD);
@@ -787,7 +787,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
                                   << LOG_DESC("contract already abolish, should not set any status")
                                   << LOG_KV("contract", path) << LOG_KV("status", statusStr);
             BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError("Contract already abolish, should not set any status."));
+                protocol::PrecompiledError{} << errinfo_comment("Contract already abolish, should not set any status."));
         }
     }
 
@@ -823,7 +823,7 @@ void ContractAuthMgrPrecompiled::contractAvailable(
     // result !=0 && result != 1
     if (status < 0)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Cannot get contract status"));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Cannot get contract status"));
     }
     bool result = (status == (uint8_t)ContractStatus::Available);
     _callParameters->setExecResult(codec.encode(result));

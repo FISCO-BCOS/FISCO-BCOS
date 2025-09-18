@@ -50,15 +50,17 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                           BlockVersion minVersion = BlockVersion::V3_0_VERSION) {
         if (versionCompareTo(version, minVersion) < 0) [[unlikely]]
         {
-            BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + std::string(_key)));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("unsupported key " + std::string(_key)));
         }
         if (_value >= _minValue) [[likely]]
         {
             return;
         }
-        BOOST_THROW_EXCEPTION(PrecompiledError(
-            "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
-            " must be no less than " + std::to_string(_minValue)));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment(
+                "Invalid value " + std::to_string(_value) + " ,the value for " + std::string{_key} +
+                " must be no less than " + std::to_string(_minValue)));
     };
     m_sysValueCmp.insert(
         std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT, [defaultCmp](int64_t _value, uint32_t version) {
@@ -69,7 +71,8 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             if (versionCompareTo(version, BlockVersion::V3_6_VERSION) < 0) [[unlikely]]
             {
                 BOOST_THROW_EXCEPTION(
-                    PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
+                    PrecompiledError{}
+                    << errinfo_comment("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
             }
             return;
         }));
@@ -86,8 +89,9 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         defaultCmp(SYSTEM_KEY_AUTH_CHECK_STATUS, _value, 0, version, BlockVersion::V3_3_VERSION);
         if (_value > (decltype(_value))UINT8_MAX) [[unlikely]]
         {
-            BOOST_THROW_EXCEPTION(PrecompiledError(
-                "Invalid status value, must less than " + std::to_string(UINT8_MAX)));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment(
+                    "Invalid status value, must less than " + std::to_string(UINT8_MAX)));
         }
     }));
     m_sysValueCmp.insert(std::make_pair(
@@ -120,7 +124,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
                                      " failed for lower than min_supported_version")
                          << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion());
                 PRECOMPILED_LOG(INFO) << errorMsg.str() << LOG_KV("setValue", _value);
-                BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
+                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(errorMsg.str()));
             }
         }));
     m_valueConverter.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION,
@@ -130,8 +134,9 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             {
                 if (version < blockVersion)
                 {
-                    BOOST_THROW_EXCEPTION(PrecompiledError(
-                        "Set compatibility version should not lower than version nowadays."));
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledError{} << errinfo_comment(
+                            "Set compatibility version should not lower than version nowadays."));
                 }
             }
             return version;
@@ -141,13 +146,15 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             if (versionCompareTo(blockVersion, BlockVersion::V3_6_VERSION) < 0) [[unlikely]]
             {
                 BOOST_THROW_EXCEPTION(
-                    PrecompiledError("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
+                    PrecompiledError{}
+                    << errinfo_comment("unsupported key " + std::string(SYSTEM_KEY_TX_GAS_PRICE)));
             }
             if (!isHexStringV2(_value))
             {
-                BOOST_THROW_EXCEPTION(PrecompiledError(
-                    "Invalid value " + _value + " ,the value for " +
-                    std::string{SYSTEM_KEY_TX_GAS_PRICE} + " must be a hex number like 0xa."));
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError{} << errinfo_comment(
+                        "Invalid value " + _value + " ,the value for " +
+                        std::string{SYSTEM_KEY_TX_GAS_PRICE} + " must be a hex number like 0xa."));
             }
             return 0;
         }));
@@ -155,8 +162,8 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
         SYSTEM_KEY_WEB3_CHAIN_ID, [](const std::string& _value, uint32_t blockVersion) -> uint64_t {
             if (blockVersion < BlockVersion::V3_9_0_VERSION)
             {
-                BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion(
-                    fmt::format("unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
+                BOOST_THROW_EXCEPTION(bcos::tool::InvalidVersion{} << errinfo_comment(fmt::format(
+                                          "unsupported key {}", SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
             u256 number = 0;
             try
@@ -165,15 +172,17 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr hashImpl) : P
             }
             catch (...)
             {
-                BOOST_THROW_EXCEPTION(PrecompiledError(
-                    fmt::format("Invalid value {}, the value for {} must be a number string.",
-                        _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError{} << errinfo_comment(
+                        fmt::format("Invalid value {}, the value for {} must be a number string.",
+                            _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
             if (number > UINT32_MAX)
             {
-                BOOST_THROW_EXCEPTION(PrecompiledError(
-                    fmt::format("Invalid value {}, the value for {} must be less than UINT32_MAX.",
-                        _value, SYSTEM_KEY_WEB3_CHAIN_ID)));
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledError{} << errinfo_comment(fmt::format(
+                        "Invalid value {}, the value for {} must be less than UINT32_MAX.", _value,
+                        SYSTEM_KEY_WEB3_CHAIN_ID)));
             }
             return 0;
         }));
@@ -255,7 +264,8 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        BOOST_THROW_EXCEPTION(PrecompiledError("SystemConfigPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "SystemConfigPrecompiled call undefined function!"));
     }
     return _callParameters;
 }
@@ -270,18 +280,20 @@ int64_t SystemConfigPrecompiled::validate(
     bool setFeature = (::ranges::find(featureKeys, key) != featureKeys.end());
     if (!m_sysValueCmp.contains(key) && !m_valueConverter.contains(key) && !setFeature)
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("unsupported key " + key));
     }
 
     if (value.empty())
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be non-empty."));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("The value for " + key + " must be non-empty."));
     }
     try
     {
         if (setFeature && value != "1")
         {
-            BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be 1."));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("The value for " + key + " must be 1."));
         }
 
         if (setFeature)
@@ -309,14 +321,15 @@ int64_t SystemConfigPrecompiled::validate(
             std::to_string(bcos::protocol::MAX_MAJOR_VERSION);
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: invalid version")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(errorMsg));
     }
     catch (bcos::tool::InvalidSetFeature const& e)
     {
         ///
         PRECOMPILED_LOG(INFO) << LOG_DESC("SystemConfigPrecompiled: set feature failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(PrecompiledError(*boost::get_error_info<bcos::errinfo_comment>(e)));
+        BOOST_THROW_EXCEPTION(PrecompiledError{}
+                              << errinfo_comment(*boost::get_error_info<bcos::errinfo_comment>(e)));
     }
     catch (std::exception const& e)
     {
@@ -324,8 +337,8 @@ int64_t SystemConfigPrecompiled::validate(
                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
                               << LOG_KV("value", value)
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("The value for " + key + " must be a valid number."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "The value for " + key + " must be a valid number."));
     }
     if (m_sysValueCmp.contains(key))
     {
@@ -399,7 +412,7 @@ void SystemConfigPrecompiled::upgradeChain(
             PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                                   << LOG_DESC("rebuildBfs failed")
                                   << LOG_KV("status", response->status);
-            BOOST_THROW_EXCEPTION(PrecompiledError("Rebuild BFS error."));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Rebuild BFS error."));
         }
 
         // create new system tables of 3.1.0
@@ -460,9 +473,9 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled, registerGovernorToCaller")
                               << LOG_DESC("get governor list failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("get governor list failed, maybe current is wasm model, "
-                             "feature_balance_precompiled is not supported in wasm model."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "get governor list failed, maybe current is wasm model, "
+                                  "feature_balance_precompiled is not supported in wasm model."));
     }
     if (governorAddress.empty())
     {

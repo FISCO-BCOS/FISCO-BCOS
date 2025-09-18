@@ -60,7 +60,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
                 // Note: the StorageException and PrecompiledException content can't
                 // be modified at will for the information will be written to the
                 // blockchain
-                BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
+                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(errorMsg.str()));
             }
         }
     };
@@ -76,7 +76,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
                 << LOG_KV("field name", fieldName) << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("invalid field: " + std::string(fieldName)));
         }
         size_t iSize = fieldName.size();
         for (size_t i = 0; i < iSize; i++)
@@ -93,7 +93,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
                 PRECOMPILED_LOG(DEBUG)
                     << LOG_BADGE("checkNameValidate") << LOG_DESC(errorMessage.str())
                     << LOG_KV("field name", fieldName) << LOG_KV("table name", tableName);
-                BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
+                BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("invalid field: " + std::string(fieldName)));
             }
         }
     };
@@ -110,7 +110,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName, std::strin
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("checkNameValidate") << LOG_DESC("duplicated field")
                 << LOG_KV("field name", valueField) << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(PrecompiledError("duplicated field: " + valueField));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("duplicated field: " + valueField));
         }
         checkFieldNameValidate(tableName, valueField);
     }
@@ -124,7 +124,7 @@ void bcos::precompiled::checkLengthValidate(
         PRECOMPILED_LOG(DEBUG) << "key:" << fieldValue << " value size:" << fieldValue.size()
                                << " greater than " << maxLength;
         BOOST_THROW_EXCEPTION(
-            PrecompiledError("size of value/key greater than" + std::to_string(maxLength) +
+            PrecompiledError{} << errinfo_comment("size of value/key greater than" + std::to_string(maxLength) +
                              " error code: " + std::to_string(errorCode)));
     }
 }
@@ -136,7 +136,7 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     if (keyOrder && (*keyOrder != 0 && *keyOrder != 1))
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError(std::to_string(int(*keyOrder)) + " KeyOrder not exist!"));
+            protocol::PrecompiledError{} << errinfo_comment(std::to_string(int(*keyOrder)) + " KeyOrder not exist!"));
     }
     std::vector<std::string> fieldNameList;
     if (_valueField.index() == 1)
@@ -151,13 +151,13 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
     {  // mysql TableName and fieldName length limit is 64
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("table field name length overflow " +
+            protocol::PrecompiledError{} << errinfo_comment("table field name length overflow " +
                                        std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
     }
     boost::trim(_keyField);
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
     {  // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
             "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
             std::string("table key name length overflow ") +
             std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
@@ -168,7 +168,7 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
         boost::trim(str);
         if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
                 "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
                 std::string("table field name length overflow ") +
                 std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
@@ -181,7 +181,7 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     if (valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH)
     {
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError(std::string("total table field name length overflow ") +
+            protocol::PrecompiledError{} << errinfo_comment(std::string("total table field name length overflow ") +
                                        std::to_string(SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH)));
     }
 
@@ -189,7 +189,7 @@ std::string bcos::precompiled::checkCreateTableParam(const std::string_view& _ta
     if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S)
     {
         // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
             "errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW) +
             std::string(" tableName length overflow ") +
             std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
@@ -224,7 +224,7 @@ uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
         PRECOMPILED_LOG(INFO) << LOG_DESC(
                                      "getParamFunc param too short, not enough to call precompiled")
                               << LOG_KV("param", toHexStringWithPrefix(_param.toBytes()));
-        BOOST_THROW_EXCEPTION(PrecompiledError("Empty param data in precompiled call"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Empty param data in precompiled call"));
     }
     auto funcBytes = _param.getCroppedData(0, 4);
     uint32_t func = *((uint32_t*)(funcBytes.data()));
@@ -423,7 +423,7 @@ std::vector<Address> precompiled::getGovernorList(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("Precompiled") << LOG_DESC("get committee failed")
                                << LOG_KV("status", getCommitteeResponse->status);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee failed."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Get committee failed."));
     }
 
     Address committee;
@@ -437,7 +437,7 @@ std::vector<Address> precompiled::getGovernorList(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("Precompiled") << LOG_DESC("get committee info failed")
                                << LOG_KV("committee", committee.hex());
-        BOOST_THROW_EXCEPTION(PrecompiledError("Get committee info failed."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Get committee info failed."));
     }
     uint8_t participatesRate = 0;
     uint8_t winRate = 0;

@@ -360,12 +360,13 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 {
     auto* toMap = transaction->sealed() ? &m_sealedTransactions : &m_unsealTransactions;
+    auto* ptr = transaction.get();
     if (TxsMap::WriteAccessor accessor;
-        !toMap->insert(accessor, {transaction->hash(), transaction}))
+        !toMap->insert(accessor, {transaction->hash(), std::move(transaction)}))
     {
-        if (transaction->submitCallback() && !accessor.value()->submitCallback())
+        if (ptr->submitCallback() && !accessor.value()->submitCallback())
         {
-            accessor.value()->setSubmitCallback(transaction->submitCallback());
+            accessor.value()->setSubmitCallback(ptr->submitCallback());
             return TransactionStatus::None;
         }
         return TransactionStatus::AlreadyInTxPool;
@@ -951,8 +952,14 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
 bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
 {
     bool has = false;
-    auto values = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
-    return ::ranges::all_of(values, [](const auto& value) { return value.has_value(); });
+    auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    auto unsealTransactions =
+        m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
+    return ::ranges::all_of(
+        ::ranges::views::zip(sealedTransactions, unsealTransactions), [](const auto& value) {
+            auto& [lhs, rhs] = value;
+            return lhs.has_value() || rhs.has_value();
+        });
 }
 
 HashListPtr MemoryStorage::getTxsHash(int _limit)

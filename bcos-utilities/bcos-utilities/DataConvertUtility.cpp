@@ -23,6 +23,7 @@
 
 using namespace std;
 using namespace bcos;
+
 /**
  * @brief: convert the hex char into the hex number
  *

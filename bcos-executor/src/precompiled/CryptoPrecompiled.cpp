@@ -107,7 +107,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
         PRECOMPILED_LOG(INFO) << LOG_DESC("CryptoPrecompiled: undefined method")
                               << LOG_KV("funcSelector", std::to_string(funcSelector));
         BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("CryptoPrecompiled call undefined function!"));
+            bcos::protocol::PrecompiledError{} << errinfo_comment("CryptoPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());

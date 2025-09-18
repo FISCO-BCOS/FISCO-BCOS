@@ -57,7 +57,7 @@ bcos::crypto::HashType TransactionImpl::hash() const
 {
     if (m_inner()->dataHash.empty() && m_inner()->extraTransactionHash.empty())
     {
-        BOOST_THROW_EXCEPTION(EmptyTransactionHash{});
+        throwWithTrace(EmptyTransactionHash{});
     }
 
     if (type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
@@ -226,4 +226,3 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->extraTransactionHash.size();
     return size;
 }
-

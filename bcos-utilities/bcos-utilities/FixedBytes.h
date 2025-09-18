@@ -34,6 +34,10 @@
 
 namespace bcos
 {
+
+DERIVE_BCOS_EXCEPTION(ConstructFixedBytesFailed);
+DERIVE_BCOS_EXCEPTION(InvalidAddress);
+
 /// Compile-time calculation of Log2 of constant values.
 template <unsigned N>
 struct StaticLog2

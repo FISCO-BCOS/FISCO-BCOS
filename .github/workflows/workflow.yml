@@ -61,7 +61,7 @@ jobs:
           sudo apt update
           sudo apt install -y lcov wget python3-dev python3-pip git curl zip unzip tar
           sudo apt install -y --no-install-recommends \
-              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
               libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config uuid-runtime automake gcc-14 g++-14
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15'

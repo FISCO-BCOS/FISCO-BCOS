@@ -40,18 +40,7 @@ DERIVE_BCOS_EXCEPTION(CallAddressError);
 DERIVE_BCOS_EXCEPTION(GasOverflow);
 DERIVE_BCOS_EXCEPTION(ContractFrozen);
 DERIVE_BCOS_EXCEPTION(AccountFrozen);
-class PrecompiledError : public Exception
-{
-public:
-    PrecompiledError() : Exception() {}
-    PrecompiledError(std::string const& _msg) : Exception(_msg) {}
-};
-
-class NotEnoughCashError : public Exception
-{
-public:
-    NotEnoughCashError() : Exception() {}
-    NotEnoughCashError(std::string const& _msg) : Exception(_msg) {}
-};
+DERIVE_BCOS_EXCEPTION(PrecompiledError);
+DERIVE_BCOS_EXCEPTION(NotEnoughCashError);
 
 }  // namespace bcos::protocol
