@@ -95,6 +95,11 @@ static void send(Session& session, EncodedMessage encodedMsg)
 static void send(Session& session, ::ranges::input_range auto payloads,
     std::function<void(boost::system::error_code)> callback)
 {
+    if (!session.active() || !session.m_socket->isConnected())
+    {
+        return;
+    }
+
     Payload payload{.m_data{Payload::MessageList{}}, .m_callback = std::move(callback)};
     auto& vec = std::get<1>(payload.m_data);
     if constexpr (::ranges::sized_range<decltype(payloads)>)
@@ -464,8 +469,8 @@ void Session::doRead()
 {
     if (m_active && m_server.get().haveNetwork())
     {
-        auto self = std::weak_ptr<Session>(shared_from_this());
-        auto asyncRead = [self](boost::system::error_code ec, std::size_t bytesTransferred) {
+        auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this())](
+                             boost::system::error_code ec, std::size_t bytesTransferred) {
             auto session = self.lock();
             if (session)
             {
@@ -655,7 +660,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             {
                 callbackPtr->timeoutHandler->cancel();
             }
-            auto callback = callbackPtr->callback;
+            auto& callback = callbackPtr->callback;
             if (!callback)
             {
                 return;
@@ -736,7 +741,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     message.encodeHeader(headerBuffer);
 
     auto view = ::ranges::views::concat(
-        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), payloads);
+        ::ranges::views::single(bcos::ref(std::as_const(headerBuffer))), std::move(payloads));
     uint32_t totalLength = 0;
     for (auto ref : view)
     {

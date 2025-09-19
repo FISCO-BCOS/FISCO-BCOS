@@ -334,12 +334,15 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         return result;
     }
 
+#if 0
     result = task::syncWait(
         TransactionValidator::validateTransactionWithState(*transaction, m_config->ledger()));
     if (result != TransactionStatus::None)
     {
         return result;
     }
+#endif
+
     auto const txImportTime = transaction->importTime();
     if (txSubmitCallback)
     {
