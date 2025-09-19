@@ -101,8 +101,7 @@ class Session : public SessionFace,
                 public bcos::ObjectCounter<Session>
 {
 public:
-    constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE =
-        static_cast<std::size_t>(512 * 1024);
+    constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
 
     Session(std::shared_ptr<SocketFace> socket, Host& server,
         size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
@@ -186,8 +185,6 @@ public:
         std::vector<Payload>& encodedMsgs, size_t _maxSendDataSize, size_t _maxSendMsgCount);
 
     virtual void checkNetworkStatus();
-
-    void send(EncodedMessage encodedMsg);
 
     void doRead();
 
