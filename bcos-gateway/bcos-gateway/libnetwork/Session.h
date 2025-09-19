@@ -7,7 +7,6 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
@@ -112,7 +111,6 @@ public:
     Session(Session&&) = delete;
     Session& operator=(Session&&) = delete;
     Session& operator=(const Session&) = delete;
-
     ~Session() noexcept override;
 
     using Ptr = std::shared_ptr<Session>;

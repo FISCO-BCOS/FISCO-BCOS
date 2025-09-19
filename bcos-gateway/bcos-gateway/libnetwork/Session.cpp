@@ -307,13 +307,15 @@ void Session::write()
                     session->m_writings->buffers.clear();
                     session->onWrite(_error, _size);
 
-                    for (auto& payload : payloads)
-                    {
-                        if (payload.m_callback)
+                    session->m_server.get().asyncTo([payloads = std::move(payloads), _error]() {
+                        for (const auto& payload : payloads)
                         {
-                            payload.m_callback(_error);
+                            if (payload.m_callback)
+                            {
+                                payload.m_callback(_error);
+                            }
                         }
-                    }
+                    });
                 }
             });
     }
