@@ -750,13 +750,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
 {
     if (nodeID == id())
     {
-        // ignore myself
         co_return {};
-    }
-
-    if (header.seq() == 0)
-    {
-        header.setSeq(m_messageFactory->newSeq());
     }
 
     auto session = getP2PSessionByNodeId(nodeID);
@@ -765,8 +759,12 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
         BOOST_THROW_EXCEPTION(
             NetworkException(-1, "send message failed for no network established"));
     }
+    if (header.seq() == 0)
+    {
+        header.setSeq(m_messageFactory->newSeq());
+    }
 
-    co_return co_await session->fastSendP2PMessage(header, std::move(payloads), {});
+    co_return co_await session->fastSendP2PMessage(header, std::move(payloads), options);
 }
 bool bcos::gateway::Service::active()
 {

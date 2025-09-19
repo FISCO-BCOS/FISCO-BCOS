@@ -353,7 +353,7 @@ public:
 
 protected:
     // for UT
-    Gateway() {}
+    Gateway() = default;
     virtual void onReceiveP2PMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 

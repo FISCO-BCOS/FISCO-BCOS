@@ -30,8 +30,8 @@ public:
     using Ptr = std::shared_ptr<P2PMessageV2>;
     //~P2PMessageV2() override = default;
 
-    virtual int16_t ttl() const { return m_ttl; }
-    virtual void setTTL(int16_t _ttl) { m_ttl = _ttl; }
+    virtual int16_t ttl() const;
+    virtual void setTTL(int16_t _ttl);
 
 protected:
     int32_t decodeHeader(const bytesConstRef& _buffer) override;
@@ -45,10 +45,6 @@ class P2PMessageFactoryV2 : public MessageFactory
 public:
     using Ptr = std::shared_ptr<P2PMessageFactoryV2>;
 
-    Message::Ptr buildMessage() override
-    {
-        auto message = std::make_shared<P2PMessageV2>();
-        return message;
-    }
+    Message::Ptr buildMessage() override;
 };
 }  // namespace bcos::gateway

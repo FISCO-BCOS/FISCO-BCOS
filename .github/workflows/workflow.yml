@@ -65,7 +65,7 @@ jobs:
               libgmp-dev flex bison patch libzstd-dev ninja-build pkg-config uuid-runtime automake gcc-14 g++-14
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15'
-        run: brew install libomp gmp
+        run: brew install libomp gmp autoconf automake libtool
       - name: Add MSbuild to PATH
         if: matrix.os == 'windows-2022'
         uses: microsoft/setup-msbuild@v1.1

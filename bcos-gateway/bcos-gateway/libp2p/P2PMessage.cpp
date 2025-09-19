@@ -107,7 +107,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
 
     try
     {
-        CHECK_OFFSET_WITH_THROW_EXCEPTION((offset + OPTIONS_MIN_LENGTH), length);
+        checkOffset((offset + OPTIONS_MIN_LENGTH), length);
 
         // groupID length
         uint16_t groupIDLength =
@@ -117,29 +117,29 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         // groupID
         if (groupIDLength > 0)
         {
-            CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + groupIDLength, length);
+            checkOffset(offset + groupIDLength, length);
             m_groupID.assign(&_buffer[offset], &_buffer[offset] + groupIDLength);
             offset += groupIDLength;
         }
 
         // nodeID length
-        CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
+        checkOffset(offset + 2, length);
         uint16_t nodeIDLength =
             boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
         offset += 2;
 
-        CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + nodeIDLength, length);
+        checkOffset(offset + nodeIDLength, length);
         m_srcNodeID.clear();
         m_srcNodeID.insert(
             m_srcNodeID.begin(), (byte*)&_buffer[offset], (byte*)&_buffer[offset] + nodeIDLength);
         offset += nodeIDLength;
 
-        CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 1, length);
+        checkOffset(offset + 1, length);
         // dstNodeCount
         uint8_t dstNodeCount = *((uint8_t*)&_buffer[offset]);
         offset += 1;
 
-        CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + dstNodeCount * nodeIDLength, length);
+        checkOffset(offset + dstNodeCount * nodeIDLength, length);
         // dstNodeIDs
         m_dstNodeIDs.reserve(dstNodeCount);
         for (size_t i = 0; i < dstNodeCount; i++)
@@ -149,7 +149,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
             offset += nodeIDLength;
         }
 
-        CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
+        checkOffset(offset + 2, length);
 
         uint16_t moduleID =
             boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
@@ -362,7 +362,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     uint32_t length = _buffer.size();
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, m_length);
+    checkOffset(offset, m_length);
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
 
@@ -395,4 +395,179 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     return (int32_t)m_length;
+}
+void bcos::gateway::P2PMessageOptions::setModuleID(uint16_t _moduleID)
+{
+    m_moduleID = _moduleID;
+}
+uint16_t bcos::gateway::P2PMessageOptions::moduleID() const
+{
+    return m_moduleID;
+}
+std::string bcos::gateway::P2PMessageOptions::groupID() const
+{
+    return m_groupID;
+}
+void bcos::gateway::P2PMessageOptions::setGroupID(const std::string& _groupID)
+{
+    m_groupID = _groupID;
+}
+bcos::bytesConstRef bcos::gateway::P2PMessageOptions::srcNodeID() const
+{
+    return ref(m_srcNodeID);
+}
+void bcos::gateway::P2PMessageOptions::setSrcNodeID(bytes _srcNodeID)
+{
+    m_srcNodeID = std::move(_srcNodeID);
+}
+const std::vector<bytes>& bcos::gateway::P2PMessageOptions::dstNodeIDs() const
+{
+    return m_dstNodeIDs;
+}
+void bcos::gateway::P2PMessageOptions::setDstNodeIDs(std::vector<bytes> _dstNodeIDs)
+{
+    m_dstNodeIDs = std::move(_dstNodeIDs);
+}
+std::vector<bytes>& bcos::gateway::P2PMessageOptions::mutableDstNodeIDs()
+{
+    return m_dstNodeIDs;
+}
+uint32_t bcos::gateway::P2PMessage::lengthDirect() const
+{
+    return m_length;
+}
+uint32_t bcos::gateway::P2PMessage::length() const
+{
+    // The length value has been set
+    if (m_length > 0)
+    {
+        return m_length;
+    }
+
+    // estimate the length of msg to be encoded
+    int64_t length = (int64_t)payload().size() + (int64_t)P2PMessage::MESSAGE_HEADER_LENGTH;
+    if (hasOptions() && options().srcNodeID())
+    {
+        length += P2PMessageOptions::OPTIONS_MIN_LENGTH;
+        length += (int64_t)(options().srcNodeID().size() * (1 + options().dstNodeIDs().size()));
+    }
+    return length;
+}
+uint16_t bcos::gateway::P2PMessage::version() const
+{
+    return m_version;
+}
+void bcos::gateway::P2PMessage::setVersion(uint16_t version)
+{
+    m_version = version;
+}
+uint16_t bcos::gateway::P2PMessage::packetType() const
+{
+    return m_packetType;
+}
+void bcos::gateway::P2PMessage::setPacketType(uint16_t packetType)
+{
+    m_packetType = packetType;
+}
+uint32_t bcos::gateway::P2PMessage::seq() const
+{
+    return m_seq;
+}
+void bcos::gateway::P2PMessage::setSeq(uint32_t seq)
+{
+    m_seq = seq;
+}
+uint16_t bcos::gateway::P2PMessage::ext() const
+{
+    return m_ext;
+}
+void bcos::gateway::P2PMessage::setExt(uint16_t _ext)
+{
+    m_ext |= _ext;
+}
+const bcos::gateway::P2PMessageOptions& bcos::gateway::P2PMessage::options() const
+{
+    return m_options;
+}
+void bcos::gateway::P2PMessage::setOptions(P2PMessageOptions _options)
+{
+    m_options = std::move(_options);
+}
+bcos::bytesConstRef bcos::gateway::P2PMessage::payload() const
+{
+    return bcos::ref(m_payload);
+}
+void bcos::gateway::P2PMessage::setPayload(bytes _payload)
+{
+    m_payload = std::move(_payload);
+}
+void bcos::gateway::P2PMessage::setRespPacket()
+{
+    m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE;
+}
+bool bcos::gateway::P2PMessage::isRespPacket() const
+{
+    return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
+}
+bool bcos::gateway::P2PMessage::hasOptions() const
+{
+    return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
+           (m_packetType == GatewayMessageType::BroadcastMessage);
+}
+void bcos::gateway::P2PMessage::setSrcP2PNodeID(std::string const& _srcP2PNodeID)
+{
+    if (m_srcP2PNodeID == _srcP2PNodeID)
+    {
+        return;
+    }
+    m_srcP2PNodeID = _srcP2PNodeID;
+}
+void bcos::gateway::P2PMessage::setDstP2PNodeID(std::string const& _dstP2PNodeID)
+{
+    if (m_dstP2PNodeID == _dstP2PNodeID)
+    {
+        return;
+    }
+    m_dstP2PNodeID = _dstP2PNodeID;
+}
+std::string const& bcos::gateway::P2PMessage::srcP2PNodeID() const
+{
+    return m_srcP2PNodeID;
+}
+std::string const& bcos::gateway::P2PMessage::dstP2PNodeID() const
+{
+    return m_dstP2PNodeID;
+}
+std::string bcos::gateway::P2PMessage::printSrcP2PNodeID() const
+{
+    return printShortP2pID(m_srcP2PNodeID);
+}
+std::string bcos::gateway::P2PMessage::printDstP2PNodeID() const
+{
+    return printShortP2pID(m_dstP2PNodeID);
+}
+void bcos::gateway::P2PMessage::setExtAttributes(std::any _extAttr)
+{
+    m_extAttr = std::move(_extAttr);
+}
+const std::any& bcos::gateway::P2PMessage::extAttributes() const
+{
+    return m_extAttr;
+}
+bcos::gateway::Message::Ptr bcos::gateway::P2PMessageFactory::buildMessage()
+{
+    auto message = std::make_shared<P2PMessage>();
+    return message;
+}
+std::ostream& bcos::gateway::operator<<(std::ostream& _out, const P2PMessage& _p2pMessage)
+{
+    _out << "P2PMessage {" << " length: " << _p2pMessage.length()
+         << " version: " << _p2pMessage.version() << " packetType: " << _p2pMessage.packetType()
+         << " seq: " << _p2pMessage.seq() << " ext: " << _p2pMessage.ext() << " }";
+    return _out;
+}
+std::ostream& bcos::gateway::operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage)
+{
+    _out << (*_p2pMessage.get());
+    return _out;
 }

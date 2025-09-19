@@ -7,7 +7,6 @@
 #pragma once
 
 #include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ObjectCounter.h"
@@ -102,8 +101,7 @@ class Session : public SessionFace,
                 public bcos::ObjectCounter<Session>
 {
 public:
-    constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE =
-        static_cast<std::size_t>(512 * 1024);
+    constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
 
     Session(std::shared_ptr<SocketFace> socket, Host& server,
         size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
@@ -112,7 +110,6 @@ public:
     Session(Session&&) = delete;
     Session& operator=(Session&&) = delete;
     Session& operator=(const Session&) = delete;
-
     ~Session() noexcept override;
 
     using Ptr = std::shared_ptr<Session>;
@@ -189,8 +186,6 @@ public:
 
     virtual void checkNetworkStatus();
 
-    void send(EncodedMessage encodedMsg);
-
     void doRead();
 
     std::size_t m_maxRecvBufferSize;
@@ -202,7 +197,7 @@ public:
     // Maximum amount of data to be sent one time, default: 1M
     uint32_t m_maxSendDataSize = 1024 * 1024;
     // Maximum number of packets to be sent one time, default: 10
-    uint32_t m_maxSendMsgCountS = 10;
+    uint32_t m_maxSendMsgCount = 10;
     //  Maximum size of message that is allowed to send or receive, default: 32M
     uint32_t m_allowMaxMsgSize = 32 * 1024 * 1024;
     //
@@ -230,7 +225,7 @@ public:
 
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
-    boost::atomic_flag m_writing;
+    std::mutex m_writingQueueMutex;
     bool m_active = false;
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
