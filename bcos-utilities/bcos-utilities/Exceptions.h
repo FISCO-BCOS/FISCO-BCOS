@@ -44,9 +44,7 @@ struct Exception : virtual std::exception, virtual boost::exception
 #define DERIVE_BCOS_EXCEPTION(X)         \
     struct X : virtual ::bcos::Exception \
     {                                    \
-        X() = default;                   \
     }
-
 
 DERIVE_BCOS_EXCEPTION(InvalidParameter);
 
