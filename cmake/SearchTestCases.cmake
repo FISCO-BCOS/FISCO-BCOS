@@ -21,7 +21,7 @@ function(config_test_cases TEST_ARGS SOURCES TEST_BINARY_PATH EXCLUDE_SUITES WOR
         file(STRINGS ${file} test_list_raw REGEX "BOOST_.*TEST_(SUITE|CASE|SUITE_END)")
         set(TestSuite "DEFAULT")
         set(TestSuitePath "")
-        # 设置工作目录变量
+        # Set working directory variable
         if(WORKING_DIRECTORY STREQUAL "")
             set(_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
         else()
