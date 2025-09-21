@@ -271,7 +271,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4_groupLimit)
     BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
     BOOST_CHECK(rateLimiterManager->removeRateLimiter("group2"));
     BOOST_CHECK(rateLimiterManager->getGroupRateLimiter("group2") != nullptr);
-    // 分布式限流器相关断言
+    // Distributed rate limiter related assertions
     auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto distributedRateLimiter0 =
         std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
