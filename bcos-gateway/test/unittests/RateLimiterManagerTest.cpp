@@ -324,7 +324,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4_connLimit)
             ->registerRateLimiter("192.108.0.2", rateLimiterFactory->buildTimeWindowRateLimiter(10))
             .first);
     BOOST_CHECK(rateLimiterManager->getConnRateLimiter("192.108.0.2") != nullptr);
-    // 工厂相关断言
+    // Factory related assertions
     auto rateLimiterManager2 = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto rateLimiter0 = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
         rateLimiterManager2->getConnRateLimiter("192.108.0.1"));
