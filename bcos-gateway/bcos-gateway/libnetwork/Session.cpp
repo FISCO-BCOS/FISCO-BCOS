@@ -728,6 +728,114 @@ void Session::checkNetworkStatus()
     }
 }
 
+template <typename View>
+task::Task<Message::Ptr> fastSendMessageWithResponse(
+    Session& session, const Message& message, View& view, Options& options)
+{
+    struct Awaitable
+    {
+        std::reference_wrapper<Options> m_options;
+        std::reference_wrapper<Host> m_host;
+        std::reference_wrapper<const Message> m_message;
+        std::weak_ptr<Session> m_self;
+        std::reference_wrapper<SessionCallbackManagerInterface> m_sessionCallbackManager;
+        std::reference_wrapper<View> m_view;
+        std::variant<NetworkException, Message::Ptr> m_result;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle)
+        {
+            auto handler = std::make_shared<ResponseCallback>();
+            handler->callback = [this, handle](NetworkException exception, Message::Ptr response) {
+                if (exception.errorCode() != 0)
+                {
+                    m_result.emplace<NetworkException>(std::move(exception));
+                }
+                else
+                {
+                    m_result.emplace<Message::Ptr>(std::move(response));
+                }
+                handle.resume();
+            };
+            auto seq = m_message.get().seq();
+            if (m_options.get().timeout > 0)
+            {
+                handler->timeoutHandler.emplace(
+                    m_host.get().asioInterface()->newTimer(m_options.get().timeout));
+                handler->timeoutHandler->async_wait([self = m_self, seq](
+                                                        const boost::system::error_code& _error) {
+                    try
+                    {
+                        if (auto session = self.lock())
+                        {
+                            session->onTimeout(_error, seq);
+                        }
+                    }
+                    catch (std::exception const& e)
+                    {
+                        SESSION_LOG(WARNING) << LOG_DESC("async_wait exception")
+                                             << LOG_KV("message", boost::diagnostic_information(e));
+                    }
+                });
+                handler->startTime = utcSteadyTime();
+            }
+            m_sessionCallbackManager.get().addCallback(seq, std::move(handler));
+            ::send(*m_self.lock(), ::ranges::views::all(m_view.get()), {});
+        }
+        Message::Ptr await_resume()
+        {
+            return std::visit(
+                bcos::overloaded(
+                    [](NetworkException& exception) -> Message::Ptr {
+                        BOOST_THROW_EXCEPTION(exception);
+                        return {};
+                    },
+                    [](Message::Ptr& response) -> Message::Ptr { return std::move(response); }),
+                m_result);
+        }
+    } awaitable{.m_options = options,
+        .m_host = session.m_server,
+        .m_message = message,
+        .m_self = session.shared_from_this(),
+        .m_sessionCallbackManager = *session.m_sessionCallbackManager,
+        .m_view = view,
+        .m_result = {}};
+
+    co_return co_await awaitable;
+}
+
+template <typename View>
+task::Task<void> fastSendMessageWithoutResponse(Session& session, View view)
+{
+    struct Awaitable
+    {
+        std::reference_wrapper<Session> m_self;
+        std::reference_wrapper<View> m_view;
+        NetworkException m_exception;
+
+        constexpr static bool await_ready() noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> handle)
+        {
+            ::send(m_self, ::ranges::views::all(m_view.get()),
+                [this, handle](boost::system::error_code errorCode) {
+                    if (errorCode.failed())
+                    {
+                        m_exception = NetworkException(errorCode.value(), errorCode.message());
+                    }
+                    handle.resume();
+                });
+        }
+        void await_resume()
+        {
+            if (m_exception.errorCode() != 0)
+            {
+                BOOST_THROW_EXCEPTION(m_exception);
+            }
+        }
+    } awaitable{session, view, {}};
+    co_await awaitable;
+}
+
 bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     const Message& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
@@ -759,108 +867,11 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Session::fastSendMessage(
     }
     if (options.response)
     {
-        struct Awaitable
-        {
-            std::reference_wrapper<Options> m_options;
-            std::reference_wrapper<Host> m_host;
-            std::reference_wrapper<const Message> m_message;
-            std::weak_ptr<Session> m_self;
-            std::reference_wrapper<SessionCallbackManagerInterface> m_sessionCallbackManager;
-            std::reference_wrapper<decltype(view)> m_view;
-            std::variant<NetworkException, Message::Ptr> m_result;
-
-            constexpr static bool await_ready() noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> handle)
-            {
-                auto handler = std::make_shared<ResponseCallback>();
-                handler->callback = [this, handle](
-                                        NetworkException exception, Message::Ptr response) {
-                    if (exception.errorCode() != 0)
-                    {
-                        m_result.emplace<NetworkException>(std::move(exception));
-                    }
-                    else
-                    {
-                        m_result.emplace<Message::Ptr>(std::move(response));
-                    }
-                    handle.resume();
-                };
-                auto seq = m_message.get().seq();
-                if (m_options.get().timeout > 0)
-                {
-                    handler->timeoutHandler.emplace(
-                        m_host.get().asioInterface()->newTimer(m_options.get().timeout));
-                    handler->timeoutHandler->async_wait(
-                        [self = m_self, seq](const boost::system::error_code& _error) {
-                            try
-                            {
-                                if (auto session = self.lock())
-                                {
-                                    session->onTimeout(_error, seq);
-                                }
-                            }
-                            catch (std::exception const& e)
-                            {
-                                SESSION_LOG(WARNING)
-                                    << LOG_DESC("async_wait exception")
-                                    << LOG_KV("message", boost::diagnostic_information(e));
-                            }
-                        });
-                    handler->startTime = utcSteadyTime();
-                }
-                m_sessionCallbackManager.get().addCallback(seq, std::move(handler));
-                ::send(*m_self.lock(), ::ranges::views::all(m_view.get()), {});
-            }
-            Message::Ptr await_resume()
-            {
-                return std::visit(
-                    bcos::overloaded(
-                        [](NetworkException& exception) -> Message::Ptr {
-                            BOOST_THROW_EXCEPTION(exception);
-                            return {};
-                        },
-                        [](Message::Ptr& response) -> Message::Ptr { return std::move(response); }),
-                    m_result);
-            }
-        } awaitable{.m_options = options,
-            .m_host = m_server,
-            .m_message = message,
-            .m_self = shared_from_this(),
-            .m_sessionCallbackManager = *m_sessionCallbackManager,
-            .m_view = view,
-            .m_result = {}};
-
-        co_return co_await awaitable;
+        co_return co_await fastSendMessageWithResponse(*this, message, view, options);
     }
     else
     {
-        struct Awaitable
-        {
-            std::reference_wrapper<Session> m_self;
-            std::reference_wrapper<decltype(view)> m_view;
-            NetworkException m_exception;
-
-            constexpr static bool await_ready() noexcept { return false; }
-            void await_suspend(std::coroutine_handle<> handle)
-            {
-                ::send(m_self, ::ranges::views::all(m_view.get()),
-                    [this, handle](boost::system::error_code errorCode) {
-                        if (errorCode.failed())
-                        {
-                            m_exception = NetworkException(errorCode.value(), errorCode.message());
-                        }
-                        handle.resume();
-                    });
-            }
-            void await_resume()
-            {
-                if (m_exception.errorCode() != 0)
-                {
-                    BOOST_THROW_EXCEPTION(m_exception);
-                }
-            }
-        } awaitable{.m_self = *this, .m_view = view, .m_exception = {}};
-        co_await awaitable;
+        co_await fastSendMessageWithoutResponse(*this, std::move(view));
         co_return {};
     }
 }
