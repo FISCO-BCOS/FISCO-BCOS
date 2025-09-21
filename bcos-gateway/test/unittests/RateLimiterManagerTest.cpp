@@ -379,7 +379,7 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4_factoryBehavior)
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
     auto timeWindowSec = rateLimiterConfig.timeWindowSec;
-    // 分布式限流器相关断言
+    // Distributed rate limiter related assertions
     auto distributedRateLimiter0 =
         std::dynamic_pointer_cast<bcos::ratelimiter::DistributedRateLimiter>(
             rateLimiterManager->getGroupRateLimiter("group0"));
