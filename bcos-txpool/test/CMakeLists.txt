@@ -33,4 +33,4 @@ target_link_libraries(${TEST_BINARY_NAME} ${TXPOOL_TARGET} ${LEDGER_TARGET} bcos
 target_link_libraries(${DEMO_BINARY_NAME} ${TXPOOL_TARGET} ${LEDGER_TARGET} bcos-crypto ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
-config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")
+config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

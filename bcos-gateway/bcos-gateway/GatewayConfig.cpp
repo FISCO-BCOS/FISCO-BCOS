@@ -15,7 +15,6 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
 #include <limits>
 #include <regex>
 #include <string>
@@ -27,7 +26,7 @@ using namespace gateway;
 
 GatewayConfig::GatewayConfig()
 {
-    m_hashImpl = std::make_shared<Keccak256>();
+    m_hashImpl = std::make_shared<crypto::Keccak256>();
 }
 
 bool GatewayConfig::isValidPort(int port)

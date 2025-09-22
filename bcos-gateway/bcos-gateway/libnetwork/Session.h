@@ -96,9 +96,7 @@ struct Payload
     }
 };
 
-class Session : public SessionFace,
-                public std::enable_shared_from_this<Session>,
-                public bcos::ObjectCounter<Session>
+class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
