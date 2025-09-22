@@ -907,9 +907,10 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
 
     auto unsealTransactions = m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
     auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
-    for (auto&& [index, value] : ::ranges::views::enumerate(unsealTransactions))
+    for (auto&& [index, unsealTx, sealedTx] :
+        ::ranges::views::zip(::ranges::views::iota(0), unsealTransactions, sealedTransactions))
     {
-        if (!value)
+        if (!unsealTx && !sealedTx)
         {
             missedTxs->emplace_back(txHashes[index]);
         }

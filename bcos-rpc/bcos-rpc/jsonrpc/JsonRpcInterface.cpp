@@ -5,83 +5,112 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <iterator>
-#include <ostream>
-#include <sstream>
 
 using namespace bcos::rpc;
 
 void JsonRpcInterface::initMethod()
 {
-    m_methodToFunc["call"] =
-        std::bind(&JsonRpcInterface::callI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["sendTransaction"] = std::bind(
-        &JsonRpcInterface::sendTransactionI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getTransaction"] = std::bind(
-        &JsonRpcInterface::getTransactionI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getTransactionReceipt"] = std::bind(&JsonRpcInterface::getTransactionReceiptI,
-        this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getBlockByHash"] = std::bind(
-        &JsonRpcInterface::getBlockByHashI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getBlockByNumber"] = std::bind(
-        &JsonRpcInterface::getBlockByNumberI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getBlockHashByNumber"] = std::bind(&JsonRpcInterface::getBlockHashByNumberI,
-        this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getBlockNumber"] = std::bind(
-        &JsonRpcInterface::getBlockNumberI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getCode"] =
-        std::bind(&JsonRpcInterface::getCodeI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getABI"] =
-        std::bind(&JsonRpcInterface::getABII, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getSealerList"] = std::bind(
-        &JsonRpcInterface::getSealerListI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getObserverList"] = std::bind(
-        &JsonRpcInterface::getObserverListI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getNodeListByType"] = std::bind(
-        &JsonRpcInterface::getNodeListByTypeI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getPbftView"] = std::bind(
-        &JsonRpcInterface::getPbftViewI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getPendingTxSize"] = std::bind(
-        &JsonRpcInterface::getPendingTxSizeI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getSyncStatus"] = std::bind(
-        &JsonRpcInterface::getSyncStatusI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getConsensusStatus"] = std::bind(
-        &JsonRpcInterface::getConsensusStatusI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getSystemConfigByKey"] = std::bind(&JsonRpcInterface::getSystemConfigByKeyI,
-        this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getTotalTransactionCount"] =
-        std::bind(&JsonRpcInterface::getTotalTransactionCountI, this, std::placeholders::_1,
-            std::placeholders::_2);
-    m_methodToFunc["getPeers"] =
-        std::bind(&JsonRpcInterface::getPeersI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getGroupPeers"] = std::bind(
-        &JsonRpcInterface::getGroupPeersI, this, std::placeholders::_1, std::placeholders::_2);
-
-    m_methodToFunc["getGroupList"] = std::bind(
-        &JsonRpcInterface::getGroupListI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getGroupInfo"] = std::bind(
-        &JsonRpcInterface::getGroupInfoI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getGroupInfoList"] = std::bind(
-        &JsonRpcInterface::getGroupInfoListI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getGroupNodeInfo"] = std::bind(
-        &JsonRpcInterface::getGroupNodeInfoI, this, std::placeholders::_1, std::placeholders::_2);
+    using ParamsType = const Json::Value&;
+    using CallbackType = std::function<void(Error::Ptr, Json::Value&)>;
+    m_methodToFunc["call"] = [this](ParamsType params, CallbackType callback) {
+        callI(params, std::move(callback));
+    };
+    m_methodToFunc["sendTransaction"] = [this](ParamsType params, CallbackType callback) {
+        sendTransactionI(params, std::move(callback));
+    };
+    m_methodToFunc["getTransaction"] = [this](ParamsType params, CallbackType callback) {
+        getTransactionI(params, std::move(callback));
+    };
+    m_methodToFunc["getTransactionReceipt"] = [this](ParamsType params, CallbackType callback) {
+        getTransactionReceiptI(params, std::move(callback));
+    };
+    m_methodToFunc["getBlockByHash"] = [this](ParamsType params, CallbackType callback) {
+        getBlockByHashI(params, std::move(callback));
+    };
+    m_methodToFunc["getBlockByNumber"] = [this](ParamsType params, CallbackType callback) {
+        getBlockByNumberI(params, std::move(callback));
+    };
+    m_methodToFunc["getBlockHashByNumber"] = [this](ParamsType params, CallbackType callback) {
+        getBlockHashByNumberI(params, std::move(callback));
+    };
+    m_methodToFunc["getBlockNumber"] = [this](ParamsType params, CallbackType callback) {
+        getBlockNumberI(params, std::move(callback));
+    };
+    m_methodToFunc["getCode"] = [this](ParamsType params, CallbackType callback) {
+        getCodeI(params, std::move(callback));
+    };
+    m_methodToFunc["getABI"] = [this](ParamsType params, CallbackType callback) {
+        getABII(params, std::move(callback));
+    };
+    m_methodToFunc["getSealerList"] = [this](ParamsType params, CallbackType callback) {
+        getSealerListI(params, std::move(callback));
+    };
+    m_methodToFunc["getObserverList"] = [this](ParamsType params, CallbackType callback) {
+        getObserverListI(params, std::move(callback));
+    };
+    m_methodToFunc["getNodeListByType"] = [this](ParamsType params, CallbackType callback) {
+        getNodeListByTypeI(params, std::move(callback));
+    };
+    m_methodToFunc["getPbftView"] = [this](ParamsType params, CallbackType callback) {
+        getPbftViewI(params, std::move(callback));
+    };
+    m_methodToFunc["getPendingTxSize"] = [this](ParamsType params, CallbackType callback) {
+        getPendingTxSizeI(params, std::move(callback));
+    };
+    m_methodToFunc["getSyncStatus"] = [this](ParamsType params, CallbackType callback) {
+        getSyncStatusI(params, std::move(callback));
+    };
+    m_methodToFunc["getConsensusStatus"] = [this](ParamsType params, CallbackType callback) {
+        getConsensusStatusI(params, std::move(callback));
+    };
+    m_methodToFunc["getSystemConfigByKey"] = [this](ParamsType params, CallbackType callback) {
+        getSystemConfigByKeyI(params, std::move(callback));
+    };
+    m_methodToFunc["getTotalTransactionCount"] = [this](ParamsType params, CallbackType callback) {
+        getTotalTransactionCountI(params, std::move(callback));
+    };
+    m_methodToFunc["getPeers"] = [this](ParamsType params, CallbackType callback) {
+        getPeersI(params, std::move(callback));
+    };
+    m_methodToFunc["getGroupPeers"] = [this](ParamsType params, CallbackType callback) {
+        getGroupPeersI(params, std::move(callback));
+    };
+    m_methodToFunc["getGroupList"] = [this](ParamsType params, CallbackType callback) {
+        getGroupListI(params, std::move(callback));
+    };
+    m_methodToFunc["getGroupInfo"] = [this](ParamsType params, CallbackType callback) {
+        getGroupInfoI(params, std::move(callback));
+    };
+    m_methodToFunc["getGroupInfoList"] = [this](ParamsType params, CallbackType callback) {
+        getGroupInfoListI(params, std::move(callback));
+    };
+    m_methodToFunc["getGroupNodeInfo"] = [this](ParamsType params, CallbackType callback) {
+        getGroupNodeInfoI(params, std::move(callback));
+    };
 
     // filter interface
-    m_methodToFunc["newBlockFilter"] = std::bind(
-        &JsonRpcInterface::newBlockFilterI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["newPendingTransactionFilter"] =
-        std::bind(&JsonRpcInterface::newPendingTransactionFilterI, this, std::placeholders::_1,
-            std::placeholders::_2);
-    m_methodToFunc["newFilter"] = std::bind(
-        &JsonRpcInterface::newFilterI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["uninstallFilter"] = std::bind(
-        &JsonRpcInterface::uninstallFilterI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getFilterChanges"] = std::bind(
-        &JsonRpcInterface::getFilterChangesI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getFilterLogs"] = std::bind(
-        &JsonRpcInterface::getFilterLogsI, this, std::placeholders::_1, std::placeholders::_2);
-    m_methodToFunc["getLogs"] =
-        std::bind(&JsonRpcInterface::getLogsI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["newBlockFilter"] = [this](ParamsType params, CallbackType callback) {
+        newBlockFilterI(params, std::move(callback));
+    };
+    m_methodToFunc["newPendingTransactionFilter"] = [this](
+                                                        ParamsType params, CallbackType callback) {
+        newPendingTransactionFilterI(params, std::move(callback));
+    };
+    m_methodToFunc["newFilter"] = [this](ParamsType params, CallbackType callback) {
+        newFilterI(params, std::move(callback));
+    };
+    m_methodToFunc["uninstallFilter"] = [this](ParamsType params, CallbackType callback) {
+        uninstallFilterI(params, std::move(callback));
+    };
+    m_methodToFunc["getFilterChanges"] = [this](ParamsType params, CallbackType callback) {
+        getFilterChangesI(params, std::move(callback));
+    };
+    m_methodToFunc["getFilterLogs"] = [this](ParamsType params, CallbackType callback) {
+        getFilterLogsI(params, std::move(callback));
+    };
+    m_methodToFunc["getLogs"] = [this](ParamsType params, CallbackType callback) {
+        getLogsI(params, std::move(callback));
+    };
 
     for (const auto& method : m_methodToFunc)
     {
@@ -174,8 +203,8 @@ void bcos::rpc::parseRpcRequestJson(std::string_view _requestBody, JsonRequest& 
 
     try
     {
-        std::string jsonrpc = "";
-        std::string method = "";
+        std::string jsonrpc;
+        std::string method;
         int64_t id = 0;
         do
         {
@@ -256,8 +285,8 @@ bcos::bytes bcos::rpc::toStringResponse(JsonResponse _jsonResponse)
     class JsonSink
     {
     public:
-        typedef char char_type;
-        typedef boost::iostreams::sink_tag category;
+        using char_type = char;
+        using category = boost::iostreams::sink_tag;
 
         JsonSink(bcos::bytes& buffer) : m_buffer(buffer) {}
 
@@ -281,8 +310,8 @@ bcos::bytes bcos::rpc::toStringResponse(JsonResponse _jsonResponse)
 Json::Value bcos::rpc::toJsonResponse(JsonResponse _jsonResponse)
 {
     Json::Value jResp;
-    jResp["jsonrpc"] = std::move(_jsonResponse.jsonrpc);
-    jResp["id"] = std::move(_jsonResponse.id);
+    jResp["jsonrpc"] = _jsonResponse.jsonrpc;
+    jResp["id"] = _jsonResponse.id;
 
     if (_jsonResponse.error.code == 0)
     {  // success
@@ -291,8 +320,8 @@ Json::Value bcos::rpc::toJsonResponse(JsonResponse _jsonResponse)
     else
     {  // error
         Json::Value jError;
-        jError["code"] = std::move(_jsonResponse.error.code);
-        jError["message"] = std::move(_jsonResponse.error.message);
+        jError["code"] = _jsonResponse.error.code;
+        jError["message"] = _jsonResponse.error.message;
         jResp["error"] = std::move(jError);
     }
 
