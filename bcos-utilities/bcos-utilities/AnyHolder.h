@@ -59,7 +59,9 @@ public:
     AnyHolder& operator=(AnyHolder&& other) noexcept
     {
         if (this == &other)
+        {
             return *this;
+        }
         other.get()->moveAssignTo(get());
         return *this;
     }

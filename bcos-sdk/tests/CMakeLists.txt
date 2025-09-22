@@ -29,4 +29,4 @@ target_link_libraries(${TEST_BINARY_NAME} ${BCOS_CPP_SDK_TARGET} ${TABLE_TARGET}
 set_source_files_properties("unittests/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 #add_test(NAME ${TEST_BINARY_NAME} COMMAND ${TEST_BINARY_NAME})
-config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "")
+config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
