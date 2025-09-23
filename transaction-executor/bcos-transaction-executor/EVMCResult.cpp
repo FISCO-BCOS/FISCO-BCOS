@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <memory>
 
-struct UnknownEVMCStatus : public bcos::Exception
-{
-};
+DERIVE_BCOS_EXCEPTION(UnknownEVMCStatus);
 
 static void cleanEVMCResult(evmc_result& from)
 {
