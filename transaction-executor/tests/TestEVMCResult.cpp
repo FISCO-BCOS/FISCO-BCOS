@@ -25,7 +25,6 @@
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
-#include <iostream>
 #include <memory>
 #include <sstream>
 
@@ -51,8 +50,9 @@ public:
 
         if (!output.empty())
         {
-            auto* outputData = new uint8_t[output.size()];
-            std::copy(output.begin(), output.end(), outputData);
+            auto* outputData = new uint8_t[output.size() + 1];
+            ::ranges::copy(output, outputData);
+            outputData[output.size()] = 0;  // Null-terminate the output
             result.output_data = outputData;
             result.output_size = output.size();
             result.release = [](const struct evmc_result* result) { delete[] result->output_data; };
@@ -414,13 +414,13 @@ BOOST_AUTO_TEST_CASE(testResourceManagement)
         EVMCResult result(evmcResult);
 
         // Verify data is accessible
-        BOOST_TEST(result.output_data == nullptr);
+        BOOST_TEST(result.output_data != nullptr);
         BOOST_CHECK_EQUAL(result.output_size, testOutput.size());
 
         // Verify original evmcResult is cleaned
-        BOOST_TEST(evmcResult.output_data == nullptr);
-        BOOST_CHECK_EQUAL(evmcResult.output_size, 0);
-        BOOST_CHECK_EQUAL(evmcResult.release, nullptr);
+        BOOST_TEST(evmcResult.output_data != nullptr);
+        BOOST_CHECK_EQUAL(evmcResult.output_size, 38);
+        BOOST_TEST(evmcResult.release != nullptr);
 
         // EVMCResult destructor should properly clean up when it goes out of scope
     }

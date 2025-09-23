@@ -147,22 +147,21 @@ BOOST_AUTO_TEST_CASE(equal)
     }());
 }
 
-// 异常情况测试用例
-
+// Test cases for exceptional situations
 BOOST_AUTO_TEST_CASE(rollbackEmptyStorage)
 {
     task::syncWait([]() -> task::Task<void> {
         MutableStorage memoryStorage;
         Rollbackable rollbackableStorage(memoryStorage);
 
-        // 测试空存储的回滚操作，应该正常工作且不产生任何效果
+        // Test rollback operation on empty storage, should work normally and have no effect
         auto savepoint = rollbackableStorage.current();
         BOOST_CHECK_EQUAL(savepoint, 0);
 
-        // 回滚空存储应该正常完成
+        // Rolling back empty storage should complete normally
         co_await rollbackableStorage.rollback(savepoint);
 
-        // 再次检查current应该还是0
+        // After rollback, current should still be 0
         BOOST_CHECK_EQUAL(rollbackableStorage.current(), 0);
     }());
 }
@@ -175,7 +174,7 @@ BOOST_AUTO_TEST_CASE(rollbackToFutureSavepoint)
 
         std::string_view tableID = "table1";
 
-        // 写入一些数据
+        // Write some data
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"Value1"});
         auto savepoint1 = rollbackableStorage.current();
@@ -186,12 +185,12 @@ BOOST_AUTO_TEST_CASE(rollbackToFutureSavepoint)
         auto savepoint2 = rollbackableStorage.current();
         BOOST_CHECK_EQUAL(savepoint2, 2);
 
-        // 尝试回滚到未来的savepoint（大于当前的savepoint）
-        // 这应该不会产生任何效果，因为rollback只处理index > savepoint的情况
+        // Try to rollback to a future savepoint (greater than the current savepoint)
+        // This should have no effect, since rollback only processes index > savepoint
         constexpr auto FUTURE_OFFSET = 10;
         co_await rollbackableStorage.rollback(savepoint2 + FUTURE_OFFSET);
 
-        // 验证数据仍然存在
+        // Verify that the data still exists
         auto value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         auto value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         BOOST_CHECK(value1);
@@ -209,41 +208,41 @@ BOOST_AUTO_TEST_CASE(nestedRollbacks)
 
         std::string_view tableID = "table1";
 
-        // 第一层操作
+        // First level operation
         auto savepoint0 = rollbackableStorage.current();
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"Value1"});
 
-        // 第二层操作
+        // Second level operation
         auto savepoint1 = rollbackableStorage.current();
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key2"sv}, storage::Entry{"Value2"});
 
-        // 第三层操作
+        // Third level operation
         auto savepoint2 = rollbackableStorage.current();
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key3"sv}, storage::Entry{"Value3"});
 
-        // 验证所有数据都存在
+        // Verify that all data exists
         auto value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         auto value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         auto value3 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key3"sv});
         BOOST_CHECK(value1 && value2 && value3);
 
-        // 回滚到savepoint2，应该只移除Key3
+        // Rollback to savepoint2, should only remove Key3
         co_await rollbackableStorage.rollback(savepoint2);
         value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         value3 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key3"sv});
         BOOST_CHECK(value1 && value2 && !value3);
 
-        // 回滚到savepoint1，应该移除Key2
+        // Rollback to savepoint1, should remove Key2
         co_await rollbackableStorage.rollback(savepoint1);
         value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         BOOST_CHECK(value1 && !value2);
 
-        // 回滚到savepoint0，应该移除Key1
+        // Rollback to savepoint0, should remove Key1
         co_await rollbackableStorage.rollback(savepoint0);
         value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         BOOST_CHECK(!value1);
@@ -259,24 +258,24 @@ BOOST_AUTO_TEST_CASE(multipleRollbacksToSameSavepoint)
         std::string_view tableID = "table1";
         auto savepoint = rollbackableStorage.current();
 
-        // 写入数据
+        // Write data
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"Value1"});
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key2"sv}, storage::Entry{"Value2"});
 
-        // 验证数据存在
+        // Verify that the data exists
         auto value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         auto value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         BOOST_CHECK(value1 && value2);
 
-        // 第一次回滚
+        // First rollback
         co_await rollbackableStorage.rollback(savepoint);
         value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         BOOST_CHECK(!value1 && !value2);
 
-        // 再次回滚到同一个savepoint应该不产生任何效果
+        // Rolling back to the same savepoint again should have no effect
         co_await rollbackableStorage.rollback(savepoint);
         value1 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         value2 = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
@@ -300,22 +299,22 @@ BOOST_AUTO_TEST_CASE(operationsAfterRollback)
         // 回滚
         co_await rollbackableStorage.rollback(savepoint);
 
-        // 验证数据已被移除
+        // Verify that the data has been removed
         auto value = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key1"sv});
         BOOST_CHECK(!value);
 
-        // 回滚后继续操作
+        // Continue operations after rollback
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key2"sv}, storage::Entry{"NewValue"});
         auto newSavepoint = rollbackableStorage.current();
 
-        // 验证新操作成功
+        // Verify that the new operation succeeded
         auto newValue =
             co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         BOOST_CHECK(newValue);
         BOOST_CHECK_EQUAL(newValue->get(), "NewValue");
 
-        // 再次回滚应该移除新的操作
+        // Rolling back again should remove the new operation
         co_await rollbackableStorage.rollback(savepoint);
         newValue = co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "Key2"sv});
         BOOST_CHECK(!newValue);
@@ -331,7 +330,7 @@ BOOST_AUTO_TEST_CASE(batchOperationsRollback)
         std::string_view tableID = "table1";
         auto savepoint = rollbackableStorage.current();
 
-        // 批量写入操作
+        // Batch write operations
         constexpr auto BATCH_SIZE = 100;
         std::vector<std::pair<StateKey, storage::Entry>> keyValues;
         keyValues.reserve(BATCH_SIZE);
@@ -343,7 +342,7 @@ BOOST_AUTO_TEST_CASE(batchOperationsRollback)
 
         co_await storage2::writeSome(rollbackableStorage, keyValues);
 
-        // 验证数据存在
+        // Verify that the data exists
         std::vector<StateKey> keys;
         keys.reserve(BATCH_SIZE);
         for (int i = 0; i < BATCH_SIZE; ++i)
@@ -362,10 +361,10 @@ BOOST_AUTO_TEST_CASE(batchOperationsRollback)
         }
         BOOST_CHECK_EQUAL(count, BATCH_SIZE);
 
-        // 批量回滚
+        // Batch rollback
         co_await rollbackableStorage.rollback(savepoint);
 
-        // 验证所有数据都被移除
+        // Verify that all data has been removed
         auto valuesAfterRollback = co_await storage2::readSome(rollbackableStorage, keys);
         count = 0;
         for (auto&& value : valuesAfterRollback)
@@ -389,7 +388,7 @@ BOOST_AUTO_TEST_CASE(removeSomeRollback)
         constexpr auto TOTAL_KEYS = 5;
         constexpr auto KEYS_TO_REMOVE = 3;
 
-        // 先写入一些数据
+        // Write some data first
         for (int i = 0; i < TOTAL_KEYS; ++i)
         {
             co_await storage2::writeOne(rollbackableStorage,
@@ -399,7 +398,7 @@ BOOST_AUTO_TEST_CASE(removeSomeRollback)
 
         auto savepoint = rollbackableStorage.current();
 
-        // 批量删除部分数据
+        // Batch delete some data
         std::vector<StateKey> keysToRemove;
         keysToRemove.reserve(KEYS_TO_REMOVE);
         for (int i = 0; i < KEYS_TO_REMOVE; ++i)
@@ -409,14 +408,14 @@ BOOST_AUTO_TEST_CASE(removeSomeRollback)
 
         co_await storage2::removeSome(rollbackableStorage, keysToRemove);
 
-        // 验证数据被删除
+        // Verify that the data has been deleted
         auto values = co_await storage2::readSome(rollbackableStorage, keysToRemove);
         for (auto&& value : values)
         {
             BOOST_CHECK(!value);
         }
 
-        // 验证未删除的数据仍然存在
+        // Verify that the undeleted data still exists
         std::vector<StateKey> remainingKeys;
         for (int i = KEYS_TO_REMOVE; i < TOTAL_KEYS; ++i)
         {
@@ -428,10 +427,10 @@ BOOST_AUTO_TEST_CASE(removeSomeRollback)
             BOOST_CHECK(value);
         }
 
-        // 回滚删除操作
+        // Rollback the delete operation
         co_await rollbackableStorage.rollback(savepoint);
 
-        // 验证被删除的数据恢复了
+        // Verify that the deleted data has been restored
         auto restoredValues = co_await storage2::readSome(rollbackableStorage, keysToRemove);
         for (auto&& value : restoredValues)
         {
@@ -448,7 +447,7 @@ BOOST_AUTO_TEST_CASE(mixedOperationsRollback)
 
         std::string_view tableID = "table1";
 
-        // 预先写入一些数据作为基础
+        // Pre-write some data as the base
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "BaseKey1"sv}, storage::Entry{"BaseValue1"});
         co_await storage2::writeOne(
@@ -456,19 +455,19 @@ BOOST_AUTO_TEST_CASE(mixedOperationsRollback)
 
         auto savepoint = rollbackableStorage.current();
 
-        // 混合操作：更新、新增、删除
-        // 更新现有数据
+        // Mixed operations: update, insert, delete
+        // Update existing data
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "BaseKey1"sv}, storage::Entry{"UpdatedValue1"});
 
-        // 新增数据
+        // Insert new data
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "NewKey1"sv}, storage::Entry{"NewValue1"});
 
-        // 删除数据
+        // Delete data
         co_await storage2::removeOne(rollbackableStorage, StateKey{tableID, "BaseKey2"sv});
 
-        // 验证操作结果
+        // Verify the operation results
         auto updatedValue =
             co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "BaseKey1"sv});
         auto newValue =
@@ -482,10 +481,10 @@ BOOST_AUTO_TEST_CASE(mixedOperationsRollback)
         BOOST_CHECK_EQUAL(newValue->get(), "NewValue1");
         BOOST_CHECK(!deletedValue);
 
-        // 回滚所有操作
+        // Rollback all operations
         co_await rollbackableStorage.rollback(savepoint);
 
-        // 验证回滚结果
+        // Verify the rollback results
         auto restoredOriginal =
             co_await storage2::readOne(rollbackableStorage, StateKey{tableID, "BaseKey1"sv});
         auto restoredDeleted =
