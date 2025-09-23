@@ -2,16 +2,18 @@
 #include "TestBytecode.h"
 #include "TestMemoryStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
+#include "bcos-executor/src/Common.h"
+#include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
+#include <evmc/evmc.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
-#include <limits>
 #include <memory>
-#include <memory_resource>
 
 using namespace bcos;
 using namespace bcos::storage2;
@@ -73,6 +75,7 @@ BOOST_AUTO_TEST_CASE(execute)
         BOOST_CHECK_EQUAL(getIntResult, 10099);
     }());
 }
+
 BOOST_AUTO_TEST_CASE(transientStorageTest)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
@@ -150,66 +153,94 @@ BOOST_AUTO_TEST_CASE(transientStorageContractTest)
     }());
 }
 
-// 暂时屏蔽，启用pmr task后开启
-// Temporarily blocked, enable after activating the PMR task.
-#if 0
-struct TestMemoryResource : public std::pmr::memory_resource
+
+BOOST_AUTO_TEST_CASE(costBalance)
 {
-    size_t m_size = 100000000;
-    int m_count = 0;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader(
+            [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_13_0_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
-    void* do_allocate(std::size_t bytes, std::size_t alignment) override
-    {
-        m_size = bytes;
-        ++m_count;
-        return std::malloc(bytes);
-    }
-    void do_deallocate(void* p, std::size_t bytes, std::size_t alignment) override { std::free(p); }
-    bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override
-    {
-        return this == &other;
-    }
-};
-#endif
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(protocol::BlockVersion::V3_13_0_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+        ledgerConfig.setFeatures(features);
+        ledgerConfig.setGasPrice({"1", 0});
 
-BOOST_AUTO_TEST_CASE(testExecuteStackSize)
-{
-#if 0
-    bcostars::protocol::BlockHeaderImpl blockHeader(
-        [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
-    blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
-    blockHeader.calculateHash(*cryptoSuite->hashImpl());
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        // First deploy
+        auto transaction = transactionFactory.createTransaction(
+            0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
+        auto receipt = co_await bcos::transaction_executor::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+        BOOST_CHECK_EQUAL(
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
 
-    bcos::bytes helloworldBytecodeBinary;
-    boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
-    // First deploy
-    auto transaction =
-        transactionFactory.createTransaction(0, "", helloworldBytecodeBinary, {}, 0, "", "", 0);
+        using namespace std::string_view_literals;
+        auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
+        evmc_address senderAddress = unhexAddress(sender);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
 
-    TestMemoryResource memoryResource;
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
 
-    auto* currentMemoryResource = std::pmr::get_default_resource();
-    std::pmr::set_default_resource(std::addressof(memoryResource));  // For gcc11 bug
-    auto generator = bcos::transaction_executor::execute3Step(executor, storage, blockHeader,
-        *transaction, 0, ledgerConfig, task::syncWait, std::allocator_arg,
-        std::pmr::polymorphic_allocator<>(std::addressof(memoryResource)));
-    protocol::TransactionReceipt::Ptr receipt;
-    for (auto currentReceipt : generator)
-    {
-        BOOST_CHECK_LT(memoryResource.m_size, transaction_executor::EXECUTOR_STACK);
-        if (currentReceipt)
-        {
-            receipt = currentReceipt;
-        }
-    }
-    std::pmr::set_default_resource(currentMemoryResource);
+        constexpr static int64_t initBalance = 90000 + 21000;
+        co_await ledger::account::setBalance(senderAccount, initBalance);
 
-    BOOST_CHECK(receipt);
-    BOOST_CHECK_EQUAL(receipt->status(), 0);
-    BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
-    BOOST_CHECK_GE(memoryResource.m_count, 1);
-#endif
+        receipt = co_await bcos::transaction_executor::executeTransaction(
+            executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        BOOST_CHECK_EQUAL(receipt->contractAddress(), "e0e794ca86d198042b64285c5ce667aee747509b");
+        BOOST_CHECK_EQUAL(
+            co_await ledger::account::balance(senderAccount), initBalance - receipt->gasUsed());
+    }());
 }
 
+BOOST_AUTO_TEST_CASE(bugfixPrecompiled)
+{
+    // task::syncWait([this]() mutable -> task::Task<void> {
+    //     bcostars::protocol::BlockHeaderImpl blockHeader(
+    //         [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
+    //     blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+    //     blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+    //     auto features = ledgerConfig.features();
+    //     features.setGenesisFeatures(protocol::BlockVersion::V3_13_0_VERSION);
+    //     features.set(bcos::ledger::Features::Flag::feature_balance);
+    //     features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+    //     ledgerConfig.setFeatures(features);
+    //     ledgerConfig.setGasPrice({"1", 0});
+
+    //     bcos::bytes helloworldBytecodeBinary;
+    //     boost::algorithm::unhex(helloworldBytecode,
+    //     std::back_inserter(helloworldBytecodeBinary));
+    //     // First deploy
+    //     auto transaction = transactionFactory.createTransaction(
+    //         0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 1000);
+    //     auto receipt = co_await bcos::transaction_executor::executeTransaction(
+    //         executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+    //     BOOST_CHECK_EQUAL(
+    //         receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+
+    //     using namespace std::string_view_literals;
+    //     auto sender = "e0e794ca86d198042b64285c5ce667aee747509b"sv;
+    //     evmc_address senderAddress = unhexAddress(sender);
+    //     transaction->forceSender(
+    //         bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+
+    //     ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+    //     co_await ledger::account::setBalance(senderAccount, 90000);
+
+    //     receipt = co_await bcos::transaction_executor::executeTransaction(
+    //         executor, storage, blockHeader, *transaction, 0, ledgerConfig, task::syncWait);
+    //     BOOST_CHECK_EQUAL(receipt->status(), 0);
+    //     BOOST_CHECK_EQUAL(receipt->contractAddress(),
+    //     "e0e794ca86d198042b64285c5ce667aee747509b"); BOOST_CHECK_EQUAL(
+    //         co_await ledger::account::balance(senderAccount), 90000 - receipt->gasUsed());
+    // }());
+}
 
 BOOST_AUTO_TEST_SUITE_END()

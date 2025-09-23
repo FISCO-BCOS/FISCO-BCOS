@@ -1586,7 +1586,9 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     auto txGasUsed = m_gasLimit - output->gasAvailable();
     // Calc the gas set to header
 
-    if (precompiled::contains(bcos::precompiled::c_systemTxsAddress, output->from()))
+    if (!m_scheduler->ledgerConfig().features().get(
+            ledger::Features::Flag::bugfix_precompiled_gasused) &&
+        precompiled::contains(bcos::precompiled::c_systemTxsAddress, output->from()))
     {
         // Note: We will not consume gas when EOA call sys contract directly.
         // When dmc return, sys contract is from(), to() is EOA address.
@@ -1616,6 +1618,10 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
                              << ", gasUsed: " << receipt->gasUsed()
                              << ", version: " << receipt->version()
                              << ", status: " << receipt->status();
+        if (c_fileLogLevel == LogLevel::TRACE)
+        {
+            SCHEDULER_LOG(TRACE) << receipt->toString();
+        }
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }
@@ -1634,6 +1640,10 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
                              << ", version: " << receipt->version()
                              << ", status: " << receipt->status()
                              << ", effectiveGasPrice: " << receipt->effectiveGasPrice();
+        if (c_fileLogLevel == LogLevel::TRACE)
+        {
+            SCHEDULER_LOG(TRACE) << receipt->toString();
+        }
         m_executiveResults[output->contextID() - m_startContextID].receipt = std::move(receipt);
         break;
     }

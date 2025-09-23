@@ -114,7 +114,7 @@ private:
             storage.m_storage.get(), std::forward<decltype(keys)>(keys));
     }
 
-    auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage,
+    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage,
         auto&& key) -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
                         Storage&, decltype(key)>>>
     {

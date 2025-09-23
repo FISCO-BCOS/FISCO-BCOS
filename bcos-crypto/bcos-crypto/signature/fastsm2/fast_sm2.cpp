@@ -18,9 +18,9 @@
  * @date 2022.01.17
  * @author yujiechen
  */
-#include "bcos-utilities/BoostLog.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
@@ -58,7 +58,7 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
     if (bn == nullptr)
     {
-        CRYPTO_LOG(ERROR) << LOG_DESC("fast_sm2_sign: error of BN_bin2bn for publicKey");
+        CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_sign: error of BN_bin2bn for publicKey");
         goto done;
     }
 
@@ -66,49 +66,49 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     privateKey = BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
     if (privateKey == nullptr)
     {
-        CRYPTO_LOG(ERROR) << LOG_DESC("sm2: fast_sm2_sign: error of BN_bin2bn for privateKey");
+        CRYPTO_LOG(WARNING) << LOG_DESC("sm2: fast_sm2_sign: error of BN_bin2bn for privateKey");
         goto done;
     }
 
     publicKey = EC_POINT_bn2point(sm2Group, bn, NULL, NULL);
     if (publicKey == NULL)
     {
-        CRYPTO_LOG(ERROR) << LOG_DESC(
-                                 "sm2: fast_sm2_sign: error of EC_POINT_bn2point for publicKey")
-                          << LOG_KV("len", raw_public_key->len)
-                          << LOG_KV(
-                                 "pubHex", *toHexString(raw_public_key->data,
-                                               raw_public_key->data + raw_public_key->len, "0x"));
+        CRYPTO_LOG(WARNING) << LOG_DESC(
+                                   "sm2: fast_sm2_sign: error of EC_POINT_bn2point for publicKey")
+                            << LOG_KV("len", raw_public_key->len)
+                            << LOG_KV(
+                                   "pubHex", *toHexString(raw_public_key->data,
+                                                 raw_public_key->data + raw_public_key->len, "0x"));
         goto done;
     }
     sm2Key = EC_KEY_new();
     if (sm2Key == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_sign: error of EC_KEY_new";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_new";
         goto done;
     }
     if (!EC_KEY_set_group(sm2Key, sm2Group))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_sign: error of EC_KEY_set_group";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_group";
         goto done;
     }
     // set the private key
     if (!EC_KEY_set_private_key(sm2Key, privateKey))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_sign: error of EC_KEY_set_private_key";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_private_key";
         goto done;
     }
     // set the public key
     if (!EC_KEY_set_public_key(sm2Key, publicKey))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_sign: error of EC_KEY_set_public_key";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of EC_KEY_set_public_key";
         goto done;
     }
     sig = sm2_do_sign(sm2Key, EVP_sm3(), (const uint8_t*)c_userId, (size_t)strlen(c_userId),
         (const uint8_t*)raw_message_hash->data, raw_message_hash->len);
     if (sig == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_sign: error of sm2_do_sign";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_sign: error of sm2_do_sign";
         goto done;
     }
     // set (r, s) to output_signature
@@ -169,55 +169,55 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     point = EC_POINT_new(sm2Group);
     if (point == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of EC_POINT_new";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_POINT_new";
         goto done;
     }
 
     if (!EC_POINT_bn2point(sm2Group, bn, point, NULL))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of EC_POINT_bin2point";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_POINT_bin2point";
         goto done;
     }
 
     sm2Key = EC_KEY_new();
     if (sm2Key == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of EC_KEY_new";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_KEY_new";
         goto done;
     }
 
     if (!EC_KEY_set_group(sm2Key, sm2Group))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of EC_KEY_set_group";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of EC_KEY_set_group";
         goto done;
     }
     if (!EC_KEY_set_public_key(sm2Key, point))
     {
-        CRYPTO_LOG(ERROR) << "EC_KEY_set_public_key of EC_KEY_set_public_key";
+        CRYPTO_LOG(WARNING) << "EC_KEY_set_public_key of EC_KEY_set_public_key";
         goto done;
     }
     r = BN_bin2bn((const unsigned char*)raw_signature->data, c_R_FIELD_LEN, NULL);
     if (r == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of BN_bin2bn for r";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of BN_bin2bn for r";
         goto done;
     }
     s = BN_bin2bn((const unsigned char*)(raw_signature->data + c_R_FIELD_LEN), c_S_FIELD_LEN, NULL);
     if (s == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of BN_bin2bn for s";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of BN_bin2bn for s";
         goto done;
     }
     signData = ECDSA_SIG_new();
     if (signData == NULL)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of ECDSA_SIG_new";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of ECDSA_SIG_new";
         goto done;
     }
     // takes ownership of r and s
     if (!ECDSA_SIG_set0(signData, r, s))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_verify: error of ECDSA_SIG_set0";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of ECDSA_SIG_set0";
         goto done;
     }
     if (sm2_do_verify(sm2Key, EVP_sm3(), signData, (const uint8_t*)c_userId, strlen(c_userId),
@@ -259,41 +259,41 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
         BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
     if (!privateKey)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_derive_public_key: error of BN_bin2bn for privateKey";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of BN_bin2bn for privateKey";
         goto done;
     }
     ctx = BN_CTX_new();
     if (!ctx)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_derive_public_key: error of BN_CTX_new";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of BN_CTX_new";
         goto done;
     }
     sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
     if (!sm2Key)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_derive_public_key: error of EC_KEY_new_by_curve_name";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of EC_KEY_new_by_curve_name";
         goto done;
     }
     if (!EC_KEY_set_private_key(sm2Key, privateKey))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_derive_public_key: error EC_KEY_set_private_key";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error EC_KEY_set_private_key";
         goto done;
     }
     pubPoint = EC_POINT_new(sm2Group);
     if (!pubPoint)
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_derive_public_key: error EC_POINT_new";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error EC_POINT_new";
         goto done;
     }
     if (!EC_POINT_mul(sm2Group, pubPoint, privateKey, NULL, NULL, NULL))
     {
-        CRYPTO_LOG(ERROR) << "sm2: fast_sm2_derive_public_key: error of EC_POINT_mul";
+        CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of EC_POINT_mul";
         goto done;
     }
     if (!EC_POINT_point2buf(
             sm2Group, pubPoint, POINT_CONVERSION_UNCOMPRESSED, (unsigned char**)&publicKey, ctx))
     {
-        CRYPTO_LOG(ERROR)
+        CRYPTO_LOG(WARNING)
             << "sm2: fast_sm2_derive_public_key: error of EC_POINT_point2bin for publicKey";
         goto done;
     }

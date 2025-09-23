@@ -1,4 +1,5 @@
 #include "HostContext.h"
+#include "VMFactory.h"
 #include <fmt/format.h>
 
 evmc_bytes32 bcos::transaction_executor::hostcontext::evm_hash_fn(const uint8_t* data, size_t size)
@@ -15,9 +16,7 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::host
     {
     case EVMC_CREATE:
     {
-        message.emplace<evmc_message>(inputMessage);
-        auto& ref = std::get<evmc_message>(message);
-
+        auto& ref = message.emplace<evmc_message>(inputMessage);
         if (concepts::bytebuffer::equalTo(
                 inputMessage.code_address.bytes, executor::EMPTY_EVM_ADDRESS.bytes))
         {
@@ -30,11 +29,9 @@ std::variant<const evmc_message*, evmc_message> bcos::transaction_executor::host
     }
     case EVMC_CREATE2:
     {
-        message.emplace<evmc_message>(inputMessage);
-        auto& ref = std::get<evmc_message>(message);
-
-        std::array<uint8_t, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
-                                crypto::HashType::SIZE>
+        auto& ref = message.emplace<evmc_message>(inputMessage);
+        std::array<bcos::byte, 1 + sizeof(ref.sender.bytes) + sizeof(inputMessage.create2_salt) +
+                                   crypto::HashType::SIZE>
             buffer;
         uint8_t* ptr = buffer.data();
         *ptr++ = 0xff;
@@ -75,3 +72,15 @@ bcos::transaction_executor::hostcontext::getCacheExecutables()
 
     return cachedExecutables.m_cachedExecutables;
 }
+
+bcos::transaction_executor::hostcontext::Executable::Executable(
+    storage::Entry code, evmc_revision revision)
+  : m_code(std::make_optional(std::move(code))),
+    m_vmInstance(VMFactory::create(VMKind::evmone,
+        bytesConstRef(reinterpret_cast<const uint8_t*>(m_code->data()), m_code->size()), revision))
+{}
+
+bcos::transaction_executor::hostcontext::Executable::Executable(
+    bytesConstRef code, evmc_revision revision)
+  : m_vmInstance(VMFactory::create(VMKind::evmone, code, revision))
+{}

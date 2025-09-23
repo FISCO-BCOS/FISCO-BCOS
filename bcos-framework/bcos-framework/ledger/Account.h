@@ -1,23 +1,24 @@
 #pragma once
 #include "bcos-task/Task.h"
 #include "bcos-task/Trait.h"
+#include <optional>
 
 namespace bcos::ledger::account
 {
 
-inline constexpr struct IsExist
+inline constexpr struct Exists
 {
     task::Task<bool> operator()(auto& account, auto&&... args) const
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
-} isExist{};
+} exists{};
 
 inline constexpr struct Create
 {
-    auto operator()(auto& account, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account,
+        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                                  account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -25,9 +26,9 @@ inline constexpr struct Create
 
 inline constexpr struct Code
 {
-    auto operator()(auto& account, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account,
+        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                                  account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -44,9 +45,9 @@ inline constexpr struct SetCode
 
 inline constexpr struct CodeHash
 {
-    auto operator()(auto& account, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account,
+        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                                  account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -54,9 +55,9 @@ inline constexpr struct CodeHash
 
 inline constexpr struct ABI
 {
-    auto operator()(auto& account, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account,
+        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                                  account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -73,9 +74,9 @@ inline constexpr struct SetABI
 
 inline constexpr struct Balance
 {
-    auto operator()(auto& account, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account,
+        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                                  account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }
@@ -132,9 +133,9 @@ inline constexpr struct SetStorage
 
 inline constexpr struct Path
 {
-    auto operator()(auto& account, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
-            *this, account, std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& account,
+        auto&&... args) const -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this,
+                                  account, std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await tag_invoke(*this, account, std::forward<decltype(args)>(args)...);
     }

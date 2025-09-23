@@ -21,9 +21,8 @@
 #pragma once
 #include "P2PMessage.h"
 
-namespace bcos
-{
-namespace gateway
+
+namespace bcos::gateway
 {
 class P2PMessageV2 : public P2PMessage
 {
@@ -36,7 +35,7 @@ public:
 
 protected:
     int32_t decodeHeader(const bytesConstRef& _buffer) override;
-    bool encodeHeader(bytes& _buffer) const override;
+    bool encodeHeaderImpl(bytes& _buffer) const override;
 
     int16_t m_ttl = 10;
 };
@@ -52,5 +51,4 @@ public:
         return message;
     }
 };
-}  // namespace gateway
-}  // namespace bcos
+}  // namespace bcos::gateway

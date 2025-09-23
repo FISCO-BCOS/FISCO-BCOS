@@ -33,6 +33,7 @@ namespace bcos::rpc
 {
     result["number"] = toQuantity(block->blockHeader()->number());
     result["hash"] = block->blockHeader()->hash().hexPrefixed();
+    // Only one parent block in BCOS. It is empty for genesis block
     for (const auto& info : block->blockHeader()->parentInfo())
     {
         result["parentHash"] = info.blockHash.hexPrefixed();
@@ -50,9 +51,15 @@ namespace bcos::rpc
         auto hash = crypto::keccak256Hash(bcos::ref(pk));
         Address address = right160(hash);
         auto addrString = address.hex();
-        auto addrHash = crypto::keccak256Hash(address.ref()).hex();
+        auto addrHash = crypto::keccak256Hash(bytesConstRef(addrString)).hex();
         toChecksumAddress(addrString, addrHash);
         result["miner"] = "0x" + addrString;
+    }
+    // genesis block
+    if (block->blockHeader()->number() == 0)
+    {
+        result["miner"] = "0x0000000000000000000000000000000000000000";
+        result["parentHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000";
     }
     result["difficulty"] = "0x0";
     result["totalDifficulty"] = "0x0";

@@ -118,6 +118,11 @@ inline constexpr struct GetSystemConfig
     {
         co_return co_await tag_invoke(*this, ledger, key);
     }
+    task::Task<std::optional<SystemConfigEntry>> operator()(
+        auto& storage, std::string_view key, FromStorage /*unused*/) const
+    {
+        co_return co_await tag_invoke(*this, storage, key);
+    }
 } getSystemConfig{};
 
 inline constexpr struct GetNodeList

@@ -22,9 +22,8 @@
 
 #include <bcos-utilities/Common.h>
 
-namespace bcos
-{
-namespace front
+
+namespace bcos::front
 {
 enum MessageDecodeStatus
 {
@@ -53,24 +52,17 @@ public:
         Response = 0x0001,
     };
 
-public:
-    FrontMessage()
-    {
-        m_uuid = std::make_shared<bytes>();
-        m_payload = bytesConstRef();
-    }
+    FrontMessage() = default;
+    virtual ~FrontMessage() = default;
 
-    virtual ~FrontMessage() {}
-
-public:
     virtual uint16_t moduleID() { return m_moduleID; }
     virtual void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
 
     virtual uint16_t ext() { return m_ext; }
     virtual void setExt(uint16_t _ext) { m_ext = _ext; }
 
-    virtual std::shared_ptr<bytes> uuid() { return m_uuid; }
-    virtual void setUuid(std::shared_ptr<bytes> _uuid) { m_uuid = _uuid; }
+    virtual bytesConstRef uuid() { return bcos::ref(m_uuid); }
+    virtual void setUuid(bytes _uuid) { m_uuid = std::move(_uuid); }
 
     virtual bytesConstRef payload() { return m_payload; }
     virtual void setPayload(bytesConstRef _payload) { m_payload = _payload; }
@@ -78,17 +70,17 @@ public:
     virtual void setResponse() { m_ext |= ExtFlag::Response; }
     virtual bool isResponse() { return m_ext & ExtFlag::Response; }
 
-public:
+    bool encodeHeader(bytes& buffer);
     virtual bool encode(bytes& _buffer);
     virtual ssize_t decode(bytesConstRef _buffer);
 
     static uint16_t tryDecodeModuleID(bytesConstRef _buffer);
 
-protected:
+private:
+    bytes m_uuid;
+    bytesConstRef m_payload;
     uint16_t m_moduleID = 0;
-    std::shared_ptr<bytes> m_uuid;
     uint16_t m_ext = 0;
-    bytesConstRef m_payload;  ///< message data
 };
 
 class FrontMessageFactory
@@ -105,5 +97,4 @@ public:
     }
 };
 
-}  // namespace front
-}  // namespace bcos
+}  // namespace bcos::front

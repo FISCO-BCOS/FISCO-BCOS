@@ -7,9 +7,7 @@
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
-#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
@@ -45,6 +43,7 @@ public:
         std::reference_wrapper<ledger::LedgerConfig const> m_ledgerConfig;
 
         Rollbackable<Storage> m_rollbackableStorage;
+        Rollbackable<Storage>::Savepoint m_startSavepoint;
         bcos::storage2::memory_storage::MemoryStorage<bcos::transaction_executor::StateKey,
             bcos::transaction_executor::StateValue, bcos::storage2::memory_storage::ORDERED>
             m_transientStorage;
@@ -67,6 +66,7 @@ public:
             m_contextID(contextID),
             m_ledgerConfig(ledgerConfig),
             m_rollbackableStorage(storage),
+            m_startSavepoint(current(m_rollbackableStorage)),
             m_rollbackableTransientStorage(m_transientStorage),
             m_gasLimit(static_cast<int64_t>(std::get<0>(ledgerConfig.gasLimit()))),
             m_evmcMessage(newEVMCMessage(transaction, m_gasLimit)),
@@ -107,14 +107,14 @@ public:
         }
         else if constexpr (step == 2)
         {
-            co_return co_await executeStep3(executeContext);
+            co_return co_await finish(executeContext);
         }
 
         co_return {};
     }
 
 
-    friend task::Task<protocol::TransactionReceipt::Ptr> executeStep3(auto& executeContext)
+    friend task::Task<protocol::TransactionReceipt::Ptr> finish(auto& executeContext)
     {
         auto& evmcMessage = executeContext.m_evmcMessage;
         auto& evmcResult = *executeContext.m_evmcResult;
@@ -127,27 +127,42 @@ public:
                 evmcResult.create_address.bytes + sizeof(evmcResult.create_address.bytes),
                 std::back_inserter(newContractAddress));
         }
-        bcos::bytesConstRef output{evmcResult.output_data, evmcResult.output_size};
 
         if (evmcResult.status_code != 0)
         {
             TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
+
+            auto [_, errorMessage] = evmcStatusToErrorMessage(
+                *executeContext.m_executor.get().m_hashImpl, evmcResult.status_code);
+            if (!errorMessage.empty())
+            {
+                auto output = std::make_unique<uint8_t[]>(errorMessage.size());
+                std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
+                evmcResult.output_data = output.release();
+                evmcResult.output_size = errorMessage.size();
+                evmcResult.release =
+                    +[](const struct evmc_result* result) { delete[] result->output_data; };
+            }
         }
 
         auto gasUsed = executeContext.m_gasLimit - evmcResult.gas_left;
+
         if (executeContext.m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_balance))
+                ledger::Features::Flag::feature_balance_policy1))
         {
             auto gasPrice = u256{std::get<0>(executeContext.m_ledgerConfig.get().gasPrice())};
             auto balanceUsed = gasUsed * gasPrice;
             auto senderAccount = getAccount(executeContext.m_hostContext, evmcMessage.sender);
             auto senderBalance = co_await ledger::account::balance(senderAccount);
 
-            if (senderBalance < balanceUsed)
+            if (senderBalance < balanceUsed || senderBalance == 0)
             {
                 TRANSACTION_EXECUTOR_LOG(ERROR) << "Insufficient balance: " << senderBalance
                                                 << ", balanceUsed: " << balanceUsed;
                 evmcResult.status_code = EVMC_INSUFFICIENT_BALANCE;
+                evmcResult.status = protocol::TransactionStatus::NotEnoughCash;
+                co_await rollback(
+                    executeContext.m_rollbackableStorage, executeContext.m_startSavepoint);
             }
             else
             {
@@ -155,25 +170,36 @@ public:
             }
         }
 
-        int32_t receiptStatus =
-            evmcResult.status_code == EVMC_REVERT ?
-                static_cast<int32_t>(protocol::TransactionStatus::RevertInstruction) :
-                evmcResult.status_code;
+        // 如果本次调用是eoa调用系统合约，将gasUsed设置为0
+        // If the call from eoa to system contract, the gasUsed is cleared to zero
+        if (!executeContext.m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_precompiled_gasused))
+        {
+            if (auto codeAddress = address2FixedArray(evmcMessage.code_address);
+                precompiled::contains(bcos::precompiled::c_systemTxsAddress,
+                    concepts::bytebuffer::toView(codeAddress)))
+            {
+                gasUsed = 0;
+            }
+        }
+
+        auto receiptStatus = static_cast<int32_t>(evmcResult.status);
         auto const& logEntries = executeContext.m_hostContext.logs();
-        auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
-            executeContext.m_transaction.get().version());
         protocol::TransactionReceipt::Ptr receipt;
-        switch (transactionVersion)
+        switch (auto transactionVersion = static_cast<bcos::protocol::TransactionVersion>(
+                    executeContext.m_transaction.get().version()))
         {
         case bcos::protocol::TransactionVersion::V0_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus, output,
+                std::move(newContractAddress), logEntries, receiptStatus,
+                {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number());
             break;
         case bcos::protocol::TransactionVersion::V1_VERSION:
         case bcos::protocol::TransactionVersion::V2_VERSION:
             receipt = executeContext.m_executor.get().m_receiptFactory.get().createReceipt2(gasUsed,
-                std::move(newContractAddress), logEntries, receiptStatus, output,
+                std::move(newContractAddress), logEntries, receiptStatus,
+                {evmcResult.output_data, evmcResult.output_size},
                 executeContext.m_blockHeader.get().number(), "", transactionVersion);
             break;
         default:
@@ -185,12 +211,7 @@ public:
         if (c_fileLogLevel <= LogLevel::TRACE)
         {
             TRANSACTION_EXECUTOR_LOG(TRACE)
-                << "Execte transaction finished" << ", gasUsed: " << receipt->gasUsed()
-                << ", newContractAddress: " << receipt->contractAddress()
-                << ", logEntries: " << receipt->logEntries().size()
-                << ", status: " << receipt->status() << ", output: " << toHex(receipt->output())
-                << ", blockNumber: " << receipt->blockNumber() << ", receipt: " << receipt->hash()
-                << ", version: " << receipt->version();
+                << "Execte transaction finished: " << receipt->toString();
         }
 
         co_return receipt;  // 完成第三步 Complete the third step

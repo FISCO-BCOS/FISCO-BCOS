@@ -407,9 +407,12 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
     auto encodeStart = utcTime();
     auto encodedData = m_config->codec()->encode(pbftMessage);
     auto encodeEnd = utcTime();
+
     // only broadcast pbft message to the consensus nodes
-    m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
+    task::wait([](decltype(m_config) config, decltype(encodedData) encoded) -> task::Task<void> {
+        co_await config->frontService()->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
+            ModuleID::PBFT, ::ranges::views::single(ref(std::as_const(*encoded))));
+    }(m_config, encodedData));
     PBFT_LOG(INFO) << LOG_DESC("broadcast pre-prepare packet")
                    << LOG_KV("packetSize", encodedData->size())
                    << LOG_KV("index", pbftMessage->index())
@@ -417,7 +420,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
                    << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
 
     // handle the pre-prepare packet
-    RecursiveGuard l(m_mutex);
+    RecursiveGuard lock(m_mutex);
     auto beginHandleT = utcSteadyTime();
     auto ret = handlePrePrepareMsg(pbftMessage, false, false, false);
     // only broadcast the prePrepareMsg when local handlePrePrepareMsg success

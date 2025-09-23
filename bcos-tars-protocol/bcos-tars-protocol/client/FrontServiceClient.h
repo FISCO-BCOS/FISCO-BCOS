@@ -246,6 +246,19 @@ public:
                 nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
     }
 
+    bcos::task::Task<void> broadcastMessage(
+        uint16_t _type, int _moduleID, ::ranges::any_view<bcos::bytesConstRef> payloads) override
+    {
+        std::vector<char> data;
+        for (auto payload : payloads)
+        {
+            data.insert(data.end(), payload.begin(), payload.end());
+        }
+        m_proxy->tars_set_timeout(c_frontServiceTimeout)
+            ->async_asyncSendBroadcastMessage(nullptr, _type, _moduleID, data);
+        co_return;
+    }
+
 private:
     // 30s
     const int c_frontServiceTimeout = 30000;

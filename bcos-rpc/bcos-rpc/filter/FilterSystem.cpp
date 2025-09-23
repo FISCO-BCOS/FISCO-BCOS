@@ -338,13 +338,18 @@ task::Task<Json::Value> FilterSystem::getLogsImpl(
                 JsonRpcException(InvalidParamsCode(), "invalid block range params"));
         }
         fromBlock = params->fromIsLatest() ? latestBlockNumber : fromBlock;
-        toBlock = params->toIsLatest() ? latestBlockNumber : toBlock;
+        toBlock = params->toIsLatest() ? latestBlockNumber : std::min(toBlock, latestBlockNumber);
         if (fromBlock > latestBlockNumber)
         {  // the block of interest has not been generated yet
             co_return Json::Value(Json::arrayValue);
         }
+        if (toBlock < fromBlock)
+        {
+            co_return Json::Value(Json::arrayValue);
+        }
+        auto processBlockNum = std::min(toBlock - fromBlock + 1, m_maxBlockProcessPerReq);
         params->setFromBlock(fromBlock);
-        params->setToBlock(std::min(toBlock, latestBlockNumber));
+        params->setToBlock(fromBlock + processBlockNum - 1);
         co_return co_await getLogsInternal(*ledger, std::move(params));
     }
 }

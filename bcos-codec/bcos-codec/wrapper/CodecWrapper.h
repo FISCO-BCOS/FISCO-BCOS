@@ -21,9 +21,9 @@
 #pragma once
 
 #include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-codec/rlp/RLPDecode.h"
-#include "bcos-codec/rlp/RLPEncode.h"
-#include "bcos-codec/scale/Scale.h"
+#include "bcos-codec/scale/ScaleDecoderStream.h"
+#include "bcos-codec/scale/ScaleEncoderStream.h"
+#include "bcos-utilities/Overloaded.h"
 
 namespace bcos
 {
@@ -43,6 +43,9 @@ class CodecWrapper
 {
 public:
     using Ptr = std::shared_ptr<CodecWrapper>;
+    CodecWrapper(const crypto::Hash& _hash, bool _isWasm)
+      : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::addressof(_hash))
+    {}
     CodecWrapper(crypto::Hash::Ptr _hash, bool _isWasm)
       : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::move(_hash))
     {}
@@ -53,7 +56,7 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(*m_hash);
+            codec::abi::ContractABICodec abi(hash());
             return abi.abiIn("", _args...);
         }
 
@@ -68,15 +71,13 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(*m_hash);
+            codec::abi::ContractABICodec abi(hash());
             return abi.abiIn(_sig, _args...);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            (s << ... << std::forward<Args>(_args));
-            return m_hash->hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        (s << ... << std::forward<Args>(_args));
+        return hash().hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
     }
 
     bytes encodeWithSig(const std::string& _sig) const
@@ -85,14 +86,12 @@ public:
         if (m_type == VMType::EVM)
         {
             // Note: the codec is not thread-safe, so we can't share this object
-            codec::abi::ContractABICodec abi(*m_hash);
+            codec::abi::ContractABICodec abi(hash());
             return abi.abiIn(_sig);
         }
-        else
-        {
-            codec::scale::ScaleEncoderStream s;
-            return m_hash->hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
-        }
+
+        codec::scale::ScaleEncoderStream s;
+        return hash().hash(_sig).ref().getCroppedData(0, 4).toBytes() + s.data();
     }
 
     template <typename... T>
@@ -101,7 +100,7 @@ public:
         assert(m_type != VMType::UNDEFINED);
         if (m_type == VMType::EVM)
         {
-            codec::abi::ContractABICodec abi(*m_hash);
+            codec::abi::ContractABICodec abi(hash());
             abi.abiOut(_data, _t...);
         }
         else if (m_type == VMType::WASM)
@@ -127,6 +126,14 @@ public:
 
 private:
     VMType m_type = VMType::UNDEFINED;
-    crypto::Hash::Ptr m_hash;
+    std::variant<const crypto::Hash*, crypto::Hash::Ptr> m_hash;
+
+    const crypto::Hash& hash() const
+    {
+        return std::visit(
+            bcos::overloaded([](const crypto::Hash* hash) -> const crypto::Hash& { return *hash; },
+                [](const crypto::Hash::Ptr& hash) -> const crypto::Hash& { return *hash; }),
+            m_hash);
+    }
 };
 }  // namespace bcos
