@@ -907,45 +907,42 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
 
     auto unsealTransactions = m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
     auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
-    for (auto&& [index, value] : ::ranges::views::enumerate(unsealTransactions))
+    for (auto&& [index, unsealTx, sealedTx] :
+        ::ranges::views::zip(::ranges::views::iota(0), unsealTransactions, sealedTransactions))
     {
-        if (!value)
+        if (sealedTx)
+        {
+            if ((*sealedTx)->batchId() != blockHeader->number() && (*sealedTx)->batchId() != -1)
+            {
+                TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                                 << LOG_KV("blkNum", blockHeader->number())
+                                 << LOG_KV("blkHash", blockHeader->hash().abridged())
+                                 << LOG_KV("txHash", (*sealedTx)->hash().hexPrefixed())
+                                 << LOG_KV("txBatchId", (*sealedTx)->batchId())
+                                 << LOG_KV("txBatchHash", (*sealedTx)->batchHash().abridged());
+                // NOTE: In certain scenarios, a bug may occur here: The leader generates the
+                // (N)th proposal, which includes transaction A. The local node puts this
+                // proposal into the cache and sets the batchId of transaction A to (N) and the
+                // batchHash to the hash of the (N)th proposal.
+                //
+                // However, at this point, a view change happens, and the next leader completes
+                // the resetTx operation for the (N)th proposal and includes transaction A in
+                // the new block of the (N)th proposal.
+                //
+                // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
+                // view change, has not completed it yet, and it receives the (N+1)th proposal
+                // sent by the new leader. During the verification process, transaction A has a
+                // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
+                // proposal, leading to false positives.
+                //
+                // Therefore, we do not validate the consistency of the batchHash for now.
+                findErrorTxInBlock = true;
+                break;
+            }
+        }
+        else if (!unsealTx)
         {
             missedTxs->emplace_back(txHashes[index]);
-        }
-    }
-    for (auto&& [index, value] : ::ranges::views::enumerate(sealedTransactions))
-    {
-        if (!value)
-        {
-            missedTxs->emplace_back(txHashes[index]);
-        }
-        else if ((*value)->batchId() != blockHeader->number() && (*value)->batchId() != -1)
-        {
-            TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
-                             << LOG_KV("blkNum", blockHeader->number())
-                             << LOG_KV("blkHash", blockHeader->hash().abridged())
-                             << LOG_KV("txHash", (*value)->hash().hexPrefixed())
-                             << LOG_KV("txBatchId", (*value)->batchId())
-                             << LOG_KV("txBatchHash", (*value)->batchHash().abridged());
-            // NOTE: In certain scenarios, a bug may occur here: The leader generates the
-            // (N)th proposal, which includes transaction A. The local node puts this
-            // proposal into the cache and sets the batchId of transaction A to (N) and the
-            // batchHash to the hash of the (N)th proposal.
-            //
-            // However, at this point, a view change happens, and the next leader completes
-            // the resetTx operation for the (N)th proposal and includes transaction A in
-            // the new block of the (N)th proposal.
-            //
-            // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
-            // view change, has not completed it yet, and it receives the (N+1)th proposal
-            // sent by the new leader. During the verification process, transaction A has a
-            // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
-            // proposal, leading to false positives.
-            //
-            // Therefore, we do not validate the consistency of the batchHash for now.
-            findErrorTxInBlock = true;
-            break;
         }
     }
 
