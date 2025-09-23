@@ -303,18 +303,18 @@ void Session::write()
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 if (auto session = self.lock())
                 {
-                    std::vector<Payload> payloads;
-                    payloads.swap(session->m_writings->payloads);
                     session->m_writings->buffers.clear();
-                    session->m_server.get().asyncTo([payloads = std::move(payloads), _error]() {
-                        for (const auto& payload : payloads)
+                    for (auto& payload : session->m_writings->payloads)
+                    {
+                        if (payload.m_callback)
                         {
-                            if (payload.m_callback)
-                            {
-                                payload.m_callback(_error);
-                            }
+                            session->m_server.get().asyncTo(
+                                [callback = std::move(payload.m_callback), error = _error]() {
+                                    callback(error);
+                                });
                         }
-                    });
+                    }
+                    session->m_writings->payloads.clear();
                     session->onWrite(_error, _size);
                 }
             });

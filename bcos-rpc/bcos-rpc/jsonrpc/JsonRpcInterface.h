@@ -47,7 +47,6 @@ public:
     JsonRpcInterface& operator=(JsonRpcInterface&&) = default;
     virtual ~JsonRpcInterface() = default;
 
-public:
     virtual void call(std::string_view _groupID, std::string_view _nodeName, std::string_view _to,
         std::string_view _data, RespFunc _respFunc) = 0;
 
