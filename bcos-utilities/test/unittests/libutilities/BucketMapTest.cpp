@@ -320,6 +320,177 @@ BOOST_AUTO_TEST_CASE(parallelTest2)
     std::cout << bucketMap.size() << std::endl;
 }
 
+BOOST_AUTO_TEST_CASE(stringKeyTransparentContains)
+{
+    using BKMap = bcos::BucketMap<std::string, int, bcos::StringHash>;
+    using WriteAccessor = BKMap::WriteAccessor;
+
+    constexpr std::size_t kBucketCount = 8;
+    constexpr int kInsertCount = 10;
+
+    BKMap mapUnderTest(kBucketCount);
+    // Insert with std::string keys
+    for (int i = 0; i < kInsertCount; ++i)
+    {
+        std::string keyStr = "key_" + std::to_string(i);
+        WriteAccessor writeAcc;
+        mapUnderTest.insert(writeAcc, {keyStr, i});
+    }
+    // Use std::string_view transparent contains
+    for (int i = 0; i < kInsertCount; ++i)
+    {
+        std::string str = "key_" + std::to_string(i);
+        std::string_view strView{str};
+        BOOST_CHECK(mapUnderTest.contains(strView));
+    }
+    // Miss case
+    BOOST_CHECK(!mapUnderTest.contains(std::string_view{"not-exist"}));
+}
+
+BOOST_AUTO_TEST_CASE(batchFindCovers)
+{
+    using BKMap = bcos::BucketMap<int, int, std::hash<int>>;
+    using ReadAccessor = BKMap::ReadAccessor;
+
+    constexpr std::size_t kBucketCount = 7;
+    constexpr int kHitCount = 64;
+    constexpr int kMissStart = 100;
+    constexpr int kMissEndExclusive = 132;  // 32 misses
+    constexpr int kMultiplier = 10;
+
+    BKMap mapUnderTest(kBucketCount);
+
+    std::vector<std::pair<int, int>> kvs;
+    kvs.reserve(kHitCount);
+    for (int i = 0; i < kHitCount; ++i)
+    {
+        kvs.emplace_back(i, i * kMultiplier);
+    }
+    mapUnderTest.batchInsert(kvs);
+
+    // Keys including hits and misses
+    std::vector<int> keys;
+    keys.reserve(static_cast<std::size_t>(kHitCount) +
+                 static_cast<std::size_t>(kMissEndExclusive - kMissStart));
+    for (int i = 0; i < kHitCount; ++i)
+    {
+        keys.push_back(i);
+    }
+    for (int i = kMissStart; i < kMissEndExclusive; ++i)
+    {
+        keys.push_back(i);
+    }
+
+    auto vals = mapUnderTest.batchFind<ReadAccessor>(keys);
+    BOOST_CHECK_EQUAL(vals.size(), keys.size());
+
+    std::size_t found = 0;
+    std::size_t miss = 0;
+    for (std::size_t i = 0; i < keys.size(); ++i)
+    {
+        if (keys[i] < kHitCount)
+        {
+            BOOST_CHECK(vals[i].has_value());
+            BOOST_CHECK_EQUAL(vals[i].value(), keys[i] * kMultiplier);
+            ++found;
+        }
+        else
+        {
+            BOOST_CHECK(!vals[i].has_value());
+            ++miss;
+        }
+    }
+    BOOST_CHECK_EQUAL(found, static_cast<std::size_t>(kHitCount));
+    BOOST_CHECK_EQUAL(miss, static_cast<std::size_t>(kMissEndExclusive - kMissStart));
+
+    // Verify deletion again via batchRemove
+    std::vector<int> toRemove{0, 1, 2, 3, 4, 5, 6};
+    mapUnderTest.batchRemove(toRemove);
+    for (int key : toRemove)
+    {
+        BOOST_CHECK(!mapUnderTest.contains(key));
+        ReadAccessor ra;
+        bool ok = mapUnderTest.find<ReadAccessor>(ra, key);
+        BOOST_CHECK(!ok);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(rangeByKeyAndWrap)
+{
+    using BKMap = bcos::BucketMap<int, int, std::hash<int>>;
+    using ReadAccessor = BKMap::ReadAccessor;
+    using WriteAccessor = BKMap::WriteAccessor;
+
+    const std::size_t bucketSize = 11;  // Prime number to cover hash modulo distribution
+
+    BKMap mapUnderTest(bucketSize);
+
+    // Sparse inserts to alternate empty and non-empty buckets
+    for (int i = 0; i < 110; i += 5)
+    {
+        WriteAccessor writer;
+        mapUnderTest.insert(writer, {i, i});
+    }
+
+    // Start from a non-existing key to ensure wrap-around across all buckets
+    std::size_t visited = 0;
+    for (auto& acc : mapUnderTest.rangeByKey<ReadAccessor>(666))
+    {
+        BOOST_CHECK_EQUAL(acc.key(), acc.value());
+        ++visited;
+    }
+    // A total of 22 elements inserted
+    BOOST_CHECK_EQUAL(visited, 22);
+
+    // Range iteration on an empty map
+    BKMap emptyMap(bucketSize);
+    std::size_t visitedEmpty = 0;
+    for (auto& acc : emptyMap.range<ReadAccessor>())
+    {
+        (void)acc;
+        ++visitedEmpty;
+    }
+    BOOST_CHECK_EQUAL(visitedEmpty, 0);
+}
+
+BOOST_AUTO_TEST_CASE(bucketSetBatchInsertReturn)
+{
+    using Set = bcos::BucketSet<int, std::hash<int>>;
+
+    constexpr std::size_t kBucketCount = 8;
+
+    Set setUnderTest(kBucketCount);
+
+    // First batchInsert should return all true
+    std::vector<int> keys{1, 2, 3, 4, 5};
+    auto result1 = setUnderTest.batchInsert<true>(keys);
+    BOOST_CHECK_EQUAL(result1.size(), keys.size());
+    for (auto inserted : result1)
+    {
+        BOOST_CHECK(inserted);
+    }
+
+    // Second insert should return all false
+    auto result2 = setUnderTest.batchInsert<true>(keys);
+    for (auto inserted : result2)
+    {
+        BOOST_CHECK(!inserted);
+    }
+
+    // Validate with contains
+    for (int key : keys)
+    {
+        BOOST_CHECK(setUnderTest.contains(key));
+    }
+
+    // Clear and validate
+    setUnderTest.clear();
+    for (int key : keys)
+    {
+        BOOST_CHECK(!setUnderTest.contains(key));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
