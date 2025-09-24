@@ -20,13 +20,8 @@
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <future>
-// Use FakeIt for lightweight mocks
-#if __has_include(<fakeit.hpp>)
 #include <fakeit.hpp>
-#elif __has_include(<fakeit/fakeit.hpp>)
-#include <fakeit/fakeit.hpp>
-#endif
+#include <future>
 
 using namespace bcos;
 using namespace bcos::storage2;
