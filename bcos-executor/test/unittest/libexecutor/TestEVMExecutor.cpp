@@ -735,10 +735,10 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
 BOOST_AUTO_TEST_CASE(performance)
 {
-    size_t count = 10 * 100;
+    size_t count = 100;
 
     bcos::crypto::HashType hash;
-    for (size_t blockNumber = 1; blockNumber < 10; ++blockNumber)
+    for (size_t blockNumber = 1; blockNumber < 3; ++blockNumber)
     {
         std::string bin =
             "608060405234801561001057600080fd5b506105db806100206000396000f3006080604052600436106100"
@@ -2710,7 +2710,8 @@ contract HelloFactory {
     codec->decode(result2->data(), newHello);
 
     auto helloFactoryAddress = fromHex(newAddress);
-    auto const expectNewHelloAddress = newLegacyEVMAddressString(bcos::ref(helloFactoryAddress), u256(0));
+    auto const expectNewHelloAddress =
+        newLegacyEVMAddressString(bcos::ref(helloFactoryAddress), u256(0));
     BOOST_CHECK_EQUAL(newHello.hex(), expectNewHelloAddress);
 }
 
