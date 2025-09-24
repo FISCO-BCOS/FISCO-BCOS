@@ -31,9 +31,9 @@ function(config_coverage TARGET REMOVE_FILE_PATTERN)
                 COMMAND genhtml --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
         else()
             add_custom_target(${TARGET}
-                COMMAND ${LCOV_TOOL} --ignore-errors mismatch,negative,gcov --branch-coverage -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
-                COMMAND ${LCOV_TOOL} --ignore-errors mismatch,negative,gcov --branch-coverage -r ${CMAKE_BINARY_DIR}/coverage.info.in '/usr*' '*vcpkg_installed*' '*boost*' '*test*' '*build*' '*deps*' ${REMOVE_FILE_PATTERN} -o ${CMAKE_BINARY_DIR}/coverage.info
-                COMMAND genhtml --branch-coverage -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
+                COMMAND ${LCOV_TOOL} --keep-going -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
+                COMMAND ${LCOV_TOOL} --keep-going -r ${CMAKE_BINARY_DIR}/coverage.info.in '/usr*' '*vcpkg_installed*' '*boost*' '*test*' '*build*' '*deps*' ${REMOVE_FILE_PATTERN} -o ${CMAKE_BINARY_DIR}/coverage.info
+                COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
         endif()
     else ()
         message(FATAL_ERROR "Can't find lcov tool. Please install lcov")
