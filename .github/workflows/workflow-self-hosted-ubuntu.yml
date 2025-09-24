@@ -40,7 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: apt install
         run: |
           sudo apt update
@@ -71,9 +70,8 @@ jobs:
       - name: Build for linux
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=mold -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=OFF -DWITH_WASM=ON -DTOOLS=ON .. || cat *.log
+          cd build && cmake -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=ON -DWITH_TARS_SERVICES=OFF -DWITH_WASM=ON -DTOOLS=ON .. || cat *.log
           make -j6
-          make coverage
       - name: Test
         run: |
           export PATH=/home/ci/.tiup/bin/:$PATH
@@ -84,12 +82,6 @@ jobs:
           tiup install playground tikv:v6.5.9 pd:v6.5.9
           nohup tiup playground v6.5.9 --mode tikv-slim --without-monitor &
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: build/coverage.info
-
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
 
