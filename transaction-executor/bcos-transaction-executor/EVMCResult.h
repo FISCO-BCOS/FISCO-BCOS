@@ -28,8 +28,8 @@ namespace bcos::executor_v1
 class EVMCResult : public evmc_result
 {
 public:
-    explicit EVMCResult(evmc_result&& from);
-    EVMCResult(evmc_result&& from, protocol::TransactionStatus _status);
+    explicit EVMCResult(evmc_result from);
+    EVMCResult(evmc_result from, protocol::TransactionStatus _status);
     EVMCResult(const EVMCResult&) = delete;
     EVMCResult(EVMCResult&& from) noexcept;
     EVMCResult& operator=(const EVMCResult&) = delete;

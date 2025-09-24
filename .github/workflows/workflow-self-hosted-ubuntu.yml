@@ -40,7 +40,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: apt install
         run: |
           sudo apt update
@@ -83,7 +82,6 @@ jobs:
           tiup install playground tikv:v6.5.9 pd:v6.5.9
           nohup tiup playground v6.5.9 --mode tikv-slim --without-monitor &
           sleep 30 && cd build && CTEST_OUTPUT_ON_FAILURE=TRUE ctest
-
       - name: prepare RPCAPI Tests
         run: cd tools && bash .ci/rpcapi_ci_prepare.sh
 
