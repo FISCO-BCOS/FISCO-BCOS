@@ -292,7 +292,7 @@ BOOST_AUTO_TEST_CASE(operationsAfterRollback)
         std::string_view tableID = "table1";
         auto savepoint = rollbackableStorage.current();
 
-        // Write datas
+        // Write data
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"Value1"});
 

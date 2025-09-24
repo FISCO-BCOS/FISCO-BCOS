@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @file TestEVMCResult.cpp
- * @author: your_name
- * @date 2024-09-23
+ * @author: MO NAN
+ * @date 2025-09-23
  */
 
 #include "../bcos-transaction-executor/EVMCResult.h"
