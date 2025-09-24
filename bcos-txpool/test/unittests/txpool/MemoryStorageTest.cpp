@@ -26,29 +26,28 @@ struct MemoryStorageFixture
             txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024, /*checkSig*/ false)),
         storage(config)
     {
-        using namespace fakeit;
-        When(Method(mockValidator, checkTransaction))
+        fakeit::When(Method(mockValidator, checkTransaction))
             .AlwaysReturn(bcos::protocol::TransactionStatus::None);
 
         // Web3NonceChecker: return a usable instance (internal structures are in-memory only; pass
         // nullptr for ledger)
         auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
-        When(Method(mockValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
+        fakeit::When(Method(mockValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
 
         // txPool NonceChecker: set all methods to no-op (side-effect free) implementations
-        When(Method(mockNonceChecker, checkNonce))
+        fakeit::When(Method(mockNonceChecker, checkNonce))
             .AlwaysReturn(bcos::protocol::TransactionStatus::None);
-        When(Method(mockNonceChecker, exists)).AlwaysReturn(false);
-        When(Method(mockNonceChecker, batchInsert)).AlwaysDo([](auto, auto const&) {});
-        When(
+        fakeit::When(Method(mockNonceChecker, exists)).AlwaysReturn(false);
+        fakeit::When(Method(mockNonceChecker, batchInsert)).AlwaysDo([](auto, auto const&) {});
+        fakeit::When(
             OverloadedMethod(mockNonceChecker, batchRemove, void(bcos::protocol::NonceList const&)))
             .AlwaysDo([](auto const&) {});
-        When(OverloadedMethod(mockNonceChecker, batchRemove,
-                 void(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
-                     std::hash<bcos::protocol::NonceType>> const&)))
+        fakeit::When(OverloadedMethod(mockNonceChecker, batchRemove,
+                         void(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
+                             std::hash<bcos::protocol::NonceType>> const&)))
             .AlwaysDo([](auto const&) {});
-        When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) {});
-        When(Method(mockNonceChecker, remove)).AlwaysDo([](auto const&) {});
+        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) {});
+        fakeit::When(Method(mockNonceChecker, remove)).AlwaysDo([](auto const&) {});
     }
 
     // Create a simple transaction and compute its hash
