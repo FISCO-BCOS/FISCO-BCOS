@@ -19,8 +19,8 @@
  */
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/hash/Sha256.h>
+#include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -35,6 +35,7 @@ namespace bcos
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(HashTest, TestPromptFixture)
+
 BOOST_AUTO_TEST_CASE(testKeccak256)
 {
     auto keccak256 = std::make_shared<Keccak256>();

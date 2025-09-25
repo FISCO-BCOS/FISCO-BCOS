@@ -37,7 +37,9 @@ struct TablePerfFixture
     }
 
     std::shared_ptr<StateStorage> tableFactory;
-    size_t count = 100 * 1000;
+    static constexpr size_t kScale = 10U;       // 1/10 of original scale
+    static constexpr size_t kThousand = 1000U;  // base unit
+    size_t count = kScale * kThousand;          // reduced to 1/10 for faster perf tests
 };
 
 BOOST_FIXTURE_TEST_SUITE(TablePerf, TablePerfFixture)
@@ -63,7 +65,7 @@ BOOST_AUTO_TEST_CASE(syncGet)
         BOOST_CHECK_EQUAL(entry->getField(0), "value1");
     }
 
-    std::cout << "sync cost: " << bcos::utcSteadyTime() - now << std::endl;
+    std::cout << "sync cost: " << bcos::utcSteadyTime() - now << "\n";
 }
 
 BOOST_AUTO_TEST_CASE(asyncGet)
@@ -98,7 +100,7 @@ BOOST_AUTO_TEST_CASE(asyncGet)
     }
     finished.get_future().get();
 
-    std::cout << "async cost: " << bcos::utcSteadyTime() - now << std::endl;
+    std::cout << "async cost: " << bcos::utcSteadyTime() - now << "\n";
 }
 
 BOOST_AUTO_TEST_CASE(asyncToSyncGet)
@@ -125,7 +127,7 @@ BOOST_AUTO_TEST_CASE(asyncToSyncGet)
         finished.get_future().get();
     }
 
-    std::cout << "asyncToSync cost: " << bcos::utcSteadyTime() - now << std::endl;
+    std::cout << "asyncToSync cost: " << bcos::utcSteadyTime() - now << "\n";
 }
 
 BOOST_AUTO_TEST_SUITE_END()

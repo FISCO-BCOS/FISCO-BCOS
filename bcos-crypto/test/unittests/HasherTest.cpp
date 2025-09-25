@@ -26,7 +26,6 @@
 #include <boost/test/unit_test_suite.hpp>
 #include <iterator>
 #include <string>
-#include <type_traits>
 
 using namespace bcos::crypto::hasher;
 
@@ -35,7 +34,9 @@ namespace bcos::test
 
 using HashType = std::array<std::byte, 32>;
 
-BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture) BOOST_AUTO_TEST_CASE(testSHA256)
+BOOST_FIXTURE_TEST_SUITE(HasherTest, TestPromptFixture)
+
+BOOST_AUTO_TEST_CASE(testSHA256)
 {
     std::string a = "arg";
 
