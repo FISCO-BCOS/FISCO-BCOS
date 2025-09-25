@@ -502,3 +502,93 @@ bcos::task::Task<void> bcos::gateway::Gateway::broadcastMessage(uint16_t type,
     co_await m_gatewayNodeManager->peersRouterTable()->broadcastMessage(
         type, groupID, moduleID, *message, std::move(payloads));
 }
+bcos::gateway::Gateway::Gateway(GatewayConfig::Ptr _gatewayConfig, P2PInterface::Ptr _p2pInterface,
+    GatewayNodeManager::Ptr _gatewayNodeManager, bcos::amop::AMOPImpl::Ptr _amop,
+    ratelimiter::GatewayRateLimiter::Ptr _gatewayRateLimiter, std::string _gatewayServiceName)
+  : m_gatewayServiceName(std::move(_gatewayServiceName)),
+    m_gatewayConfig(std::move(_gatewayConfig)),
+    m_p2pInterface(std::move(_p2pInterface)),
+    m_gatewayNodeManager(std::move(_gatewayNodeManager)),
+    m_amop(std::move(_amop)),
+    m_gatewayRateLimiter(std::move(_gatewayRateLimiter))
+{
+    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
+        [this](const NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
+            P2PMessage::Ptr p2pMessage) {
+            onReceiveP2PMessage(networkException, std::move(p2pSession), std::move(p2pMessage));
+        });
+
+    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
+        [this](const NetworkException& networkException, std::shared_ptr<P2PSession> p2pSession,
+            P2PMessage::Ptr p2pMessage) {
+            onReceiveBroadcastMessage(
+                networkException, std::move(p2pSession), std::move(p2pMessage));
+        });
+}
+bcos::gateway::Gateway::~Gateway()
+{
+    stop();
+}
+bcos::gateway::P2PInterface::Ptr bcos::gateway::Gateway::p2pInterface() const
+{
+    return m_p2pInterface;
+}
+bcos::gateway::GatewayNodeManager::Ptr bcos::gateway::Gateway::gatewayNodeManager()
+{
+    return m_gatewayNodeManager;
+}
+void bcos::gateway::Gateway::asyncSendMessageByTopic(const std::string& _topic,
+    bcos::bytesConstRef _data,
+    std::function<void(bcos::Error::Ptr&&, int16_t, bytesConstRef)> _respFunc)
+{
+    if (m_amop)
+    {
+        m_amop->asyncSendMessageByTopic(_topic, _data, std::move(_respFunc));
+        return;
+    }
+    _respFunc(BCOS_ERROR_PTR(-1, "AMOP is not initialized"), 0, {});
+}
+void bcos::gateway::Gateway::asyncSendBroadcastMessageByTopic(
+    const std::string& _topic, bcos::bytesConstRef _data)
+{
+    if (m_amop)
+    {
+        m_amop->asyncSendBroadcastMessageByTopic(_topic, _data);
+    }
+}
+void bcos::gateway::Gateway::asyncSubscribeTopic(std::string const& _clientID,
+    std::string const& _topicInfo, std::function<void(Error::Ptr&&)> _callback)
+{
+    if (m_amop)
+    {
+        m_amop->asyncSubscribeTopic(_clientID, _topicInfo, std::move(_callback));
+        return;
+    }
+    _callback(BCOS_ERROR_PTR(-1, "AMOP is not initialized"));
+}
+void bcos::gateway::Gateway::asyncRemoveTopic(std::string const& _clientID,
+    std::vector<std::string> const& _topicList, std::function<void(Error::Ptr&&)> _callback)
+{
+    if (m_amop)
+    {
+        m_amop->asyncRemoveTopic(_clientID, _topicList, std::move(_callback));
+        return;
+    }
+    _callback(BCOS_ERROR_PTR(-1, "AMOP is not initialized"));
+}
+bcos::amop::AMOPImpl::Ptr bcos::gateway::Gateway::amop()
+{
+    return m_amop;
+}
+bool bcos::gateway::Gateway::registerNode(const std::string& _groupID,
+    bcos::crypto::NodeIDPtr _nodeID, bcos::protocol::NodeType _nodeType,
+    bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
+{
+    return m_gatewayNodeManager->registerNode(
+        _groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
+}
+bool bcos::gateway::Gateway::unregisterNode(const std::string& _groupID, std::string const& _nodeID)
+{
+    return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
+}

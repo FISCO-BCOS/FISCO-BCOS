@@ -26,7 +26,6 @@
 #include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
-#include <boost/core/pointer_traits.hpp>
 
 namespace bcos::executor_v1
 {
