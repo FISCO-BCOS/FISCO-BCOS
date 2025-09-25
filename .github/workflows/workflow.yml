@@ -79,7 +79,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=Release -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
@@ -100,13 +100,13 @@ jobs:
         if: matrix.os != 'windows-2022'
         run: |
           cd build
-          CTEST_OUTPUT_ON_FAILURE=TRUE ctest
-      - name: Upload coverage report
-        if: matrix.os == 'ubuntu-24.04'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: build/coverage.info
+          CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      # - name: Upload coverage report
+      #   if: matrix.os == 'ubuntu-24.04'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: coverage-report
+      #     path: build/coverage.info
       - name: prepare RPCAPI Tests
         if: matrix.os != 'windows-2022'
         run: |
