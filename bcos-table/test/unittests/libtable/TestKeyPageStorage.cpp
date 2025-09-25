@@ -2047,7 +2047,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         ++totalCount;
         return true;
     });
-    // 原规模下为 9730，这里（表 100->10, 写入 5000->500, 读取 500->50）整体缩小 100x
+    // Original scale was 9730, here (tables 100->10, writes 5000->500, reads 500->50) reduced by 100x overall
     BOOST_REQUIRE_EQUAL(totalCount, 250);  // meta + 5page + s_table（按比例缩放）
 }
 
