@@ -20,6 +20,7 @@
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <fakeit.hpp>
 #include <future>
 
 using namespace bcos;
@@ -86,24 +87,7 @@ struct MockScheduler
     }
 };
 
-struct MockLedger
-{
-};
-
-inline task::AwaitableValue<void> tag_invoke(ledger::tag_t<bcos::ledger::prewriteBlock> /*unused*/,
-    MockLedger& ledger, bcos::protocol::ConstTransactionsPtr transactions,
-    bcos::protocol::Block::ConstPtr block, bool withTransactionsAndReceipts, auto& storage)
-{
-    return {};
-}
-
-inline task::AwaitableValue<void> tag_invoke(
-    ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MockLedger& ledger,
-    ledger::LedgerConfig& ledgerConfig)
-{
-    return {};
-}
-
+// Keep storage-level getLedgerConfig stub minimal for tests
 inline task::AwaitableValue<void> tag_invoke(
     ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/, MyMultiLayerStorage::ViewType& storage,
     bcos::ledger::LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
@@ -112,64 +96,11 @@ inline task::AwaitableValue<void> tag_invoke(
     return {};
 }
 
-task::AwaitableValue<void> tag_invoke(ledger::tag_t<ledger::storeTransactionsAndReceipts>,
-    MockLedger& ledger, bcos::protocol::ConstTransactionsPtr blockTxs,
-    bcos::protocol::Block::ConstPtr block)
+// Helper: empty task returning no transactions
+static bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>> emptyTxsTask()
 {
-    return {};
+    co_return std::vector<bcos::protocol::Transaction::ConstPtr>{};
 }
-
-struct MockTxPool : public txpool::TxPoolInterface
-{
-    void start() override {}
-    void stop() override {}
-    std::tuple<std::vector<bcos::protocol::TransactionMetaData::Ptr>,
-        std::vector<bcos::protocol::TransactionMetaData::Ptr>>
-    sealTxs(uint64_t _txsLimit) override
-    {
-        return {};
-    }
-    void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
-        bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
-        std::function<void(Error::Ptr)> _onRecvResponse) override
-    {}
-    void asyncVerifyBlock(bcos::crypto::PublicPtr _generatedNodeID,
-        protocol::Block::ConstPtr _block,
-        std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
-    {}
-    void asyncFillBlock(bcos::crypto::HashListPtr _txsHash,
-        std::function<void(Error::Ptr, bcos::protocol::ConstTransactionsPtr)> _onBlockFilled)
-        override
-    {}
-    void asyncNotifyBlockResult(bcos::protocol::BlockNumber _blockNumber,
-        bcos::protocol::TransactionSubmitResultsPtr _txsResult,
-        std::function<void(Error::Ptr)> _onNotifyFinished) override
-    {}
-    void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
-        bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        std::function<void(Error::Ptr _error)> _onRecv) override
-    {}
-    void notifyConsensusNodeList(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
-        std::function<void(Error::Ptr)> _onRecvResponse) override
-    {}
-    void notifyObserverNodeList(bcos::consensus::ConsensusNodeList const& _observerNodeList,
-        std::function<void(Error::Ptr)> _onRecvResponse) override
-    {}
-    void asyncGetPendingTransactionSize(
-        std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override
-    {}
-    void asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse) override {}
-    void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
-        std::function<void(Error::Ptr)> _onResponse) override
-    {}
-
-    task::Task<std::vector<protocol::Transaction::ConstPtr>> getTransactions(
-        ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized> hashes)
-        override
-    {
-        co_return std::vector<protocol::Transaction::ConstPtr>{};
-    }
-};
 
 class TestBaselineSchedulerFixture
 {
@@ -188,9 +119,27 @@ public:
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
         multiLayerStorage(backendStorage),
-        baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory, mockLedger,
-            mockTxPool, *transactionSubmitResultFactory, *hashImpl)
-    {}
+        baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory,
+            mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
+    {
+        // Ledger: asyncPrewriteBlock => invoke callback(success)
+        fakeit::When(Method(mockLedger, asyncPrewriteBlock))
+            .AlwaysDo([](bcos::storage::StorageInterface::Ptr, bcos::protocol::ConstTransactionsPtr,
+                          bcos::protocol::Block::ConstPtr,
+                          std::function<void(std::string, bcos::Error::Ptr&&)> callback, bool,
+                          std::optional<bcos::ledger::Features>) { callback({}, nullptr); });
+        // Ledger: storeTransactionsAndReceipts => no error
+        fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
+            .AlwaysDo([](bcos::protocol::ConstTransactionsPtr,
+                          bcos::protocol::Block::ConstPtr) -> bcos::Error::Ptr { return nullptr; });
+
+        // TxPool: getTransactions => empty list
+        using HashView =
+            ::ranges::any_view<bcos::h256, ::ranges::category::mask | ::ranges::category::sized>;
+        fakeit::When(Method(mockTxPool, getTransactions)).AlwaysDo([](HashView) {
+            return emptyTxsTask();
+        });
+    }
 
     void writeBlock(bcos::protocol::BlockNumber number, int64_t timestamp)
     {
@@ -206,7 +155,7 @@ public:
     void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
     {
         auto blockHeader = block->blockHeader();
-        task::syncWait(ledger::prewriteBlock(mockLedger,
+        task::syncWait(ledger::prewriteBlock(mockLedger.get(),
             std::make_shared<bcos::protocol::ConstTransactions>(), block, false, backendStorage));
         bytes headerBuffer;
         blockHeader->encode(headerBuffer);
@@ -229,11 +178,13 @@ public:
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 
     MockScheduler mockScheduler;
-    MockLedger mockLedger;
-    MockTxPool mockTxPool;
+    // FakeIt mocks for ledger and txpool
+    fakeit::Mock<bcos::ledger::LedgerInterface> mockLedger;
+    fakeit::Mock<bcos::txpool::TxPoolInterface> mockTxPool;
     MyMultiLayerStorage multiLayerStorage;
     MockExecutorBaseline mockExecutor;
-    BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler, MockLedger>
+    BaselineScheduler<decltype(multiLayerStorage), MockExecutorBaseline, MockScheduler,
+        bcos::ledger::LedgerInterface>
         baselineScheduler;
 };
 
@@ -447,7 +398,7 @@ BOOST_AUTO_TEST_CASE(call)
     blockHeader->setVersion(200);
     blockHeader->setTimestamp(10088);
     blockHeader->calculateHash(*hashImpl);
-    task::syncWait(ledger::prewriteBlock(mockLedger,
+    task::syncWait(ledger::prewriteBlock(mockLedger.get(),
         std::make_shared<bcos::protocol::ConstTransactions>(), block, false, backendStorage));
     bytes headerBuffer;
     blockHeader->encode(headerBuffer);
