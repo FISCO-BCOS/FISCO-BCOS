@@ -36,6 +36,8 @@ public:
     using Ptr = std::shared_ptr<TransactionFactory>;
     virtual ~TransactionFactory() = default;
 
+    virtual Transaction::Ptr createTransaction() = 0;
+    virtual Transaction::Ptr createTransaction(Transaction& input) = 0;
     virtual Transaction::Ptr createTransaction(
         bytesConstRef txData, bool checkSig = true, bool checkHash = false) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,

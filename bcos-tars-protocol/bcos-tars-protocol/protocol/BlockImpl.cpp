@@ -27,8 +27,8 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <boost/throw_exception.hpp>
-#include <stdexcept>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -51,22 +51,10 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
         });
 }
 
-bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
+bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
 {
-    return std::make_shared<const bcostars::protocol::BlockHeaderImpl>(
-        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); });
-}
-
-bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
-{
-    return std::make_shared<const bcostars::protocol::TransactionImpl>(
-        [self = shared_from_this(), _index]() { return &(self->m_inner.transactions[_index]); });
-}
-
-bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
-{
-    return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
-        [self = shared_from_this(), _index]() { return &(self->m_inner.receipts[_index]); });
+    return {bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
+        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); }};
 }
 
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
@@ -95,42 +83,14 @@ void BlockImpl::appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt)
         std::dynamic_pointer_cast<bcostars::protocol::TransactionReceiptImpl>(_receipt)->inner());
 }
 
-void BlockImpl::setNonceList(RANGES::any_view<std::string> nonces)
+void BlockImpl::setNonceList(::ranges::any_view<std::string> nonces)
 {
     m_inner.nonceList = ::ranges::to<std::vector>(nonces);
 }
 
-RANGES::any_view<std::string> BlockImpl::nonceList() const
+::ranges::any_view<std::string> BlockImpl::nonceList() const
 {
     return m_inner.nonceList;
-}
-
-bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
-{
-    if (_index >= transactionsMetaDataSize())
-    {
-        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaData index out of range"));
-    }
-
-    auto txMetaData = std::make_shared<const bcostars::protocol::TransactionMetaDataImpl>(
-        [self = shared_from_this(), _index]() {
-            return &self->m_inner.transactionsMetaData[_index];
-        });
-
-    return txMetaData;
-}
-
-TransactionMetaDataImpl BlockImpl::transactionMetaDataImpl(uint64_t _index) const
-{
-    if (_index >= transactionsMetaDataSize())
-    {
-        BOOST_THROW_EXCEPTION(std::out_of_range("transactionMetaDataImpl index out of range"));
-    }
-
-    return bcostars::protocol::TransactionMetaDataImpl(
-        [self = shared_from_this(), _index]() mutable {
-            return std::addressof(self->m_inner.transactionsMetaData[_index]);
-        });
 }
 
 bcos::crypto::HashType bcostars::protocol::BlockImpl::transactionHash(uint64_t _index) const
@@ -206,7 +166,7 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateTransactionRoot(
     {
         auto hashesRange =
             m_inner.transactions |
-            RANGES::views::transform([&](const bcostars::Transaction& transaction) {
+            ::ranges::views::transform([&](const bcostars::Transaction& transaction) {
                 bcos::bytes hash;
                 bcos::concepts::hash::calculate(transaction, hashImpl.hasher(), hash);
                 return hash;
@@ -215,14 +175,14 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateTransactionRoot(
     }
     else if (transactionsMetaDataSize() > 0)
     {
-        auto hashesRange =
-            m_inner.transactionsMetaData |
-            RANGES::views::transform([](const bcostars::TransactionMetaData& transactionMetaData) {
-                return transactionMetaData.hash;
-            });
+        auto hashesRange = m_inner.transactionsMetaData |
+                           ::ranges::views::transform(
+                               [](const bcostars::TransactionMetaData& transactionMetaData) {
+                                   return transactionMetaData.hash;
+                               });
         merkle.generateMerkle(hashesRange, m_inner.transactionsMerkle);
     }
-    bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner.transactionsMerkle), txsRoot);
+    bcos::concepts::bytebuffer::assignTo(*::ranges::rbegin(m_inner.transactionsMerkle), txsRoot);
 
     return txsRoot;
 }
@@ -236,14 +196,14 @@ bcos::crypto::HashType bcostars::protocol::BlockImpl::calculateReceiptRoot(
         return receiptsRoot;
     }
     auto hashesRange = m_inner.receipts |
-                       RANGES::views::transform([&](const bcostars::TransactionReceipt& receipt) {
+                       ::ranges::views::transform([&](const bcostars::TransactionReceipt& receipt) {
                            bcos::bytes hash;
                            bcos::concepts::hash::calculate(receipt, hashImpl.hasher(), hash);
                            return hash;
                        });
     bcos::crypto::merkle::Merkle merkle(hashImpl.hasher());
     merkle.generateMerkle(hashesRange, m_inner.receiptsMerkle);
-    bcos::concepts::bytebuffer::assignTo(*RANGES::rbegin(m_inner.receiptsMerkle), receiptsRoot);
+    bcos::concepts::bytebuffer::assignTo(*::ranges::rbegin(m_inner.receiptsMerkle), receiptsRoot);
 
     return receiptsRoot;
 }
@@ -285,14 +245,14 @@ bcostars::protocol::BlockImpl::receipts() const
 size_t bcostars::protocol::BlockImpl::size() const
 {
     size_t size = 0;
-    size += blockHeaderConst()->size();
-    for (uint64_t i = 0; i < transactionsSize(); ++i)
+    size += blockHeader()->size();
+    for (auto transaction : transactions())
     {
-        size += transaction(i)->size();
+        size += transaction->size();
     }
-    for (uint64_t i = 0; i < receiptsSize(); ++i)
+    for (auto receipt : receipts())
     {
-        size += receipt(i)->size();
+        size += receipt->size();
     }
     return size;
 }

@@ -1,7 +1,9 @@
 #include "TxPoolServiceServer.h"
 #include "../Common/TarsUtils.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
+#include "bcos-tars-protocol/protocol/BlockImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
 #include <bcos-task/Wait.h>
 using namespace bcostars;
 
@@ -182,10 +184,18 @@ bcostars::Error TxPoolServiceServer::asyncSealTxs(tars::Int64 txsLimit,
     try
     {
         auto [_txsList, _sysTxsList] = m_txpoolInitializer->txpool()->sealTxs(txsLimit);
+        for (auto& it : _txsList)
+        {
+            txsList.transactionsMetaData.emplace_back(
+                dynamic_cast<bcostars::protocol::TransactionMetaDataImpl&>(*it).inner());
+        }
+        for (auto& it : _sysTxsList)
+        {
+            sysTxsList.transactionsMetaData.emplace_back(
+                dynamic_cast<bcostars::protocol::TransactionMetaDataImpl&>(*it).inner());
+        }
 
-        async_response_asyncSealTxs(current, toTarsError({}),
-            std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_txsList)->inner(),
-            std::dynamic_pointer_cast<bcostars::protocol::BlockImpl>(_sysTxsList)->inner());
+        async_response_asyncSealTxs(current, toTarsError({}), txsList, sysTxsList);
     }
     catch (bcos::Error& error)
     {

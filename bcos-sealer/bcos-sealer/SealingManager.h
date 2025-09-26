@@ -52,8 +52,13 @@ public:
 
     virtual void resetLatestNumber(int64_t _latestNumber);
     virtual void resetLatestHash(crypto::HashType _latestHash);
+    virtual void resetLatestTimestamp(int64_t _latestTimestamp)
+    {
+        m_latestTimestamp = _latestTimestamp;
+    }
     virtual int64_t latestNumber() const;
     virtual crypto::HashType latestHash() const;
+    virtual int64_t latestTimestamp() const { return m_latestTimestamp; }
 
     enum class FetchResult : int8_t
     {
@@ -68,15 +73,17 @@ public:
     {
         return m_onReady.add(std::move(callback));
     }
-    virtual void notifyResetProposal(bcos::protocol::Block const& _block);
-
-protected:
-    virtual void appendTransactions(
-        TxsMetaDataQueue& _txsQueue, bcos::protocol::Block const& _fetchedTxs);
-    virtual bool reachMinSealTimeCondition();
-    virtual void clearPendingTxs();
+    virtual void notifyResetProposal(
+        const std::vector<protocol::TransactionMetaData::Ptr>& metaDatas);
     virtual void notifyResetTxsFlag(
         const bcos::crypto::HashList& _txsHash, bool _flag, size_t _retryTime = 0);
+
+protected:
+    virtual void appendTransactions(TxsMetaDataQueue& _txsQueue,
+        const std::vector<protocol::TransactionMetaData::Ptr>& _fetchedTxs);
+    virtual bool reachMinSealTimeCondition();
+    virtual void clearPendingTxs();
+
 
     virtual int64_t txsSizeExpectedToFetch();
     virtual size_t pendingTxsSize();
@@ -103,5 +110,6 @@ private:
 
     std::atomic<ssize_t> m_latestNumber = {0};
     bcos::crypto::HashType m_latestHash;
+    int64_t m_latestTimestamp = 0;
 };
 }  // namespace bcos::sealer

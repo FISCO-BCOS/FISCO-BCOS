@@ -66,7 +66,7 @@ std::shared_ptr<PrecompiledExecResult> AccountManagerPrecompiled::call(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
         BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("AccountManagerPrecompiled call undefined function!"));
+            bcos::protocol::PrecompiledError{} << errinfo_comment("AccountManagerPrecompiled call undefined function!"));
     }
     return _callParameters;
 }
@@ -92,7 +92,7 @@ void AccountManagerPrecompiled::createAccountWithStatus(
                               << LOG_DESC("createAccount failed")
                               << LOG_KV("accountTableName", accountTableName)
                               << LOG_KV("status", response->status);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Create account error."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Create account error."));
     }
 
     auto newParams = codec.encodeWithSig("setAccountStatus(uint8)", status);
@@ -106,7 +106,7 @@ void AccountManagerPrecompiled::createAccountWithStatus(
                               << LOG_DESC("set status failed")
                               << LOG_KV("accountTableName", accountTableName)
                               << LOG_KV("status", response->status);
-        BOOST_THROW_EXCEPTION(PrecompiledError("Set account status failed."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Set account status failed."));
     }
     _callParameters->setExternalResult(std::move(setStatusRes));
 }
@@ -145,7 +145,7 @@ void AccountManagerPrecompiled::setAccountStatus(
                               << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("set governor's status") << LOG_KV("account", accountStr)
                               << LOG_KV("status", std::to_string(status));
-        BOOST_THROW_EXCEPTION(PrecompiledError("Should not set governor's status."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Should not set governor's status."));
     }
 
     // check account exist, if not exist, create first

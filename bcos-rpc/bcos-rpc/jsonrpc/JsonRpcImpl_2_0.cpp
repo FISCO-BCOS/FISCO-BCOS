@@ -72,8 +72,10 @@ JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     m_forceSender(std::move(forceSender))
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::RPC_REQUEST,
-        boost::bind(&JsonRpcImpl_2_0::handleRpcRequest, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+        [this](std::shared_ptr<boostssl::MessageFace> msg,
+            std::shared_ptr<boostssl::ws::WsSession> session) {
+            this->handleRpcRequest(std::move(msg), std::move(session));
+        });
 }
 
 void JsonRpcImpl_2_0::handleRpcRequest(
@@ -83,7 +85,6 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     auto req = std::string_view((const char*)buffer->data(), buffer->size());
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto endpoint = _session->endPoint();
     auto seq = _msg->seq();
     auto version = _msg->version();
     auto ext = _msg->ext();
@@ -397,6 +398,8 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, boo
     toJsonResp(jResp, block.blockHeader());
     auto txSize = _onlyTxHash ? block.transactionsMetaDataSize() : block.transactionsSize();
 
+    auto transactionMetaDatas = block.transactionMetaDatas();
+    auto transactions = block.transactions();
     Json::Value jTxs(Json::arrayValue);
     for (std::size_t index = 0; index < txSize; ++index)
     {
@@ -405,11 +408,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, boo
         {
             // Note: should not call transactionHash for in the common cases transactionHash maybe
             // empty
-            jTx = toHexStringWithPrefix(block.transactionMetaData(index)->hash());
+            jTx = toHexStringWithPrefix(transactionMetaDatas[index]->hash());
         }
         else
         {
-            auto transaction = block.transaction(index);
+            auto transaction = transactions[index];
             toJsonResp(jTx, *transaction);
         }
         jTxs.append(jTx);

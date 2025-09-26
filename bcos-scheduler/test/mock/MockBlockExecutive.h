@@ -56,7 +56,7 @@ public:
         m_syncBlock = _syncBlock;
         m_gasLimit = _gasLimit;
     }
-    virtual ~MockBlockExecutive(){};
+    virtual ~MockBlockExecutive() {};
 
     void prepare() override
     {
@@ -75,8 +75,7 @@ public:
                     nullptr);
                 return;
             }
-            auto receipt = std::const_pointer_cast<protocol::TransactionReceipt>(
-                executive->block()->receipt(0));
+            auto receipt = executive->block()->receipts()[0].toShared();
             callback(std::move(_error), std::move(receipt));
         });
     }
@@ -130,7 +129,7 @@ public:
             callback(nullptr);
         }
     }
-    bcos::protocol::BlockNumber number() { return m_block->blockHeaderConst()->number(); }
+    bcos::protocol::BlockNumber number() { return m_block->blockHeader()->number(); }
     bcos::protocol::Block::Ptr block() { return m_block; }
     bool sysBlock() const { return m_isSysBlock; }
 

@@ -77,17 +77,17 @@ int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
 
     auto length = static_cast<int32_t>(_buffer.size());
     // decode ttl
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
+    checkOffset(offset + 2, length);
     m_ttl = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
 
     offset += 2;
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + 2, length);
+    checkOffset(offset + 2, length);
     // decode srcP2PNodeID, the length of srcP2PNodeID is 2-bytes
     uint16_t srcP2PNodeIDLen =
         boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
 
     offset += 2;
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + srcP2PNodeIDLen, length);
+    checkOffset(offset + srcP2PNodeIDLen, length);
     if (srcP2PNodeIDLen > 0)
     {
         m_srcP2PNodeID.assign(&_buffer[offset], &_buffer[offset] + srcP2PNodeIDLen);
@@ -97,11 +97,24 @@ int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
     uint16_t dstP2PNodeIDLen =
         boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
     offset += 2;
-    CHECK_OFFSET_WITH_THROW_EXCEPTION(offset + dstP2PNodeIDLen, length);
+    checkOffset(offset + dstP2PNodeIDLen, length);
     if (dstP2PNodeIDLen > 0)
     {
         m_dstP2PNodeID.assign(&_buffer[offset], &_buffer[offset] + dstP2PNodeIDLen);
     }
     offset += dstP2PNodeIDLen;
     return offset;
+}
+int16_t bcos::gateway::P2PMessageV2::ttl() const
+{
+    return m_ttl;
+}
+void bcos::gateway::P2PMessageV2::setTTL(int16_t _ttl)
+{
+    m_ttl = _ttl;
+}
+bcos::gateway::Message::Ptr bcos::gateway::P2PMessageFactoryV2::buildMessage()
+{
+    auto message = std::make_shared<P2PMessageV2>();
+    return message;
 }

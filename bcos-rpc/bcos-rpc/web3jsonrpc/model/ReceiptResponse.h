@@ -20,12 +20,12 @@
 
 #pragma once
 
-
-#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/TransactionReceipt.h"
 #include <json/value.h>
 
 namespace bcos::rpc
 {
 void combineReceiptResponse(Json::Value& result, protocol::TransactionReceipt& receipt,
-    const bcos::protocol::Transaction& tx, const bcos::protocol::Block* block);
+    const bcos::protocol::Transaction& tx, const crypto::HashType& blockHash);
 }  // namespace bcos::rpc

@@ -7,4 +7,4 @@ target_link_libraries(test-transaction-executor transaction-executor ${EXECUTOR_
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-executor PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-transaction-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-transaction-executor)
-config_test_cases("" "${SOURCES}" "test-transaction-executor" "")
+config_test_cases("" "${SOURCES}" "test-transaction-executor" "" "")

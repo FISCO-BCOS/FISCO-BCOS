@@ -34,7 +34,7 @@ void SerialBlockExecutive::prepare()
         else
         {
             SCHEDULER_LOG(DEBUG) << "BlockExecutive prepare: empty block"
-                                 << LOG_KV("block number", m_block->blockHeaderConst()->number());
+                                 << LOG_KV("block number", m_block->blockHeader()->number());
         }
         m_transactions.resize(txSize);
         m_web3NonceMap.clear();
@@ -190,7 +190,7 @@ void SerialBlockExecutive::serialExecute(
                 else
                 {
                     address = bcos::newEVMAddress(m_scheduler->getHashImpl(),
-                        m_block->blockHeaderConst()->number(), tx->contextID(), newSeq);
+                        m_block->blockHeader()->number(), tx->contextID(), newSeq);
                 }
 
                 tx->setTo(std::move(address));

@@ -59,6 +59,7 @@ public:
         m_candidateSealerNodeList = std::move(candidateSealerNodeList);
     }
     virtual void setHash(bcos::crypto::HashType const& _hash) { m_hash = _hash; }
+    virtual void setTimestamp(int64_t _timestamp) { m_timestamp = _timestamp; }
     virtual void setBlockNumber(bcos::protocol::BlockNumber _blockNumber)
     {
         m_blockNumber = _blockNumber;
@@ -88,6 +89,8 @@ public:
     }
     bcos::crypto::HashType const& hash() const { return m_hash; }
     bcos::protocol::BlockNumber blockNumber() const { return m_blockNumber; }
+
+    int64_t timestamp() const { return m_timestamp; }
 
     void setConsensusType(const std::string& _consensusType) { m_consensusType = _consensusType; }
     std::string consensusType() const { return m_consensusType; }
@@ -174,6 +177,7 @@ private:
     bcos::consensus::ConsensusNodeList m_candidateSealerNodeList;
     bcos::crypto::HashType m_hash;
     bcos::protocol::BlockNumber m_blockNumber = 0;
+    int64_t m_timestamp = 0;
     std::string m_consensusType;
     uint64_t m_blockTxCountLimit = 0;
     uint64_t m_leaderSwitchPeriod = 1;

@@ -197,7 +197,7 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
     PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                           << LOG_DESC("call undefined function") << LOG_KV("func", func);
     BOOST_THROW_EXCEPTION(
-        bcos::protocol::PrecompiledError("AuthManagerPrecompiled call undefined function!"));
+        bcos::protocol::PrecompiledError{} << errinfo_comment("AuthManagerPrecompiled call undefined function!"));
 }
 
 void AuthManagerPrecompiled::getAdmin(
@@ -526,7 +526,7 @@ std::string AuthManagerPrecompiled::getContractAdmin(
         PRECOMPILED_LOG(DEBUG) << "Can't get contract admin, check the contract existence."
                                << LOG_KV("address", _to);
         BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError("Please check the existence of contract."));
+            protocol::PrecompiledError{} << errinfo_comment("Please check the existence of contract."));
     }
     std::string admin;
 
@@ -835,7 +835,7 @@ void AuthManagerPrecompiled::initAuth(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                               << LOG_DESC("Committee exists.");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Committee contract already exist."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Committee contract already exist."));
     }
 
     std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
@@ -858,7 +858,7 @@ void AuthManagerPrecompiled::initAuth(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                               << LOG_DESC("init auth error.");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError("Create auth contract error."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Create auth contract error."));
     }
 
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));

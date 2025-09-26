@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "bcos-utilities/Exceptions.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
@@ -29,14 +30,13 @@
 #include <utility>
 #include <vector>
 
-void CHECK_OFFSET_WITH_THROW_EXCEPTION(auto offset, auto length)
+void checkOffset(auto offset, auto length)
 {
     if (std::cmp_greater((offset), (length)))
     {
-        BOOST_THROW_EXCEPTION(
+        bcos::throwWithTrace(
             std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
-                              " ,length: " + std::to_string(length) + " ,file: " + __FILE__ +
-                              " ,func: " + __func__ + " ,line: " + std::to_string(__LINE__)));
+                              " ,length: " + std::to_string(length)));
     }
 }
 
@@ -76,18 +76,18 @@ public:
     bool encode(bytes& _buffer) const;
     int32_t decode(const bytesConstRef& _buffer);
 
-    uint16_t moduleID() const { return m_moduleID; }
-    void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
+    uint16_t moduleID() const;
+    void setModuleID(uint16_t _moduleID);
 
-    std::string groupID() const { return m_groupID; }
-    void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
+    std::string groupID() const;
+    void setGroupID(const std::string& _groupID);
 
-    bytesConstRef srcNodeID() const { return ref(m_srcNodeID); }
-    void setSrcNodeID(bytes _srcNodeID) { m_srcNodeID = std::move(_srcNodeID); }
+    bytesConstRef srcNodeID() const;
+    void setSrcNodeID(bytes _srcNodeID);
 
-    const std::vector<bytes>& dstNodeIDs() const { return m_dstNodeIDs; }
-    void setDstNodeIDs(std::vector<bytes> _dstNodeIDs) { m_dstNodeIDs = std::move(_dstNodeIDs); }
-    std::vector<bytes>& mutableDstNodeIDs() { return m_dstNodeIDs; }
+    const std::vector<bytes>& dstNodeIDs() const;
+    void setDstNodeIDs(std::vector<bytes> _dstNodeIDs);
+    std::vector<bytes>& mutableDstNodeIDs();
 
 protected:
     std::string m_groupID;
@@ -130,89 +130,52 @@ public:
 
     // ~P2PMessage() override = default;
 
-    uint32_t lengthDirect() const override { return m_length; }
-    uint32_t length() const override
-    {
-        // The length value has been set
-        if (m_length > 0)
-        {
-            return m_length;
-        }
-
-        // estimate the length of msg to be encoded
-        int64_t length = (int64_t)payload().size() + (int64_t)P2PMessage::MESSAGE_HEADER_LENGTH;
-        if (hasOptions() && options().srcNodeID())
-        {
-            length += P2PMessageOptions::OPTIONS_MIN_LENGTH;
-            length += (int64_t)(options().srcNodeID().size() * (1 + options().dstNodeIDs().size()));
-        }
-        return length;
-    }
+    uint32_t lengthDirect() const override;
+    uint32_t length() const override;
     // virtual void setLength(uint32_t length) { m_length = length; }
 
-    uint16_t version() const override { return m_version; }
-    virtual void setVersion(uint16_t version) { m_version = version; }
+    uint16_t version() const override;
+    virtual void setVersion(uint16_t version);
 
-    uint16_t packetType() const override { return m_packetType; }
-    virtual void setPacketType(uint16_t packetType) { m_packetType = packetType; }
+    uint16_t packetType() const override;
+    virtual void setPacketType(uint16_t packetType);
 
-    uint32_t seq() const override { return m_seq; }
-    virtual void setSeq(uint32_t seq) { m_seq = seq; }
+    uint32_t seq() const override;
+    virtual void setSeq(uint32_t seq);
 
-    uint16_t ext() const override { return m_ext; }
-    virtual void setExt(uint16_t _ext) { m_ext |= _ext; }
+    uint16_t ext() const override;
+    virtual void setExt(uint16_t _ext);
 
-    const P2PMessageOptions& options() const { return m_options; }
-    void setOptions(P2PMessageOptions _options) { m_options = std::move(_options); }
+    const P2PMessageOptions& options() const;
+    void setOptions(P2PMessageOptions _options);
 
-    bytesConstRef payload() const { return bcos::ref(m_payload); }
-    void setPayload(bytes _payload) { m_payload = std::move(_payload); }
+    bytesConstRef payload() const;
+    void setPayload(bytes _payload);
 
-    void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE; }
+    void setRespPacket();
     bool encode(bytes& _buffer) override;
     bool encode(EncodedMessage& _buffer) const override;
     int32_t decode(const bytesConstRef& _buffer) override;
-    bool isRespPacket() const override
-    {
-        return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
-    }
+    bool isRespPacket() const override;
 
     // compress payload if payload need to be compressed
     bool tryToCompressPayload(bytes& compressData) const;
 
-    bool hasOptions() const
-    {
-        return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
-               (m_packetType == GatewayMessageType::BroadcastMessage);
-    }
+    bool hasOptions() const;
 
-    virtual void setSrcP2PNodeID(std::string const& _srcP2PNodeID)
-    {
-        if (m_srcP2PNodeID == _srcP2PNodeID)
-        {
-            return;
-        }
-        m_srcP2PNodeID = _srcP2PNodeID;
-    }
-    virtual void setDstP2PNodeID(std::string const& _dstP2PNodeID)
-    {
-        if (m_dstP2PNodeID == _dstP2PNodeID)
-        {
-            return;
-        }
-        m_dstP2PNodeID = _dstP2PNodeID;
-    }
+    virtual void setSrcP2PNodeID(std::string const& _srcP2PNodeID);
+    virtual void setDstP2PNodeID(std::string const& _dstP2PNodeID);
 
-    std::string const& srcP2PNodeID() const override { return m_srcP2PNodeID; }
-    std::string const& dstP2PNodeID() const override { return m_dstP2PNodeID; }
+    std::string const& srcP2PNodeID() const override;
+    std::string const& dstP2PNodeID() const override;
 
     // Note: only for log
-    std::string printSrcP2PNodeID() const { return printShortP2pID(m_srcP2PNodeID); }
+    std::string printSrcP2PNodeID() const;
     // Note: only for log
-    std::string printDstP2PNodeID() const { return printShortP2pID(m_dstP2PNodeID); }
+    std::string printDstP2PNodeID() const;
 
-    virtual void setExtAttributes(std::any _extAttr) { m_extAttr = std::move(_extAttr); }
-    const std::any& extAttributes() const override { return m_extAttr; }
+    virtual void setExtAttributes(std::any _extAttr);
+    const std::any& extAttributes() const override;
 
     bool encodeHeader(bytes& _buffer) const override;
 
@@ -243,25 +206,11 @@ public:
     using Ptr = std::shared_ptr<P2PMessageFactory>;
     // virtual ~P2PMessageFactory() = default;
 
-    Message::Ptr buildMessage() override
-    {
-        auto message = std::make_shared<P2PMessage>();
-        return message;
-    }
+    Message::Ptr buildMessage() override;
 };
 
-inline std::ostream& operator<<(std::ostream& _out, const P2PMessage& _p2pMessage)
-{
-    _out << "P2PMessage {" << " length: " << _p2pMessage.length()
-         << " version: " << _p2pMessage.version() << " packetType: " << _p2pMessage.packetType()
-         << " seq: " << _p2pMessage.seq() << " ext: " << _p2pMessage.ext() << " }";
-    return _out;
-}
+std::ostream& operator<<(std::ostream& _out, const P2PMessage& _p2pMessage);
 
-inline std::ostream& operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage)
-{
-    _out << (*_p2pMessage.get());
-    return _out;
-}
+std::ostream& operator<<(std::ostream& _out, P2PMessage::Ptr& _p2pMessage);
 
 }  // namespace bcos::gateway

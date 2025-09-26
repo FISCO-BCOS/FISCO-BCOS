@@ -56,17 +56,17 @@ struct PrecompiledExecResult
     void setExecResult(bytes const& _execResult) { m_execResult = _execResult; }
     void setExecResult(bytes&& _execResult) { m_execResult = std::move(_execResult); }
     void setGasLeft(int64_t _gasLeft) { m_gasLeft = _gasLeft; }
-    inline void setExternalResult(executor::CallParameters::UniquePtr _callParameter)
+    void setExternalResult(executor::CallParameters::UniquePtr _callParameter)
     {
         m_execResult = std::move(_callParameter->data);
         if (_callParameter->status != (int32_t)protocol::TransactionStatus::None)
         {
-            BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError("External call revert: " + _callParameter->message));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment(
+                                      "External call revert: " + _callParameter->message));
         }
     }
 
-    inline void takeDataToCallParameter(executor::CallParameters::UniquePtr& callParameters)
+    void takeDataToCallParameter(executor::CallParameters::UniquePtr& callParameters)
     {
         callParameters->type = executor::CallParameters::FINISHED;
         callParameters->gas = m_gasLeft;

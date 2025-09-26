@@ -179,7 +179,7 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
                               << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("BFSPrecompiled call undefined function!"));
     }
 
     return _callParameters;
@@ -834,7 +834,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     auto buildResult = recursiveBuildDir(_executive, parentDir);
     if (!buildResult)
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Recursive build bfs dir error."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Recursive build bfs dir error."));
     }
     if (type == FS_TYPE_DIR)
     {
@@ -946,7 +946,7 @@ void BFSPrecompiled::fixBfs(const std::shared_ptr<executor::TransactionExecutive
                               << LOG_DESC("fixBfs version not supported")
                               << LOG_KV("fixVersion", fixVersion)
                               << LOG_KV("blockVersion", blockContext.blockVersion());
-        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("BFSPrecompiled call undefined function!"));
     }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
@@ -960,7 +960,7 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("fixBfs320 backendStorage is null");
-        BOOST_THROW_EXCEPTION(PrecompiledError("BFSPrecompiled fixBfs320 backendStorage is null."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("BFSPrecompiled fixBfs320 backendStorage is null."));
     }
     auto existEntries = _executive->storage().getRows(tool::FS_ROOT, tool::FS_ROOT_SUBS_NAME);
     if (std::all_of(existEntries.begin(), existEntries.end(),
@@ -992,7 +992,7 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
                                                << LOG_DESC("fixBfs320 asyncGetPrimaryKeys error")
                                                << LOG_KV("code", error->errorCode())
                                                << LOG_KV("message", error->errorMessage());
-                        BOOST_THROW_EXCEPTION(PrecompiledError(
+                        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
                             "BFSPrecompiled fixBfs320 asyncGetPrimaryKeys failed."));
                     }
                     promise.set_value(std::forward<decltype(keys)>(keys));
@@ -1023,7 +1023,7 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
                         << LOG_KV("code", error->errorCode())
                         << LOG_KV("message", error->errorMessage());
                     BOOST_THROW_EXCEPTION(
-                        PrecompiledError("BFSPrecompiled fixBfs320 asyncGetRow failed."));
+                        PrecompiledError{} << errinfo_comment("BFSPrecompiled fixBfs320 asyncGetRow failed."));
                 }
                 getRowPromise.set_value(std::forward<decltype(entry)>(entry));
             });

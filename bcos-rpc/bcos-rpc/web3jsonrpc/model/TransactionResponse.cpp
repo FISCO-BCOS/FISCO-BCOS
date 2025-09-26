@@ -2,39 +2,27 @@
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
-    const protocol::TransactionReceipt* receipt, const bcos::protocol::Block* block,
-    std::optional<int64_t> transactionIndex)
+    const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
+{
+    combineTxResponse(result, tx, receipt.transactionIndex(), receipt.blockNumber(), blockHash);
+    // TODO: Check
+    if (!receipt.effectiveGasPrice().empty())
+    {
+        auto gasPrice = receipt.effectiveGasPrice();
+        result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+    }
+}
+
+void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
+    size_t transactionIndex, protocol::BlockNumber blockNumber, const crypto::HashType& blockHash)
 {
     if (!result.isObject())
     {
         return;
     }
-    crypto::HashType blockHash;
-    uint64_t blockNumber = 0;
-    if (block != nullptr)
-    {
-        blockHash = block->blockHeaderConst()->hash();
-        blockNumber = block->blockHeaderConst()->number();
-        auto transactionHashes = block->transactionHashes();
-        auto transactions = block->transactions();
-        if (!transactionIndex)
-        {
-            if (auto it = ::ranges::find(transactionHashes, tx.hash());
-                it != transactionHashes.end())
-            {
-                transactionIndex = ::ranges::distance(transactionHashes.begin(), it);
-            }
-            else if (auto it = ::ranges::find_if(
-                         transactions, [&](const auto& tx2) { return tx2->hash() == tx.hash(); });
-                it != transactions.end())
-            {
-                transactionIndex = ::ranges::distance(transactions.begin(), it);
-            }
-        }
-    }
     result["blockHash"] = blockHash.hexPrefixed();
     result["blockNumber"] = toQuantity(blockNumber);
-    result["transactionIndex"] = toQuantity(transactionIndex.value_or(0));
+    result["transactionIndex"] = toQuantity(transactionIndex);
     auto from = toHex(tx.sender());
     toChecksumAddress(from, bcos::crypto::keccak256Hash(bcos::bytesConstRef(from)).hex());
     result["from"] = "0x" + std::move(from);
@@ -51,10 +39,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
-    if (receipt != nullptr && !receipt->effectiveGasPrice().empty())
-    {
-        gasPrice = receipt->effectiveGasPrice();
-    }
+
     // FIXME)): return will case coredump in executor
     result["gasPrice"] = std::string(gasPrice.empty() ? "0x0" : gasPrice);
     result["hash"] = tx.hash().hexPrefixed();

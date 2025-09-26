@@ -77,6 +77,7 @@ public:
     void asyncNoteLatestBlockNumber(int64_t) override;
 
     void asyncNoteLatestBlockHash(bcos::crypto::HashType) override;
+    void asyncNoteLatestBlockTimestamp(int64_t _timestamp) override;
 
     // the consensus module notify the sealer to reset sealing when viewchange
     void asyncResetSealing(std::function<void(bcos::Error::Ptr)> _onRecvResponse) override;

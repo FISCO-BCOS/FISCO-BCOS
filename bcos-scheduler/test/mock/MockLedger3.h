@@ -10,6 +10,8 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include "bcos-tars-protocol/bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include "bcos-tars-protocol/bcos-tars-protocol/protocol/BlockImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
@@ -33,7 +35,7 @@ public:
         std::function<void(std::string, Error::Ptr&&)> callback, bool writeTxsAndReceipts,
         std::optional<bcos::ledger::Features> features) override
     {
-        auto blockNumber = block->blockHeaderConst()->number();
+        auto blockNumber = block->blockHeader()->number();
         if (blockNumber == 1024)
         {
             callback(
@@ -51,7 +53,18 @@ public:
 
     void asyncGetBlockDataByNumber(protocol::BlockNumber _blockNumber, int32_t _blockFlag,
         std::function<void(Error::Ptr, protocol::Block::Ptr)> _onGetBlock) override
-    {}
+    {
+        auto block = std::make_shared<bcostars::protocol::BlockImpl>();
+        auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+        blockHeader->setNumber(_blockNumber);
+        block->setBlockHeader(blockHeader);
+        // For testing, create a mock block with header
+        if (_blockFlag & HEADER)
+        {
+            // Return a mock block or error for testing
+            _onGetBlock(nullptr, nullptr);
+        }
+    }
 
     void asyncGetBlockNumber(
         std::function<void(Error::Ptr, protocol::BlockNumber)> _onGetBlock) override
@@ -77,8 +90,8 @@ public:
     {}
 
     void asyncGetTransactionReceiptByHash(crypto::HashType const& _txHash, bool _withProof,
-        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr, MerkleProofPtr)>
-            _onGetTx) override
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr, MerkleProofPtr)> _onGetTx)
+        override
     {}
 
     void asyncGetTotalTransactionCount(std::function<void(Error::Ptr, int64_t _totalTxCount,

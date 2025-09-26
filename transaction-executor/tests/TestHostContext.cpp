@@ -328,7 +328,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
     ledger.buildGenesisBlock(genesis, ledgerConfig);
 
     bcostars::protocol::BlockHeaderImpl blockHeader;
-    blockHeader.mutableInner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
+    blockHeader.inner().data.version = (int)bcos::protocol::BlockVersion::V3_5_VERSION;
     blockHeader.calculateHash(*bcos::executor::GlobalHashImpl::g_hashImpl);
 
     syncWait(initBFS(blockHeader, *hashImpl));

@@ -21,6 +21,7 @@
 #pragma once
 
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-framework/protocol/TransactionMetaData.h"
 #include "bcos-task/Task.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
@@ -51,8 +52,8 @@ public:
     void batchRemoveSealedTxs(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
 
-    bool batchSealTransactions(bcos::protocol::Block::Ptr _txsList,
-        bcos::protocol::Block::Ptr _sysTxsList, size_t _txsLimit) override;
+    bool batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
+        std::vector<protocol::TransactionMetaData::Ptr>& _sysTxsList, size_t _txsLimit) override;
 
     bool exists(bcos::crypto::HashType const& _txHash) override;
     bool batchExists(crypto::HashListView _txsHashList) override;

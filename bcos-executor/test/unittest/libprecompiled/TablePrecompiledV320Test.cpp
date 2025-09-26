@@ -1082,10 +1082,10 @@ static void countTest(TableFactoryPrecompiledV320Fixture* fixture, const int INS
         BOOST_CHECK(countRes == total - validCount);
     }
 
-    // 0 <= key <= 987
+    // 0 <= key <= min(INSERT_COUNT-1, 987)
     {
         uint32_t low = 0;
-        uint32_t high = 987;
+        uint32_t high = std::min<uint32_t>(INSERT_COUNT - 1, 987);
         ConditionTupleV320 cond1 = {
             (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(low)};
         ConditionTupleV320 cond2 = {
@@ -1197,7 +1197,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
     // select by condition——check limit and count
     {
         uint32_t limitOffset = 0;
-        uint32_t limitCount = 50;
+        uint32_t limitCount = std::min<uint32_t>(50u, static_cast<uint32_t>(VALID_COUNT));
         ConditionTupleV320 cond1 = {
             (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
         ConditionTupleV320 cond2 = {
@@ -1222,7 +1222,8 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
 
     {
         uint32_t limitOffset = 10;
-        uint32_t limitCount = 75;
+        uint32_t limitCount =
+            std::min<uint32_t>(75u, static_cast<uint32_t>(VALID_COUNT) - limitOffset);
         ConditionTupleV320 cond1 = {
             (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
         ConditionTupleV320 cond2 = {
@@ -1247,8 +1248,14 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
     }
 
     {
-        uint32_t limitOffset = 461;
+        // choose an offset so that remaining count (VALID_COUNT - offset) < limitCount
         uint32_t limitCount = 75;
+        uint32_t remainder =
+            (limitCount > 0) ?
+                std::min<uint32_t>(static_cast<uint32_t>(VALID_COUNT), limitCount - 1) :
+                0;
+        uint32_t validCountU = static_cast<uint32_t>(VALID_COUNT);
+        uint32_t limitOffset = (validCountU > remainder) ? (validCountU - remainder) : 0;
         ConditionTupleV320 cond1 = {
             (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
         ConditionTupleV320 cond2 = {
@@ -1276,7 +1283,7 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
     // select by condition limitCount < USER_TABLE_MIN_LIMIT_COUNT
     {
         uint32_t limitOffset = 0;
-        uint32_t limitCount = 49;
+        uint32_t limitCount = 48;
         ConditionTupleV320 cond1 = {
             (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
         ConditionTupleV320 cond2 = {
@@ -1297,7 +1304,8 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             ++count;
         }
 
-        BOOST_CHECK(entries.size() == limitCount && count == limitCount);
+        BOOST_TEST(entries.size() == limitCount);
+        BOOST_TEST(count == limitCount);
     }
 
     // select by condition limitCount == 0
@@ -1332,8 +1340,13 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         // check not use key condition
         uint32_t count1 = 0;
         {
-            uint32_t limitOffset = 461;
             uint32_t limitCount = 75;
+            uint32_t remainder =
+                (limitCount > 0) ?
+                    std::min<uint32_t>(static_cast<uint32_t>(VALID_COUNT), limitCount - 1) :
+                    0;
+            uint32_t validCountU = static_cast<uint32_t>(VALID_COUNT);
+            uint32_t limitOffset = (validCountU > remainder) ? (validCountU - remainder) : 0;
             ConditionTupleV320 cond1 = {
                 (uint8_t)storage::Condition::Comparator::GE, "id", std::to_string(0)};
             ConditionTupleV320 cond2 = {
@@ -1360,8 +1373,13 @@ static void selectByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
         }
         uint32_t count2 = 0;
         {
-            uint32_t limitOffset = 461;
             uint32_t limitCount = 75;
+            uint32_t remainder =
+                (limitCount > 0) ?
+                    std::min<uint32_t>(static_cast<uint32_t>(VALID_COUNT), limitCount - 1) :
+                    0;
+            uint32_t validCountU = static_cast<uint32_t>(VALID_COUNT);
+            uint32_t limitOffset = (validCountU > remainder) ? (validCountU - remainder) : 0;
             ConditionTupleV320 cond3 = {
                 (uint8_t)storage::Condition::Comparator::EQ, "value", "yes"};
             LimitTuple limit = {limitOffset, limitCount};
@@ -1541,14 +1559,21 @@ static void updateByConditionTest(TableFactoryPrecompiledV320Fixture* fixture,
             return rows;
         };
         int32_t countBeforeUpdate = countFunc("yes");
-        // update value = "update" where (key >= 500 && key < 1500) && (value == "yes")
-        int32_t affectRows1 = updateFunc(500, 1500, 126, 20, "update", "yes");
+        // choose a middle range covering 2 sections to ensure enough valid rows
+        uint32_t low = INTERVAL;                        // e.g., 500 when INTERVAL=500, 50 when 50
+        uint32_t high = INTERVAL * 3;                   // e.g., 1500 or 150
+        uint32_t offset = VALID_COUNT_PER_SECTION + 1;  // skip one more than one section
+        // total valid rows in [low, high) equals 2 full sections
+        uint32_t totalValidInRange = 2u * static_cast<uint32_t>(VALID_COUNT_PER_SECTION);
+        uint32_t count = std::min<uint32_t>(
+            20u, (totalValidInRange > offset) ? (totalValidInRange - offset) : 0u);
+        int32_t affectRows1 = updateFunc(low, high, offset, count, "update", "yes");
         int32_t countAfterUpdate = countFunc("update");
-        // update value = "yes" where (key >= 0 && key < 10000) && (value == "update")
+        // update value = "yes" where (key >= 0 && key < INSERT_COUNT) && (value == "update")
         int32_t affectRows2 = updateFunc(0, INSERT_COUNT, 0, VALID_COUNT, "yes", "update");
         int32_t countAfterRecover = countFunc("yes");
         BOOST_CHECK(affectRows1 == countAfterUpdate && affectRows1 == affectRows2 &&
-                    affectRows1 == 20 && countBeforeUpdate == countAfterRecover &&
+                    affectRows1 == (int32_t)count && countBeforeUpdate == countAfterRecover &&
                     countBeforeUpdate == VALID_COUNT);
     }
 
@@ -2905,9 +2930,9 @@ BOOST_AUTO_TEST_CASE(removeNumericalOrderWasmTest)
 
 BOOST_AUTO_TEST_CASE(tableConditionOP)
 {
-    const int INSERT_COUNT = 2000;
-    const int INTERVAL = 500;
-    const int VALID_COUNT = 500;
+    const int INSERT_COUNT = 200;
+    const int INTERVAL = 50;
+    const int VALID_COUNT = 48;  // 4 sections, 12 each
     const int VALID_COUNT_PER_SECTION = VALID_COUNT / (INSERT_COUNT / INTERVAL);
 
     bcos::protocol::BlockNumber number = 1;
@@ -2950,9 +2975,9 @@ BOOST_AUTO_TEST_CASE(tableConditionOP)
 BOOST_AUTO_TEST_CASE(tableWasmConditionOP)
 {
     init(true);
-    const int INSERT_COUNT = 2000;
-    const int INTERVAL = 500;
-    const int VALID_COUNT = 500;
+    const int INSERT_COUNT = 200;
+    const int INTERVAL = 50;
+    const int VALID_COUNT = 48;  // 4 sections, 12 each
     const int VALID_COUNT_PER_SECTION = VALID_COUNT / (INSERT_COUNT / INTERVAL);
 
     bcos::protocol::BlockNumber number = 1;

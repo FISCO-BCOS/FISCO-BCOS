@@ -110,7 +110,7 @@ std::shared_ptr<PrecompiledExecResult> ZkpPrecompiled::call(
         PRECOMPILED_LOG(INFO) << LOG_DESC("ZkpPrecompiled: undefined method")
                               << LOG_KV("funcSelector", std::to_string(funcSelector));
         BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError("ZkpPrecompiled call undefined function!"));
+            bcos::protocol::PrecompiledError{} << errinfo_comment("ZkpPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());

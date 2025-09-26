@@ -26,7 +26,7 @@ bcos::protocol::BlockHeader::Ptr bcostars::protocol::BlockHeaderFactoryImpl::cre
         [m_header = bcostars::BlockHeader()]() mutable { return &m_header; });
     blockHeader->decode(_data);
 
-    auto& inner = blockHeader->mutableInner();
+    auto& inner = blockHeader->inner();
     if (inner.dataHash.empty())
     {
         // Update the hash field

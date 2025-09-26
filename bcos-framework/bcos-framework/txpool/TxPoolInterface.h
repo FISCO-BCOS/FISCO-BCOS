@@ -94,8 +94,9 @@ public:
      * @param _sealCallback after the  txpool responds to the sealed txs, the callback is
      * triggered
      */
-    virtual std::tuple<bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr> sealTxs(
-        uint64_t _txsLimit) = 0;
+    virtual std::tuple<std::vector<protocol::TransactionMetaData::Ptr>,
+        std::vector<protocol::TransactionMetaData::Ptr>>
+    sealTxs(uint64_t _txsLimit) = 0;
 
     virtual void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool _sealedFlag,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,

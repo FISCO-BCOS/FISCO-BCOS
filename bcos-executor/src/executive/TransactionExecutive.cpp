@@ -35,6 +35,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
+#include "bcos-utilities/Exceptions.h"
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -619,7 +620,7 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
                 << LOG_DESC(
                        "transferBalance to sub success but add failed, strike a balance failed.")
                 << LOG_KV("restoreAccount", subAccount) << LOG_KV("tablename", formTableName);
-            BOOST_THROW_EXCEPTION(PrecompiledError(
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
                 "transferBalance to sub success but add failed, strike a balance failed."));
         }
 
@@ -1477,7 +1478,7 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
     [[unlikely]] EXECUTIVE_LOG(WARNING)
         << LOG_DESC("[call]Can't find precompiled address")
         << LOG_KV("address", _precompiledParams->m_precompiledAddress);
-    BOOST_THROW_EXCEPTION(PrecompiledError("can't find precompiled address."));
+    BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("can't find precompiled address."));
 }
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const

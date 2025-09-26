@@ -388,6 +388,8 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
                            << m_config->printCurrentState();
             return false;
         }
+        // TODO: use lastAppliedProposal to check the current proposal's parent block header info
+        // the number,hash and timestamp should be checked
         // commit the proposal
         m_committedQueue.pop();
         // in case of the same block execute more than once

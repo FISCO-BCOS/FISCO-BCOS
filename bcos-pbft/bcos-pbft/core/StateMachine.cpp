@@ -161,8 +161,8 @@ void StateMachine::preApply(
             {
                 CONSENSUS_LOG(DEBUG)
                     << LOG_BADGE("prepareBlockExecutive") << LOG_DESC("preApply")
-                    << LOG_KV("blockNumber", block->blockHeaderConst()->number())
-                    << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
+                    << LOG_KV("blockNumber", block->blockHeader()->number())
+                    << LOG_KV("blockHeader.timestamps", block->blockHeader()->timestamp())
                     << LOG_KV("timeCost", (utcTime() - startT));
                 _onPreApplyFinished(true);
             }
@@ -173,8 +173,8 @@ void StateMachine::preApply(
                     << LOG_KV("code", error->errorCode())
                     << LOG_KV("message", error->errorMessage())
                     << LOG_KV("message", error->errorMessage())
-                    << LOG_KV("blockNumber", block->blockHeaderConst()->number())
-                    << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
+                    << LOG_KV("blockNumber", block->blockHeader()->number())
+                    << LOG_KV("blockHeader.timestamps", block->blockHeader()->timestamp())
                     << LOG_KV("timeCost", (utcTime() - startT));
                 _onPreApplyFinished(false);
             }

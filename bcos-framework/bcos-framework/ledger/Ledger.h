@@ -64,10 +64,9 @@ inline constexpr struct GetBlockData
         co_return co_await tag_invoke(*this, ledger, blockNumber, blockFlag);
     }
     task::Task<protocol::Block::Ptr> operator()(auto& storage, protocol::BlockNumber blockNumber,
-        int32_t blockFlag, protocol::BlockFactory& blockFactory, FromStorage fromStorage) const
+        int32_t blockFlag, protocol::BlockFactory& blockFactory) const
     {
-        co_return co_await tag_invoke(
-            *this, storage, blockNumber, blockFlag, blockFactory, fromStorage);
+        co_return co_await tag_invoke(*this, storage, blockNumber, blockFlag, blockFactory);
     }
 } getBlockData{};
 
@@ -182,16 +181,17 @@ inline constexpr struct GetLedgerConfig
 
     // Read from storage
     task::Task<void> operator()(storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
-        LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber) const
+        LedgerConfig& ledgerConfig, protocol::BlockNumber blockNumber,
+        protocol::BlockFactory& blockFactory) const
     {
-        co_await tag_invoke(*this, storage, ledgerConfig, blockNumber);
+        co_await tag_invoke(*this, storage, ledgerConfig, blockNumber, blockFactory);
     }
     task::Task<LedgerConfig::Ptr> operator()(
         storage2::ReadableStorage<executor_v1::StateKey> auto& storage,
-        protocol::BlockNumber blockNumber) const
+        protocol::BlockNumber blockNumber, protocol::BlockFactory& blockFactory) const
     {
         auto ledgerConfig = std::make_shared<LedgerConfig>();
-        co_await tag_invoke(*this, storage, *ledgerConfig, blockNumber);
+        co_await tag_invoke(*this, storage, *ledgerConfig, blockNumber, blockFactory);
         co_return ledgerConfig;
     }
 } getLedgerConfig{};

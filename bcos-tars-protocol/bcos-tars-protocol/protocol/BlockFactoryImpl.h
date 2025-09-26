@@ -24,8 +24,6 @@
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif
-#include "BlockImpl.h"
-#include "bcos-tars-protocol/tars/Block.h"
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/BlockHeaderFactory.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
@@ -59,7 +57,7 @@ public:
     bcos::protocol::TransactionMetaData::Ptr createTransactionMetaData() override;
 
     bcos::protocol::TransactionMetaData::Ptr createTransactionMetaData(
-        bcos::crypto::HashType const _hash, std::string const& _to) override;
+        bcos::crypto::HashType _hash, std::string _to) override;
 
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

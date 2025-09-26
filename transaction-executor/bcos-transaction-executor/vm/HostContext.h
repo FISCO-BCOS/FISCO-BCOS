@@ -161,7 +161,7 @@ private:
             HOST_CONTEXT_LOG(DEBUG) << m_blockHeader.get().number() << " "
                                     << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                     << LOG_DESC("account balance not enough");
-            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError("Account balance is not enough!"));
+            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
         }
 
         if (!co_await m_recipientAccount.exists())

@@ -35,6 +35,7 @@
 
 namespace bcos
 {
+DERIVE_BCOS_EXCEPTION(BadHexCharacter);
 template <class Binary, class Out = std::string>
     requires ::ranges::range<Binary> && ::ranges::sized_range<Binary>
 Out toHex(const Binary& binary, std::string_view prefix = std::string_view())

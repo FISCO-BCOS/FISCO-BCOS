@@ -323,8 +323,8 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                 for (size_t j = range.begin(); j < range.end(); ++j)
                 {
                     Json::Value value;
-                    auto receipt = block->receipt(j);
-                    auto transaction = block->transaction(j);
+                    auto receipt = block->receipts()[j];
+                    auto transaction = block->transactions()[j];
                     auto transactionHash = transaction->hash();
                     keys[j] = std::string((char*)transactionHash.data(), transactionHash.size());
                     // write transactions and receipts to archive database

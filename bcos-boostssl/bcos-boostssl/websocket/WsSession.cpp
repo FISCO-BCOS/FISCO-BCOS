@@ -251,7 +251,8 @@ void WsSession::asyncRead()
                                    << LOG_KV("endpoint", session->endPoint())
                                    << LOG_KV("refCount", session.use_count());
 
-                    return session->drop(WsError::ReadError);
+                    session->drop(WsError::ReadError);
+                    return;
                 }
 
                 session->onReadPacket();

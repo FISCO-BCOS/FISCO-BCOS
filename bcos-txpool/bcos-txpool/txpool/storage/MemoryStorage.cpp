@@ -334,28 +334,28 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         return result;
     }
 
+#if 0
     result = task::syncWait(
         TransactionValidator::validateTransactionWithState(*transaction, m_config->ledger()));
     if (result != TransactionStatus::None)
     {
         return result;
     }
-    if (result == TransactionStatus::None)
+#endif
+
+    auto const txImportTime = transaction->importTime();
+    if (txSubmitCallback)
     {
-        auto const txImportTime = transaction->importTime();
-        if (txSubmitCallback)
-        {
-            transaction->setSubmitCallback(std::move(txSubmitCallback));
-        }
-        if (c_fileLogLevel == TRACE)
-        {
-            auto const txHash = transaction->hash().hex();
-            TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
-                              << LOG_KV("result", result)
-                              << LOG_KV("insertTime", utcTime() - txImportTime);
-        }
-        result = insert(std::move(transaction));
+        transaction->setSubmitCallback(std::move(txSubmitCallback));
     }
+    if (c_fileLogLevel == TRACE)
+    {
+        auto const txHash = transaction->hash().hex();
+        TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
+                          << LOG_KV("result", result)
+                          << LOG_KV("insertTime", utcTime() - txImportTime);
+    }
+    result = insert(std::move(transaction));
 
     return result;
 }
@@ -363,12 +363,13 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 {
     auto* toMap = transaction->sealed() ? &m_sealedTransactions : &m_unsealTransactions;
+    auto* ptr = transaction.get();
     if (TxsMap::WriteAccessor accessor;
-        !toMap->insert(accessor, {transaction->hash(), transaction}))
+        !toMap->insert(accessor, {transaction->hash(), std::move(transaction)}))
     {
-        if (transaction->submitCallback() && !accessor.value()->submitCallback())
+        if (ptr->submitCallback() && !accessor.value()->submitCallback())
         {
-            accessor.value()->setSubmitCallback(transaction->submitCallback());
+            accessor.value()->setSubmitCallback(ptr->submitCallback());
             return TransactionStatus::None;
         }
         return TransactionStatus::AlreadyInTxPool;
@@ -537,8 +538,8 @@ void MemoryStorage::batchRemoveSealedTxs(
                      << LOG_KV("updateTxPoolNonceT", updateTxPoolNonceT);
 }
 
-bool MemoryStorage::batchSealTransactions(
-    Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit)
+bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
+    std::vector<protocol::TransactionMetaData::Ptr>& _sysTxsList, size_t _txsLimit)
 {
     auto txsSize = m_unsealTransactions.size();
     if (txsSize == 0)
@@ -584,6 +585,8 @@ bool MemoryStorage::batchSealTransactions(
         auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result == TransactionStatus::NonceCheckFail)
         {
+            TXPOOL_LOG(WARNING) << "txPool nonce check failed, hash:" << tx->hash()
+                                << " blockLimit:" << tx->blockLimit() << " nonce:" << tx->nonce();
             // in case of the same tx notified more than once
             auto transaction = std::const_pointer_cast<Transaction>(tx);
             transaction->takeSubmitCallback();
@@ -594,6 +597,8 @@ bool MemoryStorage::batchSealTransactions(
         // blockLimit expired
         if (result == TransactionStatus::BlockLimitCheckFail)
         {
+            TXPOOL_LOG(WARNING) << "txPool blocklimit check failed, hash:" << tx->hash()
+                                << " blockLimit:" << tx->blockLimit() << " nonce:" << tx->nonce();
             invalidTxs.emplace_back(tx);
             return false;
         }
@@ -603,11 +608,11 @@ bool MemoryStorage::batchSealTransactions(
         txMetaData->setAttribute(tx->attribute());
         if (tx->systemTx())
         {
-            _sysTxsList->appendTransactionMetaData(std::move(txMetaData));
+            _sysTxsList.emplace_back(std::move(txMetaData));
         }
         else
         {
-            _txsList->appendTransactionMetaData(std::move(txMetaData));
+            _txsList.emplace_back(std::move(txMetaData));
         }
 #if FISCO_DEBUG
         // TODO: remove this, now just for bug tracing
@@ -628,8 +633,7 @@ bool MemoryStorage::batchSealTransactions(
     {
         const auto& tx = accessor.value();
         handleTx(tx);
-        if (!((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) <
-                _txsLimit))
+        if (!((_txsList.size() + _sysTxsList.size()) < _txsLimit))
         {
             break;
         }
@@ -637,8 +641,10 @@ bool MemoryStorage::batchSealTransactions(
     auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
 
-    auto systemHashes = _sysTxsList->transactionHashes();
-    auto txsHashes = _txsList->transactionHashes();
+    auto systemHashes =
+        ::ranges::views::transform(_sysTxsList, [](auto& metaData) { return metaData->hash(); });
+    auto txsHashes =
+        ::ranges::views::transform(_txsList, [](auto& metaData) { return metaData->hash(); });
     auto sealedHashes = ::ranges::views::concat(systemHashes, txsHashes);
     std::vector<Transaction::Ptr> values(sealedHashes.size());
     m_unsealTransactions.traverse<decltype(m_unsealTransactions)::WriteAccessor, true>(
@@ -657,9 +663,8 @@ bool MemoryStorage::batchSealTransactions(
 
     auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
-                     << LOG_KV("time", (utcTime() - recordT))
-                     << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
-                     << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("time", (utcTime() - recordT)) << LOG_KV("txsSize", _txsList.size())
+                     << LOG_KV("sysTxsSize", _sysTxsList.size())
                      << LOG_KV("pendingTxs", m_unsealTransactions.size())
                      << LOG_KV("limit", _txsLimit) << LOG_KV("fetchTxsT", fetchTxsT)
                      << LOG_KV("lockT", lockT) << LOG_KV("invalidBefore", invalidTxsSize)
@@ -890,9 +895,9 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
     {
         return missedTxs;
     }
-    auto blockHeader = _block->blockHeaderConst();
-    auto batchId = (_block && blockHeader) ? blockHeader->number() : -1;
-    auto batchHash = (_block && blockHeader) ? blockHeader->hash() : bcos::crypto::HashType();
+    auto blockHeader = _block->blockHeader();
+    auto batchId = blockHeader->number();
+    auto batchHash = blockHeader->hash();
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();
@@ -902,45 +907,42 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
 
     auto unsealTransactions = m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
     auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(txHashes);
-    for (auto&& [index, value] : ::ranges::views::enumerate(unsealTransactions))
+    for (auto&& [index, unsealTx, sealedTx] :
+        ::ranges::views::zip(::ranges::views::iota(0), unsealTransactions, sealedTransactions))
     {
-        if (!value)
+        if (sealedTx)
+        {
+            if ((*sealedTx)->batchId() != blockHeader->number() && (*sealedTx)->batchId() != -1)
+            {
+                TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
+                                 << LOG_KV("blkNum", blockHeader->number())
+                                 << LOG_KV("blkHash", blockHeader->hash().abridged())
+                                 << LOG_KV("txHash", (*sealedTx)->hash().hexPrefixed())
+                                 << LOG_KV("txBatchId", (*sealedTx)->batchId())
+                                 << LOG_KV("txBatchHash", (*sealedTx)->batchHash().abridged());
+                // NOTE: In certain scenarios, a bug may occur here: The leader generates the
+                // (N)th proposal, which includes transaction A. The local node puts this
+                // proposal into the cache and sets the batchId of transaction A to (N) and the
+                // batchHash to the hash of the (N)th proposal.
+                //
+                // However, at this point, a view change happens, and the next leader completes
+                // the resetTx operation for the (N)th proposal and includes transaction A in
+                // the new block of the (N)th proposal.
+                //
+                // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
+                // view change, has not completed it yet, and it receives the (N+1)th proposal
+                // sent by the new leader. During the verification process, transaction A has a
+                // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
+                // proposal, leading to false positives.
+                //
+                // Therefore, we do not validate the consistency of the batchHash for now.
+                findErrorTxInBlock = true;
+                break;
+            }
+        }
+        else if (!unsealTx)
         {
             missedTxs->emplace_back(txHashes[index]);
-        }
-    }
-    for (auto&& [index, value] : ::ranges::views::enumerate(sealedTransactions))
-    {
-        if (!value)
-        {
-            missedTxs->emplace_back(txHashes[index]);
-        }
-        else if ((*value)->batchId() != blockHeader->number() && (*value)->batchId() != -1)
-        {
-            TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal unexpected wrong tx")
-                             << LOG_KV("blkNum", blockHeader->number())
-                             << LOG_KV("blkHash", blockHeader->hash().abridged())
-                             << LOG_KV("txHash", (*value)->hash().hexPrefixed())
-                             << LOG_KV("txBatchId", (*value)->batchId())
-                             << LOG_KV("txBatchHash", (*value)->batchHash().abridged());
-            // NOTE: In certain scenarios, a bug may occur here: The leader generates the
-            // (N)th proposal, which includes transaction A. The local node puts this
-            // proposal into the cache and sets the batchId of transaction A to (N) and the
-            // batchHash to the hash of the (N)th proposal.
-            //
-            // However, at this point, a view change happens, and the next leader completes
-            // the resetTx operation for the (N)th proposal and includes transaction A in
-            // the new block of the (N)th proposal.
-            //
-            // Meanwhile, the local node, due to the lengthy resetTx operation caused by the
-            // view change, has not completed it yet, and it receives the (N+1)th proposal
-            // sent by the new leader. During the verification process, transaction A has a
-            // consistent batchId, but the batchHash doesn't match the one in the (N+1)th
-            // proposal, leading to false positives.
-            //
-            // Therefore, we do not validate the consistency of the batchHash for now.
-            findErrorTxInBlock = true;
-            break;
         }
     }
 
@@ -954,8 +956,14 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::ConstPtr _bl
 bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
 {
     bool has = false;
-    auto values = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
-    return ::ranges::all_of(values, [](const auto& value) { return value.has_value(); });
+    auto sealedTransactions = m_sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    auto unsealTransactions =
+        m_unsealTransactions.batchFind<TxsMap::ReadAccessor>(std::move(_txsHashList));
+    return ::ranges::all_of(
+        ::ranges::views::zip(sealedTransactions, unsealTransactions), [](const auto& value) {
+            auto& [lhs, rhs] = value;
+            return lhs.has_value() || rhs.has_value();
+        });
 }
 
 HashListPtr MemoryStorage::getTxsHash(int _limit)

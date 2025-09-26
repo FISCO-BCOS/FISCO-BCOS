@@ -19,6 +19,8 @@
  */
 
 #include "EthEndpoint.h"
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/validator/TransactionValidator.h"
 #include <bcos-codec/rlp/Common.h>
@@ -685,9 +687,8 @@ task::Task<void> EthEndpoint::getTransactionByHash(
             buildJsonContent(result, response);
             co_return;
         }
-        auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
-            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH);
-        combineTxResponse(result, *txs->at(0), receipt.get(), block.get(), {});
+        auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
+        combineTxResponse(result, *txs->at(0), *receipt, blockHash);
     }
     catch (std::exception const& e)
     {
@@ -724,9 +725,11 @@ task::Task<void> EthEndpoint::getTransactionByBlockHashAndIndex(
     }
     auto transactions = block->transactions();
     auto tx = transactions.at(transactionIndex);
-    combineTxResponse(result, *tx, nullptr, block.get(), {});
+    auto receipt = co_await ledger::getReceipt(*ledger, tx->hash());
+    combineTxResponse(result, *tx, *receipt, hash);
     buildJsonContent(result, response);
 }
+
 task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     const Json::Value& request, Json::Value& response)
 {
@@ -740,14 +743,23 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     try
     {
         auto block = co_await ledger::getBlockData(
-            *ledger, blockNumber, bcos::ledger::TRANSACTIONS | bcos::ledger::HEADER);
-        if (!block || transactionIndex >= block->transactionsSize()) [[unlikely]]
+            *ledger, blockNumber, bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::HEADER);
+        if (!block || transactionIndex >= block->transactionsMetaDataSize()) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
         }
-        auto transactions = block->transactions();
-        auto tx = transactions.at(transactionIndex);
-        combineTxResponse(result, *tx, nullptr, block.get(), {});
+        auto txHashes = block->transactionMetaDatas();
+        auto txHash = txHashes[transactionIndex]->hash();
+        auto txList = std::make_shared<crypto::HashList>();
+        txList->emplace_back(txHash);
+        auto tx = co_await ledger::getTransactions(*ledger, std::move(txList));
+        if (tx->empty())
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid transaction index!"));
+        }
+        auto receipt = co_await ledger::getReceipt(*ledger, txHash);
+        auto blockHash = block->blockHeader()->hash();
+        combineTxResponse(result, *(*tx)[0], *receipt, blockHash);
     }
     catch (std::exception const& e)
     {
@@ -757,6 +769,7 @@ task::Task<void> EthEndpoint::getTransactionByBlockNumberAndIndex(
     }
     buildJsonContent(result, response);
 }
+
 task::Task<void> EthEndpoint::getTransactionReceipt(
     const Json::Value& request, Json::Value& response)
 {
@@ -777,9 +790,8 @@ task::Task<void> EthEndpoint::getTransactionReceipt(
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(InvalidParams, "Invalid transaction hash: " + hash.hexPrefixed()));
         }
-        auto block = co_await ledger::getBlockData(*ledger, receipt->blockNumber(),
-            bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS_HASH | bcos::ledger::RECEIPTS);
-        combineReceiptResponse(result, *receipt, *txs->at(0), block.get());
+        auto blockHash = co_await ledger::getBlockHash(*ledger, receipt->blockNumber());
+        combineReceiptResponse(result, *receipt, *txs->at(0), blockHash);
     }
     catch (std::exception const& e)
     {

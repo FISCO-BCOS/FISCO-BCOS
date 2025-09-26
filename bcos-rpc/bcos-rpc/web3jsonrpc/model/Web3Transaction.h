@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>

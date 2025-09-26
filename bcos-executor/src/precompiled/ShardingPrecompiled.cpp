@@ -108,8 +108,8 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
                                  << LOG_KV("origin", _callParameters->m_origin)
                                  << LOG_KV("sender", _callParameters->m_sender);
 
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("ShardPrecompiled call: request should only call from SDK"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "ShardPrecompiled call: request should only call from SDK"));
     }
 
     if (blockContext.isAuthCheck() &&
@@ -120,7 +120,8 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
                                  << LOG_KV("origin", _callParameters->m_origin)
                                  << LOG_KV("sender", _callParameters->m_sender);
 
-        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled call: Permission denied."));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("ShardPrecompiled call: Permission denied."));
     }
 
     uint32_t func = getParamFunc(_callParameters->input());
@@ -159,8 +160,9 @@ std::shared_ptr<PrecompiledExecResult> ShardingPrecompiled::call(
                 << LOG_KV("origin", _callParameters->m_origin)
                 << LOG_KV("sender", _callParameters->m_sender);
 
-            BOOST_THROW_EXCEPTION(PrecompiledError(
-                "ShardPrecompiled call: BFS request should only call from ShardPrecompiled"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment(
+                    "ShardPrecompiled call: BFS request should only call from ShardPrecompiled"));
         }
     }
 
@@ -185,8 +187,8 @@ void ShardingPrecompiled::makeShard(
                                  << LOG_DESC(
                                         "makeShard: Shard name should not be a path, please check")
                                  << LOG_KV("shardName", shardName);
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("makeShard: Shard name should not be a path, please check"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "makeShard: Shard name should not be a path, please check"));
         return;
     }
 
@@ -213,7 +215,8 @@ void ShardingPrecompiled::makeShard(
 
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS makeDir error: ")
                                  << message;
-        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled BFS makeDir error: " + message));
+        BOOST_THROW_EXCEPTION(PrecompiledError{}
+                              << errinfo_comment("ShardPrecompiled BFS makeDir error: " + message));
     }
 }
 
@@ -238,8 +241,8 @@ void ShardingPrecompiled::linkShard(
                                  << LOG_DESC(
                                         "linkShard: Shard name should not be a path, please check")
                                  << LOG_KV("shardName", shardName);
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("linkShard: Shard name should not be a path, please check"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "linkShard: Shard name should not be a path, please check"));
         return;
     }
 
@@ -249,8 +252,8 @@ void ShardingPrecompiled::linkShard(
                                << LOG_DESC("linkShard: invalid contract address")
                                << LOG_KV("contractAddress", contractAddress);
 
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError("linkShard: invalid contract address: " + contractAddress));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "linkShard: invalid contract address: " + contractAddress));
         return;
     }
 
@@ -264,8 +267,9 @@ void ShardingPrecompiled::linkShard(
                                << LOG_KV("contractAddress", contractAddress)
                                << LOG_KV("historyShard", historyShard);
 
-        BOOST_THROW_EXCEPTION(PrecompiledError(
-            "linkShard: contract has already belongs to a shard: " + historyShard));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment(
+                "linkShard: contract has already belongs to a shard: " + historyShard));
         return;
     }
 
@@ -287,7 +291,8 @@ void ShardingPrecompiled::linkShard(
     if (!isSuccess(_callParameters, codec))
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ShardPrecompiled") << LOG_DESC("BFS link error");
-        BOOST_THROW_EXCEPTION(PrecompiledError("ShardPrecompiled BFS link error"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("ShardPrecompiled BFS link error"));
     }
 }
 
@@ -313,7 +318,8 @@ void ShardingPrecompiled::getContractShard(
                                << LOG_KV("contractAddress", contractAddress);
 
         BOOST_THROW_EXCEPTION(
-            PrecompiledError("getContractShard: invalid contract address: " + contractAddress));
+            PrecompiledError{} << errinfo_comment(
+                "getContractShard: invalid contract address: " + contractAddress));
         return;
     }
 

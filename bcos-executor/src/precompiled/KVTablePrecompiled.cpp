@@ -70,7 +70,7 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     auto table = _executive->storage().openTable(tableName);
     if (!table.has_value())
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError(tableName + " does not exist"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(tableName + " does not exist"));
     }
 
     if (func == name2Selector[KV_TABLE_METHOD_SET])
@@ -87,7 +87,7 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTablePrecompiled")
                               << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError("KVTablePrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("KVTablePrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());
@@ -133,7 +133,7 @@ void KVTablePrecompiled::set(const std::string& tableName,
 
     if (key.empty() && blockContext.blockVersion() >= BlockVersion::V3_3_VERSION) [[unlikely]]
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Table insert entry key is empty"));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Table insert entry key is empty"));
     }
 
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);

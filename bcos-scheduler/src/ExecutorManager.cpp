@@ -125,7 +125,7 @@ bool ExecutorManager::removeExecutor(const std::string_view& name)
             auto count = m_contract2ExecutorInfo.unsafe_erase(*contractIt);
             if (count < 1)
             {
-                BOOST_THROW_EXCEPTION(bcos::Exception("Can't find contract in container"));
+                BOOST_THROW_EXCEPTION(bcos::Exception{} << errinfo_comment("Can't find contract in container"));
             }
         }
 

@@ -36,14 +36,13 @@ void SealingManager::resetSealing()
 }
 
 void SealingManager::appendTransactions(
-    TxsMetaDataQueue& _txsQueue, bcos::protocol::Block const& _fetchedTxs)
+    TxsMetaDataQueue& _txsQueue, const std::vector<protocol::TransactionMetaData::Ptr>& _fetchedTxs)
 {
     WriteGuard lock(x_pendingTxs);
     // append the system transactions
-    for (size_t i = 0; i < _fetchedTxs.transactionsMetaDataSize(); i++)
+    for (const auto& metaData : _fetchedTxs)
     {
-        _txsQueue.emplace_back(
-            std::const_pointer_cast<TransactionMetaData>(_fetchedTxs.transactionMetaData(i)));
+        _txsQueue.emplace_back(std::const_pointer_cast<TransactionMetaData>(metaData));
     }
     m_onReady();
 }
@@ -111,9 +110,12 @@ void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag
         });
 }
 
-void SealingManager::notifyResetProposal(bcos::protocol::Block const& _block)
+void SealingManager::notifyResetProposal(
+    const std::vector<protocol::TransactionMetaData::Ptr>& metaDatas)
 {
-    auto txsHashList = ::ranges::to<std::vector>(_block.transactionHashes());
+    auto txsHashList = ::ranges::views::transform(metaDatas, [](auto& metaData) {
+        return metaData->hash();
+    }) | ::ranges::to<std::vector>();
     notifyResetTxsFlag(txsHashList, false);
 }
 
@@ -129,7 +131,12 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
-    blockHeader->setTimestamp(m_config->nodeTimeMaintenance()->getAlignedTime());
+    auto timestamp = m_config->nodeTimeMaintenance()->getAlignedTime();
+    if (timestamp <= m_latestTimestamp)
+    {  // make sure the timestamp is larger than the latestTimestamp in milliseconds
+        timestamp = m_latestTimestamp + 1;
+    }
+    blockHeader->setTimestamp(timestamp);
     blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
     auto txsSize =
@@ -257,7 +264,7 @@ bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
     try
     {
         auto [_txsHashList, _sysTxsList] = m_config->txpool()->sealTxs(txsToFetch);
-        if (_txsHashList->transactionsHashSize() == 0 && _sysTxsList->transactionsHashSize() == 0)
+        if (_txsHashList.size() == 0 && _sysTxsList.size() == 0)
         {
             return FetchResult::NO_TRANSACTION;
         }
@@ -265,24 +272,24 @@ bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
         bool abort = true;
         if ((m_sealingNumber >= startSealingNumber) && (m_sealingNumber <= endSealingNumber))
         {
-            appendTransactions(m_pendingTxs, *_txsHashList);
-            appendTransactions(m_pendingSysTxs, *_sysTxsList);
+            appendTransactions(m_pendingTxs, _txsHashList);
+            appendTransactions(m_pendingSysTxs, _sysTxsList);
             abort = false;
         }
         else
         {
             SEAL_LOG(INFO) << LOG_DESC("fetchTransactions finish: abort the expired txs")
-                           << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
-                           << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize());
+                           << LOG_KV("txsSize", _txsHashList.size())
+                           << LOG_KV("sysTxsSize", _sysTxsList.size());
             // Note: should reset the aborted txs
-            notifyResetProposal(*_txsHashList);
-            notifyResetProposal(*_sysTxsList);
+            notifyResetProposal(_txsHashList);
+            notifyResetProposal(_sysTxsList);
         }
 
         m_onReady();
         SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
-                        << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
-                        << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                        << LOG_KV("txsSize", _txsHashList.size())
+                        << LOG_KV("sysTxsSize", _sysTxsList.size())
                         << LOG_KV("pendingSize", m_pendingTxs.size())
                         << LOG_KV("pendingSysSize", m_pendingSysTxs.size())
                         << LOG_KV("startSealingNumber", startSealingNumber)

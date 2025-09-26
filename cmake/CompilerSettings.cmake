@@ -78,7 +78,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
     # Configuration-specific compiler settings.
     set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -DNDEBUG")
 
     if("${LINKER}" MATCHES "gold")
@@ -152,7 +152,6 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
 
     if(SANITIZE_ADDRESS)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fsanitize-address-use-after-scope -fsanitize-recover=all")
-        # add_compile_options(-DBOOST_USE_ASAN)
     endif()
 
     if(SANITIZE_THREAD)
