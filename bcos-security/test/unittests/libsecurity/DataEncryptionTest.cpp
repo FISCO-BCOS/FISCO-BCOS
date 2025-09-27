@@ -6,10 +6,12 @@
 
 using namespace bcos::security;
 
-namespace bcos
+
+namespace bcos::test
 {
-namespace test
-{
+
+BOOST_AUTO_TEST_SUITE(DataEntryptionTest)
+
 BOOST_AUTO_TEST_CASE(testDataEncryption_normal)
 {
     BcosKmsDataEncryption dataEncryption("bcos_data_key", false);
@@ -37,19 +39,22 @@ BOOST_AUTO_TEST_CASE(testDataEncryption_sm)
 }
 
 // need a HSM environment
-// BOOST_AUTO_TEST_CASE(testDataEncryption_hsmSM4)
-// {
-//     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
-//     std::string configFilePath =
-//     "/root/lucasli/FISCO-BCOS/tools/BcosAirBuilder/2nodes-hsm/127.0.0.1/node0/config.ini";
-//     nodeConfig->loadConfig(configFilePath);
-//     auto hsmdataEncryption = std::make_shared<HsmDataEncryption>(nodeConfig);
+BOOST_AUTO_TEST_CASE(testDataEncryption_hsmSM4)
+{
+#if 0
+    auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
+    std::string configFilePath =
+    "/root/lucasli/FISCO-BCOS/tools/BcosAirBuilder/2nodes-hsm/127.0.0.1/node0/config.ini";
+    nodeConfig->loadConfig(configFilePath);
+    auto hsmdataEncryption = std::make_shared<HsmDataEncryption>(nodeConfig);
 
-//     std::string originData = "hello world!";
-//     std::string encryptData = hsmdataEncryption->encrypt(originData);
-//     std::string decryptData = hsmdataEncryption->decrypt(encryptData);
+    std::string originData = "hello world!";
+    std::string encryptData = hsmdataEncryption->encrypt(originData);
+    std::string decryptData = hsmdataEncryption->decrypt(encryptData);
 
-//     BOOST_CHECK_EQUAL(originData, decryptData);
-// }
-}  // namespace test
-}  // namespace bcos
+    BOOST_CHECK_EQUAL(originData, decryptData);
+#endif
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+}  // namespace bcos::test

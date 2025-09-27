@@ -33,7 +33,7 @@ public:
     {
         if (m_split == std::string::npos)
         {
-            BOOST_THROW_EXCEPTION(NoTableSpliterError());
+            throwWithTrace(NoTableSpliterError());
         }
     }
     explicit StateKey(StateKeyView const& view);

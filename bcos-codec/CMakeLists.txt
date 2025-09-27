@@ -16,9 +16,6 @@
 # limitations under the License.
 # ------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.12)
-project(bcos-codec VERSION ${VERSION})
-
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 

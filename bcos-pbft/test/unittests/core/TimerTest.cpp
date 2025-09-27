@@ -52,6 +52,7 @@ private:
 };
 
 BOOST_FIXTURE_TEST_SUITE(TimerTest, TestPromptFixture)
+
 BOOST_AUTO_TEST_CASE(testTimer)
 {
     uint64_t timeoutInterval = 200;
@@ -104,6 +105,7 @@ BOOST_AUTO_TEST_CASE(testTimer)
     BOOST_CHECK(timer->triggerTimeout() == true);
     timer->stop();
 }
+
 BOOST_AUTO_TEST_CASE(testPBFTTimer)
 {
     uint64_t timeoutInterval = 100;
