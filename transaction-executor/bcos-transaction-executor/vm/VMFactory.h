@@ -22,6 +22,7 @@
 #pragma once
 #include "VMInstance.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/Exceptions.h"
 #include <evmone/evmone.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
@@ -33,9 +34,7 @@ enum class VMKind
     evmone,
 };
 
-// clang-format off
-struct UnknownVMError : public bcos::Error {};
-// clang-format on
+DERIVE_BCOS_EXCEPTION(UnknownVMError);
 
 class VMFactory
 {
