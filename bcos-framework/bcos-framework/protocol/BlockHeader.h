@@ -22,6 +22,7 @@
 #include "Exceptions.h"
 #include "ProtocolTypeDef.h"
 #include "bcos-utilities/AnyHolder.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -101,18 +102,12 @@ public:
         setTimestamp(_timestamp);
     }
 
-    // version returns the version of the blockHeader
     virtual uint32_t version() const = 0;
-    // parentInfo returns the parent information, including (parentBlockNumber, parentHash)
-    virtual RANGES::any_view<ParentInfo, RANGES::category::input | RANGES::category::sized>
+    virtual ::ranges::any_view<ParentInfo, ::ranges::category::input | ::ranges::category::sized>
     parentInfo() const = 0;
-    // txsRoot returns the txsRoot of the current block
     virtual bcos::crypto::HashType txsRoot() const = 0;
-    // receiptsRoot returns the receiptsRoot of the current block
     virtual bcos::crypto::HashType receiptsRoot() const = 0;
-    // stateRoot returns the stateRoot of the current block
     virtual bcos::crypto::HashType stateRoot() const = 0;
-    // number returns the number of the current block
     virtual BlockNumber number() const = 0;
     virtual u256 gasUsed() const = 0;
     virtual int64_t timestamp() const = 0;
@@ -123,9 +118,10 @@ public:
     virtual bytesConstRef extraData() const = 0;
     virtual gsl::span<const Signature> signatureList() const = 0;
     virtual gsl::span<const uint64_t> consensusWeights() const = 0;
+    virtual bcos::bytesConstRef logsBloom() const = 0;
 
     virtual void setVersion(uint32_t _version) = 0;
-    virtual void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
+    virtual void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
 
     virtual void setTxsRoot(bcos::crypto::HashType _txsRoot) = 0;
     virtual void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) = 0;
@@ -146,6 +142,7 @@ public:
 
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
+    virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
 
     virtual size_t size() const = 0;
 };

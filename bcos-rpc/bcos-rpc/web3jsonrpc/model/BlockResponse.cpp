@@ -1,5 +1,4 @@
 #include "BlockResponse.h"
-#include "Bloom.h"
 #include "Log.h"
 #include <range/v3/view/enumerate.hpp>
 
@@ -32,8 +31,7 @@ void bcos::rpc::combineBlockResponse(
             logs.push_back(std::move(logObj));
         }
     }
-    auto logsBloom = getLogsBloom(logs);
-    result["logsBloom"] = toHexStringWithPrefix(logsBloom);
+    result["logsBloom"] = toHexStringWithPrefix(block.blockHeader()->logsBloom());
     result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();
     result["stateRoot"] = blockHeader->stateRoot().hexPrefixed();
     result["receiptsRoot"] = blockHeader->receiptsRoot().hexPrefixed();

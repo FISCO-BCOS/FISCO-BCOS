@@ -25,6 +25,7 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <fmt/format.h>
@@ -173,6 +174,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             {
                 receipt->setTransactionIndex(index);
                 receipt->setLogIndex(logIndex);
+                receipt->setLogBlooms(getLogsBloom(::ranges::views::all(receipt->logEntries())));
                 logIndex += receipt->logEntries().size();
                 totalGasUsed += receipt->gasUsed();
                 receipt->setCumulativeGasUsed(totalGasUsed.str());
@@ -452,6 +454,11 @@ private:
             m_results.pop_back();
             resultsLock.unlock();
 
+            Bloom logBloom;
+            for (auto& receipt : result.m_receipts)
+            {
+                orBloom(logBloom, receipt->logBlooms());
+            }
             result.m_block->setBlockHeader(header);
             typename MultiLayerStorage::MutableStorage prewriteStorage;
             if (result.m_block->blockHeader()->number() != 0)
