@@ -21,7 +21,6 @@
 
 #pragma once
 // if windows, manual include tup/Tars.h first
-#include "bcos-utilities/AnyHolder.h"
 #ifdef _WIN32
 #include <tup/Tars.h>
 #endif

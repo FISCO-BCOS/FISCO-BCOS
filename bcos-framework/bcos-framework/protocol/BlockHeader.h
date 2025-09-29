@@ -22,9 +22,11 @@
 #include "Exceptions.h"
 #include "ProtocolTypeDef.h"
 #include "bcos-utilities/AnyHolder.h"
+#include "bcos-utilities/Exceptions.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
+#include <type_traits>
 
 namespace bcos::protocol
 {
@@ -73,9 +75,9 @@ public:
         auto sealers = sealerList();
         if (signatures.size() < sealers.size())
         {
-            BOOST_THROW_EXCEPTION(InvalidBlockHeader() << errinfo_comment(
-                                      "Invalid blockHeader for the size of sealerList "
-                                      "is smaller than the size of signatureList"));
+            throwWithTrace(InvalidBlockHeader()
+                           << errinfo_comment("Invalid blockHeader for the size of sealerList "
+                                              "is smaller than the size of signatureList"));
         }
         for (const auto& signature : signatures)
         {
@@ -85,10 +87,9 @@ public:
                     std::shared_ptr<const bytes>(&((sealers)[sealerIndex]), [](const bytes*) {}),
                     hash(), bytesConstRef(signatureData.data(), signatureData.size())))
             {
-                BOOST_THROW_EXCEPTION(
-                    InvalidSignatureList()
-                    << errinfo_comment("Invalid signatureList for verify failed, signatureData:" +
-                                       *toHexString(signatureData)));
+                throwWithTrace(InvalidSignatureList() << errinfo_comment(
+                                   "Invalid signatureList for verify failed, signatureData:" +
+                                   *toHexString(signatureData)));
             }
         }
     }
@@ -150,4 +151,5 @@ public:
 };
 
 using AnyBlockHeader = AnyHolder<BlockHeader, 48>;
+
 }  // namespace bcos::protocol
