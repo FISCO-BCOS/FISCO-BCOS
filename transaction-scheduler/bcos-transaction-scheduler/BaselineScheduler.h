@@ -174,7 +174,8 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             {
                 receipt->setTransactionIndex(index);
                 receipt->setLogIndex(logIndex);
-                receipt->setLogBlooms(getLogsBloom(::ranges::views::all(receipt->logEntries())));
+                auto logBloom = getLogsBloom(receipt->logEntries());
+                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
                 logIndex += receipt->logEntries().size();
                 totalGasUsed += receipt->gasUsed();
                 receipt->setCumulativeGasUsed(totalGasUsed.str());
@@ -454,10 +455,10 @@ private:
             m_results.pop_back();
             resultsLock.unlock();
 
-            Bloom logBloom;
+            Bloom logsBloom;
             for (auto& receipt : result.m_receipts)
             {
-                orBloom(logBloom, receipt->logBlooms());
+                orBloom(logsBloom, receipt->logsBloom());
             }
             result.m_block->setBlockHeader(header);
             typename MultiLayerStorage::MutableStorage prewriteStorage;

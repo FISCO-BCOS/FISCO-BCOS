@@ -58,7 +58,9 @@ Bloom getLogsBloom(Logs logs)
     Bloom bloom{};
     for (auto const& log : logs)
     {
-        bytesToBloom(log.address(), bloom);
+        // Convert string_view to RefDataContainer<const unsigned char>
+        auto addressView = log.address();
+        bytesToBloom(RefDataContainer(reinterpret_cast<const byte*>(addressView.data()), addressView.size()), bloom);
         auto topics = log.topics();
         for (const auto& topic : topics)
         {
