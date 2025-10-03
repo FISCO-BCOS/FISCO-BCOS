@@ -78,7 +78,7 @@ public:
     void setLogIndex(size_t index) override;
 
     const bcostars::TransactionReceipt& inner() const;
-    bcostars::TransactionReceipt& mutableInner();
+    bcostars::TransactionReceipt& inner();
 
     void setInner(const bcostars::TransactionReceipt& inner);
     void setInner(bcostars::TransactionReceipt&& inner);

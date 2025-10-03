@@ -11,7 +11,7 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(
 {
     auto tarsInput = dynamic_cast<TransactionReceiptImpl&>(input);
     return std::make_shared<TransactionReceiptImpl>(
-        [m_inner = std::move(tarsInput.mutableInner())]() mutable { return &m_inner; });
+        [m_inner = std::move(tarsInput.inner())]() mutable { return &m_inner; });
 }
 
 
@@ -24,11 +24,11 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(
 
     transactionReceipt->decode(_receiptData);
 
-    auto& inner = transactionReceipt->mutableInner();
-    if (inner.dataHash.empty())
+    auto& data = transactionReceipt->inner();
+    if (data.dataHash.empty())
     {
         // Update the hash field
-        bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
+        bcos::concepts::hash::calculate(data, m_hashImpl->hasher(), data.dataHash);
 
         BCOS_LOG(TRACE) << LOG_BADGE("createReceipt") << LOG_DESC("recalculate receipt dataHash");
     }
@@ -48,17 +48,17 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt(bcos::u256 cons
 {
     auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
         [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
-    auto& inner = transactionReceipt->mutableInner();
-    inner.data.version = 0;
+    auto& data = transactionReceipt->inner();
+    data.data.version = 0;
     // inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
-    inner.data.gasUsed = gasUsed.backend().str({}, {});
-    inner.data.contractAddress = std::move(contractAddress);
-    inner.data.status = status;
-    inner.data.output.assign(output.begin(), output.end());
+    data.data.gasUsed = gasUsed.backend().str({}, {});
+    data.data.contractAddress = std::move(contractAddress);
+    data.data.status = status;
+    data.data.output.assign(output.begin(), output.end());
     transactionReceipt->setLogEntries(logEntries);
-    inner.data.blockNumber = blockNumber;
+    data.data.blockNumber = blockNumber;
 
-    bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
+    bcos::concepts::hash::calculate(data, m_hashImpl->hasher(), data.dataHash);
     return transactionReceipt;
 }
 bcostars::protocol::TransactionReceiptImpl::Ptr
@@ -69,18 +69,18 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt2(bcos::u256 con
 {
     auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
         [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
-    auto& inner = transactionReceipt->mutableInner();
-    inner.data.version = static_cast<uint32_t>(version);
-    inner.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
-    inner.data.contractAddress = std::move(contractAddress);
-    inner.data.status = status;
-    inner.data.output.assign(output.begin(), output.end());
+    auto& data = transactionReceipt->inner();
+    data.data.version = std::bit_cast<uint32_t>(version);
+    data.data.gasUsed = boost::lexical_cast<std::string>(gasUsed);
+    data.data.contractAddress = std::move(contractAddress);
+    data.data.status = status;
+    data.data.output.assign(output.begin(), output.end());
     transactionReceipt->setLogEntries(logEntries);
-    inner.data.blockNumber = blockNumber;
-    inner.data.effectiveGasPrice = std::move(effectiveGasPrice);
+    data.data.blockNumber = blockNumber;
+    data.data.effectiveGasPrice = std::move(effectiveGasPrice);
 
     // Update the hash field
-    bcos::concepts::hash::calculate(inner, m_hashImpl->hasher(), inner.dataHash);
+    bcos::concepts::hash::calculate(data, m_hashImpl->hasher(), data.dataHash);
     return transactionReceipt;
 }
 bcostars::protocol::TransactionReceiptFactoryImpl::TransactionReceiptFactoryImpl(
