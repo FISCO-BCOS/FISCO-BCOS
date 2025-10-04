@@ -1,7 +1,7 @@
 #include "ReceiptResponse.h"
-#include "Bloom.h"
+#include "Log.h"
+#include "Web3Transaction.h"
 #include "bcos-crypto/ChecksumAddress.h"
-#include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <cstdint>
@@ -83,8 +83,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
             .data = receiptLog[i].takeData()};
         logs.push_back(std::move(logObj));
     }
-    auto logsBloom = getLogsBloom(logs);
-    result["logsBloom"] = toHexStringWithPrefix(logsBloom);
+    result["logsBloom"] = toHexStringWithPrefix(receipt.logsBloom());
     auto type = TransactionType::Legacy;
     if (!tx.extraTransactionBytes().empty())
     {

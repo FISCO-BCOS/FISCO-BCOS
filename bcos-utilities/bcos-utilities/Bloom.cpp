@@ -13,32 +13,16 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Bloom.h
+ * @file Bloom.cpp
  * @author: kyonGuo
  * @date 2024/4/12
  */
 
-#pragma once
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-rpc/web3jsonrpc/model/Log.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <concepts/bcos-concepts/Basic.h>
+#include "Bloom.h"
 
-namespace bcos::rpc
-{
-constexpr size_t BloomBytesSize = 256;
-constexpr uint8_t LOWER_3_BITS = 0b00000111;
-using Bloom = std::array<bcos::byte, BloomBytesSize>;
+using namespace bcos;
 
-void bytesToBloom(bcos::concepts::ByteBuffer auto const& _bytes, Bloom& _bloom);
-
-Bloom getLogsBloom(Logs const& logs);
-
-inline std::string_view toStringView(Bloom const& bloom)
+std::string_view bcos::toStringView(Bloom const& bloom)
 {
     return {reinterpret_cast<const char*>(bloom.data()), bloom.size()};
 }
-
-}  // namespace bcos::rpc

@@ -304,3 +304,16 @@ int64_t bcostars::protocol::BlockHeaderImpl::sealer() const
 {
     return m_inner()->data.sealer;
 }
+
+bcos::bytesConstRef bcostars::protocol::BlockHeaderImpl::logsBloom() const
+{
+    const auto& data = inner();
+    return {(const unsigned char*)data.logsBloom.data(), data.logsBloom.size()};
+}
+
+void bcostars::protocol::BlockHeaderImpl::setLogsBloom(bcos::bytesConstRef logsBloom)
+{
+    auto& data = inner();
+    data.logsBloom.assign(logsBloom.data(), logsBloom.data() + logsBloom.size());
+    clearDataHash();
+}

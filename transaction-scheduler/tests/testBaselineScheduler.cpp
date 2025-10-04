@@ -20,6 +20,7 @@
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <fakeit.hpp>
 #include <future>
 
@@ -77,8 +78,17 @@ struct MockScheduler
             ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
                 auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
                 constexpr static std::string_view str = "abc";
-                receipt->mutableInner().dataHash.assign(str.begin(), str.end());
-                receipt->mutableInner().data.gasUsed = "100";
+                auto& inner = receipt->inner();
+                inner.dataHash.assign(str.begin(), str.end());
+                inner.data.gasUsed = "100";
+
+                bytes logAddress;
+                logAddress.assign(str.begin(), str.end());
+                bcos::protocol::LogEntry logEntry{
+                    logAddress, bcos::h256s{bcos::h256{}}, bcos::bytes{}};
+                std::vector<bcos::protocol::LogEntry> logs;
+                logs.emplace_back(std::move(logEntry));
+                receipt->setLogEntries(logs);
                 return receipt;
             }) |
             ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
@@ -227,6 +237,20 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
                     co_await ledger::getBlockNumber(view, blockHeader->hash(), ledger::fromStorage);
                 BOOST_CHECK_EQUAL(blockNumber.value(), blockHeader->number());
             }());
+
+            // 校验 executeBlock 后每条回执的 logsBloom 是否与日志计算结果一致
+            for (auto receipt : block->receipts())
+            {
+                // 重新计算期望的 bloom
+                auto logsSpan = receipt->logEntries();
+                std::vector<bcos::protocol::LogEntry> logs{logsSpan.begin(), logsSpan.end()};
+                auto expectedBloom = bcos::getLogsBloom(logs);
+
+                auto actualView = receipt->logsBloom();
+                BOOST_CHECK_EQUAL(expectedBloom.size(), actualView.size());
+                BOOST_CHECK(
+                    std::equal(expectedBloom.begin(), expectedBloom.end(), actualView.data()));
+            }
             end.set_value();
         });
 

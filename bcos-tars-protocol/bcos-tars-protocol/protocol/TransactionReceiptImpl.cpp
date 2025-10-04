@@ -105,9 +105,9 @@ bcos::protocol::LogEntries bcostars::protocol::TransactionReceiptImpl::takeLogEn
 {
     if (m_logEntries.empty())
     {
-        auto& innter = mutableInner();
-        m_logEntries.reserve(innter.data.logEntries.size());
-        for (auto& it : innter.data.logEntries)
+        auto& data = inner();
+        m_logEntries.reserve(data.data.logEntries.size());
+        for (auto& it : data.data.logEntries)
         {
             auto bcosLogEntry = takeToBcosLogEntry(std::move(it));
             m_logEntries.push_back(std::move(bcosLogEntry));
@@ -132,7 +132,7 @@ const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::
 {
     return *m_inner();
 }
-bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::mutableInner()
+bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner()
 {
     return *m_inner();
 }
