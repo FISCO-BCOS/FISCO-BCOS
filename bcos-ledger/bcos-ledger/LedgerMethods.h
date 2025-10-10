@@ -66,7 +66,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlock> /*unused*/, LedgerInter
                 storage);
     }
 
-    co_return co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
+    co_await prewriteBlockToStorage(ledger, std::move(transactions), std::move(block),
         withTransactionsAndReceipts, std::move(legacyStorage));
 }
 

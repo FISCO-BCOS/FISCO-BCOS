@@ -38,6 +38,7 @@ public:
     bytesConstRef extraData() const override { return {}; }
     gsl::span<const protocol::Signature> signatureList() const override { return {}; }
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
+
     void setVersion(uint32_t _version) override {}
     void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override {}

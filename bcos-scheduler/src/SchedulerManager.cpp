@@ -4,7 +4,7 @@ using namespace bcos::scheduler;
 
 // by pbft & sync
 void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+    std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
         callback)
 {
     auto [ok, message] = checkAndInit();
@@ -31,7 +31,7 @@ void SchedulerManager::executeBlock(bcos::protocol::Block::Ptr block, bool verif
 
 // by pbft & sync
 void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
-    std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
+    std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback)
 {
     auto [ok, message] = checkAndInit();
 
@@ -56,7 +56,7 @@ void SchedulerManager::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 
 // by console, query committed and committing executing
 void SchedulerManager::status(
-    std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback)
+    std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback)
 {
     auto [ok, message] = checkAndInit();
 
@@ -80,7 +80,7 @@ void SchedulerManager::status(
 
 // by rpc
 void SchedulerManager::call(protocol::Transaction::Ptr tx,
-    std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
+    std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
     auto [ok, message] = checkAndInit();
 
@@ -103,7 +103,7 @@ void SchedulerManager::call(protocol::Transaction::Ptr tx,
 }
 
 // clear all status
-void SchedulerManager::reset(std::function<void(Error::Ptr&&)> callback)
+void SchedulerManager::reset(std::function<void(Error::Ptr)> callback)
 {
     auto [ok, message] = checkAndInit();
 
@@ -189,7 +189,7 @@ void SchedulerManager::getABI(
 }
 
 void SchedulerManager::preExecuteBlock(
-    bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr&&)> callback)
+    bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr)> callback)
 {
     auto [ok, message] = checkAndInit();
 

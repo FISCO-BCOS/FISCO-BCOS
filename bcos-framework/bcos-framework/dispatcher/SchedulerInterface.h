@@ -40,23 +40,23 @@ public:
 
     // by pbft & sync
     virtual void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) = 0;
 
     // by pbft & sync
     virtual void commitBlock(bcos::protocol::BlockHeader::Ptr header,
-        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback) = 0;
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) = 0;
 
     // by console, query committed committing executing
     virtual void status(
-        std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback) = 0;
+        std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback) = 0;
 
     // by rpc
     virtual void call(protocol::Transaction::Ptr tx,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) = 0;
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>) = 0;
 
     // clear all status
-    virtual void reset(std::function<void(Error::Ptr&&)> callback) = 0;
+    virtual void reset(std::function<void(Error::Ptr)> callback) = 0;
     virtual void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) = 0;
 
@@ -65,7 +65,7 @@ public:
 
     // for performance, do the things before executing block in executor.
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(Error::Ptr&&)> callback) = 0;
+        std::function<void(Error::Ptr)> callback) = 0;
 
     virtual void stop() {};
     virtual void setVersion(int version, ledger::LedgerConfig::Ptr ledgerConfig) {};

@@ -25,6 +25,7 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <fmt/format.h>
@@ -173,6 +174,8 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
             {
                 receipt->setTransactionIndex(index);
                 receipt->setLogIndex(logIndex);
+                auto logBloom = getLogsBloom(receipt->logEntries());
+                receipt->setLogsBloom({logBloom.data(), logBloom.size()});
                 logIndex += receipt->logEntries().size();
                 totalGasUsed += receipt->gasUsed();
                 receipt->setCumulativeGasUsed(totalGasUsed.str());
@@ -452,7 +455,13 @@ private:
             m_results.pop_back();
             resultsLock.unlock();
 
+            Bloom logsBloom;
+            for (auto& receipt : result.m_receipts)
+            {
+                orBloom(logsBloom, receipt->logsBloom());
+            }
             result.m_block->setBlockHeader(header);
+            result.m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
             typename MultiLayerStorage::MutableStorage prewriteStorage;
             if (result.m_block->blockHeader()->number() != 0)
             {
@@ -558,7 +567,7 @@ public:
     ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
             callback) override
     {
         task::wait([](decltype(this) self, bcos::protocol::Block::Ptr block, bool verify,
@@ -568,7 +577,7 @@ public:
     }
 
     void commitBlock(protocol::BlockHeader::Ptr header,
-        std::function<void(Error::Ptr&&, ledger::LedgerConfig::Ptr&&)> callback) override
+        std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr)> callback) override
     {
         task::wait([](decltype(this) self, protocol::BlockHeader::Ptr blockHeader,
                        decltype(callback) callback) -> task::Task<void> {
@@ -576,15 +585,14 @@ public:
         }(this, std::move(header), std::move(callback)));
     }
 
-    void status(
-        [[maybe_unused]] std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>
+    void status([[maybe_unused]] std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)>
             callback) override
     {
         callback({}, {});
     }
 
     void call(protocol::Transaction::Ptr transaction,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override
     {
         task::wait([](decltype(this) self, protocol::Transaction::Ptr transaction,
                        decltype(callback) callback) -> task::Task<void> {
@@ -602,7 +610,7 @@ public:
         }(this, std::move(transaction), std::move(callback)));
     }
 
-    void reset([[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
+    void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override
     {
         callback(nullptr);
     }
@@ -658,7 +666,7 @@ public:
 
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
         [[maybe_unused]] bool verify,
-        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override
+        [[maybe_unused]] std::function<void(Error::Ptr)> callback) override
     {
         callback(nullptr);
     }

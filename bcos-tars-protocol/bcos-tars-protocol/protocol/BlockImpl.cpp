@@ -256,3 +256,15 @@ size_t bcostars::protocol::BlockImpl::size() const
     }
     return size;
 }
+
+bcos::bytesConstRef bcostars::protocol::BlockImpl::logsBloom() const
+{
+    const auto& data = inner();
+    return {(const unsigned char*)data.logsBloom.data(), data.logsBloom.size()};
+}
+
+void bcostars::protocol::BlockImpl::setLogsBloom(bcos::bytesConstRef logsBloom)
+{
+    auto& data = inner();
+    data.logsBloom.assign(logsBloom.data(), logsBloom.data() + logsBloom.size());
+}

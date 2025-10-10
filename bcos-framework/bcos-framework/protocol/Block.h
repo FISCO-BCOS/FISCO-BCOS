@@ -103,6 +103,9 @@ public:
         return blockHeader()->number() < block.blockHeader()->number();
     }
     virtual size_t size() const = 0;
+
+    virtual bcos::bytesConstRef logsBloom() const = 0;
+    virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
 };
 using Blocks = std::vector<Block::Ptr>;
 using BlocksPtr = std::shared_ptr<Blocks>;

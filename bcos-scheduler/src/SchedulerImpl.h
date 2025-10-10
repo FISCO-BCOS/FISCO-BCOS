@@ -63,20 +63,19 @@ public:
     SchedulerImpl& operator=(SchedulerImpl&&) = delete;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override;
 
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
-        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
-        override;
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override;
 
     void status(
-        std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback) override;
+        std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback) override;
 
     void call(protocol::Transaction::Ptr tx,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) override;
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>) override;
 
-    void reset(std::function<void(Error::Ptr&&)> callback) override;
+    void reset(std::function<void(Error::Ptr)> callback) override;
     // register a block number receiver
     virtual void registerBlockNumberReceiver(
         std::function<void(protocol::BlockNumber blockNumber)> callback);
@@ -92,7 +91,7 @@ public:
             txNotifier);
 
     void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(Error::Ptr&&)> callback) override;
+        std::function<void(Error::Ptr)> callback) override;
 
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
@@ -153,7 +152,7 @@ private:
         std::function<void(std::exception const&)> whenException);
 
     void executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback);
 
     bcos::protocol::BlockNumber getCurrentBlockNumber();

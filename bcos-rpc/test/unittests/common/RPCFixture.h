@@ -59,7 +59,7 @@ class FakeScheduler2 : public FakeScheduler
 {
     using FakeScheduler::FakeScheduler;
     void call(protocol::Transaction::Ptr,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) noexcept
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) noexcept
         override
     {
         auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();

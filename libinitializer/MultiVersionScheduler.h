@@ -19,20 +19,19 @@ public:
     MultiVersionScheduler(std::array<scheduler::SchedulerInterface::Ptr, 2> schedulers);
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool sysBlock)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool sysBlock)>
             callback) override;
 
     void commitBlock(protocol::BlockHeader::Ptr header,
-        std::function<void(Error::Ptr&&, ledger::LedgerConfig::Ptr&&)> callback) override;
+        std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr)> callback) override;
 
-    void status(
-        [[maybe_unused]] std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>
+    void status([[maybe_unused]] std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)>
             callback) override;
 
     void call(protocol::Transaction::Ptr transaction,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override;
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
 
-    void reset([[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override;
+    void reset([[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
@@ -42,7 +41,7 @@ public:
 
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
         [[maybe_unused]] bool verify,
-        [[maybe_unused]] std::function<void(Error::Ptr&&)> callback) override;
+        [[maybe_unused]] std::function<void(Error::Ptr)> callback) override;
 
     void stop() override;
 

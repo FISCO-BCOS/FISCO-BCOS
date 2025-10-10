@@ -98,6 +98,9 @@ public:
     bcos::protocol::ViewResult<bcos::protocol::AnyTransactionReceipt> receipts() const override;
     size_t size() const override;
 
+    bcos::bytesConstRef logsBloom() const override;
+    void setLogsBloom(bcos::bytesConstRef logsBloom) override;
+
 private:
     mutable bcostars::Block m_inner;
 };

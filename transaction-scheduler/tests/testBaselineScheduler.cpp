@@ -19,6 +19,7 @@
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <future>
@@ -77,8 +78,17 @@ struct MockScheduler
             ::ranges::views::transform([](size_t index) -> protocol::TransactionReceipt::Ptr {
                 auto receipt = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
                 constexpr static std::string_view str = "abc";
-                receipt->mutableInner().dataHash.assign(str.begin(), str.end());
-                receipt->mutableInner().data.gasUsed = "100";
+                auto& inner = receipt->inner();
+                inner.dataHash.assign(str.begin(), str.end());
+                inner.data.gasUsed = "100";
+
+                bytes logAddress;
+                logAddress.assign(str.begin(), str.end());
+                bcos::protocol::LogEntry logEntry{
+                    logAddress, bcos::h256s{bcos::h256{}}, bcos::bytes{}};
+                std::vector<bcos::protocol::LogEntry> logs;
+                logs.emplace_back(std::move(logEntry));
+                receipt->setLogEntries(logs);
                 return receipt;
             }) |
             ::ranges::to<std::vector<protocol::TransactionReceipt::Ptr>>();
@@ -227,6 +237,18 @@ BOOST_AUTO_TEST_CASE(scheduleBlock)
                     co_await ledger::getBlockNumber(view, blockHeader->hash(), ledger::fromStorage);
                 BOOST_CHECK_EQUAL(blockNumber.value(), blockHeader->number());
             }());
+
+            for (auto receipt : block->receipts())
+            {
+                auto logsSpan = receipt->logEntries();
+                std::vector<bcos::protocol::LogEntry> logs{logsSpan.begin(), logsSpan.end()};
+                auto expectedBloom = bcos::getLogsBloom(logs);
+
+                auto actualView = receipt->logsBloom();
+                BOOST_CHECK_EQUAL_COLLECTIONS(expectedBloom.begin(), expectedBloom.end(),
+                    actualView.begin(), actualView.end());
+            }
+
             end.set_value();
         });
 
