@@ -50,7 +50,7 @@ public:
 
     BaseStorage(std::shared_ptr<StorageInterface> prev, bool setRowWithDirtyFlag)
       : storage::StateStorageInterface(prev),
-        m_buckets(std::thread::hardware_concurrency()),
+        m_buckets(std::thread::hardware_concurrency() + 1),
         m_setRowWithDirtyFlag(setRowWithDirtyFlag)
     {}
 

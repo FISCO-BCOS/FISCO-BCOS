@@ -39,7 +39,7 @@
 #include <range/v3/view/transform.hpp>
 #include <variant>
 
-const static auto CPU_CORES = std::thread::hardware_concurrency();
+const static auto CPU_CORES = std::thread::hardware_concurrency() + 1;
 const static auto BUCKET_SIZE = CPU_CORES;
 
 using namespace bcos;

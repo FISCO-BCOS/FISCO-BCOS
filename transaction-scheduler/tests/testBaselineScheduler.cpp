@@ -1,3 +1,4 @@
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -6,6 +7,7 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockImpl.h"
@@ -14,12 +16,8 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
+#include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include "bcos-transaction-scheduler/MultiLayerStorage.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-transaction-scheduler/BaselineScheduler.h>
-#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <future>
