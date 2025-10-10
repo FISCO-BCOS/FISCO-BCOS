@@ -116,8 +116,15 @@ protected:
     TxPoolConfig::Ptr m_config;
 
     using TxsMap = BucketMap<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr>;
-    TxsMap m_unsealTransactions;
-    TxsMap m_sealedTransactions;
+    struct BcosTransactions
+    {
+        TxsMap unsealTransactions;
+        TxsMap sealedTransactions;
+        explicit BcosTransactions(std::size_t bucketSize)
+          : unsealTransactions(bucketSize), sealedTransactions(bucketSize)
+        {}
+    };
+    BcosTransactions m_bcosTransactions;
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;
