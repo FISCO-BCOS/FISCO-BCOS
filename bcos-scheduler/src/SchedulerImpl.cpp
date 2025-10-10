@@ -187,7 +187,7 @@ void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNum
 
 
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)> _callback)
+    std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)> _callback)
 {
     m_exeWorker.enqueue(
         [this, block = std::move(block), verify, callback = std::move(_callback)]() mutable {
@@ -201,7 +201,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         });
 }
 void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool verify,
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+    std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
         _callback)
 {
     if (block->blockHeader()->version() > (uint32_t)g_BCOSConfig.maxSupportedVersion())
@@ -335,8 +335,8 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
 
     auto beforeBack = [this, block, verify, &executeLock, &blockExecutive, callback]() {
         // update m_block
-        blockExecutive = getPreparedBlock(
-            block->blockHeader()->number(), block->blockHeader()->timestamp());
+        blockExecutive =
+            getPreparedBlock(block->blockHeader()->number(), block->blockHeader()->timestamp());
 
         if (blockExecutive == nullptr)
         {
@@ -459,7 +459,7 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
 }
 
 void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
-    std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> _callback)
+    std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> _callback)
 {
     __itt_frame_begin_v3(ITT_DOMAIN_SCHEDULER_COMMIT, nullptr);
     SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(header->number()) << "CommitBlock request";
@@ -713,13 +713,13 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 }
 
 void SchedulerImpl::status(
-    std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback)
+    std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback)
 {
     (void)callback;
 }
 
 void SchedulerImpl::call(protocol::Transaction::Ptr tx,
-    std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
+    std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback)
 {
     // call but to is empty,
     // it will cause tx message be marked as 'create' falsely when asyncExecute tx
@@ -768,7 +768,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     });
 }
 
-void SchedulerImpl::reset(std::function<void(Error::Ptr&&)> callback)
+void SchedulerImpl::reset(std::function<void(Error::Ptr)> callback)
 {
     (void)callback;
 }
@@ -873,11 +873,10 @@ void SchedulerImpl::removeAllPreparedBlock()
 }
 
 void SchedulerImpl::preExecuteBlock(
-    bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr&&)> _callback)
+    bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr)> _callback)
 {
     auto startT = utcTime();
-    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(block->blockHeader()->number())
-                         << "preExeBlock request"
+    SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(block->blockHeader()->number()) << "preExeBlock request"
                          << LOG_KV("txCount",
                                 block->transactionsSize() + block->transactionsMetaDataSize())
                          << LOG_KV("startT(ms)", startT);

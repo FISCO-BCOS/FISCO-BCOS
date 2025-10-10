@@ -32,7 +32,6 @@ module bcostars {
         1 optional BlockHeaderData data;
         2 optional vector<byte> dataHash;
         3 optional vector<Signature> signatureList;
-        4 optional vector<byte> logsBloom;
     };
 
     struct Block {
@@ -47,5 +46,6 @@ module bcostars {
         
         9 optional vector<vector<byte>> transactionsMerkle;
         10 optional vector<vector<byte>> receiptsMerkle;
+        11 optional vector<byte> logsBloom;
     };
 };

@@ -70,9 +70,7 @@ public:
     gsl::span<const bcos::bytes> sealerList() const override;
     bcos::bytesConstRef extraData() const override;
     gsl::span<const bcos::protocol::Signature> signatureList() const override;
-
     gsl::span<const uint64_t> consensusWeights() const override;
-    bcos::bytesConstRef logsBloom() const override;
 
     void setVersion(uint32_t _version) override;
     void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override;
@@ -92,7 +90,7 @@ public:
     void setSignatureList(
         gsl::span<const bcos::protocol::Signature> const& _signatureList) override;
     void setSignatureList(bcos::protocol::SignatureList&& _signatureList) override;
-    void setLogsBloom(bcos::bytesConstRef logsBloom) override;
+
 
     const bcostars::BlockHeader& inner() const;
     bcostars::BlockHeader& inner();

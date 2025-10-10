@@ -27,24 +27,23 @@ public:
 
     // by pbft & sync
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
             callback) override;
     // by pbft & sync
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
-        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
-        override;
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)> callback) override;
     void status(
-        std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)> callback) override;
+        std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)> callback) override;
     void call(protocol::Transaction::Ptr tx,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback) override;
-    void reset(std::function<void(Error::Ptr&&)> callback) override;
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)> callback) override;
+    void reset(std::function<void(Error::Ptr)> callback) override;
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
     void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override;
 
     void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(Error::Ptr&&)> callback) override;
+        std::function<void(Error::Ptr)> callback) override;
 
     void asyncSwitchTerm(int64_t schedulerSeq, std::function<void(Error::Ptr&&)> callback);
 

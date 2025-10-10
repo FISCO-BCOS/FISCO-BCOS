@@ -27,7 +27,6 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
-#include <type_traits>
 
 namespace bcos::protocol
 {
@@ -36,7 +35,7 @@ class BlockHeader : public virtual MoveBase<BlockHeader>
 public:
     using Ptr = std::shared_ptr<BlockHeader>;
     using ConstPtr = std::shared_ptr<const BlockHeader>;
-    using BlockHeadersPtr = std::shared_ptr<std::vector<BlockHeader::Ptr> >;
+
     BlockHeader() = default;
     BlockHeader(const BlockHeader&) = default;
     BlockHeader(BlockHeader&&) noexcept = default;
@@ -118,7 +117,6 @@ public:
     virtual bytesConstRef extraData() const = 0;
     virtual gsl::span<const Signature> signatureList() const = 0;
     virtual gsl::span<const uint64_t> consensusWeights() const = 0;
-    virtual bcos::bytesConstRef logsBloom() const = 0;
 
     virtual void setVersion(uint32_t _version) = 0;
     virtual void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) = 0;
@@ -142,7 +140,6 @@ public:
 
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
-    virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
 
     virtual size_t size() const = 0;
 };

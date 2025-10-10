@@ -31,7 +31,7 @@ void bcos::rpc::combineBlockResponse(
             logs.push_back(std::move(logObj));
         }
     }
-    result["logsBloom"] = toHexStringWithPrefix(block.blockHeader()->logsBloom());
+    result["logsBloom"] = toHexStringWithPrefix(block.logsBloom());
     result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();
     result["stateRoot"] = blockHeader->stateRoot().hexPrefixed();
     result["receiptsRoot"] = blockHeader->receiptsRoot().hexPrefixed();

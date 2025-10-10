@@ -37,7 +37,7 @@ public:
     {}
     ~FakeScheduler() override = default;
     void executeBlock(bcos::protocol::Block::Ptr _block, bool,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>
+        std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool)>
             _callback) noexcept override
     {
         auto blockHeader = _block->blockHeader();
@@ -53,7 +53,7 @@ public:
 
     // Consensus and block-sync module use this interface to commit block
     void commitBlock(bcos::protocol::BlockHeader::Ptr _blockHeader,
-        std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)>
+        std::function<void(bcos::Error::Ptr, bcos::ledger::LedgerConfig::Ptr)>
             _onCommitBlock) noexcept override
     {
         m_ledger->asyncCommitBlock(_blockHeader, _onCommitBlock);
@@ -61,22 +61,22 @@ public:
 
     // by console, query committed committing executing
     void status(
-        std::function<void(Error::Ptr&&, bcos::protocol::Session::ConstPtr&&)>) noexcept override
+        std::function<void(Error::Ptr, bcos::protocol::Session::ConstPtr)>) noexcept override
     {}
 
     // by rpc
     void call(protocol::Transaction::Ptr,
-        std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)>) noexcept override
+        std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>) noexcept override
     {}
 
     // clear all status
-    void reset(std::function<void(Error::Ptr&&)>) noexcept override {}
+    void reset(std::function<void(Error::Ptr)>) noexcept override {}
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
 
     // for performance, do the things before executing block in executor.
     void preExecuteBlock(
-        bcos::protocol::Block::Ptr, bool, std::function<void(Error::Ptr&&)>) override{};
+        bcos::protocol::Block::Ptr, bool, std::function<void(Error::Ptr)>) override {};
 
 private:
     FakeLedger::Ptr m_ledger;
