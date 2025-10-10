@@ -42,6 +42,10 @@ public:
     explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override;
+    MemoryStorage(const MemoryStorage&) = delete;
+    MemoryStorage(MemoryStorage&&) = delete;
+    MemoryStorage& operator=(const MemoryStorage&) = delete;
+    MemoryStorage& operator=(MemoryStorage&&) = delete;
 
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
         protocol::Transaction::Ptr transaction, bool waitForReceipt) override;
