@@ -3,6 +3,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -11,7 +12,6 @@
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
-#include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
 #include "transaction-executor/tests/TestBytecode.h"
@@ -127,8 +127,8 @@ struct Fixture
 
                         auto view = m_multiLayerStorage.fork();
                         view.newMutable();
-                        auto receipts = co_await scheduler.executeBlock(view, m_executor,
-                            *block->blockHeader(), transactions, m_ledgerConfig);
+                        auto receipts = co_await scheduler.executeBlock(
+                            view, m_executor, *block->blockHeader(), transactions, m_ledgerConfig);
                         if (receipts[0]->status() != 0)
                         {
                             fmt::print("deployContract unexpected receipt status: {}, {}\n",

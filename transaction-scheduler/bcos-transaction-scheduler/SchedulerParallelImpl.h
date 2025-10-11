@@ -1,9 +1,9 @@
 #pragma once
 
 #include "GC.h"
-#include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"

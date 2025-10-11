@@ -1,7 +1,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-task/Wait.h>
-#include <bcos-transaction-scheduler/MultiLayerStorage.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 

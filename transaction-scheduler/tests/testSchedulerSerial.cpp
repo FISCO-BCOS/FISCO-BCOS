@@ -4,7 +4,7 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-transaction-scheduler/MultiLayerStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>

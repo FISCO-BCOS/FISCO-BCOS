@@ -14,7 +14,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-transaction-scheduler/MultiLayerStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-transaction-scheduler/BaselineScheduler.h>
