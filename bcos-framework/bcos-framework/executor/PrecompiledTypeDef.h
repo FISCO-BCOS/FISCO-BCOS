@@ -145,16 +145,12 @@ constexpr static auto c_systemTxsAddress =
         bcos::precompiled::ACCOUNT_ADDRESS, bcos::precompiled::ACCOUNT_MGR_ADDRESS,
         bcos::precompiled::ACCOUNT_MANAGER_NAME, bcos::precompiled::SHARDING_PRECOMPILED_ADDRESS}));
 
-constexpr static struct Contains
+template <class Arg>
+bool contains(::ranges::input_range auto const& args, const Arg& arg)
+    requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(args)>>, std::decay_t<Arg>>
 {
-    template <class Arg>
-    bool operator()(::ranges::input_range auto const& args, const Arg& arg) const
-        requires std::same_as<std::decay_t<::ranges::range_value_t<decltype(args)>>,
-            std::decay_t<Arg>>
-    {
-        return ::ranges::binary_search(args, arg);
-    }
-} contains;
+    return ::ranges::binary_search(args, arg);
+}
 
 /// for testing
 // CpuHeavy test: 0x5200 ~ (0x5200 + 128)
