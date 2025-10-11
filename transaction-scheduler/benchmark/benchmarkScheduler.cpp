@@ -23,8 +23,9 @@
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
-using namespace bcos::scheduler_v1;
+using namespace bcos::storage2;
 using namespace bcos::executor_v1;
+using namespace bcos::scheduler_v1;
 
 constexpr static s256 singleIssue = 1000000;
 constexpr static s256 singleTransfer = 1;

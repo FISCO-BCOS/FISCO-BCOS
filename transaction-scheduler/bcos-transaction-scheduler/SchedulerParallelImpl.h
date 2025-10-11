@@ -27,7 +27,7 @@ namespace bcos::scheduler_v1
 template <class MutableStorage, class Storage>
 struct StorageTrait
 {
-    using LocalStorageView = View<MutableStorage, void, Storage>;
+    using LocalStorageView = storage2::View<MutableStorage, void, Storage>;
     using LocalReadWriteSetStorage = ReadWriteSetStorage<LocalStorageView>;
 };
 
