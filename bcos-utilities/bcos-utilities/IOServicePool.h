@@ -32,7 +32,7 @@ public:
     using ExecutorType = boost::asio::io_context::executor_type;
     using Work = boost::asio::executor_work_guard<ExecutorType>;
     using WorkPtr = std::unique_ptr<Work>;
-    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency())
+    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency() + 1)
       : m_works(_workerNum), m_nextIOService(0)
     {
         // create the ioservices

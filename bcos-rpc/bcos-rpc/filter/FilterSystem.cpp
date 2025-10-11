@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#define CPU_CORES std::thread::hardware_concurrency()
+#define CPU_CORES (std::thread::hardware_concurrency() + 1)
 
 using namespace bcos;
 using namespace bcos::rpc;

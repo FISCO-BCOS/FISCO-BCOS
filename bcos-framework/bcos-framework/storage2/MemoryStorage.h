@@ -83,7 +83,7 @@ public:
 
     constexpr unsigned getBucketSize()
     {
-        return withConcurrent ? std::thread::hardware_concurrency() * 2 : 1;  // Magic
+        return withConcurrent ? std::thread::hardware_concurrency() * 2 + 1 : 1;  // Magic
     }
 
     static_assert(withOrdered || !std::is_void_v<HasherType>);
