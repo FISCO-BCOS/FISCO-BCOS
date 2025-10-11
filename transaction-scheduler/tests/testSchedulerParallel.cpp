@@ -3,7 +3,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-transaction-scheduler/MultiLayerStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>

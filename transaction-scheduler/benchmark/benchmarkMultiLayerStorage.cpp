@@ -1,13 +1,13 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-task/Wait.h>
-#include <bcos-transaction-scheduler/MultiLayerStorage.h>
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 
 using namespace bcos;
 using namespace bcos::storage2::memory_storage;
-using namespace bcos::scheduler_v1;
+using namespace bcos::storage2;
 
 using namespace std::string_view_literals;
 
@@ -51,7 +51,7 @@ struct Fixture
         Attribute(ORDERED | CONCURRENT), std::hash<executor_v1::StateKey>>;
 
     BackendStorage m_backendStorage;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    storage2::MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
     std::vector<bcos::executor_v1::StateKey> allKeys;
 };
 

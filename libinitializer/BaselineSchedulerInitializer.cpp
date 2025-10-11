@@ -32,7 +32,7 @@ bcos::scheduler_v1::BaselineSchedulerInitializer::build(::rocksdb::DB& rocksDB,
             storage2::rocksdb::StateKeyResolver, storage2::rocksdb::StateValueResolver>
             m_rocksDBStorage;
 
-        MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)>
+        storage2::MultiLayerStorage<MutableStorage, CacheStorage, decltype(m_rocksDBStorage)>
             m_multiLayerStorage;
         executor_v1::PrecompiledManager m_precompiledManager;
         executor_v1::TransactionExecutorImpl m_transactionExecutor;

@@ -1,5 +1,5 @@
 #pragma once
-#include "bcos-framework/storage2/Storage.h"
+#include "Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
 #include "bcos-utilities/Exceptions.h"
@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace bcos::scheduler_v1
+namespace bcos::storage2
 {
 
 DERIVE_BCOS_EXCEPTION(DuplicateMutableStorageError);
@@ -525,4 +525,4 @@ public:
     BackendStorage& backendStorage() { return m_backendStorage; }
 };
 
-}  // namespace bcos::scheduler_v1
+}  // namespace bcos::storage2

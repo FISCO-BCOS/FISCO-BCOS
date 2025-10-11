@@ -1,9 +1,9 @@
 #pragma once
 
 #include "GC.h"
-#include "MultiLayerStorage.h"
 #include "ReadWriteSetStorage.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
@@ -27,7 +27,7 @@ namespace bcos::scheduler_v1
 template <class MutableStorage, class Storage>
 struct StorageTrait
 {
-    using LocalStorageView = View<MutableStorage, void, Storage>;
+    using LocalStorageView = storage2::View<MutableStorage, void, Storage>;
     using LocalReadWriteSetStorage = ReadWriteSetStorage<LocalStorageView>;
 };
 

@@ -5,6 +5,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
@@ -17,7 +18,6 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
-#include "bcos-transaction-scheduler/MultiLayerStorage.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <future>
