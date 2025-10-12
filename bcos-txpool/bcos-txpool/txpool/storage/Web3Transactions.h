@@ -45,19 +45,18 @@ private:
 
     void updateLastPending()
     {
-        auto iterator =
-            m_pendingEnd == m_transactions.end() ? m_transactions.begin() : m_pendingEnd;
-        while (iterator != m_transactions.end())
+        auto it = m_pendingEnd == m_transactions.end() ? m_transactions.begin() : m_pendingEnd;
+        while (it != m_transactions.end())
         {
-            auto nextIterator = std::next(iterator);
-            if (nextIterator == m_transactions.end() ||
-                nextIterator->nonce() != iterator->nonce() + 1)
+            auto nextIterator = std::next(it);
+            if (nextIterator == m_transactions.end() || nextIterator->nonce() != it->nonce() + 1)
             {
-                iterator = nextIterator;
+                it = nextIterator;
                 break;
             }
-            iterator = nextIterator;
+            it = nextIterator;
         }
+        m_pendingEnd = it;
     }
 
 public:
@@ -86,6 +85,20 @@ public:
         return replaced;
     }
 
+    void remove(protocol::ViewResult<crypto::HashType> hashes)
+    {
+        std::unique_lock lock(m_mutex);
+        auto& index = m_transactions.get<1>();
+        for (auto const& hash : hashes)
+        {
+            index.erase(hash);
+        }
+
+        m_pendingEnd = m_transactions.end();
+        m_sealedEnd = m_transactions.end();
+        updateLastPending();
+    }
+
     std::vector<protocol::Transaction::Ptr> seal(int64_t limit)
     {
         std::vector<protocol::Transaction::Ptr> sealedTransactions;
@@ -100,22 +113,6 @@ public:
         }
         m_sealedEnd = it;
         return sealedTransactions;
-    }
-
-    void removeSealed(protocol::ViewResult<crypto::HashType> sealedTransactionHashes)
-    {
-        std::vector<Transactions::nth_index_iterator<1>> toRemoved;
-        std::unique_lock lock(m_mutex);
-        auto& index = m_transactions.get<1>();
-        for (auto const& hash : sealedTransactionHashes)
-        {
-            if (auto it = index.find(hash); it != index.end())
-            {
-                toRemoved.push_back(it);
-            }
-        }
-        m_sealedEnd = m_transactions.end();
-        updateLastPending();
     }
 };
 
