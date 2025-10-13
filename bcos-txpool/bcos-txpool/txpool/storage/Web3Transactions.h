@@ -1,12 +1,10 @@
 #pragma once
 
-#include "bcos-framework/protocol/Block.h"
 #include <bcos-framework/bcos-framework/protocol/Transaction.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/mem_fun.hpp>
-#include <boost/multi_index/member.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
@@ -20,10 +18,10 @@ struct TransactionData
     protocol::Transaction::Ptr m_transaction;
     int64_t m_nonce;
 
-    int64_t importTime() const { return m_transaction->importTime(); }
-    crypto::HashType hash() const { return m_transaction->hash(); }
-    std::string_view sender() const { return m_transaction->sender(); }
-    int64_t nonce() const { return m_nonce; }
+    int64_t importTime() const;
+    crypto::HashType hash() const;
+    std::string_view sender() const;
+    int64_t nonce() const;
 };
 
 class AccountTransactions
@@ -39,87 +37,46 @@ private:
             boost::multi_index::sequenced<>>>;
 
     Transactions m_transactions;
-    Transactions::const_iterator m_pendingEnd = m_transactions.end();
-    Transactions::const_iterator m_sealedEnd = m_transactions.end();
+    Transactions::nth_index<0>::type::const_iterator m_pendingEnd = m_transactions.begin();
+    int64_t m_sealed = 0;
     std::mutex m_mutex;
 
-    void updateLastPending()
-    {
-        auto it = m_pendingEnd == m_transactions.end() ? m_transactions.begin() : m_pendingEnd;
-        while (it != m_transactions.end())
-        {
-            auto nextIterator = std::next(it);
-            if (nextIterator == m_transactions.end() || nextIterator->nonce() != it->nonce() + 1)
-            {
-                it = nextIterator;
-                break;
-            }
-            it = nextIterator;
-        }
-        m_pendingEnd = it;
-    }
+    void updateLastPending();
 
 public:
-    bool add(protocol::Transaction::Ptr transaction)
-    {
-        auto nonce = boost::lexical_cast<int64_t>(transaction->nonce());
-
-        std::unique_lock lock(m_mutex);
-        auto& index = m_transactions.get<0>();
-        auto it = index.lower_bound(nonce);
-
-        bool replaced = false;
-        if (it != index.end() && it->nonce() == nonce)
-        {
-            replaced = true;
-            index.replace(
-                it, TransactionData{.m_transaction = std::move(transaction), .m_nonce = nonce});
-        }
-        else
-        {
-            index.emplace_hint(
-                it, TransactionData{.m_transaction = std::move(transaction), .m_nonce = nonce});
-        }
-
-        updateLastPending();
-        return replaced;
-    }
-
-    void remove(protocol::ViewResult<crypto::HashType> hashes)
-    {
-        std::unique_lock lock(m_mutex);
-        auto& index = m_transactions.get<1>();
-        for (auto const& hash : hashes)
-        {
-            index.erase(hash);
-        }
-
-        m_pendingEnd = m_transactions.end();
-        m_sealedEnd = m_transactions.end();
-        updateLastPending();
-    }
-
-    std::vector<protocol::Transaction::Ptr> seal(int64_t limit)
-    {
-        std::vector<protocol::Transaction::Ptr> sealedTransactions;
-        std::unique_lock lock(m_mutex);
-        auto& index = m_transactions.get<0>();
-
-        auto it = m_sealedEnd == m_transactions.end() ? m_transactions.begin() : m_sealedEnd;
-        auto start = it;
-        for (; it != m_pendingEnd && std::distance(start, it) <= limit; ++it)
-        {
-            sealedTransactions.push_back(it->m_transaction);
-        }
-        m_sealedEnd = it;
-        return sealedTransactions;
-    }
+    bool add(protocol::Transaction::Ptr transaction);
+    void remove(int64_t lastNonce);
+    std::vector<protocol::Transaction::Ptr> seal(int64_t limit);
+    void mark(int64_t lastNonce);
 };
+
 
 class Web3Transactions
 {
 private:
-    tbb::concurrent_unordered_map<std::string, AccountTransactions> m_accountTransactions;
+    struct StringHash
+    {
+        struct StringEqual
+        {
+            using is_transparent = void;
+            template <std::convertible_to<std::string_view> T,
+                std::convertible_to<std::string_view> U>
+            bool operator()(const T& lhs, const U& rhs) const;
+        };
+        using transparent_key_equal = StringEqual;
+
+        template <std::convertible_to<std::string_view> T>
+        std::size_t operator()(const T& str) const;
+    };
+
+    tbb::concurrent_unordered_map<std::string, AccountTransactions, StringHash>
+        m_accountTransactions;
+
+public:
+    bool add(protocol::Transaction::Ptr transaction);
+    void remove(std::string_view sender, int64_t lastNonce);
+    std::vector<protocol::Transaction::Ptr> seal(std::string_view sender, int64_t limit);
+    void mark(std::string_view sender, int64_t lastNonce);
 };
 
 }  // namespace bcos::txpool
