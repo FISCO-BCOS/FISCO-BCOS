@@ -40,7 +40,7 @@ bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
 }
 
 
-std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root) noexcept
+std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root)
 {
     CallRequest _request;
     if (!_root.isObject())
@@ -54,11 +54,15 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root) n
     }
     if (dataValue != nullptr)
     {
-        auto const dataBytes = bcos::safeFromHexWithPrefix(dataValue->asString());
-        _request.data = dataBytes.value();
+        if (auto dataBytes = bcos::safeFromHexWithPrefix(dataValue->asString()))
+        {
+            _request.data = *dataBytes;
+        }
     }
-    _request.to = _root.isMember("to") ? _root["to"].asString() : "";
-
+    if (const auto* value = _root.find("to"))
+    {
+        _request.to = value->asString();
+    }
     if (const auto* value = _root.find("from"))
     {
         _request.from = value->asString();

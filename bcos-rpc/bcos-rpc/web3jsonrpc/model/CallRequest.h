@@ -60,5 +60,5 @@ struct CallRequest
     bcos::protocol::Transaction::Ptr takeToTransaction(
         bcos::protocol::TransactionFactory::Ptr const&) noexcept;
 };
-[[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root) noexcept;
+[[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
 }  // namespace bcos::rpc
