@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-framework/bcos-framework/protocol/Transaction.h>
+#include "bcos-framework/bcos-framework/protocol/Transaction.h"
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -61,12 +61,18 @@ private:
             using is_transparent = void;
             template <std::convertible_to<std::string_view> T,
                 std::convertible_to<std::string_view> U>
-            bool operator()(const T& lhs, const U& rhs) const;
+            bool operator()(const T& lhs, const U& rhs) const
+            {
+                return lhs == rhs;
+            }
         };
         using transparent_key_equal = StringEqual;
 
         template <std::convertible_to<std::string_view> T>
-        std::size_t operator()(const T& str) const;
+        std::size_t operator()(const T& str) const
+        {
+            return std::hash<T>{}(str);
+        }
     };
 
     tbb::concurrent_unordered_map<std::string, AccountTransactions, StringHash>
