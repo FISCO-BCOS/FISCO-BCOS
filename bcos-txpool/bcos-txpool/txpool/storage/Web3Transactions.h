@@ -46,7 +46,7 @@ private:
 public:
     bool add(protocol::Transaction::Ptr transaction);
     void remove(int64_t lastNonce);
-    std::vector<protocol::Transaction::Ptr> seal(int64_t limit);
+    void seal(int64_t limit, std::vector<protocol::Transaction::Ptr>& out);
     void mark(int64_t lastNonce);
 };
 
@@ -81,7 +81,7 @@ private:
 public:
     bool add(protocol::Transaction::Ptr transaction);
     void remove(std::string_view sender, int64_t lastNonce);
-    std::vector<protocol::Transaction::Ptr> seal(std::string_view sender, int64_t limit);
+    std::vector<protocol::Transaction::Ptr> seal(int64_t limit);
     void mark(std::string_view sender, int64_t lastNonce);
 };
 

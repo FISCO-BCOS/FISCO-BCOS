@@ -76,10 +76,9 @@ void bcos::txpool::AccountTransactions::remove(int64_t lastNonce)
     updateLastPending();
 }
 
-std::vector<bcos::protocol::Transaction::Ptr> bcos::txpool::AccountTransactions::seal(int64_t limit)
+void bcos::txpool::AccountTransactions::seal(
+    int64_t limit, std::vector<protocol::Transaction::Ptr>& out)
 {
-    std::vector<protocol::Transaction::Ptr> sealedTransactions;
-
     std::unique_lock lock(m_mutex);
     auto& index = m_transactions.get<0>();
     /*-----------------------------------------
@@ -95,17 +94,16 @@ std::vector<bcos::protocol::Transaction::Ptr> bcos::txpool::AccountTransactions:
     if (limit <= 0 || m_transactions.empty() || m_pendingEnd == m_transactions.begin() ||
         (m_pendingEnd != m_transactions.end() && m_sealed >= m_pendingEnd->m_nonce))
     {
-        return sealedTransactions;
+        return;
     }
 
     auto start = m_sealed;
     for (auto it = index.lower_bound(m_sealed); it != m_pendingEnd && m_sealed - start <= limit;
         ++it)
     {
-        sealedTransactions.emplace_back(it->m_transaction);
+        out.emplace_back(it->m_transaction);
         ++m_sealed;
     }
-    return sealedTransactions;
 }
 
 void bcos::txpool::AccountTransactions::mark(int64_t lastNonce)
@@ -132,14 +130,14 @@ void bcos::txpool::Web3Transactions::remove(std::string_view sender, int64_t las
     }
 }
 
-std::vector<bcos::protocol::Transaction::Ptr> bcos::txpool::Web3Transactions::seal(
-    std::string_view sender, int64_t limit)
+std::vector<bcos::protocol::Transaction::Ptr> bcos::txpool::Web3Transactions::seal(int64_t limit)
 {
-    if (auto it = m_accountTransactions.find(sender); it != m_accountTransactions.end())
+    std::vector<protocol::Transaction::Ptr> sealedTransactions;
+    for (auto& it : m_accountTransactions)
     {
-        return it->second.seal(limit);
+        it.second.seal(limit, sealedTransactions);
     }
-    return {};
+    return sealedTransactions;
 }
 
 void bcos::txpool::Web3Transactions::mark(std::string_view sender, int64_t lastNonce)
