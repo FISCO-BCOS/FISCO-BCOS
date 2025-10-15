@@ -56,7 +56,7 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root)
     {
         if (auto dataBytes = bcos::safeFromHexWithPrefix(dataValue->asString()))
         {
-            _request.data = *dataBytes;
+            _request.data = std::move(*dataBytes);
         }
     }
     if (const auto* value = _root.find("to"))
