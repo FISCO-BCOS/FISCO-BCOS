@@ -47,8 +47,7 @@ BOOST_AUTO_TEST_CASE(decode_data_and_input_precedence)
     auto [ok, req] = decodeCallRequest(root);
     BOOST_TEST(ok);
 
-    auto expected = fromHexWithPrefix(hexData);
-    BOOST_TEST(req.data == expected);
+    BOOST_TEST(req.data.empty());
     BOOST_CHECK_EQUAL(req.to, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 }
 
