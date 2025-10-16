@@ -214,7 +214,7 @@ private:
         {
             auto it = co_await storage2::range(*m_storage);
             co_return std::unique_ptr<IteratorConcept>(
-                new IteratorModel<decltype(it)>(std::move(it)));
+                std::make_unique<IteratorModel<decltype(it)>>(std::move(it)));
         }
 
         task::Task<std::unique_ptr<IteratorConcept>> rangeSeekBegin(const Key& key) override
@@ -223,14 +223,14 @@ private:
             {
                 auto it = co_await storage2::range(*m_storage, RANGE_SEEK, key);
                 co_return std::unique_ptr<IteratorConcept>(
-                    new IteratorModel<decltype(it)>(std::move(it)));
+                    std::make_unique<IteratorModel<decltype(it)>>(std::move(it)));
             }
             else
             {
                 // Fallback: no seek support, return begin()
                 auto it = co_await storage2::range(*m_storage);
                 co_return std::unique_ptr<IteratorConcept>(
-                    new IteratorModel<decltype(it)>(std::move(it)));
+                    std::make_unique<IteratorModel<decltype(it)>>(std::move(it)));
             }
         }
 
