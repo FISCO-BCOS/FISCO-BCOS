@@ -128,7 +128,7 @@ std::optional<Out> safeFromHex(const Hex& hex, std::string_view prefix = std::st
     try
     {
         auto out = fromHex(hex, prefix);
-        return std::make_optional(out);
+        return std::make_optional(std::move(out));
     }
     catch (...)
     {
