@@ -1,6 +1,6 @@
 #include "bcos-framework/storage2/AnyStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
-#include <bcos-task/Wait.h>
+#include "bcos-task/Wait.h"
 #include <boost/test/unit_test.hpp>
 #include <string>
 
@@ -19,12 +19,12 @@ BOOST_AUTO_TEST_CASE(basicReadWrite)
         co_await writeOne(any, 1, std::string{"hello"});
         co_await writeOne(any, 2, std::string{"world"});
 
-        auto v1 = co_await readOne(any, 1);
-        auto v2 = co_await readOne(any, 2);
-        BOOST_REQUIRE(v1);
-        BOOST_REQUIRE(v2);
-        BOOST_CHECK_EQUAL(*v1, "hello");
-        BOOST_CHECK_EQUAL(*v2, "world");
+        auto value1 = co_await readOne(any, 1);
+        auto value2 = co_await readOne(any, 2);
+        BOOST_REQUIRE(value1);
+        BOOST_REQUIRE(value2);
+        BOOST_CHECK_EQUAL(*value1, "hello");
+        BOOST_CHECK_EQUAL(*value2, "world");
 
         auto vec = co_await readSome(any, std::vector<int>{1, 2, 3});
         BOOST_CHECK(vec[0]);
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(writeSome_readSome_removeSome)
             }
             ++count;
         }
-        BOOST_CHECK_EQUAL(count, 3); // keys 0,2,4 remain
+        BOOST_CHECK_EQUAL(count, 3);  // keys 0,2,4 remain
 
         co_return;
     }());
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(merge_cross_types)
 {
     task::syncWait([]() -> task::Task<void> {
         // Prepare two different memory storages with same Key/Value but different attributes
-        MemoryStorage<int, std::string, UNORDERED> fromUnordered; // source unordered
+        MemoryStorage<int, std::string, UNORDERED> fromUnordered;  // source unordered
         MemoryStorage<int, std::string, ORDERED> toOrdered;        // dest ordered
 
         // Wrap both with AnyStorage
@@ -159,27 +159,68 @@ BOOST_AUTO_TEST_CASE(merge_cross_types)
 BOOST_AUTO_TEST_CASE(merge_with_logical_deletion)
 {
     task::syncWait([]() -> task::Task<void> {
-        // Source enables logical deletion so its range() emits DELETED_TYPE; destination plain ordered
-        MemoryStorage<int, std::string, ORDERED> toPlain; // dest
-        MemoryStorage<int, std::string, Attribute(LOGICAL_DELETION)> fromWithLD; // source
+        // Source enables logical deletion so its range() emits DELETED_TYPE; destination plain
+        // ordered
+        MemoryStorage<int, std::string, ORDERED> toPlain;                         // dest
+        MemoryStorage<int, std::string, Attribute(LOGICAL_DELETION)> fromWithLD;  // source
 
         AnyStorage<int, std::string> anyTo(toPlain);
         AnyStorage<int, std::string> anyFrom(fromWithLD);
 
         // Seed data
-        co_await writeSome(anyTo, std::vector<std::pair<int, std::string>>{{1, "x1"}, {2, "x2"}, {3, "x3"}});
+        co_await writeSome(
+            anyTo, std::vector<std::pair<int, std::string>>{{1, "x1"}, {2, "x2"}, {3, "x3"}});
         co_await writeSome(anyFrom, std::vector<std::pair<int, std::string>>{{2, "y2"}});
 
-    // Source expresses a deletion for key=1 via removeOne (kept as logical deletion in source)
+        // Source expresses a deletion for key=1 via removeOne (kept as logical deletion in source)
         co_await removeOne(anyFrom, 1);
 
         // Merge: expect key=1 deleted in dest, key=2 overwritten to y2, key=3 untouched
         co_await merge(anyTo, anyFrom);
 
-    auto res = co_await readSome(anyTo, std::vector<int>{1,2,3});
-        BOOST_CHECK(!res[0]); // deleted
+        auto res = co_await readSome(anyTo, std::vector<int>{1, 2, 3});
+        BOOST_CHECK(!res[0]);  // deleted
         BOOST_CHECK(res[1] && *res[1] == "y2");
         BOOST_CHECK(res[2] && *res[2] == "x3");
+
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(range_seek_support)
+{
+    task::syncWait([]() -> task::Task<void> {
+        // Underlying ordered storage supports RANGE_SEEK
+        MemoryStorage<int, std::string, ORDERED> ordered;
+        AnyStorage<int, std::string> any(ordered);
+
+        // Seed keys 1..5
+        constexpr int kMaxKey = 5;  // avoid magic number
+        std::vector<std::pair<int, std::string>> kvs;
+        for (int i = 1; i <= kMaxKey; ++i)
+        {
+            kvs.emplace_back(i, std::to_string(i));
+        }
+        co_await writeSome(any, kvs);
+
+        // Seek from key=3 and ensure iteration starts at >=3
+        auto it = co_await range(any, RANGE_SEEK, 3);
+        std::vector<int> seen;
+        while (auto item = co_await it.next())
+        {
+            auto& [k, storageValue] = *item;
+            if (std::holds_alternative<storage2::NOT_EXISTS_TYPE>(storageValue) ||
+                std::holds_alternative<storage2::DELETED_TYPE>(storageValue))
+            {
+                continue;
+            }
+            seen.push_back(k);
+        }
+        // Expect to see 3,4,5 in order
+        BOOST_REQUIRE_EQUAL(seen.size(), 3);
+        BOOST_CHECK_EQUAL(seen[0], 3);
+        BOOST_CHECK_EQUAL(seen[1], 4);
+        BOOST_CHECK_EQUAL(seen[2], 5);
 
         co_return;
     }());

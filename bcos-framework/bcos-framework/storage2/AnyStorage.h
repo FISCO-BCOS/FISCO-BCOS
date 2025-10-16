@@ -3,6 +3,7 @@
 #include "Storage.h"
 #include <memory>
 #include <optional>
+#include <range/v3/view/any_view.hpp>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -12,6 +13,27 @@ namespace bcos::storage2
 {
 
 // AnyStorage: type-erased wrapper for Storage tag_invoke interface.
+//
+// Intent
+// - Erase the concrete storage type while keeping Key/Value types explicit
+// - Interoperate with existing storage2 tag_invoke API (readOne/Some, writeOne/Some,
+//   removeOne/Some, range, optional range-seek, and merge)
+//
+// Quick usage
+//   MemoryStorage<int, std::string, ORDERED> ms;
+//   AnyStorage<int, std::string> any(ms);
+//   co_await writeOne(any, 1, std::string{"v"});
+//   auto v = co_await readOne(any, 1);
+//   auto it = co_await range(any);
+//   while (auto kv = co_await it.next()) { /* iterate */ }
+//   // If underlying storage supports RANGE_SEEK (e.g. ordered MemoryStorage), this will seek:
+//   auto it2 = co_await range(any, RANGE_SEEK, 1);
+//
+// Notes
+// - Bulk APIs accept generic ranges; AnyStorage adapts them internally using any_view aliases
+// - merge(to, from) iterates source's range and applies writes/removes to destination generically
+// - Removing with DIRECT will bypass logical-deletion if the underlying storage supports it
+//
 // Keep Key/Value as template parameters to preserve strong types while
 // erasing the concrete storage implementation.
 template <class Key, class ValueT>
@@ -21,6 +43,10 @@ public:
     using KeyType = Key;
     using ValueType = ValueT;
     using DataValue = StorageValueType<ValueType>;
+    using AnyKeyView =
+        ::ranges::any_view<Key, ::ranges::category::mask | ::ranges::category::sized>;
+    using AnyKeyValueView = ::ranges::any_view<std::pair<Key, ValueType>,
+        ::ranges::category::mask | ::ranges::category::sized>;
 
     AnyStorage() = default;
     AnyStorage(const AnyStorage&) = default;
@@ -55,19 +81,16 @@ private:
         Concept(Concept&&) noexcept = default;
         Concept& operator=(Concept&&) noexcept = default;
         virtual ~Concept() = default;
-        virtual task::Task<std::vector<std::optional<ValueType>>> readSomeVec(
-            std::vector<Key> keys) = 0;
-        virtual task::Task<void> writeSomeVec(
-            std::vector<std::pair<Key, ValueType>> keyValues) = 0;
-        virtual task::Task<void> removeSomeVec(std::vector<Key> keys, bool direct) = 0;
+        virtual task::Task<std::vector<std::optional<ValueType>>> readSome(AnyKeyView keys) = 0;
+        virtual task::Task<void> writeSome(AnyKeyValueView keyValues) = 0;
+        virtual task::Task<void> removeSome(AnyKeyView keys, bool direct) = 0;
 
         virtual task::Task<std::optional<ValueType>> readOne(Key key) = 0;
         virtual task::Task<void> writeOne(Key key, ValueType value) = 0;
         virtual task::Task<void> removeOne(Key key, bool direct) = 0;
 
         virtual task::Task<std::unique_ptr<IteratorConcept>> rangeBegin() = 0;
-        virtual task::Task<std::unique_ptr<IteratorConcept>> rangeSeekBegin(
-            const Key& key) = 0;
+        virtual task::Task<std::unique_ptr<IteratorConcept>> rangeSeekBegin(const Key& key) = 0;
 
         // Generic merge: iterate source and write to destination
         virtual task::Task<void> mergeFrom(Concept& from) = 0;
@@ -76,7 +99,7 @@ private:
     template <class It>
     struct IteratorModel : IteratorConcept
     {
-    explicit IteratorModel(It iter) : m_it(std::move(iter)) {}
+        explicit IteratorModel(It iter) : m_it(std::move(iter)) {}
 
         task::Task<std::optional<std::pair<Key, DataValue>>> next() override
         {
@@ -122,12 +145,11 @@ private:
     template <class S>
     struct Model : Concept
     {
-    explicit Model(S& storageRef) : storage(std::addressof(storageRef)) {}
+        explicit Model(S& storageRef) : storage(std::addressof(storageRef)) {}
 
-        task::Task<std::vector<std::optional<ValueType>>> readSomeVec(
-            std::vector<Key> keys) override
+        task::Task<std::vector<std::optional<ValueType>>> readSome(AnyKeyView keys) override
         {
-            auto src = co_await readSome(*storage, std::move(keys));
+            auto src = co_await storage2::readSome(*storage, ::ranges::views::all(keys));
             std::vector<std::optional<ValueType>> dst;
             dst.reserve(src.size());
             for (auto& opt : src)
@@ -144,31 +166,21 @@ private:
             co_return dst;
         }
 
-        task::Task<void> writeSomeVec(
-            std::vector<std::pair<Key, ValueType>> keyValues) override
+        task::Task<void> writeSome(AnyKeyValueView keyValues) override
         {
-            using SValue = typename std::decay_t<S>::Value;
-            std::vector<std::pair<Key, SValue>> converted;
-            converted.reserve(keyValues.size());
-            for (auto& kv : keyValues)
-            {
-                converted.emplace_back(std::move(kv.first), SValue(std::move(kv.second)));
-            }
-            co_await writeSome(*storage, std::move(converted));
-            co_return;
+            co_await storage2::writeSome(*storage, ::ranges::views::all(keyValues));
         }
 
-        task::Task<void> removeSomeVec(std::vector<Key> keys, bool direct) override
+        task::Task<void> removeSome(AnyKeyView keys, bool direct) override
         {
             if (direct)
             {
-                co_await removeSome(*storage, std::move(keys), DIRECT);
+                co_await storage2::removeSome(*storage, ::ranges::views::all(keys), DIRECT);
             }
             else
             {
-                co_await removeSome(*storage, std::move(keys));
+                co_await storage2::removeSome(*storage, ::ranges::views::all(keys));
             }
-            co_return;
         }
 
         task::Task<std::optional<ValueType>> readOne(Key key) override
@@ -184,9 +196,7 @@ private:
         task::Task<void> writeOne(Key key, ValueType value) override
         {
             using SValue = typename std::decay_t<S>::Value;
-            co_await storage2::writeOne(
-                *storage, std::move(key), SValue(std::move(value)));
-            co_return;
+            co_await storage2::writeOne(*storage, std::move(key), SValue(std::move(value)));
         }
 
         task::Task<void> removeOne(Key key, bool direct) override
@@ -199,7 +209,6 @@ private:
             {
                 co_await storage2::removeOne(*storage, std::move(key));
             }
-            co_return;
         }
 
         task::Task<std::unique_ptr<IteratorConcept>> rangeBegin() override
@@ -251,7 +260,6 @@ private:
                 auto& valueRef = std::get<ValueType>(dataValue);
                 co_await storage2::writeOne(*storage, Key(k), ValueType(valueRef));
             }
-            co_return;
         }
 
         S* storage;
@@ -267,7 +275,7 @@ public:
     class Iterator
     {
     public:
-    explicit Iterator(std::unique_ptr<IteratorConcept> ptr) : m_ptr(std::move(ptr)) {}
+        explicit Iterator(std::unique_ptr<IteratorConcept> ptr) : m_ptr(std::move(ptr)) {}
 
         task::Task<std::optional<std::pair<Key, DataValue>>> next()
         {
@@ -280,77 +288,52 @@ public:
 
     // tag_invoke set: forward to underlying Concept
     friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, AnyStorage& storage,
-        ::ranges::input_range auto keys)
-        -> task::Task<std::vector<std::optional<Value>>>
+        ::ranges::input_range auto keys) -> task::Task<std::vector<std::optional<Value>>>
     {
-        std::vector<Key> vec;
-        for (auto&& k : keys)
-        {
-            vec.emplace_back(Key(std::forward<decltype(k)>(k)));
-        }
-        co_return co_await storage.m_self->readSomeVec(std::move(vec));
+        co_return co_await storage.m_self->readSome(::ranges::views::all(keys));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, AnyStorage& storage,
         ::ranges::input_range auto keyValues) -> task::Task<void>
         requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2)
     {
-        std::vector<std::pair<Key, Value>> vec;
-        for (auto&& keyValue : keyValues)
-        {
-            auto&& k = std::get<0>(keyValue);
-            auto&& value = std::get<1>(keyValue);
-            vec.emplace_back(Key(std::forward<decltype(k)>(k)),
-                ValueType(std::forward<decltype(value)>(value)));
-        }
-        co_await storage.m_self->writeSomeVec(std::move(vec));
+        co_await storage.m_self->writeSome(::ranges::views::all(keyValues));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, AnyStorage& storage,
         ::ranges::input_range auto keys) -> task::Task<void>
     {
-        std::vector<Key> vec;
-        for (auto&& k : keys)
-        {
-            vec.emplace_back(Key(std::forward<decltype(k)>(k)));
-        }
-        co_await storage.m_self->removeSomeVec(std::move(vec), false);
+        co_await storage.m_self->removeSome(::ranges::views::all(keys), false);
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, AnyStorage& storage,
         ::ranges::input_range auto keys, DIRECT_TYPE /*unused*/) -> task::Task<void>
     {
-        std::vector<Key> vec;
-        for (auto&& k : keys)
-        {
-            vec.emplace_back(Key(std::forward<decltype(k)>(k)));
-        }
-        co_await storage.m_self->removeSomeVec(std::move(vec), true);
+        co_await storage.m_self->removeSome(::ranges::views::all(keys), true);
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, AnyStorage& storage,
         auto key) -> task::Task<std::optional<Value>>
     {
-        co_return co_await storage.m_self->readOne(Key(std::forward<decltype(key)>(key)));
+        co_return co_await storage.m_self->readOne(Key(std::move(key)));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/, AnyStorage& storage,
         auto key, auto value) -> task::Task<void>
     {
-        co_await storage.m_self->writeOne(
-            Key(std::forward<decltype(key)>(key)), Value(std::forward<decltype(value)>(value)));
+        co_await storage.m_self->writeOne(Key(std::move(key)), Value(std::move(value)));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/, AnyStorage& storage,
         auto key) -> task::Task<void>
     {
-        co_await storage.m_self->removeOne(Key(std::forward<decltype(key)>(key)), false);
+        co_await storage.m_self->removeOne(std::move(key), false);
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/, AnyStorage& storage,
         auto key, DIRECT_TYPE /*unused*/) -> task::Task<void>
     {
-        co_await storage.m_self->removeOne(Key(std::forward<decltype(key)>(key)), true);
+        co_await storage.m_self->removeOne(std::move(key), true);
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::range> /*unused*/, AnyStorage& storage)
@@ -369,11 +352,9 @@ public:
 
     // Generic merge for AnyStorage to AnyStorage
     friend task::Task<void> tag_invoke(
-        storage2::tag_t<storage2::merge> /*unused*/, AnyStorage& toStorage,
-        AnyStorage& fromStorage)
+        storage2::tag_t<storage2::merge> /*unused*/, AnyStorage& toStorage, AnyStorage& fromStorage)
     {
         co_await toStorage.m_self->mergeFrom(*fromStorage.m_self);
-        co_return;
     }
 };
 
