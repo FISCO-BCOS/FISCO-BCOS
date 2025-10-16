@@ -295,7 +295,6 @@ public:
 
     friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, AnyStorage& storage,
         ::ranges::input_range auto keyValues) -> task::Task<void>
-        requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2)
     {
         co_await storage.m_self->writeSome(::ranges::views::all(keyValues));
     }

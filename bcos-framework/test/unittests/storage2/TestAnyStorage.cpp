@@ -92,8 +92,6 @@ BOOST_AUTO_TEST_CASE(writeSome_readSome_removeSome)
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 3);  // keys 0,2,4 remain
-
-        co_return;
     }());
 }
 
@@ -150,8 +148,6 @@ BOOST_AUTO_TEST_CASE(merge_cross_types)
         BOOST_CHECK(check[5] && *check[5] == "b5");
         BOOST_CHECK(check[6] && *check[6] == "b6");
         BOOST_CHECK(check[7] && *check[7] == "b7");
-
-        co_return;
     }());
 }
 
@@ -181,8 +177,6 @@ BOOST_AUTO_TEST_CASE(merge_with_logical_deletion)
         BOOST_CHECK(!res[0]);  // deleted
         BOOST_CHECK(res[1] && *res[1] == "y2");
         BOOST_CHECK(res[2] && *res[2] == "x3");
-
-        co_return;
     }());
 }
 
@@ -220,8 +214,6 @@ BOOST_AUTO_TEST_CASE(range_seek_support)
         BOOST_CHECK_EQUAL(seen[0], 3);
         BOOST_CHECK_EQUAL(seen[1], 4);
         BOOST_CHECK_EQUAL(seen[2], 5);
-
-        co_return;
     }());
 }
 
