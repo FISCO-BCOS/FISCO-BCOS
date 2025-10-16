@@ -26,7 +26,8 @@ BOOST_AUTO_TEST_CASE(basicReadWrite)
         BOOST_CHECK_EQUAL(*value1, "hello");
         BOOST_CHECK_EQUAL(*value2, "world");
 
-        auto vec = co_await readSome(any, std::vector<int>{1, 2, 3});
+        auto keys = std::vector<int>{1, 2, 3};
+        auto vec = co_await readSome(any, keys);
         BOOST_CHECK(vec[0]);
         BOOST_CHECK(vec[1]);
         BOOST_CHECK(!vec[2]);
@@ -38,8 +39,6 @@ BOOST_AUTO_TEST_CASE(basicReadWrite)
             ++count;
         }
         BOOST_CHECK_EQUAL(count, 2);
-
-        co_return;
     }());
 }
 
