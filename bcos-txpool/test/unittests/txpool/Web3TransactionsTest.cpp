@@ -18,11 +18,11 @@
  * @date 2025/10/14
  */
 
-#include <boost/test/unit_test.hpp>
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-txpool/txpool/storage/Web3Transactions.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -71,8 +71,14 @@ struct TransactionsFixture
     std::string senderB;
     std::string hexSenderA;
     std::string hexSenderB;
-    Transaction::Ptr txA(std::string n) { return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(n), keyA); }
-    Transaction::Ptr txB(std::string n) { return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(n), keyB); }
+    Transaction::Ptr txA(std::string n)
+    {
+        return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(n), keyA);
+    }
+    Transaction::Ptr txB(std::string n)
+    {
+        return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(n), keyB);
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(AccountTransactionsTest, TransactionsFixture)
@@ -129,7 +135,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_behavior)
 
     std::vector<Transaction::Ptr> sealed;
     acc.seal(2, sealed);
-    BOOST_CHECK_EQUAL(sealed.size(), 3);
+    BOOST_CHECK_EQUAL(sealed.size(), 2);
 }
 
 BOOST_AUTO_TEST_CASE(seal_zero_limit_noop)
@@ -177,4 +183,4 @@ BOOST_AUTO_TEST_CASE(mixed_accounts_behavior_via_add_path)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-} // namespace bcos::test
+}  // namespace bcos::test
