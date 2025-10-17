@@ -56,7 +56,7 @@ constexpr bool operator==(bcos::protocol::TransactionType const& _lhs, auto _rhs
 
 using TxSubmitCallback =
     std::function<void(Error::Ptr, bcos::protocol::TransactionSubmitResult::Ptr)>;
-class Transaction : public virtual MoveBase<Transaction>
+class Transaction
 {
 public:
     enum Attribute : int32_t
@@ -200,7 +200,7 @@ using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
-using AnyTransaction = AnyHolder<bcos::protocol::Transaction, 128>;
+using AnyTransaction = AnyHolder<bcos::protocol::Transaction, 120>;
 
 inline std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 {

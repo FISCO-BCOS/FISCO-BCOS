@@ -34,8 +34,7 @@
 namespace bcostars::protocol
 {
 
-class TransactionImpl : public bcos::protocol::Transaction,
-                        public virtual bcos::MoveImpl<TransactionImpl, bcos::protocol::Transaction>
+class TransactionImpl : public bcos::protocol::Transaction
 {
 public:
     explicit TransactionImpl(std::function<bcostars::Transaction*()> inner);
