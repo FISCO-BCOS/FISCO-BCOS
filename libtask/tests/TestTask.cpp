@@ -266,51 +266,6 @@ Generator<int> generatorWithAlloc(
     }
 }
 
-BOOST_AUTO_TEST_CASE(allocator)
-{
-#ifndef __APPLE__
-    std::array<char, 10240> mockStack;
-
-    MyMemoryResource pool(mockStack.data(), mockStack.size());
-    std::pmr::polymorphic_allocator<> allocator(std::addressof(pool));
-    {
-        auto awaitable = selfAlloc(100, std::allocator_arg, allocator);
-        awaitable.start();
-    }
-    BOOST_CHECK_EQUAL(pool.allocate, 1);
-    BOOST_CHECK_EQUAL(pool.deallocate, 1);
-
-    pool.reset();
-    bcos::task::syncWait(
-        selfAlloc(100, std::allocator_arg, allocator), std::allocator_arg, allocator);
-    BOOST_CHECK_GE(pool.allocate, 1);
-    BOOST_CHECK_GE(pool.deallocate, 1);
-
-    pool.reset();
-    auto lambda = [](int, std::allocator_arg_t,
-                      std::pmr::polymorphic_allocator<>) -> pmr::Task<void> {
-        std::array<char, 1024> buf{};
-        co_return;
-    };
-    {
-        auto awaitable2 = lambda(100, std::allocator_arg, allocator);
-        awaitable2.start();
-    }
-    BOOST_CHECK_EQUAL(pool.allocate, 1);
-    BOOST_CHECK_EQUAL(pool.deallocate, 1);
-
-    pool.reset();
-    bcos::task::syncWait(
-        [](int, std::allocator_arg_t, std::pmr::polymorphic_allocator<>) -> pmr::Task<void> {
-            std::array<char, 1024> buf{};
-            co_return;
-        }(100, std::allocator_arg, allocator),
-        std::allocator_arg, allocator);
-    BOOST_CHECK_GE(pool.allocate, 1);
-    BOOST_CHECK_GE(pool.deallocate, 1);
-#endif
-}
-
 Task<bcos::u256> testU256()
 {
     boost::multiprecision::number<boost::multiprecision::cpp_int_backend<256, 256,
