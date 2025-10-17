@@ -111,6 +111,7 @@ if(("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR("${CMAKE_CXX_COMPILER_ID}" MATC
         add_compile_options(-Wno-stringop-overflow)
         add_compile_options(-Wno-restrict)
         add_compile_options(-Wno-error=format-truncation)
+        add_compile_options(-Wno-error=free-nonheap-object)
 
         # gcc bug, refer to https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105595
         add_compile_options(-Wno-subobject-linkage)

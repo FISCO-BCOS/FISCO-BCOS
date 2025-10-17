@@ -19,6 +19,7 @@
 set(TEST_BINARY_NAME test-bcos-framework)
 include(SearchTestCases)
 set(SOURCES unittests/storage2/TestMemoryStorage.cpp
+    unittests/storage2/TestAnyStorage.cpp
     unittests/storage/TestCondition.cpp
     unittests/main/main.cpp
     unittests/interfaces/ExecutorTest.cpp
