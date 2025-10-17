@@ -75,23 +75,29 @@ jobs:
           toolchain: nightly-2024-02-25
           override: true
       - name: Configure for linux
-        if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+      - name: Configure for linux arm
+        if: matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          mkdir -p build
+          cd build
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
           export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p build
-          cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF ..
+          cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-osx-release ..
       - name: Configure for windows
         if: matrix.os == 'windows-2025'
         run: |
           mkdir build -Force
           cd build
-          cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DWITH_WASM=OFF -DWITH_TIKV=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static ..
+          cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DALLOCATOR=default -DTESTS=OFF -DFULLNODE=OFF -DWITH_LIGHTNODE=OFF -DWITH_TARS_SERVICES=OFF -DWITH_CPPSDK=ON -DWITH_WASM=OFF -DWITH_TIKV=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-windows-static-release ..
       - name: Build
         run: |
           cd build
