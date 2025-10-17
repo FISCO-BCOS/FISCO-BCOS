@@ -114,8 +114,8 @@ void bcos::txpool::AccountTransactions::mark(int64_t lastNonce)
 
 bool bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
 {
-    auto sender = transaction->sender();
-    if (auto it = m_accountTransactions.find(sender); it != m_accountTransactions.end())
+    if (auto it = m_accountTransactions.find(transaction->sender());
+        it != m_accountTransactions.end())
     {
         return it->second.add(std::move(transaction));
     }
