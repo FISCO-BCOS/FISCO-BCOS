@@ -71,7 +71,7 @@ private:
         template <std::convertible_to<std::string_view> T>
         std::size_t operator()(const T& str) const
         {
-            return std::hash<T>{}(str);
+            return std::hash<std::string_view>{}(std::string_view(str));
         }
     };
 
