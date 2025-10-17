@@ -98,7 +98,7 @@ void bcos::txpool::AccountTransactions::seal(
     }
 
     auto start = m_sealed;
-    for (auto it = index.lower_bound(m_sealed); it != m_pendingEnd && m_sealed - start <= limit;
+    for (auto it = index.lower_bound(m_sealed); it != m_pendingEnd && m_sealed - start < limit;
         ++it)
     {
         out.emplace_back(it->m_transaction);
