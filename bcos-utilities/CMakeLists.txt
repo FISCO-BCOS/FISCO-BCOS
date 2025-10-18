@@ -1,7 +1,18 @@
 
 project(bcos-utilities VERSION ${VERSION})
 
-find_package(Boost REQUIRED COMPONENTS log log_setup filesystem chrono thread serialization iostreams  stacktrace_backtrace)
+# Select proper Boost.Stacktrace backend per platform
+set(BOOST_STACKTRACE_COMPONENT stacktrace_backtrace)
+if (WIN32)
+    # On Windows, use windbg backend; prefer cached with MSVC
+    if (MSVC)
+        set(BOOST_STACKTRACE_COMPONENT stacktrace_windbg_cached)
+    else()
+        set(BOOST_STACKTRACE_COMPONENT stacktrace_windbg)
+    endif()
+endif()
+
+find_package(Boost REQUIRED COMPONENTS log log_setup filesystem chrono thread serialization iostreams ${BOOST_STACKTRACE_COMPONENT})
 find_package(ZLIB REQUIRED)
 if(NOT ONLY_CPP_SDK)
     find_package(zstd CONFIG REQUIRED)
@@ -21,9 +32,9 @@ target_include_directories(bcos-utilities PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-utilities>)
 if (ONLY_CPP_SDK)
-    target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::stacktrace_backtrace ZLIB::ZLIB)
+    target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB)
 else ()
-    target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::stacktrace_backtrace redis++::redis++_static ZLIB::ZLIB zstd::libzstd_static ittapi)
+    target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} redis++::redis++_static ZLIB::ZLIB zstd::libzstd_static ittapi)
 endif ()
 set_target_properties(bcos-utilities PROPERTIES UNITY_BUILD "ON")
 
