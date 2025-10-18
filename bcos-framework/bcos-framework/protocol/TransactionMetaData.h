@@ -24,7 +24,7 @@
 #include "bcos-utilities/AnyHolder.h"
 namespace bcos::protocol
 {
-class TransactionMetaData : public virtual MoveBase<TransactionMetaData>
+class TransactionMetaData
 {
 public:
     TransactionMetaData() = default;
@@ -52,5 +52,5 @@ public:
 
 using TransactionMetaDataList = std::vector<TransactionMetaData::Ptr>;
 using TransactionMetaDataListPtr = std::shared_ptr<TransactionMetaDataList>;
-using AnyTransactionMetaData = AnyHolder<TransactionMetaData, 48>;
+using AnyTransactionMetaData = AnyHolder<TransactionMetaData, 40>;
 }  // namespace bcos::protocol

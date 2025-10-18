@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Storage.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <memory>
 #include <optional>
 #include <range/v3/view/any_view.hpp>
@@ -82,7 +83,7 @@ public:
     // Construct from any storage S that supports the required tag_invoke ops
     template <class Storage>
         requires(!std::is_same_v<std::remove_cvref_t<Storage>, AnyStorage>)
-    explicit AnyStorage(Storage& storage) : m_self(std::make_shared<StorageModel<Storage>>(storage))
+    explicit AnyStorage(Storage& storage) : m_self(InPlace<StorageModel<Storage>>{}, storage)
     {}
 
 private:
@@ -259,7 +260,7 @@ private:
         Storage* m_storage;
     };
 
-    std::shared_ptr<StorageConcept> m_self;
+    bcos::AnyHolder<StorageConcept, 16> m_self;
 
 public:
     // Expose Value type to satisfy readOne operator() return type requirement

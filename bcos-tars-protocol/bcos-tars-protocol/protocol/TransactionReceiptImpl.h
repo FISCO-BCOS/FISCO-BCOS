@@ -38,9 +38,7 @@
 
 namespace bcostars::protocol
 {
-class TransactionReceiptImpl
-  : public bcos::protocol::TransactionReceipt,
-    public virtual bcos::MoveImpl<TransactionReceiptImpl, bcos::protocol::TransactionReceipt>
+class TransactionReceiptImpl : public bcos::protocol::TransactionReceipt
 {
 public:
     TransactionReceiptImpl(const TransactionReceiptImpl&) = default;

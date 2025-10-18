@@ -25,9 +25,7 @@
 
 namespace bcostars::protocol
 {
-class TransactionMetaDataImpl
-  : public bcos::protocol::TransactionMetaData,
-    public virtual bcos::MoveImpl<TransactionMetaDataImpl, bcos::protocol::TransactionMetaData>
+class TransactionMetaDataImpl : public bcos::protocol::TransactionMetaData
 {
 public:
     using Ptr = std::shared_ptr<TransactionMetaDataImpl>;

@@ -33,9 +33,7 @@
 
 namespace bcostars::protocol
 {
-class BlockHeaderImpl
-  : public bcos::protocol::BlockHeader,
-    public virtual bcos::MoveImpl<bcostars::protocol::BlockHeaderImpl, bcos::protocol::BlockHeader>
+class BlockHeaderImpl : public bcos::protocol::BlockHeader
 {
 public:
     explicit BlockHeaderImpl(std::function<bcostars::BlockHeader*()> inner);
