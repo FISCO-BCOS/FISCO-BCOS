@@ -24,6 +24,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
