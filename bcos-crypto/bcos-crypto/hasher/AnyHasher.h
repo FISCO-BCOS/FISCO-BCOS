@@ -1,7 +1,7 @@
 #pragma once
 #include "Hasher.h"
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/TrivialObject.h"
-#include <bcos-concepts/ByteBuffer.h>
 #include <memory>
 #include <span>
 
