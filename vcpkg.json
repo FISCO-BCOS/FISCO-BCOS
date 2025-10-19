@@ -34,6 +34,8 @@
     "fakeit",
     "tbb",
     "jsoncpp",
+    "gmp",
+    "curl",
     {
       "name": "openssl",
       "version>=": "1.1.1-tassl"
