@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
