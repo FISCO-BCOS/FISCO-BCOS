@@ -33,6 +33,7 @@
 #ifdef __APPLE__
 #include <pthread.h>
 #endif
+#include <chrono>
 
 namespace bcos
 {

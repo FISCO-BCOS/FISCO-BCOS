@@ -1,6 +1,5 @@
 #pragma once
 #include "Hasher.h"
-#include "bcos-concepts/ByteBuffer.h"
 #include "bcos-crypto/TrivialObject.h"
 #include <memory>
 #include <span>
@@ -72,9 +71,13 @@ public:
 
     void update(std::span<std::byte const> input);
 
-    void final(concepts::bytebuffer::ByteBuffer auto& output)
+    void final(auto& output)
     {
-        concepts::resizeTo(output, hashSize());
+        if constexpr (
+            requires { output.resize(size_t{}); }) {
+                output.resize(hashSize());
+        }
+
         m_anyHasher->final(
             std::span<std::byte>((std::byte*)::ranges::data(output), ::ranges::size(output)));
     }

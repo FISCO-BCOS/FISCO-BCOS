@@ -1,7 +1,7 @@
 project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE ALL_SRCS bcos-crypto/*.cpp)
-set(LIB_LIST wedprcrypto::crypto wedprcrypto::zkp bcos-utilities bcos-concepts TBB::tbb HSM-CRYPTO::sdf-crypto unofficial::secp256k1 unofficial::secp256k1_precomputed OpenSSL::SSL OpenSSL::Crypto)
+set(LIB_LIST wedprcrypto::crypto wedprcrypto::zkp bcos-utilities TBB::tbb HSM-CRYPTO::sdf-crypto unofficial::secp256k1 unofficial::secp256k1_precomputed OpenSSL::SSL OpenSSL::Crypto)
 if(ONLY_CPP_SDK)
     list(REMOVE_ITEM ALL_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.cpp)
     list(REMOVE_ITEM LIB_LIST wedprcrypto::zkp)
