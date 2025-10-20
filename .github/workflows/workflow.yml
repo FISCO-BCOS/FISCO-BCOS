@@ -30,10 +30,10 @@ jobs:
           clean: false
       - name: Set up JDK 1.8
         if: matrix.os != 'windows-2025'
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
-          distribution: "zulu"
-          java-version: "8.0.382"
+          distribution: "oracle"
+          java-version: "8"
       - uses: lukka/get-cmake@latest
         with:
           cmakeVersion: 3.28.3
