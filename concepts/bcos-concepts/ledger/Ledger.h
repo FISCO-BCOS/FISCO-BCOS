@@ -1,10 +1,6 @@
 #pragma once
+#include "../ByteBuffer.h"
 #include "../protocol/Block.h"
-#include "../storage/Storage.h"
-#include <bcos-framework/protocol/Block.h>
-#include <bcos-task/Trait.h>
-#include <bcos-utilities/Ranges.h>
-#include <concepts>
 
 namespace bcos::concepts::ledger
 {
