@@ -27,6 +27,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
+#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <boost/throw_exception.hpp>
 
@@ -53,8 +54,10 @@ bcos::protocol::BlockHeader::Ptr BlockImpl::blockHeader()
 
 bcos::protocol::AnyBlockHeader BlockImpl::blockHeader() const
 {
-    return {bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
-        [self = shared_from_this()]() { return std::addressof(self->m_inner.blockHeader); }};
+    bcos::protocol::AnyBlockHeader header(bcos::InPlace<bcostars::protocol::BlockHeaderImpl>{},
+        [self = std::const_pointer_cast<BlockImpl>(shared_from_this())]() mutable
+            -> bcostars::BlockHeader* { return &self->m_inner.blockHeader; });
+    return header;
 }
 
 void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
@@ -220,26 +223,26 @@ bcos::protocol::ViewResult<bcos::protocol::AnyTransactionMetaData>
 bcostars::protocol::BlockImpl::transactionMetaDatas() const
 {
     return ::ranges::views::transform(m_inner.transactionsMetaData, [](auto& inner) {
-        return bcos::protocol::AnyTransactionMetaData{
+        return bcos::protocol::AnyTransactionMetaData(
             bcos::InPlace<bcostars::protocol::TransactionMetaDataImpl>{},
-            [&]() mutable { return &inner; }};
+            [&]() mutable { return &inner; });
     });
 }
 bcos::protocol::ViewResult<bcos::protocol::AnyTransaction>
 bcostars::protocol::BlockImpl::transactions() const
 {
     return ::ranges::views::transform(m_inner.transactions, [](auto& inner) {
-        return bcos::protocol::AnyTransaction{
-            bcos::InPlace<bcostars::protocol::TransactionImpl>{}, [&]() mutable { return &inner; }};
+        return bcos::protocol::AnyTransaction(
+            bcos::InPlace<bcostars::protocol::TransactionImpl>{}, [&]() mutable { return &inner; });
     });
 }
 bcos::protocol::ViewResult<bcos::protocol::AnyTransactionReceipt>
 bcostars::protocol::BlockImpl::receipts() const
 {
     return ::ranges::views::transform(m_inner.receipts, [](auto& receipt) {
-        return bcos::protocol::AnyTransactionReceipt{
+        return bcos::protocol::AnyTransactionReceipt(
             bcos::InPlace<bcostars::protocol::TransactionReceiptImpl>{},
-            [&]() mutable { return std::addressof(receipt); }};
+            [&receipt]() { return std::addressof(receipt); });
     });
 }
 size_t bcostars::protocol::BlockImpl::size() const

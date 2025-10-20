@@ -86,6 +86,6 @@ public:
 using Receipts = std::vector<TransactionReceipt::Ptr>;
 using ReceiptsPtr = std::shared_ptr<Receipts>;
 using ReceiptsConstPtr = std::shared_ptr<const Receipts>;
-using AnyTransactionReceipt = AnyHolder<TransactionReceipt, 64>;
+using AnyTransactionReceipt = AnyHolder<TransactionReceipt, 104>;
 
 }  // namespace bcos::protocol

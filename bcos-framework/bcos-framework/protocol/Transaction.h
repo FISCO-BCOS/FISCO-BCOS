@@ -200,7 +200,7 @@ using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
-using AnyTransaction = AnyHolder<bcos::protocol::Transaction, 120>;
+using AnyTransaction = AnyHolder<bcos::protocol::Transaction, 184>;
 
 inline std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 {

@@ -144,6 +144,6 @@ public:
     virtual size_t size() const = 0;
 };
 
-using AnyBlockHeader = AnyHolder<BlockHeader, 40>;
+using AnyBlockHeader = AnyHolder<BlockHeader, 72>;
 
 }  // namespace bcos::protocol

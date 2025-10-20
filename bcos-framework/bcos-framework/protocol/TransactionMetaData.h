@@ -52,5 +52,5 @@ public:
 
 using TransactionMetaDataList = std::vector<TransactionMetaData::Ptr>;
 using TransactionMetaDataListPtr = std::shared_ptr<TransactionMetaDataList>;
-using AnyTransactionMetaData = AnyHolder<TransactionMetaData, 40>;
+using AnyTransactionMetaData = AnyHolder<TransactionMetaData, 72>;
 }  // namespace bcos::protocol
