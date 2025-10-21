@@ -1,4 +1,6 @@
 #include "Web3Transactions.h"
+#include "bcos-framework/txpool/TxPoolTypeDef.h"
+#include <charconv>
 
 int64_t bcos::txpool::TransactionData::importTime() const
 {
@@ -35,7 +37,14 @@ void bcos::txpool::AccountTransactions::updateLastPending()
 
 bool bcos::txpool::AccountTransactions::add(protocol::Transaction::Ptr transaction)
 {
-    auto nonce = boost::lexical_cast<int64_t>(transaction->nonce());
+    int64_t nonce;  // NOLINT
+    auto view = transaction->nonce();
+    if (auto result = std::from_chars(view.begin(), view.end(), nonce); result.ec != std::errc{})
+    {
+        TXPOOL_LOG(WARNING) << "Transaction " << transaction->hash()
+                            << " invalid web3 nonce: " << view;
+        return false;
+    }
 
     std::unique_lock lock(m_mutex);
     auto& index = m_transactions.get<0>();

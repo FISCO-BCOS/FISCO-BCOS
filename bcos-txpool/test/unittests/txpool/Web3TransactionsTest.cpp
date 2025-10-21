@@ -124,6 +124,7 @@ BOOST_AUTO_TEST_CASE(replace_same_nonce_and_mark)
     std::vector<Transaction::Ptr> sealed;
     acc.seal(100, sealed);
     BOOST_CHECK_EQUAL(sealed.size(), 1);
+    BOOST_TEST(sealed[0]->nonce() == "11");
 }
 
 BOOST_AUTO_TEST_CASE(seal_limit_behavior)
