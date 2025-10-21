@@ -200,7 +200,9 @@ using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
-using AnyTransaction = AnyHolder<bcos::protocol::Transaction, 184>;
+using AnyTransaction =
+    AnyHolder<bcos::protocol::Transaction, 184>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
+                                                  // TransactinImpl across platforms)
 
 inline std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 {

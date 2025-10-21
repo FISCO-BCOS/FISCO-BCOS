@@ -144,6 +144,7 @@ public:
     virtual size_t size() const = 0;
 };
 
-using AnyBlockHeader = AnyHolder<BlockHeader, 72>;
+using AnyBlockHeader = AnyHolder<BlockHeader, 72>;  // 多平台BlockHeaderImpl的最大尺寸 (Maximum size
+                                                    // of BlockHeaderImpl across platforms)
 
 }  // namespace bcos::protocol

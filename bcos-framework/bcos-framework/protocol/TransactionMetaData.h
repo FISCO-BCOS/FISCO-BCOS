@@ -52,5 +52,7 @@ public:
 
 using TransactionMetaDataList = std::vector<TransactionMetaData::Ptr>;
 using TransactionMetaDataListPtr = std::shared_ptr<TransactionMetaDataList>;
-using AnyTransactionMetaData = AnyHolder<TransactionMetaData, 72>;
+using AnyTransactionMetaData =
+    AnyHolder<TransactionMetaData, 72>;  // 多平台TransactionMetaDataImpl的最大尺寸 (Maximum size of
+                                         // TransactionMetaDataImpl across platforms)
 }  // namespace bcos::protocol
