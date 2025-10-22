@@ -105,12 +105,16 @@ BOOST_AUTO_TEST_CASE(pending_gap_and_remove_then_seal)
 
     std::vector<Transaction::Ptr> sealed;
     acc.seal(100, sealed);
-    BOOST_CHECK_EQUAL(sealed.size(), 4);
+    BOOST_CHECK_EQUAL(sealed.size(), 2);
+    BOOST_TEST(sealed[0]->nonce() == "1");
+    BOOST_TEST(sealed[1]->nonce() == "2");
 
     acc.remove(2);
     std::vector<Transaction::Ptr> sealed2;
     acc.seal(100, sealed2);
     BOOST_CHECK_EQUAL(sealed2.size(), 2);
+    BOOST_TEST(sealed2[0]->nonce() == "5");
+    BOOST_TEST(sealed2[1]->nonce() == "6");
 }
 
 BOOST_AUTO_TEST_CASE(replace_same_nonce_and_mark)

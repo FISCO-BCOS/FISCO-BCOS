@@ -19,20 +19,26 @@ int64_t bcos::txpool::TransactionData::nonce() const
     return m_nonce;
 }
 
-void bcos::txpool::AccountTransactions::updateLastPending()
+void bcos::txpool::AccountTransactions::updateLongestSequence(OrderedIndexConstIterator updatedIt)
 {
-    auto it = m_pendingEnd == m_transactions.end() ? m_transactions.begin() : m_pendingEnd;
-    while (it != m_transactions.end())
+    auto& index = m_transactions.get<0>();
+    if (index.size() <= 1)
     {
-        auto nextIterator = std::next(it);
-        if (nextIterator == m_transactions.end() || nextIterator->nonce() != it->nonce() + 1)
-        {
-            it = nextIterator;
-            break;
-        }
-        it = nextIterator;
+        m_pendingEnd = index.end();
+        return;
     }
-    m_pendingEnd = it;
+
+    auto it = (m_pendingEnd == index.end() || m_pendingEnd == index.begin() ||
+                  updatedIt == index.end() || m_pendingEnd->nonce() > updatedIt->nonce()) ?
+                  index.begin() :
+                  std::prev(m_pendingEnd);
+    auto nextIt = std::next(it);
+    while (nextIt != index.end() && nextIt->nonce() == it->nonce() + 1)
+    {
+        ++it;
+        ++nextIt;
+    }
+    m_pendingEnd = nextIt;
 }
 
 bool bcos::txpool::AccountTransactions::add(protocol::Transaction::Ptr transaction)
@@ -59,11 +65,11 @@ bool bcos::txpool::AccountTransactions::add(protocol::Transaction::Ptr transacti
     }
     else
     {
-        index.emplace_hint(
+        it = index.emplace_hint(
             it, TransactionData{.m_transaction = std::move(transaction), .m_nonce = nonce});
+        updateLongestSequence(it);
     }
 
-    updateLastPending();
     return replaced;
 }
 
@@ -72,17 +78,16 @@ void bcos::txpool::AccountTransactions::remove(int64_t lastNonce)
     std::unique_lock lock(m_mutex);
     auto& index = m_transactions.get<0>();
     size_t erased = 0;
-    for (auto it = index.begin(); it != index.end() && it->nonce() <= lastNonce;
-        it = index.erase(it))
+    auto it = index.begin();
+    for (; it != index.end() && it->nonce() <= lastNonce; it = index.erase(it))
     {
         ++erased;
     }
 
     if (erased != 0)
     {
-        m_pendingEnd = m_transactions.end();
+        updateLongestSequence(index.end());
     }
-    updateLastPending();
 }
 
 void bcos::txpool::AccountTransactions::seal(

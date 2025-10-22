@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-framework/bcos-framework/protocol/Transaction.h"
+#include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -41,17 +42,20 @@ private:
     int64_t m_sealed = 0;
     std::mutex m_mutex;
 
-    void updateLastPending();
-
 public:
+    // 对外暴露按nonce有序索引的常量迭代器类型，便于返回搜索结果
+    using OrderedIndexConstIterator = Transactions::nth_index<0>::type::const_iterator;
+
     bool add(protocol::Transaction::Ptr transaction);
     void remove(int64_t lastNonce);
     void seal(int64_t limit, std::vector<protocol::Transaction::Ptr>& out);
     void mark(int64_t lastNonce);
+
+    void updateLongestSequence(OrderedIndexConstIterator updatedIt);
 };
 
 
-class Web3Transactions
+class Web3Transactions : public TxPoolStorageInterface
 {
 private:
     struct StringHash
