@@ -59,10 +59,10 @@ jobs:
         if: matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt update
-          sudo apt install -y lcov wget python3-dev python3-pip git curl zip unzip tar
           sudo apt install -y --no-install-recommends \
+              lcov wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
-              flex bison patch libzstd-dev ninja-build pkg-config uuid-runtime automake gcc-14 g++-14
+              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15'
         run: brew install libomp autoconf automake libtool
