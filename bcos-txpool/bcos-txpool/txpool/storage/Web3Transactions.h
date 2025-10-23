@@ -43,7 +43,6 @@ private:
     std::mutex m_mutex;
 
 public:
-    // 对外暴露按nonce有序索引的常量迭代器类型，便于返回搜索结果
     using OrderedIndexConstIterator = Transactions::nth_index<0>::type::const_iterator;
 
     bool add(protocol::Transaction::Ptr transaction);
