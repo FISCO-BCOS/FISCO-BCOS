@@ -43,7 +43,7 @@ void bcos::txpool::AccountTransactions::updateLongestSequence(OrderedIndexConstI
 
 bool bcos::txpool::AccountTransactions::add(protocol::Transaction::Ptr transaction)
 {
-    int64_t nonce;  // NOLINT
+    int64_t nonce;  // NOLINT(cppcoreguidelines-init-variables) - initialized by std::from_chars
     auto view = transaction->nonce();
     if (auto result = std::from_chars(view.begin(), view.end(), nonce); result.ec != std::errc{})
     {
