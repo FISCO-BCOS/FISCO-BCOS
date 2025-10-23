@@ -140,7 +140,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
     auto txsSize =
-        std::min((size_t)m_maxTxsPerBlock, (m_pendingTxs.size() + m_pendingSysTxs.size()));
+        std::min(m_maxTxsPerBlock.load(), (m_pendingTxs.size() + m_pendingSysTxs.size()));
     // prioritize seal from the system txs list
     auto systemTxsSize = std::min(txsSize, m_pendingSysTxs.size());
     if (!m_pendingSysTxs.empty())

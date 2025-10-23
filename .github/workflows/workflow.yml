@@ -20,15 +20,17 @@ jobs:
   build:
     name: Build
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
     steps:
       - uses: actions/checkout@v3
         with:
           clean: false
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         if: matrix.os != 'windows-2025'
         uses: actions/setup-java@v5
         with:
@@ -64,7 +66,7 @@ jobs:
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
               flex bison patch libzstd-dev ninja-build pkg-config uuid-runtime automake gcc-14 g++-14
       - name: Install macOS dependencies
-        if: matrix.os == 'macos-15'
+        if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         run: brew install libomp autoconf automake libtool
       - name: Add MSbuild to PATH
         if: matrix.os == 'windows-2025'
@@ -74,24 +76,41 @@ jobs:
         with:
           toolchain: nightly-2024-02-25
           override: true
+      - name: Compute build flags
+        if: matrix.os != 'windows-2025'
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            echo "EXTRA_FLAGS=-DSTATIC_BUILD=ON" >> "$GITHUB_ENV"
+          else
+            echo "EXTRA_FLAGS=" >> "$GITHUB_ENV"
+          fi
       - name: Configure for linux
         if: matrix.os == 'ubuntu-24.04'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-24.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=OFF -DWITH_CPPSDK=OFF -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
           export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p build
-          cd build && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-osx-release ..
+          cd build
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-osx-release ${EXTRA_FLAGS} ..
+      - name: Configure for macOS (Intel)
+        if: matrix.os == 'macos-15-intel'
+        run: |
+          export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+          mkdir -p build
+          cd build
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-osx-release ${EXTRA_FLAGS} ..
       - name: Configure for windows
         if: matrix.os == 'windows-2025'
         run: |
@@ -124,7 +143,54 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
-        if: matrix.os != 'windows-2025' && matrix.os != 'macos-15'
+        if: matrix.os != 'windows-2025' && matrix.os != 'macos-15' && matrix.os != 'macos-15-intel'
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
+      - name: Set packaging variables
+        if: github.event_name == 'release' && matrix.os != 'windows-2025'
+        id: pkgvars
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.os }}" in
+            ubuntu-24.04)
+              echo "PKG_OS=linux" >> $GITHUB_ENV
+              echo "PKG_ARCH=x86_64" >> $GITHUB_ENV
+              ;;
+            ubuntu-24.04-arm)
+              echo "PKG_OS=linux" >> $GITHUB_ENV
+              echo "PKG_ARCH=aarch64" >> $GITHUB_ENV
+              ;;
+            macos-15)
+              echo "PKG_OS=macOS" >> $GITHUB_ENV
+              echo "PKG_ARCH=arm64" >> $GITHUB_ENV
+              ;;
+            macos-15-intel)
+              echo "PKG_OS=macOS" >> $GITHUB_ENV
+              echo "PKG_ARCH=x86_64" >> $GITHUB_ENV
+              ;;
+            *) ;;
+          esac
+          echo "PKG_NAME=fisco-bcos-${PKG_OS:-unknown}-${PKG_ARCH:-unknown}.tar.gz" >> $GITHUB_ENV
+          # also expose as step outputs for later reference
+          echo "pkg_name=fisco-bcos-${PKG_OS:-unknown}-${PKG_ARCH:-unknown}.tar.gz" >> $GITHUB_OUTPUT
+      - name: Create release tarball
+        if: github.event_name == 'release' && matrix.os != 'windows-2025'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN_PATH="build/fisco-bcos-air/fisco-bcos"
+          if [[ ! -f "$BIN_PATH" ]]; then
+            echo "Binary not found at $BIN_PATH" >&2
+            ls -la build || true
+            exit 1
+          fi
+          # Create tar.gz in repo root with only the binary inside (no extra folders)
+          tar -C "$(dirname "$BIN_PATH")" -czf "${PKG_NAME}" "$(basename "$BIN_PATH")"
+      - name: Upload assets to GitHub Release
+        if: github.event_name == 'release' && matrix.os != 'windows-2025'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.pkgvars.outputs.pkg_name }}
