@@ -55,7 +55,7 @@ public:
 };
 
 
-class Web3Transactions : public TxPoolStorageInterface
+class Web3Transactions
 {
 private:
     struct StringHash
