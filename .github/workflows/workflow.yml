@@ -40,7 +40,7 @@ jobs:
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
-      - name: Restore vcpkg cache
+      - name: Vcpkg cache
         uses: actions/cache@v4
         id: vcpkg-cache
         with:
@@ -126,12 +126,12 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
-      - name: Generate coverage (arm)
+      - name: Generate coverage
         if: matrix.os == 'ubuntu-24.04-arm'
         run: |
           cd build
           cmake --build . --target coverage --parallel 2
-      - name: Upload coverage report (arm)
+      - name: Upload coverage report
         if: matrix.os == 'ubuntu-24.04-arm'
         uses: actions/upload-artifact@v4
         with:
@@ -145,21 +145,11 @@ jobs:
         with:
           path: build/CodeCoverage
           name: github-pages
-  deploy-pages:
-    name: Deploy coverage to GitHub Pages
-    needs: build
-    if: github.event_name == 'push' || github.event_name == 'release'
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Setup Pages
+        if: matrix.os == 'ubuntu-24.04-arm'
         uses: actions/configure-pages@v5
       - name: Deploy to GitHub Pages
+        if: matrix.os == 'ubuntu-24.04-arm'
         id: deployment
         uses: actions/deploy-pages@v4
       - name: prepare RPCAPI Tests
@@ -173,7 +163,7 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
-        if: matrix.os != 'windows-2025' && matrix.os != 'macos-15' && matrix.os != 'macos-15-intel'
+        if: matrix.os != 'windows-2025'
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"

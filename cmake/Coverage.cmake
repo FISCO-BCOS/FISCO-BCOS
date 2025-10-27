@@ -40,15 +40,15 @@ function(config_coverage TARGET REMOVE_FILE_PATTERN)
     set(GCOV_ENV "")
     if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         # Try versioned gcov first (e.g. gcov-14), then fallback to gcov
-        set(_gcov_candidates gcov-${CMAKE_CXX_COMPILER_VERSION} gcov-${CMAKE_CXX_COMPILER_VERSION_MAJOR} gcov)
-        foreach(_g IN LISTS _gcov_candidates)
-            if (NOT GCOV_ENV)
-                find_program(_GCOV_PATH ${_g})
-                if (_GCOV_PATH)
-                    set(GCOV_ENV "GCOV=${_GCOV_PATH}")
-                endif()
-            endif()
-        endforeach()
+        # CMake doesn't expose a *_VERSION_MAJOR variable for compilers; extract it from the version string.
+        if (CMAKE_CXX_COMPILER_VERSION)
+            string(REGEX REPLACE "^([0-9]+).*" "\\1" _CXX_VER_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
+        endif()
+        set(_gcov_candidates gcov-${_CXX_VER_MAJOR} gcov)
+        find_program(_GCOV_PATH ${_gcov_candidates})
+        if (_GCOV_PATH)
+            set(GCOV_ENV "GCOV=${_GCOV_PATH}")
+        endif()
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         # lcov consumes gcov-compatible output; use `llvm-cov gcov`
         find_program(_LLVM_COV llvm-cov)
@@ -86,18 +86,18 @@ function(config_coverage TARGET REMOVE_FILE_PATTERN)
     if (APPLE)
         add_custom_target(${TARGET}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/CodeCoverage
-            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
-            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in "*MacOS*" 
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in "*MacOS*" 
                     ${_coverage_excludes} -o ${CMAKE_BINARY_DIR}/coverage.info
             COMMAND ${GENHTML_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info
         )
     else()
         add_custom_target(${TARGET}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/CodeCoverage
-            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
-            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in 
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in 
                     ${_coverage_excludes} -o ${CMAKE_BINARY_DIR}/coverage.info
-            COMMAND ${GENHTML_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info
+            COMMAND ${GENHTML_TOOL} --keep-going --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info
         )
     endif()
 endfunction()
