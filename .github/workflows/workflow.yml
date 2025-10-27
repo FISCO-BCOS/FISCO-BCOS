@@ -96,7 +96,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
@@ -126,12 +126,42 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
-      # - name: Upload coverage report
-      #   if: matrix.os == 'ubuntu-24.04'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: coverage-report
-      #     path: build/coverage.info
+      - name: Generate coverage (arm)
+        if: matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          cd build
+          cmake --build . --target coverage --parallel 2
+      - name: Upload coverage report (arm)
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-arm
+          path: |
+            build/coverage.info
+            build/CodeCoverage
+      - name: Upload Pages artifact (coverage html)
+        if: (matrix.os == 'ubuntu-24.04-arm') && (github.event_name == 'push' || github.event_name == 'release')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/CodeCoverage
+          name: github-pages
+  deploy-pages:
+    name: Deploy coverage to GitHub Pages
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
       - name: prepare RPCAPI Tests
         if: matrix.os != 'windows-2025'
         run: |
