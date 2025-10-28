@@ -94,9 +94,8 @@ function(config_coverage TARGET REMOVE_FILE_PATTERN)
     else()
         add_custom_target(${TARGET}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/CodeCoverage
-            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
-            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in 
-                    ${_coverage_excludes} -o ${CMAKE_BINARY_DIR}/coverage.info
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in ${_coverage_excludes} -o ${CMAKE_BINARY_DIR}/coverage.info
             COMMAND ${GENHTML_TOOL} --keep-going --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info
         )
     endif()
