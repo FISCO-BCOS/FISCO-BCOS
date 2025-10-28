@@ -22,6 +22,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      pages: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
