@@ -22,6 +22,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      issues: write
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -40,7 +42,7 @@ jobs:
         with:
           cmakeVersion: 3.28.3
           ninjaVersion: 1.12.1
-      - name: Restore vcpkg cache
+      - name: Vcpkg cache
         uses: actions/cache@v4
         id: vcpkg-cache
         with:
@@ -65,6 +67,7 @@ jobs:
           sudo apt install -y --no-install-recommends \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
               flex bison patch libzstd-dev ninja-build pkg-config uuid-runtime automake gcc-14 g++-14
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 --slave /usr/bin/g++ g++ /usr/bin/g++-14 --slave /usr/bin/gcov gcov /usr/bin/gcov-14
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         run: brew install libomp autoconf automake libtool
@@ -90,13 +93,13 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-24.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          cmake -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
@@ -126,12 +129,51 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
-      # - name: Upload coverage report
-      #   if: matrix.os == 'ubuntu-24.04'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: coverage-report
-      #     path: build/coverage.info
+      - name: Generate coverage
+        if: matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          cd build
+          cmake --build . --target coverage --parallel 2
+      - name: Summarize coverage (Job Summary)
+        if: matrix.os == 'ubuntu-24.04-arm'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Code Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifacts: coverage.info + HTML report" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f build/coverage.info ]]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            lcov --summary build/coverage.info | tee /tmp/coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            COV_PCT=$(awk '/lines/ {print $2}' /tmp/coverage-summary.txt | sed 's/%//;q')
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "Lines coverage: ${COV_PCT}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "coverage_pct=${COV_PCT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "coverage.info not found" >> "$GITHUB_STEP_SUMMARY"
+            echo "coverage_pct=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/coverage.info
+          flags: unittests
+          name: codecov-ubuntu-24.04-arm
+          fail_ci_if_error: false
+      - name: Comment coverage on PR
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            Code coverage (ubuntu-24.04-arm): `${{ steps.Summarize_coverage_Job_Summary.outputs.coverage_pct || 'N/A' }}%`
+            
+            - lcov: `build/coverage.info`
+            - HTML: artifact "coverage-report"
+          edit-mode: replace
       - name: prepare RPCAPI Tests
         if: matrix.os != 'windows-2025'
         run: |
@@ -143,7 +185,7 @@ jobs:
         with:
           collection: https://raw.githubusercontent.com/FISCO-BCOS/FISCOBCOS-RPC-API/main/fiscobcos.rpcapi.collection.json
       - name: Integration test - Air
-        if: matrix.os != 'windows-2025' && matrix.os != 'macos-15' && matrix.os != 'macos-15-intel'
+        if: matrix.os != 'windows-2025'
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"

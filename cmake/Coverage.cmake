@@ -18,24 +18,85 @@
 # ------------------------------------------------------------------------------
 # REMOVE_FILE_PATTERN eg.: '/usr*' '${CMAKE_SOURCE_DIR}/deps**' '${CMAKE_SOURCE_DIR}/evmc*' ‘${CMAKE_SOURCE_DIR}/fisco-bcos*’
 function(config_coverage TARGET REMOVE_FILE_PATTERN)
+    # Tools: lcov/genhtml are required. Ubuntu 24.04 ships lcov 2.x which needs explicit branch rc.
     find_program(LCOV_TOOL lcov)
-    message(STATUS "lcov tool: ${LCOV_TOOL}")
-    if (LCOV_TOOL)
-        message(STATUS "coverage dir: " ${CMAKE_BINARY_DIR})
-        message(STATUS "coverage TARGET: " ${TARGET})
-        message(STATUS "coverage REMOVE_FILE_PATTERN: " ${REMOVE_FILE_PATTERN})
-        if (APPLE)
-            add_custom_target(${TARGET}
-                COMMAND ${LCOV_TOOL} -keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
-                COMMAND ${LCOV_TOOL} -keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in '*MacOS*' '/usr*' '.*vcpkg_installed*' '.*boost/*' '*test*' '*build*' '*deps*' ${REMOVE_FILE_PATTERN} -o ${CMAKE_BINARY_DIR}/coverage.info
-                COMMAND genhtml --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
-        else()
-            add_custom_target(${TARGET}
-                COMMAND ${LCOV_TOOL} --keep-going -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
-                COMMAND ${LCOV_TOOL} --keep-going -r ${CMAKE_BINARY_DIR}/coverage.info.in '/usr*' '*vcpkg_installed*' '*boost*' '*test*' '*build*' '*deps*' ${REMOVE_FILE_PATTERN} -o ${CMAKE_BINARY_DIR}/coverage.info
-                COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
-        endif()
-    else ()
+    find_program(GENHTML_TOOL genhtml)
+    if (NOT LCOV_TOOL)
         message(FATAL_ERROR "Can't find lcov tool. Please install lcov")
+    endif()
+    if (NOT GENHTML_TOOL)
+        message(FATAL_ERROR "Can't find genhtml tool. Please install lcov (provides genhtml)")
+    endif()
+
+    message(STATUS "lcov tool: ${LCOV_TOOL}")
+    message(STATUS "genhtml tool: ${GENHTML_TOOL}")
+    message(STATUS "coverage dir: ${CMAKE_BINARY_DIR}")
+    message(STATUS "coverage TARGET: ${TARGET}")
+    if (REMOVE_FILE_PATTERN)
+        message(STATUS "coverage REMOVE_FILE_PATTERN: ${REMOVE_FILE_PATTERN}")
+    endif()
+
+    # Detect gcov/llvm-cov for Ubuntu 24.04 (GCC 14 / Clang 18) and pass via env GCOV
+    set(GCOV_ENV "")
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # Try versioned gcov first (e.g. gcov-14), then fallback to gcov
+        # CMake doesn't expose a *_VERSION_MAJOR variable for compilers; extract it from the version string.
+        if (CMAKE_CXX_COMPILER_VERSION)
+            string(REGEX REPLACE "^([0-9]+).*" "\\1" _CXX_VER_MAJOR "${CMAKE_CXX_COMPILER_VERSION}")
+        endif()
+        set(_gcov_candidates gcov-${_CXX_VER_MAJOR} gcov)
+        find_program(_GCOV_PATH ${_gcov_candidates})
+        if (_GCOV_PATH)
+            set(GCOV_ENV "GCOV=${_GCOV_PATH}")
+        endif()
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        # lcov consumes gcov-compatible output; use `llvm-cov gcov`
+        find_program(_LLVM_COV llvm-cov)
+        if (_LLVM_COV)
+            # Keep as a single arg so spaces are preserved: GCOV="/usr/bin/llvm-cov gcov"
+            set(GCOV_ENV "GCOV=${_LLVM_COV} gcov")
+        endif()
+    endif()
+    if (GCOV_ENV)
+        message(STATUS "coverage gcov tool set via env: ${GCOV_ENV}")
+    else()
+        message(WARNING "No explicit gcov tool configured; lcov will try system default. On Ubuntu 24.04 you may need gcov-14 or llvm-cov installed.")
+    endif()
+
+    # Common exclude patterns. Quote patterns to avoid shell globbing when using Makefile generator.
+    set(_coverage_excludes
+        "/usr/*"
+        "${CMAKE_BINARY_DIR}/*"
+        "*/CMakeFiles/*"
+        "*/vcpkg_installed/*"
+        "*/_deps/*"
+        "*/thirdparty/*"
+        "*/boost/*"
+        "*/tests/*"
+        "*/test/*"
+        "*/build/*"
+        "*/deps/*"
+    )
+    # Allow caller-provided extra remove patterns (can be a list)
+    if (REMOVE_FILE_PATTERN)
+        list(APPEND _coverage_excludes ${REMOVE_FILE_PATTERN})
+    endif()
+
+    # Assemble commands; always enable branch coverage rc and tolerant error handling across platforms.
+    if (APPLE)
+        add_custom_target(${TARGET}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/CodeCoverage
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in "*MacOS*" 
+                    ${_coverage_excludes} -o ${CMAKE_BINARY_DIR}/coverage.info
+            COMMAND ${GENHTML_TOOL} --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info
+        )
+    else()
+        add_custom_target(${TARGET}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/CodeCoverage
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} -E env ${GCOV_ENV} ${LCOV_TOOL} --keep-going --rc branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in ${_coverage_excludes} -o ${CMAKE_BINARY_DIR}/coverage.info
+            COMMAND ${GENHTML_TOOL} --keep-going --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info
+        )
     endif()
 endfunction()
