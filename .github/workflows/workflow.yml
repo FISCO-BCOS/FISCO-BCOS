@@ -164,7 +164,7 @@ jobs:
           name: codecov-ubuntu-24.04-arm
           fail_ci_if_error: false
       - name: Comment coverage on PR
-        if: github.event_name == 'pull_request_target' && matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os == 'ubuntu-24.04-arm'
         uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.pull_request.number }}
