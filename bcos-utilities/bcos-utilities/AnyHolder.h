@@ -18,7 +18,14 @@ template <class Type, std::size_t maxSize>
 class AnyHolder
 {
 private:
-    std::array<std::byte, maxSize> m_data;
+    // 注意：m_data 需要满足 HoldType 的对齐要求。之前未加对齐限定在部分平台（mac x86）上
+    // 会因为 placement new 到未对齐地址引发未定义行为（EXC_I386_GPFLT）。
+    // 使用 max_align_t 作为保守上界，确保能容纳绝大多数类型的对齐需求。
+    // Note: m_data must satisfy the alignment requirements of HoldType. Previously, without
+    // explicit alignment on some platforms (mac x86), placement-new to an unaligned address could
+    // cause undefined behavior (EXC_I386_GPFLT). Use max_align_t as a conservative upper bound to
+    // cover the vast majority of alignment requirements.
+    alignas(std::max_align_t) std::array<std::byte, maxSize> m_data;
     struct MoveOperators
     {
         void (*destroy)(Type*) noexcept;
@@ -63,7 +70,7 @@ public:
 
     template <class HoldType>
         requires std::movable<HoldType> && std::derived_from<HoldType, Type> &&
-                 (sizeof(HoldType) <= maxSize)
+                 (sizeof(HoldType) <= maxSize) && (alignof(HoldType) <= alignof(std::max_align_t))
     AnyHolder(InPlace<HoldType> /*unused*/, auto&&... args)
       : m_moveOperators(getMoveOperatorsFor<HoldType>())
     {
