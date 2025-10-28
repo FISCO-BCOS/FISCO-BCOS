@@ -22,8 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
-      pages: write
-      id-token: write
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -134,27 +133,47 @@ jobs:
         run: |
           cd build
           cmake --build . --target coverage --parallel 2
-      - name: Upload coverage report
+      - name: Summarize coverage (Job Summary)
         if: matrix.os == 'ubuntu-24.04-arm'
-        uses: actions/upload-artifact@v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "## Code Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifacts: coverage.info + HTML report" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f build/coverage.info ]]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            lcov --summary build/coverage.info | tee /tmp/coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            # 解析行覆盖率百分比（lcov --summary 输出的 lines......: XX.YY%）
+            COV_PCT=$(awk '/lines/ {print $2}' /tmp/coverage-summary.txt | sed 's/%//;q')
+            echo >> "$GITHUB_STEP_SUMMARY"
+            echo "Lines coverage: ${COV_PCT}%" >> "$GITHUB_STEP_SUMMARY"
+            echo "coverage_pct=${COV_PCT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "coverage.info not found" >> "$GITHUB_STEP_SUMMARY"
+            echo "coverage_pct=0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-24.04-arm'
+        uses: codecov/codecov-action@v4
         with:
-          name: coverage-report-arm
-          path: |
-            build/coverage.info
-            build/CodeCoverage
-      - name: Upload Pages artifact (coverage html)
-        if: (matrix.os == 'ubuntu-24.04-arm') && (github.event_name == 'push' || github.event_name == 'release')
-        uses: actions/upload-pages-artifact@v3
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/coverage.info
+          flags: unittests
+          name: codecov-ubuntu-24.04-arm
+          fail_ci_if_error: false
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-24.04-arm'
+        uses: peter-evans/create-or-update-comment@v4
         with:
-          path: build/CodeCoverage
-          name: github-pages
-      - name: Setup Pages
-        if: matrix.os == 'ubuntu-24.04-arm'
-        uses: actions/configure-pages@v5
-      - name: Deploy to GitHub Pages
-        if: matrix.os == 'ubuntu-24.04-arm'
-        id: deployment
-        uses: actions/deploy-pages@v4
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            Code coverage (ubuntu-24.04-arm): `${{ steps.Summarize_coverage_Job_Summary.outputs.coverage_pct || 'N/A' }}%`
+            
+            - lcov: `build/coverage.info`
+            - HTML: artifact "coverage-report"
+          edit-mode: replace
       - name: prepare RPCAPI Tests
         if: matrix.os != 'windows-2025'
         run: |
