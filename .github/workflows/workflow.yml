@@ -22,6 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      issues: write
       pull-requests: write
     strategy:
       fail-fast: false
@@ -145,7 +146,6 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             lcov --summary build/coverage.info | tee /tmp/coverage-summary.txt >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            # 解析行覆盖率百分比（lcov --summary 输出的 lines......: XX.YY%）
             COV_PCT=$(awk '/lines/ {print $2}' /tmp/coverage-summary.txt | sed 's/%//;q')
             echo >> "$GITHUB_STEP_SUMMARY"
             echo "Lines coverage: ${COV_PCT}%" >> "$GITHUB_STEP_SUMMARY"
@@ -164,8 +164,8 @@ jobs:
           name: codecov-ubuntu-24.04-arm
           fail_ci_if_error: false
       - name: Comment coverage on PR
-        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-24.04-arm'
-        uses: peter-evans/create-or-update-comment@v4
+        if: github.event_name == 'pull_request_target' && matrix.os == 'ubuntu-24.04-arm'
+        uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
