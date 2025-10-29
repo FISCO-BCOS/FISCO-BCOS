@@ -59,7 +59,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
             nonceU256 > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
-                              << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
+                              << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonceU256)
                               << LOG_KV("nonceInLedger", nonceInLedgerValue);
             co_return TransactionStatus::NonceCheckFail;
         }
@@ -77,7 +77,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
             nonceU256 > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce storage check fail")
-                              << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonce)
+                              << LOG_KV("sender", senderHex) << LOG_KV("nonce", nonceU256)
                               << LOG_KV("nonceInStorage", nonceInStorage);
             co_return TransactionStatus::NonceCheckFail;
         }

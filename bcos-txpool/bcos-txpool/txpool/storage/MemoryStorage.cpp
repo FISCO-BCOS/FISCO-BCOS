@@ -439,6 +439,11 @@ void MemoryStorage::batchRemoveSealedTxs(
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_REMOVE_TXS);
 
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        TXPOOL_LOG(TRACE) << LOG_DESC("batchRemoveSealedTxs called") << LOG_KV("batchId", batchId)
+                          << LOG_KV("txsResultSize", txsResult.size());
+    }
     auto startT = utcTime();
     auto recordT = startT;
     uint64_t lockT = 0;
@@ -486,29 +491,37 @@ void MemoryStorage::batchRemoveSealedTxs(
     std::unordered_map<std::string, std::set<u256>> web3NonceMap{};
     for (auto&& [tx, txResult] : results)
     {
+        auto nonceString = std::string();
+        auto sender = std::string();
+        auto type = TransactionType::BCOSTransaction;
         if (tx)
         {
-            if (tx->type() == TransactionType::Web3Transaction) [[unlikely]]
-            {
-                auto sender = std::string(tx->sender());
-                auto nonce = hex2u(tx->nonce());
-                if (auto it = web3NonceMap.find(sender); it != web3NonceMap.end())
-                {
-                    it->second.insert(nonce);
-                }
-                else
-                {
-                    web3NonceMap.insert({sender, {nonce}});
-                }
-            }
-            else
-            {
-                nonceListPtr->emplace_back(tx->nonce());
-            }
+            nonceString = tx->nonce();
+            sender = std::string(tx->sender());
+            type = static_cast<TransactionType>(tx->type());
         }
         else if (!(*txResult)->nonce().empty())
         {
-            nonceListPtr->emplace_back((*txResult)->nonce());
+            nonceString = (*txResult)->nonce();
+            sender = (*txResult)->sender();
+            type = static_cast<TransactionType>((*txResult)->type());
+        }
+
+        if (type == TransactionType::Web3Transaction)
+        {
+            auto nonce = hex2u(nonceString);
+            if (auto it = web3NonceMap.find(sender); it != web3NonceMap.end())
+            {
+                it->second.insert(nonce);
+            }
+            else
+            {
+                web3NonceMap.insert({sender, {nonce}});
+            }
+        }
+        else if (type == TransactionType::BCOSTransaction)
+        {
+            nonceListPtr->emplace_back(nonceString);
         }
     }
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(batchId, nonceListPtr);
@@ -683,6 +696,10 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
 {
     try
     {
+        if (txs.empty()) [[unlikely]]
+        {
+            return;
+        }
         // remove invalid txs
         size_t txCnt = 0;
         std::unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::Ptr> txs2Remove;
@@ -734,6 +751,8 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
             txResult->setTxHash(txHash);
             txResult->setStatus(static_cast<uint32_t>(TransactionStatus::TransactionPoolTimeout));
             txResult->setNonce(std::string(nonce));
+            txResult->setType(tx->type());
+            txResult->setSender(std::string(tx->sender()));
             notifyTxResult(*tx, std::move(txResult));
         }
 

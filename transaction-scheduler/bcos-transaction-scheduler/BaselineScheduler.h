@@ -514,6 +514,7 @@ private:
                             submitResult->setTransactionReceipt(receipt);
                             submitResult->setSender(std::string(transaction->sender()));
                             submitResult->setTo(std::string(transaction->to()));
+                            submitResult->setType(transaction->type());
 
                             return submitResult;
                         }) |

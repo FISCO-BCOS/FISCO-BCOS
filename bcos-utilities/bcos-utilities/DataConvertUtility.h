@@ -84,6 +84,22 @@ std::string toQuantity(const Binary auto& binary)
     return out;
 }
 
+u256 safeCastToU256(const concepts::StringLike auto& value)
+{
+    if (value.empty())
+    {
+        return u256{};
+    }
+    try
+    {
+        return boost::lexical_cast<u256>(value);
+    }
+    catch (...)
+    {
+        return {};
+    }
+}
+
 template <class T>
 concept Number = std::is_integral_v<T>;
 std::string toQuantity(Number auto number)

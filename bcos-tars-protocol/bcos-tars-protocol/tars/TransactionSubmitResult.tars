@@ -11,5 +11,6 @@ module bcostars {
         6 optional TransactionReceipt transactionReceipt;
         7 optional string sender;
         8 optional string to;
+        9 optional byte type;
     };
 };
