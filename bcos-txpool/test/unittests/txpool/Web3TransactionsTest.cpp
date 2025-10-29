@@ -1,191 +1,215 @@
 /**
  *  Copyright (C) 2025 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file Web3TransactionsTest.cpp
- * @author: MO NAN
- * @date 2025/10/14
  */
 
 #include "bcos-txpool/txpool/storage/Web3Transactions.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/ledger/EVMAccount.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-task/Wait.h>
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/all.hpp>
+#include <unordered_map>
 
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
+using namespace bcos::executor_v1;
 
 namespace bcos::test
 {
-
-// A unified fixture for both AccountTransactions and Web3Transactions tests
-struct TransactionsFixture
+// A tiny in-memory storage implementing storage2 tag_invoke for StateKeyView/StateValue.
+struct MapStateStorage
 {
-    TransactionsFixture()
-    {
-        hashImpl = std::make_shared<Keccak256>();
-        signatureImpl = std::make_shared<Secp256k1Crypto>();
-        cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-
-        // For AccountTransactions tests
-        key = signatureImpl->generateKeyPair();
-
-        // For Web3Transactions tests
-        keyA = signatureImpl->generateKeyPair();
-        keyB = signatureImpl->generateKeyPair();
-        senderA = keyA->address(hashImpl).toRawString();
-        senderB = keyB->address(hashImpl).toRawString();
-        hexSenderA = toHex(senderA);
-        hexSenderB = toHex(senderB);
-    }
-
-    CryptoSuite::Ptr cryptoSuite;
-    std::shared_ptr<Keccak256> hashImpl;
-    std::shared_ptr<Secp256k1Crypto> signatureImpl;
-
-    // For AccountTransactions
-    KeyPairInterface::UniquePtr key;
-    Transaction::Ptr makeTx(std::string nonce)
-    {
-        return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(nonce), key);
-    }
-
-    // For Web3Transactions
-    KeyPairInterface::UniquePtr keyA;
-    KeyPairInterface::UniquePtr keyB;
-    std::string senderA;
-    std::string senderB;
-    std::string hexSenderA;
-    std::string hexSenderB;
-    Transaction::Ptr txA(std::string n)
-    {
-        return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(n), keyA);
-    }
-    Transaction::Ptr txB(std::string n)
-    {
-        return bcos::test::fakeWeb3Tx(cryptoSuite, std::move(n), keyB);
-    }
+    using Value = storage::Entry;
+    std::unordered_map<std::string, std::unordered_map<std::string, Value>> data;
 };
 
-BOOST_FIXTURE_TEST_SUITE(AccountTransactionsTest, TransactionsFixture)
-
-BOOST_AUTO_TEST_CASE(add_and_seal_contiguous)
+// ReadOne
+inline task::Task<std::optional<MapStateStorage::Value>> tag_invoke(
+    bcos::storage2::tag_t<bcos::storage2::readOne>, MapStateStorage& storage,
+    const StateKeyView key)
 {
-    AccountTransactions acc;
-    BOOST_CHECK_EQUAL(acc.add(makeTx("1")), false);
-    BOOST_CHECK_EQUAL(acc.add(makeTx("2")), false);
-    BOOST_CHECK_EQUAL(acc.add(makeTx("3")), false);
-
-    std::vector<Transaction::Ptr> sealed;
-    acc.seal(100, sealed);
-    BOOST_CHECK_EQUAL(sealed.size(), 3);
+    auto [table, field] = key.get();
+    if (auto tIt = storage.data.find(std::string(table)); tIt != storage.data.end())
+    {
+        if (auto fIt = tIt->second.find(std::string(field)); fIt != tIt->second.end())
+        {
+            co_return std::make_optional(fIt->second);
+        }
+    }
+    co_return std::nullopt;
 }
 
-BOOST_AUTO_TEST_CASE(pending_gap_and_remove_then_seal)
+// WriteOne
+inline task::Task<void> tag_invoke(bcos::storage2::tag_t<bcos::storage2::writeOne>,
+    MapStateStorage& storage, StateKey key, MapStateStorage::Value value)
 {
-    AccountTransactions acc;
-    BOOST_CHECK(!acc.add(makeTx("1")));
-    BOOST_CHECK(!acc.add(makeTx("2")));
-    BOOST_CHECK(!acc.add(makeTx("5")));
-    BOOST_CHECK(!acc.add(makeTx("6")));
-
-    std::vector<Transaction::Ptr> sealed;
-    acc.seal(100, sealed);
-    BOOST_CHECK_EQUAL(sealed.size(), 2);
-    BOOST_TEST(sealed[0]->nonce() == "1");
-    BOOST_TEST(sealed[1]->nonce() == "2");
-
-    acc.remove(2);
-    std::vector<Transaction::Ptr> sealed2;
-    acc.seal(100, sealed2);
-    BOOST_CHECK_EQUAL(sealed2.size(), 2);
-    BOOST_TEST(sealed2[0]->nonce() == "5");
-    BOOST_TEST(sealed2[1]->nonce() == "6");
+    StateKeyView view{key};
+    auto [table, field] = view.get();
+    storage.data[std::string(table)][std::string(field)] = std::move(value);
+    co_return;
 }
 
-BOOST_AUTO_TEST_CASE(replace_same_nonce_and_mark)
+// ReadSome: return vector<optional<Entry>> in the same order
+template <class Keys>
+inline task::Task<std::vector<std::optional<MapStateStorage::Value>>> tag_invoke(
+    bcos::storage2::tag_t<bcos::storage2::readSome>, MapStateStorage& storage, Keys keys)
 {
-    AccountTransactions acc;
-    BOOST_CHECK(!acc.add(makeTx("10")));
-    BOOST_CHECK(acc.add(makeTx("10")));
-    BOOST_CHECK(!acc.add(makeTx("11")));
-
-    acc.mark(11);
-    std::vector<Transaction::Ptr> sealed;
-    acc.seal(100, sealed);
-    BOOST_CHECK_EQUAL(sealed.size(), 1);
-    BOOST_TEST(sealed[0]->nonce() == "11");
+    std::vector<std::optional<MapStateStorage::Value>> results;
+    results.reserve(::ranges::distance(keys));
+    for (auto&& k : keys)
+    {
+        StateKeyView key{k};
+        auto [table, field] = key.get();
+        if (auto tIt = storage.data.find(std::string(table)); tIt != storage.data.end())
+        {
+            if (auto fIt = tIt->second.find(std::string(field)); fIt != tIt->second.end())
+            {
+                results.emplace_back(fIt->second);
+                continue;
+            }
+        }
+        results.emplace_back(std::nullopt);
+    }
+    co_return results;
 }
 
-BOOST_AUTO_TEST_CASE(seal_limit_behavior)
+// WriteSome: accept range of pair(StateKey, Entry)
+template <class KVs>
+inline task::Task<void> tag_invoke(
+    bcos::storage2::tag_t<bcos::storage2::writeSome>, MapStateStorage& storage, KVs keyValues)
 {
-    AccountTransactions acc;
-    BOOST_CHECK(!acc.add(makeTx("1")));
-    BOOST_CHECK(!acc.add(makeTx("2")));
-    BOOST_CHECK(!acc.add(makeTx("3")));
-
-    std::vector<Transaction::Ptr> sealed;
-    acc.seal(2, sealed);
-    BOOST_CHECK_EQUAL(sealed.size(), 2);
+    for (auto&& kv : keyValues)
+    {
+        StateKey key{std::get<0>(kv)};
+        auto& value = std::get<1>(kv);
+        StateKeyView view{key};
+        auto [table, field] = view.get();
+        storage.data[std::string(table)][std::string(field)] = value;
+    }
+    co_return;
 }
 
-BOOST_AUTO_TEST_CASE(seal_zero_limit_noop)
+static bytes toBytes(std::string_view s)
 {
-    AccountTransactions acc;
-    BOOST_CHECK(!acc.add(makeTx("1")));
-    std::vector<Transaction::Ptr> sealed;
-    acc.seal(0, sealed);
-    BOOST_CHECK(sealed.empty());
+    return bytes(reinterpret_cast<const byte*>(s.data()),
+        reinterpret_cast<const byte*>(s.data()) + s.size());
+}
+
+static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t nonce)
+{
+    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    tx->setNonce(std::to_string(nonce));
+    tx->forceSender(toBytes(senderBytes));
+    Keccak256 hasher;
+    tx->calculateHash(hasher);
+    // give it a stable importTime ordering same as nonce
+    tx->setImportTime(nonce);
+    return tx;
+}
+
+// Helper to read nonce from storage via EVMAccount to validate seal() side effects
+static std::optional<std::string> readNonce(MapStateStorage& s, std::string_view sender)
+{
+    ledger::account::EVMAccount acc{s, sender, false};
+    return task::syncWait(acc.nonce());
+}
+
+static void setNonce(MapStateStorage& s, std::string_view sender, std::string nonce)
+{
+    ledger::account::EVMAccount acc{s, sender, false};
+    task::syncWait(acc.setNonce(std::move(nonce)));
+}
+
+BOOST_AUTO_TEST_SUITE(Web3TransactionsTest)
+
+BOOST_AUTO_TEST_CASE(seal_single_sender_contiguous)
+{
+    Web3Transactions pool;
+    // 20-byte sender
+    std::string sender("aaaaaaaaaaaaaaaaaaaa", 20);
+    std::vector<protocol::Transaction::Ptr> txs;
+    txs.emplace_back(makeTx(sender, 0));
+    txs.emplace_back(makeTx(sender, 1));
+    txs.emplace_back(makeTx(sender, 2));
+    pool.add(txs);
+
+    MapStateStorage state{};  // empty state implies starting nonce = 0
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(100, state, out));
+
+    BOOST_CHECK_EQUAL(out.size(), 3);
+    auto nonce = readNonce(state, sender);
+    BOOST_CHECK(nonce.has_value());
+    BOOST_CHECK_EQUAL(nonce.value(), "3");
+}
+
+BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
+{
+    Web3Transactions pool;
+    std::string a("AAAAAAAAAAAAAAAAAAAA", 20);
+    std::string b("BBBBBBBBBBBBBBBBBBBB", 20);
+
+    pool.add(std::vector{makeTx(a, 0), makeTx(a, 2), makeTx(b, 0)});
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(100, state, out));
+
+    // Expect to seal A:0 and B:0 only; A:2 is blocked by gap at 1
+    // Order across senders is implementation-defined; check membership and counts
+    BOOST_CHECK_EQUAL(out.size(), 2);
+    auto sealedNoncesBySender = std::unordered_map<std::string, std::vector<int64_t>>{};
+    for (auto& t : out)
+    {
+        sealedNoncesBySender[std::string(t->sender())].push_back(
+            std::stoll(std::string(t->nonce())));
+    }
+    BOOST_CHECK(sealedNoncesBySender.contains(a));
+    BOOST_CHECK(sealedNoncesBySender.contains(b));
+    BOOST_CHECK(sealedNoncesBySender[a].size() == 1 && sealedNoncesBySender[a][0] == 0);
+    BOOST_CHECK(sealedNoncesBySender[b].size() == 1 && sealedNoncesBySender[b][0] == 0);
+
+    // Nonce advanced to 1 for A and 1 for B
+    auto nonceA = readNonce(state, a);
+    auto nonceB = readNonce(state, b);
+    BOOST_CHECK(nonceA.has_value());
+    BOOST_CHECK(nonceB.has_value());
+    BOOST_CHECK_EQUAL(nonceA.value(), "1");
+    BOOST_CHECK_EQUAL(nonceB.value(), "1");
+}
+
+BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
+{
+    Web3Transactions pool;
+    std::string sender("CCCCCCCCCCCCCCCCCCCC", 20);
+
+    // Ledger already has nonce = 5, so only >=5 contiguous will be sealed
+    MapStateStorage state{};
+    setNonce(state, sender, "5");
+
+    pool.add(
+        std::vector{makeTx(sender, 3), makeTx(sender, 4), makeTx(sender, 5), makeTx(sender, 6)});
+
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(100, state, out));
+
+    // Expect only 5 and 6 sealed
+    BOOST_CHECK_EQUAL(out.size(), 2);
+    auto ns = std::vector<int64_t>{
+        std::stoll(std::string(out[0]->nonce())), std::stoll(std::string(out[1]->nonce()))};
+    ::ranges::sort(ns);
+    BOOST_CHECK(ns[0] == 5 && ns[1] == 6);
+
+    auto nonce = readNonce(state, sender);
+    BOOST_CHECK(nonce.has_value());
+    BOOST_CHECK_EQUAL(nonce.value(), "7");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
-BOOST_FIXTURE_TEST_SUITE(Web3TransactionsTest, TransactionsFixture)
-
-BOOST_AUTO_TEST_CASE(add_only_when_account_exists)
-{
-    Web3Transactions pool;
-    BOOST_CHECK_EQUAL(pool.add(txA("1")), false);
-    pool.remove(hexSenderA, 0);
-    pool.mark(hexSenderA, 0);
-}
-
-BOOST_AUTO_TEST_CASE(seal_across_multiple_accounts)
-{
-    Web3Transactions pool;
-    auto sealed = pool.seal(100);
-    BOOST_CHECK(sealed.empty());
-    pool.remove(hexSenderA, 10);
-    pool.mark(hexSenderA, 10);
-    auto sealed2 = pool.seal(1);
-    BOOST_CHECK(sealed2.empty());
-}
-
-BOOST_AUTO_TEST_CASE(mixed_accounts_behavior_via_add_path)
-{
-    Web3Transactions pool;
-    BOOST_CHECK_EQUAL(pool.add(txA("1")), false);
-    BOOST_CHECK_EQUAL(pool.add(txB("1")), false);
-    pool.remove(hexSenderB, 1);
-    pool.mark(hexSenderB, 1);
-    auto sealed = pool.seal(10);
-    BOOST_CHECK(sealed.empty());
-}
-
-BOOST_AUTO_TEST_SUITE_END()
-
 }  // namespace bcos::test
