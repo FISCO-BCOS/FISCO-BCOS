@@ -1,6 +1,9 @@
 #pragma once
 
 #include "bcos-framework/bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage2/Storage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-utilities/Exceptions.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -14,6 +17,8 @@
 namespace bcos::txpool
 {
 
+DERIVE_BCOS_EXCEPTION(InvalidNonce);
+
 struct TransactionData
 {
     protocol::Transaction::Ptr m_transaction;
@@ -23,7 +28,19 @@ struct TransactionData
     crypto::HashType hash() const;
     std::string_view sender() const;
     int64_t nonce() const;
+
+    TransactionData(protocol::Transaction::Ptr transaction);
 };
+
+template <class TransactionsType>
+concept InputTransactions =
+    ::ranges::input_range<TransactionsType> &&
+    std::same_as<::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
+
+template <class SenderNoncesType>
+concept SenderNonces =
+    ::ranges::input_range<SenderNoncesType> &&
+    std::same_as<::ranges::range_value_t<SenderNoncesType>, std::pair<std::string_view, int64_t>>;
 
 class Web3Transactions
 {
@@ -44,10 +61,22 @@ private:
     Transactions m_transactions;
     std::mutex m_mutex;
 
+    void add(protocol::Transaction::Ptr transaction);
+
 public:
-    bool add(protocol::Transaction::Ptr transaction);
-    void seal(std::string_view sender, int64_t startNonce, int64_t limit,
-        std::vector<protocol::Transaction::Ptr>& out);
+    void add(InputTransactions auto transactions)
+    {
+        std::unique_lock lock(m_mutex);
+        for (auto&& transaction : transactions)
+        {
+            add(std::forward<decltype(transaction)>(transaction));
+        }
+    }
+    void seal(storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, int64_t limit,
+        std::vector<protocol::Transaction::Ptr>& out)
+    {
+        std::unique_lock lock(m_mutex);
+    }
 };
 
 }  // namespace bcos::txpool
