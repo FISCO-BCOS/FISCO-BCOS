@@ -54,6 +54,31 @@ concept SenderNonces = ::ranges::input_range<SenderNoncesType> &&
 class Web3Transactions
 {
 private:
+    // Transactions: A boost::multi_index_container that maintains multiple indexes over
+    // TransactionData for different query patterns and ordering policies.
+    //
+    // 该容器为交易缓存的多索引结构，针对不同访问/遍历需求建立多个索引，便于快速按哈希查找、
+    // 按账户与 nonce 顺序扫描，以及按发送者聚合遍历，同时保留插入顺序。
+    //
+    // Index layout 索引布局（get<N>() 对应关系）：
+    //   0 -> SenderNonceIndex（ordered_unique by (sender, nonce)）
+    //        - 保证同一 sender 下 nonce 的唯一性与有序性；
+    //        - 便于按照 (sender, currentNonce..) 连续扫描，用于 seal / remove等流程；
+    //   1 -> HashIndex（hashed_unique by tx hash）
+    //        - 按交易哈希 O(1) 近似查找/去重，用于交易按 hash 去重；
+    //   2 -> SenderIndex（hashed_non_unique by sender）
+    //        - 快速按发送者分组遍历（一个 sender 对应多笔交易），用于按 sender 遍历；
+    //   3 -> SequenceIndex（sequenced）
+    //        - 维护插入顺序（FIFO），便于基于时间/先来先服务的策略，用于超时淘汰；
+    //
+    // Notes:
+    // - ordered_unique composite key uses (sender, nonce) to avoid duplicates and keep
+    //   per-sender nonce strictly increasing when scanning.
+    // - hashed_unique by hash prevents duplicate transactions with the same hash.
+    // - hashed_non_unique by sender supports grouping operations across all txs of a sender.
+    // - sequenced keeps push order; useful for strategies relying on arrival order.
+    //
+    // 注意：本结构仅添加索引与顺序语义，不改变交易对象本身；增删改查均通过对应索引视图完成。
     using Transactions = boost::multi_index_container<TransactionData,
         boost::multi_index::indexed_by<
             boost::multi_index::ordered_unique<
