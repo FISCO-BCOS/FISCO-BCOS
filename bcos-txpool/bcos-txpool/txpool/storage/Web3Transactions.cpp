@@ -34,7 +34,6 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
 {
     auto& nonceIndex = m_transactions.get<0>();
     auto& hashIndex = m_transactions.get<1>();
-    auto& seqIndex = m_transactions.get<2>();
 
     auto hash = transaction->hash();
     if (auto it = hashIndex.find(hash); it != hashIndex.end())
