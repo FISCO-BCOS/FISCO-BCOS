@@ -46,5 +46,6 @@ struct ExecutiveResult
     bcos::crypto::HashType transactionHash;
     std::string source;
     int32_t version;
+    uint8_t type;
 };
 }  // namespace bcos::scheduler

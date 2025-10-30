@@ -116,6 +116,12 @@ public:
                 if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
                     maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
                 {
+                    if (c_fileLogLevel == TRACE) [[unlikely]]
+                    {
+                        TXPOOL_LOG(TRACE)
+                            << LOG_DESC("Web3Nonce: rm max nonce cache")
+                            << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
+                    }
                     co_await storage2::removeOne(m_maxNonces, sender);
                 }
             }

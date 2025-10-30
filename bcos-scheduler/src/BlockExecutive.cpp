@@ -205,6 +205,7 @@ void BlockExecutive::buildExecutivesFromMetaData()
                     message = buildMessage(contextID, (*m_blockTxs)[i]);
                     // recoder tx version
                     m_executiveResults[i].version = (*m_blockTxs)[i]->version();
+                    m_executiveResults[i].type = (*m_blockTxs)[i]->type();
                     toAddress = {message->to().data(), message->to().size()};
                     enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
                 }
@@ -245,6 +246,8 @@ void BlockExecutive::buildExecutivesFromNormalTransaction()
                 auto tx = m_block->transactions()[i].toShared();
                 m_executiveResults[i].transactionHash = tx->hash();
                 m_executiveResults[i].version = tx->version();
+                m_executiveResults[i].type = tx->type();
+                m_executiveResults[i].source = tx->sender();
 
                 auto contextID = i + m_startContextID;
                 auto& [to, message, enableDAG] = results[i];
@@ -660,6 +663,8 @@ void BlockExecutive::asyncNotify(
         submitResult->setTxHash(it.transactionHash);
         submitResult->setStatus(it.receipt->status());
         submitResult->setTransactionReceipt(it.receipt);
+        submitResult->setType(it.type);
+        submitResult->setSender(it.source);
         if (m_syncBlock)
         {
             auto tx = m_block->transactions()[index];

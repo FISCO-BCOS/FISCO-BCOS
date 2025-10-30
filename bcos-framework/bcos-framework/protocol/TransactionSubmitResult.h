@@ -52,6 +52,9 @@ public:
     virtual std::string const& to() const = 0;
     virtual void setTo(std::string const& _to) = 0;
 
+    virtual uint8_t type() const = 0;
+    virtual void setType(uint8_t _type) = 0;
+
     // NOTE: only use for trace log
     friend std::ostream& operator<<(
         std::ostream& output, const TransactionSubmitResult& submitResult)

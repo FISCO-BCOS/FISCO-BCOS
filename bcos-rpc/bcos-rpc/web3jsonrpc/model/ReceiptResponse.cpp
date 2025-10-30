@@ -17,7 +17,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["status"] = toQuantity(status);
     auto txHashHex = tx.hash().hexPrefixed();
     result["transactionHash"] = txHashHex;
-    u256 cumulativeGasUsed = boost::lexical_cast<u256>(receipt.cumulativeGasUsed());
+    auto cumulativeGasUsed = safeCastToU256(receipt.cumulativeGasUsed());
     size_t logIndex = receipt.logIndex();
     auto transactionIndex = toQuantity(receipt.transactionIndex());
     result["transactionIndex"] = transactionIndex;

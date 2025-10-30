@@ -61,14 +61,19 @@ public:
     std::string const& to() const override { return m_to; }
     void setTo(std::string const& _to) override { m_to = _to; }
 
+    uint8_t type() const override { return m_type; }
+
+    void setType(uint8_t _type) override { m_type = _type; }
+
 private:
-    uint32_t m_status = (uint32_t)TransactionStatus::None;
     bcos::crypto::HashType m_txHash;
     bcos::crypto::HashType m_blockHash;
-    int64_t m_transactionIndex;
+    int64_t m_transactionIndex = 0;
     NonceType m_nonce;
     TransactionReceipt::ConstPtr m_receipt;
     std::string m_sender;
     std::string m_to;
+    uint32_t m_status = (uint32_t)TransactionStatus::None;
+    uint8_t m_type = 0;
 };
 }  // namespace bcos::protocol
