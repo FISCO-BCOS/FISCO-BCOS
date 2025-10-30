@@ -128,10 +128,19 @@ public:
                 ++currentNonce;
                 ++count;
                 out.emplace_back(nonceIt->m_transaction);
+
+                if (count >= limit)
+                {
+                    break;
+                }
             }
             if (currentNonce > startNonce)
             {
                 co_await account.setNonce(std::to_string(currentNonce));
+            }
+            if (count >= limit)
+            {
+                break;
             }
         }
     }

@@ -150,35 +150,142 @@ BOOST_AUTO_TEST_CASE(seal_single_sender_contiguous)
     BOOST_CHECK_EQUAL(nonce.value(), "3");
 }
 
-BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
+BOOST_AUTO_TEST_CASE(seal_limit_within_single_sender)
 {
     Web3Transactions pool;
-    std::string a("AAAAAAAAAAAAAAAAAAAA", 20);
-    std::string b("BBBBBBBBBBBBBBBBBBBB", 20);
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 2;
+    std::string sender("LLLLLLLLLLLLLLLLLLLL", kSenderBytes);
 
-    pool.add(std::vector{makeTx(a, 0), makeTx(a, 2), makeTx(b, 0)});
+    // Add A: 0,1,2 and B: 0
+    std::vector<protocol::Transaction::Ptr> txsA{
+        makeTx(sender, 0), makeTx(sender, 1), makeTx(sender, 2)};
+    pool.add(txsA);
+    std::string otherSender("MMMMMMMMMMMMMMMMMMMM", kSenderBytes);
+    pool.add(std::vector{makeTx(otherSender, 0)});
+
+    MapStateStorage state{};  // empty state -> start nonces at 0
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(kSealLimit, state, out));
+
+    // Expect only first two from the first sender
+    BOOST_CHECK_EQUAL(out.size(), 2);
+    auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
+        return std::stoll(std::string(txPtr->nonce()));
+    }) | ::ranges::to<std::vector>();
+    ::ranges::sort(nonces);
+    BOOST_CHECK(nonces[0] == 0 && nonces[1] == 1);
+
+    // A nonce advanced to 2; other sender untouched (no nonce key)
+    auto nonceA = readNonce(state, sender);
+    BOOST_CHECK(nonceA.has_value());
+    BOOST_CHECK_EQUAL(nonceA.value(), "2");
+    auto nonceB = readNonce(state, otherSender);
+    BOOST_CHECK(!nonceB.has_value());
+}
+
+BOOST_AUTO_TEST_CASE(seal_limit_across_senders)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 2;
+    std::string senderA("NNNNNNNNNNNNNNNNNNNN", kSenderBytes);
+    std::string senderB("OOOOOOOOOOOOOOOOOOOO", kSenderBytes);
+
+    // A: 0 and 2 (gap at 1), B: 0
+    pool.add(std::vector{makeTx(senderA, 0), makeTx(senderA, 2), makeTx(senderB, 0)});
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(100, state, out));
+    task::syncWait(pool.seal(kSealLimit, state, out));
+
+    // Expect A:0 and B:0
+    BOOST_CHECK_EQUAL(out.size(), 2);
+    bool foundA0 = false;
+    bool foundB0 = false;
+    for (auto& txPtr : out)
+    {
+        auto senderStr = std::string(txPtr->sender());
+        auto nonceVal = std::stoll(std::string(txPtr->nonce()));
+        if (senderStr == senderA && nonceVal == 0)
+        {
+            foundA0 = true;
+        }
+        if (senderStr == senderB && nonceVal == 0)
+        {
+            foundB0 = true;
+        }
+    }
+    BOOST_CHECK(foundA0 && foundB0);
+
+    // Nonces advanced accordingly
+    auto nonceA = readNonce(state, senderA);
+    auto nonceB = readNonce(state, senderB);
+    BOOST_CHECK(nonceA.has_value());
+    BOOST_CHECK(nonceB.has_value());
+    BOOST_CHECK_EQUAL(nonceA.value(), "1");
+    BOOST_CHECK_EQUAL(nonceB.value(), "1");
+}
+
+BOOST_AUTO_TEST_CASE(seal_limit_exact_boundary)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 2;
+    std::string sender("PPPPPPPPPPPPPPPPPPPP", kSenderBytes);
+
+    // A: 0,1,2 but limit=2 should only output 0,1
+    pool.add(std::vector{makeTx(sender, 0), makeTx(sender, 1), makeTx(sender, 2)});
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(kSealLimit, state, out));
+
+    BOOST_CHECK_EQUAL(out.size(), 2);
+    auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
+        return std::stoll(std::string(txPtr->nonce()));
+    }) | ::ranges::to<std::vector>();
+    ::ranges::sort(nonces);
+    BOOST_CHECK(nonces[0] == 0 && nonces[1] == 1);
+
+    // Nonce updated to 2
+    auto nonceA = readNonce(state, sender);
+    BOOST_CHECK(nonceA.has_value());
+    BOOST_CHECK_EQUAL(nonceA.value(), "2");
+}
+
+BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 100;
+    std::string senderAlpha("AAAAAAAAAAAAAAAAAAAA", kSenderBytes);
+    std::string senderBeta("BBBBBBBBBBBBBBBBBBBB", kSenderBytes);
+
+    pool.add(std::vector{makeTx(senderAlpha, 0), makeTx(senderAlpha, 2), makeTx(senderBeta, 0)});
+
+    MapStateStorage state{};
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(kSealLimit, state, out));
 
     // Expect to seal A:0 and B:0 only; A:2 is blocked by gap at 1
     // Order across senders is implementation-defined; check membership and counts
     BOOST_CHECK_EQUAL(out.size(), 2);
     auto sealedNoncesBySender = std::unordered_map<std::string, std::vector<int64_t>>{};
-    for (auto& t : out)
+    for (auto& txPtr : out)
     {
-        sealedNoncesBySender[std::string(t->sender())].push_back(
-            std::stoll(std::string(t->nonce())));
+        sealedNoncesBySender[std::string(txPtr->sender())].push_back(
+            std::stoll(std::string(txPtr->nonce())));
     }
-    BOOST_CHECK(sealedNoncesBySender.contains(a));
-    BOOST_CHECK(sealedNoncesBySender.contains(b));
-    BOOST_CHECK(sealedNoncesBySender[a].size() == 1 && sealedNoncesBySender[a][0] == 0);
-    BOOST_CHECK(sealedNoncesBySender[b].size() == 1 && sealedNoncesBySender[b][0] == 0);
+    BOOST_CHECK(sealedNoncesBySender.contains(senderAlpha));
+    BOOST_CHECK(sealedNoncesBySender.contains(senderBeta));
+    BOOST_CHECK(
+        sealedNoncesBySender[senderAlpha].size() == 1 && sealedNoncesBySender[senderAlpha][0] == 0);
+    BOOST_CHECK(
+        sealedNoncesBySender[senderBeta].size() == 1 && sealedNoncesBySender[senderBeta][0] == 0);
 
     // Nonce advanced to 1 for A and 1 for B
-    auto nonceA = readNonce(state, a);
-    auto nonceB = readNonce(state, b);
+    auto nonceA = readNonce(state, senderAlpha);
+    auto nonceB = readNonce(state, senderBeta);
     BOOST_CHECK(nonceA.has_value());
     BOOST_CHECK(nonceB.has_value());
     BOOST_CHECK_EQUAL(nonceA.value(), "1");
@@ -188,24 +295,30 @@ BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
 BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
 {
     Web3Transactions pool;
-    std::string sender("CCCCCCCCCCCCCCCCCCCC", 20);
+    constexpr int kSenderBytes2 = 20;
+    constexpr int kSealLimit2 = 100;
+    std::string sender("CCCCCCCCCCCCCCCCCCCC", kSenderBytes2);
 
     // Ledger already has nonce = 5, so only >=5 contiguous will be sealed
     MapStateStorage state{};
     setNonce(state, sender, "5");
 
-    pool.add(
-        std::vector{makeTx(sender, 3), makeTx(sender, 4), makeTx(sender, 5), makeTx(sender, 6)});
+    constexpr int64_t kNonce3 = 3;
+    constexpr int64_t kNonce4 = 4;
+    constexpr int64_t kNonce5 = 5;
+    constexpr int64_t kNonce6 = 6;
+    pool.add(std::vector{makeTx(sender, kNonce3), makeTx(sender, kNonce4), makeTx(sender, kNonce5),
+        makeTx(sender, kNonce6)});
 
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(100, state, out));
+    task::syncWait(pool.seal(kSealLimit2, state, out));
 
     // Expect only 5 and 6 sealed
     BOOST_CHECK_EQUAL(out.size(), 2);
-    auto ns = std::vector<int64_t>{
+    auto nonceVec = std::vector<int64_t>{
         std::stoll(std::string(out[0]->nonce())), std::stoll(std::string(out[1]->nonce()))};
-    ::ranges::sort(ns);
-    BOOST_CHECK(ns[0] == 5 && ns[1] == 6);
+    ::ranges::sort(nonceVec);
+    BOOST_CHECK(nonceVec[0] == 5 && nonceVec[1] == 6);
 
     auto nonce = readNonce(state, sender);
     BOOST_CHECK(nonce.has_value());
