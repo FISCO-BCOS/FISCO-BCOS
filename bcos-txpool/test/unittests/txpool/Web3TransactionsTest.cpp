@@ -104,6 +104,7 @@ static bytes toBytes(std::string_view s)
 static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t nonce)
 {
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    tx->mutableInner().data.to.assign(senderBytes.begin(), senderBytes.end());
     tx->setNonce(std::to_string(nonce));
     tx->forceSender(toBytes(senderBytes));
     Keccak256 hasher;
@@ -209,6 +210,122 @@ BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
     auto nonce = readNonce(state, sender);
     BOOST_CHECK(nonce.has_value());
     BOOST_CHECK_EQUAL(nonce.value(), "7");
+}
+
+BOOST_AUTO_TEST_CASE(remove_by_state_drops_confirmed)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 100;
+    std::string sender("DDDDDDDDDDDDDDDDDDDD", kSenderBytes);
+
+    // Add 0..5
+    std::vector<protocol::Transaction::Ptr> txs;
+    constexpr int kMaxNonce = 5;
+    for (int i = 0; i <= kMaxNonce; ++i)
+    {
+        txs.emplace_back(makeTx(sender, i));
+    }
+    pool.add(txs);
+
+    MapStateStorage state{};
+    // Ledger reports nonce = 3 (i.e., 0..3 already confirmed)
+    setNonce(state, sender, "3");
+    task::syncWait(pool.remove(state));
+
+    // Now set ledger to 4 and seal, should only see 4 and 5
+    setNonce(state, sender, "4");
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(kSealLimit, state, out));
+
+    BOOST_CHECK_EQUAL(out.size(), 2);
+    auto firstNonce = std::stoll(std::string(out[0]->nonce()));
+    auto secondNonce = std::stoll(std::string(out[1]->nonce()));
+    auto nonceArray = std::array<long, 2>{firstNonce, secondNonce};
+    ::ranges::sort(nonceArray);
+    BOOST_CHECK(nonceArray[0] == 4 && nonceArray[1] == 5);
+}
+
+BOOST_AUTO_TEST_CASE(remove_by_hashes_respects_per_sender_max)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 100;
+    std::string senderAName("EEEEEEEEEEEEEEEEEEEE", kSenderBytes);
+    std::string senderBName("FFFFFFFFFFFFFFFFFFFF", kSenderBytes);
+
+    // A: 0..5, B: 0..2
+    std::vector<protocol::Transaction::Ptr> txsA;
+    std::vector<protocol::Transaction::Ptr> txsB;
+    constexpr int kMaxANonce = 5;
+    constexpr int kMaxBNonce = 2;
+    for (int i = 0; i <= kMaxANonce; ++i)
+    {
+        txsA.emplace_back(makeTx(senderAName, i));
+    }
+    for (int i = 0; i <= kMaxBNonce; ++i)
+    {
+        txsB.emplace_back(makeTx(senderBName, i));
+    }
+    pool.add(txsA);
+    pool.add(txsB);
+
+    // Choose hashes: A {1,3} -> max=3, B {0,1} -> max=1
+    std::vector<crypto::HashType> toRemove{
+        txsA[1]->hash(), txsA[3]->hash(), txsB[0]->hash(), txsB[1]->hash()};
+    crypto::HashListView view{toRemove};
+    pool.remove(view);
+
+    // After removal, remaining for A: 0,2,4,5; for B: 2
+    // From ledger points matching first remaining contiguous, we expect to seal A:4,5 and B:2
+    MapStateStorage state{};
+    setNonce(state, senderAName, "4");
+    setNonce(state, senderBName, "2");
+
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(kSealLimit, state, out));
+
+    // Expect three txs: A:4,5 and B:2
+    BOOST_CHECK_EQUAL(out.size(), 3);
+    auto got = ::ranges::views::transform(out, [](auto& txPtr) {
+        return std::make_pair(
+            std::string(txPtr->sender()), std::stoll(std::string(txPtr->nonce())));
+    }) | ::ranges::to<std::vector>();
+    // Count per sender
+    int aCount = 0;
+    int bCount = 0;
+    bool aHas4 = false;
+    bool aHas5 = false;
+    bool bHas2 = false;
+    constexpr int kNonce4 = 4;
+    constexpr int kNonce5 = 5;
+    constexpr int kNonce2 = 2;
+    for (auto& [senderStr, nonceValue] : got)
+    {
+        if (senderStr == senderAName)
+        {
+            ++aCount;
+            if (nonceValue == kNonce4)
+            {
+                aHas4 = true;
+            }
+            if (nonceValue == kNonce5)
+            {
+                aHas5 = true;
+            }
+        }
+        if (senderStr == senderBName)
+        {
+            ++bCount;
+            if (nonceValue == kNonce2)
+            {
+                bHas2 = true;
+            }
+        }
+    }
+    BOOST_CHECK_EQUAL(aCount, 2);
+    BOOST_CHECK_EQUAL(bCount, 1);
+    BOOST_CHECK(aHas4 && aHas5 && bHas2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
