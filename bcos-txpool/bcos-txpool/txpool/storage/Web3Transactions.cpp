@@ -46,7 +46,7 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     TransactionData transactionData{std::move(transaction)};
     if (auto it = nonceIndex.lower_bound(
             std::make_tuple(transactionData.sender(), transactionData.nonce()));
-        it != nonceIndex.end() && it->nonce() == transactionData.nonce())
+        it != nonceIndex.end() && it->sender() == transactionData.sender() && it->nonce() == transactionData.nonce())
     {
         nonceIndex.replace(it, std::move(transactionData));
     }
