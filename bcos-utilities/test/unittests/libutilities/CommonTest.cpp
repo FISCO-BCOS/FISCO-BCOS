@@ -23,7 +23,6 @@
 
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
-#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -80,10 +79,10 @@ BOOST_AUTO_TEST_CASE(testGuards)
 
     // auto begin = std::chrono::high_resolution_clock::now();
 
-    thread* t = new thread[max];
+    std::thread* t = new std::thread[max];
     for (int i = 0; i < max; i++)
     {
-        t[i] = thread(f);
+        t[i] = std::thread(f);
     }
 
     for (int i = 0; i < max; i++)
@@ -117,10 +116,10 @@ BOOST_AUTO_TEST_CASE(testWriteGuard)
     // struct timeval begin;
     // gettimeofday(&begin, NULL);
 
-    thread* t = new thread[max];
+    std::thread* t = new std::thread[max];
     for (int i = 0; i < max; i++)
     {
-        t[i] = thread(f);
+        t[i] = std::thread(f);
     }
 
     for (int i = 0; i < max; i++)
@@ -160,10 +159,10 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
     // struct timeval begin;
     // gettimeofday(&begin, NULL);
 
-    thread* t = new thread[max];
+    std::thread* t = new std::thread[max];
     for (int i = 0; i < max; i++)
     {
-        t[i] = thread(f1);
+        t[i] = std::thread(f1);
     }
 
     for (int i = 0; i < max; i++)

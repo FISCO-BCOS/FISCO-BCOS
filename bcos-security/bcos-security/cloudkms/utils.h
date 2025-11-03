@@ -21,6 +21,7 @@
  * @date 2024-11-12
  */
 #include <string>
+#include <vector>
 
 namespace bcos::security
 {

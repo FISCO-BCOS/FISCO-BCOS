@@ -21,11 +21,11 @@
  * @date 2024-11-07
  */
 #pragma once
-#include <bcos-framework/security/CloudKmsType.h>
-#include <bcos-framework/security/KeyEncryptInterface.h>
+#include "bcos-framework/security/CloudKmsType.h"
+#include "bcos-framework/security/KeyEncryptInterface.h"
+#include "bcos-tool/NodeConfig.h"
 #include <string>
 
-using namespace std;
 // only for nodes, client will shutdown after decrypt
 namespace bcos::security
 {
