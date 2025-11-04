@@ -39,6 +39,11 @@ concept InputTransactions =
     ::ranges::input_range<TransactionsType> &&
     std::same_as<::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
 
+template <class InputHashesType>
+concept InputHashes =
+    ::ranges::input_range<InputHashesType> &&
+    std::same_as<::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
+
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
     { std::get<0>(senderNonce) } -> std::convertible_to<std::string_view>;
@@ -191,7 +196,28 @@ public:
         remove(::ranges::views::all(senderNonces));
     }
 
-    void remove(crypto::HashListView hashes);
+    void remove(InputHashes auto hashes)
+    {
+        std::unordered_map<std::string_view, int64_t> senderNonceMap;
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (const auto& hash : hashes)
+        {
+            if (auto it = hashIndex.find(hash); it != hashIndex.end())
+            {
+                if (auto nonceIt = senderNonceMap.find(it->sender());
+                    nonceIt != senderNonceMap.end())
+                {
+                    nonceIt->second = std::max(it->nonce(), nonceIt->second);
+                }
+                else
+                {
+                    senderNonceMap.emplace(it->sender(), it->nonce());
+                }
+            }
+        }
+        remove(::ranges::views::all(senderNonceMap));
+    }
 };
 
 }  // namespace bcos::txpool
