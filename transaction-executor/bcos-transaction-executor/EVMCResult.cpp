@@ -1,5 +1,3 @@
-#pragma once
-
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-protocol/TransactionStatus.h"

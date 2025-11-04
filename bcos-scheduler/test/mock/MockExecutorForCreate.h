@@ -54,7 +54,7 @@ public:
         if (count == 0)
         {
             input->setType(bcos::protocol::ExecutionMessage::MESSAGE);
-            input->setTo(""s);
+            input->setTo(std::string());
         }
         else
         {

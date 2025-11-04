@@ -19,6 +19,7 @@
  */
 
 #include "JsonValidator.h"
+#include <regex>
 
 namespace bcos::rpc
 {

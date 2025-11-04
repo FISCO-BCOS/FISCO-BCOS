@@ -197,7 +197,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
 {
     auto transactionsNum = inputs.size();
     CriticalFields::Ptr txsCriticals = make_shared<CriticalFields>(transactionsNum);
-    if (!g_BCOSConfig.enableDAG())
+    if (!bcos::protocol::g_BCOSConfig.enableDAG())
     {
         DAGFLOW_LOG(DEBUG) << "generateDags: DAG has disabled, just return all conflict"
                            << LOG_KV("transactionsNum", transactionsNum);

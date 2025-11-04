@@ -21,6 +21,7 @@
  * @date 2024-11-12
  */
 #include "utils.h"
+#include <sstream>
 
 namespace bcos::security
 {

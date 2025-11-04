@@ -8,7 +8,6 @@
 
 using namespace bcos;
 using namespace bcos::storage2;
-using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
 class TestReadWriteSetStorageFixture

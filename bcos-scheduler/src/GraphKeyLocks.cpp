@@ -11,6 +11,7 @@
 #include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
 #include <boost/throw_exception.hpp>
+#include <fmt/format.h>
 
 using namespace bcos::scheduler;
 

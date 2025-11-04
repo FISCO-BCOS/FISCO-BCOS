@@ -204,12 +204,14 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
     std::function<void(bcos::Error::Ptr, bcos::protocol::BlockHeader::Ptr, bool _sysBlock)>
         _callback)
 {
-    if (block->blockHeader()->version() > (uint32_t)g_BCOSConfig.maxSupportedVersion())
+    if (block->blockHeader()->version() >
+        (uint32_t)bcos::protocol::g_BCOSConfig.maxSupportedVersion())
     {
         auto errorMessage = "The block version is larger than maxSupportedVersion";
-        SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeader()->number()) << errorMessage
-                               << LOG_KV("version", block->version())
-                               << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
+    SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeader()->number()) << errorMessage
+                   << LOG_KV("version", block->version())
+                   << LOG_KV("maxSupportedVersion",
+                      bcos::protocol::g_BCOSConfig.maxSupportedVersion());
         _callback(
             BCOS_ERROR_PTR(SchedulerError::InvalidBlockVersion, errorMessage), nullptr, false);
         return;

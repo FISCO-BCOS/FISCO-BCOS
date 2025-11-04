@@ -66,13 +66,13 @@ public:
             if (input->to() == "contract1")
             {
                 input->setFrom("contract1");
-                input->setTo("contract2"s);
+                input->setTo(std::string("contract2"));
                 input->setKeyLocks({"key1"});
             }
             else
             {
                 input->setFrom("contract2");
-                input->setTo("contract1"s);
+                input->setTo(std::string("contract1"));
                 input->setKeyLocks({"key2"});
             }
         }

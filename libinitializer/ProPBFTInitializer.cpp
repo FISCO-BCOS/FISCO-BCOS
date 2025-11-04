@@ -19,6 +19,7 @@
  * @date 2021-06-10
  */
 #include "ProPBFTInitializer.h"
+#include "Common.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
 #include "bcos-utilities/Exceptions.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"

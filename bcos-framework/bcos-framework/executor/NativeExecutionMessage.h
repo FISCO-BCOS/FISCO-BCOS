@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bcos-framework/executor/ExecutionMessage.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/multi_index/detail/modify_key_adaptor.hpp>
 #include <boost/range/adaptor/transformed.hpp>
@@ -9,7 +10,7 @@
 
 namespace bcos::executor
 {
-class NativeExecutionMessage : public protocol::ExecutionMessage
+class NativeExecutionMessage : public bcos::protocol::ExecutionMessage
 {
 public:
     NativeExecutionMessage() = default;
@@ -195,7 +196,8 @@ public:
     std::vector<std::string> m_keyLocks;
     std::string m_keyLockAcquired;
     std::string m_nonce;
-    uint8_t m_transactionType = static_cast<uint8_t>(protocol::TransactionType::BCOSTransaction);
+    uint8_t m_transactionType =
+        static_cast<uint8_t>(bcos::protocol::TransactionType::BCOSTransaction);
 
     int32_t m_status = 0;
     int32_t m_depth = 0;
@@ -215,10 +217,10 @@ public:
     bool m_hasContractTableChanged = false;
 };
 
-class NativeExecutionMessageFactory : public protocol::ExecutionMessageFactory
+class NativeExecutionMessageFactory : public bcos::protocol::ExecutionMessageFactory
 {
 public:
-    protocol::ExecutionMessage::UniquePtr createExecutionMessage() override
+    bcos::protocol::ExecutionMessage::UniquePtr createExecutionMessage() override
     {
         return std::make_unique<NativeExecutionMessage>();
     }
