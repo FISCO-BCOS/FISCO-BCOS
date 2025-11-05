@@ -25,7 +25,7 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
         if (auto result = std::from_chars(view.begin(), view.end(), nonce);
             result.ec != std::errc{})
         {
-            bcos::throwWithTrace(InvalidNonce{} << bcos::errinfo_comment(std::string{view}));
+            bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(std::string{view}));
         }
         return nonce;
     }())

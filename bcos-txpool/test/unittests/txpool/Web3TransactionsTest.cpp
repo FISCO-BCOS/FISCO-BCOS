@@ -442,5 +442,66 @@ BOOST_AUTO_TEST_CASE(remove_by_hashes_respects_per_sender_max)
     BOOST_CHECK(aHas4 && aHas5 && bHas2);
 }
 
+BOOST_AUTO_TEST_CASE(get_returns_in_order_with_null_for_missing)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    std::string senderA("GGGGGGGGGGGGGGGGGGGG", kSenderBytes);
+    std::string senderB("HHHHHHHHHHHHHHHHHHHH", kSenderBytes);
+
+    // Add two transactions we know
+    auto txA0 = makeTx(senderA, 0);
+    auto txB1 = makeTx(senderB, 1);
+    pool.add(std::vector{txA0, txB1});
+
+    // Create a hash that does not exist in the pool
+    constexpr int64_t kMissingNonce = 9;
+    std::string missingSender("IIIIIIIIIIIIIIIIIIII", kSenderBytes);
+    auto missingTx = makeTx(missingSender, kMissingNonce);
+    auto missingHash = missingTx->hash();
+
+    // Query in mixed order: present, missing, present
+    std::vector<crypto::HashType> query{txB1->hash(), missingHash, txA0->hash()};
+    auto results = pool.get(query);
+
+    BOOST_CHECK_EQUAL(results.size(), query.size());
+    // 0 -> txB1
+    BOOST_CHECK(results[0]);
+    BOOST_CHECK_EQUAL(results[0]->hash(), txB1->hash());
+    // 1 -> missing => nullptr
+    BOOST_CHECK(!results[1]);
+    // 2 -> txA0
+    BOOST_CHECK(results[2]);
+    BOOST_CHECK_EQUAL(results[2]->hash(), txA0->hash());
+}
+
+BOOST_AUTO_TEST_CASE(get_duplicate_hashes_returns_duplicates)
+{
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int64_t kNonce = 7;
+    std::string sender("JJJJJJJJJJJJJJJJJJJJ", kSenderBytes);
+    auto tx = makeTx(sender, kNonce);
+    pool.add(std::vector{tx});
+
+    // Query same hash twice
+    std::vector<crypto::HashType> query{tx->hash(), tx->hash()};
+    auto results = pool.get(query);
+
+    BOOST_CHECK_EQUAL(results.size(), 2);
+    BOOST_CHECK(results[0]);
+    BOOST_CHECK(results[1]);
+    BOOST_CHECK_EQUAL(results[0]->hash(), tx->hash());
+    BOOST_CHECK_EQUAL(results[1]->hash(), tx->hash());
+}
+
+BOOST_AUTO_TEST_CASE(get_empty_input_returns_empty)
+{
+    Web3Transactions pool;
+    std::vector<crypto::HashType> emptyQuery;
+    auto results = pool.get(emptyQuery);
+    BOOST_CHECK(results.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

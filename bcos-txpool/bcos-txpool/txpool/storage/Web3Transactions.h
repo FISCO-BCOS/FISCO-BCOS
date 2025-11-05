@@ -145,8 +145,12 @@ public:
             int64_t currentNonce = 0;
             if (auto nonceStr = co_await account.nonce())
             {
-                std::from_chars(
-                    nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
+                if (auto result = std::from_chars(
+                        nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
+                    result.ec != std::errc{})
+                {
+                    bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
+                }
             }
 
             auto startNonce = currentNonce;
@@ -190,7 +194,12 @@ public:
             ledger::account::EVMAccount account(state, sender, m_rawAddress);
             if (auto nonceStr = co_await account.nonce())
             {
-                std::from_chars(nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
+                if (auto result = std::from_chars(
+                        nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
+                    result.ec != std::errc{})
+                {
+                    bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
+                }
             }
         }
         remove(::ranges::views::all(senderNonces));
@@ -217,6 +226,30 @@ public:
             }
         }
         remove(::ranges::views::all(senderNonceMap));
+    }
+
+    template <InputHashes TransactionHashes>
+    std::vector<protocol::Transaction::Ptr> get(TransactionHashes hashes)
+    {
+        std::vector<protocol::Transaction::Ptr> transactions;
+        if constexpr (::ranges::sized_range<TransactionHashes>)
+        {
+            transactions.reserve(hashes.size());
+        }
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (const auto& hash : hashes)
+        {
+            if (auto it = hashIndex.find(hash); it != hashIndex.end())
+            {
+                transactions.emplace_back(it->m_transaction);
+            }
+            else
+            {
+                transactions.emplace_back();
+            }
+        }
+        return transactions;
     }
 };
 

@@ -34,7 +34,7 @@ void checkOffset(auto offset, auto length)
 {
     if (std::cmp_greater((offset), (length)))
     {
-        bcos::throwWithTrace(
+        bcos::throwTrace(
             std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
                               " ,length: " + std::to_string(length)));
     }
