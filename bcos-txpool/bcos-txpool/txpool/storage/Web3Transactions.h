@@ -131,7 +131,7 @@ public:
 
     task::Task<void> seal(int64_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
-        std::vector<protocol::Transaction::Ptr>& out)
+        std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
         int64_t count = 0;
         std::unique_lock lock(m_mutex);
@@ -157,7 +157,7 @@ public:
             {
                 ++currentNonce;
                 ++count;
-                out.emplace_back(nonceIt->m_transaction);
+                *out++ = nonceIt->m_transaction;
 
                 if (count >= limit)
                 {
