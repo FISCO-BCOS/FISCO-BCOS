@@ -24,8 +24,8 @@
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
+#include <boost/regex.hpp>
 #include <boost/thread/thread.hpp>
-#include <regex>
 
 namespace bcos::boostssl::ws
 {
@@ -34,13 +34,13 @@ class WsTools
 public:
     static bool isIPAddress(std::string const& _input)
     {
-        const std::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
-        const std::regex ipv6_regex(
+        const static boost::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+        const static boost::regex ipv6_regex(
             "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|:|((([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})"
             "?::("
             "([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?))$");
 
-        return std::regex_match(_input, ipv4_regex) || std::regex_match(_input, ipv6_regex);
+        return boost::regex_match(_input, ipv4_regex) || boost::regex_match(_input, ipv6_regex);
     }
     static bool validIP(const std::string& _ip)
     {

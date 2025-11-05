@@ -17,9 +17,7 @@
  */
 
 #include "DataConvertUtility.h"
-#include <regex>
-
-#include "Exceptions.h"
+#include <boost/regex.hpp>
 
 using namespace std;
 using namespace bcos;
@@ -65,8 +63,8 @@ bool bcos::isHexStringV2(string const& _string)
     {
         return true;
     }
-    std::regex pattern("0x[0-9a-fA-F]*");
-    return std::regex_match(_string, pattern);
+    const static boost::regex pattern("0x[0-9a-fA-F]*");
+    return boost::regex_match(_string, pattern);
 }
 
 std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)

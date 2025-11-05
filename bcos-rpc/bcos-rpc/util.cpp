@@ -23,6 +23,7 @@
 #include <bcos-rpc/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/regex.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -39,20 +40,18 @@ std::tuple<protocol::BlockNumber, bool> bcos::rpc::getBlockNumberByTag(
     {
         return std::make_tuple(0, false);
     }
-    else if (blockTag == LatestBlock || blockTag == SafeBlock || blockTag == FinalizedBlock ||
-             blockTag == PendingBlock)
+    if (blockTag == LatestBlock || blockTag == SafeBlock || blockTag == FinalizedBlock ||
+        blockTag == PendingBlock)
     {
         return std::make_tuple(latest, true);
     }
-    else
+
+    const static boost::regex hexRegex("^0x[0-9a-fA-F]+$");
+    if (boost::regex_match(blockTag.begin(), blockTag.end(), hexRegex))
     {
-        static const std::regex hexRegex("^0x[0-9a-fA-F]+$");
-        if (std::regex_match(blockTag.data(), hexRegex))
-        {
-            auto blockNumber = fromQuantity(std::string(blockTag));
-            return std::make_tuple(blockNumber, false);
-        }
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "Invalid Block Number: " + std::string(blockTag)));
+        auto blockNumber = fromQuantity(std::string(blockTag));
+        return std::make_tuple(blockNumber, false);
     }
+    BOOST_THROW_EXCEPTION(
+        JsonRpcException(InvalidParams, "Invalid Block Number: " + std::string(blockTag)));
 }
