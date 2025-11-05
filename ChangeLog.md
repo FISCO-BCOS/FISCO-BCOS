@@ -1,4 +1,508 @@
 
+### v3.16.2
+
+(2025-10)
+
+**修复**
+
+* 修复 CallRequest 解码错误（改进 `decodeCallRequest` 的健壮性，不抛异常地忽略非法十六进制输入）
+
+**修改/工程**
+
+* 版本号/默认兼容版本提升至 3.16.2；同步配置模板、协议版本常量等
+
+**升级描述**
+
+* 升级节点可执行程序（3.14.0+ 建议直接替换二进制）；如使用配置模板，更新兼容版本为 3.16.2
+
+---
+
+### v3.16.1
+
+(2025-09-29)
+
+**新增/修改**
+
+* 回执新增字段；更新 `sealTxs` 接口
+* `blockHeader()` const 返回类型调整为 `AnyBlockHeader`；`blockHeaderConst` 重命名为 `blockHeader`
+* 废弃“按索引取区块”相关接口；移除区块对象上已废弃的 `receipt()`、`metaData()`、`transactions()` 等访问器
+* 更新 `archive-reader`
+
+**性能/稳定性**
+
+* 优化正则性能，引入 `throwWithTrace`
+* P2P 写入路径改为将异步任务投递到 TBB 任务组；拆分 `fastSendMessage`
+* 拆分/补充多处单元测试；修复缺失交易检查
+
+**升级描述**
+
+* 直接替换可执行程序可获得上述修复/改进；如依赖废弃接口，请按新接口进行代码迁移
+
+---
+
+### v3.16.0
+
+(2025-09-03)
+
+**Web3/RPC**
+
+* 支持 WebSocket 协议与 CORS；增强区块响应（含 receipts、logs bloom 计算）
+* 兼容旧交易编码（无 chainId）；`estimateGas()` 增强；新增同步交易行为配置
+
+**交易池（txpool）**
+
+* 重构为 “sealed/unseal” 队列；移除未使用接口与冗余逻辑，统一/精简命名
+* 移除旧 `asyncSendBroadcastMessage`；合并 `submitTransactionWithHook` 至 `submitTransaction`
+* 修复 pending nonce、过滤等问题；补充交易验证器
+
+**执行/调度与性能**
+
+* 引入 `AnyHolder` 优化 `BlockImpl`；修复 `delegatecall` value；改进 `writeOne` 实现；多处异常捕获与容错
+
+**工程/CI**
+
+* 更新 vcpkg 基线与 CI；HTTP Server、tars-protocol client 实现迁移；广播序列修复；回调 Sealer 等待时间策略
+
+**升级描述**
+
+* 二进制可直接替换；如对 txpool/RPC 的废弃接口有依赖，需要按新版接口适配
+
+---
+
+### v3.15.5
+
+(2025-08-19)
+
+**修复**
+
+* 修复 KMS 与交易池协同下的异常
+* RPC 增加获取区块头时间戳的调用
+
+---
+
+### v3.15.4
+
+(2025-07-14)
+
+**概念与接口**
+
+* 将 `tag_invoke`、`EVMAccount` 重构为成员自定义点；补充 Storage/Account 概念；新增 `enforceSubmitTransaction` 标志
+
+**交易池/执行**
+
+* 修复 web3 pending nonce、max nonce 等问题；KMS 在 CentOS + AWS SDK 下的内存分配问题
+
+**工程**
+
+* 增强 Web3 CI；为 GitHub macOS 添加 vcpkg 缓存
+* 调整 Sealer 执行等待时间（1ms → 1s），并修复 pending 相关问题
+
+---
+
+### v3.15.3
+
+(2025-05-20)
+
+**修改**
+
+* 引入 RocksDB cache；`merge` 方法支持多参数
+
+**修复**
+
+* 修复 web3 待处理交易计数
+
+---
+
+### v3.15.2
+
+(2025-04-24)
+
+**存储与一致性**
+
+* `memstorage` 的 `readOne` 支持升级为 writer；改进 `readSome/exists`；将 `blockhash/number` 写入存储以支持 `getBlockHash()`
+
+**调度/共识**
+
+* `scheduler v1` 支持空块；`viewChange` 时重置 `lowWaterMark`；每块获取 `LedgerConfig`；移除 `marktx` 锁
+
+**测试/其他**
+
+* 新增 `single_point_consensus` 与 `force_sender` 测试开关
+
+**修复**
+
+* 修复预编译 EVM 状态、方法权限校验 sender、`m_result` 计算等
+
+---
+
+### v3.15.1
+
+(2025-04-15)
+
+**执行与回滚**
+
+* `executeTransaction` 新增 `call` 标志；消费余额移动到执行阶段；不返回空块
+* 调整更新 nonce 顺序与保存点；`LedgerNonceChecker::batchInsert` 解锁；`BucketMap::clear()` 去除回调
+* 支持在多层存储查询不存在项
+
+**稳定性**
+
+* 规避潜在内存错误；为通知任务增加隔离；修复扩容模板（`build_chain`）问题
+
+---
+
+### v3.15.0 
+
+(2025-03-26)
+
+**执行器版本治理**
+
+* 新增 `executor_version` 配置（含创世）；修复版本同步；重命名 `transaction-executor/scheduler` 为 v1；v1 引入新的 nonce 逻辑；初始化 `evmc_tx_context`
+
+**Web3/RPC 与其他**
+
+* 修复 `to` 为空时交易编码；静态调用场景下更新 nonce；`StateKey` 与 `StateKeyView` 比较函数一致性修复；余额问题修复
+
+**工程**
+
+* 移除 `checkRequirements`；简化 baseline
+
+---
+
+### v3.14.0
+
+(2025-02-28)
+
+**Web3/RPC/WS 与 SDK**
+
+* 修复 WS 消息解码；限制 SM 模式下 TLS 低版本；优化日志关键字；修复多项 SDK 崩溃
+
+**执行/调度**
+
+* 修复回滚场景 nonce 不增长、合约初始化 nonce；将更新 EOA nonce 的逻辑移动至 scheduler；修复 `notifySealer` 引发的死锁
+
+**P2P/网络**
+
+* 修复向已关闭 socket 写入导致的崩溃；定时器异常修复；当 `p2p.enable_ssl=false` 时不校验证书；修复链 ID 一致性问题
+
+**存储与权限**
+
+* `memory storage` 的 `range()` 加锁；并发容器替换为互斥；新增 `transfer` 权限项
+
+---
+
+### v3.13.0
+
+(2025-02-25)
+
+**性能/重构**
+
+* 内存/结构优化：`MemoryStorage` 支持异构查找与 `Equal`，多处容器/结构（如使用 `array` 替代 `unordered_map`、`std::string_view` 用作 nonce）与隐藏友元（hidden friend）风格重构
+* 任务/执行器：引入 `pmr` 分配器以降低分配开销；执行器拆分为三段协程以提升并发；为基线执行器实现基础余额逻辑与 `BalancePrecompiled`
+* 网络/网关：减少 handle 拷贝与无用 `shared_ptr`；新增协程化的 `broadcastMessage` 接口并在 `PBFT`/网络中落地；去除阻塞的 `notifyUnSealTxs`
+
+**功能/接口**
+
+* 交易新增 `conflictKeys` 字段；新增交易签名检查开关；区块对象接口完善；定时器支持借用 `io_service`
+
+**修复/工程**
+
+* 多处基准/单测与工具链改进（sanitize CI、BucketMap 遍历、前置消息类型/路由图更新等）；执行器/事务若干缺陷修复；性能基准用例完善
+
+---
+
+### v3.12.4
+
+(2025-01-21)
+
+**修复/工程**
+
+* 修复 build_chain.py 的 CDN 问题
+* 修复 RPC 过滤器在 ranges 下的边界问题
+* 版本提升与发布流程脚本更新
+
+---
+
+### v3.12.3
+
+(2024-12-27)
+
+**修复**
+
+* 执行器新地址生成问题
+* P2P 端对交易签名长度检查与 sender 字段处理
+* 修复 Web3 RPC 交易返回结构
+
+---
+
+### v3.12.2
+
+(2024-12-20)
+
+**修复/工程**
+
+* CI：补充 Ubuntu 上传并尝试修复 Windows cppsdk 构建
+* RPC：区块响应编码修复；执行器 nonce 兼容性修复
+* 同步与版本提升
+
+---
+
+### v3.12.1
+
+(2024-11-25)
+
+**网关/安全**
+
+* 新增网关 SSL server/client 验证模式配置；当使用 `verify_none` 时生成随机 p2p 节点 ID，并修复握手异常
+
+**修复/工程**
+
+* 修复 p2p 消息长度校验导致的 coredump；在 Web3 JSON-RPC 区块响应中增加更多信息
+* 修复 Docker CI 构建失败与发布 actions
+
+---
+
+### v3.12.0
+
+(2024-10-25)
+
+**新增**
+
+* Web3 兼容增强：配置项 `feature_evm_address`（Web3 合约地址计算逻辑）、对 EOA 的 nonce 递增检查
+* 时间戳单位适配：配置项 `feature_evm_timestamp`（Solidity 交易内合约时间戳改为秒）
+* rPBFT：新增“轮换选举权重”，可按权重选出共识节点
+* 配置：新增 `rpc.enable_ssl`（覆盖旧的 `rpc.disable_ssl`）
+
+**修复**
+
+* rPBFT 在流水线共识场景的轮换失败：VRF 输入从 prev block hash 改为 block number（`bugfix_rpbft_vrf_blocknumber_input`）
+* 修复游离节点可将交易广播到共识节点、观察节点切为 leader 后已落盘交易被拒的问题
+* 修复部分 Web3 JSON-RPC 接口错误 HEX 输入导致的 coredump；修复落盘加密不可用
+
+**兼容性**
+
+* 3.4.x ~ 3.11.x 数据完全兼容；3.0.x ~ 3.3.x 可灰度替换二进制，如需新特性需升级 `compatibility_version`（参考文档）
+
+---
+
+### v3.11.0
+
+(2024-08-27)
+
+**新增**
+
+* 自动清理过期 Nonce；新增 `[log].rotate_time_point`（日志滚动时间）
+* 快照生成/导入；通过 p2p 同步归档区块的交易与收据
+* 支持“区块与状态”分离存储
+
+**工程/性能**
+
+* 多模块统一/合并编译（unity build）、代码结构与接口清理，快照/归档工具链完善
+
+**兼容性**
+
+* 3.4.x ~ 3.10.x 数据完全兼容；更旧版本参考升级说明
+
+---
+
+### v3.10.3
+
+(2024-09-20)
+
+**修复**
+
+* 修复 Web3 RPC `eth_estimateGas` 返回问题；版本小幅提升
+
+---
+
+### v3.10.2
+
+(2024-09-13)
+
+**修复/改进**
+
+* 依赖版本修正；PBFT 提案重推缓存缺陷修复
+* 预编译余额转账开关；回滚日志修正；构建/头文件与方法补充
+
+---
+
+### v3.10.0
+
+(2024-08-06)
+
+**新增**
+
+* EVM 升级至 CANCUN：新增 TLOAD/TSTORE/MCOPY/BLOBHASH/BLOBBASEFEE 等操作码；支持 Solidity 0.8.26
+* 新增开关 `feature_evm_cancun` 控制升级；搭链脚本支持开启 debug 日志
+
+**修复/性能**
+
+* baseline 模式下“合约不存在/回滚”行为与内存泄漏修复；限制缓存执行实例数量，降低内存
+* 修复部分 Web3 JSON-RPC 接口缺失 Block Tag 导致的退出
+
+**兼容性**
+
+* 3.4.x ~ 3.9.x 数据完全兼容；更旧版本参考升级说明
+
+---
+
+### v3.9.0
+
+(2024-07-03)
+
+**新增**
+
+* Web3 JSON-RPC 接口：支持 Hardhat、OpenZeppelin 等 Web3 工具联调
+* 交易类型：支持 RLP 编码交易（EIP-2930/EIP-1559/EIP-4844）的解析与执行
+* 事件与过滤器：新增事件拉取与过滤接口（newFilter/newBlockFilter/getFilterChanges/getFilterLogs 等）
+* 账本查询：新增 `eth_getStorageAt`；区块响应增强（含 logs bloom）
+* 配置项：新增 `web3_chain_id`（系统配置）与 `[web3_rpc]` 段（默认端口 8545）
+
+**修复**
+
+* 修复 Solidity 静态调用 staticcall 异常返回、receive 函数处理、EOA code 返回、view 场景取区块高/时间戳错误等问题
+* 修复多项 Web3 JSON-RPC 兼容性问题（syncing/transaction 响应、estimateGas 等）
+* 交易池：修复同一交易在池内导致的提案 nonce 校验失败；修复新交易同步、EIP1559 签名校验等
+
+**兼容性/升级**
+
+* 3.4.x ~ 3.8.x 数据完全兼容，直接替换二进制即可；3.0.x ~ 3.3.x 可灰度替换，如需新特性需升级 `compatibility_version` 至 3.9.0（参考文档）
+
+---
+
+### v3.8.0
+
+(2024-05-15)
+
+**新增**
+
+* 流水线执行（实验特性）：提供并发流水线模式，显著提升吞吐
+* Storage2：为 RocksDB/MemoryStorage 提供异步 `range()`/遍历能力
+* 基线工具：支持 getCode/listABI 查询；新增预编译错误输出编码
+* 执行器：为不存在地址的 STATIC_CALL 返回 success（与以太坊对齐）；添加特性开关检查
+
+**修复/改进**
+
+* 修复 EOA 账户 `getCode` 返回、DMC 部署 gas、EVM 异常 gas 统计、并行回滚缺失 entry、`create2`/`delegatecall` 语义、冻结账户等问题
+* 为 KeyPage/StateStorage 写入未变更时计算 DBHash；多处日志、编译与 CI 稳定性修复
+
+**升级描述**
+
+* 替换全部节点二进制可获得修复；如需使用新特性，完成二进制替换后将 `compatibility_version` 升级为 3.8.0
+
+---
+
+### v3.7.3
+
+(2024-06-21)
+
+**修复/改进**
+
+* 判断 EOA/合约 codeEntry 的兼容修复；修复 TARS 推送交易回调异常
+* 修复 staticcall 无地址返回、DMC 部署 gasUsed、set_row 脏标等问题
+* 交易池/同步：修复提案 nonce 校验、同步日志级别与 TLS 版本限制（国密模式）
+
+---
+
+### v3.7.2
+
+(2024-05-21)
+
+**修改**
+
+* 回退日志级别变更以避免兼容性问题（仅影响日志，不影响业务）
+
+---
+
+### v3.7.1
+
+(2024-04-12)
+
+**新增/改进**
+
+* 新增“只读模式”与 `allow_free_node` 配置；更新版本与 License
+* 网络/运维：忽略未知 AMOP 报文；修复 Boost.Asio 定时器 bug；新增上传产物 CI
+
+---
+
+### v3.7.0
+
+(2024-03-25)
+
+**新增**
+
+* 交易结构新增 `memo` 字段（业务标识，不影响 txHash）
+
+**修复**
+
+* 依赖与平台：更新 tikv_client/bcos-wasm/wedprcrypto/rust 工具链；更新 TASSL 修复 macOS 编译
+* 功能修复：空 ABI 的 getABI、开启部署权限后资产转移受限、搭链脚本安装 python 失败等
+
+**升级/兼容**
+
+* 二进制直接替换；如需新特性，完成替换后升级链数据版本至 3.7.0；组件兼容矩阵参考官方文档
+
+---
+
+### v3.6.1
+
+(2024-03-04)
+
+**修复/改进**
+
+* 修复 DagTransfer 兼容性；开启网络层限流；修复 keyPage 哈希不一致；`internalCreate` 复用部署逻辑
+
+**升级/兼容**
+
+* 建议直接替换二进制；如需新特性与行为变更，请按 3.6.0 的升级步骤处理 `compatibility_version`
+
+---
+
+### v3.6.0
+
+(2024-02-08)
+
+**新增**
+
+* SDK：新增交易流程编解码接口
+* 搭链：`build_chain.sh` 支持直接搭建 pro/max 区块链
+* 日志：新增归档与压缩配置项
+
+**修复**
+
+* 与以太坊对齐 opcode 行为；修复 DMC 仅回滚部分状态；支持配置网络 hostname
+* 修复交易池 MarkTxs 失败；修复 feature 升级时 bugfix 启用问题；修复轻节点创世校验导致无法同步
+
+**升级/兼容**
+
+* 二进制替换即可获得稳定性提升；如需新特性，完成替换后将 `compatibility_version` 升级为 3.6.0
+
+---
+
+### v3.5.0
+
+(2023-11-20)
+
+**新增**
+
+* rPBFT 共识算法；交易/区块树状广播；按时间顺序打包交易
+* 同态加密 Paillier 预编译；支持使用 TARS RPC 发送交易
+
+**修改**
+
+* 日志打印与关键路径优化
+
+**修复**
+
+* 共识 Proposal 验证/CheckPoint 计时与交易回退处理；DAG 执行自锁；EVM 缓存失效；网关损坏包；归档重导入字段处理等
+
+**升级/特性开关**
+
+* 稳定版可灰度替换；最新版需全量同时升级
+* 新增多项实验特性开关（如 `feature_sharding`、`feature_paillier`、`feature_rpbft`、`bugfix_*`），开启后不可回退；建议确认所有节点版本一致后再开启
+
+---
+
 ### v3.4.0
 
 (2023-06-14)
