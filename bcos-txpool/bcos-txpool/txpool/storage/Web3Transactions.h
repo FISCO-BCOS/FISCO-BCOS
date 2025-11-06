@@ -39,6 +39,11 @@ concept InputTransactions =
     ::ranges::input_range<TransactionsType> &&
     std::same_as<::ranges::range_value_t<TransactionsType>, protocol::Transaction::Ptr>;
 
+template <class InputHashesType>
+concept InputHashes =
+    ::ranges::input_range<InputHashesType> &&
+    std::same_as<::ranges::range_value_t<InputHashesType>, bcos::crypto::HashType>;
+
 template <class SenderNonceTuple>
 concept SenderNonce = requires(SenderNonceTuple senderNonce) {
     { std::get<0>(senderNonce) } -> std::convertible_to<std::string_view>;
@@ -126,7 +131,7 @@ public:
 
     task::Task<void> seal(int64_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
-        std::vector<protocol::Transaction::Ptr>& out)
+        std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
         int64_t count = 0;
         std::unique_lock lock(m_mutex);
@@ -140,8 +145,12 @@ public:
             int64_t currentNonce = 0;
             if (auto nonceStr = co_await account.nonce())
             {
-                std::from_chars(
-                    nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
+                if (auto result = std::from_chars(
+                        nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
+                    result.ec != std::errc{})
+                {
+                    bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
+                }
             }
 
             auto startNonce = currentNonce;
@@ -152,7 +161,7 @@ public:
             {
                 ++currentNonce;
                 ++count;
-                out.emplace_back(nonceIt->m_transaction);
+                *out++ = nonceIt->m_transaction;
 
                 if (count >= limit)
                 {
@@ -185,13 +194,63 @@ public:
             ledger::account::EVMAccount account(state, sender, m_rawAddress);
             if (auto nonceStr = co_await account.nonce())
             {
-                std::from_chars(nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
+                if (auto result = std::from_chars(
+                        nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
+                    result.ec != std::errc{})
+                {
+                    bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
+                }
             }
         }
         remove(::ranges::views::all(senderNonces));
     }
 
-    void remove(crypto::HashListView hashes);
+    void remove(InputHashes auto hashes)
+    {
+        std::unordered_map<std::string_view, int64_t> senderNonceMap;
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (const auto& hash : hashes)
+        {
+            if (auto it = hashIndex.find(hash); it != hashIndex.end())
+            {
+                if (auto nonceIt = senderNonceMap.find(it->sender());
+                    nonceIt != senderNonceMap.end())
+                {
+                    nonceIt->second = std::max(it->nonce(), nonceIt->second);
+                }
+                else
+                {
+                    senderNonceMap.emplace(it->sender(), it->nonce());
+                }
+            }
+        }
+        remove(::ranges::views::all(senderNonceMap));
+    }
+
+    template <InputHashes TransactionHashes>
+    std::vector<protocol::Transaction::Ptr> get(TransactionHashes hashes)
+    {
+        std::vector<protocol::Transaction::Ptr> transactions;
+        if constexpr (::ranges::sized_range<TransactionHashes>)
+        {
+            transactions.reserve(hashes.size());
+        }
+        std::unique_lock lock(m_mutex);
+        auto& hashIndex = m_transactions.get<1>();
+        for (const auto& hash : hashes)
+        {
+            if (auto it = hashIndex.find(hash); it != hashIndex.end())
+            {
+                transactions.emplace_back(it->m_transaction);
+            }
+            else
+            {
+                transactions.emplace_back();
+            }
+        }
+        return transactions;
+    }
 };
 
 }  // namespace bcos::txpool

@@ -40,16 +40,18 @@ struct Exception : virtual std::exception, virtual boost::exception
     const char* what() const noexcept override;
 };
 
+// NOLINTBEGIN(cppcoreguidelines-macro-usage)
 /// construct a new exception class overriding Exception
 #define DERIVE_BCOS_EXCEPTION(X)         \
     struct X : virtual ::bcos::Exception \
     {                                    \
     }
+// NOLINTEND(cppcoreguidelines-macro-usage)
 
 DERIVE_BCOS_EXCEPTION(InvalidParameter);
 
 template <class Exception>
-void throwWithTrace(const Exception& error)
+void throwTrace(const Exception& error)
 {
     throw boost::enable_error_info(error) << errinfo_stacktrace{boost::stacktrace::stacktrace()};
 }

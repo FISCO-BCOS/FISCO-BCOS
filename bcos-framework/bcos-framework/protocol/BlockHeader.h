@@ -75,7 +75,7 @@ public:
         auto sealers = sealerList();
         if (signatures.size() < sealers.size())
         {
-            throwWithTrace(InvalidBlockHeader()
+            throwTrace(InvalidBlockHeader()
                            << errinfo_comment("Invalid blockHeader for the size of sealerList "
                                               "is smaller than the size of signatureList"));
         }
@@ -87,7 +87,7 @@ public:
                     std::shared_ptr<const bytes>(&((sealers)[sealerIndex]), [](const bytes*) {}),
                     hash(), bytesConstRef(signatureData.data(), signatureData.size())))
             {
-                throwWithTrace(InvalidSignatureList() << errinfo_comment(
+                throwTrace(InvalidSignatureList() << errinfo_comment(
                                    "Invalid signatureList for verify failed, signatureData:" +
                                    *toHexString(signatureData)));
             }

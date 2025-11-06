@@ -25,7 +25,7 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
         if (auto result = std::from_chars(view.begin(), view.end(), nonce);
             result.ec != std::errc{})
         {
-            bcos::throwWithTrace(InvalidNonce{} << bcos::errinfo_comment(std::string{view}));
+            bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(std::string{view}));
         }
         return nonce;
     }())
@@ -45,7 +45,8 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     TransactionData transactionData{std::move(transaction)};
     if (auto it = nonceIndex.lower_bound(
             std::make_tuple(transactionData.sender(), transactionData.nonce()));
-        it != nonceIndex.end() && it->sender() == transactionData.sender() && it->nonce() == transactionData.nonce())
+        it != nonceIndex.end() && it->sender() == transactionData.sender() &&
+        it->nonce() == transactionData.nonce())
     {
         nonceIndex.replace(it, std::move(transactionData));
     }
@@ -53,25 +54,4 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     {
         nonceIndex.emplace_hint(it, std::move(transactionData));
     }
-}
-void bcos::txpool::Web3Transactions::remove(crypto::HashListView hashes)
-{
-    std::unordered_map<std::string_view, int64_t> senderNonceMap;
-    std::unique_lock lock(m_mutex);
-    auto& hashIndex = m_transactions.get<1>();
-    for (const auto& hash : hashes)
-    {
-        if (auto it = hashIndex.find(hash); it != hashIndex.end())
-        {
-            if (auto nonceIt = senderNonceMap.find(it->sender()); nonceIt != senderNonceMap.end())
-            {
-                nonceIt->second = std::max(it->nonce(), nonceIt->second);
-            }
-            else
-            {
-                senderNonceMap.emplace(it->sender(), it->nonce());
-            }
-        }
-    }
-    remove(::ranges::views::all(senderNonceMap));
 }

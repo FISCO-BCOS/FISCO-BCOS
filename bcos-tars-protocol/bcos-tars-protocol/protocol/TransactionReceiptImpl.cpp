@@ -49,7 +49,7 @@ bcos::crypto::HashType TransactionReceiptImpl::hash() const
 {
     if (m_inner()->dataHash.empty())
     {
-        throwWithTrace(EmptyReceiptHash{});
+        throwTrace(EmptyReceiptHash{});
     }
 
     bcos::crypto::HashType hashResult(
