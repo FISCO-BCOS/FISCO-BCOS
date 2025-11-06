@@ -70,7 +70,7 @@ std::tuple<bool, std::string> JsonValidator::checkRequestFields(const Json::Valu
                 {
                     const static boost::regex IDRegex("^[0-9a-fA-F-]+$");
                     if (std::string idString = item->asString();
-                        boost::regex_match(idString, IDRegex))
+                        !boost::regex_match(idString, IDRegex))
                     {
                         return {false, "Invalid field: " + item.name()};
                     }
