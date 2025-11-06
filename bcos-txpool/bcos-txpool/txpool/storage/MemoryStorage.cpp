@@ -25,14 +25,17 @@
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/validator/TransactionValidator.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/exception/diagnostic_information.hpp>
+#include <boost/numeric/conversion/cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <iterator>
 #include <memory>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
@@ -41,6 +44,8 @@
 
 const static auto CPU_CORES = std::thread::hardware_concurrency() + 1;
 const static auto BUCKET_SIZE = CPU_CORES;
+
+DERIVE_BCOS_EXCEPTION(InvalidWait);
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -188,8 +193,20 @@ std::vector<protocol::Transaction::ConstPtr> MemoryStorage::getTransactions(
             .batchFind<decltype(m_bcosTransactions.sealedTransactions)::ReadAccessor>(hashes);
     auto unsealTransactions =
         m_bcosTransactions.unsealTransactions
-            .batchFind<decltype(m_bcosTransactions.unsealTransactions)::ReadAccessor>(
-                std::move(hashes));
+            .batchFind<decltype(m_bcosTransactions.unsealTransactions)::ReadAccessor>(hashes);
+
+    if (m_enableWeb3Transactions)
+    {
+        std::vector<protocol::Transaction::Ptr> web3Transactions;
+        web3Transactions = m_web3Transactions.get(std::move(hashes));
+        return ::ranges::views::zip(sealedTransactions, unsealTransactions, web3Transactions) |
+               ::ranges::views::transform([](auto const& tuple) -> protocol::Transaction::ConstPtr {
+                   auto& [sealed, unseal, web3] = tuple;
+                   return protocol::Transaction::ConstPtr(sealed.value_or(unseal.value_or(web3)));
+               }) |
+               ::ranges::to<std::vector>();
+    }
+
     return ::ranges::views::zip(sealedTransactions, unsealTransactions) |
            ::ranges::views::transform([](auto const& tuple) -> protocol::Transaction::ConstPtr {
                auto& [sealed, unseal] = tuple;
@@ -308,6 +325,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 {
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
+
+    if (m_enableWeb3Transactions &&
+        transaction->type() == protocol::TransactionType::Web3Transaction)
+    {
+        m_web3Transactions.add(::ranges::views::single(std::move(transaction)));
+        return TransactionStatus::None;
+    }
+
     auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
     if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
     {
@@ -366,6 +391,13 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 
 TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)
 {
+    if (m_enableWeb3Transactions &&
+        transaction->type() == protocol::TransactionType::Web3Transaction)
+    {
+        m_web3Transactions.add(::ranges::views::single(std::move(transaction)));
+        return TransactionStatus::None;
+    }
+
     auto* toMap = transaction->sealed() ? &m_bcosTransactions.sealedTransactions :
                                           &m_bcosTransactions.unsealTransactions;
     auto* ptr = transaction.get();
@@ -535,7 +567,14 @@ void MemoryStorage::batchRemoveSealedTxs(
     startT = utcTime();
     // update the txpool nonce
     m_config->txPoolNonceChecker()->batchRemove(*nonceListPtr);
+
+    if (m_enableWeb3Transactions)
+    {
+        m_web3Transactions.remove(::ranges::views::all(txHashes));
+    }
+
     auto updateTxPoolNonceT = utcTime() - startT;
+
 
     tbb::parallel_for(tbb::blocked_range(0UL, results.size()), [&](const auto& range) {
         for (auto i = range.begin(); i != range.end(); ++i)
@@ -690,6 +729,36 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
                      << LOG_KV("lockT", lockT) << LOG_KV("invalidBefore", invalidTxsSize)
                      << LOG_KV("sealed", sealed) << LOG_KV("traverseCount", traverseCount);
     return true;
+}
+
+task::Task<bool> bcos::txpool::MemoryStorage::batchSealTransactions(size_t limit,
+    storage2::AnyStorage<executor_v1::StateKeyView, executor_v1::StateValue>& state,
+    std::vector<protocol::TransactionMetaData::Ptr>& txsList,
+    std::vector<protocol::TransactionMetaData::Ptr>& sysTxsList)
+{
+    auto originSize = txsList.size() + sysTxsList.size();
+    batchSealTransactions(txsList, sysTxsList, limit);
+    auto left = limit - (txsList.size() + sysTxsList.size() - originSize);
+
+    if (m_enableWeb3Transactions && left > 0)
+    {
+        std::vector<protocol::Transaction::Ptr> out;
+        co_await m_web3Transactions.seal(left, state, std::back_inserter(out));
+        for (auto& transaction : out)
+        {
+            auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
+            txMetaData->setHash(transaction->hash());
+            if (transaction->systemTx())
+            {
+                sysTxsList.emplace_back(std::move(txMetaData));
+            }
+            else
+            {
+                txsList.emplace_back(std::move(txMetaData));
+            }
+        }
+    }
+    co_return true;
 }
 
 void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr> txs)
@@ -988,8 +1057,18 @@ bool MemoryStorage::batchExists(crypto::HashListView _txsHashList)
     bool has = false;
     auto sealedTransactions =
         m_bcosTransactions.sealedTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
-    auto unsealTransactions = m_bcosTransactions.unsealTransactions.batchFind<TxsMap::ReadAccessor>(
-        std::move(_txsHashList));
+    auto unsealTransactions =
+        m_bcosTransactions.unsealTransactions.batchFind<TxsMap::ReadAccessor>(_txsHashList);
+    if (m_enableWeb3Transactions)
+    {
+        auto web3Transactions = m_web3Transactions.get(_txsHashList);
+        return ::ranges::all_of(
+            ::ranges::views::zip(sealedTransactions, unsealTransactions, web3Transactions),
+            [](const auto& value) {
+                auto& [lhs, rhs, web3] = value;
+                return lhs.has_value() || rhs.has_value() || web3 != nullptr;
+            });
+    }
     return ::ranges::all_of(
         ::ranges::views::zip(sealedTransactions, unsealTransactions), [](const auto& value) {
             auto& [lhs, rhs] = value;
@@ -1209,11 +1288,29 @@ bcos::txpool::MemoryStorage::~MemoryStorage()
 bool bcos::txpool::MemoryStorage::exists(bcos::crypto::HashType const& _txHash)
 {
     TxsMap::ReadAccessor accessor;
+    if (m_enableWeb3Transactions)
+    {
+        auto result = m_web3Transactions.get(::ranges::views::single(_txHash));
+        return m_bcosTransactions.sealedTransactions.find<TxsMap::ReadAccessor>(
+                   accessor, _txHash) ||
+               m_bcosTransactions.unsealTransactions.find<TxsMap::ReadAccessor>(
+                   accessor, _txHash) ||
+               result[0] != nullptr;
+    }
     return m_bcosTransactions.sealedTransactions.find<TxsMap::ReadAccessor>(accessor, _txHash) ||
            m_bcosTransactions.unsealTransactions.find<TxsMap::ReadAccessor>(accessor, _txHash);
 }
-size_t bcos::txpool::MemoryStorage::size() const
+size_t bcos::txpool::MemoryStorage::size()
 {
-    return m_bcosTransactions.unsealTransactions.size() +
-           m_bcosTransactions.sealedTransactions.size();
+    auto size =
+        m_bcosTransactions.unsealTransactions.size() + m_bcosTransactions.sealedTransactions.size();
+    if (m_enableWeb3Transactions)
+    {
+        size += m_web3Transactions.size();
+    }
+    return size;
+}
+void bcos::txpool::MemoryStorage::setEnableWeb3Transactions(bool enable)
+{
+    m_enableWeb3Transactions = enable;
 }

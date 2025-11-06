@@ -156,7 +156,7 @@ private:
                 },
                 dataValue);
 
-            co_return std::make_optional(std::make_pair(std::move(key), std::move(out)));
+            co_return std::make_optional(std::make_pair(Key{key}, std::move(out)));
         }
 
         It m_it;

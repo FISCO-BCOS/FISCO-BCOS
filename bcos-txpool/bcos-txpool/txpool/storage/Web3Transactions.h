@@ -129,11 +129,11 @@ public:
         }
     }
 
-    task::Task<void> seal(int64_t limit,
+    task::Task<void> seal(size_t limit,
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
-        int64_t count = 0;
+        size_t count = 0;
         std::unique_lock lock(m_mutex);
         auto& senderNonceIndex = m_transactions.get<0>();
         auto& senderIndex = m_transactions.get<2>();
@@ -251,6 +251,8 @@ public:
         }
         return transactions;
     }
+
+    size_t size();
 };
 
 }  // namespace bcos::txpool

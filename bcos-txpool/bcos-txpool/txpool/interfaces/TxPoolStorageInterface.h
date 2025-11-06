@@ -19,11 +19,11 @@
  * @date 2021-05-07
  */
 #pragma once
-#include <bcos-framework/protocol/Block.h>
-#include <bcos-framework/protocol/Transaction.h>
-#include <bcos-framework/txpool/TxPoolTypeDef.h>
-#include <bcos-protocol/TransactionStatus.h>
-#include <bcos-task/Task.h>
+#include "bcos-framework/protocol/Block.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/storage2/AnyStorage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-task/Task.h"
 #include <utility>
 
 namespace bcos::txpool
@@ -56,13 +56,18 @@ public:
     virtual bool batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
         std::vector<protocol::TransactionMetaData::Ptr>& _sysTxsList, size_t _txsLimit) = 0;
 
+    virtual task::Task<bool> batchSealTransactions(size_t limit,
+        storage2::AnyStorage<executor_v1::StateKeyView, executor_v1::StateValue>& state,
+        std::vector<protocol::TransactionMetaData::Ptr>& txsList,
+        std::vector<protocol::TransactionMetaData::Ptr>& sysTxsList) = 0;
+
     virtual bool exists(bcos::crypto::HashType const& _txHash) = 0;
     virtual bool batchExists(crypto::HashListView _txsHashList) = 0;
 
     virtual bcos::crypto::HashList filterUnknownTxs(
         crypto::HashListView _txsHashList, bcos::crypto::NodeIDPtr _peer) = 0;
 
-    virtual size_t size() const = 0;
+    virtual size_t size() = 0;
     virtual void clear() = 0;
 
     // return true if all txs have been marked
