@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-framework/txpool/TxPoolTypeDef.h"
 #include "bcos-utilities/Exceptions.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/multi_index/composite_key.hpp>

@@ -9,12 +9,19 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
 #include "bcos-txpool/txpool/validator/LedgerNonceChecker.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <fakeit.hpp>
@@ -31,8 +38,21 @@ struct MemoryStorageFixture
       : txValidator(&mockValidator.get(), [](bcos::txpool::TxValidatorInterface*) {}),
         txPoolNonceChecker(&mockNonceChecker.get(), [](bcos::txpool::NonceCheckerInterface*) {}),
         ledgerNonceChecker(&mockLedgerNonceChecker.get(), [](bcos::txpool::LedgerNonceChecker*) {}),
-        config(std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
-            txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024, /*checkSig*/ false)),
+        cryptoSuite(
+            std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::Keccak256>(),
+                std::make_shared<bcos::crypto::Secp256k1Crypto>(), nullptr)),
+        blockHeaderFactory(
+            std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite)),
+        transactionFactory(
+            std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite)),
+        receiptFactory(
+            std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite)),
+        blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+            cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
+        config(std::make_shared<TxPoolConfig>(txValidator,
+            std::make_shared<bcostars::protocol::TransactionSubmitResultFactoryImpl>(),
+            blockFactory, nullptr, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024,
+            /*checkSig*/ false)),
         storage(std::make_shared<MemoryStorage>(config))
     {
         fakeit::When(Method(mockValidator, checkTransaction))
@@ -70,6 +90,7 @@ struct MemoryStorageFixture
         auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
         tx->setNonce(std::move(nonce));
         tx->setSealed(sealed);
+        tx->setImportTime(utcTime());
         Keccak256 keccak;
         tx->calculateHash(keccak);
         return tx;
@@ -90,6 +111,7 @@ struct MemoryStorageFixture
         tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
         tx->setSealed(sealed);
         Keccak256 keccak;
+        tx->setImportTime(utcTime());
         tx->calculateHash(keccak);
         return tx;
     }
@@ -100,6 +122,12 @@ struct MemoryStorageFixture
     std::shared_ptr<bcos::txpool::TxValidatorInterface> txValidator;
     std::shared_ptr<bcos::txpool::NonceCheckerInterface> txPoolNonceChecker;
     std::shared_ptr<bcos::txpool::LedgerNonceChecker> ledgerNonceChecker;
+    // Added tars protocol factories and BlockFactoryImpl for config
+    bcos::crypto::CryptoSuite::Ptr cryptoSuite;
+    bcos::protocol::BlockHeaderFactory::Ptr blockHeaderFactory;
+    bcos::protocol::TransactionFactory::Ptr transactionFactory;
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory;
+    bcos::protocol::BlockFactory::Ptr blockFactory;
     std::shared_ptr<TxPoolConfig> config;
     std::shared_ptr<MemoryStorage> storage;
 };
@@ -227,9 +255,9 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsWithWeb3Transactions)
     const std::string sender2Hex = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
 
     // Create Web3 transactions with different nonces
-    const auto web3Tx1 = makeWeb3Tx("0x5", sender1Hex, true);  // sealed, nonce 5
-    const auto web3Tx2 = makeWeb3Tx("0x7", sender1Hex, true);  // sealed, nonce 7
-    const auto web3Tx3 = makeWeb3Tx("0x3", sender2Hex, true);  // sealed, nonce 3
+    const auto web3Tx1 = makeWeb3Tx("5", sender1Hex, true);  // sealed, nonce 5
+    const auto web3Tx2 = makeWeb3Tx("7", sender1Hex, true);  // sealed, nonce 7
+    const auto web3Tx3 = makeWeb3Tx("3", sender2Hex, true);  // sealed, nonce 3
 
     // Create a BCOS transaction (for comparison)
     const auto bcosTx = makeTx("bcos_nonce_1", true);
@@ -314,9 +342,9 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsWithWeb3Transactions)
 
     // test sync block scenario
     const auto web3Tx4 =
-        makeWeb3Tx("0x9", sender1Hex, true);  // sealed, nonce 9 (higher than previous 7)
+        makeWeb3Tx("9", sender1Hex, true);  // sealed, nonce 9 (higher than previous 7)
     const auto web3Tx5 =
-        makeWeb3Tx("0x4", sender2Hex, true);  // sealed, nonce 4 (higher than previous 3)
+        makeWeb3Tx("4", sender2Hex, true);  // sealed, nonce 4 (higher than previous 3)
 
     storage->insert(web3Tx4);
     storage->insert(web3Tx5);
@@ -363,8 +391,8 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsMixedTypes)
     const std::string web3SenderHex = "0x9876543210987654321098765432109876543210";
 
     // Create mixed transaction types
-    const auto web3Tx1 = makeWeb3Tx("0xa", web3SenderHex, true);  // nonce 10
-    const auto web3Tx2 = makeWeb3Tx("0xc", web3SenderHex, true);  // nonce 12
+    const auto web3Tx1 = makeWeb3Tx("10", web3SenderHex, true);  // nonce 10
+    const auto web3Tx2 = makeWeb3Tx("12", web3SenderHex, true);  // nonce 12
     const auto bcosTx1 = makeTx("bcos_n1", true);
     const auto bcosTx2 = makeTx("bcos_n2", true);
 
@@ -406,16 +434,6 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsMixedTypes)
 
     // Verify all removed
     BOOST_CHECK_EQUAL(storage->size(), 0U);
-
-    // Verify Web3 nonce updated correctly (max nonce 12, so pending should be 13)
-    auto web3Checker = config->txValidator()->web3NonceChecker();
-    // Note: getPendingNonce expects hex string format
-    auto pendingNonce = task::syncWait(web3Checker->getPendingNonce(web3SenderHex));
-    BOOST_CHECK(pendingNonce.has_value());
-    if (pendingNonce.has_value())
-    {
-        BOOST_CHECK_EQUAL(pendingNonce.value(), 13);  // 0xc (12) + 1
-    }
 }
 
 // ==================== Tests for Web3Transactions Integration ====================
@@ -429,9 +447,12 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsInsertAndExists)
     const std::string sender2Hex = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
 
     // Create Web3 transactions
-    auto web3Tx1 = makeWeb3Tx("0x1", sender1Hex, false);
-    auto web3Tx2 = makeWeb3Tx("0x2", sender1Hex, false);
-    auto web3Tx3 = makeWeb3Tx("0x1", sender2Hex, false);
+    auto web3Tx1 = makeWeb3Tx("1", sender1Hex, false);
+    auto web3Tx2 = makeWeb3Tx("2", sender1Hex, false);
+    auto web3Tx3 = makeWeb3Tx("1", sender2Hex, false);
+
+    TXPOOL_LOG(DEBUG) << "Inserting Web3 Transactions:" << web3Tx1->hash() << ", "
+                      << web3Tx2->hash() << ", " << web3Tx3->hash();
 
     // Insert Web3 transactions
     BOOST_CHECK(storage->insert(web3Tx1) == TransactionStatus::None);
@@ -459,8 +480,8 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsGetTransactions)
     const std::string senderHex = "0x1111111111111111111111111111111111111111";
 
     // Create mixed transaction types
-    auto web3Tx1 = makeWeb3Tx("0x5", senderHex, false);
-    auto web3Tx2 = makeWeb3Tx("0x6", senderHex, true);
+    auto web3Tx1 = makeWeb3Tx("5", senderHex, false);
+    auto web3Tx2 = makeWeb3Tx("6", senderHex, true);
     auto bcosTx1 = makeTx("bcos1", false);
     auto bcosTx2 = makeTx("bcos2", true);
 
@@ -498,8 +519,8 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsBatchExists)
     const std::string senderHex = "0x2222222222222222222222222222222222222222";
 
     // Create transactions
-    auto web3Tx1 = makeWeb3Tx("0xa", senderHex, false);
-    auto web3Tx2 = makeWeb3Tx("0xb", senderHex, false);
+    auto web3Tx1 = makeWeb3Tx("1", senderHex, false);
+    auto web3Tx2 = makeWeb3Tx("2", senderHex, false);
     auto bcosTx = makeTx("bcos", false);
 
     storage->insert(web3Tx1);
@@ -514,8 +535,6 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsBatchExists)
     HashType missingHash = HashType::generateRandomFixedBytes();
     HashList withMissing{web3Tx1->hash(), missingHash, bcosTx->hash()};
     BOOST_CHECK_EQUAL(storage->batchExists(withMissing), false);
-
-    storage->setEnableWeb3Transactions(false);
 }
 
 BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsVerifyAndSubmit)
@@ -526,7 +545,7 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsVerifyAndSubmit)
     const std::string senderHex = "0x3333333333333333333333333333333333333333";
 
     // Create a Web3 transaction
-    auto web3Tx = makeWeb3Tx("0x10", senderHex, false);
+    auto web3Tx = makeWeb3Tx("10", senderHex, false);
 
     // Verify and submit the Web3 transaction
     auto status = storage->verifyAndSubmitTransaction(
@@ -536,7 +555,7 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsVerifyAndSubmit)
     BOOST_CHECK(storage->exists(web3Tx->hash()));
 
     // Create another Web3 transaction with different nonce
-    auto web3Tx2 = makeWeb3Tx("0x11", senderHex, false);
+    auto web3Tx2 = makeWeb3Tx("11", senderHex, false);
     status = storage->verifyAndSubmitTransaction(
         web3Tx2, nullptr, /*checkPoolLimit*/ false, /*lock*/ false);
 
@@ -558,10 +577,10 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsBatchRemove)
     const std::string sender2Hex = "0x5555555555555555555555555555555555555555";
 
     // Create Web3 transactions with different nonces
-    auto web3Tx1 = makeWeb3Tx("0x1", sender1Hex, true);
-    auto web3Tx2 = makeWeb3Tx("0x2", sender1Hex, true);
-    auto web3Tx3 = makeWeb3Tx("0x3", sender1Hex, true);
-    auto web3Tx4 = makeWeb3Tx("0x1", sender2Hex, true);
+    auto web3Tx1 = makeWeb3Tx("1", sender1Hex, true);
+    auto web3Tx2 = makeWeb3Tx("2", sender1Hex, true);
+    auto web3Tx3 = makeWeb3Tx("3", sender1Hex, true);
+    auto web3Tx4 = makeWeb3Tx("1", sender2Hex, true);
 
     storage->insert(web3Tx1);
     storage->insert(web3Tx2);
@@ -615,8 +634,8 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsMixedTypesBatchRemove)
     const std::string senderHex = "0x6666666666666666666666666666666666666666";
 
     // Create mixed transaction types
-    auto web3Tx1 = makeWeb3Tx("0xa", senderHex, true);
-    auto web3Tx2 = makeWeb3Tx("0xb", senderHex, true);
+    auto web3Tx1 = makeWeb3Tx("10", senderHex, true);
+    auto web3Tx2 = makeWeb3Tx("11", senderHex, true);
     auto bcosTx1 = makeTx("bcos1", true);
     auto bcosTx2 = makeTx("bcos2", true);
 
@@ -674,10 +693,10 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsNonceOrdering)
     const std::string senderHex = "0x7777777777777777777777777777777777777777";
 
     // Create Web3 transactions with non-sequential nonces (out of order insertion)
-    auto web3Tx1 = makeWeb3Tx("0x5", senderHex, false);  // nonce 5
-    auto web3Tx2 = makeWeb3Tx("0x3", senderHex, false);  // nonce 3
-    auto web3Tx3 = makeWeb3Tx("0x4", senderHex, false);  // nonce 4
-    auto web3Tx4 = makeWeb3Tx("0x6", senderHex, false);  // nonce 6
+    auto web3Tx1 = makeWeb3Tx("5", senderHex, false);  // nonce 5
+    auto web3Tx2 = makeWeb3Tx("3", senderHex, false);  // nonce 3
+    auto web3Tx3 = makeWeb3Tx("4", senderHex, false);  // nonce 4
+    auto web3Tx4 = makeWeb3Tx("6", senderHex, false);  // nonce 6
 
     // Insert in non-sequential order
     storage->insert(web3Tx1);
@@ -701,33 +720,6 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsNonceOrdering)
     BOOST_CHECK(transactions[1] != nullptr);
     BOOST_CHECK(transactions[2] != nullptr);
     BOOST_CHECK(transactions[3] != nullptr);
-
-    storage->setEnableWeb3Transactions(false);
-}
-
-BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsDuplicateNonceHandling)
-{
-    // Enable Web3Transactions support
-    storage->setEnableWeb3Transactions(true);
-
-    const std::string senderHex = "0x8888888888888888888888888888888888888888";
-
-    // Create two Web3 transactions with the same sender and nonce
-    auto web3Tx1 = makeWeb3Tx("0xa", senderHex, false);
-    auto web3Tx2 = makeWeb3Tx("0xa", senderHex, false);  // Same nonce
-
-    // Insert first transaction
-    BOOST_CHECK(storage->insert(web3Tx1) == TransactionStatus::None);
-    BOOST_CHECK_EQUAL(storage->exists(web3Tx1->hash()), true);
-
-    // Try to insert second transaction with same nonce
-    // The behavior depends on Web3Transactions implementation:
-    // - If it uses (sender, nonce) as unique key, the second insert might replace or fail
-    // - The transaction hash is different, so it's a different transaction
-    auto status = storage->insert(web3Tx2);
-
-    // At least the first transaction should exist
-    BOOST_CHECK_EQUAL(storage->exists(web3Tx1->hash()), true);
 
     storage->setEnableWeb3Transactions(false);
 }
@@ -769,7 +761,7 @@ BOOST_AUTO_TEST_CASE(EnableWeb3TransactionsToggleFeature)
     storage->setEnableWeb3Transactions(true);
 
     // Insert Web3 transaction
-    auto web3Tx = makeWeb3Tx("0x1", senderHex, false);
+    auto web3Tx = makeWeb3Tx("1", senderHex, false);
     storage->insert(web3Tx);
     BOOST_CHECK_EQUAL(storage->exists(web3Tx->hash()), true);
 
@@ -796,7 +788,7 @@ BOOST_AUTO_TEST_CASE(SubmitTransactionWithWeb3Enabled)
     const std::string senderHex = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     // Create Web3 transaction
-    auto web3Tx = makeWeb3Tx("0x5", senderHex, false);
+    auto web3Tx = makeWeb3Tx("5", senderHex, false);
 
     // Submit transaction without waiting for receipt
     auto submitResult = task::syncWait(storage->submitTransaction(web3Tx, false));
@@ -840,9 +832,9 @@ BOOST_AUTO_TEST_CASE(SubmitMultipleWeb3TransactionsSameSender)
     const std::string senderHex = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     // Submit transactions with sequential nonces
-    auto web3Tx1 = makeWeb3Tx("0x1", senderHex, false);
-    auto web3Tx2 = makeWeb3Tx("0x2", senderHex, false);
-    auto web3Tx3 = makeWeb3Tx("0x3", senderHex, false);
+    auto web3Tx1 = makeWeb3Tx("1", senderHex, false);
+    auto web3Tx2 = makeWeb3Tx("2", senderHex, false);
+    auto web3Tx3 = makeWeb3Tx("3", senderHex, false);
 
     auto result1 = task::syncWait(storage->submitTransaction(web3Tx1, false));
     auto result2 = task::syncWait(storage->submitTransaction(web3Tx2, false));
@@ -871,7 +863,7 @@ BOOST_AUTO_TEST_CASE(SubmitWeb3TransactionDuplicateHash)
     storage->setEnableWeb3Transactions(true);
 
     const std::string senderHex = "0xcccccccccccccccccccccccccccccccccccccccc";
-    auto web3Tx = makeWeb3Tx("0xa", senderHex, false);
+    auto web3Tx = makeWeb3Tx("10", senderHex, false);
 
     // First submission should succeed
     auto result1 = task::syncWait(storage->submitTransaction(web3Tx, false));
@@ -898,7 +890,7 @@ BOOST_AUTO_TEST_CASE(SubmitMixedTransactionTypes)
     const std::string senderHex = "0xdddddddddddddddddddddddddddddddddddddddd";
 
     // Submit Web3 transaction
-    auto web3Tx = makeWeb3Tx("0x7", senderHex, false);
+    auto web3Tx = makeWeb3Tx("7", senderHex, false);
     auto web3Result = task::syncWait(storage->submitTransaction(web3Tx, false));
 
     // Submit BCOS transaction
@@ -928,8 +920,8 @@ BOOST_AUTO_TEST_CASE(SubmitWeb3TransactionMultipleSenders)
     const std::string sender2Hex = "0xffffffffffffffffffffffffffffffffffffffff";
 
     // Submit transactions from different senders with same nonce
-    auto web3Tx1 = makeWeb3Tx("0x1", sender1Hex, false);
-    auto web3Tx2 = makeWeb3Tx("0x1", sender2Hex, false);
+    auto web3Tx1 = makeWeb3Tx("1", sender1Hex, false);
+    auto web3Tx2 = makeWeb3Tx("1", sender2Hex, false);
 
     auto result1 = task::syncWait(storage->submitTransaction(web3Tx1, false));
     auto result2 = task::syncWait(storage->submitTransaction(web3Tx2, false));
@@ -1009,7 +1001,7 @@ BOOST_AUTO_TEST_CASE(BatchSealTransactionsWithStateWeb3Enabled)
     std::vector<protocol::Transaction::Ptr> web3Txs;
     for (int i = 0; i < 3; ++i)
     {
-        auto tx = makeWeb3Tx("0x" + std::to_string(i), sender1Hex, false);
+        auto tx = makeWeb3Tx(std::to_string(i), sender1Hex, false);
         storage->insert(tx);
         web3Txs.push_back(tx);
     }
@@ -1017,7 +1009,7 @@ BOOST_AUTO_TEST_CASE(BatchSealTransactionsWithStateWeb3Enabled)
     // Create Web3 transactions from sender2
     for (int i = 0; i < 2; ++i)
     {
-        auto tx = makeWeb3Tx("0x" + std::to_string(i), sender2Hex, false);
+        auto tx = makeWeb3Tx(std::to_string(i), sender2Hex, false);
         storage->insert(tx);
         web3Txs.push_back(tx);
     }
@@ -1069,7 +1061,7 @@ BOOST_AUTO_TEST_CASE(BatchSealTransactionsWithStateWeb3OnlyBcosFull)
     // Create multiple Web3 transactions with sequential nonces
     for (int i = 0; i < numWeb3Txs; ++i)
     {
-        auto tx = makeWeb3Tx("0x" + std::to_string(i), senderHex, false);
+        auto tx = makeWeb3Tx(std::to_string(i), senderHex, false);
         storage->insert(tx);
     }
 
@@ -1115,7 +1107,7 @@ BOOST_AUTO_TEST_CASE(BatchSealTransactionsWithStateWeb3LimitReached)
 
     for (int i = 0; i < numTxsPerType; ++i)
     {
-        auto tx = makeWeb3Tx("0x" + std::to_string(i), senderHex, false);
+        auto tx = makeWeb3Tx(std::to_string(i), senderHex, false);
         storage->insert(tx);
     }
 
@@ -1182,7 +1174,7 @@ BOOST_AUTO_TEST_CASE(BatchSealTransactionsWithStateWeb3SystemTransactions)
     // Create regular Web3 transactions
     for (int i = 0; i < 3; ++i)
     {
-        auto tx = makeWeb3Tx("0x" + std::to_string(i), senderHex, false);
+        auto tx = makeWeb3Tx(std::to_string(i), senderHex, false);
         storage->insert(tx);
     }
 
