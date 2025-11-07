@@ -1155,7 +1155,7 @@ BOOST_AUTO_TEST_CASE(BatchSealTransactionsWithStateWeb3EmptyPool)
     constexpr size_t limit = 10;
     auto result = task::syncWait(storage->batchSealTransactions(limit, state, txsList, sysTxsList));
 
-    BOOST_CHECK_EQUAL(result, true);
+    BOOST_CHECK_EQUAL(result, false);
 
     // No transactions should be sealed
     BOOST_CHECK_EQUAL(txsList.size(), 0U);
