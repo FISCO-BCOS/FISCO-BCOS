@@ -736,14 +736,16 @@ task::Task<bool> bcos::txpool::MemoryStorage::batchSealTransactions(size_t limit
     std::vector<protocol::TransactionMetaData::Ptr>& txsList,
     std::vector<protocol::TransactionMetaData::Ptr>& sysTxsList)
 {
-    auto originSize = txsList.size() + sysTxsList.size();
-    batchSealTransactions(txsList, sysTxsList, limit);
-    auto left = limit - (txsList.size() + sysTxsList.size() - originSize);
+    auto beforeSealSize = txsList.size() + sysTxsList.size();
+    auto result = batchSealTransactions(txsList, sysTxsList, limit);
+    auto afterSealSize = txsList.size() + sysTxsList.size();
+    auto left = limit - (afterSealSize - beforeSealSize);
 
     if (m_enableWeb3Transactions && left > 0)
     {
         std::vector<protocol::Transaction::Ptr> out;
         co_await m_web3Transactions.seal(left, state, std::back_inserter(out));
+        result |= (out.size() > 0);
         for (auto& transaction : out)
         {
             auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
@@ -758,7 +760,7 @@ task::Task<bool> bcos::txpool::MemoryStorage::batchSealTransactions(size_t limit
             }
         }
     }
-    co_return true;
+    co_return result;
 }
 
 void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr> txs)
