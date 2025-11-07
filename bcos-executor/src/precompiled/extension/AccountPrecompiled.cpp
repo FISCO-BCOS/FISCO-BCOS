@@ -20,7 +20,7 @@
 
 #include "AccountPrecompiled.h"
 #include "../../vm/HostContext.h"
-#include <regex>
+#include <boost/regex.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -111,8 +111,8 @@ std::shared_ptr<PrecompiledExecResult> AccountPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError{} << errinfo_comment("AccountPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{}
+                              << errinfo_comment("AccountPrecompiled call undefined function!"));
     }
     return _callParameters;
 }
@@ -166,8 +166,8 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
                                   << LOG_DESC("account already abolish, should not set any status")
                                   << LOG_KV("account", accountTableName)
                                   << LOG_KV("status", std::to_string(status));
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError{} << errinfo_comment("Account already abolish, should not set any status."));
+            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                      "Account already abolish, should not set any status."));
         }
         _executive->storage().setRow(
             accountTableName, ACCOUNT_LAST_STATUS, std::move(existEntry.value()));
@@ -309,8 +309,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
 
 
         // get account hex from /sys/xxxxx or /apps/xxxxx
-        std::smatch match;
-        std::regex_search(accountTableName, match, std::regex("/([^/]+)$"));
+        boost::smatch match;
+        boost::regex_search(accountTableName, match, boost::regex("/([^/]+)$"));
         auto accountHex = match[1].str();
 
         PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number())
@@ -349,7 +349,8 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
                                   << LOG_KV("account", accountTableName)
                                   << LOG_KV("balance", to_string(balance))
                                   << LOG_KV("add balance", to_string(value));
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Account balance overflow!"));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment("Account balance overflow!"));
             return;
         }
         balance += value;
@@ -401,7 +402,8 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
         PRECOMPILED_LOG(WARNING) << BLOCK_NUMBER(blockContext.number())
                                  << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                  << LOG_DESC("table not exist!");
-        BOOST_THROW_EXCEPTION(NotEnoughCashError{} << errinfo_comment("Account table not exist, subBalance failed!"));
+        BOOST_THROW_EXCEPTION(
+            NotEnoughCashError{} << errinfo_comment("Account table not exist, subBalance failed!"));
         return;
     }
 
@@ -416,7 +418,8 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
             PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number())
                                    << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                    << LOG_DESC("account balance not enough");
-            BOOST_THROW_EXCEPTION(NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
+            BOOST_THROW_EXCEPTION(
+                NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
             return;
         }
         else
@@ -435,7 +438,8 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
         Entry Balance;
         Balance.importFields({boost::lexical_cast<std::string>(0)});
         _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
-        BOOST_THROW_EXCEPTION(NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
+        BOOST_THROW_EXCEPTION(
+            NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
         return;
     }
 }

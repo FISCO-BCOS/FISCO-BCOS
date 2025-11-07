@@ -14,9 +14,9 @@
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <json/json.h>
+#include <boost/regex.hpp>
 #include <boost/throw_exception.hpp>
 #include <limits>
-#include <regex>
 #include <string>
 #include <vector>
 
@@ -53,12 +53,12 @@ int64_t GatewayConfig::doubleMBToBit(double _d)
 
 bool GatewayConfig::isIPAddress(const std::string& _input)
 {
-    const std::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
-    const std::regex ipv6_regex(
+    const static boost::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+    const static boost::regex ipv6_regex(
         "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|:|((([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::("
         "([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?))$");
 
-    return std::regex_match(_input, ipv4_regex) || std::regex_match(_input, ipv6_regex);
+    return boost::regex_match(_input, ipv4_regex) || boost::regex_match(_input, ipv6_regex);
 }
 
 bool GatewayConfig::isHostname(const std::string& _input)
