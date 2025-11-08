@@ -19,8 +19,7 @@
  */
 
 #pragma once
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-rpc/filter/Common.h>
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <json/json.h>
 #include <boost/algorithm/string.hpp>
 #include <string>

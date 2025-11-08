@@ -1,13 +1,11 @@
 #pragma once
 
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-rpc/filter/Common.h"
+#include "bcos-rpc/filter/FilterRequest.h"
+#include "bcos-utilities/Common.h"
 #include <boost/asio.hpp>
 #include <memory>
-#include <vector>
-
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-rpc/filter/Common.h>
-#include <bcos-rpc/filter/FilterRequest.h>
-#include <bcos-utilities/Common.h>
 
 namespace bcos
 {

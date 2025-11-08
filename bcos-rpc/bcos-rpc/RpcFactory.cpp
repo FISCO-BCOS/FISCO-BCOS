@@ -19,6 +19,7 @@
  * @date 2021-07-15
  */
 
+#include "bcos-rpc/amop/AirAMOPClient.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/RawWsMessage.h>
 #include <bcos-boostssl/websocket/WsError.h>

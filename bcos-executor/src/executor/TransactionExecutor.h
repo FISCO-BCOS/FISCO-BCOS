@@ -24,35 +24,27 @@
  */
 #pragma once
 
-#include "../Common.h"
 #include "../dag/CriticalFields.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-executor/src/executive/LedgerCache.h"
 #include "bcos-executor/src/vm/VMFactory.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
-#include "bcos-framework/protocol/Block.h"
-#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
-#include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-utilities/ThreadPool.h"
 #include "tbb/concurrent_unordered_map.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-executor/src/executive/LedgerCache.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_hash_map.h>
 #include <boost/function.hpp>
 #include <algorithm>
 #include <cstdint>
 #include <functional>
-#include <future>
 #include <memory>
-#include <mutex>
 #include <shared_mutex>
-#include <stack>
 #include <thread>
 
 

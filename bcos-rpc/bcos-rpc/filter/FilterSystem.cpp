@@ -1,10 +1,5 @@
-#include <bcos-framework/Common.h>
-#include <bcos-framework/protocol/CommonError.h>
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-rpc/filter/FilterSystem.h>
-#include <bcos-rpc/jsonrpc/Common.h>
-#include <bcos-rpc/web3jsonrpc/utils/Common.h>
-
+#include "bcos-rpc/filter/FilterSystem.h"
+#include "bcos-rpc/jsonrpc/Common.h"
 #include <utility>
 
 #define CPU_CORES (std::thread::hardware_concurrency() + 1)

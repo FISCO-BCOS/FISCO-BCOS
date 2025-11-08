@@ -19,8 +19,7 @@
  */
 
 #pragma once
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-rpc/Common.h>
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
 
 namespace bcos::rpc
 {

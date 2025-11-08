@@ -22,7 +22,7 @@
 #include "Common.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-framework/protocol/Exceptions.h"
-#include <bcos-utilities/Common.h>
+#include "bcos-utilities/Common.h"
 
 using namespace bcos::protocol;
 

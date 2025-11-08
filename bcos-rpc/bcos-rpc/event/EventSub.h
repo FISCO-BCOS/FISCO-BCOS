@@ -20,11 +20,9 @@
 
 #pragma once
 
-#include <bcos-framework/ledger/LedgerInterface.h>
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-rpc/event/EventSubTask.h>
-#include <bcos-rpc/groupmgr/GroupManager.h>
-#include <bcos-utilities/Worker.h>
+#include "bcos-rpc/event/EventSubTask.h"
+#include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-utilities/Worker.h"
 #include <atomic>
 #include <functional>
 #include <memory>
