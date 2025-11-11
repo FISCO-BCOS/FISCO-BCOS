@@ -20,6 +20,7 @@
 
 #pragma once
 #include "bcos-codec/scale/Scale.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
@@ -31,12 +32,15 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-framework/testutils/faker/FakeBlock.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "executor/TransactionExecutorFactory.h"
 #include "libtask/bcos-task/Wait.h"
 #include "mock/MockKeyPageStorage.h"
 #include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
+#include <libinitializer/AuthInitializer.h>
 #include <string>
 
 using namespace bcos;

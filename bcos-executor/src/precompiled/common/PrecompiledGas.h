@@ -20,6 +20,11 @@
 
 #pragma once
 
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <vector>
+
 namespace bcos
 {
 namespace executor
