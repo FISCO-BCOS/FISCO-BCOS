@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../vm/Precompiled.h"
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
 
 namespace bcos::precompiled
 {

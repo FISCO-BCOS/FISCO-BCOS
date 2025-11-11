@@ -21,8 +21,7 @@
 #pragma once
 
 #include "../../vm/Precompiled.h"
-#include "bcos-executor/src/precompiled/common/Common.h"
-#include <bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h>
+#include "bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h"
 
 namespace bcos
 {

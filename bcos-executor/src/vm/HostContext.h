@@ -24,17 +24,11 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/storage/Table.h"
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/Protocol.h>
+#include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
-#include <atomic>
-#include <functional>
-#include <map>
 #include <memory>
 
 namespace bcos

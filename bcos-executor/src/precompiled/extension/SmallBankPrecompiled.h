@@ -22,9 +22,8 @@
 
 #include "../../vm/Precompiled.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/storage/Table.h>
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/storage/Table.h"
 
 namespace bcos
 {
@@ -37,7 +36,7 @@ public:
 
     SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::string _tableName);
 
-    ~SmallBankPrecompiled() override{};
+    ~SmallBankPrecompiled() override {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

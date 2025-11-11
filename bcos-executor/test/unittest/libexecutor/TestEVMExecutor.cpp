@@ -23,29 +23,23 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-crypto/ChecksumAddress.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
+#include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
-#include "bcos-task/Task.h"
-#include "bcos-task/Wait.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
-#include <bcos-crypto/ChecksumAddress.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -56,7 +50,6 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <set>
 
 using namespace std;
 using namespace bcos;

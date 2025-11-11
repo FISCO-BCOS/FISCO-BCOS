@@ -20,15 +20,13 @@
 #include "precompiled/CryptoPrecompiled.h"
 #include "../mock/MockLedger.h"
 #include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
+#include "bcos-crypto/signature/key/KeyFactoryImpl.h"
+#include "bcos-crypto/signature/sm2.h"
+#include "bcos-crypto/signature/sm2/SM2KeyPair.h"
 #include "bcos-executor/src/executive/LedgerCache.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "vm/gas_meter/GasInjector.h"
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/sm2.h>
-#include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-crypto/signature/sm2/SM2KeyPair.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

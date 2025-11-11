@@ -25,7 +25,6 @@
 #include "kzgPrecompiled.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
-#include <bcos-utilities/Log.h>
 #include <algorithm>
 
 using namespace std;

@@ -20,7 +20,6 @@
 
 #include "BalancePrecompiled.h"
 #include "bcos-framework/bcos-framework/storage/Table.h"
-#include <bcos-tool/BfsFileFactory.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>

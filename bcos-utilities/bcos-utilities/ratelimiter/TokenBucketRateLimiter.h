@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
 
 namespace bcos
 {

@@ -8,9 +8,7 @@
 #include "executor/TransactionExecutor.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/SystemConfigPrecompiled.h"
-#include "precompiled/TableManagerPrecompiled.h"
 #include "precompiled/common/PrecompiledResult.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -162,8 +160,8 @@ BOOST_AUTO_TEST_CASE(upgradeVersion)
         codec.decode(bcos::ref(result->execResult()), code);
         BOOST_CHECK_EQUAL(code, 0);
 
-        auto entry = co_await storage2::readOne(*backendStorage,
-            executor_v1::StateKeyView(ledger::SYS_CONFIG, "bugfix_revert"));
+        auto entry = co_await storage2::readOne(
+            *backendStorage, executor_v1::StateKeyView(ledger::SYS_CONFIG, "bugfix_revert"));
         BOOST_CHECK(!entry);
 
         result = systemConfigPrecompiled.call(executive, getRevertParameters);

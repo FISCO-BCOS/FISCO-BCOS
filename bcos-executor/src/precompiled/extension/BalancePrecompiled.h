@@ -19,7 +19,6 @@
  */
 #pragma once
 #include "../../vm/Precompiled.h"
-#include <bcos-framework/executor/PrecompiledTypeDef.h>
 
 namespace bcos::precompiled
 {

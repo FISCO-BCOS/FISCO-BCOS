@@ -20,9 +20,9 @@
  */
 
 #pragma once
-#include <bcos-crypto/hash/Sha256.h>
-#include <bcos-framework/protocol/Protocol.h>
+#include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include <evmc/evmc.h>
+#include <memory>
 
 namespace bcos::executor
 {

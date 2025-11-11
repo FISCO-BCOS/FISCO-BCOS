@@ -14,8 +14,8 @@
  *  limitations under the License.
  */
 
-#include <bcos-executor/src/vm/Precompiled.h>
-#include <bcos-executor/src/vm/kzgPrecompiled.h>
+#include "bcos-executor/src/vm/Precompiled.h"
+#include "bcos-executor/src/vm/kzgPrecompiled.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

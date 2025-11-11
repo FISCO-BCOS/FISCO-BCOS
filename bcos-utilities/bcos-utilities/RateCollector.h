@@ -20,14 +20,11 @@
 #pragma once
 
 #include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/ObjectCounter.h"
-#include "bcos-utilities/RefDataContainer.h"
 #include "bcos-utilities/Timer.h"
-#include <bcos-utilities/Common.h>
-#include <algorithm>
 #include <memory>
 #include <utility>
-#include <vector>
 
 namespace bcos
 {

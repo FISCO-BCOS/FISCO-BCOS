@@ -22,17 +22,12 @@
 
 #pragma once
 
-#include "Abi.h"
-#include <bcos-utilities/Common.h>
 #include <tbb/concurrent_hash_map.h>
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
-#include <memory>
 #include <mutex>
-#include <thread>
 #include <vector>
 
 namespace bcos

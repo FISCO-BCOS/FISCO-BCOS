@@ -24,7 +24,6 @@
 #include "VRFInfo.h"
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
-#include <bcos-framework/storage/Table.h>
 #include <cstdint>
 #include <functional>
 

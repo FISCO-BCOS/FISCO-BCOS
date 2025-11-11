@@ -21,8 +21,6 @@
 #pragma once
 
 #include "../vm/Precompiled.h"
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-framework/storage/Table.h>
 
 namespace bcos::precompiled
 {
@@ -38,7 +36,7 @@ class KVTablePrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<KVTablePrecompiled>;
     KVTablePrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~KVTablePrecompiled(){};
+    virtual ~KVTablePrecompiled() {};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,

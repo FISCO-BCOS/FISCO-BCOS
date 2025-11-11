@@ -21,7 +21,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/ConsensusPrecompiled.h"
 #include "precompiled/SystemConfigPrecompiled.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 
 using namespace bcos;
 using namespace bcos::precompiled;

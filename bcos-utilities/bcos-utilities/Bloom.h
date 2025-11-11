@@ -21,10 +21,7 @@
 #pragma once
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/LogEntry.h"
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <concepts/bcos-concepts/Basic.h>
+#include "bcos-utilities/Common.h"
 
 namespace bcos
 {
@@ -60,7 +57,9 @@ Bloom getLogsBloom(Logs logs)
     {
         // Convert string_view to RefDataContainer<const unsigned char>
         auto addressView = log.address();
-        bytesToBloom(RefDataContainer(reinterpret_cast<const byte*>(addressView.data()), addressView.size()), bloom);
+        bytesToBloom(
+            RefDataContainer(reinterpret_cast<const byte*>(addressView.data()), addressView.size()),
+            bloom);
         auto topics = log.topics();
         for (const auto& topic : topics)
         {

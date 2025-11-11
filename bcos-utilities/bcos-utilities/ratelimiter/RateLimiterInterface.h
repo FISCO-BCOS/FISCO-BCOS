@@ -19,7 +19,6 @@
  */
 
 #pragma once
-#include <bcos-utilities/BoostLog.h>
 #include <memory>
 #define RATELIMIT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RateLimiter]"
 

@@ -7,7 +7,6 @@
 #include "../dag/ScaleUtils.h"
 #include "../vm/Precompiled.h"
 #include "TransactionExecutive.h"
-#include <bcos-framework/executor/ExecuteError.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 

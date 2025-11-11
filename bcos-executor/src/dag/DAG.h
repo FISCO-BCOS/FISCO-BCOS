@@ -21,13 +21,9 @@
 
 
 #pragma once
-#include "../Common.h"
-#include <bcos-utilities/Common.h>
 #include <tbb/concurrent_queue.h>
 #include <condition_variable>
 #include <cstdint>
-#include <queue>
-#include <thread>
 #include <vector>
 
 namespace bcos
@@ -48,7 +44,7 @@ class DAG
 {
     // Just algorithm, not thread safe
 public:
-    DAG(){};
+    DAG() {};
     ~DAG();
 
     // Init DAG basic memory, should call before other function

@@ -23,19 +23,12 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
-#include "../vm/VMFactory.h"
 #include "BlockContext.h"
-#include "SyncStorageWrapper.h"
+#include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-framework/protocol/BlockHeader.h"
-#include "bcos-framework/protocol/Transaction.h"
-#include "bcos-protocol/TransactionStatus.h"
-#include "bcos-table/src/StateStorage.h"
-#include <bcos-codec/abi/ContractABICodec.h>
+#include "bcos-table/src/StorageWrapper.h"
 #include <boost/algorithm/string/case_conv.hpp>
-#include <functional>
 #include <variant>
 
 namespace bcos
