@@ -259,6 +259,50 @@ BOOST_AUTO_TEST_CASE(createTwice)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(emptyCreate)
+{
+    // Create a contract with empty init code and zero value
+    syncWait([this]() -> Task<void> {
+        // Advance block height
+        blockHeader.setNumber(seq++);
+        blockHeader.calculateHash(*hashImpl);
+
+        constexpr int64_t CREATE_GAS = 300LL * 10000LL;  // gas budget for empty create
+        evmc_message message = {.kind = EVMC_CREATE,
+            .flags = 0,
+            .depth = 0,
+            .gas = CREATE_GAS,
+            .recipient = {},
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = {},
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = nullptr,
+            .input_size = 0,
+            .value = {},  // zero value
+            .create2_salt = {},
+            .code_address = {}};
+
+        evmc_address origin{};
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, blockHeader, message,
+                origin, "", 0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0,
+                bcos::task::syncWait);
+
+        co_await hostContext.prepare();
+        auto result = co_await hostContext.execute();
+
+        // Expect the creation succeeds and produces an empty runtime code
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
+        // Verify code size at the created address is zero using same context
+        auto size = co_await hostContext.codeSizeAt(result.create_address);
+        BOOST_CHECK_EQUAL(size, 0);
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(failure)
 {
     syncWait([this]() -> Task<void> {
