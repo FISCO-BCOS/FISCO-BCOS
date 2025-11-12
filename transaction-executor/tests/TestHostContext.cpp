@@ -293,9 +293,7 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
         co_await hostContext.prepare();
         auto result = co_await hostContext.execute();
 
-        // Expect the creation succeeds and produces an empty runtime code
         BOOST_CHECK_EQUAL(result.status_code, EVMC_SUCCESS);
-        // Verify code size at the created address is zero using same context
         auto size = co_await hostContext.codeSizeAt(result.create_address);
         BOOST_CHECK_EQUAL(size, 0);
 

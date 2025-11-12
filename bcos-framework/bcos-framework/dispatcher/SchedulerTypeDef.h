@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
 
 namespace bcos
 {

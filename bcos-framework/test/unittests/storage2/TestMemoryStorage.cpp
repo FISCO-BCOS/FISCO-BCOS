@@ -1,13 +1,12 @@
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
+#include "bcos-task/Wait.h"
 #include "transaction-executor/StateKey.h"
-#include <bcos-framework/storage2/MemoryStorage.h>
-#include <bcos-task/Wait.h>
 #include <fmt/format.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <functional>
-#include <ostream>
 #include <range/v3/view/transform.hpp>
 #include <string>
 #include <variant>

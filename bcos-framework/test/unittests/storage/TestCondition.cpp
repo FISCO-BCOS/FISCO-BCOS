@@ -1,5 +1,5 @@
 #include "bcos-framework/storage/Common.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
 #include <sstream>

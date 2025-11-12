@@ -19,12 +19,11 @@
  * @date 2021-04-19
  */
 #pragma once
+#include "bcos-crypto/interfaces/crypto/KeyInterface.h"
+#include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-task/Task.h"
-#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/gateway/GroupNodeInfo.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Error.h"
 #include <range/v3/view/any_view.hpp>
 
 namespace bcos::front
