@@ -1,4 +1,5 @@
 #include "kzgPrecompiled.h"
+#include "bcos-crypto/hash/Sha256.h"
 #include <blst.h>
 
 using G1 = blst_p1;

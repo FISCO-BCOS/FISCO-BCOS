@@ -20,10 +20,7 @@
 
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/extension/AuthManagerPrecompiled.h"
 #include "precompiled/extension/ContractAuthMgrPrecompiled.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
-#include <libinitializer/AuthInitializer.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

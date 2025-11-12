@@ -19,16 +19,14 @@
  */
 
 #include "CryptoPrecompiled.h"
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
+#include "bcos-crypto/signature/sm2.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-codec/abi/ContractABICodec.h>
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/interfaces/crypto/Signature.h>
-#include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
-#include <bcos-crypto/signature/sm2.h>
-#include <bcos-framework/protocol/Protocol.h>
+#include "bcos-framework/protocol/Protocol.h"
 
 using namespace bcos;
 using namespace bcos::codec;
@@ -106,8 +104,8 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
         // no defined function
         PRECOMPILED_LOG(INFO) << LOG_DESC("CryptoPrecompiled: undefined method")
                               << LOG_KV("funcSelector", std::to_string(funcSelector));
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError{} << errinfo_comment("CryptoPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{}
+                              << errinfo_comment("CryptoPrecompiled call undefined function!"));
     }
     gasPricer->updateMemUsed(_callParameters->m_execResult.size());
     _callParameters->setGasLeft(_callParameters->m_gasLeft - gasPricer->calTotalGas());

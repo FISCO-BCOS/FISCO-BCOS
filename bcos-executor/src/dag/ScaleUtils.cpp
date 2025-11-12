@@ -21,7 +21,7 @@
  */
 
 #include "ScaleUtils.h"
-#include <bcos-codec/scale/Scale.h>
+#include "bcos-codec/scale/Common.h"
 #include <boost/algorithm/string/predicate.hpp>
 #include <string>
 
@@ -37,7 +37,7 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
     }
 
     auto _1stByte = encodedBytes[startPos];
-    auto flag = (_1stByte)&0b00000011u;
+    auto flag = (_1stByte) & 0b00000011u;
     auto number = 0u;
 
     switch (flag)
@@ -57,13 +57,13 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         if (encodedBytes.size() - startPos < 2)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("decodeCompactInteger")
-                           << LOG_DESC("not enough data to decode compact integer");
+                            << LOG_DESC("not enough data to decode compact integer");
             return nullopt;
         }
         auto _2ndByte = encodedBytes[startPos + 1];
-        number =
-            (static_cast<size_t>((_1stByte)&0b11111100u) + static_cast<size_t>(_2ndByte) * 256u) >>
-            2u;
+        number = (static_cast<size_t>((_1stByte) & 0b11111100u) +
+                     static_cast<size_t>(_2ndByte) * 256u) >>
+                 2u;
         break;
     }
     case 0b10u:
@@ -76,7 +76,7 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         if (encodedBytes.size() - startPos < 4)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("decodeCompactInteger")
-                           << LOG_DESC("not enough data to decode compact integer");
+                            << LOG_DESC("not enough data to decode compact integer");
             return nullopt;
         }
 
@@ -98,7 +98,7 @@ optional<size_t> bcos::executor::decodeCompactInteger(const bytes& encodedBytes,
         if (encodedBytes.size() - startPos < bytesCount + 1)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("decodeCompactInteger")
-                           << LOG_DESC("not enough data to decode compact integer");
+                            << LOG_DESC("not enough data to decode compact integer");
             return nullopt;
         }
 
@@ -126,7 +126,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         if (leftBracketPos == type.npos)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
-                           << LOG_DESC("unable to parse array type") << LOG_KV("type", type);
+                            << LOG_DESC("unable to parse array type") << LOG_KV("type", type);
             return nullopt;
         }
 
@@ -144,7 +144,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             else
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
-                               << LOG_DESC("unable to parse length of dynamic array");
+                                << LOG_DESC("unable to parse length of dynamic array");
                 return nullopt;
             }
         }
@@ -158,8 +158,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             catch (...)
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
-                               << LOG_DESC("unable to parse dimension")
-                               << LOG_KV("dimension", dimension);
+                                << LOG_DESC("unable to parse dimension")
+                                << LOG_KV("dimension", dimension);
                 return nullopt;
             }
         }
@@ -177,7 +177,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             else
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
-                               << LOG_DESC("unable to calculate length of element");
+                                << LOG_DESC("unable to calculate length of element");
                 return nullopt;
             }
         }
@@ -195,7 +195,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         catch (...)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
-                           << LOG_KV("type", type);
+                            << LOG_KV("type", type);
             return nullopt;
         }
         return digitsNum >> 3;
@@ -212,7 +212,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         else
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
-                           << LOG_DESC("unable to parse string or bytes");
+                            << LOG_DESC("unable to parse string or bytes");
             return nullopt;
         }
     }
@@ -233,7 +233,7 @@ optional<size_t> bcos::executor::scaleEncodingLength(
         catch (...)
         {
             BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
-                           << LOG_KV("type", type);
+                            << LOG_KV("type", type);
             return nullopt;
         }
         return digitsNum;
@@ -254,8 +254,8 @@ optional<size_t> bcos::executor::scaleEncodingLength(
             else
             {
                 BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength")
-                               << LOG_DESC("unable to parse component")
-                               << LOG_KV("type", component);
+                                << LOG_DESC("unable to parse component")
+                                << LOG_KV("type", component);
                 return nullopt;
             }
         }
@@ -263,6 +263,6 @@ optional<size_t> bcos::executor::scaleEncodingLength(
     }
 
     BCOS_LOG(TRACE) << LOG_BADGE("scaleEncodingLength") << LOG_DESC("unable to parse type")
-                   << LOG_KV("type", type);
+                    << LOG_KV("type", type);
     return nullopt;
 }

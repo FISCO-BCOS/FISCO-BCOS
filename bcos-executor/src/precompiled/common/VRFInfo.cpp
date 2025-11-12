@@ -20,8 +20,6 @@
 
 #include "VRFInfo.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <wedpr-crypto/WedprUtilities.h>
 

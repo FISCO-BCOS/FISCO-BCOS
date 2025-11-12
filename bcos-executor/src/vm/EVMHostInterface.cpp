@@ -25,17 +25,11 @@
 
 #include "EVMHostInterface.h"
 #include "../Common.h"
-#include "../precompiled/common/Common.h"
 #include "HostContext.h"
-#include "bcos-codec/abi/ContractABICodec.h"
-#include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include <bcos-utilities/Common.h>
+#include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
-#include <exception>
-#include <optional>
 
 using namespace std;
 

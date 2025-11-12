@@ -19,12 +19,11 @@
  */
 
 #include "TableManagerPrecompiled.h"
-
 #include "bcos-executor/src/precompiled/common/Common.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledAbi.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
-#include <bcos-framework/protocol/Exceptions.h>
+#include "bcos-framework/protocol/Exceptions.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/throw_exception.hpp>

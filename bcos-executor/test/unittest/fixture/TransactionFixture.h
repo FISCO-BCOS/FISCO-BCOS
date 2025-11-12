@@ -18,52 +18,28 @@
  * @date 2025/2/13
  */
 
-/**
- *  Copyright (C) 2021 FISCO BCOS.
- *  SPDX-License-Identifier: Apache-2.0
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- *
- * @file TransactionFixture.h
- * @author: kyonRay
- * @date 2021-06-19
- */
-
 #pragma once
 #include "bcos-codec/scale/Scale.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/storage/Table.h"
+#include "bcos-framework/testutils/faker/FakeBlock.h"
+#include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "executor/TransactionExecutorFactory.h"
 #include "libtask/bcos-task/Wait.h"
 #include "mock/MockKeyPageStorage.h"
 #include "mock/MockLedger.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/hash/SM3.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-crypto/signature/sm2.h>
-#include <bcos-executor/src/precompiled/common/Common.h>
-#include <bcos-executor/src/precompiled/common/Utilities.h>
-#include <bcos-framework/executor/NativeExecutionMessage.h>
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/storage/Table.h>
-#include <bcos-framework/testutils/faker/FakeBlock.h>
-#include <bcos-framework/testutils/faker/FakeBlockHeader.h>
-#include <bcos-table/src/StateStorageFactory.h>
-#include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <libinitializer/AuthInitializer.h>
 #include <string>
 

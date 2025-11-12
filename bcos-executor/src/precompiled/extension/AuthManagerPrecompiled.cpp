@@ -23,7 +23,7 @@
 #include "ContractAuthMgrPrecompiled.h"
 #include "bcos-codec/scale/Scale.h"
 #include "libinitializer/AuthInitializer.h"
-#include <bcos-tool/BfsFileFactory.h>
+#include "bcos-tool/BfsFileFactory.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/core/ignore_unused.hpp>

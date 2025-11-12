@@ -23,12 +23,11 @@
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Wait.h"
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/GlobalConfig.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-tool/VersionConverter.h>
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-tool/VersionConverter.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 

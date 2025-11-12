@@ -19,7 +19,11 @@
  */
 
 #pragma once
-#include <bcos-utilities/Common.h>
+
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <vector>
 
 namespace bcos
 {

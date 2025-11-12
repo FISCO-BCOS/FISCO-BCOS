@@ -18,12 +18,9 @@
  * @date 2021-06-22
  */
 
-#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-framework/transaction-executor/StateKey.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/endian/conversion.hpp>
 
 using namespace bcos;

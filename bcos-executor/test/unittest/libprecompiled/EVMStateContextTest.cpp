@@ -17,15 +17,11 @@
  * @author: kyonGuo
  * @date 2022/11/2
  */
-#include "bcos-crypto/signature/codec/SignatureDataWithPub.h"
+#include "bcos-crypto/signature/codec/SignatureDataWithV.h"
+#include "bcos-crypto/signature/key/KeyFactoryImpl.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/CryptoPrecompiled.h"
-#include <bcos-crypto/signature/codec/SignatureDataWithV.h>
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

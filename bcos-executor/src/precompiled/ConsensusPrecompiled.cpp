@@ -19,13 +19,12 @@
  */
 
 #include "ConsensusPrecompiled.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"
-#include <bcos-framework/ledger/LedgerTypeDef.h>
-#include <bcos-framework/protocol/CommonError.h>
-#include <bcos-framework/protocol/Protocol.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/lexical_cast.hpp>
@@ -296,7 +295,8 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     {
         if (node->type == consensus::Type::consensus_observer)
         {
-            BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Cannot set weight to observer."));
+            BOOST_THROW_EXCEPTION(
+                protocol::PrecompiledError{} << errinfo_comment("Cannot set weight to observer."));
         }
         if (setTermWeight)
         {
@@ -318,7 +318,8 @@ static int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _exe
     return 0;
 }
 
-sealer::VrfCurveType getVrfCurveType(const std::shared_ptr<executor::TransactionExecutive>& _executive)
+sealer::VrfCurveType getVrfCurveType(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     sealer::VrfCurveType vrfCurveType = sealer::VrfCurveType::CURVE25519;
 
@@ -364,8 +365,8 @@ static void rotateWorkingSealer(const std::shared_ptr<executor::TransactionExecu
                                << LOG_KV("msg", boost::diagnostic_information(_e))
                                << LOG_KV("origin", _callParameters->m_origin)
                                << LOG_KV("sender", _callParameters->m_sender);
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError{} << errinfo_comment("RotateWorkingSealer exception occurred."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{}
+                              << errinfo_comment("RotateWorkingSealer exception occurred."));
     }
 }
 
@@ -463,8 +464,8 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("ConsensusPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError{} << errinfo_comment("ConsensusPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{}
+                              << errinfo_comment("ConsensusPrecompiled call undefined function!"));
     }
 
     _callParameters->setExecResult(codec.encode(int32_t(result)));

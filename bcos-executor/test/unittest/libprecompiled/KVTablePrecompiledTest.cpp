@@ -21,7 +21,7 @@
 #include "precompiled/KVTablePrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 
 using namespace bcos;
 using namespace bcos::precompiled;
