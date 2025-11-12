@@ -17,16 +17,15 @@
  * @author: octopus
  * @date 2023-02-17
  */
+#include "bcos-framework/protocol/GlobalConfig.h"
+#include "bcos-gateway/GatewayFactory.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
 #include "bcos-utilities/BoostLogInitializer.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/CompositeBuffer.h"
+#include "bcos-utilities/RateCollector.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
-#include <bcos-gateway/GatewayFactory.h>
-#include <bcos-utilities/RateCollector.h>
 #include <chrono>
 #include <memory>
 #include <string>

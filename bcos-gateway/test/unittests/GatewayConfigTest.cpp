@@ -19,12 +19,11 @@
  * @date 2021-05-17
  */
 
-#include <bcos-gateway/GatewayConfig.h>
-#include <bcos-gateway/GatewayFactory.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-gateway/GatewayConfig.h"
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/algorithm/string/join.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

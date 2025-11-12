@@ -21,13 +21,12 @@
 #pragma once
 #include "LocalRouterTable.h"
 #include "PeersRouterTable.h"
-#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-gateway/Common.h>
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libp2p/P2PInterface.h>
-#include <bcos-gateway/libp2p/P2PSession.h>
-#include <bcos-gateway/protocol/GatewayNodeStatus.h>
-#include <bcos-utilities/Timer.h>
+#include "bcos-crypto/interfaces/crypto/KeyFactory.h"
+#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/P2PSession.h"
+#include "bcos-gateway/protocol/GatewayNodeStatus.h"
+#include "bcos-utilities/Timer.h"
 #include <oneapi/tbb/concurrent_hash_map.h>
 
 namespace bcos::gateway

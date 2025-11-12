@@ -20,15 +20,12 @@
  */
 
 #include "bcos-gateway/gateway/GatewayMessageExtAttributes.h"
-#include <boost/test/tools/old/interface.hpp>
 #define BOOST_TEST_MAIN
-
-#include <bcos-gateway/Common.h>
-#include <bcos-gateway/libp2p/P2PInterface.h>
-#include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-gateway/libp2p/P2PMessageV2.h>
-#include <bcos-gateway/libp2p/Service.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-gateway/libp2p/P2PMessageV2.h"
+#include "bcos-gateway/libp2p/Service.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

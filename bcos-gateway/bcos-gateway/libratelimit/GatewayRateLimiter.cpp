@@ -19,7 +19,7 @@
  */
 
 #include "bcos-utilities/BoostLog.h"
-#include <bcos-gateway/libratelimit/GatewayRateLimiter.h>
+#include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 
 using namespace bcos;
 using namespace bcos::gateway;

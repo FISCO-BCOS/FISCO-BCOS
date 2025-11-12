@@ -20,7 +20,7 @@
 #pragma once
 
 #include "RouterTableInterface.h"
-#include <bcos-tars-protocol/tars/RouterTable.h>
+#include "bcos-tars-protocol/tars/RouterTable.h"
 #include <memory>
 
 

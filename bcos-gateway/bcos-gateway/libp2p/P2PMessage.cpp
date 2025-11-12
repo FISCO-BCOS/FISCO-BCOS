@@ -18,15 +18,15 @@
  * @date 2021-05-04
  */
 
-#include <bcos-gateway/Common.h>
-#include <bcos-gateway/libp2p/Common.h>
-#include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-utilities/ZstdCompress.h>
+#include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-gateway/Common.h"
+#include "bcos-gateway/libp2p/Common.h"
+#include "bcos-utilities/ZstdCompress.h"
 #include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::crypto;
 
 bool P2PMessageOptions::encode(bytes& _buffer) const
 {

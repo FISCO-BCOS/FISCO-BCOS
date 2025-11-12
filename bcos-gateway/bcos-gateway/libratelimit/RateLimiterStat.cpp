@@ -18,11 +18,10 @@
  * @date 2022-06-30
  */
 
+#include "bcos-gateway/libratelimit/RateLimiterStat.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/libratelimit/RateLimiterStat.h>
 #include <boost/lexical_cast.hpp>
 #include <iomanip>
 #include <optional>
@@ -66,7 +65,7 @@ void RateLimiterStat::start()
     if (m_running)
     {
         GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat")
-                            << LOG_DESC("ratelimiter stat is running");
+                          << LOG_DESC("ratelimiter stat is running");
         return;
     }
     m_running = true;
@@ -93,8 +92,8 @@ void RateLimiterStat::start()
     m_statTimer->start();
 
     GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat") << LOG_DESC("ratelimiter stat start ok")
-                        << LOG_KV("statInterval", statInterval)
-                        << LOG_KV("enableConnectDebugInfo", m_enableConnectDebugInfo);
+                      << LOG_KV("statInterval", statInterval)
+                      << LOG_KV("enableConnectDebugInfo", m_enableConnectDebugInfo);
 }
 
 void RateLimiterStat::stop()
@@ -102,7 +101,7 @@ void RateLimiterStat::stop()
     if (!m_running)
     {
         GATEWAY_LOG(INFO) << LOG_BADGE("RateLimiterStat")
-                            << LOG_DESC("ratelimiter stat has been stopped");
+                          << LOG_DESC("ratelimiter stat has been stopped");
         return;
     }
 

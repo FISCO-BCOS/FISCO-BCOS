@@ -6,9 +6,11 @@
  */
 
 #pragma once
-#include <bcos-gateway/libnetwork/Common.h>
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-gateway/libnetwork/Common.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast.hpp>
+
 
 namespace bcos
 {

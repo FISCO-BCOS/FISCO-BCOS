@@ -20,10 +20,8 @@
 
 #pragma once
 
-#include "bcos-gateway/libratelimit/ModuleWhiteList.h"
+#include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/libratelimit/RateLimiterFactory.h"
-#include <bcos-gateway/GatewayConfig.h>
-#include <bcos-utilities/Common.h>
 #include <array>
 #include <shared_mutex>
 #include <unordered_map>
@@ -54,13 +52,15 @@ public:
     bcos::ratelimiter::RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 
     std::pair<bool, bcos::ratelimiter::RateLimiterInterface::Ptr> registerRateLimiter(
-        const std::string& _rateLimiterKey, bcos::ratelimiter::RateLimiterInterface::Ptr _rateLimiter);
+        const std::string& _rateLimiterKey,
+        bcos::ratelimiter::RateLimiterInterface::Ptr _rateLimiter);
     bool removeRateLimiter(const std::string& _rateLimiterKey);
 
     bcos::ratelimiter::RateLimiterInterface::Ptr getGroupRateLimiter(const std::string& _group);
     bcos::ratelimiter::RateLimiterInterface::Ptr getConnRateLimiter(const std::string& _connIP);
 
-    bcos::ratelimiter::RateLimiterInterface::Ptr getInRateLimiter(const std::string& _connIP, uint16_t _packageType);
+    bcos::ratelimiter::RateLimiterInterface::Ptr getInRateLimiter(
+        const std::string& _connIP, uint16_t _packageType);
     bcos::ratelimiter::RateLimiterInterface::Ptr getInRateLimiter(
         const std::string& _groupID, uint16_t _moduleID, bool /***/);
 

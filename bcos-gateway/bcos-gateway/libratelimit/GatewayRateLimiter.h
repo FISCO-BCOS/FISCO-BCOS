@@ -20,12 +20,9 @@
 
 #pragma once
 
+#include "bcos-gateway/libratelimit/RateLimiterManager.h"
+#include "bcos-gateway/libratelimit/RateLimiterStat.h"
 #include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Timer.h"
-#include <bcos-utilities/ratelimiter/RateLimiterInterface.h>
-#include <bcos-gateway/libratelimit/RateLimiterManager.h>
-#include <bcos-gateway/libratelimit/RateLimiterStat.h>
-#include <bcos-utilities/Common.h>
 
 namespace bcos
 {
@@ -58,7 +55,7 @@ public:
         if (m_running)
         {
             GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                                << LOG_DESC("gateway ratelimiter is running");
+                              << LOG_DESC("gateway ratelimiter is running");
             return;
         }
         m_running = true;
@@ -72,10 +69,10 @@ public:
         }
 
         GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                            << LOG_DESC("gateway ratelimiter start end")
-                            << LOG_KV("bStartStat", bStartStat)
-                            << LOG_KV("enableOutRateLimit", enableOutRateLimit)
-                            << LOG_KV("enableInRateLimit", enableInRateLimit);
+                          << LOG_DESC("gateway ratelimiter start end")
+                          << LOG_KV("bStartStat", bStartStat)
+                          << LOG_KV("enableOutRateLimit", enableOutRateLimit)
+                          << LOG_KV("enableInRateLimit", enableInRateLimit);
     }
 
     void stop()
@@ -83,7 +80,7 @@ public:
         if (!m_running)
         {
             GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                                << LOG_DESC("gateway ratelimiter has been stopped");
+                              << LOG_DESC("gateway ratelimiter has been stopped");
             return;
         }
 
@@ -94,7 +91,7 @@ public:
         }
 
         GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                            << LOG_DESC("gateway ratelimiter stop end");
+                          << LOG_DESC("gateway ratelimiter stop end");
     }
 
 public:

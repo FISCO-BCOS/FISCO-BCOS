@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "GatewayNodeManager.h"
-#include <bcos-utilities/Timer.h>
+#include "bcos-utilities/Timer.h"
 namespace bcos
 {
 namespace gateway

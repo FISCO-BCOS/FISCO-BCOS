@@ -18,14 +18,11 @@
  * @date 2021-05-13
  */
 #pragma once
-#include "bcos-tars-protocol/Common.h"
+#include "bcos-framework/front/FrontServiceInterface.h"
+#include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
+#include "bcos-tars-protocol/tars/FrontService.h"
 #include "bcos-utilities/ObjectCounter.h"
-#include <bcos-framework/front/FrontServiceInterface.h>
-#include <bcos-framework/multigroup/ChainNodeInfo.h>
-#include <bcos-framework/protocol/ProtocolInfo.h>
-#include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-tars-protocol/client/FrontServiceClient.h>
-#include <bcos-tars-protocol/impl/TarsServantProxyCallback.h>
 namespace bcos
 {
 namespace gateway

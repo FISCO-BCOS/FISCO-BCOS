@@ -5,12 +5,10 @@
 
 #pragma once
 
-#include <bcos-framework/protocol/ProtocolInfo.h>
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>
-#include <bcos-gateway/libp2p/Common.h>
-#include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libnetwork/SessionFace.h"
+#include "bcos-gateway/libp2p/P2PMessage.h"
 #include <memory>
 #include <utility>
 

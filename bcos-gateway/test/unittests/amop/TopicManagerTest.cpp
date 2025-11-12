@@ -19,8 +19,7 @@
  * @date 2021-06-21
  */
 #include "bcos-gateway/libamop/AirTopicManager.h"
-#include <bcos-gateway/libamop/TopicManager.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

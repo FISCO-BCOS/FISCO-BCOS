@@ -20,6 +20,8 @@
  */
 #pragma once
 #include "bcos-framework/protocol/MemberInterface.h"
+#include <functional>
+#include <map>
 #include <memory>
 namespace bcos
 {

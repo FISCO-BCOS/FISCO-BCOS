@@ -18,11 +18,11 @@
  * @date 2021-06-18
  */
 
-#include "bcos-tars-protocol/Common.h"
+#include "bcos-gateway/libamop/TopicManager.h"
+#include "bcos-gateway/libamop/Common.h"
+#include "bcos-tars-protocol/client/RpcServiceClient.h"
 #include "bcos-utilities/BoostLog.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-gateway/libamop/Common.h>
-#include <bcos-gateway/libamop/TopicManager.h>
 #include <json/json.h>
 #include <servant/Application.h>
 #include <algorithm>

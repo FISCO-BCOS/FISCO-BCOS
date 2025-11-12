@@ -5,11 +5,9 @@
 
 #pragma once
 
+#include "bcos-gateway/libnetwork/Host.h"
+#include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-task/Task.h"
-#include <bcos-gateway/libnetwork/Host.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>
-#include <bcos-gateway/libp2p/Common.h>
-#include <bcos-gateway/libp2p/P2PMessage.h>
 
 namespace bcos
 {

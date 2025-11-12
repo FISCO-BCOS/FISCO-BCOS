@@ -5,11 +5,10 @@
 
 #pragma once
 
+#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-gateway/Common.h"
 #include "bcos-utilities/ObjectCounter.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/Common.h>
-#include <bcos-gateway/libnetwork/Common.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>

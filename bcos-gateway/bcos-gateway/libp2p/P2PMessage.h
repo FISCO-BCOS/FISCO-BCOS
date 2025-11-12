@@ -20,12 +20,10 @@
 
 #pragma once
 
+#include "bcos-framework/protocol/Protocol.h"
+#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/Message.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/throw_exception.hpp>
 #include <utility>
 #include <vector>
@@ -34,9 +32,8 @@ void checkOffset(auto offset, auto length)
 {
     if (std::cmp_greater((offset), (length)))
     {
-        bcos::throwTrace(
-            std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
-                              " ,length: " + std::to_string(length)));
+        bcos::throwTrace(std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
+                                           " ,length: " + std::to_string(length)));
     }
 }
 

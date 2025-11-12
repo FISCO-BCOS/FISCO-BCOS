@@ -23,9 +23,9 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
-#include <bcos-gateway/GatewayConfig.h>
-#include <bcos-gateway/GatewayFactory.h>
-#include <bcos-utilities/testutils/TestPromptFixture.h>
+#include "bcos-gateway/GatewayConfig.h"
+#include "bcos-gateway/GatewayFactory.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/filesystem.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>

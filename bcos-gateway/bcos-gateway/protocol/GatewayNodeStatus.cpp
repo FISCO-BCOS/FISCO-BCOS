@@ -18,8 +18,8 @@
  * @date 2021-12-31
  */
 #include "GatewayNodeStatus.h"
-#include <bcos-tars-protocol/Common.h>
-#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
+#include "bcos-tars-protocol/Common.h"
+#include "bcos-tars-protocol/protocol/GroupNodeInfoImpl.h"
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::gateway;

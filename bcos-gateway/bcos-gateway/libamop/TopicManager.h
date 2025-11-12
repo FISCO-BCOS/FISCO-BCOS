@@ -19,16 +19,11 @@
  */
 #pragma once
 
-#include "fisco-bcos-tars-service/Common/TarsUtils.h"
-#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/rpc/RPCInterface.h>
-#include <bcos-gateway/libamop/Common.h>
-#include <bcos-gateway/libp2p/P2PInterface.h>
-#include <bcos-tars-protocol/client/RpcServiceClient.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Timer.h>
+#include "bcos-framework/rpc/RPCInterface.h"
+#include "bcos-gateway/libamop/Common.h"
+#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-utilities/Common.h"
 #include <servant/Application.h>
-#include <algorithm>
 #include <shared_mutex>
 
 namespace bcos

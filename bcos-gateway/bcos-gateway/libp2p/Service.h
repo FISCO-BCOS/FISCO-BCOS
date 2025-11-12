@@ -8,13 +8,11 @@
  */
 
 #pragma once
-#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/gateway/GatewayTypeDef.h>
-#include <bcos-framework/protocol/GlobalConfig.h>
-#include <bcos-framework/protocol/ProtocolInfoCodec.h>
-#include <bcos-gateway/Gateway.h>
-#include <bcos-gateway/libp2p/P2PInterface.h>
-#include <bcos-gateway/libp2p/P2PSession.h>
+#include "bcos-crypto/interfaces/crypto/KeyFactory.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-framework/protocol/ProtocolInfoCodec.h"
+#include "bcos-gateway/libp2p/P2PInterface.h"
+#include "bcos-gateway/libp2p/P2PSession.h"
 #include <array>
 #include <shared_mutex>
 

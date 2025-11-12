@@ -5,7 +5,7 @@
  */
 #pragma once
 
-#include <bcos-utilities/FixedBytes.h>
+#include "bcos-utilities/FixedBytes.h"
 
 #include <memory>
 #include <set>

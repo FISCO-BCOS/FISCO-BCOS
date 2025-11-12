@@ -3,16 +3,15 @@
  *  @date 2021-05-19
  */
 
+#include "bcos-gateway/GatewayConfig.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
+#include "bcos-security/bcos-security/BcosKms.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/protocol/Protocol.h>
-#include <bcos-gateway/GatewayConfig.h>
-#include <bcos-security/bcos-security/BcosKms.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/FixedBytes.h>
+#include "bcos-utilities/FileUtility.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <json/json.h>
 #include <boost/regex.hpp>
 #include <boost/throw_exception.hpp>

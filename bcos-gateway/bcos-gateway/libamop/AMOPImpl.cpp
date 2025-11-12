@@ -19,9 +19,9 @@
  */
 #include "AMOPImpl.h"
 #include "bcos-utilities/BoostLog.h"
-#include <bcos-framework/protocol/CommonError.h>
-#include <bcos-gateway/libamop/AMOPMessage.h>
-#include <bcos-gateway/libnetwork/Common.h>
+#include "bcos-framework/protocol/CommonError.h"
+#include "bcos-gateway/libamop/AMOPMessage.h"
+#include "bcos-gateway/libnetwork/Common.h"
 #include <boost/bind/bind.hpp>
 using namespace bcos;
 using namespace bcos::gateway;

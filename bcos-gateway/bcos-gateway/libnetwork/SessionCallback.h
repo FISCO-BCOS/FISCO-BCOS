@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "bcos-gateway/libnetwork/Common.h"
-#include <bcos-gateway/libnetwork/Message.h>
+#include "bcos-gateway/libnetwork/Message.h"
 #include <boost/asio/deadline_timer.hpp>
 #include <array>
 #include <mutex>

@@ -4,13 +4,13 @@
  */
 #pragma once
 
+#include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-framework/gateway/GatewayTypeDef.h"
+#include "bcos-gateway/libnetwork/Common.h"
+#include "bcos-gateway/libnetwork/Message.h"
+#include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/Message.h>
-#include <bcos-gateway/libnetwork/PeerBlacklist.h>
-#include <bcos-gateway/libnetwork/PeerWhitelist.h>
-#include <bcos-utilities/Common.h>
+#include "bcos-utilities/Common.h"
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
@@ -18,7 +18,6 @@
 #include <boost/asio/ssl/stream_base.hpp>
 #include <boost/system/error_code.hpp>
 #include <memory>
-#include <set>
 #include <string>
 #include <utility>
 
