@@ -55,3 +55,8 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
         nonceIndex.emplace_hint(it, std::move(transactionData));
     }
 }
+size_t bcos::txpool::Web3Transactions::size()
+{
+    std::unique_lock lock(m_mutex);
+    return m_transactions.size();
+}

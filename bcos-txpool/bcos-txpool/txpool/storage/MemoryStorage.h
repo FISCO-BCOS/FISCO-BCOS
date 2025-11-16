@@ -26,6 +26,7 @@
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
+#include "txpool/storage/Web3Transactions.h"
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <bcos-utilities/ThreadPool.h>
@@ -59,10 +60,15 @@ public:
     bool batchSealTransactions(std::vector<protocol::TransactionMetaData::Ptr>& _txsList,
         std::vector<protocol::TransactionMetaData::Ptr>& _sysTxsList, size_t _txsLimit) override;
 
+    task::Task<bool> batchSealTransactions(size_t limit,
+        storage2::AnyStorage<executor_v1::StateKeyView, executor_v1::StateValue>& state,
+        std::vector<protocol::TransactionMetaData::Ptr>& txsList,
+        std::vector<protocol::TransactionMetaData::Ptr>& sysTxsList) override;
+
     bool exists(bcos::crypto::HashType const& _txHash) override;
     bool batchExists(crypto::HashListView _txsHashList) override;
 
-    size_t size() const override;
+    size_t size() override;
     void clear() override;
 
     // FIXME: deprecated, after using txpool::broadcastTransaction
@@ -93,6 +99,8 @@ public:
     // For testing
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::Ptr transaction);
     void remove(crypto::HashType const& _txHash);
+
+    void setEnableWeb3Transactions(bool enable);
 
 protected:
     virtual void notifyTxsSize(size_t _retryTime = 0);
@@ -125,6 +133,7 @@ protected:
         {}
     };
     BcosTransactions m_bcosTransactions;
+    Web3Transactions m_web3Transactions;
 
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     uint64_t m_blockNumberUpdatedTime;
@@ -136,5 +145,6 @@ protected:
     // timer to notify txs size
     std::shared_ptr<Timer> m_txsSizeNotifierTimer;
     bcos::crypto::HashType m_knownLatestSealedTxHash;
+    bool m_enableWeb3Transactions = false;
 };
 }  // namespace bcos::txpool
