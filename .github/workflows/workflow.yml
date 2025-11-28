@@ -11,7 +11,7 @@ on:
       - "Changelog.md"
       - "README.md"
   release:
-    types: [published]
+    types: [published, prereleased, released, created]
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -155,26 +155,32 @@ jobs:
           set -euo pipefail
           case "${{ matrix.os }}" in
             ubuntu-24.04)
-              echo "PKG_OS=linux" >> $GITHUB_ENV
-              echo "PKG_ARCH=x86_64" >> $GITHUB_ENV
+              PKG_OS=linux
+              PKG_ARCH=x86_64
               ;;
             ubuntu-24.04-arm)
-              echo "PKG_OS=linux" >> $GITHUB_ENV
-              echo "PKG_ARCH=aarch64" >> $GITHUB_ENV
+              PKG_OS=linux
+              PKG_ARCH=aarch64
               ;;
             macos-15)
-              echo "PKG_OS=macOS" >> $GITHUB_ENV
-              echo "PKG_ARCH=arm64" >> $GITHUB_ENV
+              PKG_OS=macOS
+              PKG_ARCH=arm64
               ;;
             macos-15-intel)
-              echo "PKG_OS=macOS" >> $GITHUB_ENV
-              echo "PKG_ARCH=x86_64" >> $GITHUB_ENV
+              PKG_OS=macOS
+              PKG_ARCH=x86_64
               ;;
-            *) ;;
+            *)
+              PKG_OS=unknown
+              PKG_ARCH=unknown
+              ;;
           esac
-          echo "PKG_NAME=fisco-bcos-${PKG_OS:-unknown}-${PKG_ARCH:-unknown}.tar.gz" >> $GITHUB_ENV
+          echo "PKG_OS=$PKG_OS" >> $GITHUB_ENV
+          echo "PKG_ARCH=$PKG_ARCH" >> $GITHUB_ENV
+          PKG_NAME="fisco-bcos-${PKG_OS}-${PKG_ARCH}.tar.gz"
+          echo "PKG_NAME=$PKG_NAME" >> $GITHUB_ENV
           # also expose as step outputs for later reference
-          echo "pkg_name=fisco-bcos-${PKG_OS:-unknown}-${PKG_ARCH:-unknown}.tar.gz" >> $GITHUB_OUTPUT
+          echo "pkg_name=$PKG_NAME" >> $GITHUB_OUTPUT
       - name: Create release tarball
         if: github.event_name == 'release' && matrix.os != 'windows-2025'
         shell: bash
