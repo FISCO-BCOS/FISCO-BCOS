@@ -11,7 +11,7 @@ on:
       - "Changelog.md"
       - "README.md"
   release:
-    types: [published, prereleased, released, created]
+    types: [published]
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
