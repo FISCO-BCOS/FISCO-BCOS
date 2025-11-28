@@ -164,7 +164,7 @@ jobs:
               ;;
             macos-15)
               PKG_OS=macOS
-              PKG_ARCH=arm64
+              PKG_ARCH=arm
               ;;
             macos-15-intel)
               PKG_OS=macOS
