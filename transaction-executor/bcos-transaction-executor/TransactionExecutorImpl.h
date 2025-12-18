@@ -221,6 +221,7 @@ public:
                         delete[] result->output_data;
                     };
                 }
+                m_data->m_hostContext.logs().clear();
             }
 
             auto receiptStatus = static_cast<int32_t>(evmcResult.status);
