@@ -206,6 +206,62 @@ BOOST_AUTO_TEST_CASE(costBalance)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(insufficientBalanceNoLogs)
+{
+    using namespace std::string_view_literals;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        // Prepare block header and enable balance features
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_13_0_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(protocol::BlockVersion::V3_13_0_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+        ledgerConfig.setFeatures(features);
+        // Set gas price high to trigger insufficient balance quickly
+        ledgerConfig.setGasPrice({"1000", 0});
+
+        // Deploy HelloWorld contract with a funded deployer
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+        auto deployTx = transactionFactory.createTransaction(
+            0, "", helloworldBytecodeBinary, {}, 0, "", "", 0, std::string{}, {}, {}, 200000);
+
+        // Use a deployer with enough balance for deployment
+        auto deployer = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
+        deployTx->forceSender(bytes(deployer.bytes, deployer.bytes + sizeof(deployer.bytes)));
+        ledger::account::EVMAccount deployerAccount(storage, deployer, false);
+        co_await deployerAccount.setBalance(100000000000);
+
+        auto deployReceipt = co_await executor.executeTransaction(
+            storage, blockHeader, *deployTx, 10, ledgerConfig, false);
+        BOOST_CHECK_EQUAL(deployReceipt->status(), 0);
+
+        // Prepare a call that would emit logs if executed successfully
+        bcos::codec::abi::ContractABICodec abiCodec(*cryptoSuite->hashImpl());
+        auto callInput = abiCodec.abiIn("logOut()");
+        auto callTx =
+            transactionFactory.createTransaction(0, std::string(deployReceipt->contractAddress()),
+                callInput, {}, 0, "", "", 0, std::string{}, {}, {}, 50000);
+
+        // Set sender balance to 1 to ensure insufficient balance
+        auto lowBalanceSender = unhexAddress("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"sv);
+        callTx->forceSender(
+            bytes(lowBalanceSender.bytes, lowBalanceSender.bytes + sizeof(lowBalanceSender.bytes)));
+        ledger::account::EVMAccount lowAccount(storage, lowBalanceSender, false);
+        co_await lowAccount.setBalance(0);
+
+        auto callReceipt = co_await executor.executeTransaction(
+            storage, blockHeader, *callTx, 11, ledgerConfig, false);
+        BOOST_CHECK_EQUAL(callReceipt->status(),
+            static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+        // On failure due to insufficient balance, receipt should have no logs
+        BOOST_CHECK(callReceipt->logEntries().empty());
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(web3Nonce)
 {
     using namespace std::string_view_literals;
