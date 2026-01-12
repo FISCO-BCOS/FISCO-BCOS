@@ -188,6 +188,29 @@ void SchedulerManager::getABI(
     }
 }
 
+bcos::task::Task<std::optional<bcos::storage::Entry>> SchedulerManager::getPendingStorageAt(
+    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
+{
+    try
+    {
+        auto [ok, message] = checkAndInit();
+
+        if (!ok)
+        {
+            co_return std::nullopt;
+        }
+
+        co_return co_await m_scheduler->getPendingStorageAt(address, key, number);
+    }
+    catch (std::exception const& e)
+    {
+        SCHEDULER_LOG(WARNING) << LOG_DESC("getPendingStorageAt exception")
+                               << LOG_KV("contract", address)
+                               << LOG_KV("error", boost::diagnostic_information(e));
+        co_return std::nullopt;
+    }
+}
+
 void SchedulerManager::preExecuteBlock(
     bcos::protocol::Block::Ptr block, bool verify, std::function<void(Error::Ptr)> callback)
 {

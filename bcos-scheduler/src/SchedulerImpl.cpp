@@ -9,6 +9,7 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
+#include <bcos-task/Task.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ITTAPI.h>
@@ -208,10 +209,10 @@ void SchedulerImpl::executeBlockInternal(bcos::protocol::Block::Ptr block, bool 
         (uint32_t)bcos::protocol::g_BCOSConfig.maxSupportedVersion())
     {
         auto errorMessage = "The block version is larger than maxSupportedVersion";
-    SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeader()->number()) << errorMessage
-                   << LOG_KV("version", block->version())
-                   << LOG_KV("maxSupportedVersion",
-                      bcos::protocol::g_BCOSConfig.maxSupportedVersion());
+        SCHEDULER_LOG(WARNING) << BLOCK_NUMBER(block->blockHeader()->number()) << errorMessage
+                               << LOG_KV("version", block->version())
+                               << LOG_KV("maxSupportedVersion",
+                                      bcos::protocol::g_BCOSConfig.maxSupportedVersion());
         _callback(
             BCOS_ERROR_PTR(SchedulerError::InvalidBlockVersion, errorMessage), nullptr, false);
         return;
@@ -808,6 +809,13 @@ void SchedulerImpl::getABI(
         }
         callback(std::move(error), std::move(abi));
     });
+}
+
+bcos::task::Task<std::optional<bcos::storage::Entry>> SchedulerImpl::getPendingStorageAt(
+    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
+{
+    auto const executor = m_executorManager->dispatchExecutor(address);
+    co_return co_await executor->getPendingStorageAt(address, key, number);
 }
 
 void SchedulerImpl::registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,

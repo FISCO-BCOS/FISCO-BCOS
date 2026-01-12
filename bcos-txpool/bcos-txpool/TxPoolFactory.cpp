@@ -57,8 +57,8 @@ TxPool::Ptr TxPoolFactory::createTxPool(
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
     auto txpoolNonceChecker = std::make_shared<TxPoolNonceChecker>();
     auto web3NonceChecker = std::make_shared<Web3NonceChecker>(m_ledger);
-    auto validator = std::make_shared<TxValidator>(
-        txpoolNonceChecker, std::move(web3NonceChecker), m_cryptoSuite, m_groupId, m_chainId);
+    auto validator = std::make_shared<TxValidator>(txpoolNonceChecker, std::move(web3NonceChecker),
+        m_cryptoSuite, m_groupId, m_chainId, m_scheduler);
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
     auto txpoolConfig = std::make_shared<TxPoolConfig>(validator, m_txResultFactory, m_blockFactory,
@@ -77,5 +77,19 @@ TxPool::Ptr TxPoolFactory::createTxPool(
 
     TXPOOL_LOG(INFO) << LOG_DESC("create txpool") << LOG_KV("submitWorkerNum", _verifierWorkerNum)
                      << LOG_KV("notifyWorkerNum", _notifyWorkerNum);
-    return std::make_shared<TxPool>(txpoolConfig, txpoolStorage, txsSync, _verifierWorkerNum);
+    m_txpool = std::make_shared<TxPool>(txpoolConfig, txpoolStorage, txsSync, _verifierWorkerNum);
+    return m_txpool;
+}
+
+void TxPoolFactory::setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler)
+{
+    m_scheduler = _scheduler;
+    if (m_txpool)
+    {
+        if (auto txValidator =
+                std::dynamic_pointer_cast<TxValidator>(m_txpool->txpoolConfig()->txValidator()))
+        {
+            txValidator->setScheduler(_scheduler);
+        }
+    }
 }

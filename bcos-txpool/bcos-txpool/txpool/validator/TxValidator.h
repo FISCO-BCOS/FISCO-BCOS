@@ -21,7 +21,10 @@
 #pragma once
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
+#include <bcos-task/Task.h>
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <bcos-utilities/DataConvertUtility.h>
 
@@ -33,12 +36,14 @@ public:
     using Ptr = std::shared_ptr<TxValidator>;
     TxValidator(NonceCheckerInterface::Ptr _txPoolNonceChecker,
         Web3NonceChecker::Ptr _web3NonceChecker, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-        std::string _groupId, std::string _chainId)
+        std::string _groupId, std::string _chainId,
+        std::weak_ptr<bcos::scheduler::SchedulerInterface> _scheduler = {})
       : m_txPoolNonceChecker(std::move(_txPoolNonceChecker)),
         m_web3NonceChecker(std::move(_web3NonceChecker)),
         m_cryptoSuite(std::move(_cryptoSuite)),
         m_groupId(std::move(_groupId)),
-        m_chainId(std::move(_chainId))
+        m_chainId(std::move(_chainId)),
+        m_scheduler(std::move(_scheduler))
     {}
     ~TxValidator() override = default;
 
@@ -52,12 +57,23 @@ public:
     bcos::protocol::TransactionStatus checkWeb3Nonce(
         const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false) override;
 
+    bcos::protocol::TransactionStatus validateTransaction(
+        const bcos::protocol::Transaction& _tx) override;
+    task::Task<protocol::TransactionStatus> validateBalance(const bcos::protocol::Transaction& _tx,
+        std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) override;
+    task::Task<protocol::TransactionStatus> validateChainId(const bcos::protocol::Transaction& _tx,
+        std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) override;
     Web3NonceChecker::Ptr web3NonceChecker() override { return m_web3NonceChecker; }
 
     LedgerNonceChecker::Ptr ledgerNonceChecker() override { return m_ledgerNonceChecker; }
     void setLedgerNonceChecker(LedgerNonceChecker::Ptr _ledgerNonceChecker) override
     {
         m_ledgerNonceChecker = std::move(_ledgerNonceChecker);
+    }
+
+    void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler)
+    {
+        m_scheduler = std::move(_scheduler);
     }
 
 protected:
@@ -77,5 +93,6 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::string m_groupId;
     std::string m_chainId;
+    std::weak_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
 };
 }  // namespace bcos::txpool

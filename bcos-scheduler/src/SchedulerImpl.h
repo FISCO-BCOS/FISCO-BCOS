@@ -75,6 +75,10 @@ public:
     void call(protocol::Transaction::Ptr tx,
         std::function<void(Error::Ptr, protocol::TransactionReceipt::Ptr)>) override;
 
+    bcos::task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key,
+        bcos::protocol::BlockNumber number) override;
+
     void reset(std::function<void(Error::Ptr)> callback) override;
     // register a block number receiver
     virtual void registerBlockNumberReceiver(

@@ -73,6 +73,11 @@ public:
     void reset(std::function<void(Error::Ptr)>) noexcept override {}
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
+    {
+        co_return co_await m_ledger->getStorageAt(address, key, number);
+    }
 
     // for performance, do the things before executing block in executor.
     void preExecuteBlock(

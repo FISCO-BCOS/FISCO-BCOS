@@ -19,7 +19,9 @@
  */
 
 #include "Web3JsonRpcImpl.h"
+#include "bcos-rpc/validator/JsonValidator.h"
 #include "bcos-task/Wait.h"
+#include "utils/util.h"
 
 using namespace bcos;
 using namespace bcos::rpc;

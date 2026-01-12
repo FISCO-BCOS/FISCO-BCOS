@@ -538,13 +538,17 @@ public:
 
     void setStorageAt(std::string _address, std::string _key, std::optional<storage::Entry> _data)
     {
-        fakeStorageEntryMaps[_address][_key] = std::move(_data);
+        const std::string tableName =
+            std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + _address;
+        fakeStorageEntryMaps[tableName][_key] = std::move(_data);
     }
 
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override
     {
-        co_return fakeStorageEntryMaps[std::string(_address)][std::string(_key)];
+        const std::string tableName =
+            std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) + std::string(_address);
+        co_return fakeStorageEntryMaps[tableName][std::string(_key)];
     }
 
     storage::StorageInterface::Ptr getStateStorage() override

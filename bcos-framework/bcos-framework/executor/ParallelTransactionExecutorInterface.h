@@ -25,7 +25,9 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "ExecutionMessage.h"
 #include "ExecutorStatus.h"
+#include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
@@ -131,6 +133,9 @@ public:
 
     virtual void getABI(
         std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) = 0;
+
+    virtual task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) = 0;
 
     virtual void start() {};
 

@@ -25,7 +25,8 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-protocol/TransactionStatus.h>
 
-#define TX_VALIDATOR_CHECKER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXValidator") << LOG_BADGE("CHECKER")
+#define TX_VALIDATOR_CHECKER_LOG(LEVEL) \
+    BCOS_LOG(LEVEL) << LOG_BADGE("TXValidator") << LOG_BADGE("CHECKER")
 
 namespace bcos::txpool
 {
@@ -48,5 +49,13 @@ public:
     virtual LedgerNonceChecker::Ptr ledgerNonceChecker() = 0;
     virtual Web3NonceChecker::Ptr web3NonceChecker() = 0;
     virtual void setLedgerNonceChecker(LedgerNonceChecker::Ptr _ledgerNonceChecker) = 0;
+    virtual bcos::protocol::TransactionStatus validateTransaction(
+        const bcos::protocol::Transaction& _tx) = 0;
+    virtual task::Task<protocol::TransactionStatus> validateBalance(
+        const bcos::protocol::Transaction& _tx,
+        std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) = 0;
+    virtual task::Task<protocol::TransactionStatus> validateChainId(
+        const bcos::protocol::Transaction& _tx,
+        std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) = 0;
 };
 }  // namespace bcos::txpool

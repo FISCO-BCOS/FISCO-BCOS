@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "TxPool.h"
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 
 namespace bcos::txpool
@@ -40,6 +41,8 @@ public:
     TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
+    void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);
+
 private:
     bcos::crypto::NodeIDPtr m_nodeId;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
@@ -52,5 +55,7 @@ private:
     int64_t m_blockLimit = DEFAULT_BLOCK_LIMIT;
     size_t m_txpoolLimit = DEFAULT_POOL_LIMIT;
     bool m_checkTransactionSignature;
+    std::weak_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    TxPool::Ptr m_txpool;
 };
 }  // namespace bcos::txpool

@@ -23,7 +23,6 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-txpool/txpool/validator/TransactionValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/blocked_range.h>
@@ -308,45 +307,52 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
 {
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
-    auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
-    if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+
+    // Define validation steps as a chain of validators
+    // Each step returns TransactionStatus::None if validation passes, or an error status otherwise
+    const std::vector<std::function<TransactionStatus()>> validationSteps = {
+        [this, transaction, &txSubmitCallback]() {
+            // Step 1: Check if transaction already exists in txpool
+            auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
+            if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+            {
+                // Note: if rpc is slower than p2p tx sync, we also need to accept this tx and
+                // record callback
+                return TransactionStatus::None;
+            }
+            return result;
+        },
+        [this, transaction]() {
+            // Step 2: Verify transaction signature (if enabled)
+            return m_config->checkTransactionSignature() ?
+                       m_config->txValidator()->verify(*transaction) :
+                       TransactionStatus::None;
+        },
+        [this, transaction]() {
+            // Step 3: Validate transaction format and constraints
+            return m_config->txValidator()->validateTransaction(*transaction);
+        },
+        // [this, transaction]() {
+        //     // Step 4: Validate balance
+        //     return task::syncWait(
+        //         m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
+        // },
+        [this, transaction]() {
+            // Step 5: Check chain Id
+            return task::syncWait(
+                m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
+        }};
+
+    // Execute validation chain - stop at first failure
+    for (const auto& step : validationSteps)
     {
-        // Note: if rpc is slower than p2p tx sync, we also need to accept this tx and record
-        // callback
-        return TransactionStatus::None;
+        if (const auto result = step(); result != TransactionStatus::None)
+        {
+            return result;
+        }
     }
 
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
-
-    // verify the transaction
-    if (m_config->checkTransactionSignature())
-    {
-        result = m_config->txValidator()->verify(*transaction);
-    }
-
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
-    // check txpool validator
-    result = TransactionValidator::validateTransaction(*transaction);
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
-
-#if 0
-    result = task::syncWait(
-        TransactionValidator::validateTransactionWithState(*transaction, m_config->ledger()));
-    if (result != TransactionStatus::None)
-    {
-        return result;
-    }
-#endif
-
+    // All validations passed, prepare for insertion
     auto const txImportTime = transaction->importTime();
     if (txSubmitCallback)
     {
@@ -356,12 +362,10 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     {
         auto const txHash = transaction->hash().hex();
         TXPOOL_LOG(TRACE) << LOG_DESC("submitTxTime") << LOG_KV("txHash", txHash)
-                          << LOG_KV("result", result)
                           << LOG_KV("insertTime", utcTime() - txImportTime);
     }
-    result = insert(std::move(transaction));
 
-    return result;
+    return insert(std::move(transaction));
 }
 
 TransactionStatus MemoryStorage::insert(Transaction::Ptr transaction)

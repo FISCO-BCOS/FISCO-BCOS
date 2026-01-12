@@ -22,13 +22,13 @@
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-rpc/validator/TransactionValidator.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
+#include <bcos-rpc/validator/TxValidator.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -435,27 +435,16 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
     auto encodeTxHash = web3Tx.txHash();
-    auto config = co_await ledger::getSystemConfig(
-        *m_nodeService->ledger(), ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
-    if (!config.has_value())
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(JsonRpcError::InvalidParams, "ChainId not available!"));
-    }
-    auto [chainId, _] = config.value();
-    if (web3Tx.chainId)
-    {
-        if (auto txChainId = std::to_string(web3Tx.chainId.value()); txChainId != chainId)
-        {
-            BOOST_THROW_EXCEPTION(
-                JsonRpcException(JsonRpcError::InvalidParams, "Replayed transaction!"));
-        }
-    }
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
     // check transaction validator
-    TransactionValidator::checkTransaction(*tx, true);
+    auto const checkStatus =
+        co_await bcos::rpc::TxValidator::checkSenderBalance(*tx, m_nodeService->scheduler());
+    if (checkStatus != protocol::TransactionStatus::None)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, bcos::toString(checkStatus)));
+    }
 
 // for web3.eth.sendRawTransaction, return the hash of raw transaction
 #if 0

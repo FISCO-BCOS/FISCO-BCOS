@@ -2,8 +2,8 @@
 
 #include "TransactionExecutorFactory.h"
 #include "bcos-executor/src/executor/TransactionExecutor.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ExecuteError.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-utilities/ThreadPool.h"
 #include <thread>
@@ -684,6 +684,20 @@ public:
             // execute the function
             executor->getABI(contract, std::move(_holdExecutorCallback));
         });
+    }
+
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
+    {
+        if (hasStopped())
+        {
+            EXECUTOR_LOG(DEBUG) << "getPendingStorageAt: executor has been stopped";
+            co_return std::nullopt;
+        }
+
+        const auto currentExecutor = getAndNewExecutorIfNotExists();
+
+        co_return co_await currentExecutor->getPendingStorageAt(address, key, number);
     }
 
     void updateEoaNonce(std::unordered_map<std::string, u256> const& nonceMap) override

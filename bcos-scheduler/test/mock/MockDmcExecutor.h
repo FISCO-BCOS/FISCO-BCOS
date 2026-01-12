@@ -233,6 +233,11 @@ public:
     {
         callback(nullptr, {});
     }
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
+    {
+        co_return std::nullopt;
+    }
     void reset(std::function<void(bcos::Error::Ptr)> callback) override { callback(nullptr); }
 
     void updateEoaNonce(std::unordered_map<std::string, u256> const&) override {}
