@@ -221,7 +221,11 @@ public:
                         delete[] result->output_data;
                     };
                 }
-                m_data->m_hostContext.logs().clear();
+                if (m_data->m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_revert_logs))
+                {
+                    m_data->m_hostContext.logs().clear();
+                }
             }
 
             auto receiptStatus = static_cast<int32_t>(evmcResult.status);

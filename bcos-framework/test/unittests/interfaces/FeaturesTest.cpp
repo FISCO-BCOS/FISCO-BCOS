@@ -124,6 +124,24 @@ BOOST_AUTO_TEST_CASE(feature)
     BOOST_CHECK_EQUAL(features7.get(Features::Flag::feature_balance_policy1), true);
     BOOST_CHECK_EQUAL(features7.get("feature_balance_policy1"), true);
 
+    // bugfix_revert_logs default false and set via string
+    Features features8;
+    BOOST_CHECK_EQUAL(features8.get(Features::Flag::bugfix_revert_logs), false);
+    BOOST_CHECK_EQUAL(features8.get("bugfix_revert_logs"), false);
+
+    features8.set("bugfix_revert_logs");
+    BOOST_CHECK_EQUAL(features8.get(Features::Flag::bugfix_revert_logs), true);
+    BOOST_CHECK_EQUAL(features8.get("bugfix_revert_logs"), true);
+
+    // bugfix_revert_logs set via enum
+    Features features9;
+    BOOST_CHECK_EQUAL(features9.get(Features::Flag::bugfix_revert_logs), false);
+    BOOST_CHECK_EQUAL(features9.get("bugfix_revert_logs"), false);
+
+    features9.set(Features::Flag::bugfix_revert_logs);
+    BOOST_CHECK_EQUAL(features9.get(Features::Flag::bugfix_revert_logs), true);
+    BOOST_CHECK_EQUAL(features9.get("bugfix_revert_logs"), true);
+
     auto keys = Features::featureKeys();
     // clang-format off
     std::vector<std::string> compareKeys = {
@@ -159,6 +177,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_delegatecall_transfer",
         "bugfix_nonce_initialize",
         "bugfix_v1_timestamp",
+        "bugfix_revert_logs",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -327,6 +346,24 @@ BOOST_AUTO_TEST_CASE(upgrade)
     {
         BOOST_CHECK(features12.get(feature));
     }
+
+    // 3.16.0 to 3.16.4: no new features added in roadmap
+    Features features13;
+    features13.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_0_VERSION,
+        bcos::protocol::BlockVersion::V3_16_4_VERSION);
+    BOOST_TEST(validFlags(features13).size() == 1);
+
+    // 3.15.2 to 3.16.4: expect 3.16.0 feature flags
+    Features features14;
+    features14.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_15_2_VERSION,
+        bcos::protocol::BlockVersion::V3_16_4_VERSION);
+    auto expect11 = std::to_array<std::string_view>({"bugfix_delegatecall_transfer",
+        "bugfix_nonce_initialize", "bugfix_v1_timestamp", "bugfix_revert_logs"});
+    BOOST_CHECK_EQUAL(validFlags(features14).size(), expect11.size());
+    for (auto feature : expect11)
+    {
+        BOOST_CHECK(features14.get(feature));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(genesis)
@@ -470,6 +507,35 @@ BOOST_AUTO_TEST_CASE(genesis)
     {
         BOOST_CHECK(features3_152.get(feature));
     }
+
+    // 3.16.4
+    Features features3_16_4;
+    features3_16_4.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_4_VERSION);
+    auto expect3_16_4 = std::to_array<std::string_view>({// up to 3.15.1
+        "bugfix_revert", "bugfix_statestorage_hash",
+        "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
+        "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
+        "bugfix_keypage_system_entry_hash", "bugfix_internal_create_redundant_storage",
+        "bugfix_internal_create_permission_denied", "bugfix_sharding_call_in_child_executive",
+        "bugfix_empty_abi_reset", "bugfix_eip55_addr", "bugfix_eoa_as_contract",
+        "bugfix_eoa_match_failed", "bugfix_evm_exception_gas_used", "bugfix_dmc_deploy_gas_used",
+        "bugfix_staticcall_noaddr_return", "bugfix_support_transfer_receive_fallback",
+        "bugfix_set_row_with_dirty_flag", "bugfix_rpbft_vrf_blocknumber_input",
+        "bugfix_delete_account_code", "bugfix_policy1_empty_code_address",
+        "bugfix_precompiled_gasused", "bugfix_nonce_not_increase_when_revert",
+        "bugfix_set_contract_nonce_when_create", "bugfix_precompiled_gascalc",
+        // 3.15.2
+        "bugfix_method_auth_sender", "bugfix_precompiled_evm_status",
+        // 3.16.0
+        "bugfix_delegatecall_transfer", "bugfix_nonce_initialize", "bugfix_v1_timestamp",
+        "bugfix_revert_logs"});
+    BOOST_CHECK_EQUAL(validFlags(features3_16_4).size(), expect3_16_4.size());
+    for (auto feature : expect3_16_4)
+    {
+        BOOST_CHECK(features3_16_4.get(feature));
+    }
+    // ensure bugfix_revert_logs is not enabled by genesis of 3.16.4
+    BOOST_CHECK_EQUAL(features3_16_4.get(bcos::ledger::Features::Flag::bugfix_revert_logs), true);
 }
 
 

@@ -52,6 +52,7 @@ public:
         bugfix_delegatecall_transfer,
         bugfix_nonce_initialize,
         bugfix_v1_timestamp,
+        bugfix_revert_logs,
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -277,7 +278,9 @@ public:
                         }},
                 {.to = protocol::BlockVersion::V3_16_0_VERSION,
                     .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize,
-                        Flag::bugfix_v1_timestamp}}});
+                        Flag::bugfix_v1_timestamp}},
+                {.to = protocol::BlockVersion::V3_16_4_VERSION,
+                    .flags = {Flag::bugfix_revert_logs}}});
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
