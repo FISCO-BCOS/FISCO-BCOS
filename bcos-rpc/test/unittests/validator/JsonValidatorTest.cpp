@@ -19,8 +19,8 @@
  */
 
 #include <bcos-rpc/validator/JsonValidator.h>
-#include <boost/test/unit_test.hpp>
 #include <json/json.h>
+#include <boost/test/unit_test.hpp>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(testMissingJsonRpcField)
     request["method"] = "eth_blockNumber";
     request["params"] = Json::arrayValue;
     request["id"] = Json::UInt64(1);
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Request not valid, required fields: jsonrpc, method, params, id");
@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testMissingMethodField)
     request["jsonrpc"] = "2.0";
     request["params"] = Json::arrayValue;
     request["id"] = Json::UInt64(1);
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Request not valid, required fields: jsonrpc, method, params, id");
@@ -114,7 +114,7 @@ BOOST_AUTO_TEST_CASE(testMissingIdField)
     request["jsonrpc"] = "2.0";
     request["method"] = "eth_blockNumber";
     request["params"] = Json::arrayValue;
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Request not valid, required fields: jsonrpc, method, params, id");
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(testInvalidJsonRpcType)
     request["method"] = "eth_blockNumber";
     request["params"] = Json::arrayValue;
     request["id"] = Json::UInt64(1);
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Invalid field: jsonrpc");
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(testInvalidMethodType)
     request["method"] = 123;  // should be string, not number
     request["params"] = Json::arrayValue;
     request["id"] = Json::UInt64(1);
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Invalid field: method");
@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(testInvalidParamsType)
     request["method"] = "eth_blockNumber";
     request["params"] = "invalid";  // should be array, not string
     request["id"] = Json::UInt64(1);
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Invalid field: params");
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(testInvalidIdType)
     request["method"] = "eth_blockNumber";
     request["params"] = Json::arrayValue;
     request["id"] = true;  // should be string or uint64, not boolean
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Invalid field: id");
@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(testExtraInvalidField)
 {
     auto request = createValidRequest();
     request["extraField"] = "should not be here";
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Invalid field: extraField");
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(testCheckRequestFieldsInvalid)
     request["method"] = "eth_blockNumber";
     request["params"] = Json::arrayValue;
     // missing id field
-    
+
     auto [valid, errorMsg] = JsonValidator::checkRequestFields(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Request not valid, required fields: jsonrpc, method, params, id");
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(testValidRequestWithoutParams)
     request["method"] = "eth_blockNumber";
     request["id"] = Json::UInt64(1);
     // params is optional based on the flag logic
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(valid);
     BOOST_CHECK(errorMsg.empty());
@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(testValidRequestWithoutParams)
 BOOST_AUTO_TEST_CASE(testEmptyRequest)
 {
     Json::Value request;  // empty request object
-    
+
     auto [valid, errorMsg] = JsonValidator::validate(request);
     BOOST_CHECK(!valid);
     BOOST_CHECK(errorMsg == "Request not valid, required fields: jsonrpc, method, params, id");

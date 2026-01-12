@@ -200,6 +200,12 @@ public:
             std::move(valueEntry));
     }
 
+    task::Task<std::optional<bcos::storage::Entry>> storageEntry(const std::string_view& key)
+    {
+        co_return co_await storage2::readOne(
+            m_storage.get(), executor_v1::StateKeyView{m_tableName, key});
+    }
+
     task::Task<std::string_view> path() { co_return m_tableName; }
 
     EVMAccount(const EVMAccount&) = delete;

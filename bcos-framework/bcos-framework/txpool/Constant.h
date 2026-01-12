@@ -21,8 +21,8 @@
 #include <cstddef>
 
 // u256 with 0x prefix
-const size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
+constexpr size_t TRANSACTION_VALUE_MAX_LENGTH = 256 * 2 + 2;
 // EIP-170
-const int MAX_CODE_SIZE = 0x6000;
+constexpr int MAX_CODE_SIZE = 0x6000;
 // EIP 3860
-const int MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
+constexpr int MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;

@@ -53,6 +53,13 @@ void bcos::scheduler_v1::MultiVersionScheduler::getABI(
     auto& scheduler = getScheduler();
     scheduler.getABI(contract, std::move(callback));
 }
+bcos::task::Task<std::optional<bcos::storage::Entry>>
+bcos::scheduler_v1::MultiVersionScheduler::getPendingStorageAt(
+    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
+{
+    auto& scheduler = getScheduler();
+    return scheduler.getPendingStorageAt(address, key, number);
+}
 void bcos::scheduler_v1::MultiVersionScheduler::preExecuteBlock(
     [[maybe_unused]] bcos::protocol::Block::Ptr block, [[maybe_unused]] bool verify,
     [[maybe_unused]] std::function<void(Error::Ptr)> callback)

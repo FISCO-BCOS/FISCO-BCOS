@@ -23,6 +23,7 @@
 #include "../ledger/LedgerConfig.h"
 #include "../protocol/Block.h"
 #include "SchedulerTypeDef.h"
+#include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 #include <functional>
@@ -62,6 +63,9 @@ public:
 
     virtual void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) = 0;
+
+    virtual task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) = 0;
 
     // for performance, do the things before executing block in executor.
     virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,

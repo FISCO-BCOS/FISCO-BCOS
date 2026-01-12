@@ -39,6 +39,9 @@ public:
     void getABI(
         std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override;
 
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
+        std::string_view key, bcos::protocol::BlockNumber number) override;
+
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
         [[maybe_unused]] bool verify,
         [[maybe_unused]] std::function<void(Error::Ptr)> callback) override;

@@ -69,7 +69,7 @@ public:
         m_maxNonces(DefaultBucketSize),
         m_ledger(std::move(ledger))
     {}
-    ~Web3NonceChecker() = default;
+    virtual ~Web3NonceChecker() = default;
     Web3NonceChecker(const Web3NonceChecker&) = delete;
     Web3NonceChecker& operator=(const Web3NonceChecker&) = delete;
     Web3NonceChecker(Web3NonceChecker&&) = default;
@@ -82,10 +82,10 @@ public:
      * check tx nonce self failed.
      * @return TransactionStatus: the status of the transaction
      */
-    task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
+    virtual task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
         const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false);
 
-    task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
+    virtual task::Task<bcos::protocol::TransactionStatus> checkWeb3Nonce(
         std::string_view sender, std::string_view nonce, bool onlyCheckLedgerNonce = false);
 
     /**
@@ -172,12 +172,12 @@ public:
      * @param nonce transaction nonce, number string
      * @return coroutine void
      */
-    task::Task<void> insertMemoryNonce(std::string sender, std::string nonce);
+    virtual task::Task<void> insertMemoryNonce(std::string sender, std::string nonce);
 
-    task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
+    virtual task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
 
     // only for test, inset nonce into ledgerStateNonces
-    void insert(std::string sender, u256 nonce);
+    virtual void insert(std::string sender, u256 nonce);
 
 private:
     // sender address(bytes string) -> nonce

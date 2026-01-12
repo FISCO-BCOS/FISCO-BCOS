@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2024 FISCO BCOS.
+ *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,26 +13,25 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file TransactionValidator.h
- * @author: asherli
- * @date 2024/12/12
+ * @file TxValidator.h
+ * @author: kyonGuo
+ * @date 2026/1/12
  */
-#pragma once
 
+#pragma once
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/protocol/Transaction.h>
+#include <bcos-task/Task.h>
 
 namespace bcos::rpc
 {
-class TransactionValidator
+class TxValidator
 {
 public:
-    // EIP-2681: Limit account nonce to 2^64-1
-    // EIP-3860: Limit and meter initcode
-    // EIP-3607: Reject transactions from senders with deployed code
-    // Enough balance
-    static protocol::TransactionStatus checkTransaction(
-        const protocol::Transaction& _tx, bool isHandleException = false);
+    static task::Task<protocol::TransactionStatus> checkSenderBalance(
+        const protocol::Transaction& _tx, bcos::scheduler::SchedulerInterface::Ptr _scheduler,
+        protocol::BlockNumber _blockNumber = 0);
 };
-
 }  // namespace bcos::rpc

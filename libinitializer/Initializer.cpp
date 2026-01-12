@@ -43,6 +43,7 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
+#include <TxPool.h>
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
@@ -67,6 +68,7 @@
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
+#include <txpool/validator/TxValidator.h>
 #include <util/tc_clientsocket.h>
 #include <boost/filesystem.hpp>
 #include <cstddef>
@@ -289,6 +291,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     INITIALIZER_LOG(INFO) << "Set executor version to: " << executorVersion;
     m_scheduler->setVersion(executorVersion, {});
+
+    // Set scheduler to TxPoolInitializer after scheduler is created
+    m_txpoolInitializer->setScheduler(m_scheduler);
 
     if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
     {

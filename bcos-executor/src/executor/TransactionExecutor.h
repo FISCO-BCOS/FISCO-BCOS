@@ -171,6 +171,8 @@ public:
 
     void start() override { m_isRunning = true; }
     void stop() override;
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(std::string_view address,
+        std::string_view key, bcos::protocol::BlockNumber number) override;
 
     void registerNeedSwitchEvent(std::function<void()> event) { f_onNeedSwitchEvent = event; }
 

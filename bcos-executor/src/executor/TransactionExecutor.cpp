@@ -76,6 +76,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorageFactory.h"
+#include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ThreadPool.h"
@@ -2235,6 +2236,44 @@ void TransactionExecutor::getABI(
         return;
     }
     getAbiFromContractTable(contractTableName, std::move(callback));
+}
+
+bcos::task::Task<std::optional<bcos::storage::Entry>> TransactionExecutor::getPendingStorageAt(
+    std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
+{
+    EXECUTOR_NAME_LOG(INFO) << "getPendingStorageAt request" << LOG_KV("address", address)
+                            << LOG_KV("key", key) << LOG_KV("number", number);
+
+    if (!m_isRunning)
+    {
+        EXECUTOR_NAME_LOG(ERROR) << "TransactionExecutor is not running";
+        co_return std::nullopt;
+    }
+
+    storage::StateStorageInterface::Ptr stateStorage;
+    {
+        std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
+        if (!m_stateStorages.empty())
+        {
+            stateStorage = createStateStorage(m_stateStorages.back().storage, true, false);
+        }
+    }
+    // create temp state storage
+    if (!stateStorage)
+    {
+        if (m_cachedStorage)
+        {
+            stateStorage = createStateStorage(m_cachedStorage, true, false);
+        }
+        else
+        {
+            stateStorage = createStateStorage(m_backendStorage, true, false);
+        }
+    }
+
+    auto eoa = bcos::ledger::account::EVMAccount(*stateStorage, address,
+        m_blockContext->features().get(ledger::Features::Flag::feature_raw_address));
+    co_return co_await eoa.storageEntry(key);
 }
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(

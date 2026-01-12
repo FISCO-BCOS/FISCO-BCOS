@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
+#include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
@@ -32,8 +33,9 @@ namespace bcos
 {
 namespace txpool
 {
+class TxPoolFactory;
 class TxPool;
-}
+}  // namespace txpool
 
 namespace initializer
 {
@@ -51,6 +53,8 @@ public:
     virtual void start();
     virtual void stop();
 
+    void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);
+
     std::shared_ptr<bcos::txpool::TxPoolInterface> txpool();
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_protocolInitializer->cryptoSuite(); }
 
@@ -60,6 +64,7 @@ private:
     bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
+    std::shared_ptr<bcos::txpool::TxPoolFactory> m_txpoolFactory;
     std::shared_ptr<bcos::txpool::TxPool> m_txpool;
     std::atomic_bool m_running = {false};
 };

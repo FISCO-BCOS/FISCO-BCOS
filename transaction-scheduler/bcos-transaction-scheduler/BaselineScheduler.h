@@ -665,6 +665,17 @@ public:
         }(this, contract, std::move(callback)));
     }
 
+    task::Task<std::optional<bcos::storage::Entry>> getPendingStorageAt(
+        std::string_view address, std::string_view key, bcos::protocol::BlockNumber number) override
+    {
+        auto view = m_multiLayerStorage.get().fork();
+        auto ledgerConfig = co_await ledger::getLedgerConfig(view, number, m_blockFactory.get());
+
+        ledger::account::EVMAccount account(view, address,
+            ledgerConfig->features().get(ledger::Features::Flag::feature_raw_address));
+        co_return co_await account.storageEntry(key);
+    }
+
     void preExecuteBlock([[maybe_unused]] bcos::protocol::Block::Ptr block,
         [[maybe_unused]] bool verify,
         [[maybe_unused]] std::function<void(Error::Ptr)> callback) override

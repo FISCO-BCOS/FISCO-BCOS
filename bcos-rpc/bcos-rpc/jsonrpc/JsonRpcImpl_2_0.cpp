@@ -31,7 +31,6 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
-#include "bcos-rpc/validator/TransactionValidator.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
 #include "bcos-utilities/Base64.h"
 #include "bcos-utilities/BoostLog.h"
@@ -515,7 +514,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
                 BOOST_THROW_EXCEPTION(
                     JsonRpcException(JsonRpcError::InternalError, "Chain ID mismatch!"));
             }
-            TransactionValidator::checkTransaction(*transaction, true);
 
             auto start = utcSteadyTime();
             co_await txpool->broadcastTransactionBuffer(bcos::ref(transactionData));
