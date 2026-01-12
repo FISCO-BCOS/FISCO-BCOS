@@ -1,5 +1,8 @@
 #include "BlockResponse.h"
 #include "Log.h"
+
+#include <bcos-utilities/Bloom.h>
+
 #include <range/v3/view/enumerate.hpp>
 
 void bcos::rpc::combineBlockResponse(
@@ -31,7 +34,7 @@ void bcos::rpc::combineBlockResponse(
             logs.push_back(std::move(logObj));
         }
     }
-    result["logsBloom"] = toHexStringWithPrefix(block.logsBloom());
+    result["logsBloom"] = toPaddingHexStringWithPrefix(BloomBytesSize, block.logsBloom());
     result["transactionsRoot"] = blockHeader->txsRoot().hexPrefixed();
     result["stateRoot"] = blockHeader->stateRoot().hexPrefixed();
     result["receiptsRoot"] = blockHeader->receiptsRoot().hexPrefixed();
@@ -80,4 +83,12 @@ void bcos::rpc::combineBlockResponse(
         result["transactions"] = std::move(txHashesList);
     }
     result["uncles"] = Json::Value(Json::arrayValue);
+    result["mixHash"] = crypto::HashType().hexPrefixed();
+    result["baseFeePerGas"] = "0x0";
+    result["withdrawals"] = Json::Value(Json::arrayValue);
+    // empty withdrawals trie root hash
+    result["withdrawalsRoot"] = crypto::HashType().hexPrefixed();
+    result["blobGasUsed"] = "0x0";
+    result["excessBlobGas"] = "0x0";
+    result["parentBeaconBlockRoot"] = crypto::HashType().hexPrefixed();
 }

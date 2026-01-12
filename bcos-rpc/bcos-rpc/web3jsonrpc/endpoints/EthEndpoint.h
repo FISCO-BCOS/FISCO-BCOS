@@ -84,7 +84,7 @@ private:
     FilterSystem::Ptr m_filterSystem;
     bool m_syncTransaction;
 
-    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed);
+    task::Task<void> call(const Json::Value&, Json::Value&, u256* gasUsed, bool isEstimate);
 };
 
 }  // namespace bcos::rpc

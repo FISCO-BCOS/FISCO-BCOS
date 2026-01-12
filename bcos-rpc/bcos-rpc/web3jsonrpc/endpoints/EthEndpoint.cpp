@@ -496,9 +496,10 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
 
 task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response)
 {
-    co_await call(request, response, nullptr);
+    co_await call(request, response, nullptr, false);
 }
-task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& response, u256* gasUsed)
+task::Task<void> EthEndpoint::call(
+    const Json::Value& request, Json::Value& response, u256* gasUsed, bool isEstimate)
 {
     // params: transaction(TX), blockNumber(QTY|TAG)
     // result: data(DATA)
@@ -520,7 +521,8 @@ task::Task<void> EthEndpoint::call(const Json::Value& request, Json::Value& resp
         WEB3_LOG(TRACE) << LOG_DESC("eth_call") << LOG_KV("call", call)
                         << LOG_KV("blockTag", blockTag) << LOG_KV("blockNumber", blockNumber);
     }
-    auto tx = call.takeToTransaction(m_nodeService->blockFactory()->transactionFactory());
+    auto tx = call.takeToTransaction(
+        m_nodeService->blockFactory()->transactionFactory(), isEstimate ? scheduler : nullptr);
     struct Awaitable
     {
         bcos::scheduler::SchedulerInterface& m_scheduler;
@@ -594,7 +596,7 @@ task::Task<void> EthEndpoint::estimateGas(const Json::Value& request, Json::Valu
 
     u256 gasUsed;
     Json::Value callResponse;
-    co_await call(request, callResponse, std::addressof(gasUsed));
+    co_await call(request, callResponse, std::addressof(gasUsed), true);
 
     if (!callResponse.isMember("error"))
     {
