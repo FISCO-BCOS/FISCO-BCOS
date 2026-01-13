@@ -19,15 +19,32 @@
  */
 
 #include "CallRequest.h"
+#include "bcos-crypto/ChecksumAddress.h"
+#include "bcos-executor/src/precompiled/common/Utilities.h"
+#include "bcos-task/Wait.h"
 
 using namespace bcos;
 using namespace bcos::rpc;
 
 bcos::protocol::Transaction::Ptr CallRequest::takeToTransaction(
-    bcos::protocol::TransactionFactory::Ptr const& factory) noexcept
+    bcos::protocol::TransactionFactory::Ptr const& factory,
+    bcos::scheduler::SchedulerInterface::Ptr const& scheduler) noexcept
 {
-    auto tx = factory->createTransaction(1, std::move(this->to), this->data, "", 0, {}, {}, 0, "",
-        value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),
+    std::string nonce = "";
+    if (to.empty() && scheduler) [[unlikely]]
+    {
+        // estimate gas deploy contract
+        if (from.has_value())
+        {
+            if (const auto entry = task::syncWait(scheduler->getPendingStorageAt(
+                    bcos::precompiled::trimHexPrefix(from.value()), "nonce", 0)))
+            {
+                nonce = entry->get();
+            }
+        }
+    }
+    auto tx = factory->createTransaction(1, std::move(this->to), this->data, nonce, 0, {}, {}, 0,
+        "", value.value_or(""), gasPrice.value_or(""), gas.value_or(0), maxFeePerGas.value_or(""),
         maxPriorityFeePerGas.value_or(""));
     if (from.has_value())
     {

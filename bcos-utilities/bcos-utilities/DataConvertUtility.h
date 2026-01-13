@@ -230,6 +230,24 @@ std::string toHexStringWithPrefix(T const& _data)
     return out;
 }
 
+template <class T>
+std::string toPaddingHexStringWithPrefix(size_t paddingSize, T const& _data)
+{
+    std::string out;
+    out.reserve((paddingSize * 2) + 2);
+    out = "0x";
+
+    // Add leading zeros if needed
+    if (paddingSize > _data.size())
+    {
+        out.append((paddingSize - _data.size()) * 2, '0');
+    }
+
+    boost::algorithm::hex_lower(_data.begin(), _data.end(), std::back_inserter(out));
+
+    return out;
+}
+
 /**
  * @brief convert hex string to bytes
  *

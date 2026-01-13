@@ -22,6 +22,7 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
+#include <bcos-scheduler/src/SchedulerFactory.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
@@ -58,7 +59,8 @@ struct CallRequest
         return _out;
     }
     bcos::protocol::Transaction::Ptr takeToTransaction(
-        bcos::protocol::TransactionFactory::Ptr const&) noexcept;
+        bcos::protocol::TransactionFactory::Ptr const&,
+        bcos::scheduler::SchedulerInterface::Ptr const&) noexcept;
 };
 [[maybe_unused]] std::tuple<bool, CallRequest> decodeCallRequest(Json::Value const& _root);
 }  // namespace bcos::rpc

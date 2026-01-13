@@ -2271,8 +2271,9 @@ bcos::task::Task<std::optional<bcos::storage::Entry>> TransactionExecutor::getPe
         }
     }
 
-    auto eoa = bcos::ledger::account::EVMAccount(*stateStorage, address,
-        m_blockContext->features().get(ledger::Features::Flag::feature_raw_address));
+    const auto features = co_await ledger::getFeatures(*m_ledger);
+    auto eoa = bcos::ledger::account::EVMAccount(
+        *stateStorage, address, features.get(ledger::Features::Flag::feature_raw_address));
     co_return co_await eoa.storageEntry(key);
 }
 
