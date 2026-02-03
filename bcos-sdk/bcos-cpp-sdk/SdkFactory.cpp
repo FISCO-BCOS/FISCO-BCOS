@@ -39,6 +39,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -136,8 +137,7 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(
         {
             if (_respFunc)
             {
-                auto error = std::make_shared<Error>(-1, "service has been destroyed");
-                _respFunc(error, nullptr);
+                _respFunc(BCOS_ERROR_PTR(-1, "service has been destroyed"), nullptr);
             }
             return;
         }
