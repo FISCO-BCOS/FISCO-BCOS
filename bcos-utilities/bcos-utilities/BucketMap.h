@@ -89,13 +89,7 @@ public:
 
     public:
         BaseAccessor() = default;
-        void emplaceLock(SharedMutex& mutex)
-        {
-            if (!m_guard)
-            {
-                m_guard.emplace(mutex, write);
-            }
-        }
+        void emplaceLock(SharedMutex& mutex) { m_guard.emplace(mutex, write); }
         void setIterator(decltype(m_iterator) iterator, decltype(m_bucket) bucket)
         {
             m_iterator = iterator;
