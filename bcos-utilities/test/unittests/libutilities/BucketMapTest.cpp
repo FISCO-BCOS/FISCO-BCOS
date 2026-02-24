@@ -491,6 +491,146 @@ BOOST_AUTO_TEST_CASE(bucketSetBatchInsertReturn)
     }
 }
 
+BOOST_AUTO_TEST_CASE(baseAccessorReuseBetweenBuckets)
+{
+    using BucketType = bcos::Bucket<int, int>;
+    using ReadAccessor = BucketType::ReadAccessor;
+    using WriteAccessor = BucketType::WriteAccessor;
+
+    // Create multiple buckets
+    auto bucket1 = std::make_shared<BucketType>();
+    auto bucket2 = std::make_shared<BucketType>();
+    auto bucket3 = std::make_shared<BucketType>();
+
+    // Populate buckets
+    {
+        WriteAccessor accessor;
+        bucket1->insert(accessor, {1, 100});
+    }
+    {
+        WriteAccessor accessor;
+        bucket1->insert(accessor, {2, 200});
+    }
+    {
+        WriteAccessor accessor;
+        bucket2->insert(accessor, {10, 1000});
+    }
+    {
+        WriteAccessor accessor;
+        bucket2->insert(accessor, {20, 2000});
+    }
+    {
+        WriteAccessor accessor;
+        bucket3->insert(accessor, {100, 10000});
+    }
+    {
+        WriteAccessor accessor;
+        bucket3->insert(accessor, {200, 20000});
+    }
+
+    // Test 1: Reuse ReadAccessor across multiple buckets
+    {
+        ReadAccessor accessor;
+
+        // First access to bucket1
+        BOOST_CHECK(bucket1->find(accessor, 1));
+        BOOST_CHECK_EQUAL(accessor.key(), 1);
+        BOOST_CHECK_EQUAL(accessor.value(), 100);
+        BOOST_CHECK_EQUAL(accessor.bucket(), bucket1.get());
+
+        // Reuse accessor for bucket2 (emplaceLock should release old lock and acquire new)
+        BOOST_CHECK(bucket2->find(accessor, 10));
+        BOOST_CHECK_EQUAL(accessor.key(), 10);
+        BOOST_CHECK_EQUAL(accessor.value(), 1000);
+        BOOST_CHECK_EQUAL(accessor.bucket(), bucket2.get());
+
+        // Reuse accessor for bucket3
+        BOOST_CHECK(bucket3->find(accessor, 100));
+        BOOST_CHECK_EQUAL(accessor.key(), 100);
+        BOOST_CHECK_EQUAL(accessor.value(), 10000);
+        BOOST_CHECK_EQUAL(accessor.bucket(), bucket3.get());
+
+        // Reuse accessor back to bucket1 (test repeated reuse)
+        BOOST_CHECK(bucket1->find(accessor, 2));
+        BOOST_CHECK_EQUAL(accessor.key(), 2);
+        BOOST_CHECK_EQUAL(accessor.value(), 200);
+        BOOST_CHECK_EQUAL(accessor.bucket(), bucket1.get());
+    }
+
+    // Test 2: Reuse WriteAccessor across multiple buckets
+    {
+        WriteAccessor accessor;
+
+        // First access to bucket1 and modify
+        BOOST_CHECK(bucket1->find(accessor, 1));
+        BOOST_CHECK_EQUAL(accessor.value(), 100);
+        accessor.value() = 111;
+
+        // Reuse accessor for bucket2 and modify
+        BOOST_CHECK(bucket2->find(accessor, 10));
+        BOOST_CHECK_EQUAL(accessor.value(), 1000);
+        accessor.value() = 1111;
+
+        // Reuse accessor for bucket3 and modify
+        BOOST_CHECK(bucket3->find(accessor, 100));
+        BOOST_CHECK_EQUAL(accessor.value(), 10000);
+        accessor.value() = 11111;
+    }
+
+    // Verify modifications took effect
+    {
+        ReadAccessor accessor;
+        BOOST_CHECK(bucket1->find(accessor, 1));
+        BOOST_CHECK_EQUAL(accessor.value(), 111);
+
+        BOOST_CHECK(bucket2->find(accessor, 10));
+        BOOST_CHECK_EQUAL(accessor.value(), 1111);
+
+        BOOST_CHECK(bucket3->find(accessor, 100));
+        BOOST_CHECK_EQUAL(accessor.value(), 11111);
+    }
+
+    // Test 3: Reuse accessor in a loop across all buckets multiple times
+    {
+        WriteAccessor accessor;
+        std::vector<std::shared_ptr<BucketType>> buckets = {bucket1, bucket2, bucket3};
+        std::vector<int> keys = {1, 10, 100};
+
+        for (int round = 0; round < 3; ++round)
+        {
+            for (size_t i = 0; i < buckets.size(); ++i)
+            {
+                BOOST_CHECK(buckets[i]->find(accessor, keys[i]));
+                accessor.value() += 1;  // Increment value in each round
+            }
+        }
+    }
+
+    // Verify loop modifications
+    {
+        ReadAccessor accessor;
+        BOOST_CHECK(bucket1->find(accessor, 1));
+        BOOST_CHECK_EQUAL(accessor.value(), 114);  // 111 + 3
+
+        BOOST_CHECK(bucket2->find(accessor, 10));
+        BOOST_CHECK_EQUAL(accessor.value(), 1114);  // 1111 + 3
+
+        BOOST_CHECK(bucket3->find(accessor, 100));
+        BOOST_CHECK_EQUAL(accessor.value(), 11114);  // 11111 + 3
+    }
+
+    // Test 4: Ensure acquireAccessor can be called multiple times
+    {
+        WriteAccessor accessor;
+        // Multiple explicit acquireAccessor calls on different buckets
+        bucket1->acquireAccessor(accessor);
+        bucket2->acquireAccessor(accessor);
+        bucket3->acquireAccessor(accessor);
+        // If this doesn't crash or deadlock, the test passes
+        BOOST_CHECK(true);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos
