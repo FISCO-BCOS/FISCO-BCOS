@@ -34,7 +34,7 @@ bcos::protocol::MemberInterface::Ptr CampaignConfig::fetchLeader()
     }
     // TODO: check the mode is sync or async
     fetchLeaderInfoFromEtcd();
-    return m_leader;
+    return getLeader();
 }
 
 bcos::protocol::MemberInterface::Ptr CampaignConfig::getLeader()
@@ -55,9 +55,11 @@ void CampaignConfig::fetchLeaderInfoFromEtcd()
                                << LOG_KV("key", m_leaderKey);
             return;
         }
+        auto currentLeader = getLeader();
         ELECTION_LOG(INFO) << LOG_DESC("fetchLeaderInfoFromEtcd success")
                            << LOG_KV("leaderKey", m_leaderKey)
-                           << LOG_KV("leaderID", m_leader->memberID());
+                           << LOG_KV("leaderID",
+                                  currentLeader ? currentLeader->memberID() : "unknown");
     }
     catch (std::exception const& e)
     {
@@ -117,7 +119,7 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
         m_triggerCampaign();
     }
     ELECTION_LOG(INFO) << LOG_DESC("checkAndUpdateLeaderKey success")
-                       << LOG_KV("leaderKey", m_leaderKey) << LOG_KV("leader", m_leader->memberID())
+                       << LOG_KV("leaderKey", m_leaderKey) << LOG_KV("leader", leader->memberID())
                        << LOG_KV("version", valueVersion) << LOG_KV("modifiedIndex", seq)
                        << LOG_KV("lease", leader->leaseID());
     return true;
