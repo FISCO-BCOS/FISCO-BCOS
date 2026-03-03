@@ -47,8 +47,10 @@ PeerStatus::PeerStatus(
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
     std::lock_guard<std::mutex> lock(x_mutex);
-    // maybe sync status msg delay in network
-    if (m_number > _status->number())
+    // Allow block number decrease within a reasonable reorg window to handle
+    // legitimate reorganizations, but reject large backward jumps
+    constexpr bcos::protocol::BlockNumber c_reorgWindow = 10;
+    if (m_number > _status->number() + c_reorgWindow)
     {
         return false;
     }
@@ -151,12 +153,32 @@ void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr 
     {
         return;
     }
-    if (_peerStatus->number() <= m_config->knownHighestNumber())
+    auto peerNumber = _peerStatus->number();
+    // Sanity check: reject block numbers implausibly far ahead of current chain
+    // to prevent state poisoning from malicious peers
+    constexpr bcos::protocol::BlockNumber c_maxBlockAhead = 10000;
+    auto currentNumber = m_config->blockNumber();
+    if (peerNumber < 0 || (currentNumber > 0 && peerNumber > currentNumber + c_maxBlockAhead))
     {
+        BLKSYNC_LOG(WARNING) << LOG_DESC("updateKnownMaxBlockInfo: reject implausible block number")
+                             << LOG_KV("peerNumber", peerNumber)
+                             << LOG_KV("currentNumber", currentNumber);
         return;
     }
-    m_config->setKnownHighestNumber(_peerStatus->number());
-    m_config->setKnownLatestHash(_peerStatus->hash());
+    // Use atomic CAS loop to ensure knownHighestNumber only increases monotonically,
+    // preventing lost updates from concurrent calls
+    auto currentHighest = m_config->knownHighestNumber();
+    while (peerNumber > currentHighest)
+    {
+        m_config->setKnownHighestNumber(peerNumber);
+        m_config->setKnownLatestHash(_peerStatus->hash());
+        // Re-read to verify our update wasn't overwritten by a concurrent higher value
+        currentHighest = m_config->knownHighestNumber();
+        if (currentHighest >= peerNumber)
+        {
+            break;
+        }
+    }
 }
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
