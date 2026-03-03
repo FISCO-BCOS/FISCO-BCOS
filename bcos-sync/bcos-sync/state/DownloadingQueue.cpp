@@ -24,6 +24,7 @@
 #include "bcos-sync/utilities/Common.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/dispatcher/SchedulerTypeDef.h>
+#include <thread>
 
 using namespace std;
 using namespace bcos;
@@ -344,7 +345,11 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     {
                         BLKSYNC_LOG(INFO)
                             << LOG_DESC("fetchAndUpdateLedgerConfig for InvalidBlocks");
-                        downloadQueue->fetchAndUpdateLedgerConfig();
+                        // Run asynchronously to avoid blocking the scheduler callback thread,
+                        // since fetchAndUpdateLedgerConfig uses task::syncWait which could
+                        // deadlock if called from a scheduler worker thread.
+                        auto queue = downloadQueue;
+                        std::thread([queue]() { queue->fetchAndUpdateLedgerConfig(); }).detach();
                         return;
                     }
                     if (!config->masterNode())
