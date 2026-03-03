@@ -63,15 +63,15 @@ public:
     void addMemberChangeNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
     {
-        ReadGuard l(x_notificationHandlers);
-        m_notificationHandlers.emplace_back(_handler);
+        WriteGuard l(x_notificationHandlers);
+        m_notificationHandlers.emplace_back(std::move(_handler));
     }
 
     void addMemberDeleteNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
     {
-        ReadGuard l(x_onMemberDeleted);
-        m_onMemberDeleted.emplace_back(_handler);
+        WriteGuard l(x_onMemberDeleted);
+        m_onMemberDeleted.emplace_back(std::move(_handler));
     }
 
 protected:
