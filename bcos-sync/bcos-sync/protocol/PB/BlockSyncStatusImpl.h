@@ -58,6 +58,6 @@ protected:
 private:
     bcos::crypto::HashType m_hash;
     bcos::crypto::HashType m_genesisHash;
-    std::int64_t m_time;
+    std::int64_t m_time{0};
 };
 }  // namespace bcos::sync
