@@ -85,9 +85,18 @@ void BlockSyncConfig::setGenesisHash(HashType const& _hash)
 
 void BlockSyncConfig::setApplyingBlock(bcos::protocol::BlockNumber _number)
 {
-    // update in case applying block already apply finished
-    auto blockNumber = std::max(_number, m_executedBlock.load());
-    m_applyingBlock.store(blockNumber);
+    // Use atomic CAS loop to ensure m_applyingBlock only increases monotonically,
+    // avoiding race between setApplyingBlock and setExecutedBlock.
+    auto desired = std::max(_number, m_executedBlock.load());
+    auto current = m_applyingBlock.load();
+    while (desired > current)
+    {
+        if (m_applyingBlock.compare_exchange_weak(current, desired))
+        {
+            break;
+        }
+        // current was updated by compare_exchange_weak; re-check
+    }
 }
 
 void BlockSyncConfig::resetBlockInfo(BlockNumber _blockNumber, bcos::crypto::HashType const& _hash)
