@@ -43,7 +43,9 @@ void BlockSyncStatusImpl::deserializeObject()
     {
         m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
     }
-    m_time = m_syncMessage->time();
+    auto rawTime = m_syncMessage->time();
+    // Validate peer time: must be non-negative (UTC timestamp in milliseconds)
+    m_time = (rawTime >= 0) ? rawTime : 0;
 }
 void BlockSyncStatusImpl::setHash(HashType const& _hash)
 {
