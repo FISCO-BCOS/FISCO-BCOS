@@ -59,7 +59,12 @@ public:
         m_syncMessage->set_archived_number(_number);
     }
 
-    size_t blockInterval() const override { return m_syncMessage->block_interval(); }
+    size_t blockInterval() const override
+    {
+        auto rawInterval = m_syncMessage->block_interval();
+        // Clamp negative protobuf int64 values to 0 for safe unsigned conversion
+        return (rawInterval > 0) ? static_cast<size_t>(rawInterval) : 0;
+    }
     void setBlockInterval(size_t interval) override { m_syncMessage->set_block_interval(interval); }
 
     void setPacketType(int32_t packetType) override { m_syncMessage->set_packettype(packetType); }

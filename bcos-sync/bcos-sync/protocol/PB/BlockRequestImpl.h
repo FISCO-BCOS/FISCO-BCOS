@@ -38,7 +38,12 @@ public:
     explicit BlockRequestImpl(bytesConstRef _data) : BlockRequestImpl() { decode(_data); }
     ~BlockRequestImpl() override = default;
 
-    size_t size() const override { return m_syncMessage->size(); }
+    size_t size() const override
+    {
+        auto rawSize = m_syncMessage->size();
+        // Clamp negative protobuf int64 values to 0 for safe unsigned conversion
+        return (rawSize > 0) ? static_cast<size_t>(rawSize) : 0;
+    }
     void setSize(size_t _size) override { m_syncMessage->set_size(_size); }
 
     int32_t blockDataFlag() const override { return m_syncMessage->block_data_flag(); }
