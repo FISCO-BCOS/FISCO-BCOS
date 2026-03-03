@@ -126,9 +126,19 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
 // Note: this handler is triggered when leaderKey changed
 void CampaignConfig::onLeaderKeyChanged(etcd::Response _response)
 {
-    ELECTION_LOG(INFO) << LOG_DESC("onLeaderKeyChanged, checkAndUpdateLeaderKey")
-                       << LOG_KV("leaderKey", m_leaderKey);
-    checkAndUpdateLeaderKey(_response);
+    try
+    {
+        ELECTION_LOG(INFO) << LOG_DESC("onLeaderKeyChanged, checkAndUpdateLeaderKey")
+                           << LOG_KV("leaderKey", m_leaderKey);
+        checkAndUpdateLeaderKey(_response);
+    }
+    catch (std::exception const& e)
+    {
+        ELECTION_LOG(ERROR) << LOG_DESC("onLeaderKeyChanged exception")
+                            << LOG_KV("leaderKey", m_leaderKey)
+                            << LOG_KV("message", boost::diagnostic_information(e));
+        resetLeader(nullptr);
+    }
 }
 
 
