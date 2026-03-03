@@ -34,15 +34,28 @@ void BlockSyncStatusImpl::decode(bytesConstRef _data)
 void BlockSyncStatusImpl::deserializeObject()
 {
     auto const& hashData = m_syncMessage->hash();
-    if (hashData.size() >= HashType::SIZE)
+    if (hashData.size() == HashType::SIZE)
     {
         m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
     }
+    else
+    {
+        m_hash = HashType();
+    }
+    // release oversized protobuf allocation after copying to fixed-size HashType
+    m_syncMessage->set_hash({});
+
     auto const& genesisHashData = m_syncMessage->genesishash();
-    if (genesisHashData.size() >= HashType::SIZE)
+    if (genesisHashData.size() == HashType::SIZE)
     {
         m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
     }
+    else
+    {
+        m_genesisHash = HashType();
+    }
+    m_syncMessage->set_genesishash({});
+
     m_time = m_syncMessage->time();
 }
 void BlockSyncStatusImpl::setHash(HashType const& _hash)
