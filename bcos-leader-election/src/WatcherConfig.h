@@ -38,8 +38,11 @@ public:
 
     void start() override
     {
-        ElectionConfig::start();
+        // Fetch initial state before starting watcher to avoid race where
+        // watcher events update m_keyToLeader before fetchLeadersInfo()
+        // overwrites it with potentially stale data
         fetchLeadersInfo();
+        ElectionConfig::start();
     }
 
     std::string const& watchDir() const { return m_watchDir; }
