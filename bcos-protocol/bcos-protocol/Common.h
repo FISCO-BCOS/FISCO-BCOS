@@ -60,9 +60,17 @@ void decodePBObject(T _pbObject, bytesConstRef _data)
 {
     if (!_pbObject->ParseFromArray(_data.data(), _data.size()))
     {
-        BOOST_THROW_EXCEPTION(
-            PBObjectDecodeException() << errinfo_comment(
-                "decode bytes data into PBObject failed, data: " + *toHexString(_data)));
+        // Truncate hex output to avoid excessive memory usage for large payloads
+        constexpr size_t c_maxHexBytes = 64;
+        auto truncatedRef = _data.getCroppedData(0, std::min(_data.size(), c_maxHexBytes));
+        auto hexStr = *toHexString(truncatedRef);
+        if (_data.size() > c_maxHexBytes)
+        {
+            hexStr += "...(truncated)";
+        }
+        BOOST_THROW_EXCEPTION(PBObjectDecodeException() << errinfo_comment(
+                                  "decode bytes data into PBObject failed, size: " +
+                                  std::to_string(_data.size()) + ", data: " + hexStr));
     }
 }
 
