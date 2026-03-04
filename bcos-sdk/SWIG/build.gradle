@@ -69,6 +69,7 @@ publishing {
             artifact javadocJar
             pom {
                 name = 'fisco-bcos'
+                url = 'https://github.com/FISCO-BCOS/FISCO-BCOS'
                 description = 'fisco-bcos java-tars sdk'
                 licenses {
                     license {
