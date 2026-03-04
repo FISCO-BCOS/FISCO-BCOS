@@ -42,11 +42,12 @@ public:
     size_t blocksSize() const override { return m_syncMessage->blocksdata_size(); }
     bytesConstRef blockData(size_t _index) const override
     {
-        if (_index >= blocksSize())
+        auto const size = blocksSize();
+        if (_index >= size)
         {
             BOOST_THROW_EXCEPTION(
                 std::out_of_range("blockData index out of range, index: " + std::to_string(_index) +
-                                  ", blocksSize: " + std::to_string(blocksSize())));
+                                  ", blocksSize: " + std::to_string(size)));
         }
         auto const& blockData = m_syncMessage->blocksdata(static_cast<int>(_index));
         return {(byte const*)blockData.data(), blockData.size()};
