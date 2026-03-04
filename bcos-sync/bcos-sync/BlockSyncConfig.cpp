@@ -87,15 +87,22 @@ void BlockSyncConfig::setApplyingBlock(bcos::protocol::BlockNumber _number)
 {
     // Use atomic CAS loop to ensure m_applyingBlock only increases monotonically,
     // avoiding race between setApplyingBlock and setExecutedBlock.
-    auto desired = std::max(_number, m_executedBlock.load());
     auto current = m_applyingBlock.load();
-    while (desired > current)
+    while (true)
     {
+        // Ensure we never publish an applying block below the latest executed block.
+        auto executed = m_executedBlock.load();
+        auto desired = std::max(_number, executed);
+        if (desired <= current)
+        {
+            break;
+        }
         if (m_applyingBlock.compare_exchange_weak(current, desired))
         {
             break;
         }
-        // current was updated by compare_exchange_weak; re-check
+        // On CAS failure, current is updated to the latest m_applyingBlock; retry with fresh
+        // executed and desired values.
     }
 }
 
