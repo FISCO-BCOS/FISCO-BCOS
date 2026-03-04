@@ -354,44 +354,36 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                             "node");
                         return;
                     }
+                    // only retry for transient scheduler errors
+                    auto errorCode = _error->errorCode();
+                    bool retryable =
+                        (errorCode ==
+                            bcos::scheduler::SchedulerError::InvalidStatus) ||
+                        (errorCode ==
+                            bcos::scheduler::SchedulerError::BlockIsCommitting) ||
+                        (errorCode ==
+                            bcos::scheduler::SchedulerError::ExecutorNotEstablishedError);
+                    if (retryable &&
+                        _block->blockHeader()->number() > config->blockNumber())
                     {
-                        // re-push the block into blockQueue to retry later, with retry limit
-                        if (_block->blockHeader()->number() > config->blockNumber())
-                        {
-                            auto blockNum = orgBlockHeader->number();
-                            size_t retryCount = 0;
-                            {
-                                WriteGuard rl(downloadQueue->x_applyRetryCount);
-                                retryCount = ++downloadQueue->m_applyRetryCount[blockNum];
-                            }
-                            if (retryCount > DownloadingQueue::c_maxApplyRetry)
-                            {
-                                BLKSYNC_LOG(WARNING)
-                                    << LOG_DESC(
-                                           "applyBlock: exceeded max retry limit, dropping block")
-                                    << LOG_KV("number", blockNum)
-                                    << LOG_KV("hash", orgBlockHeader->hash().abridged())
-                                    << LOG_KV("retryCount", retryCount);
-                                {
-                                    WriteGuard rl(downloadQueue->x_applyRetryCount);
-                                    downloadQueue->m_applyRetryCount.erase(blockNum);
-                                }
-                                config->setExecutedBlock(config->blockNumber());
-                            }
-                            else
-                            {
-                                BLKSYNC_LOG(INFO)
-                                    << LOG_DESC(
-                                           "applyBlock: executing the downloaded block failed, "
-                                           "re-push the block into executing queue")
-                                    << LOG_KV("number", blockNum)
-                                    << LOG_KV("hash", orgBlockHeader->hash().abridged())
-                                    << LOG_KV("retryCount", retryCount)
-                                    << LOG_KV("maxRetry", DownloadingQueue::c_maxApplyRetry);
-                                WriteGuard l(downloadQueue->x_blocks);
-                                downloadQueue->m_blocks.push(_block);
-                            }
-                        }
+                        BLKSYNC_LOG(INFO)
+                            << LOG_DESC(
+                                   "applyBlock: transient error, re-push the block "
+                                   "into executing queue")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                            << LOG_KV("code", errorCode);
+                        WriteGuard l(downloadQueue->x_blocks);
+                        downloadQueue->m_blocks.push(_block);
+                    }
+                    else
+                    {
+                        BLKSYNC_LOG(WARNING)
+                            << LOG_DESC(
+                                   "applyBlock: non-retryable error, dropping block")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                            << LOG_KV("code", errorCode);
                     }
                     return;
                 }
@@ -399,11 +391,6 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 {
                     config->setExecutedBlock(config->blockNumber());
                     return;
-                }
-                // clear retry counter on successful execution
-                {
-                    WriteGuard rl(downloadQueue->x_applyRetryCount);
-                    downloadQueue->m_applyRetryCount.erase(orgBlockHeader->number());
                 }
                 auto executedBlock = config->executedBlock();
                 if (orgBlockHeader->number() > executedBlock + 1)

@@ -128,10 +128,5 @@ private:
 
     std::function<void(bcos::ledger::LedgerConfig::Ptr)> m_newBlockHandler;
     std::function<void(bool)> m_applyFinishedHandler;
-
-    // retry counter for applyBlock execution failures per block number
-    static constexpr size_t c_maxApplyRetry = 3;
-    std::map<bcos::protocol::BlockNumber, size_t> m_applyRetryCount;
-    mutable SharedMutex x_applyRetryCount;
 };
 }  // namespace bcos::sync
