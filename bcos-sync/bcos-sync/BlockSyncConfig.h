@@ -131,12 +131,22 @@ public:
 
     void setMasterNode(bool _masterNode)
     {
-        Guard lock(m_mutex);
-        m_masterNode = _masterNode;
-        // notify nodeType to the gateway
-        if (m_nodeTypeChanged)
+        // Capture state under lock, then invoke callback outside lock to prevent
+        // re-entrancy deadlocks and blocking other threads on m_mutex.
+        std::function<void(bcos::protocol::NodeType)> callback = nullptr;
+        bcos::protocol::NodeType type = bcos::protocol::NodeType::NONE;
         {
-            m_nodeTypeChanged(nodeType());
+            std::scoped_lock lock(m_mutex);
+            m_masterNode = _masterNode;
+            if (m_nodeTypeChanged)
+            {
+                callback = m_nodeTypeChanged;
+                type = nodeType();
+            }
+        }
+        if (callback)
+        {
+            callback(type);
         }
     }
 
