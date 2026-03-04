@@ -496,6 +496,14 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
                                  << LOG_KV("archivedBlockNumber", archivedNumber);
             return;
         }
+        if (blockMsg->blocksSize() == 0)
+        {
+            BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                 << LOG_DESC("Empty blocksData in BlockResponsePacket")
+                                 << LOG_KV("receivedBlockNumber", number)
+                                 << LOG_KV("peer", _nodeID->shortHex());
+            return;
+        }
         auto block = m_config->blockFactory()->createBlock(blockMsg->blockData(0), true, true);
         BLKSYNC_LOG(DEBUG) << LOG_BADGE("Download") << BLOCK_NUMBER(number)
                            << LOG_DESC("Receive peer block packet(archived)")
