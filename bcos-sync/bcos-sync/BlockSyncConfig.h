@@ -133,10 +133,10 @@ public:
     {
         // Capture state under lock, then invoke callback outside lock to prevent
         // re-entrancy deadlocks and blocking other threads on m_mutex.
-        std::function<void(bcos::protocol::NodeType)> callback;
-        bcos::protocol::NodeType type;
+        std::function<void(bcos::protocol::NodeType)> callback = nullptr;
+        bcos::protocol::NodeType type = bcos::protocol::NodeType::NONE;
         {
-            Guard lock(m_mutex);
+            std::scoped_lock lock(m_mutex);
             m_masterNode = _masterNode;
             if (m_nodeTypeChanged)
             {
