@@ -35,8 +35,18 @@ public:
     ~BlockSyncMsgImpl() override = default;
 
     bytesPointer encode() const override { return bcos::protocol::encodePBObject(m_syncMessage); }
+    // Maximum allowed sync message size (256 MB)
+    static constexpr size_t c_maxSyncMsgSize = 256 * 1024 * 1024;
+
     void decode(bytesConstRef _data) override
     {
+        if (_data.size() > c_maxSyncMsgSize)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::protocol::PBObjectDecodeException() << bcos::errinfo_comment(
+                    "BlockSyncMsg exceeds max allowed size, size: " + std::to_string(_data.size()) +
+                    ", limit: " + std::to_string(c_maxSyncMsgSize)));
+        }
         bcos::protocol::decodePBObject(m_syncMessage, _data);
     }
 
