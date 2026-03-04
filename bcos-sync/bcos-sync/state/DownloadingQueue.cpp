@@ -343,8 +343,9 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
                     {
                         BLKSYNC_LOG(INFO)
-                            << LOG_DESC("fetchAndUpdateLedgerConfig for InvalidBlocks");
-                        downloadQueue->fetchAndUpdateLedgerConfig();
+                            << LOG_DESC("applyBlock: InvalidBlocks, drop the block")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged());
                         return;
                     }
                     if (!config->masterNode())
