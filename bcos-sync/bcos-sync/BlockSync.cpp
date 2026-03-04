@@ -335,6 +335,22 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
 {
     if (!m_masterNode)
     {
+        if (_onRecv)
+        {
+            // Propagate existing error if provided, otherwise report that the node did not handle
+            // the request due to not being master.
+            if (_error)
+            {
+                _onRecv(_error);
+            }
+            else
+            {
+                auto notMasterError = std::make_shared<Error>(
+                    (int)CommonError::InternalError,
+                    "BlockSync: node is not master, request ignored");
+                _onRecv(notMasterError);
+            }
+        }
         return;
     }
     auto self = weak_from_this();
