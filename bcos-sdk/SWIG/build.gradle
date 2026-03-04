@@ -70,8 +70,6 @@ publishing {
             pom {
                 name = 'fisco-bcos'
                 description = 'fisco-bcos java-tars sdk'
-                url = 'http://www.fisco-bcos.org'
-
                 licenses {
                     license {
                         name = 'The Apache License, Version 2.0'
