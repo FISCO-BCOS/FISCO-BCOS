@@ -108,6 +108,9 @@ protected:
     virtual bool verifyExecutedBlock(bcos::protocol::Block::Ptr const& _block,
         bcos::protocol::BlockHeader::Ptr const& _blockHeader) const noexcept;
 
+    // Returns true if the scheduler error code is transient and the block should be retried
+    static bool isRetryableError(int64_t _errorCode);
+
 private:
     // Note: this function should not be called frequently
     std::string printBlockHeader(bcos::protocol::BlockHeader::Ptr const& _header) const noexcept;

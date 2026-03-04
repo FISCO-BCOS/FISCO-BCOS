@@ -31,6 +31,18 @@ using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::ledger;
 
+bool DownloadingQueue::isRetryableError(int64_t _errorCode)
+{
+    switch (_errorCode)
+    {
+    case bcos::scheduler::SchedulerError::InvalidStatus:
+    case bcos::scheduler::SchedulerError::UnknownError:
+    case bcos::scheduler::SchedulerError::fetchGasLimitError:
+        return true;
+    default:
+        return false;
+    }
+}
 void DownloadingQueue::push(BlocksMsgInterface::Ptr _blocksData)
 {
     // push to the blockBuffer firstly
@@ -354,16 +366,8 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                             "node");
                         return;
                     }
-                    // only retry for transient scheduler errors
                     auto errorCode = _error->errorCode();
-                    bool retryable =
-                        (errorCode ==
-                            bcos::scheduler::SchedulerError::InvalidStatus) ||
-                        (errorCode ==
-                            bcos::scheduler::SchedulerError::BlockIsCommitting) ||
-                        (errorCode ==
-                            bcos::scheduler::SchedulerError::ExecutorNotEstablishedError);
-                    if (retryable &&
+                    if (isRetryableError(errorCode) &&
                         _block->blockHeader()->number() > config->blockNumber())
                     {
                         BLKSYNC_LOG(INFO)
