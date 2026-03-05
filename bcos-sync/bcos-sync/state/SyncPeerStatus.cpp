@@ -196,8 +196,15 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
     // access _f() according to the random list
     for (auto const& peerStatus : peersStatusList)
     {
-        // check again in case peer status changed during the loop
-        if (!peerStatus || !this->peerStatus(peerStatus->nodeId()))
+        // check again in case peer status changed during the loop;
+        // compare object identity (not just key existence) to detect stale snapshots
+        // from peer disconnect+reconnect
+        if (!peerStatus)
+        {
+            continue;
+        }
+        auto current = this->peerStatus(peerStatus->nodeId());
+        if (current != peerStatus)
         {
             continue;
         }
