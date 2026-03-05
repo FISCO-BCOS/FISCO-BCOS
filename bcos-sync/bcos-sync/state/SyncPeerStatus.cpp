@@ -47,8 +47,10 @@ PeerStatus::PeerStatus(
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
     std::lock_guard<std::mutex> lock(x_mutex);
-    // maybe sync status msg delay in network
-    if (m_number > _status->number())
+    // Allow block number decrease within a reasonable reorg window to handle
+    // legitimate reorganizations, but reject large backward jumps
+    constexpr bcos::protocol::BlockNumber c_reorgWindow = 10;
+    if (m_number > _status->number() + c_reorgWindow)
     {
         return false;
     }
@@ -145,18 +147,24 @@ bool SyncPeerStatus::updatePeerStatus(
     return true;
 }
 
-void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus)
+void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr const& _peerStatus)
 {
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
         return;
     }
-    if (_peerStatus->number() <= m_config->knownHighestNumber())
+    const auto currentHighest = m_config->knownHighestNumber();
+    const auto peerNumber = _peerStatus->number();
+    if (peerNumber < 0 || peerNumber > currentHighest + PeerStatus::MAX_REASONABLE_BLOCK_NUMBER)
     {
+        BLKSYNC_LOG(WARNING) << LOG_DESC(
+                                    "updateKnownMaxBlockInfo: reject unreasonable block number")
+                             << LOG_KV("peerNumber", peerNumber)
+                             << LOG_KV("maxReasonable",
+                                    currentHighest + PeerStatus::MAX_REASONABLE_BLOCK_NUMBER);
         return;
     }
-    m_config->setKnownHighestNumber(_peerStatus->number());
-    m_config->setKnownLatestHash(_peerStatus->hash());
+    m_config->updateKnownHighestBlock(peerNumber, _peerStatus->hash());
 }
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)

@@ -31,6 +31,7 @@ namespace bcos::sync
 class PeerStatus
 {
 public:
+    static constexpr int64_t MAX_REASONABLE_BLOCK_NUMBER = INT32_MAX / 2;
     using Ptr = std::shared_ptr<PeerStatus>;
     PeerStatus(BlockSyncConfig::Ptr _config, bcos::crypto::PublicPtr _nodeId,
         bcos::protocol::BlockNumber _number, bcos::crypto::HashType const& _hash,
@@ -110,7 +111,7 @@ public:
     PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
 
 protected:
-    virtual void updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus);
+    virtual void updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr const& _peerStatus);
 
 private:
     std::map<bcos::crypto::PublicPtr, PeerStatus::Ptr, bcos::crypto::KeyCompare> m_peersStatus;
