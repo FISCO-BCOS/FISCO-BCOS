@@ -147,38 +147,24 @@ bool SyncPeerStatus::updatePeerStatus(
     return true;
 }
 
-void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus)
+void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr const& _peerStatus)
 {
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
         return;
     }
-    auto peerNumber = _peerStatus->number();
-    // Sanity check: reject block numbers implausibly far ahead of current chain
-    // to prevent state poisoning from malicious peers
-    constexpr bcos::protocol::BlockNumber c_maxBlockAhead = 10000;
-    auto currentNumber = m_config->blockNumber();
-    if (peerNumber < 0 || (currentNumber > 0 && peerNumber > currentNumber + c_maxBlockAhead))
+    const auto currentHighest = m_config->knownHighestNumber();
+    const auto peerNumber = _peerStatus->number();
+    if (peerNumber < 0 || peerNumber > currentHighest + PeerStatus::MAX_REASONABLE_BLOCK_NUMBER)
     {
-        BLKSYNC_LOG(WARNING) << LOG_DESC("updateKnownMaxBlockInfo: reject implausible block number")
+        BLKSYNC_LOG(WARNING) << LOG_DESC(
+                                    "updateKnownMaxBlockInfo: reject unreasonable block number")
                              << LOG_KV("peerNumber", peerNumber)
-                             << LOG_KV("currentNumber", currentNumber);
+                             << LOG_KV("maxReasonable",
+                                    currentHighest + PeerStatus::MAX_REASONABLE_BLOCK_NUMBER);
         return;
     }
-    // Use atomic CAS loop to ensure knownHighestNumber only increases monotonically,
-    // preventing lost updates from concurrent calls
-    auto currentHighest = m_config->knownHighestNumber();
-    while (peerNumber > currentHighest)
-    {
-        m_config->setKnownHighestNumber(peerNumber);
-        m_config->setKnownLatestHash(_peerStatus->hash());
-        // Re-read to verify our update wasn't overwritten by a concurrent higher value
-        currentHighest = m_config->knownHighestNumber();
-        if (currentHighest >= peerNumber)
-        {
-            break;
-        }
-    }
+    m_config->updateKnownHighestBlock(peerNumber, _peerStatus->hash());
 }
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
