@@ -31,6 +31,18 @@ using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::ledger;
 
+bool DownloadingQueue::isRetryableError(int64_t _errorCode)
+{
+    switch (_errorCode)
+    {
+    case bcos::scheduler::SchedulerError::InvalidStatus:
+    case bcos::scheduler::SchedulerError::UnknownError:
+    case bcos::scheduler::SchedulerError::fetchGasLimitError:
+        return true;
+    default:
+        return false;
+    }
+}
 void DownloadingQueue::push(BlocksMsgInterface::Ptr _blocksData)
 {
     // push to the blockBuffer firstly
@@ -354,19 +366,28 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                             "node");
                         return;
                     }
+                    auto errorCode = _error->errorCode();
+                    if (isRetryableError(errorCode) &&
+                        _block->blockHeader()->number() > config->blockNumber())
                     {
-                        // re-push the block into blockQueue to retry later
-                        if (_block->blockHeader()->number() > config->blockNumber())
-                        {
-                            BLKSYNC_LOG(INFO)
-                                << LOG_DESC(
-                                       "applyBlock: executing the downloaded block failed, re-push "
-                                       "the block into executing queue")
-                                << LOG_KV("number", orgBlockHeader->number())
-                                << LOG_KV("hash", orgBlockHeader->hash().abridged());
-                            WriteGuard l(downloadQueue->x_blocks);
-                            downloadQueue->m_blocks.push(_block);
-                        }
+                        BLKSYNC_LOG(INFO)
+                            << LOG_DESC(
+                                   "applyBlock: transient error, re-push the block "
+                                   "into executing queue")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                            << LOG_KV("code", errorCode);
+                        WriteGuard l(downloadQueue->x_blocks);
+                        downloadQueue->m_blocks.push(_block);
+                    }
+                    else
+                    {
+                        BLKSYNC_LOG(WARNING)
+                            << LOG_DESC(
+                                   "applyBlock: non-retryable error, dropping block")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                            << LOG_KV("code", errorCode);
                     }
                     return;
                 }
