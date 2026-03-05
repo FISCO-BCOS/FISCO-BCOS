@@ -106,7 +106,11 @@ public:
     void foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> const&) const;
     void foreachPeer(std::function<bool(PeerStatus::Ptr)> const&) const;
     std::shared_ptr<bcos::crypto::NodeIDs> peers();
-    size_t peersSize() const { return m_peersStatus.size(); }
+    size_t peersSize() const
+    {
+        std::shared_lock<std::shared_mutex> lock(x_peersStatus);
+        return m_peersStatus.size();
+    }
     PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
 
 protected:
