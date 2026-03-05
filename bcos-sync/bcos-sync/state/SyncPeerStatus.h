@@ -108,7 +108,7 @@ public:
     std::shared_ptr<bcos::crypto::NodeIDs> peers();
     size_t peersSize() const
     {
-        std::shared_lock lock(x_peersStatus);
+        std::shared_lock<std::shared_mutex> lock(x_peersStatus);
         return m_peersStatus.size();
     }
     PeerStatus::Ptr insertEmptyPeer(bcos::crypto::PublicPtr _peer);
