@@ -137,9 +137,7 @@ bool SyncPeerStatus::updatePeerStatus(
         if (!inserted)
         {
             // Another thread inserted first — update that entry instead
-            auto& existingPeer = it->second;
-            lock.unlock();
-            if (existingPeer->update(_peerStatus))
+            if (it->second->update(_peerStatus))
             {
                 updateKnownMaxBlockInfo(_peerStatus);
             }
