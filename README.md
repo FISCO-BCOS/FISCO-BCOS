@@ -6,7 +6,7 @@
 [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS)
 [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
 
-FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的区块链底层平台，由微众银行牵头的金链盟主导研发，其可用性经广泛应用实践检验。至今已涌现300+产业数字化标杆应用，覆盖金融、医疗、教育、文化、社会治理等领域，如珠三角征信链、区块链服务网络BSN、人民链、国家健康医疗大数据科创平台、粤澳健康码跨境互认系统等。
+FISCO BCOS（读作/ˈfɪskl bi:ˈkɒz/） 是一个稳定、高效、安全的区块链底层平台，由微众银行牵头的金链盟主导研发，其可用性经广泛应用实践检验。至今已涌现400+产业数字化标杆应用，覆盖金融、医疗、教育、文化、社会治理等领域，如珠三角征信链、区块链服务网络BSN、人民链、国家健康医疗大数据科创平台、粤澳健康码跨境互认系统等。
 
 单链配置下，性能TPS可达10万+。全面支持国密算法、国产操作系统与国产CPU架构。包含区块流水线、可拔插共识机制、全方位并行计算、区块链文件系统、权限治理框架、分布式存储等特性。
 
