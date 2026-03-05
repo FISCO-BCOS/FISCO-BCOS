@@ -39,6 +39,7 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -127,15 +128,26 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(
     BCOS_LOG(INFO) << "[buildJsonRpc]" << LOG_DESC("build json rpc")
                    << LOG_KV("sendRequestToHighestBlockNode", _sendRequestToHighestBlockNode);
 
-    jsonRpc->setSender([_service](const std::string& _group, const std::string& _node,
+    // Use weak_ptr to avoid circular reference memory leak
+    auto weakService = std::weak_ptr<Service>(_service);
+    jsonRpc->setSender([weakService](const std::string& _group, const std::string& _node,
                            const std::string& _request, auto&& _respFunc) {
+        auto service = weakService.lock();
+        if (!service)
+        {
+            if (_respFunc)
+            {
+                _respFunc(BCOS_ERROR_PTR(-1, "service has been destroyed"), nullptr);
+            }
+            return;
+        }
         auto data = std::make_shared<bytes>(_request.begin(), _request.end());
-        auto msg = _service->messageFactory()->buildMessage();
-        msg->setSeq(_service->messageFactory()->newSeq());
+        auto msg = service->messageFactory()->buildMessage();
+        msg->setSeq(service->messageFactory()->newSeq());
         msg->setPacketType(bcos::protocol::MessageType::RPC_REQUEST);
         msg->setPayload(data);
 
-        _service->asyncSendMessageByGroupAndNode(_group, _node, msg, Options(),
+        service->asyncSendMessageByGroupAndNode(_group, _node, msg, Options(),
             [_respFunc](Error::Ptr _error, MessageFace::Ptr _msg, auto&& _session) {
                 (void)_session;
                 _respFunc(_error, _msg ? _msg->payload() : nullptr);
