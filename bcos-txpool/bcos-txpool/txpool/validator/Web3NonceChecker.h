@@ -154,6 +154,8 @@ public:
         // into a block first, the ledge state nonce will be updated to 7, then the transactions
         // with nonce 5 and 7 in the memory nonce of the transaction pool will be removed.
         std::stringstream ss;
+        // Track affected senders to invalidate stale m_maxNonces entries
+        std::set<std::string> affectedSenders;
         for (auto&& [sender, nonce] : ::ranges::views::zip(senders, nonces))
         {
             if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -161,6 +163,13 @@ public:
                 ss << toHex(sender) << ":" << nonce << ", ";
             }
             co_await storage2::removeOne(m_memoryNonces, std::make_pair(sender, nonce));
+            affectedSenders.emplace(sender);
+        }
+        // Clear stale m_maxNonces for affected senders so getPendingNonce()
+        // falls through to the ledger nonce instead of returning inflated values
+        for (auto const& sender : affectedSenders)
+        {
+            co_await storage2::removeOne(m_maxNonces, sender);
         }
         TXPOOL_LOG(DEBUG) << LOG_DESC("Web3Nonce: rm mem nonce cache for invalid txs.") << ss.str();
     }
