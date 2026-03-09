@@ -381,9 +381,14 @@ TransactionSync::importDownloadedTxsByBlock(
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
     auto txFactory = m_config->blockFactory()->transactionFactory();
-    for (auto tx : _txsBuffer->transactions())
+    for (auto const& tx : _txsBuffer->transactions())
     {
-        txs->emplace_back(txFactory->createTransaction(*tx));
+        // Re-encode and decode with hash verification enabled to prevent
+        // content-hash mismatch attacks where embedded hash fields are
+        // manipulated to bypass signature binding
+        bytes txData;
+        tx->encode(txData);
+        txs->emplace_back(txFactory->createTransaction(bcos::ref(txData), false, true));
     }
     return {importDownloadedTxs(txs, std::move(_verifiedProposal)), txs};
 }
