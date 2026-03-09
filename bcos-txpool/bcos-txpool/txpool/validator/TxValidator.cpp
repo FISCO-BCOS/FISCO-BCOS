@@ -57,6 +57,9 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     // remove in front module check signature
     try
     {
+        // Defensively clear sender to ensure signature verification is always performed,
+        // preventing bypass via pre-filled sender field from untrusted sources
+        _tx.forceSender({});
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
     catch (...)
