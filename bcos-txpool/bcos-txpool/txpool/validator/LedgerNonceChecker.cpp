@@ -66,9 +66,9 @@ TransactionStatus LedgerNonceChecker::checkBlockLimit(const bcos::protocol::Tran
 
 void LedgerNonceChecker::batchInsert(BlockNumber _batchId, NonceListPtr const& _nonceList)
 {
-    if (m_blockNumber < _batchId)
+    auto current = m_blockNumber.load();
+    while (current < _batchId && !m_blockNumber.compare_exchange_weak(current, _batchId))
     {
-        m_blockNumber.store(_batchId);
     }
     ssize_t batchToBeRemoved = _batchId - m_blockLimit;
     // insert the latest nonces
