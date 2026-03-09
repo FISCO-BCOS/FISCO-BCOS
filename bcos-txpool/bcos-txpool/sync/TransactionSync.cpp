@@ -283,6 +283,12 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                            "requestMissedTxs: verifyFetchedTxs when recv txs response exception")
                     << LOG_KV("message", boost::diagnostic_information(e))
                     << LOG_KV("_peer", _nodeID->shortHex());
+                if (_onVerifyFinished)
+                {
+                    _onVerifyFinished(BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                                          "verifyFetchedTxs exception: " + std::string(e.what())),
+                        false);
+                }
             }
         });
 }
