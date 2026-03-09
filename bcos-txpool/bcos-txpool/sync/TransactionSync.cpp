@@ -327,7 +327,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     startT = utcTime();
     if (_missedTxs->size() != transactions->transactionsSize())
     {
-        SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed")
+        SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed: transaction count mismatch")
                        << LOG_KV("expectedTxs", _missedTxs->size())
                        << LOG_KV("fetchedTxs", transactions->transactionsSize())
                        << LOG_KV("peer", _nodeID->shortHex())
@@ -337,13 +337,11 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (_verifiedProposal) ?
                                                 _verifiedProposal->blockHeader()->number() :
                                                 -1);
-        // response to verify result
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
-        // try to import the transactions even when verify failed
-        importDownloadedTxsByBlock(transactions);
         return;
     }
+    // Verify transaction hashes match requested hashes before import
     auto [result, txs] = importDownloadedTxsByBlock(transactions, _verifiedProposal);
     if (!result)
     {
@@ -352,7 +350,6 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
             false);
         return;
     }
-    // check the transaction hash
     for (size_t i = 0; i < _missedTxs->size(); i++)
     {
         if ((*_missedTxs)[i] != (*txs)[i]->hash())
