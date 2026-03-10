@@ -335,6 +335,10 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
 {
     if (!m_masterNode)
     {
+        if (_onRecv)
+        {
+            _onRecv(nullptr);
+        }
         return;
     }
     auto self = weak_from_this();
