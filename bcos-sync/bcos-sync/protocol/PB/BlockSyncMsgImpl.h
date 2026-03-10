@@ -23,6 +23,8 @@
 #include "bcos-sync/protocol/proto/BlockSync.pb.h"
 #include "bcos-sync/utilities/Common.h"
 #include <bcos-protocol/Common.h>
+#include <limits>
+#include <utility>
 namespace bcos::sync
 {
 class BlockSyncMsgImpl : virtual public BlockSyncMsgInterface
@@ -69,8 +71,23 @@ public:
         m_syncMessage->set_archived_number(_number);
     }
 
-    size_t blockInterval() const override { return m_syncMessage->block_interval(); }
-    void setBlockInterval(size_t interval) override { m_syncMessage->set_block_interval(interval); }
+    size_t blockInterval() const override
+    {
+        const auto rawInterval = m_syncMessage->block_interval();
+        if (rawInterval <= 0)
+        {
+            return 0;
+        }
+        if (std::cmp_greater(rawInterval, std::numeric_limits<size_t>::max()))
+        {
+            return std::numeric_limits<size_t>::max();
+        }
+        return static_cast<size_t>(rawInterval);
+    }
+    void setBlockInterval(size_t interval) override
+    {
+        m_syncMessage->set_block_interval(static_cast<int64_t>((interval)));
+    }
 
     void setPacketType(int32_t packetType) override { m_syncMessage->set_packettype(packetType); }
 
