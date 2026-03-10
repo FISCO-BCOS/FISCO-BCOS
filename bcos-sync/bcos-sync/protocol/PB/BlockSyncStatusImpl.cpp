@@ -33,10 +33,8 @@ void BlockSyncStatusImpl::decode(bytesConstRef _data)
 
 void BlockSyncStatusImpl::deserializeObject()
 {
-    static constexpr size_t MAX_HASH_DATA_SIZE = static_cast<size_t>(HashType::SIZE) * 3;
-
     auto const& hashData = m_syncMessage->hash();
-    if (hashData.size() >= HashType::SIZE && hashData.size() <= MAX_HASH_DATA_SIZE)
+    if (hashData.size() == HashType::SIZE)
     {
         m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
     }
@@ -48,7 +46,7 @@ void BlockSyncStatusImpl::deserializeObject()
     std::string().swap(*m_syncMessage->mutable_hash());
 
     auto const& genesisHashData = m_syncMessage->genesishash();
-    if (genesisHashData.size() >= HashType::SIZE && genesisHashData.size() <= MAX_HASH_DATA_SIZE)
+    if (genesisHashData.size() == HashType::SIZE)
     {
         m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
     }
