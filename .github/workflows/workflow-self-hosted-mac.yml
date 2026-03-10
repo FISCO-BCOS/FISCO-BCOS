@@ -1,14 +1,6 @@
 name: Mac CI Check
 on:
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-    branches:
-      - release-3.*
-      - feature-*
-      - master
+  workflow_dispatch:
   release:
     types: []
 concurrency:

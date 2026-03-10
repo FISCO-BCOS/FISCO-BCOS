@@ -1,16 +1,6 @@
 name: Ubuntu CI Upload
 on:
-  push:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  pull_request:
-    branches:
-      - release-3.*
-      - feature-3.*
-      - bugfix-3.*
-      - master
+  workflow_dispatch:
   release:
     types: [ push ]
 

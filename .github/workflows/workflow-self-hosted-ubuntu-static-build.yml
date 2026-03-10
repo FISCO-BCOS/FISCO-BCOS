@@ -1,11 +1,6 @@
 name: Ubuntu Static Build
 on:
-  pull_request:
-    branches:
-      - release-3.*
-      - feature-3.*
-      - master
-    types: [closed]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

@@ -1,15 +1,6 @@
 name: Arm CI Check
 on:
-  push:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
-  pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "Changelog.md"
-      - "README.md"
+  workflow_dispatch:
   release:
     types: []
 
