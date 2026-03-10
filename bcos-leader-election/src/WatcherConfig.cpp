@@ -85,6 +85,7 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
                 deletedMember = it->second;
                 UpgradeGuard ul(l);
                 m_keyToLeader.erase(leaderKey);
+                m_keyToLeaderSeq.erase(leaderKey);
             }
             // invoke callback outside lock to prevent self-deadlock
             onMemberDeleted(leaderKey, deletedMember);
@@ -94,13 +95,22 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         auto member = m_memberFactory->createMember(_value.as_string());
         auto seq = _value.modified_index();
         member->setSeq(seq);
+        {
+            WriteGuard l(x_keyToLeader);
+            auto seqIt = m_keyToLeaderSeq.find(leaderKey);
+            if (seqIt != m_keyToLeaderSeq.end() && seq <= seqIt->second)
+            {
+                ELECTION_LOG(DEBUG) << LOG_DESC("updateLeaderInfo: ignore stale update")
+                                    << LOG_KV("leaderKey", leaderKey) << LOG_KV("incomingSeq", seq)
+                                    << LOG_KV("currentSeq", seqIt->second);
+                return;
+            }
+            m_keyToLeaderSeq[leaderKey] = seq;
+            m_keyToLeader[leaderKey] = member;
+        }
         ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: update leader")
                            << LOG_KV("leaderKey", leaderKey) << LOG_KV("member", member->memberID())
                            << LOG_KV("modifiedIndex", seq);
-        {
-            WriteGuard l(x_keyToLeader);
-            m_keyToLeader[leaderKey] = member;
-        }
         callNotificationHandlers(leaderKey, member);
     }
     catch (std::exception const& e)
