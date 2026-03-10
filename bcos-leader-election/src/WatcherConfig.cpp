@@ -73,19 +73,21 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         {
             ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: the leaderKey has been released")
                                << LOG_KV("leaderKey", _value.key());
+            auto const& leaderKey = _value.key();
+            bcos::protocol::MemberInterface::Ptr deletedMember;
             {
-                auto const& leaderKey = _value.key();
                 UpgradableGuard l(x_keyToLeader);
                 auto it = m_keyToLeader.find(leaderKey);
                 if (it == m_keyToLeader.end())
                 {
                     return;
                 }
-                auto member = it->second;
+                deletedMember = it->second;
                 UpgradeGuard ul(l);
                 m_keyToLeader.erase(leaderKey);
-                onMemberDeleted(leaderKey, member);
             }
+            // invoke callback outside lock to prevent self-deadlock
+            onMemberDeleted(leaderKey, deletedMember);
             return;
         }
         auto const& leaderKey = _value.key();

@@ -38,8 +38,11 @@ public:
 
     void start() override
     {
-        ElectionConfig::start();
+        // Fetch initial state before starting watcher to avoid race where
+        // watcher events update m_keyToLeader before fetchLeadersInfo()
+        // overwrites it with potentially stale data
         fetchLeadersInfo();
+        ElectionConfig::start();
     }
 
     std::string const& watchDir() const { return m_watchDir; }
@@ -63,15 +66,15 @@ public:
     void addMemberChangeNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
     {
-        ReadGuard l(x_notificationHandlers);
-        m_notificationHandlers.emplace_back(_handler);
+        WriteGuard l(x_notificationHandlers);
+        m_notificationHandlers.emplace_back(std::move(_handler));
     }
 
     void addMemberDeleteNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
     {
-        ReadGuard l(x_onMemberDeleted);
-        m_onMemberDeleted.emplace_back(_handler);
+        WriteGuard l(x_onMemberDeleted);
+        m_onMemberDeleted.emplace_back(std::move(_handler));
     }
 
 protected:
