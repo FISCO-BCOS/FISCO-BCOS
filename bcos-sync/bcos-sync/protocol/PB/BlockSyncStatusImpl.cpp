@@ -19,11 +19,16 @@
  * @date 2021-05-23
  */
 #include "BlockSyncStatusImpl.h"
+#include "bcos-sync/utilities/Common.h"
+#include <bcos-utilities/Common.h>
 
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
+
+// maximum allowed time drift from local UTC: 24 hours in milliseconds
+static constexpr std::int64_t MAX_TIME_DRIFT_MS = 24 * 60 * 60 * 1000LL;
 
 void BlockSyncStatusImpl::decode(bytesConstRef _data)
 {
@@ -43,7 +48,20 @@ void BlockSyncStatusImpl::deserializeObject()
     {
         m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
     }
-    m_time = m_syncMessage->time();
+    auto rawTime = m_syncMessage->time();
+    auto localTime = static_cast<std::int64_t>(utcTime());
+    // Validate peer time: must be within ±24h of local UTC time
+    if (rawTime >= localTime - MAX_TIME_DRIFT_MS && rawTime <= localTime + MAX_TIME_DRIFT_MS)
+    {
+        m_time = rawTime;
+    }
+    else
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC("deserializeObject: peer time out of valid range")
+                             << LOG_KV("peerTime", rawTime) << LOG_KV("localTime", localTime)
+                             << LOG_KV("maxDriftMs", MAX_TIME_DRIFT_MS);
+        m_time = 0;
+    }
 }
 void BlockSyncStatusImpl::setHash(HashType const& _hash)
 {
