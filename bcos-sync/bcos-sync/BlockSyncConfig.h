@@ -84,12 +84,12 @@ public:
     void resetBlockInfo(
         bcos::protocol::BlockNumber _blockNumber, bcos::crypto::HashType const& _hash);
 
-    void setKnownHighestNumber(bcos::protocol::BlockNumber _highestNumber);
-    bcos::protocol::BlockNumber knownHighestNumber() { return m_knownHighestNumber; }
-
-    void setKnownLatestHash(bcos::crypto::HashType const& _hash);
-
+    bcos::protocol::BlockNumber knownHighestNumber();
     bcos::crypto::HashType const& knownLatestHash();
+
+    // Atomically update known highest block number and hash (monotonically increasing)
+    void updateKnownHighestBlock(
+        bcos::protocol::BlockNumber _number, bcos::crypto::HashType const& _hash);
 
     size_t maxDownloadingBlockQueueSize() const { return m_maxDownloadingBlockQueueSize; }
     void setMaxDownloadingBlockQueueSize(size_t _maxDownloadingBlockQueueSize);
@@ -160,10 +160,15 @@ public:
 
     std::string printBlockSyncState() const noexcept
     {
+        bcos::protocol::BlockNumber highestNumber = 0;
+        {
+            ReadGuard lock(x_knownLatestStatus);
+            highestNumber = m_knownHighestNumber;
+        }
         std::stringstream stringstream;
         stringstream << LOG_KV("number", m_blockNumber) << LOG_KV("applyingBlock", m_applyingBlock)
                      << LOG_KV("nextBlock", m_nextBlock) << LOG_KV("executedBlock", m_executedBlock)
-                     << LOG_KV("highestNumber", m_knownHighestNumber);
+                     << LOG_KV("highestNumber", highestNumber);
         return stringstream.str();
     }
 
@@ -194,9 +199,10 @@ private:
     bcos::crypto::HashType m_hash;
     mutable SharedMutex x_hash;
 
-    std::atomic<bcos::protocol::BlockNumber> m_knownHighestNumber = {0};
+    bcos::protocol::BlockNumber m_knownHighestNumber = 0;
     bcos::crypto::HashType m_knownLatestHash;
-    mutable SharedMutex x_knownLatestHash;
+    mutable SharedMutex x_knownLatestStatus;  // protects both m_knownHighestNumber and
+                                              // m_knownLatestHash
     mutable Mutex m_mutex;
 
     std::atomic<size_t> m_maxDownloadingBlockQueueSize = MAX_DOWNLOAD_BLOCK_QUEUE_SIZE;

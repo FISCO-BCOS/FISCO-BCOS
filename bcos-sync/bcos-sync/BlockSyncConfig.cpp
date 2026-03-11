@@ -77,9 +77,10 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
 void BlockSyncConfig::setGenesisHash(HashType const& _hash)
 {
     m_genesisHash = _hash;
-    if (knownLatestHash() == HashType())
+    WriteGuard lock(x_knownLatestStatus);
+    if (m_knownLatestHash == HashType())
     {
-        setKnownLatestHash(m_genesisHash);
+        m_knownLatestHash = m_genesisHash;
     }
 }
 
@@ -97,11 +98,7 @@ void BlockSyncConfig::resetBlockInfo(BlockNumber _blockNumber, bcos::crypto::Has
     m_blockNumber = _blockNumber;
     setHash(_hash);
     m_nextBlock = m_blockNumber + 1;
-    if (m_knownHighestNumber < _blockNumber)
-    {
-        m_knownHighestNumber = _blockNumber;
-        setKnownLatestHash(_hash);
-    }
+    updateKnownHighestBlock(_blockNumber, _hash);
     if (_blockNumber > m_executedBlock)
     {
         m_executedBlock = _blockNumber;
@@ -120,21 +117,26 @@ void BlockSyncConfig::setHash(HashType const& _hash)
     m_hash = _hash;
 }
 
-void BlockSyncConfig::setKnownHighestNumber(BlockNumber _highestNumber)
+BlockNumber BlockSyncConfig::knownHighestNumber()
 {
-    m_knownHighestNumber = _highestNumber;
-}
-
-void BlockSyncConfig::setKnownLatestHash(HashType const& _hash)
-{
-    WriteGuard lock(x_knownLatestHash);
-    m_knownLatestHash = _hash;
+    ReadGuard lock(x_knownLatestStatus);
+    return m_knownHighestNumber;
 }
 
 HashType const& BlockSyncConfig::knownLatestHash()
 {
-    ReadGuard lock(x_knownLatestHash);
+    ReadGuard lock(x_knownLatestStatus);
     return m_knownLatestHash;
+}
+
+void BlockSyncConfig::updateKnownHighestBlock(BlockNumber _number, HashType const& _hash)
+{
+    WriteGuard lock(x_knownLatestStatus);
+    if (_number > m_knownHighestNumber)
+    {
+        m_knownHighestNumber = _number;
+        m_knownLatestHash = _hash;
+    }
 }
 
 void BlockSyncConfig::setMaxDownloadingBlockQueueSize(size_t _maxDownloadingBlockQueueSize)
