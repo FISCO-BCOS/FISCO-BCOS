@@ -29,8 +29,18 @@ void WatcherConfig::reCreateWatcher()
 {
     ELECTION_LOG(INFO) << LOG_DESC("reCreateWatcher");
     // Note: set recursive to watch subdirectory change
-    m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_watchDir,
-        boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1), true);
+    auto weak = std::weak_ptr<ElectionConfig>(shared_from_this());
+    m_watcher = std::make_shared<etcd::Watcher>(
+        *m_etcdClient, m_watchDir,
+        [weak](etcd::Response response) {
+            auto self = std::dynamic_pointer_cast<WatcherConfig>(weak.lock());
+            if (!self)
+            {
+                return;
+            }
+            self->onWatcherKeyChanged(std::move(response));
+        },
+        true);
     // fetchLeadersInfo when reCreateWatcher
     fetchLeadersInfo();
 }
@@ -63,32 +73,44 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         {
             ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: the leaderKey has been released")
                                << LOG_KV("leaderKey", _value.key());
+            auto const& leaderKey = _value.key();
+            bcos::protocol::MemberInterface::Ptr deletedMember;
             {
-                auto const& leaderKey = _value.key();
                 UpgradableGuard l(x_keyToLeader);
                 auto it = m_keyToLeader.find(leaderKey);
                 if (it == m_keyToLeader.end())
                 {
                     return;
                 }
-                auto member = it->second;
+                deletedMember = it->second;
                 UpgradeGuard ul(l);
                 m_keyToLeader.erase(leaderKey);
-                onMemberDeleted(leaderKey, member);
+                m_keyToLeaderSeq.erase(leaderKey);
             }
+            // invoke callback outside lock to prevent self-deadlock
+            onMemberDeleted(leaderKey, deletedMember);
             return;
         }
         auto const& leaderKey = _value.key();
         auto member = m_memberFactory->createMember(_value.as_string());
         auto seq = _value.modified_index();
         member->setSeq(seq);
+        {
+            WriteGuard l(x_keyToLeader);
+            auto seqIt = m_keyToLeaderSeq.find(leaderKey);
+            if (seqIt != m_keyToLeaderSeq.end() && seq <= seqIt->second)
+            {
+                ELECTION_LOG(DEBUG) << LOG_DESC("updateLeaderInfo: ignore stale update")
+                                    << LOG_KV("leaderKey", leaderKey) << LOG_KV("incomingSeq", seq)
+                                    << LOG_KV("currentSeq", seqIt->second);
+                return;
+            }
+            m_keyToLeaderSeq[leaderKey] = seq;
+            m_keyToLeader[leaderKey] = member;
+        }
         ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: update leader")
                            << LOG_KV("leaderKey", leaderKey) << LOG_KV("member", member->memberID())
                            << LOG_KV("modifiedIndex", seq);
-        {
-            WriteGuard l(x_keyToLeader);
-            m_keyToLeader[leaderKey] = member;
-        }
         callNotificationHandlers(leaderKey, member);
     }
     catch (std::exception const& e)
