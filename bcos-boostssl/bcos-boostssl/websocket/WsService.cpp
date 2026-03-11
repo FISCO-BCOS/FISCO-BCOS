@@ -176,10 +176,10 @@ void WsService::stop()
         UpgradableGuard l(x_msgTypeHandlers);
         UpgradeGuard ul(l);
         m_msgType2Method.clear();
+        // Clear connect and disconnect handlers under the same lock to avoid data races
+        m_connectHandlers.clear();
+        m_disconnectHandlers.clear();
     }
-    // Clear connect and disconnect handlers
-    m_connectHandlers.clear();
-    m_disconnectHandlers.clear();
 
     // WEBSOCKET_SERVICE(INFO) << LOG_DESC("stop websocket service successfully");
 }
