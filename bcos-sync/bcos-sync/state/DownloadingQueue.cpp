@@ -139,6 +139,12 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
                        << LOG_DESC("Decoding block buffer")
                        << LOG_KV("blocksShardSize", _blocksData->blocksSize());
     size_t blocksSize = _blocksData->blocksSize();
+    if (blocksSize == 0)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                             << LOG_DESC("Empty blocksData in BlockResponsePacket");
+        return true;
+    }
     std::vector<protocol::Block::Ptr> blocks;
     blocks.reserve(blocksSize);
     // prepare block
