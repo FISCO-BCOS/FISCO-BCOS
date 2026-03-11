@@ -22,6 +22,8 @@
 #include "bcos-sync/interfaces/BlockRequestInterface.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgImpl.h"
 #include "bcos-sync/utilities/Common.h"
+#include <limits>
+#include <utility>
 namespace bcos::sync
 {
 class BlockRequestImpl : public BlockRequestInterface, public BlockSyncMsgImpl
@@ -38,8 +40,20 @@ public:
     explicit BlockRequestImpl(bytesConstRef _data) : BlockRequestImpl() { decode(_data); }
     ~BlockRequestImpl() override = default;
 
-    size_t size() const override { return m_syncMessage->size(); }
-    void setSize(size_t _size) override { m_syncMessage->set_size(_size); }
+    size_t size() const override
+    {
+        const auto rawSize = m_syncMessage->size();
+        if (rawSize <= 0)
+        {
+            return 0;
+        }
+        if (std::cmp_greater(rawSize, std::numeric_limits<size_t>::max()))
+        {
+            return std::numeric_limits<size_t>::max();
+        }
+        return static_cast<size_t>(rawSize);
+    }
+    void setSize(size_t _size) override { m_syncMessage->set_size(static_cast<int64_t>(_size)); }
 
     int32_t blockDataFlag() const override { return m_syncMessage->block_data_flag(); }
     void setBlockDataFlag(int32_t _flag) override { m_syncMessage->set_block_data_flag(_flag); }
