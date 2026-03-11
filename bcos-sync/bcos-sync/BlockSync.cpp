@@ -379,6 +379,14 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
                              << LOG_KV("msg", _error->errorMessage());
         return;
     }
+    // Early authorization check: reject all packet types from non-group peers
+    // when free node sync is not allowed
+    if (!m_allowFreeNode && !m_config->existsInGroup(_nodeID))
+    {
+        BLKSYNC_LOG(DEBUG) << LOG_DESC("asyncNotifyBlockSyncMessage: reject non-group peer")
+                           << LOG_KV("peer", _nodeID->shortHex());
+        return;
+    }
     try
     {
         auto syncMsg = m_config->msgFactory()->createBlockSyncMsg(_data);
