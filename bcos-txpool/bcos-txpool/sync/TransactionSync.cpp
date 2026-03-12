@@ -341,7 +341,26 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
         return;
     }
-    // Verify transaction hashes match requested hashes before import
+    // Verify transaction hashes match requested hashes BEFORE import
+    const auto hashMismatch = ::ranges::any_of(
+        ::ranges::views::zip(*_missedTxs, transactions->transactions()), [](auto const& pair) {
+            auto& [expectedHash, tx] = pair;
+            return expectedHash != tx->hash();
+        });
+    if (hashMismatch)
+    {
+        SYNC_LOG(WARNING) << LOG_DESC("verifyFetchedTxs: transaction hash mismatch")
+                          << LOG_KV("peer", _nodeID->shortHex())
+                          << LOG_KV(
+                                 "hash", (_verifiedProposal) ?
+                                             _verifiedProposal->blockHeader()->hash().abridged() :
+                                             "unknown");
+        _onVerifyFinished(
+            BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
+            false);
+        return;
+    }
+    // Hashes verified, now safe to import
     auto [result, txs] = importDownloadedTxsByBlock(transactions, _verifiedProposal);
     if (!result)
     {
@@ -349,16 +368,6 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                               "invalid transaction for invalid signature or nonce or blockLimit"),
             false);
         return;
-    }
-    for (size_t i = 0; i < _missedTxs->size(); i++)
-    {
-        if ((*_missedTxs)[i] != (*txs)[i]->hash())
-        {
-            _onVerifyFinished(
-                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
-                false);
-            return;
-        }
     }
     _onVerifyFinished(error, true);
     SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")

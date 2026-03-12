@@ -412,6 +412,7 @@ void TxPool::fillBlock(HashListPtr _txsHash,
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FILL_BLOCK);
 
+    // getTransactions guarantees that txs and *_txsHash have the same size and order
     auto txs = m_txpoolStorage->getTransactions(*_txsHash);
     auto missedTxs = ::ranges::views::zip(*_txsHash, txs) |
                      ::ranges::views::filter([](const auto& pair) {
