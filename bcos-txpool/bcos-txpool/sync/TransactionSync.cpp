@@ -376,19 +376,14 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
 
 std::tuple<bool, std::shared_ptr<protocol::Transactions>>
 TransactionSync::importDownloadedTxsByBlock(
-    Block::Ptr _txsBuffer, Block::ConstPtr _verifiedProposal)
+    Block::Ptr const& _txsBuffer, Block::ConstPtr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
     auto txFactory = m_config->blockFactory()->transactionFactory();
-    for (auto const& tx : _txsBuffer->transactions())
+    for (auto&& tx : _txsBuffer->transactions())
     {
-        // Re-encode and decode with hash verification enabled to prevent
-        // content-hash mismatch attacks where embedded hash fields are
-        // manipulated to bypass signature binding
-        bytes txData;
-        tx->encode(txData);
-        txs->emplace_back(txFactory->createTransaction(bcos::ref(txData), false, true));
+        txs->emplace_back(txFactory->createTransaction(*tx));
     }
     return {importDownloadedTxs(txs, std::move(_verifiedProposal)), txs};
 }
@@ -432,8 +427,8 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 {
                     try
                     {
-                        // force sender to empty for the txs verification
-                        tx->forceSender({});
+                        // clear sender and hash so that verify() will recompute them
+                        tx->clearSenderAndHash();
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);
                     }

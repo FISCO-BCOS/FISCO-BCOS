@@ -85,7 +85,7 @@ protected:
         VerifyResponseCallback _onVerifyFinished);
 
     virtual std::tuple<bool, std::shared_ptr<protocol::Transactions>> importDownloadedTxsByBlock(
-        bcos::protocol::Block::Ptr _txsBuffer,
+        bcos::protocol::Block::Ptr const& _txsBuffer,
         bcos::protocol::Block::ConstPtr _verifiedProposal = nullptr);
 
     virtual bool importDownloadedTxs(bcos::protocol::TransactionsPtr _txs,

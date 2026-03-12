@@ -54,6 +54,8 @@ public:
         std::string _value = {}, std::string _gasPrice = {}, int64_t _gasLimit = 0,
         std::string _maxFeePerGas = {}, std::string _maxPriorityFeePerGas = {}) override;
 
+    bcos::protocol::Transaction::Ptr decodeTransaction(bcos::bytesConstRef txData) override;
+
     void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite);
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() override;
 
