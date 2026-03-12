@@ -57,6 +57,9 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     // remove in front module check signature
     try
     {
+        // Defensively clear sender to ensure signature verification is always performed,
+        // preventing bypass via pre-filled sender field from untrusted sources
+        _tx.forceSender({});
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
     catch (...)
@@ -160,6 +163,10 @@ TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transac
 task::Task<TransactionStatus> TxValidator::validateBalance(
     const bcos::protocol::Transaction& _tx, std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
 {
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        co_return TransactionStatus::None;
+    }
     auto sender = toHex(_tx.sender());
 
     u256 balanceValue{};

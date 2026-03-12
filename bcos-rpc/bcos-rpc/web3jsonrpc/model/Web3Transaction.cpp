@@ -144,28 +144,22 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         tarsTx.data.gasPrice = "0x" + this->maxPriorityFeePerGas.str(0, std::ios_base::hex);
     }
     tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
-    auto hashForSign = this->hashForSign();
+
+    // Only call encodeForSign() once, store in extraTransactionBytes for TxValidator::verify()
     auto encodedForSign = this->encodeForSign();
+    tarsTx.extraTransactionBytes.reserve(encodedForSign.size());
+    ::ranges::move(encodedForSign, std::back_inserter(tarsTx.extraTransactionBytes));
+
     // FISCO BCOS signature is r||s||v
     tarsTx.signature.reserve(crypto::SECP256K1_SIGNATURE_LEN);
     ::ranges::move(this->signatureR, std::back_inserter(tarsTx.signature));
     ::ranges::move(this->signatureS, std::back_inserter(tarsTx.signature));
     tarsTx.signature.push_back(static_cast<tars::Char>(this->signatureV));
 
-    tarsTx.extraTransactionBytes.reserve(encodedForSign.size());
-    ::ranges::move(encodedForSign, std::back_inserter(tarsTx.extraTransactionBytes));
-
-    const bcos::crypto::Secp256k1Crypto signatureImpl;
-    bcos::crypto::Keccak256 hashImpl;
-    auto signRef = bcos::bytesConstRef(
-        reinterpret_cast<const bcos::byte*>(tarsTx.signature.data()), tarsTx.signature.size());
-    auto [_, sender] = signatureImpl.recoverAddress(hashImpl, hashForSign, signRef);
     tarsTx.data.nonce = toQuantity(this->nonce);
     tarsTx.data.chainID = std::to_string(this->chainId.value_or(0));
-    tarsTx.dataHash.reserve(crypto::HashType::SIZE);
-    ::ranges::move(hashForSign, std::back_inserter(tarsTx.dataHash));
-    tarsTx.sender.reserve(sender.size());
-    ::ranges::move(sender, std::back_inserter(tarsTx.sender));
+
+    // dataHash and sender left empty — TxValidator::verify() computes them
     return tarsTx;
 }
 std::ostream& operator<<(std::ostream& _out, const TransactionType& _in)
