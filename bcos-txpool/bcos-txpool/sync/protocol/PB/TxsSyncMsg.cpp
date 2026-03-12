@@ -20,6 +20,7 @@
  */
 #include "TxsSyncMsg.h"
 #include "bcos-protocol/Common.h"
+#include "bcos-txpool/sync/utilities/Common.h"
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -94,6 +95,13 @@ void TxsSyncMsg::deserializeObject()
     for (int i = 0; i < m_rawSyncMessage->txshash_size(); i++)
     {
         auto const& hashData = m_rawSyncMessage->txshash(i);
+        if (hashData.size() < bcos::crypto::HashType::SIZE)
+        {
+            SYNC_LOG(WARNING) << LOG_DESC("deserializeObject: invalid hash entry size, skip")
+                              << LOG_KV("expected", bcos::crypto::HashType::SIZE)
+                              << LOG_KV("actual", hashData.size());
+            continue;
+        }
         m_txsHash->emplace_back(
             HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE));
     }
