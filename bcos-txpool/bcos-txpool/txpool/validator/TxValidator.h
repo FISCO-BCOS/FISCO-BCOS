@@ -79,7 +79,13 @@ public:
 protected:
     virtual bool isSystemTransaction(const bcos::protocol::Transaction& _tx)
     {
-        return precompiled::contains(bcos::precompiled::c_systemTxsAddress, _tx.to());
+        auto to = _tx.to();
+        // Normalize: strip 0x/0X prefix to match c_systemTxsAddress entries (unprefixed)
+        if (to.size() > 2 && (to.substr(0, 2) == "0x" || to.substr(0, 2) == "0X"))
+        {
+            to = to.substr(2);
+        }
+        return precompiled::contains(bcos::precompiled::c_systemTxsAddress, to);
     }
 
 private:
