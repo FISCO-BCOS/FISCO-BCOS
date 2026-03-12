@@ -280,4 +280,35 @@ BOOST_AUTO_TEST_CASE(test_namedTypeHelper)
     }
 }
 
+BOOST_AUTO_TEST_CASE(test_contractABIDefinition_nullHashImpl)
+{
+    // Build a ContractABIDefinition with one method and one event
+    ContractABIDefinition abiDef;
+
+    auto method = std::make_shared<ContractABIMethodDefinition>();
+    method->setName("transfer");
+    method->setType(ContractABIMethodDefinition::FUNCTION_TYPE);
+    std::vector<NamedType::Ptr> inputs;
+    inputs.push_back(std::make_shared<NamedType>("to", "address"));
+    inputs.push_back(std::make_shared<NamedType>("amount", "uint256"));
+    method->setInputs(inputs);
+    abiDef.addMethod("transfer", method);
+
+    auto event = std::make_shared<ContractABIMethodDefinition>();
+    event->setName("Transfer");
+    event->setType(ContractABIMethodDefinition::EVENT_TYPE);
+    abiDef.addEvent(event);
+
+    bcos::crypto::Hash::Ptr nullHash = nullptr;
+
+    // methodIDs() should throw std::invalid_argument when _hashImpl is nullptr
+    BOOST_CHECK_THROW(abiDef.methodIDs("transfer", nullHash), std::invalid_argument);
+
+    // getMethodByMethodID() should throw std::invalid_argument when _hashImpl is nullptr
+    BOOST_CHECK_THROW(abiDef.getMethodByMethodID("0x12345678", nullHash), std::invalid_argument);
+
+    // getEventByTopic() should throw std::invalid_argument when _hashImpl is nullptr
+    BOOST_CHECK_THROW(abiDef.getEventByTopic("0xabcdef", nullHash), std::invalid_argument);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

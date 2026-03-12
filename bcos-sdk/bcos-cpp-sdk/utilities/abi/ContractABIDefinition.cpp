@@ -44,6 +44,11 @@ const std::string ContractABIMethodDefinition::RECEIVE_TYPE = "receive";
 std::vector<std::string> ContractABIDefinition::methodIDs(
     const std::string& _methodName, bcos::crypto::Hash::Ptr _hashImpl) const
 {
+    if (!_hashImpl)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("_hashImpl cannot be null in methodIDs"));
+    }
     std::vector<std::string> ids;
     auto it = m_methods.find(_methodName);
     if (it == m_methods.end())
@@ -103,6 +108,11 @@ std::vector<ContractABIMethodDefinition::Ptr> ContractABIDefinition::getMethod(
 ContractABIMethodDefinition::Ptr ContractABIDefinition::getMethodByMethodID(
     const std::string& _methodID, bcos::crypto::Hash::Ptr _hashImpl)
 {
+    if (!_hashImpl)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("_hashImpl cannot be null in getMethodByMethodID"));
+    }
     UTILITIES_ABI_LOG(TRACE) << LOG_BADGE("getMethodByMethodID") << LOG_KV("methodID", _methodID);
 
     // check method exist or overloaded methods exist
@@ -157,6 +167,11 @@ std::vector<ContractABIMethodDefinition::Ptr> ContractABIDefinition::getEvent(
 ContractABIMethodDefinition::Ptr ContractABIDefinition::getEventByTopic(
     const std::string& _eventTopic, bcos::crypto::Hash::Ptr _hashImpl)
 {
+    if (!_hashImpl)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("_hashImpl cannot be null in getEventByTopic"));
+    }
     UTILITIES_ABI_LOG(TRACE) << LOG_BADGE("getEventByTopic") << LOG_KV("topic", _eventTopic);
 
     // check method exist or overloaded methods exist
