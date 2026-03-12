@@ -20,6 +20,7 @@
  */
 #include "BlockSyncStatusImpl.h"
 #include "bcos-sync/utilities/Common.h"
+#include <bcos-protocol/Common.h>
 #include <bcos-utilities/Common.h>
 
 using namespace bcos;
@@ -39,15 +40,28 @@ void BlockSyncStatusImpl::decode(bytesConstRef _data)
 void BlockSyncStatusImpl::deserializeObject()
 {
     auto const& hashData = m_syncMessage->hash();
-    if (hashData.size() >= HashType::SIZE)
+    if (hashData.size() != HashType::SIZE)
     {
-        m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
+        BOOST_THROW_EXCEPTION(PBObjectDecodeException()
+                              << errinfo_comment("BlockSyncStatus: invalid hash size, expected " +
+                                                 std::to_string(HashType::SIZE) + " got " +
+                                                 std::to_string(hashData.size())));
     }
+    m_hash = HashType((byte const*)hashData.data(), HashType::SIZE);
+    // swap with empty string to reliably release protobuf's underlying allocation
+    std::string().swap(*m_syncMessage->mutable_hash());
+
     auto const& genesisHashData = m_syncMessage->genesishash();
-    if (genesisHashData.size() >= HashType::SIZE)
+    if (genesisHashData.size() != HashType::SIZE)
     {
-        m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
+        BOOST_THROW_EXCEPTION(
+            PBObjectDecodeException() << errinfo_comment(
+                "BlockSyncStatus: invalid genesis hash size, expected " +
+                std::to_string(HashType::SIZE) + " got " + std::to_string(genesisHashData.size())));
     }
+    m_genesisHash = HashType((byte const*)genesisHashData.data(), HashType::SIZE);
+    std::string().swap(*m_syncMessage->mutable_genesishash());
+
     auto rawTime = m_syncMessage->time();
     auto localTime = static_cast<std::int64_t>(utcTime());
     // Validate peer time: must be within ±24h of local UTC time
