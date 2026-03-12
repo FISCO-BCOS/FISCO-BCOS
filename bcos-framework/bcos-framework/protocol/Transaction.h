@@ -21,6 +21,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <range/v3/view/any_view.hpp>
@@ -98,17 +99,27 @@ public:
         crypto::HashType hashResult;
         if (type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
         {
+            // Always recompute hash from transaction data to prevent content-hash
+            // mismatch attacks where the embedded dataHash field is tampered
+            calculateHash(hashImpl);
             hashResult = hash();
         }
         else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
         {
-            auto bytesRef = extraTransactionBytes();
+            const auto bytesRef = extraTransactionBytes();
             hashResult = bcos::crypto::keccak256Hash(bytesRef);
         }
         // check the signatures
-        auto signature = signatureData();
-        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
-        forceSender(ret.second);
+        const auto signature = signatureData();
+        auto [recovered, sender] = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
+        if (!recovered) [[unlikely]]
+        {
+            BCOS_LOG(INFO) << LOG_DESC("recover sender address failed")
+                           << LOG_KV("hash", hashResult.abridged());
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("recover sender address from signature failed"));
+        }
+        forceSender(sender);
     }
 
     virtual int32_t version() const = 0;
@@ -140,6 +151,10 @@ public:
     virtual uint8_t type() const = 0;
 
     virtual void forceSender(const bcos::bytes& _sender) const = 0;
+    // Clear both sender and hash fields so that verify() will recompute them
+    virtual void clearSenderAndHash() const = 0;
+    // Recompute hash from transaction data fields
+    virtual void calculateHash(const crypto::Hash& hashImpl) const = 0;
     virtual bcos::bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;

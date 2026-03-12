@@ -376,12 +376,12 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
 
 std::tuple<bool, std::shared_ptr<protocol::Transactions>>
 TransactionSync::importDownloadedTxsByBlock(
-    Block::Ptr _txsBuffer, Block::ConstPtr _verifiedProposal)
+    Block::Ptr const& _txsBuffer, Block::ConstPtr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
     auto txFactory = m_config->blockFactory()->transactionFactory();
-    for (auto tx : _txsBuffer->transactions())
+    for (auto&& tx : _txsBuffer->transactions())
     {
         txs->emplace_back(txFactory->createTransaction(*tx));
     }
@@ -427,8 +427,8 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 {
                     try
                     {
-                        // force sender to empty for the txs verification
-                        tx->forceSender({});
+                        // clear sender and hash so that verify() will recompute them
+                        tx->clearSenderAndHash();
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);
                     }
