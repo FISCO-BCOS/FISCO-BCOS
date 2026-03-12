@@ -92,12 +92,19 @@ void TxsSyncMsg::setTxsHash(HashList const& _txsHash)
 void TxsSyncMsg::deserializeObject()
 {
     m_txsHash->clear();
-    for (int i = 0; i < m_rawSyncMessage->txshash_size(); i++)
+    const auto hashCount = m_rawSyncMessage->txshash_size();
+    if (hashCount > static_cast<int>(MAX_SYNC_TXSHASH_COUNT))
+    {
+        SYNC_LOG(WARNING) << LOG_DESC("deserializeObject: txsHash count exceeds limit, reject")
+                          << LOG_KV("count", hashCount) << LOG_KV("limit", MAX_SYNC_TXSHASH_COUNT);
+        return;
+    }
+    for (int i = 0; i < hashCount; i++)
     {
         auto const& hashData = m_rawSyncMessage->txshash(i);
-        if (hashData.size() < bcos::crypto::HashType::SIZE)
+        if (hashData.size() != bcos::crypto::HashType::SIZE)
         {
-            SYNC_LOG(WARNING) << LOG_DESC("deserializeObject: invalid hash entry size, skip")
+            SYNC_LOG(WARNING) << LOG_DESC("deserializeObject: unexpected hash entry size, skip")
                               << LOG_KV("expected", bcos::crypto::HashType::SIZE)
                               << LOG_KV("actual", hashData.size());
             continue;

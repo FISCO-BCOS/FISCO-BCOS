@@ -51,7 +51,7 @@ void TransactionSync::onRecvSyncMessage(
         }
         auto txsSyncMsg = m_config->msgFactory()->createTxsSyncMsg(_data);
         // receive txs request, and response the transactions
-        if (txsSyncMsg->type() == TxsSyncPacketType::TxsRequestPacket)
+        if (txsSyncMsg->type() == static_cast<int32_t>(TxsSyncPacketType::TxsRequestPacket))
         {
             try
             {
@@ -64,7 +64,7 @@ void TransactionSync::onRecvSyncMessage(
                                   << LOG_KV("peer", _nodeID->shortHex());
             }
         }
-        if (txsSyncMsg->type() == TxsSyncPacketType::TxsStatusPacket)
+        if (txsSyncMsg->type() == static_cast<int32_t>(TxsSyncPacketType::TxsStatusPacket))
         {
             try
             {
@@ -121,7 +121,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     bytes txsData;
     block->encode(txsData);
     auto txsResponse = m_config->msgFactory()->createTxsSyncMsg(
-        TxsSyncPacketType::TxsResponsePacket, std::move(txsData));
+        static_cast<uint32_t>(TxsSyncPacketType::TxsResponsePacket), std::move(txsData));
     auto packetData = txsResponse->encode();
     _sendResponse(ref(*packetData));
     SYNC_LOG(INFO) << LOG_DESC("onReceiveTxsRequest: response txs")
@@ -235,8 +235,8 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
     }
     auto protocolID = _verifiedProposal ? ModuleID::ConsTxsSync : ModuleID::TxsSync;
 
-    auto txsRequest =
-        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsRequestPacket, *_missedTxs);
+    auto txsRequest = m_config->msgFactory()->createTxsSyncMsg(
+        static_cast<uint32_t>(TxsSyncPacketType::TxsRequestPacket), *_missedTxs);
     auto encodedData = txsRequest->encode();
     auto startT = utcTime();
     auto self = weak_from_this();
@@ -311,11 +311,12 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     }
     auto txsResponse = m_config->msgFactory()->createTxsSyncMsg(_data);
     auto error = nullptr;
-    if (txsResponse->type() != TxsSyncPacketType::TxsResponsePacket)
+    if (txsResponse->type() != static_cast<int32_t>(TxsSyncPacketType::TxsResponsePacket))
     {
         SYNC_LOG(WARNING) << LOG_DESC("requestMissedTxs: receive invalid txsResponse")
                           << LOG_KV("peer", _nodeID->shortHex())
-                          << LOG_KV("expectedType", TxsSyncPacketType::TxsResponsePacket)
+                          << LOG_KV("expectedType",
+                                 static_cast<int32_t>(TxsSyncPacketType::TxsResponsePacket))
                           << LOG_KV("recvType", txsResponse->type());
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed, "FetchTransactionsFailed"), false);
@@ -507,8 +508,8 @@ void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
     // TODO: get tx directly, not get txHash and request tx indirectly
     auto txsHash =
         m_config->txpoolStorage()->getTxsHash(m_config->getMaxResponseTxsToNodesWithEmptyTxs());
-    auto txsStatus =
-        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, *txsHash);
+    auto txsStatus = m_config->msgFactory()->createTxsSyncMsg(
+        static_cast<uint32_t>(TxsSyncPacketType::TxsStatusPacket), *txsHash);
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendMessageByNodeID(
         ModuleID::TxsSync, _fromNode, ref(*packetData), 0, nullptr);
@@ -524,8 +525,8 @@ void TransactionSync::onEmptyTxs()
         return;
     }
     SYNC_LOG(DEBUG) << LOG_DESC("onEmptyTxs: broadcast txs status to all consensus node list");
-    auto txsStatus =
-        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
+    auto txsStatus = m_config->msgFactory()->createTxsSyncMsg(
+        static_cast<uint32_t>(TxsSyncPacketType::TxsStatusPacket), HashList());
     auto packetData = txsStatus->encode();
     task::wait([](decltype(packetData) packetData,
                    bcos::front::FrontServiceInterface::Ptr front) -> task::Task<void> {
