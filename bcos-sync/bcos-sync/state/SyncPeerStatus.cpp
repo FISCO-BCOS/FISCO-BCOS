@@ -47,8 +47,10 @@ PeerStatus::PeerStatus(
 bool PeerStatus::update(BlockSyncStatusInterface::ConstPtr _status)
 {
     std::lock_guard<std::mutex> lock(x_mutex);
-    // maybe sync status msg delay in network
-    if (m_number > _status->number())
+    // Allow block number decrease within a reasonable reorg window to handle
+    // legitimate reorganizations, but reject large backward jumps
+    constexpr bcos::protocol::BlockNumber c_reorgWindow = 10;
+    if (m_number > _status->number() + c_reorgWindow)
     {
         return false;
     }
@@ -115,48 +117,63 @@ bool SyncPeerStatus::updatePeerStatus(
         return false;
     }
 
-    PeerStatus::Ptr peerStatus{nullptr};
+    // First try to update an existing peer under shared lock
     {
-        // update the existed peer status
-        peerStatus = this->peerStatus(_peer);
-    }
-
-    if (nullptr != peerStatus)
-    {
-        if (peerStatus->update(_peerStatus))
+        auto existingPeer = this->peerStatus(_peer);
+        if (existingPeer)
         {
-            updateKnownMaxBlockInfo(_peerStatus);
+            if (existingPeer->update(_peerStatus))
+            {
+                updateKnownMaxBlockInfo(_peerStatus);
+            }
+            return true;
         }
     }
-    else
+
+    // Peer not found — insert under unique lock, but re-check to handle the race
+    // where another thread inserts the same peer between the shared and unique lock
+    auto newPeerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
     {
-        // create and insert the new peer status
-        peerStatus = std::make_shared<PeerStatus>(m_config, _peer, _peerStatus);
         std::unique_lock lock(x_peersStatus);
-        m_peersStatus.emplace(_peer, peerStatus);
-        BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
-                           << LOG_KV("peer", _peer->shortHex())
-                           << LOG_KV("number", _peerStatus->number())
-                           << LOG_KV("hash", _peerStatus->hash().abridged())
-                           << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
-                           << LOG_KV("node", m_config->nodeID()->shortHex());
-        updateKnownMaxBlockInfo(_peerStatus);
+        auto [it, inserted] = m_peersStatus.try_emplace(_peer, newPeerStatus);
+        if (!inserted)
+        {
+            // Another thread inserted first — update that entry instead
+            if (it->second->update(_peerStatus))
+            {
+                updateKnownMaxBlockInfo(_peerStatus);
+            }
+            return true;
+        }
     }
+    BLKSYNC_LOG(DEBUG) << LOG_DESC("updatePeerStatus: new peer")
+                       << LOG_KV("peer", _peer->shortHex())
+                       << LOG_KV("number", _peerStatus->number())
+                       << LOG_KV("hash", _peerStatus->hash().abridged())
+                       << LOG_KV("genesisHash", _peerStatus->genesisHash().abridged())
+                       << LOG_KV("node", m_config->nodeID()->shortHex());
+    updateKnownMaxBlockInfo(_peerStatus);
     return true;
 }
 
-void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr _peerStatus)
+void SyncPeerStatus::updateKnownMaxBlockInfo(BlockSyncStatusInterface::ConstPtr const& _peerStatus)
 {
     if (_peerStatus->genesisHash() != m_config->genesisHash())
     {
         return;
     }
-    if (_peerStatus->number() <= m_config->knownHighestNumber())
+    const auto currentHighest = m_config->knownHighestNumber();
+    const auto peerNumber = _peerStatus->number();
+    if (peerNumber < 0 || peerNumber > currentHighest + PeerStatus::MAX_REASONABLE_BLOCK_NUMBER)
     {
+        BLKSYNC_LOG(WARNING) << LOG_DESC(
+                                    "updateKnownMaxBlockInfo: reject unreasonable block number")
+                             << LOG_KV("peerNumber", peerNumber)
+                             << LOG_KV("maxReasonable",
+                                    currentHighest + PeerStatus::MAX_REASONABLE_BLOCK_NUMBER);
         return;
     }
-    m_config->setKnownHighestNumber(_peerStatus->number());
-    m_config->setKnownLatestHash(_peerStatus->hash());
+    m_config->updateKnownHighestBlock(peerNumber, _peerStatus->hash());
 }
 
 void SyncPeerStatus::deletePeer(PublicPtr _peer)
@@ -196,8 +213,11 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
     // access _f() according to the random list
     for (auto const& peerStatus : peersStatusList)
     {
-        // check again in case peer status changed during the loop
-        if (!peerStatus || !this->peerStatus(peerStatus->nodeId()))
+        // check again in case peer status changed during the loop;
+        // compare object identity (not just key existence) to detect stale snapshots
+        // from peer disconnect+reconnect
+        auto current = this->peerStatus(peerStatus->nodeId());
+        if (!peerStatus || current.get() != peerStatus.get())
         {
             continue;
         }
