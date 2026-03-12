@@ -163,6 +163,10 @@ TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transac
 task::Task<TransactionStatus> TxValidator::validateBalance(
     const bcos::protocol::Transaction& _tx, std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
 {
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        co_return TransactionStatus::None;
+    }
     auto sender = toHex(_tx.sender());
 
     u256 balanceValue{};

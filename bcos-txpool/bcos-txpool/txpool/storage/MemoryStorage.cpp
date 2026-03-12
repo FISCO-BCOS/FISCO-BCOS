@@ -332,11 +332,16 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             // Step 3: Validate transaction format and constraints
             return m_config->txValidator()->validateTransaction(*transaction);
         },
-        // [this, transaction]() {
-        //     // Step 4: Validate balance
-        //     return task::syncWait(
-        //         m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
-        // },
+        [this, transaction]() {
+            // Step 4: Validate balance (only for Web3 transactions)
+            if (transaction->type() ==
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                return task::syncWait(
+                    m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
+            }
+            return bcos::protocol::TransactionStatus::None;
+        },
         [this, transaction]() {
             // Step 5: Check chain Id
             return task::syncWait(
