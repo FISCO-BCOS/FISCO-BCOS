@@ -172,7 +172,6 @@ void bcostars::protocol::TransactionImpl::clearSenderAndHash() const
 {
     m_inner()->sender.clear();
     m_inner()->dataHash.clear();
-    m_inner()->extraTransactionHash.clear();
 }
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
 {
