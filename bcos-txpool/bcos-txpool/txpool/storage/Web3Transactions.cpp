@@ -1,4 +1,6 @@
 #include "Web3Transactions.h"
+#include <bcos-framework/txpool/TxPoolTypeDef.h>
+#include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
 
 int64_t bcos::txpool::TransactionData::importTime() const
@@ -32,26 +34,50 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
 {}
 void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
 {
+    if (!transaction) [[unlikely]]
+    {
+        return;
+    }
+
     auto& nonceIndex = m_transactions.get<0>();
     auto& hashIndex = m_transactions.get<1>();
 
-    auto hash = transaction->hash();
+    bcos::crypto::HashType hash;
+    try
+    {
+        hash = transaction->hash();
+    }
+    catch (std::exception const& e)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: get hash failed, skip")
+                            << LOG_KV("reason", boost::diagnostic_information(e));
+        return;
+    }
+
     if (auto it = hashIndex.find(hash); it != hashIndex.end())
     {
         // Duplicate transaction
         return;
     }
 
-    TransactionData transactionData{std::move(transaction)};
-    if (auto it = nonceIndex.lower_bound(
-            std::make_tuple(transactionData.sender(), transactionData.nonce()));
-        it != nonceIndex.end() && it->sender() == transactionData.sender() &&
-        it->nonce() == transactionData.nonce())
+    try
     {
-        nonceIndex.replace(it, std::move(transactionData));
+        TransactionData transactionData{std::move(transaction)};
+        if (auto it = nonceIndex.lower_bound(
+                std::make_tuple(transactionData.sender(), transactionData.nonce()));
+            it != nonceIndex.end() && it->sender() == transactionData.sender() &&
+            it->nonce() == transactionData.nonce())
+        {
+            nonceIndex.replace(it, std::move(transactionData));
+        }
+        else
+        {
+            nonceIndex.emplace_hint(it, std::move(transactionData));
+        }
     }
-    else
+    catch (InvalidNonce const& e)
     {
-        nonceIndex.emplace_hint(it, std::move(transactionData));
+        TXPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: invalid nonce, skip")
+                            << LOG_KV("reason", boost::diagnostic_information(e));
     }
 }

@@ -414,32 +414,32 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 {
                     continue;
                 }
-                if (_verifiedProposal)
+                try
                 {
-                    tx->setBatchId(_verifiedProposal->blockHeader()->number());
-                    tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
-                }
-                if (m_config->txpoolStorage()->exists(tx->hash()))
-                {
-                    continue;
-                }
-                if (m_checkTransactionSignature)
-                {
-                    try
+                    if (_verifiedProposal)
+                    {
+                        tx->setBatchId(_verifiedProposal->blockHeader()->number());
+                        tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
+                    }
+                    if (m_config->txpoolStorage()->exists(tx->hash()))
+                    {
+                        continue;
+                    }
+                    if (m_checkTransactionSignature)
                     {
                         // force sender to empty for the txs verification
                         tx->forceSender({});
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);
                     }
-                    catch (std::exception const& e)
-                    {
-                        tx->setInvalid(true);
-                        SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
-                                          << LOG_KV("reason", boost::diagnostic_information(e))
-                                          << LOG_KV("hash", tx->hash().abridged());
-                        verifySuccess = false;
-                    }
+                }
+                catch (std::exception const& e)
+                {
+                    tx->setInvalid(true);
+                    SYNC_LOG(WARNING)
+                        << LOG_DESC("importDownloadedTxs: verify tx failed")
+                        << LOG_KV("reason", boost::diagnostic_information(e)) << LOG_KV("index", i);
+                    verifySuccess = false;
                 }
             }
         });
