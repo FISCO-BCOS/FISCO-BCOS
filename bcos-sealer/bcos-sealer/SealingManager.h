@@ -111,5 +111,6 @@ private:
     std::atomic<ssize_t> m_latestNumber = {0};
     bcos::crypto::HashType m_latestHash;
     int64_t m_latestTimestamp = 0;
+    static constexpr size_t c_maxSysTxsPerBlock = 10;
 };
 }  // namespace bcos::sealer

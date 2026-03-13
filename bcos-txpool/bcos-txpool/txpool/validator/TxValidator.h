@@ -79,13 +79,6 @@ public:
 protected:
     virtual bool isSystemTransaction(const bcos::protocol::Transaction& _tx)
     {
-        // Only BCOS (internal) transactions should be classified as system transactions.
-        // Web3 transactions from external users targeting system addresses should not
-        // trigger sys-block priority to prevent DoS via spamming system addresses.
-        if (_tx.type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-        {
-            return false;
-        }
         return precompiled::contains(bcos::precompiled::c_systemTxsAddress, _tx.to());
     }
 
