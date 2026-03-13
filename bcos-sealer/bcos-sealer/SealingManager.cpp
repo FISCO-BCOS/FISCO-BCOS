@@ -141,8 +141,8 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     block->setBlockHeader(blockHeader);
     auto txsSize =
         std::min(m_maxTxsPerBlock.load(), (m_pendingTxs.size() + m_pendingSysTxs.size()));
-    // prioritize seal from the system txs list
-    auto systemTxsSize = std::min(txsSize, m_pendingSysTxs.size());
+    // prioritize seal from the system txs list, cap at 10 per block to prevent DoS
+    const auto systemTxsSize = std::min({txsSize, m_pendingSysTxs.size(), c_maxSysTxsPerBlock});
     if (!m_pendingSysTxs.empty())
     {
         m_waitUntil.store(m_sealingNumber);
@@ -189,7 +189,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
         block->appendTransactionMetaData(std::move(m_pendingTxs.front()));
         m_pendingTxs.pop_front();
     }
-    m_sealingNumber++;
+    ++m_sealingNumber;
 
     m_lastSealTime = utcSteadyTime();
     // Note: When the last block(N) sealed by this node contains system transactions,
