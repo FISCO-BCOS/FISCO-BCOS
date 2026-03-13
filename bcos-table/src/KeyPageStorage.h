@@ -95,7 +95,7 @@ public:
         m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
         m_splitSize(m_pageSize / 3 * 2),
         m_mergeSize(m_pageSize / 4),
-        m_buckets(std::thread::hardware_concurrency()),
+        m_buckets(std::max(1u, std::thread::hardware_concurrency())),
         m_ignoreTables(std::move(_ignoreTables)),
         m_ignoreNotExist(_ignoreNotExist),
         m_setRowWithDirtyFlag(setRowWithDirtyFlag)

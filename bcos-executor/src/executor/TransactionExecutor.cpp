@@ -150,7 +150,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 #endif
 
-    m_threadPool = std::make_shared<bcos::ThreadPool>(name, std::thread::hardware_concurrency());
+    m_threadPool =
+        std::make_shared<bcos::ThreadPool>(name, std::max(1u, std::thread::hardware_concurrency()));
     setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
     if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {
