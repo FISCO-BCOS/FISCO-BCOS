@@ -133,62 +133,97 @@ public:
         storage2::ReadWriteStorage<executor_v1::StateKeyView, executor_v1::StateValue> auto& state,
         std::output_iterator<protocol::Transaction::Ptr> auto out)
     {
-        int64_t count = 0;
-        std::unique_lock lock(m_mutex);
-        auto& senderNonceIndex = m_transactions.get<0>();
-        auto& senderIndex = m_transactions.get<2>();
-        for (const auto& data : senderIndex)
+        // Phase 1: collect unique senders (owned strings) under lock so we can release the lock
+        // before the async storage queries below (FIB-56: no mutex held across co_await)
+        std::vector<std::string> senders;
         {
-            auto sender = data.sender();
-            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            std::unique_lock lock(m_mutex);
+            auto& senderIndex = m_transactions.get<2>();
+            std::string_view lastSender;
+            for (const auto& data : senderIndex)
+            {
+                if (data.sender() != lastSender)
+                {
+                    lastSender = data.sender();
+                    senders.push_back(std::string(data.sender()));
+                }
+            }
+        }  // lock released before any co_await
 
-            int64_t currentNonce = 0;
+        // Phase 2: query current on-chain nonces for each sender (no lock held)
+        std::unordered_map<std::string, int64_t> nonceMap;
+        for (const auto& sender : senders)
+        {
+            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            int64_t nonce = 0;
             if (auto nonceStr = co_await account.nonce())
             {
                 if (auto result = std::from_chars(
-                        nonceStr->data(), nonceStr->data() + nonceStr->size(), currentNonce);
+                        nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
                     result.ec != std::errc{})
                 {
                     bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
                 }
             }
+            nonceMap.emplace(sender, nonce);
+        }
 
-            auto startNonce = currentNonce;
-            for (auto nonceIt = senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
-                nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
-                nonceIt->nonce() == currentNonce;
-                ++nonceIt)
+        // Phase 3: under lock, collect transactions to seal and compute nonce updates
+        std::vector<std::pair<std::string, int64_t>> nonceUpdates;
+        int64_t count = 0;
+        {
+            std::unique_lock lock(m_mutex);
+            auto& senderNonceIndex = m_transactions.get<0>();
+            for (const auto& sender : senders)
             {
-                ++currentNonce;
-                ++count;
-                *out++ = nonceIt->m_transaction;
-
+                auto currentNonce = nonceMap[sender];
+                auto startNonce = currentNonce;
+                for (auto nonceIt =
+                         senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
+                    nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
+                    nonceIt->nonce() == currentNonce && count < limit;
+                    ++nonceIt, ++currentNonce, ++count)
+                {
+                    *out++ = nonceIt->m_transaction;
+                }
+                if (currentNonce > startNonce)
+                {
+                    nonceUpdates.emplace_back(sender, currentNonce);
+                }
                 if (count >= limit)
                 {
                     break;
                 }
             }
-            if (currentNonce > startNonce)
-            {
-                co_await account.setNonce(std::to_string(currentNonce));
-            }
-            if (count >= limit)
-            {
-                break;
-            }
+        }  // lock released before any co_await
+
+        // Phase 4: write updated nonces back to storage (no lock held)
+        for (const auto& [sender, nonce] : nonceUpdates)
+        {
+            ledger::account::EVMAccount account(state, sender, m_rawAddress);
+            co_await account.setNonce(std::to_string(nonce));
         }
     }
 
     task::Task<void> remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& state)
     {
-        std::unique_lock lock(m_mutex);
-        auto& senderNonceIndex = m_transactions.get<0>();
-        auto& senderIndex = m_transactions.get<2>();
+        // Phase 1: collect (sender, 0) pairs under lock using owned strings (FIB-56)
+        std::vector<std::pair<std::string, int64_t>> senderNonces;
+        {
+            std::unique_lock lock(m_mutex);
+            auto& senderIndex = m_transactions.get<2>();
+            std::string_view lastSender;
+            for (const auto& data : senderIndex)
+            {
+                if (data.sender() != lastSender)
+                {
+                    lastSender = data.sender();
+                    senderNonces.emplace_back(std::string(data.sender()), 0L);
+                }
+            }
+        }  // lock released before any co_await
 
-        auto senderNonces = ::ranges::views::transform(senderIndex, [](auto& data) {
-            return std::make_tuple(data.sender(), 0L);
-        }) | ::ranges::to<std::vector>();
-
+        // Phase 2: query on-chain nonces (no lock held)
         for (auto& [sender, nonce] : senderNonces)
         {
             ledger::account::EVMAccount account(state, sender, m_rawAddress);
@@ -202,6 +237,9 @@ public:
                 }
             }
         }
+
+        // Phase 3: remove transactions under lock
+        std::unique_lock lock(m_mutex);
         remove(::ranges::views::all(senderNonces));
     }
 
