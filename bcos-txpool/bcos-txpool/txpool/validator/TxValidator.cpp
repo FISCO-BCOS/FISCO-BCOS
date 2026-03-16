@@ -40,6 +40,12 @@ TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
     {
         return TransactionStatus::InvalidSignature;
     }
+    // Reject unknown transaction types to prevent signature binding bypass
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::BCOSTransaction) &&
+        _tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction)) [[unlikely]]
+    {
+        return TransactionStatus::Malformed;
+    }
     if (_tx.type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
     {
         // check groupId and chainId

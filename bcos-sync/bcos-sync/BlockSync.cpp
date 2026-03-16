@@ -335,6 +335,10 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
 {
     if (!m_masterNode)
     {
+        if (_onRecv)
+        {
+            _onRecv(nullptr);
+        }
         return;
     }
     auto self = weak_from_this();
@@ -373,6 +377,14 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, NodeIDPtr _nodeID
         BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage error")
                              << LOG_KV("code", _error->errorCode())
                              << LOG_KV("msg", _error->errorMessage());
+        return;
+    }
+    // Early authorization check: reject all packet types from non-group peers
+    // when free node sync is not allowed
+    if (!m_allowFreeNode && !m_config->existsInGroup(_nodeID))
+    {
+        BLKSYNC_LOG(DEBUG) << LOG_DESC("asyncNotifyBlockSyncMessage: reject non-group peer")
+                           << LOG_KV("peer", _nodeID->shortHex());
         return;
     }
     try
@@ -494,6 +506,14 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
                                  << LOG_KV("receivedBlockNumber", number)
                                  << LOG_KV("topArchivedQueue", topNumber)
                                  << LOG_KV("archivedBlockNumber", archivedNumber);
+            return;
+        }
+        if (blockMsg->blocksSize() == 0)
+        {
+            BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                                 << LOG_DESC("Empty blocksData in BlockResponsePacket")
+                                 << LOG_KV("receivedBlockNumber", number)
+                                 << LOG_KV("peer", _nodeID->shortHex());
             return;
         }
         auto block = m_config->blockFactory()->createBlock(blockMsg->blockData(0), true, true);

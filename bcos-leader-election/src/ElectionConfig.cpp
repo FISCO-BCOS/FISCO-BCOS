@@ -72,22 +72,43 @@ void ElectionConfig::onElectionClusterDown()
 
 void ElectionConfig::refreshWatcher()
 {
-    if (m_etcdClient->head().get().is_ok())
+    try
     {
+        if (m_stopped.load())
+        {
+            return;
+        }
+        if (m_etcdClient->head().get().is_ok())
+        {
+            onElectionClusterRecover();
+            m_watcherTimer->restart();
+            return;
+        }
+        m_watcherTimer->stop();
+        ELECTION_LOG(WARNING) << LOG_DESC("The client disconnect, wait for reconnect success");
+        onElectionClusterDown();
+        // wait until the client connects to etcd server or stop is called
+        while (!m_stopped.load() && !m_etcdClient->head().get().is_ok())
+        {
+            boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+        }
+        if (m_stopped.load())
+        {
+            ELECTION_LOG(INFO) << LOG_DESC("refreshWatcher: stopped during reconnect wait");
+            return;
+        }
         onElectionClusterRecover();
-        m_watcherTimer->restart();
-        return;
+        ELECTION_LOG(WARNING) << LOG_DESC("The client reconnect success, refreshWatcher");
+        reCreateWatcher();
+        m_watcherTimer->start();
     }
-    m_watcherTimer->stop();
-    ELECTION_LOG(WARNING) << LOG_DESC("The client disconnect, wait for reconnect success");
-    onElectionClusterDown();
-    // wait until the client connects to etcd server
-    while (!m_etcdClient->head().get().is_ok())
+    catch (std::exception const& e)
     {
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+        ELECTION_LOG(ERROR) << LOG_DESC("refreshWatcher exception")
+                            << LOG_KV("message", boost::diagnostic_information(e));
+        if (!m_stopped.load() && m_watcherTimer)
+        {
+            m_watcherTimer->restart();
+        }
     }
-    onElectionClusterRecover();
-    ELECTION_LOG(WARNING) << LOG_DESC("The client reconnect success, refreshWatcher");
-    reCreateWatcher();
-    m_watcherTimer->start();
 }
