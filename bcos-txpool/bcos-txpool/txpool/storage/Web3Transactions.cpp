@@ -13,14 +13,15 @@ bcos::crypto::HashType bcos::txpool::TransactionData::hash() const
 }
 std::string_view bcos::txpool::TransactionData::sender() const
 {
-    return m_transaction->sender();
+    return m_sender;
 }
 int64_t bcos::txpool::TransactionData::nonce() const
 {
     return m_nonce;
 }
 bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transaction)
-  : m_transaction(std::move(transaction)), m_nonce([&]() {
+  : m_transaction(std::move(transaction)),
+    m_nonce([&]() {
         int64_t nonce;  // NOLINT(cppcoreguidelines-init-variables) - initialized by
                         // std::from_chars
         auto view = m_transaction->nonce();
@@ -30,7 +31,10 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
             bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(std::string{view}));
         }
         return nonce;
-    }())
+    }()),
+    // Copy sender at construction time to own a stable copy; prevents dangling string_view when
+    // forceSender() is called later or when elements are erased from the index (FIB-49)
+    m_sender(m_transaction->sender())
 {}
 void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
 {

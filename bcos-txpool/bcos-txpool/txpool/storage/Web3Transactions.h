@@ -25,6 +25,7 @@ struct TransactionData
 {
     protocol::Transaction::Ptr m_transaction;
     int64_t m_nonce;
+    std::string m_sender;  // owned copy to prevent dangling string_view (FIB-49)
 
     int64_t importTime() const;
     crypto::HashType hash() const;
@@ -207,7 +208,9 @@ public:
 
     void remove(InputHashes auto hashes)
     {
-        std::unordered_map<std::string_view, int64_t> senderNonceMap;
+        // Use std::string keys (not string_view) so keys remain valid after elements are erased
+        // from m_transactions (FIB-49)
+        std::unordered_map<std::string, int64_t> senderNonceMap;
         std::unique_lock lock(m_mutex);
         auto& hashIndex = m_transactions.get<1>();
         for (const auto& hash : hashes)
