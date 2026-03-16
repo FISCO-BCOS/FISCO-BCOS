@@ -93,8 +93,16 @@ protected:
     void onElectionClusterRecover() override;
     void reCreateWatcher() override
     {
-        m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_leaderKey,
-            boost::bind(&CampaignConfig::onLeaderKeyChanged, this, boost::placeholders::_1));
+        auto weak = std::weak_ptr<ElectionConfig>(shared_from_this());
+        m_watcher = std::make_shared<etcd::Watcher>(
+            *m_etcdClient, m_leaderKey, [weak](etcd::Response response) {
+                auto self = std::dynamic_pointer_cast<CampaignConfig>(weak.lock());
+                if (!self)
+                {
+                    return;
+                }
+                self->onLeaderKeyChanged(std::move(response));
+            });
     }
 
     void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
