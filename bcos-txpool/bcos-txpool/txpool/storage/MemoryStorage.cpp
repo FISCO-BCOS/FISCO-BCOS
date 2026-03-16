@@ -831,10 +831,13 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
             {
                 auto hash = _txsHashList[index];
                 protocol::Transaction::Ptr transaction;
+                // Track whether the tx came from fromMap; only record for movement if it passes
+                // the re-seal guard below — prevents stranding re-sealed txs (FIB-60)
+                bool foundInFromMap = false;
                 if (bucket.find(accessor, hash))
                 {
                     transaction = accessor.value();
-                    moveTransactions[index] = transaction;
+                    foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
                     toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
@@ -853,6 +856,12 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                 {
                     ++localReSealed;
                     continue;
+                }
+
+                // Assign to moveTransactions only after the re-seal guard passes
+                if (foundInFromMap)
+                {
+                    moveTransactions[index] = transaction;
                 }
 
                 transaction->setSealed(_sealFlag);
