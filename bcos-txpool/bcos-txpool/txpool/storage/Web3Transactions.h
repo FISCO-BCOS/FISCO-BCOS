@@ -111,7 +111,9 @@ private:
         for (auto&& [sender, nonce] : senderNonces)
         {
             auto start = senderNonceIndex.lower_bound(std::make_tuple(sender, 0));
-            auto end = senderNonceIndex.upper_bound(std::make_tuple(sender, nonce));
+            // FIB-63: use lower_bound so nonce == accountNonce is excluded from removal;
+            // upper_bound would include the still-pending transaction at accountNonce.
+            auto end = senderNonceIndex.lower_bound(std::make_tuple(sender, nonce));
             for (auto it = start; it != end;)
             {
                 it = senderNonceIndex.erase(it);
