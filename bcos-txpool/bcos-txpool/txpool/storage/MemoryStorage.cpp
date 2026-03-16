@@ -603,7 +603,11 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
             return false;
         }
 
-        if (currentTime > (tx->importTime() + m_txsExpirationTime))
+        // Treat a negative importTime as already expired to prevent unsigned overflow when
+        // adding a negative int64_t to uint64_t m_txsExpirationTime (FIB-61)
+        auto const importTime = tx->importTime();
+        if (importTime < 0 ||
+            currentTime > (static_cast<uint64_t>(importTime) + m_txsExpirationTime))
         {
             invalidTxs.emplace_back(tx);
             return false;
