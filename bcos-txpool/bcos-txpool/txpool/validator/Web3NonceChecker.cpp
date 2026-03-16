@@ -63,10 +63,13 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
         co_return TransactionStatus::NonceCheckFail;
     }
 
+    // Check ledger state nonce cache first; only query the ledger storage on a cache miss to avoid
+    // unconditional expensive I/O on every tx submission (FIB-59)
     if (auto const nonceInLedger = co_await bcos::storage2::readOne(m_ledgerStateNonces, sender))
     {
-        if (auto nonceInLedgerValue = nonceInLedger.value();
-            nonceU256 < nonceInLedgerValue ||
+        // Cache hit: validate against cached value and return without touching storage
+        auto nonceInLedgerValue = nonceInLedger.value();
+        if (nonceU256 < nonceInLedgerValue ||
             nonceU256 > nonceInLedgerValue + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
             TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce ledger check fail")
@@ -74,16 +77,21 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
                               << LOG_KV("nonceInLedger", nonceInLedgerValue);
             co_return TransactionStatus::NonceCheckFail;
         }
+        co_return TransactionStatus::None;
     }
-    // not in ledger memory, check from storage
-    // TODO)): block number not use nowadays
+
+    // Cache miss: query ledger storage
     if (auto const storageState = co_await m_ledger->getStorageState(senderHex, 0);
         storageState.has_value())
     {
         // nonce in storage is uint string
         auto const nonceInStorage = u256(storageState.value().nonce);
-        // update memory first
-        co_await storage2::writeOne(m_ledgerStateNonces, sender, nonceInStorage);
+        // Monotonic cache update: only raise the cached value, never lower it (FIB-59)
+        if (auto existing = co_await storage2::readOne(m_ledgerStateNonces, sender);
+            !existing.has_value() || nonceInStorage > existing.value())
+        {
+            co_await storage2::writeOne(m_ledgerStateNonces, sender, nonceInStorage);
+        }
         if (nonceU256 < nonceInStorage ||
             nonceU256 > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
