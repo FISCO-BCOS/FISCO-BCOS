@@ -312,20 +312,24 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
 
-    // Define validation steps as a chain of validators
+    // Step 1: Check if transaction already exists in txpool
+    {
+        auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
+        if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+        {
+            // Callback has been moved to the existing transaction; return success immediately
+            // without proceeding to insert() to avoid use-after-free and double-resume (FIB-48)
+            return TransactionStatus::None;
+        }
+        if (result != TransactionStatus::None)
+        {
+            return result;
+        }
+    }
+
+    // Define remaining validation steps as a chain
     // Each step returns TransactionStatus::None if validation passes, or an error status otherwise
     const std::vector<std::function<TransactionStatus()>> validationSteps = {
-        [this, transaction, &txSubmitCallback]() {
-            // Step 1: Check if transaction already exists in txpool
-            auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
-            if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
-            {
-                // Note: if rpc is slower than p2p tx sync, we also need to accept this tx and
-                // record callback
-                return TransactionStatus::None;
-            }
-            return result;
-        },
         [this, transaction]() {
             // Step 2: Verify transaction signature (if enabled)
             return m_config->checkTransactionSignature() ?
