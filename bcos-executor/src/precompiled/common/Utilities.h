@@ -98,9 +98,19 @@ inline bool isDynamicPrecompiledAccountCode(const std::string_view& _code)
     return getDynamicPrecompiledCodeString(ACCOUNT_ADDRESS, "") == _code;
 }
 
-inline std::string trimHexPrefix(const std::string& _hex)
+inline std::string trimHexPrefix(std::string _hex)
 {
-    if (_hex.size() >= 2 && _hex[1] == 'x' && _hex[0] == '0')
+    if (_hex.size() >= 2 && (_hex.starts_with("0x") || _hex.starts_with("0X")))
+    {
+        _hex.erase(0, 2);
+    }
+    // NRVO
+    return _hex;
+}
+
+inline std::string_view trimHexPrefix(const std::string_view _hex)
+{
+    if (_hex.size() >= 2 && (_hex.starts_with("0x") || _hex.starts_with("0X")))
     {
         return _hex.substr(2);
     }
