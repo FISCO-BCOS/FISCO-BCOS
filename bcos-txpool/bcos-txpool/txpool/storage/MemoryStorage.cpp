@@ -728,8 +728,10 @@ void MemoryStorage::removeInvalidTxs(std::span<bcos::protocol::Transaction::Ptr>
             });
         m_config->txPoolNonceChecker()->batchRemove(invalidNonceList);
         task::syncWait(m_config->txValidator()->web3NonceChecker()->batchRemoveMemoryNonce(
-            web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->sender(); }),
-            web3Txs | ::ranges::views::transform([](auto const& _tx) { return _tx->nonce(); })));
+            web3Txs | ::ranges::views::transform(
+                          [](auto const& _tx) { return std::string(_tx->sender()); }),
+            web3Txs | ::ranges::views::transform(
+                          [](auto const& _tx) { return std::string(_tx->nonce()); })));
 
         for (const auto& tx2Remove : txs2Remove | ::ranges::views::keys)
         {
