@@ -162,9 +162,9 @@ public:
 
     void setSystemTx(bool _systemTx) const
     {
-        m_systemTx.store(_systemTx, std::memory_order_relaxed);
+        m_systemTx.store(_systemTx, std::memory_order_release);
     }
-    bool systemTx() const { return m_systemTx.load(std::memory_order_relaxed); }
+    bool systemTx() const { return m_systemTx.load(std::memory_order_acquire); }
 
     void setBatchId(bcos::protocol::BlockNumber _batchId) const { m_batchId = _batchId; }
     bcos::protocol::BlockNumber batchId() const { return m_batchId; }
