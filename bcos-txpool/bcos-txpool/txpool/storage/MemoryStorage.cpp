@@ -326,6 +326,16 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             }
             return result;
         },
+        [this, checkPoolLimit]() {
+            // Step 1.5: Enforce pool size limit before running expensive validation steps (FIB-55)
+            if (checkPoolLimit &&
+                (m_bcosTransactions.unsealTransactions.size() +
+                    m_bcosTransactions.sealedTransactions.size()) >= m_config->poolLimit())
+            {
+                return TransactionStatus::TxPoolIsFull;
+            }
+            return TransactionStatus::None;
+        },
         [this, transaction]() {
             // Step 2: Verify transaction signature (if enabled)
             return m_config->checkTransactionSignature() ?
