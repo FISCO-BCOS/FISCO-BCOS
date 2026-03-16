@@ -29,12 +29,17 @@ namespace bcos::txpool
 {
 constexpr static uint16_t DefaultBucketSize = 256;
 struct PairHash
-
 {
+    // Hash both pair.first (sender) and pair.second (nonce) so that different nonces from the
+    // same sender land in different buckets and can be independently looked up (FIB-52).
+    // Uses std::string_view for consistent hashing regardless of the concrete string type.
     template <std::convertible_to<std::string_view> StringView>
     std::size_t operator()(const std::pair<StringView, StringView>& pair) const
     {
-        return std::hash<StringView>()(pair.first);
+        auto h1 = std::hash<std::string_view>{}(std::string_view{pair.first});
+        auto h2 = std::hash<std::string_view>{}(std::string_view{pair.second});
+        // Combine hashes with a Fibonacci multiplier to reduce correlation
+        return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL);
     }
     template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
     bool operator()(const std::pair<Lhs, Lhs>& lhs, const std::pair<Rhs, Rhs>& rhs) const
