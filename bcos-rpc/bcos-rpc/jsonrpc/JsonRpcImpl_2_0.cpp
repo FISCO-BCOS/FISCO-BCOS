@@ -500,7 +500,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             }
             else
             {
-                transaction->clearSenderAndHash();  // clear sender and hash for future verify
+                transaction->forceSender({});  // clear sender for future verify
             }
 
             if (c_fileLogLevel <= TRACE)

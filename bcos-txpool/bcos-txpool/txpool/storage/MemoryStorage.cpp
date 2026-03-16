@@ -345,7 +345,8 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             // Step 5: Check chain Id
             return task::syncWait(
                 m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
-        }};
+        },
+    };
 
     // Execute validation chain - stop at first failure
     for (const auto& step : validationSteps)

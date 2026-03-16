@@ -205,7 +205,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                                   << LOG_KV("tx", transaction ? transaction->hash().hex() : "")
                                   << LOG_KV("messageID", messageID);
             }
-            transaction->clearSenderAndHash();  // must clear sender and hash here for future verify
+            transaction->forceSender({});  // must clear sender here for future verify
             task::wait(
                 [](decltype(txpool) txpool, decltype(transaction) transaction) -> task::Task<void> {
                     try
@@ -244,7 +244,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 }
                 return;
             }
-            transaction->clearSenderAndHash();  // must clear sender and hash here for future verify
+            transaction->forceSender({});  // must clear sender here for future verify
             task::wait([](decltype(txpool) txpool, decltype(transaction) transaction,
                            decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
                 try
