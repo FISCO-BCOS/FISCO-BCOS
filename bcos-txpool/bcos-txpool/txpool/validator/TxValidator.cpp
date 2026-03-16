@@ -83,9 +83,19 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     {
         _tx.setSystemTx(true);
     }
-    m_txPoolNonceChecker->insert(std::string(_tx.nonce()));
-    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
+    // Atomic check-and-reserve: insert() returns false when the nonce already exists,
+    // replacing the separate checkNonce()+insert() pair that had a TOCTOU race (FIB-51).
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
+        if (!m_txPoolNonceChecker->insert(std::string(_tx.nonce()))) [[unlikely]]
+        {
+            return TransactionStatus::NonceCheckFail;
+        }
+    }
+    else
+    {
+        // For Web3 transactions the memory nonce store is used; the BCOS pool nonce
+        // checker is not applied.
         task::syncWait(m_web3NonceChecker->insertMemoryNonce(
             std::string(_tx.sender()), std::string(_tx.nonce())));
     }
