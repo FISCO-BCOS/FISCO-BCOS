@@ -83,12 +83,9 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     {
         _tx.setSystemTx(true);
     }
-    m_txPoolNonceChecker->insert(std::string(_tx.nonce()));
-    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
-    {
-        task::syncWait(m_web3NonceChecker->insertMemoryNonce(
-            std::string(_tx.sender()), std::string(_tx.nonce())));
-    }
+    // Nonce insertion is deferred to after all validation steps complete in
+    // verifyAndSubmitTransaction(), so that a failure in validateTransaction() or
+    // validateChainId() does not leave a leaked nonce in the pool (FIB-50)
     return TransactionStatus::None;
 }
 
