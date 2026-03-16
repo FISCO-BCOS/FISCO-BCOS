@@ -94,6 +94,16 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
 
 task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
 {
+    // Bound nonce string length to prevent unbounded string content from defeating LRU capacity
+    // accounting (which uses sizeof(pair<string,string>) and ignores dynamic string size) (FIB-57)
+    constexpr static size_t MAX_NONCE_STRING_LENGTH = 78;  // max decimal digits of u256
+    if (nonce.length() > MAX_NONCE_STRING_LENGTH) [[unlikely]]
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("Web3Nonce: reject oversized nonce string")
+                            << LOG_KV("sender", toHex(sender))
+                            << LOG_KV("nonceLen", nonce.length());
+        co_return;
+    }
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: write memory nonces")
