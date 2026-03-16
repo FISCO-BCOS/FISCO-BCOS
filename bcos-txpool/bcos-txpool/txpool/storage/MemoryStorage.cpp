@@ -205,9 +205,11 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto hash = transaction.hash();
-    if (TxsMap::ReadAccessor accessor;
-        m_bcosTransactions.unsealTransactions.find<TxsMap::ReadAccessor>(accessor, hash) ||
-        m_bcosTransactions.sealedTransactions.find<TxsMap::ReadAccessor>(accessor, hash))
+    // Use WriteAccessor so the find+setSubmitCallback is done under a write lock, preventing
+    // two concurrent callers from both seeing !submitCallback() and both trying to set it (FIB-54)
+    if (TxsMap::WriteAccessor accessor;
+        m_bcosTransactions.unsealTransactions.find(accessor, hash) ||
+        m_bcosTransactions.sealedTransactions.find(accessor, hash))
     {
         if (txSubmitCallback && !accessor.value()->submitCallback())
         {
@@ -715,7 +717,9 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         return true;
     };
 
-    for (auto& accessor : m_bcosTransactions.unsealTransactions.rangeByKey<TxsMap::ReadAccessor>(
+    // Use WriteAccessor so that mutations inside handleTx (setSealed, setBatchId, setBatchHash)
+    // are performed under an exclusive bucket lock (FIB-54)
+    for (auto& accessor : m_bcosTransactions.unsealTransactions.rangeByKey<TxsMap::WriteAccessor>(
              m_knownLatestSealedTxHash))
     {
         const auto& tx = accessor.value();
@@ -876,8 +880,11 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
     TxsMap* toMap = _sealFlag ? std::addressof(m_bcosTransactions.sealedTransactions) :
                                 std::addressof(m_bcosTransactions.unsealTransactions);
     std::vector<Transaction::Ptr> moveTransactions(_txsHashList.size());
-    fromMap->traverse<TxsMap::ReadAccessor, true>(
-        _txsHashList, [&](TxsMap::ReadAccessor& accessor, const auto& range, auto& bucket) {
+    // Use WriteAccessor so that mutations to transaction fields (setSealed, setBatchId,
+    // setBatchHash) are performed under an exclusive bucket lock, preventing data races
+    // with concurrent readers of the same bucket (FIB-54)
+    fromMap->traverse<TxsMap::WriteAccessor, true>(
+        _txsHashList, [&](TxsMap::WriteAccessor& accessor, const auto& range, auto& bucket) {
             size_t localNotFound = 0;
             size_t localReSealed = 0;
             size_t localSuccess = 0;
