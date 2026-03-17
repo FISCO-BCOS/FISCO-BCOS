@@ -503,5 +503,49 @@ BOOST_AUTO_TEST_CASE(get_empty_input_returns_empty)
     BOOST_CHECK(results.empty());
 }
 
+BOOST_AUTO_TEST_CASE(FIB63_RemoveByStateExcludesPendingNonce)
+{
+    // FIB-63: remove(state) used upper_bound to find the end of confirmed txs, which
+    // included the tx at nonce==accountNonce (the next pending tx), incorrectly dropping it.
+    // The fix uses lower_bound so only txs with nonce < accountNonce are erased.
+    Web3Transactions pool;
+    constexpr int kSenderBytes = 20;
+    constexpr int kSealLimit = 100;
+    std::string sender("PPPPPPPPPPPPPPPPPPPPP", kSenderBytes);
+
+    // Add nonces 0..5
+    std::vector<protocol::Transaction::Ptr> txs;
+    for (int i = 0; i <= 5; ++i)
+    {
+        txs.emplace_back(makeTx(sender, i));
+    }
+    pool.add(txs);
+
+    // Remove with accountNonce=3: nonces 0,1,2 should be erased; nonce 3 must be preserved
+    MapStateStorage removeState{};
+    setNonce(removeState, sender, "3");
+    task::syncWait(pool.remove(removeState));
+
+    // Seal starting from nonce=3: should see txs 3, 4, 5 (nonce 3 was preserved by lower_bound)
+    MapStateStorage sealState{};
+    setNonce(sealState, sender, "3");
+    std::vector<protocol::Transaction::Ptr> out;
+    task::syncWait(pool.seal(kSealLimit, sealState, std::back_inserter(out)));
+
+    BOOST_CHECK_EQUAL(out.size(), 3);
+
+    // Verify nonces 3, 4, 5 are sealed
+    std::vector<int64_t> sealedNonces;
+    sealedNonces.reserve(out.size());
+    for (auto& tx : out)
+    {
+        sealedNonces.push_back(std::stoll(std::string(tx->nonce())));
+    }
+    ::ranges::sort(sealedNonces);
+    BOOST_CHECK_EQUAL(sealedNonces[0], 3);
+    BOOST_CHECK_EQUAL(sealedNonces[1], 4);
+    BOOST_CHECK_EQUAL(sealedNonces[2], 5);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
