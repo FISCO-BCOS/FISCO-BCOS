@@ -640,4 +640,46 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FIB60_UnsealWithWrongBatchIdPreservesResealed)
+{
+    // FIB-60: When unsealing, the code moved txs to unsealTransactions regardless of whether
+    // they had been re-sealed by a newer batch. The fix adds a re-seal guard: if a tx is sealed
+    // and its batchId/batchHash doesn't match the unseal request, it is left sealed.
+    auto tx0 = makeTx("fib60_n0", false);
+    auto tx1 = makeTx("fib60_n1", false);
+    auto tx2 = makeTx("fib60_n2", false);
+    storage.insert(tx0);
+    storage.insert(tx1);
+    storage.insert(tx2);
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+
+    // Seal all 3 txs with batch 1
+    HashType batchHash1 = HashType::generateRandomFixedBytes();
+    HashList batch1All{tx0->hash(), tx1->hash(), tx2->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, true));
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    BOOST_CHECK(tx2->sealed());
+
+    // Re-seal tx0 and tx1 with batch 2 (simulates a competing proposer)
+    HashType batchHash2 = HashType::generateRandomFixedBytes();
+    HashList batch2Partial{tx0->hash(), tx1->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch2Partial, 2, batchHash2, true));
+    BOOST_CHECK_EQUAL(tx0->batchId(), 2);
+    BOOST_CHECK_EQUAL(tx1->batchId(), 2);
+
+    // Now unseal with the old batch 1 — tx0 and tx1 must be protected by the re-seal guard
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, false));
+    // tx0, tx1 were re-sealed to batch 2: must remain sealed
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    // tx2 belonged to batch 1 and was not re-sealed: must be unsealed
+    BOOST_CHECK(!tx2->sealed());
+    // All 3 txs must still be present in the pool
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+    BOOST_CHECK(storage.exists(tx0->hash()));
+    BOOST_CHECK(storage.exists(tx1->hash()));
+    BOOST_CHECK(storage.exists(tx2->hash()));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
