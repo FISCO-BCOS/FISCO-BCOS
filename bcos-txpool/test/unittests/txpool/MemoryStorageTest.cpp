@@ -26,9 +26,11 @@
 #include "bcos-utilities/DataConvertUtility.h"
 
 #include <sw/redis++/cxx_utils.h>
+#include <tbb/parallel_for.h>
 
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <atomic>
 #include <fakeit.hpp>
 
 using namespace bcos;
@@ -883,6 +885,63 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
     BOOST_CHECK_EQUAL(r2, TransactionStatus::None);
     BOOST_CHECK(realNC->exists(goodNonce));
     BOOST_CHECK_EQUAL(stor.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(FIB65_SealAtIndex0UpdatesKnownHash)
+{
+    // FIB-65: batchMarkTxs must update m_knownLatestSealedTxHash even when the sealed
+    // transaction is at index 0 of the hash list. The old code used `> 0` which skipped
+    // index 0, leaving m_knownLatestSealedTxHash stale and causing batchSealTransactions
+    // to start from the wrong position on subsequent calls.
+
+    // Provide a real BlockFactory so batchSealTransactions can create TransactionMetaData
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    config->setBlockFactory(blockFactory);
+
+    // Step 1: Insert tx1 (unsealed) and seal it via batchMarkTxs at index 0
+    auto tx1 = makeTx("fib65_nonce1", false);
+    tx1->setImportTime(static_cast<int64_t>(utcTime()));
+    storage.insert(tx1);
+    HashType batchHash = HashType::generateRandomFixedBytes();
+    HashList toSeal{tx1->hash()};  // tx1 is at index 0 — this is the bug trigger
+    bool ok = storage.batchMarkTxs(toSeal, /*batchId*/ 1, batchHash, /*sealFlag*/ true);
+    BOOST_CHECK(ok);
+    BOOST_CHECK(tx1->sealed());
+
+    // Step 2: Insert tx2 (unsealed) — should be found by the next batchSealTransactions
+    auto tx2 = makeTx("fib65_nonce2", false);
+    tx2->setImportTime(static_cast<int64_t>(utcTime()));
+    storage.insert(tx2);
+    BOOST_CHECK(!tx2->sealed());
+
+    // Step 3: batchSealTransactions must find tx2 regardless of m_knownLatestSealedTxHash
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    bool result = storage.batchSealTransactions(txsList, sysTxsList, /*limit*/ 100);
+    BOOST_CHECK(result);
+
+    // tx2 must be in the output (the fix ensures rangeByKey starts from the correct position)
+    bool foundTx2 = false;
+    for (auto& meta : txsList)
+    {
+        if (meta->hash() == tx2->hash())
+        {
+            foundTx2 = true;
+            break;
+        }
+    }
+    BOOST_CHECK(foundTx2);
+    // Total: tx1 (sealed) + tx2 (now sealed after batchSealTransactions) = 2
+    BOOST_CHECK_EQUAL(storage.size(), 2U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
