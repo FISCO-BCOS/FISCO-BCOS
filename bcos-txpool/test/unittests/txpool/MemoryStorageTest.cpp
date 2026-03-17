@@ -640,4 +640,63 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
+{
+    // FIB-50: nonce must only be inserted AFTER all validation steps pass.
+    // Old code called txPoolNonceChecker->insert() inside TxValidator::verify() — before
+    // validateTransaction(). If validateTransaction later failed (e.g. OverFlowValue), the
+    // nonce was already stuck in the pool, preventing valid re-submission.
+    // Fix: nonce insertion is deferred to verifyAndSubmitTransaction(), after all steps pass.
+
+    // Use a real TxPoolNonceChecker so we can query exists()
+    auto realNC = std::make_shared<TxPoolNonceChecker>();
+    std::shared_ptr<NonceCheckerInterface> nc = realNC;
+
+    // Fresh validator mock with all required methods set up
+    fakeit::Mock<bcos::txpool::TxValidatorInterface> localValidator;
+    fakeit::Mock<bcos::txpool::LedgerNonceChecker> localLNC;
+    auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
+    fakeit::When(Method(localValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
+    auto lnc = std::shared_ptr<bcos::txpool::LedgerNonceChecker>(&localLNC.get(), [](auto*) {});
+    fakeit::When(Method(localValidator, ledgerNonceChecker)).AlwaysReturn(lnc);
+    fakeit::When(Method(localLNC, batchInsert)).AlwaysDo([](auto, auto const&) {});
+
+    // verify() always passes — bypasses real signature verification for test simplicity
+    fakeit::When(Method(localValidator, verify)).AlwaysReturn(TransactionStatus::None);
+
+    // validateTransaction(): reject the bad nonce, accept all others
+    const std::string badNonce = "fib50_bad_nonce";
+    fakeit::When(Method(localValidator, validateTransaction))
+        .AlwaysDo([badNonce](const bcos::protocol::Transaction& tx) -> TransactionStatus {
+            return std::string(tx.nonce()) == badNonce ? TransactionStatus::OverFlowValue :
+                                                         TransactionStatus::None;
+        });
+
+    // validateChainId() always passes
+    fakeit::When(Method(localValidator, validateChainId))
+        .AlwaysDo([](const auto&, auto) -> task::Task<TransactionStatus> {
+            co_return TransactionStatus::None;
+        });
+
+    std::shared_ptr<TxValidatorInterface> v(&localValidator.get(), [](auto*) {});
+    auto cfg = std::make_shared<TxPoolConfig>(
+        v, nullptr, nullptr, nullptr, nc, 1000, 1024, /*checkSig=*/true);
+    MemoryStorage stor(cfg);
+
+    // 1. Bad tx: validateTransaction returns OverFlowValue → chain stops → nonce NOT inserted
+    auto badTx = makeTx(badNonce, false);
+    auto r1 = stor.verifyAndSubmitTransaction(badTx, nullptr, false, false);
+    BOOST_CHECK_EQUAL(r1, TransactionStatus::OverFlowValue);
+    // FIB-50 fix: nonce was not inserted because validation failed before the insertion point
+    BOOST_CHECK(!realNC->exists(badNonce));
+
+    // 2. Good tx: all steps pass → nonce IS inserted and tx enters pool
+    const std::string goodNonce = "fib50_good_nonce";
+    auto goodTx = makeTx(goodNonce, false);
+    auto r2 = stor.verifyAndSubmitTransaction(goodTx, nullptr, false, false);
+    BOOST_CHECK_EQUAL(r2, TransactionStatus::None);
+    BOOST_CHECK(realNC->exists(goodNonce));
+    BOOST_CHECK_EQUAL(stor.size(), 1U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
