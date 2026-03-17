@@ -640,4 +640,30 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
+{
+    // FIB-55: Pool limit was bypassed because the check happened after expensive validation.
+    // The fix moves the pool limit check (Step 1.5) before signature verification and nonce
+    // checks so that TxPoolIsFull is returned early.
+    constexpr size_t kLimit = 3;
+    auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
+        txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
+    MemoryStorage limitedStorage(limitedConfig);
+
+    // Insert kLimit txs directly (bypasses validator, fills the pool)
+    for (size_t i = 0; i < kLimit; ++i)
+    {
+        auto tx = makeTx("fib55_n" + std::to_string(i), false);
+        BOOST_CHECK_EQUAL(limitedStorage.insert(tx), TransactionStatus::None);
+    }
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+
+    // Submitting a new tx with checkPoolLimit=true must be rejected before reaching validation
+    auto tx4 = makeTx("fib55_n3", false);
+    auto result =
+        limitedStorage.verifyAndSubmitTransaction(tx4, nullptr, /*checkPoolLimit*/ true, false);
+    BOOST_CHECK_EQUAL(result, TransactionStatus::TxPoolIsFull);
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
