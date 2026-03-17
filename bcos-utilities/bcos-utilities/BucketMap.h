@@ -53,10 +53,23 @@ struct StringHash
 {
     using is_transparent = void;
 
+    // FIB-64: mix a per-process random seed into bucket hashes to prevent
+    // adversarial hash-collision DoS attacks (HashDoS / bucket-flooding).
+    static std::size_t seed()
+    {
+        static const std::size_t s = [] {
+            std::random_device rd;
+            std::size_t v = rd();
+            v ^= static_cast<std::size_t>(rd()) << 32U;
+            return v;
+        }();
+        return s;
+    }
+
     template <std::convertible_to<std::string_view> T>
     std::size_t operator()(const T& str) const
     {
-        return std::hash<std::decay_t<T>>{}(str);
+        return std::hash<std::string_view>{}(std::string_view{str}) ^ seed();
     }
 };
 
