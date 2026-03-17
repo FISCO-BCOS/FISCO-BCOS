@@ -640,4 +640,38 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FIB51_TxPoolNonceCheckerInsertReturnsBool)
+{
+    // FIB-51: TxPoolNonceChecker::insert() now returns bool (true = newly inserted,
+    // false = already existed). This makes the check-and-reserve atomic per bucket,
+    // eliminating the TOCTOU window between separate checkNonce() + insert() calls.
+
+    TxPoolNonceChecker checker;
+
+    // First insert: nonce is new -> must return true
+    const std::string nonce1 = "fib51_nonce_unique";
+    BOOST_CHECK(checker.insert(nonce1) == true);
+
+    // Second insert of the same nonce: already exists -> must return false
+    BOOST_CHECK(checker.insert(nonce1) == false);
+
+    // Different nonce: returns true again
+    const std::string nonce2 = "fib51_nonce_other";
+    BOOST_CHECK(checker.insert(nonce2) == true);
+
+    // Concurrent test: 50 threads all insert the same nonce; exactly one must succeed
+    const std::string raceNonce = "fib51_race_nonce";
+    std::atomic<int> successCount{0};
+    tbb::parallel_for(tbb::blocked_range<int>(0, 50), [&](const tbb::blocked_range<int>& range) {
+        for (int i = range.begin(); i < range.end(); ++i)
+        {
+            if (checker.insert(raceNonce))
+            {
+                successCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+    BOOST_CHECK_EQUAL(successCount.load(), 1);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
