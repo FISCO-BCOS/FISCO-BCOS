@@ -640,4 +640,33 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FIB48_AlreadyInTxPoolAndAcceptReturnsNone)
+{
+    // FIB-48: When a transaction without a callback is re-submitted with a callback,
+    // txpoolStorageCheck() returns AlreadyInTxPoolAndAccept and sets the callback.
+    // The old code continued through the lambda chain into insert(), causing a
+    // use-after-free and potential double-resume of the coroutine handle.
+    // The fix returns TransactionStatus::None immediately after registering the callback.
+
+    auto tx1 = makeTx("fib48_n1", false);
+    storage.insert(tx1);  // Insert without callback
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+
+    // Re-submit with a callback: tx exists, no prior callback → AlreadyInTxPoolAndAccept
+    // Fix: returns None immediately (callback accepted) without re-entering insert()
+    bool callbackCalled = false;
+    auto result = storage.verifyAndSubmitTransaction(
+        tx1,
+        [&callbackCalled](
+            Error::Ptr, protocol::TransactionSubmitResult::Ptr) { callbackCalled = true; },
+        false, false);
+    BOOST_CHECK(result == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);  // No duplicate insert
+
+    // Re-submit again: tx now has a callback → AlreadyInTxPool (rejected outright)
+    auto result2 = storage.verifyAndSubmitTransaction(tx1, nullptr, false, false);
+    BOOST_CHECK(result2 == TransactionStatus::AlreadyInTxPool);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
