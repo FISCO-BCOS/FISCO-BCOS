@@ -936,7 +936,8 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
             successCount += localSuccess;
             notFound += localNotFound;
             reSealed += localReSealed;
-            if (localKnownLatestSealedTxIndex > 0)
+            // FIB-65: sentinel is -1; index 0 is valid, so use >= 0 not > 0
+            if (localKnownLatestSealedTxIndex >= 0)
             {
                 auto current = knownLatestSealedTxIndex.load();
                 while (localKnownLatestSealedTxIndex > current &&
@@ -946,7 +947,8 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                 }
             }
         });
-    if (knownLatestSealedTxIndex > 0)
+    // FIB-65: sentinel is -1; index 0 is valid, so use >= 0 not > 0
+    if (knownLatestSealedTxIndex >= 0)
     {
         m_knownLatestSealedTxHash = _txsHashList[knownLatestSealedTxIndex];
     }
