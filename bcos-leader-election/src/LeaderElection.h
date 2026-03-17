@@ -35,8 +35,6 @@ public:
     LeaderElection(CampaignConfig::Ptr _config)
       : m_config(_config), m_etcdClient(_config->etcdClient())
     {
-        m_config->registerTriggerCampaignHandler(
-            boost::bind(&LeaderElection::campaignLeader, this));
         m_campaignTimer = std::make_shared<Timer>(m_config->leaseTTL() * 1000, "campTimer");
     }
     ~LeaderElection() override { stop(); }

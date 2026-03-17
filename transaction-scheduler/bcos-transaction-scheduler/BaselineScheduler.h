@@ -332,6 +332,14 @@ private:
             auto view = m_multiLayerStorage.get().fork();
             view.newMutable();
             auto transactions = co_await getTransactions(m_txpool.get(), *block);
+            if (::ranges::any_of(transactions, [](auto const& tx) { return tx == nullptr; }))
+            {
+                auto message = fmt::format(
+                    "Not found transactions in txpool for block: {}", blockHeader->number());
+                BASELINE_SCHEDULER_LOG(ERROR) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlocks, message),
+                    nullptr, false};
+            }
             auto ledgerConfig =
                 co_await ledger::getLedgerConfig(view, blockHeader->number(), m_blockFactory.get());
             auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),

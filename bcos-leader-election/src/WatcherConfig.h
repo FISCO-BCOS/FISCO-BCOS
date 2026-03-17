@@ -38,8 +38,11 @@ public:
 
     void start() override
     {
-        ElectionConfig::start();
+        // Fetch initial state before starting watcher to avoid race where
+        // watcher events update m_keyToLeader before fetchLeadersInfo()
+        // overwrites it with potentially stale data
         fetchLeadersInfo();
+        ElectionConfig::start();
     }
 
     std::string const& watchDir() const { return m_watchDir; }
@@ -89,6 +92,8 @@ protected:
 private:
     std::string m_watchDir;
     std::map<std::string, bcos::protocol::MemberInterface::Ptr> m_keyToLeader;
+    // track last-seen modified_index per key to reject out-of-order updates
+    std::map<std::string, int64_t> m_keyToLeaderSeq;
     mutable SharedMutex x_keyToLeader;
 
     std::vector<std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)>>
