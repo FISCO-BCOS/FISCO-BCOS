@@ -9,7 +9,11 @@
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
+#include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
+#include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
@@ -638,6 +642,54 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         auto result = storageNoSig.verifyAndSubmitTransaction(tx10, nullptr, false, false);
         // Result depends on other validation steps
     }
+}
+
+BOOST_AUTO_TEST_CASE(FIB61_NegativeImportTimeTreatedAsExpired)
+{
+    // FIB-61: A tx with negative importTime caused unsigned overflow when computing
+    // importTime + m_txsExpirationTime, potentially treating an expired tx as valid.
+    // The fix adds an explicit `importTime < 0` guard in batchSealTransactions.
+
+    // Set up a real BlockFactory required by batchSealTransactions
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    config->setBlockFactory(blockFactory);
+
+    // tx1: negative import time — must be treated as expired
+    auto tx1 = makeTx("fib61_expired", false);
+    tx1->setImportTime(-1);
+    storage.insert(tx1);
+
+    // tx2: current time — must be included in sealed output
+    auto tx2 = makeTx("fib61_valid", false);
+    tx2->setImportTime(static_cast<int64_t>(utcTime()));
+    storage.insert(tx2);
+
+    std::vector<protocol::TransactionMetaData::Ptr> txsList;
+    std::vector<protocol::TransactionMetaData::Ptr> sysTxsList;
+    storage.batchSealTransactions(txsList, sysTxsList, 100);
+
+    bool foundTx1 = false;
+    bool foundTx2 = false;
+    for (auto& meta : txsList)
+    {
+        if (meta->hash() == tx1->hash())
+            foundTx1 = true;
+        if (meta->hash() == tx2->hash())
+            foundTx2 = true;
+    }
+    // tx1 must be excluded (treated as expired due to negative importTime)
+    BOOST_CHECK(!foundTx1);
+    // tx2 must be included
+    BOOST_CHECK(foundTx2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
