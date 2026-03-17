@@ -217,5 +217,36 @@ BOOST_AUTO_TEST_CASE(testStorageLayerNonce)
     BOOST_CHECK_EQUAL(errorCount, totalSize);
 }
 
+BOOST_AUTO_TEST_CASE(FIB52_PairHashDistinguishesSecondElement)
+{
+    // FIB-52: The old PairHash only hashed pair.first (sender) and ignored pair.second
+    // (nonce), causing all (sender, *) pairs to collide in the same hash bucket. The fix
+    // combines hashes of both elements using a Fibonacci multiplier to spread nonces.
+
+    bcos::txpool::PairHash hasher;
+
+    const std::string senderA = "sender_alpha_addr_xyz";
+    const std::string senderB = "sender_beta_addr_abc";
+    const std::string nonce1 = "0x0001";
+    const std::string nonce2 = "0x0002";
+
+    // Same sender, different nonces must hash differently (old code: same hash = collision)
+    auto h1 = hasher(std::make_pair(senderA, nonce1));
+    auto h2 = hasher(std::make_pair(senderA, nonce2));
+    BOOST_CHECK_NE(h1, h2);
+
+    // Consistency: same inputs must produce the same hash
+    BOOST_CHECK_EQUAL(h1, hasher(std::make_pair(senderA, nonce1)));
+
+    // Different senders, same nonce must also hash differently
+    auto h3 = hasher(std::make_pair(senderB, nonce1));
+    BOOST_CHECK_NE(h1, h3);
+
+    // Equality predicate: (A,n1) == (A,n1) and (A,n1) != (A,n2)
+    BOOST_CHECK(hasher(std::make_pair(senderA, nonce1), std::make_pair(senderA, nonce1)));
+    BOOST_CHECK(!hasher(std::make_pair(senderA, nonce1), std::make_pair(senderA, nonce2)));
+    BOOST_CHECK(!hasher(std::make_pair(senderA, nonce1), std::make_pair(senderB, nonce1)));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
