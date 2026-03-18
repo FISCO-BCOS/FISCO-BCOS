@@ -45,10 +45,10 @@ void setCapacityForMRU(auto& storage)
 {
     if constexpr (std::is_same_v<std::remove_cvref_t<decltype(storage)>,
                       MemoryStorage<Key, storage::Entry,
-                          memory_storage::Attribute(ORDERED | CONCURRENT | LRU), std::hash<Key>>> ||
+                          memory_storage::Attribute(ORDERED | CONCURRENT | LRU)>> ||
                   std::is_same_v<std::remove_cvref_t<decltype(storage)>,
                       MemoryStorage<Key, storage::Entry,
-                          memory_storage::Attribute(CONCURRENT | LRU), std::hash<Key>>>)
+                          memory_storage::Attribute(CONCURRENT | LRU)>>)
     {
         storage.setMaxCapacity(1000 * 1000 * 1000);
     }
@@ -216,23 +216,22 @@ BENCHMARK(read<MemoryStorage<Key, storage::Entry, ORDERED | CONCURRENT>>)
     ->Arg(1000000)
     ->Threads(1)
     ->Threads(8);
-BENCHMARK(read<MemoryStorage<Key, storage::Entry,
-              memory_storage::Attribute(ORDERED | CONCURRENT | LRU), std::hash<Key>>>)
+BENCHMARK(
+    read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT | LRU)>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)
     ->Threads(8);
 BENCHMARK(read<MemoryStorage<Key, storage::Entry>>)->Arg(100000)->Arg(1000000);
-BENCHMARK(
-    read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT), std::hash<Key>>>)
+BENCHMARK(read<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(CONCURRENT)>>)
     ->Arg(100000)
     ->Arg(1000000)
     ->Threads(1)
     ->Threads(8);
 
 BENCHMARK(write<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED)>>);
-BENCHMARK(write<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT),
-              std::hash<Key>>>)
+BENCHMARK(
+    write<MemoryStorage<Key, storage::Entry, memory_storage::Attribute(ORDERED | CONCURRENT)>>)
     ->Threads(1)
     ->Threads(8);
 BENCHMARK(write<MemoryStorage<Key, storage::Entry>>);

@@ -23,6 +23,16 @@
 namespace bcos::storage2::memory_storage
 {
 
+struct TransparentHash
+{
+    using is_transparent = void;
+    template <typename T>
+    std::size_t operator()(T&& val) const
+    {
+        return std::hash<std::decay_t<T>>{}(std::forward<T>(val));
+    }
+};
+
 struct NullLock
 {
     NullLock(auto&&... /*unused*/) {}
@@ -50,7 +60,7 @@ enum Attribute : uint8_t
 };
 
 template <class KeyType, class ValueType = Empty, uint8_t attribute = Attribute::UNORDERED,
-    class HasherType = std::hash<KeyType>, class Equal = std::equal_to<>,
+    class HasherType = TransparentHash, class Equal = std::equal_to<>,
     class BucketHasherType = HasherType>
 class MemoryStorage
 {
