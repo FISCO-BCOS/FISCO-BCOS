@@ -84,7 +84,7 @@ public:
     virtual bcos::crypto::HashType hash() const = 0;
     virtual bcos::bytesConstRef extraTransactionBytes() const = 0;
 
-    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
+    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl)
     {
 #if !ONLY_CPP_SDK
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
@@ -150,11 +150,11 @@ public:
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual uint8_t type() const = 0;
 
-    virtual void forceSender(const bcos::bytes& _sender) const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) = 0;
     // Clear both sender and hash fields so that verify() will recompute them
-    virtual void clearSenderAndHash() const = 0;
+    virtual void clearSenderAndHash() = 0;
     // Recompute hash from transaction data fields
-    virtual void calculateHash(const crypto::Hash& hashImpl) const = 0;
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
     virtual bcos::bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;

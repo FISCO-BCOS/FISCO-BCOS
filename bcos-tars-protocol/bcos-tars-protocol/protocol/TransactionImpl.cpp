@@ -72,7 +72,7 @@ bcos::crypto::HashType TransactionImpl::hash() const
     return hashResult;
 }
 
-void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl) const
+void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash& hashImpl)
 {
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
@@ -164,11 +164,11 @@ std::string_view bcostars::protocol::TransactionImpl::sender() const
 {
     return {m_inner()->sender.data(), m_inner()->sender.size()};
 }
-void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender) const
+void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender)
 {
     m_inner()->sender.assign(_sender.begin(), _sender.end());
 }
-void bcostars::protocol::TransactionImpl::clearSenderAndHash() const
+void bcostars::protocol::TransactionImpl::clearSenderAndHash()
 {
     m_inner()->sender.clear();
     m_inner()->dataHash.clear();

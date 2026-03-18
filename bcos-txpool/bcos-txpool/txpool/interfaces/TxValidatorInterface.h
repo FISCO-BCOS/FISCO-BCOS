@@ -37,7 +37,7 @@ public:
     TxValidatorInterface() = default;
     virtual ~TxValidatorInterface() = default;
 
-    virtual bcos::protocol::TransactionStatus verify(const bcos::protocol::Transaction& _tx) = 0;
+    virtual bcos::protocol::TransactionStatus verify(bcos::protocol::Transaction& _tx) = 0;
     virtual bcos::protocol::TransactionStatus checkTransaction(
         const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false) = 0;
     virtual bcos::protocol::TransactionStatus checkLedgerNonceAndBlockLimit(

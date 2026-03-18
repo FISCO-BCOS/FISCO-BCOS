@@ -34,7 +34,7 @@ using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
 
-TransactionStatus TxValidator::verify(const bcos::protocol::Transaction& _tx)
+TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
 {
     if (_tx.invalid()) [[unlikely]]
     {
