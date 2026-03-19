@@ -21,6 +21,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <range/v3/view/any_view.hpp>
@@ -83,7 +84,7 @@ public:
     virtual bcos::crypto::HashType hash() const = 0;
     virtual bcos::bytesConstRef extraTransactionBytes() const = 0;
 
-    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) const
+    virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl)
     {
 #if !ONLY_CPP_SDK
         ittapi::Report report(ittapi::ITT_DOMAINS::instance().TRANSACTION,
@@ -98,17 +99,27 @@ public:
         crypto::HashType hashResult;
         if (type() == static_cast<uint8_t>(TransactionType::BCOSTransaction))
         {
+            // Always recompute hash from transaction data to prevent content-hash
+            // mismatch attacks where the embedded dataHash field is tampered
+            calculateHash(hashImpl);
             hashResult = hash();
         }
         else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
         {
-            auto bytesRef = extraTransactionBytes();
+            const auto bytesRef = extraTransactionBytes();
             hashResult = bcos::crypto::keccak256Hash(bytesRef);
         }
         // check the signatures
-        auto signature = signatureData();
-        auto ret = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
-        forceSender(ret.second);
+        const auto signature = signatureData();
+        auto [recovered, sender] = signatureImpl.recoverAddress(hashImpl, hashResult, signature);
+        if (!recovered) [[unlikely]]
+        {
+            BCOS_LOG(INFO) << LOG_DESC("recover sender address failed")
+                           << LOG_KV("hash", hashResult.abridged());
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("recover sender address from signature failed"));
+        }
+        forceSender(sender);
     }
 
     virtual int32_t version() const = 0;
@@ -139,7 +150,11 @@ public:
     virtual void setImportTime(int64_t _importTime) = 0;
     virtual uint8_t type() const = 0;
 
-    virtual void forceSender(const bcos::bytes& _sender) const = 0;
+    virtual void forceSender(const bcos::bytes& _sender) = 0;
+    // Clear both sender and hash fields so that verify() will recompute them
+    virtual void clearSenderAndHash() = 0;
+    // Recompute hash from transaction data fields
+    virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
     virtual bcos::bytesConstRef signatureData() const = 0;
 
     virtual int32_t attribute() const = 0;

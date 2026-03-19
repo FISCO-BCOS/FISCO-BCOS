@@ -492,15 +492,15 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         {
             auto isWasm = groupInfo->wasm();
             auto transactionData = decodeData(data);
-            auto transaction = nodeService->blockFactory()->transactionFactory()->createTransaction(
-                bcos::ref(transactionData), false, true);
+            auto transaction = nodeService->blockFactory()->transactionFactory()->decodeTransaction(
+                bcos::ref(transactionData));
             if (!self->m_forceSender.empty())
             {
                 transaction->forceSender(self->m_forceSender);
             }
             else
             {
-                transaction->forceSender({});  // must clear sender here for future verify
+                transaction->forceSender({});  // clear sender for future verify
             }
 
             if (c_fileLogLevel <= TRACE)
