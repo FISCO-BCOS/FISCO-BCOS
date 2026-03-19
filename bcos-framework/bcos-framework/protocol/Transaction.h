@@ -72,10 +72,58 @@ public:
     using ConstPtr = std::shared_ptr<const Transaction>;
 
     Transaction() = default;
-    Transaction(const Transaction&) = default;
-    Transaction(Transaction&&) = default;
-    Transaction& operator=(const Transaction&) = default;
-    Transaction& operator=(Transaction&&) = default;
+    Transaction(const Transaction& other)
+      : m_submitCallback(other.m_submitCallback),
+        m_batchHash(other.m_batchHash),
+        m_batchId(other.m_batchId),
+        m_synced(other.m_synced),
+        m_sealed(other.m_sealed),
+        m_invalid(other.m_invalid),
+        m_systemTx(other.m_systemTx.load(std::memory_order_acquire)),
+        m_storeToBackend(other.m_storeToBackend)
+    {}
+    Transaction(Transaction&& other) noexcept
+      : m_submitCallback(std::move(other.m_submitCallback)),
+        m_batchHash(other.m_batchHash),
+        m_batchId(other.m_batchId),
+        m_synced(other.m_synced),
+        m_sealed(other.m_sealed),
+        m_invalid(other.m_invalid),
+        m_systemTx(other.m_systemTx.load(std::memory_order_acquire)),
+        m_storeToBackend(other.m_storeToBackend)
+    {}
+    Transaction& operator=(const Transaction& other)
+    {
+        if (this != &other)
+        {
+            m_submitCallback = other.m_submitCallback;
+            m_batchHash = other.m_batchHash;
+            m_batchId = other.m_batchId;
+            m_synced = other.m_synced;
+            m_sealed = other.m_sealed;
+            m_invalid = other.m_invalid;
+            m_systemTx.store(
+                other.m_systemTx.load(std::memory_order_acquire), std::memory_order_release);
+            m_storeToBackend = other.m_storeToBackend;
+        }
+        return *this;
+    }
+    Transaction& operator=(Transaction&& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_submitCallback = std::move(other.m_submitCallback);
+            m_batchHash = other.m_batchHash;
+            m_batchId = other.m_batchId;
+            m_synced = other.m_synced;
+            m_sealed = other.m_sealed;
+            m_invalid = other.m_invalid;
+            m_systemTx.store(
+                other.m_systemTx.load(std::memory_order_acquire), std::memory_order_release);
+            m_storeToBackend = other.m_storeToBackend;
+        }
+        return *this;
+    }
     virtual ~Transaction() noexcept = default;
 
     virtual void decode(bytesConstRef _txData) = 0;
