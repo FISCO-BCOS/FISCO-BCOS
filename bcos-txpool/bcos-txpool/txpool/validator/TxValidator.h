@@ -81,6 +81,11 @@ public:
 protected:
     virtual bool isSystemTransaction(const bcos::protocol::Transaction& _tx)
     {
+        if (_tx.type() == static_cast<uint8_t>(bcos::protocol::TransactionType::BCOSTransaction))
+            [[likely]]
+        {
+            return precompiled::contains(bcos::precompiled::c_systemTxsAddress, _tx.to());
+        }
         // Normalize: strip 0x/0X prefix and convert to lowercase to match
         // c_systemTxsAddress entries (unprefixed, lowercase hex)
         auto to = precompiled::trimHexPrefix(_tx.to());
