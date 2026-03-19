@@ -119,6 +119,9 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
 
     const uint64_t value = 1234567;
     auto txNoEoughtValue = fakeInvalidateTransacton(inputStr, value);
+    auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(txNoEoughtValue);
+    txImpl->mutableInner().type =
+        static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction);
     auto resultWithStateNoEnoughBalance =
         task::syncWait(txpoolConfig->txValidator()->validateBalance(*txNoEoughtValue, ledger));
     BOOST_CHECK(resultWithStateNoEnoughBalance == TransactionStatus::InsufficientFunds);

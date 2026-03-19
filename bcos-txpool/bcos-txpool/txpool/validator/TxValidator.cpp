@@ -206,8 +206,8 @@ task::Task<TransactionStatus> TxValidator::validateBalance(
     }
     // if gasPriceConfig is not set, we can skip the balance check
     bool skipBalanceCheck = false;
-    if (auto gasPriceConfig = co_await ledger::getSystemConfig(
-            *_ledger->getStateStorage(), ledger::SYSTEM_KEY_TX_GAS_PRICE, ledger::fromStorage))
+    if (auto gasPriceConfig =
+            co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE))
     {
         if (auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
             gasPriceStr == "0x0" || gasPriceStr == "0")

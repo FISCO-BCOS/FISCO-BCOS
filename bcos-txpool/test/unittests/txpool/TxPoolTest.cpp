@@ -516,7 +516,7 @@ void txPoolInitAndSubmitWeb3TransactionTest(CryptoSuite::Ptr _cryptoSuite, bool 
     auto txpool = faker->txpool();
     auto txpoolStorage = txpool->txpoolStorage();
     auto ledger = faker->ledger();
-
+    ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
     auto const eoaKey = _cryptoSuite->signatureImpl()->generateKeyPair();
     // case3: transaction with invalid nonce(conflict with the ledger nonce)
     auto const& blockData = ledger->ledgerData();
