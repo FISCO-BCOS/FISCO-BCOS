@@ -196,8 +196,8 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 return;
             }
             auto transaction =
-                m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
-                    data, false);
+                m_protocolInitializer->blockFactory()->transactionFactory()->decodeTransaction(
+                    data);
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
                 TXPOOL_LOG(TRACE) << "Receive push transaction"
@@ -225,8 +225,8 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
         [this, txpool = _txpool](bcos::crypto::NodeIDPtr const& nodeID,
             const std::string& messageID, bytesConstRef data) {
             auto transaction =
-                m_protocolInitializer->blockFactory()->transactionFactory()->createTransaction(
-                    data, false);
+                m_protocolInitializer->blockFactory()->transactionFactory()->decodeTransaction(
+                    data);
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
                 TXPOOL_LOG(TRACE) << "Receive tree push transaction"
@@ -244,6 +244,7 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
                 }
                 return;
             }
+            transaction->forceSender({});  // must clear sender here for future verify
             task::wait([](decltype(txpool) txpool, decltype(transaction) transaction,
                            decltype(data) data, decltype(nodeID) nodeID) -> task::Task<void> {
                 try

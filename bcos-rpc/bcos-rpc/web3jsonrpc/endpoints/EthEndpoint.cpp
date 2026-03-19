@@ -28,7 +28,6 @@
 #include <bcos-executor/src/Common.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
-#include <bcos-rpc/validator/TxValidator.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/endpoints/EthMethods.h>
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
@@ -438,13 +437,6 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_tx = web3Tx.takeToTarsTransaction()]() mutable { return &m_tx; });
-    // check transaction validator
-    auto const checkStatus =
-        co_await bcos::rpc::TxValidator::checkSenderBalance(*tx, m_nodeService->scheduler());
-    if (checkStatus != protocol::TransactionStatus::None)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, bcos::toString(checkStatus)));
-    }
 
 // for web3.eth.sendRawTransaction, return the hash of raw transaction
 #if 0

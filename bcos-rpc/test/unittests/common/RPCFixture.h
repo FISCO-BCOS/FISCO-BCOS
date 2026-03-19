@@ -114,10 +114,11 @@ public:
             m_blockFactory, m_frontService, m_ledger, "group0", "chain0", 100000000,
             bcos::txpool::DEFAULT_POOL_LIMIT, true);
 
+        scheduler = std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory);
+        txPoolFactory->setScheduler(scheduler);
         txPool = txPoolFactory->createTxPool();
         txPool->init();
         txPool->start();
-        scheduler = std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory);
 
         nodeService = std::make_shared<rpc::NodeService>(
             m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory);
