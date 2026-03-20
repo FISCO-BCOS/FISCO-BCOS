@@ -139,6 +139,12 @@ bool DownloadingQueue::flushOneShard(BlocksMsgInterface::Ptr _blocksData)
                        << LOG_DESC("Decoding block buffer")
                        << LOG_KV("blocksShardSize", _blocksData->blocksSize());
     size_t blocksSize = _blocksData->blocksSize();
+    if (blocksSize == 0)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                             << LOG_DESC("Empty blocksData in BlockResponsePacket");
+        return true;
+    }
     std::vector<protocol::Block::Ptr> blocks;
     blocks.reserve(blocksSize);
     // prepare block
@@ -355,8 +361,9 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
                     {
                         BLKSYNC_LOG(INFO)
-                            << LOG_DESC("fetchAndUpdateLedgerConfig for InvalidBlocks");
-                        downloadQueue->fetchAndUpdateLedgerConfig();
+                            << LOG_DESC("applyBlock: InvalidBlocks, drop the block")
+                            << LOG_KV("number", orgBlockHeader->number())
+                            << LOG_KV("hash", orgBlockHeader->hash().abridged());
                         return;
                     }
                     if (!config->masterNode())

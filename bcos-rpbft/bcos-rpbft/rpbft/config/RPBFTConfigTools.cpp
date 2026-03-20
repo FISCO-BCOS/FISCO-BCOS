@@ -167,18 +167,23 @@ void RPBFTConfigTools::updateNotifyRotateFlag(const bcos::ledger::LedgerConfig::
 
 bool RPBFTConfigTools::shouldRotateSealers(protocol::BlockNumber _number) const
 {
-    if (!m_shouldRotateWorkingSealer && _number != -1)
+    // Always rotate if rotation is forced
+    if (m_shouldRotateWorkingSealer)
     {
-        if (m_epochBlockNum == 0)
-        {
-            return false;
-        }
-        if ((_number - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0)
-        {
-            return true;
-        }
+        return true;
     }
-    return m_shouldRotateWorkingSealer;
+    // Early exit for invalid block numbers
+    if (_number == -1)
+    {
+        return false;
+    }
+    // Cannot rotate if epoch configuration is invalid
+    if (m_epochBlockNum == 0)
+    {
+        return false;
+    }
+    // Check if current block is at rotation boundary
+    return (_number - m_epochBlockNumEnableNumber) % m_epochBlockNum == 0;
 }
 
 void RPBFTConfigTools::setShouldRotateSealers(bool _shouldRotateSealers)

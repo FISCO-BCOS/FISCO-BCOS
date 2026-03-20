@@ -515,28 +515,32 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     }
 
     // // Test 6: Step 4 - InsufficientFunds
-    // {
-    //     storageNoSig.clear();
-    //     const std::string senderHex = "0x1234567890123456789012345678901234567890";
-    //     auto tx6 = makeWeb3Tx("0x2", senderHex, false);
-    //     // Set a large value - need to cast to TransactionImpl
-    //     auto tx6Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx6);
-    //     if (tx6Impl)
-    //     {
-    //         std::string largeValue = "0x1000000000000000000000000";  // Very large value
-    //         tx6Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
-    //     }
-    //
-    //     fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey)).AlwaysDo(
-    //         [](auto, auto) -> task::Task<std::optional<std::string>> {
-    //             co_return std::nullopt;
-    //         });
-    //
-    //     auto result = storageNoSig.verifyAndSubmitTransaction(tx6, nullptr, false, false);
-    //     // Note: This depends on the balance validation logic
-    //     // If balance is 0 or insufficient, should return InsufficientFunds
-    //     // The actual result depends on how validateBalance handles empty/null storage
-    // }
+    {
+        storageNoSig.clear();
+        const std::string senderHex = "0x1234567890123456789012345678901234567890";
+        auto tx6 = makeWeb3Tx("0x2", senderHex, false);
+        // Set a large value - need to cast to TransactionImpl
+        auto tx6Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx6);
+        if (tx6Impl)
+        {
+            std::string largeValue = "0x1000000000000000000000000";  // Very large value
+            tx6Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
+        }
+
+        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
+            .AlwaysDo(
+                [](auto const&,
+                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
+                    callback(nullptr, "0x1234", 0);
+                });
+
+        fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
+            return 0;
+        });
+
+        auto result = storageNoSig.verifyAndSubmitTransaction(tx6, nullptr, false, false);
+        BOOST_CHECK(result == TransactionStatus::InsufficientFunds);
+    }
 
     // Test 7: Step 5 - InvalidChainId (for Web3Transaction)
     {
@@ -553,12 +557,19 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
 
         fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
             .AlwaysDo(
-                [](auto const&,
+                [](auto const& key,
                     std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    callback(nullptr, "321", 0);
+                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
+                    {
+                        callback(nullptr, "321", 0);
+                    }
+                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
+                    {
+                        callback(nullptr, "0", 0);
+                    }
                 });
         auto result = storageNoSig.verifyAndSubmitTransaction(tx7, nullptr, false, false);
-        // The result depends on how validateChainId is implemented
+        BOOST_CHECK(result == TransactionStatus::InvalidChainId);
     }
 
     // Test 8: Success case - All validations pass
@@ -585,6 +596,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         txValidator->setLedgerNonceChecker(ledgerNonceChecker);
 
         auto result = storageNoSig.verifyAndSubmitTransaction(tx8, nullptr, false, false);
+        BOOST_CHECK(result == TransactionStatus::None);
         // Note: Result may vary depending on balance validation and other checks
         // The test verifies the validation chain executes without crashing
     }

@@ -80,6 +80,10 @@ void MemoryStorage::stop()
 task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransaction(
     protocol::Transaction::Ptr transaction, bool waitForReceipt)
 {
+    if (!transaction) [[unlikely]]
+    {
+        co_return nullptr;
+    }
     transaction->setImportTime(utcTime());
     struct Awaitable
     {
@@ -332,16 +336,22 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             // Step 3: Validate transaction format and constraints
             return m_config->txValidator()->validateTransaction(*transaction);
         },
-        // [this, transaction]() {
-        //     // Step 4: Validate balance
-        //     return task::syncWait(
-        //         m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
-        // },
+        [this, transaction]() {
+            // Step 4: Validate balance (only for Web3 transactions)
+            if (transaction->type() ==
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                return task::syncWait(
+                    m_config->txValidator()->validateBalance(*transaction, m_config->ledger()));
+            }
+            return bcos::protocol::TransactionStatus::None;
+        },
         [this, transaction]() {
             // Step 5: Check chain Id
             return task::syncWait(
                 m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
-        }};
+        },
+    };
 
     // Execute validation chain - stop at first failure
     for (const auto& step : validationSteps)
@@ -574,19 +584,18 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().BATCH_FETCH_TXS);
     TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", txsSize)
                      << LOG_KV("limit", _txsLimit);
-    auto blockFactory = m_config->blockFactory();
-    auto recordT = utcTime();
+    const auto recordT = utcTime();
     auto startT = utcTime();
-    auto lockT = utcTime() - startT;
+    const auto lockT = utcTime() - startT;
     startT = utcTime();
-    auto currentTime = utcTime();
+    const auto currentTime = utcTime();
     size_t traverseCount = 0;
     size_t sealed = 0;
 
     std::vector<Transaction::Ptr> invalidTxs;
     auto handleTx = [&](const Transaction::Ptr& tx) {
         traverseCount++;
-        auto txHash = tx->hash();
+        const auto txHash = tx->hash();
         // the transaction has already been sealed for newer proposal
         if (tx->sealed())
         {
@@ -605,7 +614,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
         // txPool, the txs with duplicated nonce here are already-committed, but have not been
         // dropped
         // check txpool txs, no need to check txpool nonce
-        auto result = m_config->txValidator()->checkTransaction(*tx, true);
+        const auto result = m_config->txValidator()->checkTransaction(*tx, true);
         if (result == TransactionStatus::NonceCheckFail)
         {
             TXPOOL_LOG(WARNING) << "txPool nonce check failed, hash:" << tx->hash()
@@ -661,7 +670,7 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
             break;
         }
     }
-    auto invalidTxsSize = invalidTxs.size();
+    const auto invalidTxsSize = invalidTxs.size();
     removeInvalidTxs(invalidTxs);
 
     auto systemHashes =
@@ -682,10 +691,13 @@ bool MemoryStorage::batchSealTransactions(std::vector<protocol::TransactionMetaD
                     }
                 }
             });
-    m_bcosTransactions.sealedTransactions.batchInsert(::ranges::views::transform(
-        values, [](const auto& tx) { return std::make_pair(tx->hash(), tx); }));
+    auto sealedPairs =
+        values | ::ranges::views::filter([](const auto& tx) { return tx != nullptr; }) |
+        ::ranges::views::transform([](const auto& tx) { return std::make_pair(tx->hash(), tx); }) |
+        ::ranges::to<std::vector>();
+    m_bcosTransactions.sealedTransactions.batchInsert(::ranges::views::all(sealedPairs));
 
-    auto fetchTxsT = utcTime() - startT;
+    const auto fetchTxsT = utcTime() - startT;
     TXPOOL_LOG(INFO) << METRIC << LOG_DESC("batchFetchTxs success")
                      << LOG_KV("time", (utcTime() - recordT)) << LOG_KV("txsSize", _txsList.size())
                      << LOG_KV("sysTxsSize", _sysTxsList.size())

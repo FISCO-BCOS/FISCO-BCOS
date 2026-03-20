@@ -29,6 +29,14 @@ using namespace bcos::election;
 void LeaderElection::start()
 {
     auto self = std::weak_ptr<LeaderElection>(shared_from_this());
+    m_config->registerTriggerCampaignHandler([self]() -> bool {
+        auto leaderElection = self.lock();
+        if (!leaderElection)
+        {
+            return false;
+        }
+        return leaderElection->campaignLeader();
+    });
     m_campaignTimer->registerTimeoutHandler([self]() {
         auto leaderElection = self.lock();
         if (!leaderElection)
@@ -141,8 +149,17 @@ bool LeaderElection::campaignLeader()
         }
         // establish new keepAlive
         auto keepAliveTTL = m_config->leaseTTL() - 1;
-        m_keepAlive = std::make_shared<etcd::KeepAlive>(*(m_config->etcdClient()),
-            boost::bind(&LeaderElection::onKeepAliveException, this, boost::placeholders::_1),
+        auto weakSelf = std::weak_ptr<LeaderElection>(shared_from_this());
+        m_keepAlive = std::make_shared<etcd::KeepAlive>(
+            *(m_config->etcdClient()),
+            [weakSelf](std::exception_ptr e) {
+                auto self = weakSelf.lock();
+                if (!self)
+                {
+                    return;
+                }
+                self->onKeepAliveException(e);
+            },
             keepAliveTTL, leaseID);
         m_config->setLeaderToSelf(leaseID, response.value().modified_index());
         auto leader = m_config->getLeader();

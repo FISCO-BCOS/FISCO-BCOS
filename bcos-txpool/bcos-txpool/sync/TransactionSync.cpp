@@ -283,6 +283,13 @@ void TransactionSync::requestMissedTxsFromPeer(PublicPtr _generatedNodeID, HashL
                            "requestMissedTxs: verifyFetchedTxs when recv txs response exception")
                     << LOG_KV("message", boost::diagnostic_information(e))
                     << LOG_KV("_peer", _nodeID->shortHex());
+                if (_onVerifyFinished)
+                {
+                    _onVerifyFinished(
+                        BCOS_ERROR_PTR(CommonError::FetchTransactionsFailed,
+                            "verifyFetchedTxs exception: " + boost::diagnostic_information(e)),
+                        false);
+                }
             }
         });
 }
@@ -327,7 +334,7 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
     startT = utcTime();
     if (_missedTxs->size() != transactions->transactionsSize())
     {
-        SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed")
+        SYNC_LOG(INFO) << LOG_DESC("verifyFetchedTxs failed: transaction count mismatch")
                        << LOG_KV("expectedTxs", _missedTxs->size())
                        << LOG_KV("fetchedTxs", transactions->transactionsSize())
                        << LOG_KV("peer", _nodeID->shortHex())
@@ -337,13 +344,30 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                        << LOG_KV("consNum", (_verifiedProposal) ?
                                                 _verifiedProposal->blockHeader()->number() :
                                                 -1);
-        // response to verify result
         _onVerifyFinished(
             BCOS_ERROR_PTR(CommonError::TransactionsMissing, "TransactionsMissing"), false);
-        // try to import the transactions even when verify failed
-        importDownloadedTxsByBlock(transactions);
         return;
     }
+    // Verify transaction hashes match requested hashes BEFORE import
+    const auto hashMismatch = ::ranges::any_of(
+        ::ranges::views::zip(*_missedTxs, transactions->transactions()), [](auto const& pair) {
+            auto& [expectedHash, tx] = pair;
+            return expectedHash != tx->hash();
+        });
+    if (hashMismatch)
+    {
+        SYNC_LOG(WARNING) << LOG_DESC("verifyFetchedTxs: transaction hash mismatch")
+                          << LOG_KV("peer", _nodeID->shortHex())
+                          << LOG_KV(
+                                 "hash", (_verifiedProposal) ?
+                                             _verifiedProposal->blockHeader()->hash().abridged() :
+                                             "unknown");
+        _onVerifyFinished(
+            BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
+            false);
+        return;
+    }
+    // Hashes verified, now safe to import
     auto [result, txs] = importDownloadedTxsByBlock(transactions, _verifiedProposal);
     if (!result)
     {
@@ -351,17 +375,6 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                               "invalid transaction for invalid signature or nonce or blockLimit"),
             false);
         return;
-    }
-    // check the transaction hash
-    for (size_t i = 0; i < _missedTxs->size(); i++)
-    {
-        if ((*_missedTxs)[i] != (*txs)[i]->hash())
-        {
-            _onVerifyFinished(
-                BCOS_ERROR_PTR(CommonError::InconsistentTransactions, "InconsistentTransactions"),
-                false);
-            return;
-        }
     }
     _onVerifyFinished(error, true);
     SYNC_LOG(DEBUG) << METRIC << LOG_DESC("requestMissedTxs and verify success")
@@ -376,12 +389,12 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
 
 std::tuple<bool, std::shared_ptr<protocol::Transactions>>
 TransactionSync::importDownloadedTxsByBlock(
-    Block::Ptr _txsBuffer, Block::ConstPtr _verifiedProposal)
+    Block::Ptr const& _txsBuffer, Block::ConstPtr _verifiedProposal)
 {
     auto txs = std::make_shared<Transactions>();
     txs->reserve(_txsBuffer->transactionsSize());
     auto txFactory = m_config->blockFactory()->transactionFactory();
-    for (auto tx : _txsBuffer->transactions())
+    for (auto&& tx : _txsBuffer->transactions())
     {
         txs->emplace_back(txFactory->createTransaction(*tx));
     }
@@ -414,32 +427,32 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                 {
                     continue;
                 }
-                if (_verifiedProposal)
+                try
                 {
-                    tx->setBatchId(_verifiedProposal->blockHeader()->number());
-                    tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
-                }
-                if (m_config->txpoolStorage()->exists(tx->hash()))
-                {
-                    continue;
-                }
-                if (m_checkTransactionSignature)
-                {
-                    try
+                    if (_verifiedProposal)
                     {
-                        // force sender to empty for the txs verification
-                        tx->forceSender({});
+                        tx->setBatchId(_verifiedProposal->blockHeader()->number());
+                        tx->setBatchHash(_verifiedProposal->blockHeader()->hash());
+                    }
+                    if (m_config->txpoolStorage()->exists(tx->hash()))
+                    {
+                        continue;
+                    }
+                    if (m_checkTransactionSignature)
+                    {
+                        // clear sender and hash so that verify() will recompute them
+                        tx->clearSenderAndHash();
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);
                     }
-                    catch (std::exception const& e)
-                    {
-                        tx->setInvalid(true);
-                        SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
-                                          << LOG_KV("reason", boost::diagnostic_information(e))
-                                          << LOG_KV("hash", tx->hash().abridged());
-                        verifySuccess = false;
-                    }
+                }
+                catch (std::exception const& e)
+                {
+                    tx->setInvalid(true);
+                    SYNC_LOG(WARNING)
+                        << LOG_DESC("importDownloadedTxs: verify tx failed")
+                        << LOG_KV("reason", boost::diagnostic_information(e)) << LOG_KV("index", i);
+                    verifySuccess = false;
                 }
             }
         });
