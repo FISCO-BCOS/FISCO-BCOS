@@ -47,7 +47,7 @@ public:
     {}
     ~TxValidator() override = default;
 
-    bcos::protocol::TransactionStatus verify(const bcos::protocol::Transaction& _tx) override;
+    bcos::protocol::TransactionStatus verify(bcos::protocol::Transaction& _tx) override;
     bcos::protocol::TransactionStatus checkTransaction(
         const bcos::protocol::Transaction& _tx, bool onlyCheckLedgerNonce = false) override;
     bcos::protocol::TransactionStatus checkLedgerNonceAndBlockLimit(

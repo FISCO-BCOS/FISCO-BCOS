@@ -60,6 +60,10 @@ public:
         return createTransaction(_version, std::move(_to), _input, _nonce, _blockLimit,
             std::move(_chainId), std::move(_groupId), _importTime, *keyPair, std::move(_abi));
     }
+    // Decode transaction from bytes without hash computation or signature verification.
+    // Caller should call clearSenderAndHash() before submitting for verification.
+    virtual Transaction::Ptr decodeTransaction(bytesConstRef txData) = 0;
+
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
 };
 }  // namespace bcos::protocol

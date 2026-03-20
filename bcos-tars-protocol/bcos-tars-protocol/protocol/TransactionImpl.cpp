@@ -164,9 +164,14 @@ std::string_view bcostars::protocol::TransactionImpl::sender() const
 {
     return {m_inner()->sender.data(), m_inner()->sender.size()};
 }
-void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender) const
+void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender)
 {
     m_inner()->sender.assign(_sender.begin(), _sender.end());
+}
+void bcostars::protocol::TransactionImpl::clearSenderAndHash()
+{
+    m_inner()->sender.clear();
+    m_inner()->dataHash.clear();
 }
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
 {
