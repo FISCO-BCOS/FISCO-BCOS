@@ -53,7 +53,7 @@ public:
     void encode(bcos::bytes& txData) const override;
 
     bcos::crypto::HashType hash() const override;
-    void calculateHash(const bcos::crypto::Hash& hashImpl);
+    void calculateHash(const bcos::crypto::Hash& hashImpl) override;
 
     int32_t version() const override;
     std::string_view chainId() const override;
@@ -77,7 +77,8 @@ public:
     void setImportTime(int64_t _importTime) override;
     bcos::bytesConstRef signatureData() const override;
     std::string_view sender() const override;
-    void forceSender(const bcos::bytes& _sender) const override;
+    void forceSender(const bcos::bytes& _sender) override;
+    void clearSenderAndHash() override;
 
     void setSignatureData(bcos::bytes& signature);
 
