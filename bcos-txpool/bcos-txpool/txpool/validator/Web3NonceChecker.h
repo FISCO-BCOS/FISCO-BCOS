@@ -33,16 +33,25 @@ struct PairHash
     // Hash both pair.first (sender) and pair.second (nonce) so that different nonces from the
     // same sender land in different buckets and can be independently looked up (FIB-52).
     // Uses std::string_view for consistent hashing regardless of the concrete string type.
-    template <std::convertible_to<std::string_view> StringView>
-    std::size_t operator()(const std::pair<StringView, StringView>& pair) const
+    template <std::convertible_to<std::string_view> First,
+        std::convertible_to<std::string_view> Second>
+    std::size_t operator()(const std::pair<First, Second>& pair) const
     {
         auto h1 = std::hash<std::string_view>{}(std::string_view{pair.first});
         auto h2 = std::hash<std::string_view>{}(std::string_view{pair.second});
-        // Combine hashes with a Fibonacci multiplier to reduce correlation
-        return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL);
+        // Combine hashes using a Boost-style hash_combine pattern with a size_t-sized constant
+        constexpr std::size_t kGolden =
+            sizeof(std::size_t) == 8 ? static_cast<std::size_t>(0x9e3779b97f4a7c15ULL)
+                                     : static_cast<std::size_t>(0x9e3779b9UL);
+        h1 ^= h2 + kGolden + (h1 << 6) + (h1 >> 2);
+        return h1;
     }
-    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
-    bool operator()(const std::pair<Lhs, Lhs>& lhs, const std::pair<Rhs, Rhs>& rhs) const
+    template <std::convertible_to<std::string_view> LFirst,
+        std::convertible_to<std::string_view> LSecond,
+        std::convertible_to<std::string_view> RFirst,
+        std::convertible_to<std::string_view> RSecond>
+    bool operator()(
+        const std::pair<LFirst, LSecond>& lhs, const std::pair<RFirst, RSecond>& rhs) const
     {
         return std::string_view{lhs.first} == std::string_view{rhs.first} &&
                std::string_view{lhs.second} == std::string_view{rhs.second};
@@ -55,8 +64,9 @@ struct StateNonceHash
     {
         return std::hash<std::string_view>{}(std::string_view{sender});
     }
-    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
-    std::size_t operator()(const Lhs& lhs, const Rhs& rhs) const
+    template <std::convertible_to<std::string_view> Lhs,
+        std::convertible_to<std::string_view> Rhs>
+    bool operator()(const Lhs& lhs, const Rhs& rhs) const
     {
         return std::string_view{lhs} == std::string_view{rhs};
     }
