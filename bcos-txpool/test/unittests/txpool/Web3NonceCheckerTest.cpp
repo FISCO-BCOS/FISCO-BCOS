@@ -219,32 +219,27 @@ BOOST_AUTO_TEST_CASE(testStorageLayerNonce)
 
 BOOST_AUTO_TEST_CASE(FIB57_RejectOversizedNonceString)
 {
-    // FIB-57: The LRU capacity accounting used sizeof(pair<string,string>), ignoring dynamic
-    // string allocation. A nonce longer than 78 chars could silently defeat capacity limits.
-    // The fix rejects nonce strings longer than 78 chars (max decimal digits of u256) in
-    // insertMemoryNonce().
-    constexpr size_t MAX_LEN = 78;
+    // FIB-57: Oversized nonce strings must be rejected at the earliest validation point —
+    // checkWeb3Nonce() — before any u256 conversion, to prevent LRU capacity accounting bypass.
+    constexpr size_t MAX_LEN = 78;  // max decimal digits of u256
 
-    // A nonce exactly at the limit (78 chars) should be accepted
-    const std::string senderOk = Address::generateRandomFixedBytes().toRawString();
+    // A nonce exactly at the limit (78 chars) should pass checkWeb3Nonce
+    const std::string sender78 = Address::generateRandomFixedBytes().toRawString();
     const std::string nonce78(MAX_LEN, '1');
-    task::syncWait(checker.insertMemoryNonce(senderOk, nonce78));
-    auto pending78 = task::syncWait(checker.getPendingNonce(toHex(senderOk)));
-    BOOST_CHECK(pending78.has_value());
+    auto status78 = task::syncWait(checker.checkWeb3Nonce(sender78, nonce78));
+    BOOST_CHECK_EQUAL(status78, TransactionStatus::None);
 
-    // A nonce one byte over the limit (79 chars) should be silently dropped
-    const std::string senderOver = Address::generateRandomFixedBytes().toRawString();
+    // A nonce one byte over the limit (79 chars) must be rejected by checkWeb3Nonce
+    const std::string sender79 = Address::generateRandomFixedBytes().toRawString();
     const std::string nonce79(MAX_LEN + 1, '1');
-    task::syncWait(checker.insertMemoryNonce(senderOver, nonce79));
-    auto pending79 = task::syncWait(checker.getPendingNonce(toHex(senderOver)));
-    BOOST_CHECK(!pending79.has_value());
+    auto status79 = task::syncWait(checker.checkWeb3Nonce(sender79, nonce79));
+    BOOST_CHECK_EQUAL(status79, TransactionStatus::NonceCheckFail);
 
-    // A very long nonce (1000 chars) should also be silently dropped
+    // A very long nonce (1000 chars) must also be rejected by checkWeb3Nonce
     const std::string senderLong = Address::generateRandomFixedBytes().toRawString();
     const std::string nonce1000(1000, '9');
-    task::syncWait(checker.insertMemoryNonce(senderLong, nonce1000));
-    auto pendingLong = task::syncWait(checker.getPendingNonce(toHex(senderLong)));
-    BOOST_CHECK(!pendingLong.has_value());
+    auto statusLong = task::syncWait(checker.checkWeb3Nonce(senderLong, nonce1000));
+    BOOST_CHECK_EQUAL(statusLong, TransactionStatus::NonceCheckFail);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
