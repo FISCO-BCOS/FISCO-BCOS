@@ -205,19 +205,44 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
     const Transaction& transaction, protocol::TxSubmitCallback& txSubmitCallback)
 {
     auto hash = transaction.hash();
-    // Use WriteAccessor so the find+setSubmitCallback is done under a write lock, preventing
-    // two concurrent callers from both seeing !submitCallback() and both trying to set it (FIB-54)
-    if (TxsMap::WriteAccessor accessor;
-        m_bcosTransactions.unsealTransactions.find(accessor, hash) ||
-        m_bcosTransactions.sealedTransactions.find(accessor, hash))
-    {
-        if (txSubmitCallback && !accessor.value()->submitCallback())
+
+    // Per-map double-checked lookup: ReadAccessor first, WriteAccessor only when mutation is
+    // needed. Each map gets its own accessor so the correct bucket lock is held (FIB-54).
+    auto checkMap = [&](auto& txMap) -> std::optional<TransactionStatus> {
+        // Fast path: shared (read) lock
         {
-            accessor.value()->setSubmitCallback(std::move(txSubmitCallback));
+            TxsMap::ReadAccessor readAccessor;
+            if (!txMap.find(readAccessor, hash))
+            {
+                return std::nullopt;  // not in this map
+            }
+            if (!txSubmitCallback || readAccessor.value()->submitCallback())
+            {
+                return TransactionStatus::AlreadyInTxPool;  // no mutation needed
+            }
+        }  // read lock released
+
+        // Slow path: exclusive (write) lock — only reached when callback needs to be set
+        TxsMap::WriteAccessor writeAccessor;
+        if (!txMap.find(writeAccessor, hash))
+        {
+            return std::nullopt;  // tx removed between read and write
+        }
+        if (!writeAccessor.value()->submitCallback())
+        {
+            writeAccessor.value()->setSubmitCallback(std::move(txSubmitCallback));
             return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
+        return TransactionStatus::AlreadyInTxPool;  // another thread set callback first
+    };
 
-        return TransactionStatus::AlreadyInTxPool;
+    if (const auto result = checkMap(m_bcosTransactions.unsealTransactions))
+    {
+        return *result;
+    }
+    if (const auto result = checkMap(m_bcosTransactions.sealedTransactions))
+    {
+        return *result;
     }
     return TransactionStatus::None;
 }
