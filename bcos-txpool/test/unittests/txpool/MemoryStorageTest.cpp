@@ -67,7 +67,7 @@ struct MemoryStorageFixture
                          void(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
                              std::hash<bcos::protocol::NonceType>> const&)))
             .AlwaysDo([](auto const&) {});
-        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) {});
+        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) { return true; });
         fakeit::When(Method(mockNonceChecker, remove)).AlwaysDo([](auto const&) {});
     }
 
@@ -443,7 +443,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
 
     fakeit::Mock<bcos::txpool::Web3NonceChecker> mockWeb3NonceChecker;
     fakeit::When(Method(mockWeb3NonceChecker, insertMemoryNonce))
-        .AlwaysDo([](auto, auto) -> task::Task<void> { co_return; });
+        .AlwaysDo([](auto, auto) -> task::Task<bool> { co_return true; });
 
     std::shared_ptr<bcos::txpool::Web3NonceChecker> web3NonceChecker(
         &mockWeb3NonceChecker.get(), [](bcos::txpool::Web3NonceChecker*) {});

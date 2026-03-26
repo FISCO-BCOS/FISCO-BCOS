@@ -288,6 +288,40 @@ public:
         }
     }
 
+    bool insertOne(Bucket& bucket, auto key, auto value)
+    {
+        auto const& index = bucket.container.template get<0>();
+        bool found = false;
+        auto it = [&]() {
+            if constexpr (withOrdered)
+            {
+                auto it = index.lower_bound(key);
+                found = (it != index.end() && it->key == key);
+                return it;
+            }
+            else
+            {
+                auto it = index.find(key);
+                found = (it != index.end());
+                return it;
+            }
+        }();
+
+        if (found)
+        {
+            return false;
+        }
+
+        it = bucket.container.emplace_hint(
+            it, Data{.key = Key{std::move(key)}, .value = {std::move(value)}});
+        if constexpr (withLRU)
+        {
+            bucket.capacity += getSize(it->key) + getSize(it->value);
+            updateLRUAndCheck(bucket, it);
+        }
+        return true;
+    }
+
     void removeSome(::ranges::input_range auto keys, bool ignoreLogicalDeletion)
     {
         for (auto&& key : keys)
@@ -330,6 +364,15 @@ public:
         Lock lock(bucket.mutex, true);
         storage.writeOne(bucket, std::move(key), std::move(value), false);
         return {};
+    }
+
+    friend task::AwaitableValue<bool> tag_invoke(
+        storage2::tag_t<storage2::insertIfAbsent> /*unused*/, MemoryStorage& storage, auto key,
+        auto value)
+    {
+        auto& bucket = storage.getBucket(key);
+        Lock lock(bucket.mutex, true);
+        return {storage.insertOne(bucket, std::move(key), std::move(value))};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,

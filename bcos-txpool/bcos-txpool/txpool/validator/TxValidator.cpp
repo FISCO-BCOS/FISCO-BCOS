@@ -94,10 +94,12 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     }
     else
     {
-        // For Web3 transactions the memory nonce store is used; the BCOS pool nonce
-        // checker is not applied.
-        task::syncWait(m_web3NonceChecker->insertMemoryNonce(
-            std::string(_tx.sender()), std::string(_tx.nonce())));
+        // Atomic check-and-reserve for Web3 transactions (FIB-51).
+        if (!task::syncWait(m_web3NonceChecker->insertMemoryNonce(
+                std::string(_tx.sender()), std::string(_tx.nonce())))) [[unlikely]]
+        {
+            return TransactionStatus::NonceCheckFail;
+        }
     }
     return TransactionStatus::None;
 }

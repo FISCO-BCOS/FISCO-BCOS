@@ -92,14 +92,21 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     co_return co_await checkWeb3Nonce(_tx.sender(), _tx.nonce(), onlyCheckLedgerNonce);
 }
 
-task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
+task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
 {
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: write memory nonces")
                           << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
     }
-    co_await storage2::writeOne(m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
+    // Atomic check-and-reserve: insertIfAbsent returns false when the (sender, nonce)
+    // pair already exists, eliminating the TOCTOU race between existsOne() and writeOne().
+    if (const bool inserted = co_await storage2::insertIfAbsent(
+            m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
+        !inserted)
+    {
+        co_return false;
+    }
     const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
     if (auto const uNonce = u256(nonce); !maxMemNonce.has_value() || uNonce >= maxMemNonce.value())
     {
@@ -112,6 +119,7 @@ task::Task<void> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
         }
         co_await storage2::writeOne(m_maxNonces, sender, uNonce + 1);
     }
+    co_return true;
 }
 
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)

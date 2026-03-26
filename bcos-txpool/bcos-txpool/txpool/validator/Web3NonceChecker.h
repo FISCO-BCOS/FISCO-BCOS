@@ -174,7 +174,7 @@ public:
      * @param nonce transaction nonce, number string
      * @return coroutine void
      */
-    virtual task::Task<void> insertMemoryNonce(std::string sender, std::string nonce);
+    virtual task::Task<bool> insertMemoryNonce(std::string sender, std::string nonce);
 
     virtual task::Task<std::optional<u256>> getPendingNonce(std::string_view sender);
 

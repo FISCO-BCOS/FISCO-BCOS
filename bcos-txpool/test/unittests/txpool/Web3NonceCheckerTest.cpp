@@ -23,13 +23,16 @@
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/test/unit_test.hpp>
+#include <atomic>
 #include <memory>
 #include <range/v3/all.hpp>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/transform.hpp>
 #include <ranges>
 #include <set>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -77,7 +80,7 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
     {
         auto status = task::syncWait(checker.checkWeb3Nonce(sender, nonce));
         BOOST_CHECK_EQUAL(status, TransactionStatus::None);
-        task::syncWait(checker.insertMemoryNonce(sender, nonce));
+        BOOST_CHECK(task::syncWait(checker.insertMemoryNonce(sender, nonce)));
     }
     // commit
     std::unordered_map<std::string, std::set<u256>> commitMap = {};
@@ -105,7 +108,8 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
     // new pending
     for (auto&& sender : senders)
     {
-        task::syncWait(checker.insertMemoryNonce(sender, (*commitMap[sender].rbegin() + 2).str()));
+        BOOST_CHECK(task::syncWait(
+            checker.insertMemoryNonce(sender, (*commitMap[sender].rbegin() + 2).str())));
         auto nonce = task::syncWait(checker.getPendingNonce(toHex(sender)));
         BOOST_CHECK(nonce.has_value());
         BOOST_CHECK_EQUAL(nonce.value(), *commitMap[sender].rbegin() + 2 + 1);
@@ -117,7 +121,7 @@ BOOST_AUTO_TEST_CASE(testNormalFlow)
         auto nonce = task::syncWait(checker.getPendingNonce(toHex(newSender)));
         BOOST_CHECK(!nonce.has_value());
 
-        task::syncWait(checker.insertMemoryNonce(newSender, "1"));
+        BOOST_CHECK(task::syncWait(checker.insertMemoryNonce(newSender, "1")));
         nonce = task::syncWait(checker.getPendingNonce(toHex(newSender)));
         BOOST_CHECK(nonce.has_value());
         BOOST_CHECK_EQUAL(nonce.value(), 2);
@@ -140,7 +144,7 @@ BOOST_AUTO_TEST_CASE(testInvalidNonce)
         }
         else
         {
-            task::syncWait(checker.insertMemoryNonce(sender, nonce));
+            BOOST_CHECK(task::syncWait(checker.insertMemoryNonce(sender, nonce)));
         }
     }
     BOOST_CHECK_EQUAL(dupCount, dupSize);
@@ -215,6 +219,36 @@ BOOST_AUTO_TEST_CASE(testStorageLayerNonce)
         }
     }
     BOOST_CHECK_EQUAL(errorCount, totalSize);
+}
+
+BOOST_AUTO_TEST_CASE(testAtomicInsertMemoryNonce)
+{
+    // 50 concurrent threads all try to insert the same (sender, nonce) pair.
+    // Exactly one must succeed; the rest must return false.
+    constexpr int threadCount = 50;
+    auto sender = Address::generateRandomFixedBytes().toRawString();
+    std::string nonce = "42";
+
+    std::atomic<int> successCount{0};
+    std::vector<std::thread> threads;
+    threads.reserve(threadCount);
+
+    for (int i = 0; i < threadCount; ++i)
+    {
+        threads.emplace_back([&]() {
+            bool inserted = task::syncWait(checker.insertMemoryNonce(sender, nonce));
+            if (inserted)
+            {
+                successCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
+    }
+    for (auto& t : threads)
+    {
+        t.join();
+    }
+
+    BOOST_CHECK_EQUAL(successCount.load(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
