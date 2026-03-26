@@ -49,7 +49,7 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     auto nonceU256 = u256(nonce);
     // Normalize nonce to a canonical hex string so that "1", "0x1", and "0x01" all map to the
     // same cache key, preventing duplicate-bypass via alternative nonce representations (FIB-58)
-    auto const normNonce = toQuantity(nonceU256);
+    auto const normNonce = normalizeNonceHex(nonce);
 
     // Note:
     // 在以太坊中，nonce是从0开始的，也代表着该地址发交易次数。例如：在存储中存储的是5，那么web3工具从rpc
@@ -112,7 +112,7 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
     // Normalize to canonical hex representation so cache lookups in checkWeb3Nonce() always use
     // the same key regardless of how the nonce was encoded by the caller (FIB-58)
     auto const uNonce = u256(nonce);
-    auto const normNonce = toQuantity(uNonce);
+    auto const normNonce = normalizeNonceHex(nonce);
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: write memory nonces")
