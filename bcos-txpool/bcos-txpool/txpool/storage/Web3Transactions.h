@@ -145,7 +145,7 @@ public:
                 if (data.sender() != lastSender)
                 {
                     lastSender = data.sender();
-                    senders.push_back(std::string(data.sender()));
+                    senders.emplace_back(data.sender());
                 }
             }
         }  // lock released before any co_await
@@ -170,14 +170,14 @@ public:
 
         // Phase 3: under lock, collect transactions to seal and compute nonce updates
         std::vector<std::pair<std::string, int64_t>> nonceUpdates;
-        int64_t count = 0;
         {
+            int64_t count = 0;
             std::unique_lock lock(m_mutex);
             auto& senderNonceIndex = m_transactions.get<0>();
             for (const auto& sender : senders)
             {
                 auto currentNonce = nonceMap[sender];
-                auto startNonce = currentNonce;
+                const auto startNonce = currentNonce;
                 for (auto nonceIt =
                          senderNonceIndex.lower_bound(std::make_tuple(sender, currentNonce));
                     nonceIt != senderNonceIndex.end() && nonceIt->sender() == sender &&
