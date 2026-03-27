@@ -217,7 +217,7 @@ public:
         {
             if (auto it = hashIndex.find(hash); it != hashIndex.end())
             {
-                if (auto nonceIt = senderNonceMap.find(it->sender());
+                if (auto nonceIt = senderNonceMap.find(std::string(it->sender()));
                     nonceIt != senderNonceMap.end())
                 {
                     nonceIt->second = std::max(it->nonce(), nonceIt->second);
