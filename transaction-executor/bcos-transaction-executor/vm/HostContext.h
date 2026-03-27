@@ -161,7 +161,8 @@ private:
             HOST_CONTEXT_LOG(DEBUG) << m_blockHeader.get().number() << " "
                                     << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                     << LOG_DESC("account balance not enough");
-            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
+            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{}
+                                  << errinfo_comment("Account balance is not enough!"));
         }
 
         if (!co_await m_recipientAccount.exists())
@@ -548,9 +549,13 @@ private:
         auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
+            // FIB-82: always use hex-encoded address for auth table name to match
+            // the lookup path in ContractAuthMgrPrecompiled, regardless of feature_raw_address
+            auto authTablePath =
+                std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
             co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                co_await m_recipientAccount.path(), buildLegacyExternalCaller(),
-                m_precompiledManager.get(), m_contextID, m_seq, m_ledgerConfig);
+                authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID,
+                m_seq, m_ledgerConfig);
         }
 
         if (m_web3Tx && m_level != 0)
