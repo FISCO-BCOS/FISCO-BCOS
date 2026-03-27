@@ -8,6 +8,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/txpool/Constant.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
@@ -42,8 +43,10 @@ struct MemoryStorageFixture
         txPoolNonceChecker(&mockNonceChecker.get(), [](bcos::txpool::NonceCheckerInterface*) {}),
         ledgerNonceChecker(&mockLedgerNonceChecker.get(), [](bcos::txpool::LedgerNonceChecker*) {}),
         ledger(&mockLedger.get(), [](bcos::ledger::LedgerInterface*) {}),
-        config(std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
-            txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024, /*checkSig*/ false)),
+        config(std::make_shared<TxPoolConfig>(txValidator,
+            std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), nullptr,
+            nullptr, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024,
+            /*checkSig*/ false)),
         storage(config)
     {
         fakeit::When(Method(mockValidator, checkTransaction))
