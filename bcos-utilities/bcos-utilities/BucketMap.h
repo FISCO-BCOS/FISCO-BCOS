@@ -27,6 +27,7 @@
 #include <oneapi/tbb/parallel_for.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <oneapi/tbb/rw_mutex.h>
+#include <rapidhash.h>
 #include <concepts>
 #include <optional>
 #include <random>
@@ -49,18 +50,16 @@ class EmptyType
 {
 };
 
-struct StringHash
+struct RapidHasher
 {
     using is_transparent = void;
 
-    // FIB-64: mix a per-process random seed into bucket hashes to prevent
-    // adversarial hash-collision DoS attacks (HashDoS / bucket-flooding).
-    static std::size_t seed()
+    static uint64_t globalSeed()
     {
-        static const std::size_t s = [] {
+        static const uint64_t s = [] {
             std::random_device rd;
-            std::size_t v = rd();
-            v ^= static_cast<std::size_t>(rd()) << 32U;
+            uint64_t v = rd();
+            v ^= static_cast<uint64_t>(rd()) << 32U;
             return v;
         }();
         return s;
@@ -69,14 +68,24 @@ struct StringHash
     template <std::convertible_to<std::string_view> T>
     std::size_t operator()(const T& str) const
     {
-        return std::hash<std::string_view>{}(std::string_view{str}) ^ seed();
+        auto sv = std::string_view{str};
+        return static_cast<std::size_t>(rapidhash_withSeed(sv.data(), sv.size(), globalSeed()));
+    }
+
+    template <typename T>
+        requires std::is_trivially_copyable_v<T> && (!std::convertible_to<T, std::string_view>)
+    std::size_t operator()(const T& val) const
+    {
+        return static_cast<std::size_t>(rapidhash_withSeed(&val, sizeof(val), globalSeed()));
     }
 };
 
+using StringHash = RapidHasher;
+
 template <class KeyType, class ValueType,
     class MapType = std::conditional_t<std::is_same_v<KeyType, std::string>,
-        std::unordered_map<std::string, ValueType, StringHash, std::equal_to<>>,
-        std::unordered_map<KeyType, ValueType>>>
+        std::unordered_map<std::string, ValueType, RapidHasher, std::equal_to<>>,
+        std::unordered_map<KeyType, ValueType, RapidHasher>>>
 class Bucket : public std::enable_shared_from_this<Bucket<KeyType, ValueType, MapType>>
 {
 public:
@@ -180,8 +189,11 @@ public:
     mutable SharedMutex m_mutex;
 };
 
-template <class KeyType, class ValueType, class BucketHasher = std::hash<KeyType>,
-    class BucketType = Bucket<KeyType, ValueType>>
+template <class KeyType, class ValueType, class BucketHasher = RapidHasher,
+    class BucketType = Bucket<KeyType, ValueType,
+        std::conditional_t<std::is_same_v<KeyType, std::string>,
+            std::unordered_map<std::string, ValueType, BucketHasher, std::equal_to<>>,
+            std::unordered_map<KeyType, ValueType, BucketHasher>>>>
 class BucketMap
 {
 private:
@@ -393,7 +405,7 @@ public:
     }
 };
 
-template <class KeyType, class BucketHasher = std::hash<KeyType>>
+template <class KeyType, class BucketHasher = RapidHasher>
 class BucketSet : public BucketMap<KeyType, EmptyType, BucketHasher>
 {
 public:
