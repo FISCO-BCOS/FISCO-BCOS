@@ -46,19 +46,31 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     params->data.assign(message.input_data, message.input_data + message.input_size);
     params->gas = message.gas;
     params->staticCall = (message.flags & EVMC_STATIC) != 0;
-    params->create = (message.kind == EVMC_CREATE);
+    // FIB-77: include EVMC_CREATE2 in deploy authorization check
+    params->create = (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2);
     auto result = executive->checkAuth(params);
 
     if (!result)
     {
-        auto buffer = std::unique_ptr<uint8_t>(new uint8_t[params->data.size()]);
-        std::uninitialized_copy(params->data.begin(), params->data.end(), buffer.get());
+        // FIB-81: return ABI-encoded error message instead of full transaction input
+        auto errorOutput = writeErrInfoToOutput(
+            hashImpl, params->message.empty() ? "Authorization check failed" : params->message);
+        auto buffer = std::make_unique<uint8_t[]>(errorOutput.size());
+        std::uninitialized_copy(errorOutput.begin(), errorOutput.end(), buffer.get());
+
+        // FIB-81: ensure failed auth never reports EVMC_SUCCESS
+        auto evmStatus = static_cast<evmc_status_code>(params->evmStatus);
+        if (evmStatus == EVMC_SUCCESS)
+        {
+            evmStatus = EVMC_REVERT;
+        }
+
         return std::make_optional(EVMCResult{
-            evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
+            evmc_result{.status_code = evmStatus,
                 .gas_left = params->gas,
                 .gas_refund = 0,
                 .output_data = buffer.release(),
-                .output_size = params->data.size(),
+                .output_size = errorOutput.size(),
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
                 .create_address = {},
                 .padding = {}},

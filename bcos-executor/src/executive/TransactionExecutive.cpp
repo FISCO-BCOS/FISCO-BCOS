@@ -45,11 +45,11 @@
 #include "ExecutiveFactory.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/bcos-crypto/ChecksumAddress.h"
+#include "bcos-framework/executor/ExecuteError.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-framework/executor/ExecuteError.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/algorithm/hex.hpp>
@@ -620,8 +620,9 @@ CallParameters::UniquePtr TransactionExecutive::transferBalance(
                 << LOG_DESC(
                        "transferBalance to sub success but add failed, strike a balance failed.")
                 << LOG_KV("restoreAccount", subAccount) << LOG_KV("tablename", formTableName);
-            BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
-                "transferBalance to sub success but add failed, strike a balance failed."));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledError{} << errinfo_comment(
+                    "transferBalance to sub success but add failed, strike a balance failed."));
         }
 
         return reposeAdd;
@@ -1830,7 +1831,11 @@ void TransactionExecutive::creatAuthTable(std::string_view _tableName, std::stri
                          << LOG_KV("origin", _origin) << LOG_KV("sender", _sender)
                          << LOG_KV("admin", admin);
     auto table = m_storageWrapper->createTable(authTableName, std::string(STORAGE_VALUE));
-
+    // FIB-83: if table already exists (e.g. squatting), open it and overwrite auth rows
+    if (!table)
+    {
+        table = m_storageWrapper->openTable(authTableName);
+    }
     if (table) [[likely]]
     {
         tool::BfsFileFactory::buildAuth(table.value(), admin);
