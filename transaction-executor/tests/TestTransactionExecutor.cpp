@@ -612,4 +612,71 @@ BOOST_AUTO_TEST_CASE(proxyReceive)
     }());
 }
 
+// FIB-73: unhexAddress buffer overflow prevention
+// FIB-74: unhexAddress uninitialized memory prevention
+BOOST_AUTO_TEST_CASE(unhexAddress_exactInput)
+{
+    // Exactly 40 hex chars (20 bytes) - valid input
+    auto addr = unhexAddress("0x1234567890abcdef1234567890abcdef12345678");
+    BOOST_CHECK_EQUAL(addr.bytes[0], 0x12);
+    BOOST_CHECK_EQUAL(addr.bytes[19], 0x78);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_noPrefix)
+{
+    // 40 hex chars without 0x prefix
+    auto addr = unhexAddress("1234567890abcdef1234567890abcdef12345678");
+    BOOST_CHECK_EQUAL(addr.bytes[0], 0x12);
+    BOOST_CHECK_EQUAL(addr.bytes[19], 0x78);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_emptyInput)
+{
+    auto addr = unhexAddress("");
+    evmc_address zero{};
+    BOOST_CHECK(std::memcmp(&addr, &zero, sizeof(evmc_address)) == 0);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_oversizedInput)
+{
+    // FIB-73: More than 40 hex chars should return zero address, not overflow
+    std::string oversized = "0x" + std::string(100, 'a');
+    auto addr = unhexAddress(oversized);
+    evmc_address zero{};
+    BOOST_CHECK(std::memcmp(&addr, &zero, sizeof(evmc_address)) == 0);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_undersizedInput)
+{
+    // FIB-74: Fewer than 40 hex chars should return zero address, not leave uninitialized bytes
+    auto addr = unhexAddress("0x1234");
+    evmc_address zero{};
+    BOOST_CHECK(std::memcmp(&addr, &zero, sizeof(evmc_address)) == 0);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_oddLength)
+{
+    // Odd number of hex chars (39) - invalid
+    std::string odd = "0x" + std::string(39, 'a');
+    auto addr = unhexAddress(odd);
+    evmc_address zero{};
+    BOOST_CHECK(std::memcmp(&addr, &zero, sizeof(evmc_address)) == 0);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_justPrefix)
+{
+    // Just "0x" with no hex data
+    auto addr = unhexAddress("0x");
+    evmc_address zero{};
+    BOOST_CHECK(std::memcmp(&addr, &zero, sizeof(evmc_address)) == 0);
+}
+
+BOOST_AUTO_TEST_CASE(unhexAddress_upperCasePrefix)
+{
+    // "0X" prefix should also work
+    auto addr = unhexAddress("0X1234567890abcdef1234567890abcdef12345678");
+    BOOST_CHECK_EQUAL(addr.bytes[0], 0x12);
+    BOOST_CHECK_EQUAL(addr.bytes[19], 0x78);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
