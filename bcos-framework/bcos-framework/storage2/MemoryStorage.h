@@ -220,7 +220,8 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    void writeOne(Bucket& bucket, auto key, auto value, bool ignoreLogicalDeletion)
+    bool writeOne(
+        Bucket& bucket, auto key, auto value, bool ignoreLogicalDeletion, bool insertOnly = false)
     {
         auto const& index = bucket.container.template get<0>();
         int64_t updatedCapacity = 0;
@@ -245,6 +246,10 @@ public:
 
         if (found)
         {
+            if (insertOnly)
+            {
+                return false;
+            }
             if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
             {
                 bucket.container.modify(it, [&](Data& data) mutable {
@@ -286,40 +291,7 @@ public:
             bucket.capacity += updatedCapacity;
             updateLRUAndCheck(bucket, it);
         }
-    }
-
-    bool insertOne(Bucket& bucket, auto key, auto value)
-    {
-        auto const& index = bucket.container.template get<0>();
-        bool found = false;
-        auto it = [&]() {
-            if constexpr (withOrdered)
-            {
-                auto it = index.lower_bound(key);
-                found = (it != index.end() && it->key == key);
-                return it;
-            }
-            else
-            {
-                auto it = index.find(key);
-                found = (it != index.end());
-                return it;
-            }
-        }();
-
-        if (found)
-        {
-            return false;
-        }
-
-        it = bucket.container.emplace_hint(
-            it, Data{.key = Key{std::move(key)}, .value = {std::move(value)}});
-        if constexpr (withLRU)
-        {
-            bucket.capacity += getSize(it->key) + getSize(it->value);
-            updateLRUAndCheck(bucket, it);
-        }
-        return true;
+        return !found;
     }
 
     void removeSome(::ranges::input_range auto keys, bool ignoreLogicalDeletion)
@@ -372,7 +344,8 @@ public:
     {
         auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, true);
-        return {storage.insertOne(bucket, std::move(key), std::move(value))};
+        return {
+            storage.writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
