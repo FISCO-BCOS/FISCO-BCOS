@@ -114,6 +114,14 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
             boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
         offset += 2;
 
+        // FIB-67: validate groupID length against protocol maximum
+        if (groupIDLength > MAX_GROUPID_LENGTH)
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("decode: groupID length overflow")
+                              << LOG_KV("groupIDLength", groupIDLength);
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+
         // groupID
         if (groupIDLength > 0)
         {
@@ -128,6 +136,14 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
             boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
         offset += 2;
 
+        // FIB-67: validate nodeID length against protocol maximum
+        if (nodeIDLength > MAX_NODEID_LENGTH)
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("decode: nodeID length overflow")
+                              << LOG_KV("nodeIDLength", nodeIDLength);
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+
         checkOffset(offset + nodeIDLength, length);
         m_srcNodeID.clear();
         m_srcNodeID.insert(
@@ -139,7 +155,15 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         uint8_t dstNodeCount = *((uint8_t*)&_buffer[offset]);
         offset += 1;
 
-        checkOffset(offset + dstNodeCount * nodeIDLength, length);
+        // FIB-67: validate dstNodeCount against protocol maximum
+        if (dstNodeCount > MAX_DST_NODEID_COUNT)
+        {
+            P2PMSG_LOG(ERROR) << LOG_DESC("decode: dstNodeID count overflow")
+                              << LOG_KV("dstNodeCount", dstNodeCount);
+            return MessageDecodeStatus::MESSAGE_ERROR;
+        }
+
+        checkOffset(offset + static_cast<size_t>(dstNodeCount) * nodeIDLength, length);
         // dstNodeIDs
         m_dstNodeIDs.reserve(dstNodeCount);
         for (size_t i = 0; i < dstNodeCount; i++)
@@ -304,10 +328,27 @@ int32_t P2PMessage::decodeHeader(const bytesConstRef& _buffer)
         boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)&_buffer[offset]));
     offset += 4;
 
+    // FIB-66: reject frames where length is less than header size
+    if (m_length < MESSAGE_HEADER_LENGTH)
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: length less than header")
+                            << LOG_KV("length", m_length)
+                            << LOG_KV("headerLen", MESSAGE_HEADER_LENGTH);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
+
     // version
     m_version =
         boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
     offset += 2;
+
+    // FIB-66: validate version range
+    if (m_version > static_cast<uint16_t>(bcos::protocol::ProtocolVersion::V3))
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: unsupported version")
+                            << LOG_KV("version", m_version);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
 
     // packetType
     m_packetType =
@@ -334,8 +375,12 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     int32_t offset = decodeHeader(_buffer);
-    if (offset <= 0)
-    {  // The packet was not fully received by the network.
+    if (offset < 0)
+    {
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
+    if (offset == 0)
+    {
         return MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
 
@@ -361,8 +406,13 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
         offset += optionsOffset;
     }
 
-    uint32_t length = _buffer.size();
-    checkOffset(offset, m_length);
+    // FIB-66: verify offset does not exceed m_length to prevent unsigned underflow
+    if (static_cast<uint32_t>(offset) > m_length)
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: offset exceeds length")
+                            << LOG_KV("offset", offset) << LOG_KV("length", m_length);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // raw data cropped from buffer, maybe be compressed or not
 

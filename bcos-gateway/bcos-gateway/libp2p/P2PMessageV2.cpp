@@ -64,6 +64,11 @@ bool P2PMessageV2::encodeHeaderImpl(bytes& _buffer) const
 int32_t P2PMessageV2::decodeHeader(const bytesConstRef& _buffer)
 {
     int32_t offset = P2PMessage::decodeHeader(_buffer);
+    // FIB-66: propagate error from base decodeHeader
+    if (offset < 0)
+    {
+        return offset;
+    }
     if (m_version <= bcos::protocol::ProtocolVersion::V0)
     {
         return offset;
