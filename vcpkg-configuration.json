@@ -18,6 +18,7 @@
   ],
   "overlay-ports": [
     "./ports/boost-context",
-    "./ports/tarscpp"
+    "./ports/tarscpp",
+    "./ports/rapidhash"
   ]
 }
