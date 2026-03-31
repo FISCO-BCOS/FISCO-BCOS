@@ -37,18 +37,13 @@ struct PairHash
         std::convertible_to<std::string_view> Second>
     std::size_t operator()(const std::pair<First, Second>& pair) const
     {
-        auto h1 = std::hash<std::string_view>{}(std::string_view{pair.first});
-        auto h2 = std::hash<std::string_view>{}(std::string_view{pair.second});
-        // Combine hashes using a Boost-style hash_combine pattern with a size_t-sized constant
-        constexpr std::size_t kGolden =
-            sizeof(std::size_t) == 8 ? static_cast<std::size_t>(0x9e3779b97f4a7c15ULL)
-                                     : static_cast<std::size_t>(0x9e3779b9UL);
-        h1 ^= h2 + kGolden + (h1 << 6) + (h1 >> 2);
-        return h1;
+        std::size_t seed = 0;
+        boost::hash_combine(seed, std::string_view{pair.first});
+        boost::hash_combine(seed, std::string_view{pair.second});
+        return seed;
     }
     template <std::convertible_to<std::string_view> LFirst,
-        std::convertible_to<std::string_view> LSecond,
-        std::convertible_to<std::string_view> RFirst,
+        std::convertible_to<std::string_view> LSecond, std::convertible_to<std::string_view> RFirst,
         std::convertible_to<std::string_view> RSecond>
     bool operator()(
         const std::pair<LFirst, LSecond>& lhs, const std::pair<RFirst, RSecond>& rhs) const
@@ -64,8 +59,7 @@ struct StateNonceHash
     {
         return std::hash<std::string_view>{}(std::string_view{sender});
     }
-    template <std::convertible_to<std::string_view> Lhs,
-        std::convertible_to<std::string_view> Rhs>
+    template <std::convertible_to<std::string_view> Lhs, std::convertible_to<std::string_view> Rhs>
     bool operator()(const Lhs& lhs, const Rhs& rhs) const
     {
         return std::string_view{lhs} == std::string_view{rhs};
