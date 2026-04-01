@@ -36,7 +36,7 @@ public:
         std::hash<bcos::protocol::NonceType>> const& _nonceList) override;
     bool exists(bcos::protocol::NonceType const& _nonce) override;
 
-    void insert(bcos::protocol::NonceType const& _nonce) override;
+    bool insert(bcos::protocol::NonceType const& _nonce) override;
 
 protected:
     void remove(bcos::protocol::NonceType const& _nonce) override;

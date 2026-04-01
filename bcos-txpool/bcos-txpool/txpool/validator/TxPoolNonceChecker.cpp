@@ -40,10 +40,13 @@ TransactionStatus TxPoolNonceChecker::checkNonce(const bcos::protocol::Transacti
     return TransactionStatus::None;
 }
 
-void TxPoolNonceChecker::insert(NonceType const& _nonce)
+bool TxPoolNonceChecker::insert(NonceType const& _nonce)
 {
     NonceSet::WriteAccessor accessor;
-    m_nonces.insert(accessor, _nonce);
+    // BucketSet::insert returns true if newly inserted, false if already existed.
+    // This makes check-and-reserve atomic: callers that get false must treat it as
+    // NonceCheckFail without an intermediate checkNonce() call (FIB-51).
+    return m_nonces.insert(accessor, _nonce);
 }
 
 void TxPoolNonceChecker::batchInsert(BlockNumber /*_batchId*/, NonceListPtr const& _nonceList)

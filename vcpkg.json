@@ -51,6 +51,7 @@
     },
     "wedprcrypto",
     "range-v3",
+    "rapidhash",
     "hsm-crypto",
     {
       "name": "tarscpp",

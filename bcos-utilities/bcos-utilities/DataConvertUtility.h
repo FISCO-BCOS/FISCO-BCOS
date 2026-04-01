@@ -489,4 +489,5 @@ std::string toQuantity(BigNumber auto number)
     auto bytes = toCompactBigEndian(number);
     return toQuantity(bytes);
 }
+
 }  // namespace bcos

@@ -491,6 +491,43 @@ BOOST_AUTO_TEST_CASE(bucketSetBatchInsertReturn)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FIB64_StringHashRandomSeedConsistency)
+{
+    // FIB-64: The bucket hash function was deterministic (no seed), allowing an attacker
+    // to craft keys that all land in the same bucket (HashDoS). The fix mixes a per-process
+    // random seed (from std::random_device) into StringHash to prevent bucket flooding.
+    bcos::StringHash hasher;
+
+    // Seed must be non-zero (probability 1/2^64 of false failure)
+    BOOST_CHECK_NE(bcos::StringHash::globalSeed(), static_cast<std::size_t>(0));
+
+    // Intra-process consistency: same key must produce the same hash value
+    BOOST_CHECK_EQUAL(hasher("key_alpha"), hasher("key_alpha"));
+    BOOST_CHECK_EQUAL(hasher(std::string("key_beta")), hasher(std::string("key_beta")));
+
+    // Different keys must (almost certainly) produce different hashes
+    BOOST_CHECK_NE(hasher("key1"), hasher("key2"));
+    BOOST_CHECK_NE(hasher("key1"), hasher("key1 "));
+
+    // Functional correctness: BucketMap with StringHash must store and retrieve all items
+    using BKMap = bcos::BucketMap<std::string, int>;
+    using WriteAccessor = BKMap::WriteAccessor;
+    BKMap m(16);
+    for (int i = 0; i < 100; ++i)
+    {
+        WriteAccessor acc;
+        m.insert(acc, {std::to_string(i), i});
+    }
+    BOOST_CHECK_EQUAL(m.size(), 100);
+    for (int i = 0; i < 100; ++i)
+    {
+        BOOST_CHECK(m.contains(std::to_string(i)));
+        WriteAccessor acc;
+        BOOST_CHECK(m.find<WriteAccessor>(acc, std::to_string(i)));
+        BOOST_CHECK_EQUAL(acc.value(), i);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

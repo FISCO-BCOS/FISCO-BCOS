@@ -74,7 +74,7 @@ struct MemoryStorageFixture
                          void(tbb::concurrent_unordered_set<bcos::protocol::NonceType,
                              std::hash<bcos::protocol::NonceType>> const&)))
             .AlwaysDo([](auto const&) {});
-        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) {});
+        fakeit::When(Method(mockNonceChecker, insert)).AlwaysDo([](auto const&) { return true; });
         fakeit::When(Method(mockNonceChecker, remove)).AlwaysDo([](auto const&) {});
     }
 
@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
 
     fakeit::Mock<bcos::txpool::Web3NonceChecker> mockWeb3NonceChecker;
     fakeit::When(Method(mockWeb3NonceChecker, insertMemoryNonce))
-        .AlwaysDo([](auto, auto) -> task::Task<void> { co_return; });
+        .AlwaysDo([](auto, auto) -> task::Task<bool> { co_return true; });
 
     std::shared_ptr<bcos::txpool::Web3NonceChecker> web3NonceChecker(
         &mockWeb3NonceChecker.get(), [](bcos::txpool::Web3NonceChecker*) {});
@@ -693,6 +693,66 @@ BOOST_AUTO_TEST_CASE(FIB61_NegativeImportTimeTreatedAsExpired)
     BOOST_CHECK(!foundTx1);
     // tx2 must be included
     BOOST_CHECK(foundTx2);
+}
+
+BOOST_AUTO_TEST_CASE(FIB51_TxPoolNonceCheckerInsertReturnsBool)
+{
+    // FIB-51: TxPoolNonceChecker::insert() now returns bool (true = newly inserted,
+    // false = already existed). This makes the check-and-reserve atomic per bucket,
+    // eliminating the TOCTOU window between separate checkNonce() + insert() calls.
+
+    TxPoolNonceChecker checker;
+
+    // First insert: nonce is new -> must return true
+    const std::string nonce1 = "fib51_nonce_unique";
+    BOOST_CHECK(checker.insert(nonce1) == true);
+
+    // Second insert of the same nonce: already exists -> must return false
+    BOOST_CHECK(checker.insert(nonce1) == false);
+
+    // Different nonce: returns true again
+    const std::string nonce2 = "fib51_nonce_other";
+    BOOST_CHECK(checker.insert(nonce2) == true);
+
+    // Concurrent test: 50 threads all insert the same nonce; exactly one must succeed
+    const std::string raceNonce = "fib51_race_nonce";
+    std::atomic<int> successCount{0};
+    tbb::parallel_for(tbb::blocked_range<int>(0, 50), [&](const tbb::blocked_range<int>& range) {
+        for (int i = range.begin(); i < range.end(); ++i)
+        {
+            if (checker.insert(raceNonce))
+            {
+                successCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+    BOOST_CHECK_EQUAL(successCount.load(), 1);
+}
+
+BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
+{
+    // FIB-55: Pool limit was bypassed because the check happened after expensive validation.
+    // The fix moves the pool limit check (Step 1.5) before signature verification and nonce
+    // checks so that TxPoolIsFull is returned early.
+    constexpr size_t kLimit = 3;
+    auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
+        txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
+    MemoryStorage limitedStorage(limitedConfig);
+
+    // Insert kLimit txs directly (bypasses validator, fills the pool)
+    for (size_t i = 0; i < kLimit; ++i)
+    {
+        auto tx = makeTx("fib55_n" + std::to_string(i), false);
+        BOOST_CHECK_EQUAL(limitedStorage.insert(tx), TransactionStatus::None);
+    }
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+
+    // Submitting a new tx with checkPoolLimit=true must be rejected before reaching validation
+    auto tx4 = makeTx("fib55_n3", false);
+    auto result =
+        limitedStorage.verifyAndSubmitTransaction(tx4, nullptr, /*checkPoolLimit*/ true, false);
+    BOOST_CHECK_EQUAL(result, TransactionStatus::TxPoolIsFull);
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
 }
 
 BOOST_AUTO_TEST_CASE(FIB60_UnsealWithWrongBatchIdPreservesResealed)
