@@ -312,7 +312,22 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().SUBMIT_TX);
 
-    // Define validation steps as a chain of validators
+    // Step 1: Check if transaction already exists in txpool
+    {
+        auto result = txpoolStorageCheck(*transaction, txSubmitCallback);
+        if (result == TransactionStatus::AlreadyInTxPoolAndAccept) [[unlikely]]
+        {
+            // Callback has been moved to the existing transaction; return success immediately
+            // without proceeding to insert() to avoid use-after-free and double-resume (FIB-48)
+            return TransactionStatus::None;
+        }
+        if (result != TransactionStatus::None)
+        {
+            return result;
+        }
+    }
+
+    // Define remaining validation steps as a chain
     // Each step returns TransactionStatus::None if validation passes, or an error status otherwise
     const std::vector<std::function<TransactionStatus()>> validationSteps = {
         [this, transaction, &txSubmitCallback]() {
@@ -325,6 +340,16 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
                 return TransactionStatus::None;
             }
             return result;
+        },
+        [this, checkPoolLimit]() {
+            // Step 1.5: Enforce pool size limit before running expensive validation steps (FIB-55)
+            if (checkPoolLimit &&
+                (m_bcosTransactions.unsealTransactions.size() +
+                    m_bcosTransactions.sealedTransactions.size()) >= m_config->poolLimit())
+            {
+                return TransactionStatus::TxPoolIsFull;
+            }
+            return TransactionStatus::None;
         },
         [this, transaction]() {
             // Step 2: Verify transaction signature (if enabled)
@@ -362,7 +387,20 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
     }
 
-    // All validations passed, prepare for insertion
+    // All validations passed — now insert nonce atomically before inserting the transaction.
+    // Nonce insertion is done here (not inside verify()) so that failures in validateTransaction()
+    // or validateChainId() cannot leave a stale nonce in the pool (FIB-50).
+    if (m_config->checkTransactionSignature())
+    {
+        m_config->txPoolNonceChecker()->insert(std::string(transaction->nonce()));
+        if (transaction->type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
+        {
+            task::syncWait(m_config->txValidator()->web3NonceChecker()->insertMemoryNonce(
+                std::string(transaction->sender()), std::string(transaction->nonce())));
+        }
+    }
+
+    // Prepare for insertion
     auto const txImportTime = transaction->importTime();
     if (txSubmitCallback)
     {
@@ -831,10 +869,13 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
             {
                 auto hash = _txsHashList[index];
                 protocol::Transaction::Ptr transaction;
+                // Track whether the tx came from fromMap; only record for movement if it passes
+                // the re-seal guard below — prevents stranding re-sealed txs (FIB-60)
+                bool foundInFromMap = false;
                 if (bucket.find(accessor, hash))
                 {
                     transaction = accessor.value();
-                    moveTransactions[index] = transaction;
+                    foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
                     toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
@@ -853,6 +894,12 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                 {
                     ++localReSealed;
                     continue;
+                }
+
+                // Assign to moveTransactions only after the re-seal guard passes
+                if (foundInFromMap)
+                {
+                    moveTransactions[index] = transaction;
                 }
 
                 transaction->setSealed(_sealFlag);
