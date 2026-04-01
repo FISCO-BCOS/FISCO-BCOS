@@ -71,3 +71,8 @@ tools/BcosAirBuilder/*
 
 test/*
 /CMakeSettings.json
+
+# Claude Code
+CLAUDE.local.md
+.claude/worktrees
+.claude/agents

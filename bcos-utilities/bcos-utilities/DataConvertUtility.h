@@ -490,27 +490,4 @@ std::string toQuantity(BigNumber auto number)
     return toQuantity(bytes);
 }
 
-/// Normalize a nonce string to canonical Ethereum QUANTITY form ("0x"-prefixed, lowercase,
-/// no leading zeros). Fast-path for hex input avoids bignum round-trip. (FIB-58)
-inline std::string normalizeNonceHex(std::string_view nonce)
-{
-    // Hex path: "0x01Af" → "0x1af"
-    if (nonce.size() >= 2 && (nonce.starts_with("0x") || nonce.starts_with("0X")))
-    {
-        const auto hex = nonce.substr(2);
-        const auto pos = hex.find_first_not_of('0');
-        if (pos == std::string_view::npos)
-        {
-            return "0x0";
-        }
-        std::string result = "0x";
-        const auto trimmed = hex.substr(pos);
-        result.reserve(2 + trimmed.size());
-        std::ranges::transform(trimmed, std::back_inserter(result),
-            [](auto cha) { return static_cast<char>(std::tolower(cha)); });
-        return result;
-    }
-    // Decimal fallback: "500" → "0x1f4"
-    return toQuantity(u256(nonce));
-}
 }  // namespace bcos
