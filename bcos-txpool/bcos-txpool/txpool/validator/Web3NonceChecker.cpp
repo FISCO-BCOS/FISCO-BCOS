@@ -114,7 +114,7 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
     // Atomic check-and-reserve: insertIfAbsent returns false when the (sender, nonce)
     // pair already exists, eliminating the TOCTOU race between existsOne() and writeOne().
     if (const bool inserted = co_await storage2::insertIfAbsent(
-            m_memoryNonces, std::make_pair(sender, nonce), std::monostate{});
+            m_memoryNonces, std::make_pair(sender, uNonce), std::monostate{});
         !inserted)
     {
         co_return false;
