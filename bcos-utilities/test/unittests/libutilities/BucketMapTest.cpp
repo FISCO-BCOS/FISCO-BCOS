@@ -499,7 +499,7 @@ BOOST_AUTO_TEST_CASE(FIB64_StringHashRandomSeedConsistency)
     bcos::StringHash hasher;
 
     // Seed must be non-zero (probability 1/2^64 of false failure)
-    BOOST_CHECK_NE(bcos::StringHash::seed(), static_cast<std::size_t>(0));
+    BOOST_CHECK_NE(bcos::StringHash::globalSeed(), static_cast<std::size_t>(0));
 
     // Intra-process consistency: same key must produce the same hash value
     BOOST_CHECK_EQUAL(hasher("key_alpha"), hasher("key_alpha"));
