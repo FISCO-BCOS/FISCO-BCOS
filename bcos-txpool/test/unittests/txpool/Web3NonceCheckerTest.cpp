@@ -307,5 +307,37 @@ BOOST_AUTO_TEST_CASE(FIB57_RejectOversizedNonceString)
     BOOST_CHECK_EQUAL(statusLong, TransactionStatus::NonceCheckFail);
 }
 
+BOOST_AUTO_TEST_CASE(FIB58_NonceNormalizationDetectsDuplicates)
+{
+    // FIB-58: insertMemoryNonce and checkWeb3Nonce used different nonce representations
+    // (raw string vs u256), so "0x1", "0x01", and "1" were treated as distinct nonces.
+    // The fix normalizes via toQuantity(u256(nonce)) in both paths so all forms map to the
+    // same canonical key.
+    const std::string sender1 = Address::generateRandomFixedBytes().toRawString();
+
+    // Insert nonce "0x1" (hex notation)
+    task::syncWait(checker.insertMemoryNonce(sender1, "0x1"));
+
+    // "0x1", "0x01", and "1" should all be detected as duplicates
+    BOOST_CHECK_EQUAL(
+        task::syncWait(checker.checkWeb3Nonce(sender1, "0x1")), TransactionStatus::NonceCheckFail);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(checker.checkWeb3Nonce(sender1, "0x01")), TransactionStatus::NonceCheckFail);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(checker.checkWeb3Nonce(sender1, "1")), TransactionStatus::NonceCheckFail);
+
+    // Different nonce should still pass
+    BOOST_CHECK_EQUAL(
+        task::syncWait(checker.checkWeb3Nonce(sender1, "0x2")), TransactionStatus::None);
+
+    // Decimal 16 == hex 0x10: both should collide after inserting "0x10"
+    const std::string sender2 = Address::generateRandomFixedBytes().toRawString();
+    task::syncWait(checker.insertMemoryNonce(sender2, "0x10"));
+    BOOST_CHECK_EQUAL(
+        task::syncWait(checker.checkWeb3Nonce(sender2, "16")), TransactionStatus::NonceCheckFail);
+    BOOST_CHECK_EQUAL(
+        task::syncWait(checker.checkWeb3Nonce(sender2, "0x10")), TransactionStatus::NonceCheckFail);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
