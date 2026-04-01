@@ -22,6 +22,7 @@
 #include "../utilities/Common.h"
 #include "bcos-framework/txpool/TxPoolTypeDef.h"
 #include "bcos-task/Wait.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-protocol/TransactionStatus.h>
 
@@ -46,6 +47,9 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     // sender is bytes view
     auto const senderHex = toHex(sender);
     auto nonceU256 = u256(nonce);
+    // Normalize nonce to a canonical hex string so that "1", "0x1", and "0x01" all map to the
+    // same cache key, preventing duplicate-bypass via alternative nonce representations (FIB-58)
+    auto const normNonce = toQuantity(nonceU256);
 
     // Note:
     // 在以太坊中，nonce是从0开始的，也代表着该地址发交易次数。例如：在存储中存储的是5，那么web3工具从rpc
@@ -54,8 +58,8 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     // sent by the address. For example, if 5 is stored in the storage, then the transactionCount
     // obtained from the rpc api by the web3 tool is 5; then the new transaction will be sent
     // from 5.
-    if (!onlyCheckLedgerNonce &&
-        co_await bcos::storage2::existsOne(m_memoryNonces, std::make_pair(sender, nonce)))
+    if (!onlyCheckLedgerNonce && co_await bcos::storage2::existsOne(m_memoryNonces,
+                                     std::make_pair(sender, std::string_view{normNonce})))
     {
         // memory nonce check nonce existence in memory first, if not exist, then check from storage
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: nonce mem check fail")
@@ -105,10 +109,14 @@ task::Task<TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
 
 task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::string nonce)
 {
+    // Normalize to canonical hex representation so cache lookups in checkWeb3Nonce() always use
+    // the same key regardless of how the nonce was encoded by the caller (FIB-58)
+    auto const uNonce = u256(nonce);
+    auto const normNonce = toQuantity(uNonce);
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: write memory nonces")
-                          << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", nonce);
+                          << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", normNonce);
     }
     // Atomic check-and-reserve: insertIfAbsent returns false when the (sender, nonce)
     // pair already exists, eliminating the TOCTOU race between existsOne() and writeOne().
@@ -119,7 +127,7 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
         co_return false;
     }
     const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-    if (auto const uNonce = u256(nonce); !maxMemNonce.has_value() || uNonce >= maxMemNonce.value())
+    if (!maxMemNonce.has_value() || uNonce >= maxMemNonce.value())
     {
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
