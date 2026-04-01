@@ -217,5 +217,30 @@ BOOST_AUTO_TEST_CASE(testStorageLayerNonce)
     BOOST_CHECK_EQUAL(errorCount, totalSize);
 }
 
+BOOST_AUTO_TEST_CASE(FIB57_RejectOversizedNonceString)
+{
+    // FIB-57: Oversized nonce strings must be rejected at the earliest validation point —
+    // checkWeb3Nonce() — before any u256 conversion, to prevent LRU capacity accounting bypass.
+    constexpr size_t MAX_LEN = 78;  // max decimal digits of u256
+
+    // A nonce exactly at the limit (78 chars) should pass checkWeb3Nonce
+    const std::string sender78 = Address::generateRandomFixedBytes().toRawString();
+    const std::string nonce78(MAX_LEN, '1');
+    auto status78 = task::syncWait(checker.checkWeb3Nonce(sender78, nonce78));
+    BOOST_CHECK_EQUAL(status78, TransactionStatus::None);
+
+    // A nonce one byte over the limit (79 chars) must be rejected by checkWeb3Nonce
+    const std::string sender79 = Address::generateRandomFixedBytes().toRawString();
+    const std::string nonce79(MAX_LEN + 1, '1');
+    auto status79 = task::syncWait(checker.checkWeb3Nonce(sender79, nonce79));
+    BOOST_CHECK_EQUAL(status79, TransactionStatus::NonceCheckFail);
+
+    // A very long nonce (1000 chars) must also be rejected by checkWeb3Nonce
+    const std::string senderLong = Address::generateRandomFixedBytes().toRawString();
+    const std::string nonce1000(1000, '9');
+    auto statusLong = task::syncWait(checker.checkWeb3Nonce(senderLong, nonce1000));
+    BOOST_CHECK_EQUAL(statusLong, TransactionStatus::NonceCheckFail);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
