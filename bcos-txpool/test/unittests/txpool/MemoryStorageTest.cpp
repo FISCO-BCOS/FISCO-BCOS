@@ -695,4 +695,134 @@ BOOST_AUTO_TEST_CASE(FIB61_NegativeImportTimeTreatedAsExpired)
     BOOST_CHECK(foundTx2);
 }
 
+BOOST_AUTO_TEST_CASE(FIB60_UnsealWithWrongBatchIdPreservesResealed)
+{
+    // FIB-60: When unsealing, the code moved txs to unsealTransactions regardless of whether
+    // they had been re-sealed by a newer batch. The fix adds a re-seal guard: if a tx is sealed
+    // and its batchId/batchHash doesn't match the unseal request, it is left sealed.
+    auto tx0 = makeTx("fib60_n0", false);
+    auto tx1 = makeTx("fib60_n1", false);
+    auto tx2 = makeTx("fib60_n2", false);
+    storage.insert(tx0);
+    storage.insert(tx1);
+    storage.insert(tx2);
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+
+    // Seal all 3 txs with batch 1
+    HashType batchHash1 = HashType::generateRandomFixedBytes();
+    HashList batch1All{tx0->hash(), tx1->hash(), tx2->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, true));
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    BOOST_CHECK(tx2->sealed());
+
+    // Re-seal tx0 and tx1 with batch 2 (simulates a competing proposer)
+    HashType batchHash2 = HashType::generateRandomFixedBytes();
+    HashList batch2Partial{tx0->hash(), tx1->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch2Partial, 2, batchHash2, true));
+    BOOST_CHECK_EQUAL(tx0->batchId(), 2);
+    BOOST_CHECK_EQUAL(tx1->batchId(), 2);
+
+    // Now unseal with the old batch 1 — tx0 and tx1 must be protected by the re-seal guard
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, false));
+    // tx0, tx1 were re-sealed to batch 2: must remain sealed
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    // tx2 belonged to batch 1 and was not re-sealed: must be unsealed
+    BOOST_CHECK(!tx2->sealed());
+    // All 3 txs must still be present in the pool
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+    BOOST_CHECK(storage.exists(tx0->hash()));
+    BOOST_CHECK(storage.exists(tx1->hash()));
+    BOOST_CHECK(storage.exists(tx2->hash()));
+}
+
+BOOST_AUTO_TEST_CASE(FIB48_AlreadyInTxPoolAndAcceptReturnsNone)
+{
+    // FIB-48: When a transaction without a callback is re-submitted with a callback,
+    // txpoolStorageCheck() returns AlreadyInTxPoolAndAccept and sets the callback.
+    // The old code continued through the lambda chain into insert(), causing a
+    // use-after-free and potential double-resume of the coroutine handle.
+    // The fix returns TransactionStatus::None immediately after registering the callback.
+
+    auto tx1 = makeTx("fib48_n1", false);
+    storage.insert(tx1);  // Insert without callback
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+
+    // Re-submit with a callback: tx exists, no prior callback → AlreadyInTxPoolAndAccept
+    // Fix: returns None immediately (callback accepted) without re-entering insert()
+    bool callbackCalled = false;
+    auto result = storage.verifyAndSubmitTransaction(
+        tx1,
+        [&callbackCalled](
+            Error::Ptr, protocol::TransactionSubmitResult::Ptr) { callbackCalled = true; },
+        false, false);
+    BOOST_CHECK(result == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);  // No duplicate insert
+
+    // Re-submit again: tx now has a callback → AlreadyInTxPool (rejected outright)
+    auto result2 = storage.verifyAndSubmitTransaction(tx1, nullptr, false, false);
+    BOOST_CHECK(result2 == TransactionStatus::AlreadyInTxPool);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
+{
+    // FIB-50: nonce must only be inserted AFTER all validation steps pass.
+    // Old code called txPoolNonceChecker->insert() inside TxValidator::verify() — before
+    // validateTransaction(). If validateTransaction later failed (e.g. OverFlowValue), the
+    // nonce was already stuck in the pool, preventing valid re-submission.
+    // Fix: nonce insertion is deferred to verifyAndSubmitTransaction(), after all steps pass.
+
+    // Use a real TxPoolNonceChecker so we can query exists()
+    auto realNC = std::make_shared<TxPoolNonceChecker>();
+    std::shared_ptr<NonceCheckerInterface> nc = realNC;
+
+    // Fresh validator mock with all required methods set up
+    fakeit::Mock<bcos::txpool::TxValidatorInterface> localValidator;
+    fakeit::Mock<bcos::txpool::LedgerNonceChecker> localLNC;
+    auto web3Checker = std::make_shared<bcos::txpool::Web3NonceChecker>(nullptr);
+    fakeit::When(Method(localValidator, web3NonceChecker)).AlwaysReturn(web3Checker);
+    auto lnc = std::shared_ptr<bcos::txpool::LedgerNonceChecker>(&localLNC.get(), [](auto*) {});
+    fakeit::When(Method(localValidator, ledgerNonceChecker)).AlwaysReturn(lnc);
+    fakeit::When(Method(localLNC, batchInsert)).AlwaysDo([](auto, auto const&) {});
+
+    // verify() always passes — bypasses real signature verification for test simplicity
+    fakeit::When(Method(localValidator, verify)).AlwaysReturn(TransactionStatus::None);
+
+    // validateTransaction(): reject the bad nonce, accept all others
+    const std::string badNonce = "fib50_bad_nonce";
+    fakeit::When(Method(localValidator, validateTransaction))
+        .AlwaysDo([badNonce](const bcos::protocol::Transaction& tx) -> TransactionStatus {
+            return std::string(tx.nonce()) == badNonce ? TransactionStatus::OverFlowValue :
+                                                         TransactionStatus::None;
+        });
+
+    // validateChainId() always passes
+    fakeit::When(Method(localValidator, validateChainId))
+        .AlwaysDo([](const auto&, auto) -> task::Task<TransactionStatus> {
+            co_return TransactionStatus::None;
+        });
+
+    std::shared_ptr<TxValidatorInterface> v(&localValidator.get(), [](auto*) {});
+    auto cfg = std::make_shared<TxPoolConfig>(
+        v, nullptr, nullptr, nullptr, nc, 1000, 1024, /*checkSig=*/true);
+    MemoryStorage stor(cfg);
+
+    // 1. Bad tx: validateTransaction returns OverFlowValue → chain stops → nonce NOT inserted
+    auto badTx = makeTx(badNonce, false);
+    auto r1 = stor.verifyAndSubmitTransaction(badTx, nullptr, false, false);
+    BOOST_CHECK_EQUAL(r1, TransactionStatus::OverFlowValue);
+    // FIB-50 fix: nonce was not inserted because validation failed before the insertion point
+    BOOST_CHECK(!realNC->exists(badNonce));
+
+    // 2. Good tx: all steps pass → nonce IS inserted and tx enters pool
+    const std::string goodNonce = "fib50_good_nonce";
+    auto goodTx = makeTx(goodNonce, false);
+    auto r2 = stor.verifyAndSubmitTransaction(goodTx, nullptr, false, false);
+    BOOST_CHECK_EQUAL(r2, TransactionStatus::None);
+    BOOST_CHECK(realNC->exists(goodNonce));
+    BOOST_CHECK_EQUAL(stor.size(), 1U);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
