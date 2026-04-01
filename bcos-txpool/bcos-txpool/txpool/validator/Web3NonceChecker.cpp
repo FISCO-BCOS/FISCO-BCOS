@@ -87,11 +87,8 @@ task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
         // nonce in storage is uint string
         auto const nonceInStorage = u256(storageState.value().nonce);
         // Monotonic cache update: only raise the cached value, never lower it (FIB-59)
-        if (auto existing = co_await storage2::readOne(m_ledgerStateNonces, sender);
-            !existing.has_value() || nonceInStorage > existing.value())
-        {
-            co_await storage2::writeOne(m_ledgerStateNonces, sender, nonceInStorage);
-        }
+        co_await storage2::writeOneIf(m_ledgerStateNonces, sender, nonceInStorage,
+            [&](u256 const& existing) { return nonceInStorage > existing; });
         if (nonceU256 < nonceInStorage ||
             nonceU256 > nonceInStorage + DEFAULT_WEB3_NONCE_CHECK_LIMIT)
         {
@@ -127,17 +124,13 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
     {
         co_return false;
     }
-    const auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-    if (!maxMemNonce.has_value() || uNonce >= maxMemNonce.value())
+    auto const newMaxNonce = uNonce + 1;
+    auto const written = co_await storage2::writeOneIf(m_maxNonces, sender, newMaxNonce,
+        [&](u256 const& existing) { return newMaxNonce >= existing; });
+    if (written && c_fileLogLevel == TRACE) [[unlikely]]
     {
-        if (c_fileLogLevel == TRACE) [[unlikely]]
-        {
-            TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: update max nonce")
-                              << LOG_KV("sender", toHex(sender))
-                              << LOG_KV("originNonce", maxMemNonce.value_or(0))
-                              << LOG_KV("newNonce", uNonce);
-        }
-        co_await storage2::writeOne(m_maxNonces, sender, uNonce + 1);
+        TXPOOL_LOG(TRACE) << LOG_DESC("Web3Nonce: update max nonce")
+                          << LOG_KV("sender", toHex(sender)) << LOG_KV("newNonce", uNonce);
     }
     co_return true;
 }

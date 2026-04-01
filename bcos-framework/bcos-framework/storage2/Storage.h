@@ -106,6 +106,20 @@ inline constexpr struct WriteOne
     }
 } writeOne;
 
+inline constexpr struct WriteOneIf
+{
+    // Atomically reads existing value, writes only if predicate(existing) is true.
+    // If no existing value, writes unconditionally.
+    // Predicate: (Value const&) -> bool
+    // Returns true if the write was performed.
+    auto operator()(auto& storage, auto key, auto value, auto predicate, auto&&... args) const
+        -> task::Task<bool>
+    {
+        co_return co_await tag_invoke(*this, storage, std::move(key), std::move(value),
+            std::move(predicate), std::forward<decltype(args)>(args)...);
+    }
+} writeOneIf;
+
 inline constexpr struct RemoveOne
 {
     auto operator()(auto& storage, auto key, auto&&... args) const -> task::Task<void>

@@ -138,7 +138,8 @@ public:
                         << LOG_DESC("Web3Nonce: update ledger nonce cache")
                         << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
                 }
-                co_await storage2::writeOne(m_ledgerStateNonces, sender, maxNonce);
+                co_await storage2::writeOneIf(m_ledgerStateNonces, sender, maxNonce,
+                    [&](u256 const& existing) { return maxNonce > existing; });
                 if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
                     maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
                 {

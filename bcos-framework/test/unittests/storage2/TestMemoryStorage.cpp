@@ -534,4 +534,42 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(writeOneIf)
+{
+    task::syncWait([]() -> task::Task<void> {
+        MemoryStorage<int, int, Attribute(CONCURRENT | LRU)> storage(4, 1024);
+
+        // 1. Write to non-existent key: no existing value, writes unconditionally
+        auto written = co_await storage2::writeOneIf(
+            storage, 1, 100, [](int const& existing) { return 100 > existing; });
+        BOOST_CHECK(written);
+        auto val = co_await storage2::readOne(storage, 1);
+        BOOST_REQUIRE(val.has_value());
+        BOOST_CHECK_EQUAL(*val, 100);
+
+        // 2. Conditional update: new > existing, should succeed
+        written = co_await storage2::writeOneIf(
+            storage, 1, 200, [](int const& existing) { return 200 > existing; });
+        BOOST_CHECK(written);
+        val = co_await storage2::readOne(storage, 1);
+        BOOST_REQUIRE(val.has_value());
+        BOOST_CHECK_EQUAL(*val, 200);
+
+        // 3. Conditional update rejected: 50 < 200, should fail
+        written = co_await storage2::writeOneIf(
+            storage, 1, 50, [](int const& existing) { return 50 > existing; });
+        BOOST_CHECK(!written);
+        val = co_await storage2::readOne(storage, 1);
+        BOOST_REQUIRE(val.has_value());
+        BOOST_CHECK_EQUAL(*val, 200);  // unchanged
+
+        // 4. Equal value with >= predicate, should succeed
+        written = co_await storage2::writeOneIf(
+            storage, 1, 200, [](int const& existing) { return 200 >= existing; });
+        BOOST_CHECK(written);
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

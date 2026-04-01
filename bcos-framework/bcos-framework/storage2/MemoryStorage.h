@@ -13,6 +13,7 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/throw_exception.hpp>
+#include <concepts>
 #include <optional>
 #include <range/v3/view/chunk_by.hpp>
 #include <range/v3/view/transform.hpp>
@@ -346,6 +347,32 @@ public:
         Lock lock(bucket.mutex, true);
         return {
             storage.writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
+    }
+
+    friend task::AwaitableValue<bool> tag_invoke(storage2::tag_t<storage2::writeOneIf> /*unused*/,
+        MemoryStorage& storage, auto key, auto value, std::predicate<Value const&> auto predicate)
+    {
+        auto& bucket = storage.getBucket(key);
+        [[maybe_unused]] Lock lock(bucket.mutex, true);
+
+        // Read existing value and evaluate predicate under the same lock
+        auto const& index = bucket.container.template get<0>();
+        bool shouldWrite = true;
+        if (auto it = index.find(key); it != index.end())
+        {
+            shouldWrite = std::visit(bcos::overloaded{[](DELETED_TYPE) { return true; },
+                                         [](NOT_EXISTS_TYPE) { return true; },
+                                         [&](Value const& itValue) { return predicate(itValue); }},
+                it->value);
+        }
+
+        if (!shouldWrite)
+        {
+            return {false};
+        }
+
+        storage.writeOne(bucket, std::move(key), std::move(value), false);
+        return {true};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
