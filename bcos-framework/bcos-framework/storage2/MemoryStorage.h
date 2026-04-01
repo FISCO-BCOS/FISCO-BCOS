@@ -220,7 +220,8 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    void writeOne(Bucket& bucket, auto key, auto value, bool ignoreLogicalDeletion)
+    bool writeOne(
+        Bucket& bucket, auto key, auto value, bool ignoreLogicalDeletion, bool insertOnly = false)
     {
         auto const& index = bucket.container.template get<0>();
         int64_t updatedCapacity = 0;
@@ -245,6 +246,10 @@ public:
 
         if (found)
         {
+            if (insertOnly)
+            {
+                return false;
+            }
             if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
             {
                 bucket.container.modify(it, [&](Data& data) mutable {
@@ -286,6 +291,7 @@ public:
             bucket.capacity += updatedCapacity;
             updateLRUAndCheck(bucket, it);
         }
+        return !found;
     }
 
     void removeSome(::ranges::input_range auto keys, bool ignoreLogicalDeletion)
@@ -330,6 +336,16 @@ public:
         Lock lock(bucket.mutex, true);
         storage.writeOne(bucket, std::move(key), std::move(value), false);
         return {};
+    }
+
+    friend task::AwaitableValue<bool> tag_invoke(
+        storage2::tag_t<storage2::insertIfAbsent> /*unused*/, MemoryStorage& storage, auto key,
+        auto value)
+    {
+        auto& bucket = storage.getBucket(key);
+        Lock lock(bucket.mutex, true);
+        return {
+            storage.writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,

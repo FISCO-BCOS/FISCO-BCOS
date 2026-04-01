@@ -83,21 +83,9 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     {
         _tx.setSystemTx(true);
     }
-    // Atomic check-and-reserve: insert() returns false when the nonce already exists,
-    // replacing the separate checkNonce()+insert() pair that had a TOCTOU race (FIB-51).
-    //
-    // Note: Web3 and BCOS transactions use separate nonce checkers intentionally.
-    // m_txPoolNonceChecker is keyed by nonce alone (no sender), designed for BCOS random UUID
-    // nonces. Web3 nonces are per-sender sequential integers, so different senders can share
-    // the same nonce value — inserting them into m_txPoolNonceChecker would cause false
-    // cross-sender conflicts. checkTransaction() also never calls checkTxpoolNonce() for
-    // Web3 transactions, so reserving in m_txPoolNonceChecker would have no matching check.
-    m_txPoolNonceChecker->insert(std::string(_tx.nonce()));
-    if (_tx.type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
-    {
-        task::syncWait(m_web3NonceChecker->insertMemoryNonce(
-            std::string(_tx.sender()), std::string(_tx.nonce())));
-    }
+    // Nonce insertion is deferred to after all validation steps complete in
+    // verifyAndSubmitTransaction(), so that a failure in validateTransaction() or
+    // validateChainId() does not leave a leaked nonce in the pool (FIB-50)
     return TransactionStatus::None;
 }
 

@@ -132,6 +132,15 @@ inline constexpr struct ExistsOne
     }
 } existsOne;
 
+inline constexpr struct InsertIfAbsent
+{
+    auto operator()(auto& storage, auto key, auto value, auto&&... args) const -> task::Task<bool>
+    {
+        co_return co_await tag_invoke(*this, storage, std::move(key), std::move(value),
+            std::forward<decltype(args)>(args)...);
+    }
+} insertIfAbsent;
+
 inline constexpr struct Merge
 {
     auto operator()(auto& toStorage, auto& fromStorage, auto&&... args) const -> task::Task<void>
