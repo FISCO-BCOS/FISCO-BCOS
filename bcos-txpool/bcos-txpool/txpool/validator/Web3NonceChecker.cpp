@@ -32,6 +32,17 @@ using namespace bcos::protocol;
 task::Task<bcos::protocol::TransactionStatus> Web3NonceChecker::checkWeb3Nonce(
     std::string_view sender, std::string_view nonce, bool onlyCheckLedgerNonce)
 {
+    // Reject oversized nonce strings before any u256 conversion to prevent LRU capacity bypass
+    // (FIB-57): max decimal digits of u256 is 78
+    constexpr static size_t MAX_NONCE_STRING_LENGTH = 78;
+    if (nonce.length() > MAX_NONCE_STRING_LENGTH) [[unlikely]]
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("Web3Nonce: reject oversized nonce string")
+                            << LOG_KV("sender", toHex(sender))
+                            << LOG_KV("nonceLen", nonce.length());
+        co_return TransactionStatus::NonceCheckFail;
+    }
+
     // sender is bytes view
     auto const senderHex = toHex(sender);
     auto nonceU256 = u256(nonce);

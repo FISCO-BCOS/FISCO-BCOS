@@ -674,6 +674,103 @@ BOOST_AUTO_TEST_CASE(FIB51_TxPoolNonceCheckerInsertReturnsBool)
     BOOST_CHECK_EQUAL(successCount.load(), 1);
 }
 
+BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
+{
+    // FIB-55: Pool limit was bypassed because the check happened after expensive validation.
+    // The fix moves the pool limit check (Step 1.5) before signature verification and nonce
+    // checks so that TxPoolIsFull is returned early.
+    constexpr size_t kLimit = 3;
+    auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
+        txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
+    MemoryStorage limitedStorage(limitedConfig);
+
+    // Insert kLimit txs directly (bypasses validator, fills the pool)
+    for (size_t i = 0; i < kLimit; ++i)
+    {
+        auto tx = makeTx("fib55_n" + std::to_string(i), false);
+        BOOST_CHECK_EQUAL(limitedStorage.insert(tx), TransactionStatus::None);
+    }
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+
+    // Submitting a new tx with checkPoolLimit=true must be rejected before reaching validation
+    auto tx4 = makeTx("fib55_n3", false);
+    auto result =
+        limitedStorage.verifyAndSubmitTransaction(tx4, nullptr, /*checkPoolLimit*/ true, false);
+    BOOST_CHECK_EQUAL(result, TransactionStatus::TxPoolIsFull);
+    BOOST_CHECK_EQUAL(limitedStorage.size(), kLimit);
+}
+
+BOOST_AUTO_TEST_CASE(FIB60_UnsealWithWrongBatchIdPreservesResealed)
+{
+    // FIB-60: When unsealing, the code moved txs to unsealTransactions regardless of whether
+    // they had been re-sealed by a newer batch. The fix adds a re-seal guard: if a tx is sealed
+    // and its batchId/batchHash doesn't match the unseal request, it is left sealed.
+    auto tx0 = makeTx("fib60_n0", false);
+    auto tx1 = makeTx("fib60_n1", false);
+    auto tx2 = makeTx("fib60_n2", false);
+    storage.insert(tx0);
+    storage.insert(tx1);
+    storage.insert(tx2);
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+
+    // Seal all 3 txs with batch 1
+    HashType batchHash1 = HashType::generateRandomFixedBytes();
+    HashList batch1All{tx0->hash(), tx1->hash(), tx2->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, true));
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    BOOST_CHECK(tx2->sealed());
+
+    // Re-seal tx0 and tx1 with batch 2 (simulates a competing proposer)
+    HashType batchHash2 = HashType::generateRandomFixedBytes();
+    HashList batch2Partial{tx0->hash(), tx1->hash()};
+    BOOST_CHECK(storage.batchMarkTxs(batch2Partial, 2, batchHash2, true));
+    BOOST_CHECK_EQUAL(tx0->batchId(), 2);
+    BOOST_CHECK_EQUAL(tx1->batchId(), 2);
+
+    // Now unseal with the old batch 1 — tx0 and tx1 must be protected by the re-seal guard
+    BOOST_CHECK(storage.batchMarkTxs(batch1All, 1, batchHash1, false));
+    // tx0, tx1 were re-sealed to batch 2: must remain sealed
+    BOOST_CHECK(tx0->sealed());
+    BOOST_CHECK(tx1->sealed());
+    // tx2 belonged to batch 1 and was not re-sealed: must be unsealed
+    BOOST_CHECK(!tx2->sealed());
+    // All 3 txs must still be present in the pool
+    BOOST_CHECK_EQUAL(storage.size(), 3);
+    BOOST_CHECK(storage.exists(tx0->hash()));
+    BOOST_CHECK(storage.exists(tx1->hash()));
+    BOOST_CHECK(storage.exists(tx2->hash()));
+}
+
+BOOST_AUTO_TEST_CASE(FIB48_AlreadyInTxPoolAndAcceptReturnsNone)
+{
+    // FIB-48: When a transaction without a callback is re-submitted with a callback,
+    // txpoolStorageCheck() returns AlreadyInTxPoolAndAccept and sets the callback.
+    // The old code continued through the lambda chain into insert(), causing a
+    // use-after-free and potential double-resume of the coroutine handle.
+    // The fix returns TransactionStatus::None immediately after registering the callback.
+
+    auto tx1 = makeTx("fib48_n1", false);
+    storage.insert(tx1);  // Insert without callback
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+
+    // Re-submit with a callback: tx exists, no prior callback → AlreadyInTxPoolAndAccept
+    // Fix: returns None immediately (callback accepted) without re-entering insert()
+    bool callbackCalled = false;
+    auto result = storage.verifyAndSubmitTransaction(
+        tx1,
+        [&callbackCalled](
+            Error::Ptr, protocol::TransactionSubmitResult::Ptr) { callbackCalled = true; },
+        false, false);
+    BOOST_CHECK(result == TransactionStatus::None);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);  // No duplicate insert
+
+    // Re-submit again: tx now has a callback → AlreadyInTxPool (rejected outright)
+    auto result2 = storage.verifyAndSubmitTransaction(tx1, nullptr, false, false);
+    BOOST_CHECK(result2 == TransactionStatus::AlreadyInTxPool);
+    BOOST_CHECK_EQUAL(storage.size(), 1U);
+}
+
 BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
 {
     // FIB-50: nonce must only be inserted AFTER all validation steps pass.
