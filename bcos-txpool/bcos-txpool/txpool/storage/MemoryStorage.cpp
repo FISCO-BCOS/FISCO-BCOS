@@ -362,7 +362,33 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
     }
 
-    // All validations passed, prepare for insertion
+    // All validations passed — now insert nonce atomically before inserting the transaction.
+    // Nonce insertion is done here (not inside verify()) so that failures in validateTransaction()
+    // or validateChainId() cannot leave a stale nonce in the pool (FIB-50).
+    // Atomic check-and-reserve: insert() returns false when the nonce already exists,
+    // eliminating the TOCTOU window between separate checkNonce() + insert() calls (FIB-51).
+    if (m_config->checkTransactionSignature())
+    {
+        if (transaction->type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
+        {
+            if (!m_config->txPoolNonceChecker()->insert(std::string(transaction->nonce())))
+                [[unlikely]]
+            {
+                return TransactionStatus::NonceCheckFail;
+            }
+        }
+        else
+        {
+            if (!task::syncWait(m_config->txValidator()->web3NonceChecker()->insertMemoryNonce(
+                    std::string(transaction->sender()), std::string(transaction->nonce()))))
+                [[unlikely]]
+            {
+                return TransactionStatus::NonceCheckFail;
+            }
+        }
+    }
+
+    // Prepare for insertion
     auto const txImportTime = transaction->importTime();
     if (txSubmitCallback)
     {
