@@ -339,5 +339,32 @@ BOOST_AUTO_TEST_CASE(FIB58_NonceNormalizationDetectsDuplicates)
         task::syncWait(checker.checkWeb3Nonce(sender2, "0x10")), TransactionStatus::NonceCheckFail);
 }
 
+BOOST_AUTO_TEST_CASE(FIB59_CacheHitSkipsLedgerQuery)
+{
+    // FIB-59: After checking m_ledgerStateNonces, the code unconditionally queried storage
+    // and could overwrite a higher cached value with a stale lower one.
+    // The fix short-circuits on cache hit, skipping storage entirely and keeping the
+    // monotonically increasing cached value intact.
+    const std::string sender = Address::generateRandomFixedBytes().toRawString();
+    const std::string senderHex = toHex(sender);
+
+    // Prime the ledger state nonce cache with nonce=10
+    checker.insert(sender, 10);
+
+    // Ledger storage has a lower stale nonce=0 (simulates a block that hasn't propagated yet)
+    ledger::StorageState storageState{.nonce = "0", .balance = "1"};
+    m_ledger->setStorageState(senderHex, std::move(storageState));
+
+    // nonce=11 (0xb) should pass: 11 >= cached 10 and within limit
+    auto status = task::syncWait(checker.checkWeb3Nonce(sender, "0xb"));
+    BOOST_CHECK_EQUAL(status, TransactionStatus::None);
+
+    // The cache must NOT have been overwritten by the stale storage nonce=0.
+    // getPendingNonce reads m_ledgerStateNonces; with the fix it must return 10, not 0.
+    auto pending = task::syncWait(checker.getPendingNonce(senderHex));
+    BOOST_CHECK(pending.has_value());
+    BOOST_CHECK_EQUAL(pending.value(), 10);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
