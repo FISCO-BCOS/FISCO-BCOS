@@ -943,5 +943,63 @@ BOOST_AUTO_TEST_CASE(FIB65_SealAtIndex0UpdatesKnownHash)
     // Total: tx1 (sealed) + tx2 (now sealed after batchSealTransactions) = 2
     BOOST_CHECK_EQUAL(storage.size(), 2U);
 }
+BOOST_AUTO_TEST_CASE(FIB54_ConcurrentBatchMarkTxs)
+{
+    // FIB-54: batchMarkTxs used ReadAccessor inside the traverse callback but then
+    // called bucket.remove() and batchInsert() which need write access, causing a data
+    // race under concurrent sealing. The fix promotes to WriteAccessor for all mutations.
+    // This test inserts 50 txs and concurrently seals two non-overlapping batches to
+    // exercise the concurrent-write path.
+
+    constexpr int kTotal = 50;
+    constexpr int kBatch1End = 25;  // batch 1: indices 0..24, batch 2: indices 25..49
+
+    std::vector<bcostars::protocol::TransactionImpl::Ptr> txs;
+    txs.reserve(kTotal);
+    for (int i = 0; i < kTotal; ++i)
+    {
+        auto tx = makeTx("fib54_n" + std::to_string(i), false);
+        storage.insert(tx);
+        txs.push_back(tx);
+    }
+    BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+
+    HashType bh1 = HashType::generateRandomFixedBytes();
+    HashType bh2 = HashType::generateRandomFixedBytes();
+
+    HashList batch1;
+    HashList batch2;
+    for (int i = 0; i < kBatch1End; ++i)
+    {
+        batch1.push_back(txs[i]->hash());
+    }
+    for (int i = kBatch1End; i < kTotal; ++i)
+    {
+        batch2.push_back(txs[i]->hash());
+    }
+
+    // Seal both batches concurrently — must not crash or corrupt state (FIB-54)
+    tbb::parallel_invoke([&] { storage.batchMarkTxs(batch1, /*batchId=*/10, bh1, /*seal=*/true); },
+        [&] { storage.batchMarkTxs(batch2, /*batchId=*/11, bh2, /*seal=*/true); });
+
+    // All 50 txs must now be sealed
+    for (auto& tx : txs)
+    {
+        BOOST_CHECK(tx->sealed());
+    }
+    BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+
+    // Unseal both batches concurrently
+    tbb::parallel_invoke([&] { storage.batchMarkTxs(batch1, /*batchId=*/10, bh1, /*seal=*/false); },
+        [&] { storage.batchMarkTxs(batch2, /*batchId=*/11, bh2, /*seal=*/false); });
+
+    // All 50 txs must now be unsealed and still present
+    for (auto& tx : txs)
+    {
+        BOOST_CHECK(!tx->sealed());
+        BOOST_CHECK(storage.exists(tx->hash()));
+    }
+    BOOST_CHECK_EQUAL(storage.size(), static_cast<std::size_t>(kTotal));
+}
 
 BOOST_AUTO_TEST_SUITE_END()
