@@ -24,6 +24,7 @@
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-utilities/ZstdCompress.h"
 #include <boost/asio/detail/socket_ops.hpp>
+#include <utility>
 
 using namespace bcos;
 using namespace bcos::gateway;
@@ -31,19 +32,19 @@ using namespace bcos::gateway;
 bool P2PMessageOptions::encode(bytes& _buffer) const
 {
     // parameters check
-    if (m_groupID.size() > MAX_GROUPID_LENGTH)
+    if (m_groupID.size() > MAX_GROUPID_LENGTH) [[unlikely]]
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("groupID length overflow")
                           << LOG_KV("groupID length", m_groupID.size());
         return false;
     }
-    if (m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH))
+    if (m_srcNodeID.empty() || (m_srcNodeID.size() > MAX_NODEID_LENGTH)) [[unlikely]]
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("srcNodeID length valid")
                           << LOG_KV("srcNodeID length", m_srcNodeID.size());
         return false;
     }
-    if (m_dstNodeIDs.size() > MAX_DST_NODEID_COUNT)
+    if (m_dstNodeIDs.size() > MAX_DST_NODEID_COUNT) [[unlikely]]
     {
         P2PMSG_LOG(ERROR) << LOG_DESC("dstNodeID amount overfow")
                           << LOG_KV("dstNodeID size", m_dstNodeIDs.size());
@@ -137,7 +138,7 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         offset += 2;
 
         // FIB-67: validate nodeID length against protocol maximum
-        if (nodeIDLength > MAX_NODEID_LENGTH)
+        if (nodeIDLength > MAX_NODEID_LENGTH) [[unlikely]]
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("decode: nodeID length overflow")
                               << LOG_KV("nodeIDLength", nodeIDLength);
@@ -156,14 +157,14 @@ int32_t P2PMessageOptions::decode(const bytesConstRef& _buffer)
         offset += 1;
 
         // FIB-67: validate dstNodeCount against protocol maximum
-        if (dstNodeCount > MAX_DST_NODEID_COUNT)
+        if (dstNodeCount > MAX_DST_NODEID_COUNT) [[unlikely]]
         {
             P2PMSG_LOG(ERROR) << LOG_DESC("decode: dstNodeID count overflow")
                               << LOG_KV("dstNodeCount", dstNodeCount);
             return MessageDecodeStatus::MESSAGE_ERROR;
         }
 
-        checkOffset(offset + static_cast<size_t>(dstNodeCount) * nodeIDLength, length);
+        checkOffset(offset + (static_cast<size_t>(dstNodeCount) * nodeIDLength), length);
         // dstNodeIDs
         m_dstNodeIDs.reserve(dstNodeCount);
         for (size_t i = 0; i < dstNodeCount; i++)
@@ -209,8 +210,6 @@ bool P2PMessage::encodeHeader(bytes& _buffer) const
 
 bool bcos::gateway::P2PMessage::encodeHeaderImpl(bytes& _buffer) const
 {
-    auto offset = _buffer.size();
-
     // set length to zero first
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
@@ -329,7 +328,7 @@ int32_t P2PMessage::decodeHeader(const bytesConstRef& _buffer)
     offset += 4;
 
     // FIB-66: reject frames where length is less than header size
-    if (m_length < MESSAGE_HEADER_LENGTH)
+    if (m_length < MESSAGE_HEADER_LENGTH) [[unlikely]]
     {
         P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: length less than header")
                             << LOG_KV("length", m_length)
@@ -407,7 +406,7 @@ int32_t P2PMessage::decode(const bytesConstRef& _buffer)
     }
 
     // FIB-66: verify offset does not exceed m_length to prevent unsigned underflow
-    if (static_cast<uint32_t>(offset) > m_length)
+    if (std::cmp_greater(offset, m_length)) [[unlikely]]
     {
         P2PMSG_LOG(WARNING) << LOG_DESC("Invalid frame: offset exceeds length")
                             << LOG_KV("offset", offset) << LOG_KV("length", m_length);
