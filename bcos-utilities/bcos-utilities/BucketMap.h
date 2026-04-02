@@ -106,11 +106,42 @@ public:
     private:
         std::conditional_t<write, typename MapType::iterator, typename MapType::const_iterator>
             m_iterator;
-        std::conditional_t<write, Bucket*, const Bucket*> m_bucket;
+        std::conditional_t<write, Bucket*, const Bucket*> m_bucket{};
         std::optional<Guard> m_guard;
 
     public:
         BaseAccessor() = default;
+
+        /// Upgrade the held lock from shared (reader) to exclusive (writer).
+        /// Returns true if the upgrade was atomic (no gap); false if the lock
+        /// was briefly released and re-acquired — in that case, the iterator
+        /// may be invalid and the caller should call revalidate().
+        bool upgradeToWriter()
+        {
+            if (m_guard)
+            {
+                return m_guard->upgrade_to_writer();
+            }
+            return false;
+        }
+
+        /// Re-find the element in the same bucket after a non-atomic lock upgrade.
+        /// Returns true if the element still exists, false otherwise.
+        bool revalidate(const KeyType& key)
+        {
+            if (!m_bucket)
+            {
+                return false;
+            }
+            auto it = m_bucket->m_values.find(key);
+            if (it != m_bucket->m_values.end())
+            {
+                m_iterator = it;
+                return true;
+            }
+            return false;
+        }
+
         void emplaceLock(SharedMutex& mutex)
         {
             if (!m_guard)

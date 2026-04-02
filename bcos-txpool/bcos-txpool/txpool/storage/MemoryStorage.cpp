@@ -206,34 +206,33 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
 {
     auto hash = transaction.hash();
 
-    // Per-map double-checked lookup: ReadAccessor first, WriteAccessor only when mutation is
-    // needed. Each map gets its own accessor so the correct bucket lock is held (FIB-54).
+    // Per-map double-checked lookup: ReadAccessor (shared lock) first, upgrade to
+    // exclusive lock only when mutation is needed.  Each map uses its own accessor
+    // so the correct bucket lock is held.
     auto checkMap = [&](auto& txMap) -> std::optional<TransactionStatus> {
         // Fast path: shared (read) lock
+        TxsMap::ReadAccessor readAccessor;
+        if (!txMap.find(readAccessor, hash))
         {
-            TxsMap::ReadAccessor readAccessor;
-            if (!txMap.find(readAccessor, hash))
-            {
-                return std::nullopt;  // not in this map
-            }
-            if (!txSubmitCallback || readAccessor.value()->submitCallback())
-            {
-                return TransactionStatus::AlreadyInTxPool;  // no mutation needed
-            }
-        }  // read lock released
-
-        // Slow path: exclusive (write) lock — only reached when callback needs to be set
-        TxsMap::WriteAccessor writeAccessor;
-        if (!txMap.find(writeAccessor, hash))
-        {
-            return std::nullopt;  // tx removed between read and write
+            return std::nullopt;  // not in this map
         }
-        if (!writeAccessor.value()->submitCallback())
+        if (!txSubmitCallback || readAccessor.value()->submitCallback())
         {
-            writeAccessor.value()->setSubmitCallback(std::move(txSubmitCallback));
+            return TransactionStatus::AlreadyInTxPool;  // no mutation needed
+        }
+
+        // Slow path: upgrade read lock -> write lock in-place
+        if (!readAccessor.upgradeToWriter() && !readAccessor.revalidate(hash))
+        {
+            return std::nullopt;  // tx removed during non-atomic upgrade
+        }
+        // Double-check under exclusive lock
+        if (!readAccessor.value()->submitCallback())
+        {
+            readAccessor.value()->setSubmitCallback(std::move(txSubmitCallback));
             return TransactionStatus::AlreadyInTxPoolAndAccept;
         }
-        return TransactionStatus::AlreadyInTxPool;  // another thread set callback first
+        return TransactionStatus::AlreadyInTxPool;  // another thread set it first
     };
 
     if (const auto result = checkMap(m_bcosTransactions.unsealTransactions))
