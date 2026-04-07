@@ -7,15 +7,15 @@
  * @date 2018
  */
 
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Overloaded.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Overloaded.h"
 #include <boost/asio/buffer.hpp>
 #include <boost/container/container_fwd.hpp>
 #include <boost/throw_exception.hpp>
@@ -469,7 +469,7 @@ void Session::doRead()
 {
     if (m_active && m_server.get().haveNetwork())
     {
-        auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this())](
+        auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this()), socket = m_socket](
                              boost::system::error_code ec, std::size_t bytesTransferred) {
             auto session = self.lock();
             if (session)
@@ -517,6 +517,7 @@ void Session::doRead()
                                 session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                        "ProtocolError(msg overflow)"),
                                     message);
+                                session->drop(UserReason);
                                 break;
                             }
 
@@ -558,6 +559,7 @@ void Session::doRead()
                             session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                    "ProtocolError(decode msg error)"),
                                 message);
+                            session->drop(UserReason);
                             break;
                         }
                     }
@@ -568,6 +570,7 @@ void Session::doRead()
                         session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                "ProtocolError(decode msg exception)"),
                             message);
+                        session->drop(UserReason);
                         break;
                     }
                 }
