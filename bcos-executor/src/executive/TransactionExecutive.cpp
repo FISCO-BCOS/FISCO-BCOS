@@ -1832,7 +1832,8 @@ void TransactionExecutive::creatAuthTable(std::string_view _tableName, std::stri
                          << LOG_KV("admin", admin);
     auto table = m_storageWrapper->createTable(authTableName, std::string(STORAGE_VALUE));
     // FIB-83: if table already exists (e.g. squatting), open it and overwrite auth rows
-    if (!table)
+    if (!table &&
+        m_blockContext.features().get(ledger::Features::Flag::bugfix_auth_table_squatting))
     {
         table = m_storageWrapper->openTable(authTableName);
     }
@@ -1857,27 +1858,40 @@ bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::stri
 
 bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParameters)
 {
+    // FIB-81: cache flag to ensure auth failures always report EVMC_REVERT
+    const bool fixRevertStatus =
+        m_blockContext.features().get(ledger::Features::Flag::bugfix_auth_check_revert_status);
+
+    auto revertAuth = [&](int32_t status, std::string_view message) {
+        callParameters->status = status;
+        callParameters->type = CallParameters::REVERT;
+        callParameters->message = std::string(message);
+        if (fixRevertStatus)
+        {
+            callParameters->evmStatus = EVMC_REVERT;
+        }
+    };
+
     // check account first
-    if (m_blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    if (m_blockContext.blockVersion() >=
+        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
-        uint8_t accountStatus = checkAccountAvailable(callParameters);
+        const uint8_t accountStatus = checkAccountAvailable(callParameters);
         if (accountStatus == AccountStatus::freeze)
         {
             writeErrInfoToOutput("Account is frozen.", *callParameters);
-            callParameters->status = (int32_t)TransactionStatus::AccountFrozen;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Account's status is abnormal";
+            revertAuth(static_cast<int32_t>(TransactionStatus::AccountFrozen),
+                "Account's status is abnormal");
             callParameters->create = false;
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("origin", callParameters->origin);
             return false;
         }
-        else if (accountStatus == AccountStatus::abolish)
+        if (accountStatus == AccountStatus::abolish)
         {
             writeErrInfoToOutput("Account is abolished.", *callParameters);
-            callParameters->status = (int32_t)TransactionStatus::AccountAbolished;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Account's status is abnormal";
+            revertAuth(static_cast<int32_t>(TransactionStatus::AccountAbolished),
+                "Account's status is abnormal");
             callParameters->create = false;
             EXECUTIVE_LOG(INFO) << "Revert transaction: " << callParameters->message
                                 << LOG_KV("origin", callParameters->origin);
@@ -1897,9 +1911,8 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
         if (!checkExecAuth(callParameters))
         {
             auto newAddress = string(callParameters->codeAddress);
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Create permission denied";
+            revertAuth(static_cast<int32_t>(TransactionStatus::PermissionDenied),
+                "Create permission denied");
             callParameters->create = false;
             if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
@@ -1923,17 +1936,17 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
         // if call contract, then
         //      check contract available
         //      check exec auth
-        auto contractStatus = checkContractAvailable(callParameters);
-        if (contractStatus != static_cast<uint8_t>(ContractStatus::Available))
+        if (const auto contractStatus = checkContractAvailable(callParameters);
+            contractStatus != static_cast<uint8_t>(ContractStatus::Available))
         {
-            callParameters->status = (int32_t)TransactionStatus::ContractFrozen;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Contract is frozen";
+            revertAuth(
+                static_cast<int32_t>(TransactionStatus::ContractFrozen), "Contract is frozen");
             if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_2_VERSION) >= 0)
             {
                 if (contractStatus == static_cast<uint8_t>(ContractStatus::Abolish))
                 {
-                    callParameters->status = (int32_t)TransactionStatus::ContractAbolished;
+                    callParameters->status =
+                        static_cast<int32_t>(TransactionStatus::ContractAbolished);
                     callParameters->message = "Contract is abolished";
                     writeErrInfoToOutput("Contract is abolished.", *callParameters);
                 }
@@ -1955,9 +1968,8 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
         }
         if (!checkExecAuth(callParameters))
         {
-            callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-            callParameters->type = CallParameters::REVERT;
-            callParameters->message = "Call permission denied";
+            revertAuth(static_cast<int32_t>(TransactionStatus::PermissionDenied),
+                "Call permission denied");
             if (versionCompareTo(m_blockContext.blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
             {
                 writeErrInfoToOutput("Call permission denied.", *callParameters);

@@ -320,6 +320,20 @@ bool precompiled::checkPathValid(
             << LOG_KV("path", _path);
         return false;
     }
+    // FIB-83: reject paths ending with reserved _accessAuth suffix to prevent auth table squatting
+    if (versionCompareTo(version, BlockVersion::V3_16_5_VERSION) >= 0)
+    {
+        for (const auto& component : pathList)
+        {
+            if (component.ends_with(executor::CONTRACT_SUFFIX))
+            {
+                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("checkPathValid")
+                                       << LOG_DESC("path ends with reserved _accessAuth suffix")
+                                       << LOG_KV("component", component) << LOG_KV("path", _path);
+                return false;
+            }
+        }
+    }
     const static boost::regex oldRegex(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     const static boost::regex newRegex(R"(^[\w]+[\w\-#@.]*$)");
     const auto* reg =

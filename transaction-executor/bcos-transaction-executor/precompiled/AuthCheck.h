@@ -31,7 +31,8 @@ inline task::Task<void> createAuthTable(auto& storage, protocol::BlockHeader con
 
 inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader const& blockHeader,
     evmc_message const& message, evmc_address const& origin, ExternalCaller auto&& externalCaller,
-    auto& precompiledManager, int64_t contextID, int64_t seq, crypto::Hash const& hashImpl)
+    auto& precompiledManager, int64_t contextID, int64_t seq, crypto::Hash const& hashImpl,
+    const ledger::Features& features)
 {
     auto contractAddress = address2HexString(message.code_address);
     auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
@@ -47,26 +48,34 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     params->gas = message.gas;
     params->staticCall = (message.flags & EVMC_STATIC) != 0;
     // FIB-77: include EVMC_CREATE2 in deploy authorization check
-    params->create = (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2);
+    if (features.get(ledger::Features::Flag::bugfix_auth_check_create2))
+    {
+        params->create = (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2);
+    }
+    else
+    {
+        params->create = (message.kind == EVMC_CREATE);
+    }
     auto result = executive->checkAuth(params);
 
     if (!result)
     {
         // FIB-81: return ABI-encoded error message instead of full transaction input
-        auto errorOutput = writeErrInfoToOutput(
-            hashImpl, params->message.empty() ? "Authorization check failed" : params->message);
+        bcos::bytes errorOutput;
+        if (features.get(ledger::Features::Flag::bugfix_auth_check_revert_status))
+        {
+            errorOutput = writeErrInfoToOutput(
+                hashImpl, params->message.empty() ? "Authorization check failed" : params->message);
+        }
+        else
+        {
+            errorOutput.assign(params->data.begin(), params->data.end());
+        }
         auto buffer = std::make_unique<uint8_t[]>(errorOutput.size());
         std::uninitialized_copy(errorOutput.begin(), errorOutput.end(), buffer.get());
 
-        // FIB-81: ensure failed auth never reports EVMC_SUCCESS
-        auto evmStatus = static_cast<evmc_status_code>(params->evmStatus);
-        if (evmStatus == EVMC_SUCCESS)
-        {
-            evmStatus = EVMC_REVERT;
-        }
-
         return std::make_optional(EVMCResult{
-            evmc_result{.status_code = evmStatus,
+            evmc_result{.status_code = static_cast<evmc_status_code>(params->evmStatus),
                 .gas_left = params->gas,
                 .gas_refund = 0,
                 .output_data = buffer.release(),
@@ -74,7 +83,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
                 .release = [](const struct evmc_result* result) { delete[] result->output_data; },
                 .create_address = {},
                 .padding = {}},
-            (protocol::TransactionStatus)params->status});
+            static_cast<protocol::TransactionStatus>(params->status)});
     }
     return {};
 }

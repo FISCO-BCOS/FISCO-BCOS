@@ -401,7 +401,7 @@ public:
 
             if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
                     buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                    m_hashImpl))
+                    m_hashImpl, m_ledgerConfig.get().features()))
             {
                 HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                 evmResult = std::move(result);
@@ -549,10 +549,21 @@ private:
         auto& ref = message();
         if (m_blockHeader.get().number() != 0)
         {
-            // FIB-82: always use hex-encoded address for auth table name to match
-            // the lookup path in ContractAuthMgrPrecompiled, regardless of feature_raw_address
-            auto authTablePath =
-                std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
+            std::string authTablePath;
+            // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a binary
+            // path, but ContractAuthMgrPrecompiled always looks up auth tables using hex paths.
+            // Force hex to match the lookup path.
+            if (m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_auth_table_raw_address) &&
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address))
+            {
+                authTablePath =
+                    std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
+            }
+            else
+            {
+                authTablePath = std::string(co_await m_recipientAccount.path());
+            }
             co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID,
                 m_seq, m_ledgerConfig);
