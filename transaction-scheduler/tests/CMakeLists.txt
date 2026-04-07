@@ -14,6 +14,6 @@ target_link_libraries(test-transaction-scheduler
 	Boost::unit_test_framework
 	FakeIt::FakeIt-boost
 )
-set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("main.cpp" "FIB101_102_103_104_SchedulerTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-scheduler PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "test-transaction-scheduler" "" "")

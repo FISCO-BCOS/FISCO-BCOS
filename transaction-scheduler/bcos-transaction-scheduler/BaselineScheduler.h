@@ -37,6 +37,7 @@
 #include <boost/atomic.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 #include <chrono>
 #include <exception>
 #include <memory>
@@ -243,9 +244,9 @@ private:
         m_transactionNotifier;
     std::reference_wrapper<crypto::Hash const> m_hashImpl;
 
-    int64_t m_lastExecutedBlockNumber = -1;
+    std::atomic<int64_t> m_lastExecutedBlockNumber{-1};
     std::mutex m_executeMutex;
-    int64_t m_lastCommittedBlockNumber = -1;
+    std::atomic<int64_t> m_lastCommittedBlockNumber{-1};
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 
@@ -282,8 +283,8 @@ private:
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
             std::unique_lock resultsLock(m_resultsMutex);
-            if (m_lastExecutedBlockNumber != -1 &&
-                blockHeader->number() - m_lastExecutedBlockNumber != 1)
+            auto lastExecNum = m_lastExecutedBlockNumber.load();
+            if (lastExecNum != -1 && blockHeader->number() - lastExecNum != 1)
             {
                 // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
                 // If the block has been executed, the result will be returned directly without
@@ -309,7 +310,7 @@ private:
 
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
-                        m_lastExecutedBlockNumber + 1, blockHeader->number());
+                        lastExecNum + 1, blockHeader->number());
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
@@ -321,7 +322,7 @@ private:
             if (!executeLock.owns_lock())
             {
                 auto message =
-                    fmt::format("Another block:{} is executing!", m_lastExecutedBlockNumber);
+                    fmt::format("Another block:{} is executing!", m_lastExecutedBlockNumber.load());
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
@@ -378,9 +379,18 @@ private:
             }
 
             m_multiLayerStorage.get().pushView(std::move(view));
-            m_lastExecutedBlockNumber = blockHeader->number();
+            m_lastExecutedBlockNumber.store(blockHeader->number());
 
+            static constexpr size_t MAX_PENDING_RESULTS = 16;
             resultsLock.lock();
+            if (m_results.size() >= MAX_PENDING_RESULTS)
+            {
+                auto message =
+                    fmt::format("Too many pending execution results: {}", m_results.size());
+                BASELINE_SCHEDULER_LOG(WARNING) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
             m_results.push_front({.m_transactions = std::make_shared<protocol::ConstTransactions>(
                                       std::move(transactions)),
                 .m_receipts = std::move(receipts),
@@ -431,19 +441,19 @@ private:
             std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
-                auto message =
-                    fmt::format("Another block:{} is committing!", m_lastCommittedBlockNumber);
+                auto message = fmt::format(
+                    "Another block:{} is committing!", m_lastCommittedBlockNumber.load());
                 BASELINE_SCHEDULER_LOG(INFO) << message;
 
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr};
             }
 
-            if (m_lastCommittedBlockNumber != -1 &&
-                header->number() - m_lastCommittedBlockNumber != 1)
+            auto lastCommitNum = m_lastCommittedBlockNumber.load();
+            if (lastCommitNum != -1 && header->number() - lastCommitNum != 1)
             {
                 auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), m_lastCommittedBlockNumber + 1);
+                    header->number(), lastCommitNum + 1);
 
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {
@@ -494,6 +504,10 @@ private:
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
+
+            // FIB-101: Update m_lastCommittedBlockNumber only after all persistence
+            // operations succeed, preventing out-of-order commits on retry (FIB-104)
+            m_lastCommittedBlockNumber.store(header->number());
 
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
@@ -569,9 +583,9 @@ public:
         m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
-    BaselineScheduler(BaselineScheduler&&) noexcept = default;
+    BaselineScheduler(BaselineScheduler&&) = delete;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
-    BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
+    BaselineScheduler& operator=(BaselineScheduler&&) = delete;
     ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
