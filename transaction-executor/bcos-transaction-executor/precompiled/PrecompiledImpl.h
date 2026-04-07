@@ -10,8 +10,8 @@
 #include "bcos-utilities/Overloaded.h"
 #include <evmc/evmc.h>
 #include <boost/exception/diagnostic_information.hpp>
-#include <boost/throw_exception.hpp>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <variant>
 
@@ -46,10 +46,11 @@ inline constexpr struct
         try
         {
             return std::visit(
-                bcos::overloaded{
-                    [&](executor::PrecompiledContract const& precompiled) {
+                bcos::overloaded{// evm built-in precompiled contracts
+                    [&](executor::PrecompiledContract const& precompiledContract) {
                         // FIB-76: compute gas cost BEFORE execution and validate
-                        auto gas = precompiled.cost({message.input_data, message.input_size});
+                        const auto gas =
+                            precompiledContract.cost({message.input_data, message.input_size});
                         int64_t gasCost = 0;
                         if (gas > std::numeric_limits<int64_t>::max() || gas < 0)
                         {
@@ -66,7 +67,7 @@ inline constexpr struct
                         }
 
                         auto [success, output] =
-                            precompiled.execute({message.input_data, message.input_size});
+                            precompiledContract.execute({message.input_data, message.input_size});
 
                         auto buffer = std::make_unique_for_overwrite<uint8_t[]>(output.size());
                         ::ranges::copy(output, buffer.get());
@@ -88,7 +89,8 @@ inline constexpr struct
 
                         return result;
                     },
-                    [&](std::shared_ptr<precompiled::Precompiled> const& precompiled) {
+                    // bcos precompiled contracts
+                    [&](std::shared_ptr<precompiled::Precompiled> const& precompiledContract) {
                         using namespace std::string_literals;
                         auto contractAddress = address2HexString(message.code_address);
                         auto executive = buildLegacyExecutive(storage, blockHeader, contractAddress,
@@ -107,7 +109,7 @@ inline constexpr struct
 
                         try
                         {
-                            auto response = precompiled->call(executive, params);
+                            auto response = precompiledContract->call(executive, params);
 
                             auto buffer = std::make_unique<uint8_t[]>(params->m_execResult.size());
                             std::uninitialized_copy(params->m_execResult.begin(),

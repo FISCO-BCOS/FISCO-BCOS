@@ -37,8 +37,8 @@ namespace bcos
 namespace executor
 {
 class BlockContext;
-using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef _in)>;
-using PrecompiledPricer = std::function<bigint(bytesConstRef _in)>;
+using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef)>;
+using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
 
 DERIVE_BCOS_EXCEPTION(ExecutorNotFound);
 DERIVE_BCOS_EXCEPTION(PricerNotFound);
@@ -73,8 +73,10 @@ public:
 private:
     static PrecompiledRegistrar* get()
     {
-        if (!s_this)
+        if (s_this == nullptr)
+        {
             s_this = new PrecompiledRegistrar;
+        }
         return s_this;
     }
 

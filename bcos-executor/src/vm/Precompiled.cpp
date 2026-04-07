@@ -61,16 +61,22 @@ bool bcos::executor::PrecompiledMap::contains(std::string const& key, uint32_t v
 
 PrecompiledExecutor const& PrecompiledRegistrar::executor(std::string const& _name)
 {
-    if (!get()->m_execs.count(_name))
+    auto const it = get()->m_execs.find(_name);
+    if (it == get()->m_execs.end())
+    {
         BOOST_THROW_EXCEPTION(ExecutorNotFound());
-    return get()->m_execs[_name];
+    }
+    return it->second;
 }
 
 PrecompiledPricer const& PrecompiledRegistrar::pricer(std::string const& _name)
 {
-    if (!get()->m_pricers.count(_name))
+    const auto it = get()->m_pricers.find(_name);
+    if (it == get()->m_pricers.end())
+    {
         BOOST_THROW_EXCEPTION(PricerNotFound());
-    return get()->m_pricers[_name];
+    }
+    return it->second;
 }
 
 }  // namespace bcos::executor
