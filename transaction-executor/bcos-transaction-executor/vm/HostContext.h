@@ -161,7 +161,8 @@ private:
             HOST_CONTEXT_LOG(DEBUG) << m_blockHeader.get().number() << " "
                                     << LOG_BADGE("AccountPrecompiled, subAccountBalance")
                                     << LOG_DESC("account balance not enough");
-            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
+            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{}
+                                  << errinfo_comment("Account balance is not enough!"));
         }
 
         if (!co_await m_recipientAccount.exists())
@@ -447,9 +448,9 @@ public:
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "OutOfGas exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(
-                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                        EVMC_OUT_OF_GAS, evmResult->gas_left, e.what()));
+                // Use ref->gas since evmResult may be empty if auth check was skipped (FIB-111)
+                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                    protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, ref->gas, e.what()));
             }
             catch (protocol::NotEnoughCashError& e)
 
