@@ -78,6 +78,12 @@ bcos::executor_v1::hostcontext::getCacheExecutables()
     return cachedExecutables.m_cachedExecutables;
 }
 
+std::mutex& bcos::executor_v1::hostcontext::getCacheMutex()
+{
+    static std::mutex g_cacheMutex;
+    return g_cacheMutex;
+}
+
 bcos::executor_v1::hostcontext::Executable::Executable(storage::Entry code, evmc_revision revision)
   : m_code(std::make_optional(std::move(code))),
     m_vmInstance(VMFactory::create(VMKind::evmone,
