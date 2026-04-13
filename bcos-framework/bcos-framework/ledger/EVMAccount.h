@@ -3,7 +3,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
+// #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
@@ -279,7 +279,7 @@ public:
             storage,
             [](const bcos::Address& address) {
                 evmc_address evmcAddress;
-                ::ranges::copy(address, evmcAddress.bytes);
+                ::ranges::copy(address, std::span(evmcAddress.bytes).data());
                 return evmcAddress;
             }(address),
             binaryAddress)
