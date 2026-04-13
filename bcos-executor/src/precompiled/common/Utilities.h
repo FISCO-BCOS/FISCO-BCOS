@@ -25,6 +25,7 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include "bcos-utilities/Common.h"
 #include <boost/archive/text_iarchive.hpp>
@@ -141,8 +142,9 @@ inline bytesConstRef getParamData(bytesConstRef _param)
 }
 
 
-bool checkPathValid(
-    std::string_view _absolutePath, std::variant<uint32_t, protocol::BlockVersion> version);
+bool checkPathValid(std::string_view _absolutePath,
+    std::variant<uint32_t, protocol::BlockVersion> version,
+    const ledger::Features* features = nullptr);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 

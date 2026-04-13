@@ -179,7 +179,8 @@ std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("BFSPrecompiled")
                               << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("BFSPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("BFSPrecompiled call undefined function!"));
     }
 
     return _callParameters;
@@ -309,7 +310,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
     std::vector<BfsTuple> files = {};
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("ls path")
                            << LOG_KV("path", absolutePath);
-    if (!checkPathValid(absolutePath, blockContext.blockVersion()))
+    if (!checkPathValid(absolutePath, blockContext.blockVersion(), &blockContext.features()))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("invalid path name")
                                << LOG_KV("path", absolutePath);
@@ -444,7 +445,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("ls path")
                            << LOG_KV("path", absolutePath) << LOG_KV("offset", offset)
                            << LOG_KV("count", count);
-    if (!checkPathValid(absolutePath, blockContext.blockVersion()))
+    if (!checkPathValid(absolutePath, blockContext.blockVersion(), &blockContext.features()))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("invalid path name")
                                << LOG_KV("path", absolutePath);
@@ -587,7 +588,7 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
                            << LOG_KV("contractAbiSize", _contractAbi.size());
     auto linkTableName = getContractTableName(getLinkRootDir(), _absolutePath);
 
-    if (!checkPathValid(linkTableName, blockContext.blockVersion()))
+    if (!checkPathValid(linkTableName, blockContext.blockVersion(), &blockContext.features()))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("check link params failed, invalid path name")
@@ -660,7 +661,8 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         checkLinkParam(_executive, contractAddress, contractName, contractVersion, contractAbi);
     auto linkTableName = std::string(USER_APPS_PREFIX) + contractName + '/' + contractVersion;
 
-    if (validCode < 0 || !checkPathValid(linkTableName, blockContext.blockVersion()))
+    if (validCode < 0 ||
+        !checkPathValid(linkTableName, blockContext.blockVersion(), &blockContext.features()))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("check link params failed, invalid path name")
@@ -791,7 +793,7 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     PRECOMPILED_LOG(DEBUG) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BFSPrecompiled")
                            << LOG_DESC("touch new file") << LOG_KV("absolutePath", absolutePath)
                            << LOG_KV("type", type);
-    if (!checkPathValid(absolutePath, blockContext.blockVersion()))
+    if (!checkPathValid(absolutePath, blockContext.blockVersion(), &blockContext.features()))
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("BFSPrecompiled") << LOG_DESC("file name is invalid");
 
@@ -834,7 +836,8 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     auto buildResult = recursiveBuildDir(_executive, parentDir);
     if (!buildResult)
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Recursive build bfs dir error."));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("Recursive build bfs dir error."));
     }
     if (type == FS_TYPE_DIR)
     {
@@ -946,7 +949,8 @@ void BFSPrecompiled::fixBfs(const std::shared_ptr<executor::TransactionExecutive
                               << LOG_DESC("fixBfs version not supported")
                               << LOG_KV("fixVersion", fixVersion)
                               << LOG_KV("blockVersion", blockContext.blockVersion());
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("BFSPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("BFSPrecompiled call undefined function!"));
     }
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
@@ -960,7 +964,8 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("BFSPrecompiled")
                                << LOG_DESC("fixBfs320 backendStorage is null");
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("BFSPrecompiled fixBfs320 backendStorage is null."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "BFSPrecompiled fixBfs320 backendStorage is null."));
     }
     auto existEntries = _executive->storage().getRows(tool::FS_ROOT, tool::FS_ROOT_SUBS_NAME);
     if (std::all_of(existEntries.begin(), existEntries.end(),
@@ -992,8 +997,9 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
                                                << LOG_DESC("fixBfs320 asyncGetPrimaryKeys error")
                                                << LOG_KV("code", error->errorCode())
                                                << LOG_KV("message", error->errorMessage());
-                        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
-                            "BFSPrecompiled fixBfs320 asyncGetPrimaryKeys failed."));
+                        BOOST_THROW_EXCEPTION(
+                            PrecompiledError{} << errinfo_comment(
+                                "BFSPrecompiled fixBfs320 asyncGetPrimaryKeys failed."));
                     }
                     promise.set_value(std::forward<decltype(keys)>(keys));
                 });
@@ -1022,8 +1028,8 @@ void BFSPrecompiled::fixBfs330(const std::shared_ptr<executor::TransactionExecut
                         << LOG_BADGE("BFSPrecompiled") << LOG_DESC("fixBfs320 asyncGetRow error")
                         << LOG_KV("code", error->errorCode())
                         << LOG_KV("message", error->errorMessage());
-                    BOOST_THROW_EXCEPTION(
-                        PrecompiledError{} << errinfo_comment("BFSPrecompiled fixBfs320 asyncGetRow failed."));
+                    BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                              "BFSPrecompiled fixBfs320 asyncGetRow failed."));
                 }
                 getRowPromise.set_value(std::forward<decltype(entry)>(entry));
             });
