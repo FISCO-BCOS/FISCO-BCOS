@@ -8,6 +8,7 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
+#include <bit>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -116,7 +117,7 @@ struct MockConflictExecutor
             {
                 auto input = transaction->input();
                 auto inputNum = boost::lexical_cast<int>(
-                    std::string_view((const char*)input.data(), input.size()));
+                    std::string_view(std::bit_cast<const char*>(input.data()), input.size()));
                 fromAddress = std::to_string(inputNum % MOCK_USER_COUNT);
                 toAddress = std::to_string((inputNum + (MOCK_USER_COUNT / 2)) % MOCK_USER_COUNT);
             }

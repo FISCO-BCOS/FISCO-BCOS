@@ -20,6 +20,7 @@
  */
 #include "ProtocolInfoCodecImpl.h"
 #include "../Common.h"
+#include <bit>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -39,7 +40,7 @@ void ProtocolInfoCodecImpl::encode(
 bcos::protocol::ProtocolInfo::Ptr ProtocolInfoCodecImpl::decode(bcos::bytesConstRef _data) const
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)_data.data(), _data.size());
+    input.setBuffer(std::bit_cast<const char*>(_data.data()), _data.size());
     bcostars::ProtocolInfo tarsProtocolInfo;
     tarsProtocolInfo.readFrom(input);
 

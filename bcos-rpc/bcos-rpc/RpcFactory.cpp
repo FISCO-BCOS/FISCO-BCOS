@@ -43,6 +43,7 @@
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+#include <bit>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -407,7 +408,8 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
         WS_RAW_MESSAGE_TYPE, [web3JsonRpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
                                  std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             auto payload = msg->payload();
-            std::string_view strRequest((char*)payload->data(), payload->size());
+            std::string_view strRequest(
+                std::bit_cast<const char*>(payload->data()), payload->size());
 
             // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
 

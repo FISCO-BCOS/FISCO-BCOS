@@ -24,12 +24,14 @@
 #include "bcos-framework/sealer/VrfCurveType.h"
 #include "bcos-pbft/core/ConsensusConfig.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include <bit>
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-txpool/TxPool.h>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <boost/endian/conversion.hpp>
+#include <bit>
 #include <cstdint>
 
 namespace bcos::sealer
@@ -77,7 +79,7 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
             return SealBlockResult::WAIT_FOR_LATEST_BLOCK;
         }
         auto keyPair = _sealerConfig->keyPair();
-        CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
+        CInputBuffer privateKey{std::bit_cast<const char*>(keyPair->secretKey()->data().data()),
             keyPair->secretKey()->size()};
         bytes vrfPublicKey;
         bcos::bytes vrfProof;
@@ -88,30 +90,30 @@ uint16_t VRFBasedSealer::generateTransactionForRotating(bcos::protocol::Block::P
         auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
         CInputBuffer inputMsg = {
             .data = blockNumberInput ?
-                        reinterpret_cast<const char*>(std::addressof(blockNumberBigEndian)) :
-                        reinterpret_cast<const char*>(blockHash.data()),
+                        std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)) :
+                        std::bit_cast<const char*>(blockHash.data()),
             .len = blockNumberInput ? sizeof(blockNumberBigEndian) :
                                       static_cast<size_t>(blockHash.size())};
         if (vrfCurveType == sealer::VrfCurveType::CURVE25519)
         {
             vrfPublicKey.resize(curve25519PublicKeySize);
-            COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+            COutputBuffer publicKey{std::bit_cast<char*>(vrfPublicKey.data()), vrfPublicKey.size()};
             // NOTE: curve25519 fits sm2 and secp256k1 private key value range, so if you want to
             // change elliptic curve, do think twice here.
             pubkeyDerive = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
 
             vrfProof.resize(curve25519VRFProofSize);
-            COutputBuffer proof{(char*)vrfProof.data(), curve25519VRFProofSize};
+            COutputBuffer proof{std::bit_cast<char*>(vrfProof.data()), curve25519VRFProofSize};
             auto vrfProve = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
         }
         else if (vrfCurveType == sealer::VrfCurveType::SECKP256K1)
         {
             vrfPublicKey.resize(secp256k1PublicKeySize);
-            COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+            COutputBuffer publicKey{std::bit_cast<char*>(vrfPublicKey.data()), vrfPublicKey.size()};
             pubkeyDerive = wedpr_secp256k1_vrf_derive_public_key(&privateKey, &publicKey);
 
             vrfProof.resize(secp256k1VRFProofSize);
-            COutputBuffer proof{(char*)vrfProof.data(), secp256k1VRFProofSize};
+            COutputBuffer proof{std::bit_cast<char*>(vrfProof.data()), secp256k1VRFProofSize};
             vrfProve = wedpr_secp256k1_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
         }
 

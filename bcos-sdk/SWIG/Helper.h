@@ -3,6 +3,7 @@
 #include "bcos-cpp-sdk/tarsRPC/Handle.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <bit>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <memory>
 #include <string_view>
@@ -12,13 +13,14 @@ namespace bcos::sdk::swig
 template <class Buffer>
 bcos::bytesConstRef toBytesConstRef(Buffer const& input)
 {
-    return {(const bcos::byte*)input.data(), input.size()};
+    return {std::bit_cast<const bcos::byte*>(input.data()), input.size()};
 }
 
 template <class Buffer>
 bcos::bytes toBytes(Buffer const& input)
 {
-    return {(const bcos::byte*)input.data(), (const bcos::byte*)input.data() + input.size()};
+    return {std::bit_cast<const bcos::byte*>(input.data()),
+        std::bit_cast<const bcos::byte*>(input.data()) + input.size()};
 }
 bcos::bytes toBytes(char* STRING, size_t LENGTH);
 
@@ -37,14 +39,14 @@ std::string toString(Input const& input)
     }
     else
     {
-        return {(const char*)input.data(), input.size()};
+        return {std::bit_cast<const char*>(input.data()), input.size()};
     }
 }
 
 template <class Buffer>
 std::string_view toStringView(Buffer input)
 {
-    return {(const char*)input.data(), input.size()};
+    return {std::bit_cast<const char*>(input.data()), input.size()};
 }
 
 template <class Input>

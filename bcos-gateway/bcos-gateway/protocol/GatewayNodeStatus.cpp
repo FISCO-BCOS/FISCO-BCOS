@@ -20,6 +20,7 @@
 #include "GatewayNodeStatus.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/protocol/GroupNodeInfoImpl.h"
+#include <bit>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::gateway;
@@ -48,7 +49,7 @@ bytesPointer GatewayNodeStatus::encode()
 void GatewayNodeStatus::decode(bytesConstRef _data)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)_data.data(), _data.size());
+    input.setBuffer(std::bit_cast<const char*>(_data.data()), _data.size());
     m_tarsStatus->readFrom(input);
     // decode into m_groupNodeInfos
     m_groupNodeInfos.clear();

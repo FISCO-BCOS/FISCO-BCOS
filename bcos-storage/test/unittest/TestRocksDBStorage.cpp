@@ -14,6 +14,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/test/unit_test.hpp>
+#include <bit>
 #include <future>
 #include <optional>
 #include <random>
@@ -39,7 +40,7 @@ public:
     {
         std::hash<std::string_view> hash;
         return bcos::crypto::HashType(
-            hash(std::string_view((const char*)_data.data(), _data.size())));
+            hash(std::string_view(std::bit_cast<const char*>(_data.data()), _data.size())));
     }
     bcos::crypto::hasher::AnyHasher hasher() const override
     {
@@ -551,7 +552,8 @@ BOOST_AUTO_TEST_CASE(rocksDBiter)
 
         for (size_t j = 0; j != 1000; ++j)
         {
-            std::string key = *(bcos::toHexString(std::string((char*)&i, sizeof(i)))) + "_key_" +
+            std::string key =
+                              *(bcos::toHexString(std::string(std::bit_cast<const char*>(std::addressof(i)), sizeof(i)))) + "_key_" +
                               boost::lexical_cast<std::string>(j);
             std::string value = "hello world!";
 

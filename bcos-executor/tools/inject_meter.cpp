@@ -28,6 +28,7 @@
 #include "src/validator.h"
 #include "src/wast-lexer.h"
 #include "vm/gas_meter/GasInjector.h"
+#include <bit>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -62,7 +63,8 @@ int main(int argc, char* argv[])
             ReadBinaryOptions options(
                 defaultFeature, s_log_stream.get(), true, kStopOnFirstError, true);
             result = ReadBinaryIr(p.filename().generic_string().c_str(),
-                (const char*)ret.byteCode->data(), ret.byteCode->size(), options, &errors, &module);
+                std::bit_cast<const char*>(ret.byteCode->data()), ret.byteCode->size(), options,
+                &errors, &module);
             if (Succeeded(result))
             {
                 ValidateOptions voptions(defaultFeature);
@@ -71,7 +73,8 @@ int main(int argc, char* argv[])
                 {
                     ofstream out("metric_" + p.filename().generic_string(),
                         std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
-                    out.write((const char*)ret.byteCode->data(), ret.byteCode->size());
+                    out.write(std::bit_cast<const char*>(ret.byteCode->data()),
+                        ret.byteCode->size());
                     out.close();
                     cout << "InjectMeter success" << endl;
                     return 0;

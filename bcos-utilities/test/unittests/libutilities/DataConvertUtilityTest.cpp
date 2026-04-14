@@ -20,6 +20,7 @@
  */
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bit>
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>
 #include <ctime>
@@ -107,7 +108,8 @@ BOOST_AUTO_TEST_CASE(testBigEndianToU64)
     std::cout << "bigEndU64:" << toHex(bigEndU64) << std::endl;
     // check u256
     uint64_t fromBig0 = 0;
-    std::reverse_copy(bigEndU64.data() + 24, bigEndU64.data() + 32, (char*)&fromBig0);
+    std::reverse_copy(bigEndU64.data() + 24, bigEndU64.data() + 32,
+        std::bit_cast<char*>(std::addressof(fromBig0)));
     std::cout << "fromBig:" << fromBig0 << std::endl;
     BOOST_CHECK(fromBig0 == number);
 

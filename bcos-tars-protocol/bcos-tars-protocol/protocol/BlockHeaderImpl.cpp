@@ -25,6 +25,7 @@
 #include "bcos-concepts/Hash.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
+#include <bit>
 #include <boost/endian/conversion.hpp>
 
 using namespace bcostars;
@@ -35,7 +36,7 @@ DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 void BlockHeaderImpl::decode(bcos::bytesConstRef _data)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)_data.data(), _data.size());
+    input.setBuffer(std::bit_cast<const char*>(_data.data()), _data.size());
 
     m_inner()->readFrom(input);
 }

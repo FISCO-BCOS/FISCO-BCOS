@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <bit>
 #include <unistd.h>
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -178,7 +179,7 @@ int main(int argc, char** argv)
     {
         is_sm_ssl = 0;
     }
-    auto config = bcos_sdk_create_config(is_sm_ssl, (char*)host, port);
+    auto config = bcos_sdk_create_config(is_sm_ssl, std::bit_cast<char*>(host), port);
     config->disable_ssl = 1;
     // check success or not
     std::thread threads[100];

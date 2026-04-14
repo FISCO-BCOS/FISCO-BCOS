@@ -13,9 +13,11 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
+#include <bit>
 #include <atomic>
 #include <chrono>
 #include <exception>
+#include <array>
 #include <string>
 #include <thread>
 
@@ -26,9 +28,9 @@ const static std::string DAG_TRANSFER_ADDRESS = "0000000000000000000000000000000
 
 static std::string generateNonce(int64_t number)
 {
-    std::string nonce(8, '\0');
-    std::copy(
-        reinterpret_cast<char*>(&number), reinterpret_cast<char*>(&number) + 8, nonce.begin());
+    auto raw = std::bit_cast<std::array<char, sizeof(number)>>(number);
+    std::string nonce(sizeof(number), '\0');
+    std::copy(raw.begin(), raw.end(), nonce.begin());
     return nonce;
 }
 

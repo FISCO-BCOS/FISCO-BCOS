@@ -28,6 +28,7 @@
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/Common.h"
+#include <bit>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -92,7 +93,8 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     auto addr = _keyPair->address(_cryptoSuite->hashImpl());
     if (isCheck)
     {
-        BOOST_CHECK(pbTransaction->sender() == std::string_view((char*)addr.data(), 20));
+        BOOST_CHECK(pbTransaction->sender() ==
+                    std::string_view(std::bit_cast<const char*>(addr.data()), 20));
     }
     bcos::bytes encodedData;
     pbTransaction->encode(encodedData);
@@ -140,8 +142,9 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, const std
     }
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
-    return fakeTransaction(_cryptoSuite, keyPair, std::string_view((char*)_to.data(), _to.size()),
-        input, nonce, blockLimit, chainId, groupId);
+    return fakeTransaction(_cryptoSuite, keyPair,
+        std::string_view(std::bit_cast<const char*>(_to.data()), _to.size()), input, nonce,
+        blockLimit, chainId, groupId);
 }
 
 inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string nonce,

@@ -13,6 +13,7 @@
 #include <aws/kms/model/EncryptRequest.h>
 #include <bcos-security/cloudkms/AwsKmsWrapper.h>
 #include <boost/test/unit_test.hpp>
+#include <bit>
 
 using namespace bcos::security;
 
@@ -45,12 +46,12 @@ public:
         Aws::KMS::Model::EncryptResult result;
         // Simulate encryption by base64 encoding
         Aws::Utils::ByteBuffer plainBuffer(
-            (unsigned char*)request.GetPlaintext().GetUnderlyingData(),
+            std::bit_cast<unsigned char*>(request.GetPlaintext().GetUnderlyingData()),
             request.GetPlaintext().GetLength());
         Aws::Utils::Base64::Base64 base64;
         auto encoded = base64.Encode(plainBuffer);
         result.SetCiphertextBlob(
-            Aws::Utils::ByteBuffer((unsigned char*)encoded.data(), encoded.length()));
+            Aws::Utils::ByteBuffer(std::bit_cast<unsigned char*>(encoded.data()), encoded.length()));
         lastCiphertext = result.GetCiphertextBlob();
         return Aws::KMS::Model::EncryptOutcome(result);
     }
@@ -69,12 +70,12 @@ public:
         Aws::KMS::Model::DecryptResult result;
         const auto& resultCipher = request.GetCiphertextBlob();
         auto resultCipherStr =
-            std::string((char*)resultCipher.GetUnderlyingData(), resultCipher.GetLength());
+            std::string(std::bit_cast<char*>(resultCipher.GetUnderlyingData()), resultCipher.GetLength());
         // Simulate decryption by base64 decoding
         Aws::Utils::Base64::Base64 base64;
         auto decoded = base64.Decode(resultCipherStr);
         result.SetPlaintext(Aws::Utils::ByteBuffer(
-            (unsigned char*)decoded.GetUnderlyingData(), decoded.GetLength()));
+            std::bit_cast<unsigned char*>(decoded.GetUnderlyingData()), decoded.GetLength()));
         return Aws::KMS::Model::DecryptOutcome(result);
     }
 

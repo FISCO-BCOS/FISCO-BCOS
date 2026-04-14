@@ -30,6 +30,7 @@
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
 #include "../vm/VMInstance.h"
+#include <bit>
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -472,7 +473,7 @@ std::tuple<h256, std::optional<storage::Entry>> TransactionExecutive::getCodeByC
     const std::string_view& contractTableName, bool tryFromContractTable)
 {
     auto hash = getCodeHash(contractTableName);
-    auto entry = getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
+    auto entry = getCodeByHash(std::string_view(std::bit_cast<const char*>(hash.data()), hash.size()));
     if (entry && entry.has_value() && !entry->get().empty())
     {
         return {hash, std::move(entry)};

@@ -23,6 +23,7 @@
 // #if !defined(__aarch64__) && !defined(__linux__)
 
 #include "bcos-codec/scale/Scale.h"
+#include <bit>
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #ifdef WITH_WASM
 
@@ -244,7 +245,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto tx = fakeTransaction(
         cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = *toHexString(
+        string_view(std::bit_cast<const char*>(tx->sender().data()), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -452,7 +454,8 @@ BOOST_AUTO_TEST_CASE(deployError)
 
     auto tx = fakeTransaction(
         cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = *toHexString(
+        string_view(std::bit_cast<const char*>(tx->sender().data()), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -655,7 +658,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     auto tx = fakeTransaction(
         cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = *toHexString(
+        string_view(std::bit_cast<const char*>(tx->sender().data()), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);

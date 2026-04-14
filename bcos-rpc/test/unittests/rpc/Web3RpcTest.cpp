@@ -36,6 +36,7 @@
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <bit>
 #include <ostream>
 #include <string_view>
 
@@ -66,7 +67,8 @@ public:
                 request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
             auto jsonBytes = promise.get_future().get();
             std::string_view json(
-                (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
+                std::bit_cast<const char*>(jsonBytes.data()),
+                std::bit_cast<const char*>(jsonBytes.data()) + jsonBytes.size());
             reader.parse(json.begin(), json.end(), value);
         }
         else

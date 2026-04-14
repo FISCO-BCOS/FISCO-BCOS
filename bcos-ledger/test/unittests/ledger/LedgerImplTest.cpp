@@ -19,6 +19,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
+#include <bit>
 #include <iterator>
 #include <optional>
 
@@ -29,7 +30,7 @@ namespace std
 ostream& operator<<(ostream& os, std::vector<tars::Char> const& buffer)
 {
     auto hexBuffer = boost::algorithm::hex_lower(buffer);
-    os << string_view{(const char*)hexBuffer.data(), hexBuffer.size()};
+    os << string_view{std::bit_cast<const char*>(hexBuffer.data()), hexBuffer.size()};
     return os;
 }
 
@@ -44,8 +45,8 @@ ostream& operator<<(
 ostream& operator<<(ostream& os, std::array<std::byte, 32> const& buffer)
 {
     std::string hex;
-    boost::algorithm::hex_lower((const char*)buffer.data(),
-        (const char*)buffer.data() + buffer.size(), std::back_inserter(hex));
+    boost::algorithm::hex_lower(std::bit_cast<const char*>(buffer.data()),
+        std::bit_cast<const char*>(buffer.data()) + buffer.size(), std::back_inserter(hex));
     os << hex;
     return os;
 }

@@ -23,6 +23,7 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
+#include <bit>
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
@@ -161,7 +162,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     boost::algorithm::unhex(helloworld, std::back_inserter(input));
     auto tx =
         fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = *toHexString(
+        string_view(std::bit_cast<const char*>(tx->sender().data()), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -1039,7 +1041,8 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         params->setContextID(100 + i);
         params->setSeq(1000);
         params->setDepth(0);
-        auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+        auto sender = *toHexString(
+            string_view(std::bit_cast<const char*>(tx->sender().data()), tx->sender().size()));
 
         auto addressCreate =
             cryptoSuite->hashImpl()->hash("i am a address" + boost::lexical_cast<std::string>(i));

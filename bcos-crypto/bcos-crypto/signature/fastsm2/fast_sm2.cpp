@@ -27,6 +27,7 @@
 #include <openssl/evp.h>
 #include <openssl/obj_mac.h>
 #include <openssl/sm2.h>
+#include <bit>
 
 #ifdef WITH_SM2_OPTIMIZE
 using namespace bcos;
@@ -55,7 +56,7 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     int8_t ret = WEDPR_ERROR;
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
-    bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
+    bn = BN_bin2bn(publicKeyData, 65, NULL);
     if (bn == nullptr)
     {
         CRYPTO_LOG(WARNING) << LOG_DESC("fast_sm2_sign: error of BN_bin2bn for publicKey");
@@ -63,7 +64,8 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
     }
 
     // load privateKey
-    privateKey = BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
+    privateKey = BN_bin2bn(
+        std::bit_cast<const unsigned char*>(raw_private_key->data), raw_private_key->len, NULL);
     if (privateKey == nullptr)
     {
         CRYPTO_LOG(WARNING) << LOG_DESC("sm2: fast_sm2_sign: error of BN_bin2bn for privateKey");
@@ -112,7 +114,7 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         goto done;
     }
     // set (r, s) to output_signature
-    len = BN_bn2bin(ECDSA_SIG_get0_r(sig), (unsigned char*)output_signature->data);
+    len = BN_bn2bin(ECDSA_SIG_get0_r(sig), std::bit_cast<unsigned char*>(output_signature->data));
     if (len < c_R_FIELD_LEN)
     {
         // padding zero to the r field
@@ -120,8 +122,8 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         memset(output_signature->data, 0, (c_R_FIELD_LEN - len));
     }
     // get s filed
-    len =
-        BN_bn2bin(ECDSA_SIG_get0_s(sig), (unsigned char*)(output_signature->data + c_R_FIELD_LEN));
+    len = BN_bn2bin(
+        ECDSA_SIG_get0_s(sig), std::bit_cast<unsigned char*>(output_signature->data + c_R_FIELD_LEN));
     if (len < c_S_FIELD_LEN)
     {
         auto startPointer = output_signature->data + c_R_FIELD_LEN;
@@ -165,7 +167,7 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
     int8_t ret = WEDPR_ERROR;
     uint8_t publicKeyData[65] = {4};
     memcpy(publicKeyData + 1, raw_public_key->data, raw_public_key->len);
-    BIGNUM* bn = BN_bin2bn((const unsigned char*)publicKeyData, 65, NULL);
+    BIGNUM* bn = BN_bin2bn(publicKeyData, 65, NULL);
     point = EC_POINT_new(sm2Group);
     if (point == NULL)
     {
@@ -196,13 +198,15 @@ int8_t bcos::crypto::fast_sm2_verify(const CInputBuffer* raw_public_key,
         CRYPTO_LOG(WARNING) << "EC_KEY_set_public_key of EC_KEY_set_public_key";
         goto done;
     }
-    r = BN_bin2bn((const unsigned char*)raw_signature->data, c_R_FIELD_LEN, NULL);
+    r = BN_bin2bn(std::bit_cast<const unsigned char*>(raw_signature->data), c_R_FIELD_LEN, NULL);
     if (r == NULL)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of BN_bin2bn for r";
         goto done;
     }
-    s = BN_bin2bn((const unsigned char*)(raw_signature->data + c_R_FIELD_LEN), c_S_FIELD_LEN, NULL);
+    s = BN_bin2bn(
+        std::bit_cast<const unsigned char*>(raw_signature->data + c_R_FIELD_LEN), c_S_FIELD_LEN,
+        NULL);
     if (s == NULL)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_verify: error of BN_bin2bn for s";
@@ -255,8 +259,8 @@ int8_t bcos::crypto::fast_sm2_derive_public_key(
     EC_POINT* pubPoint = NULL;
     BN_CTX* ctx = NULL;
     char* publicKey = NULL;
-    BIGNUM* privateKey =
-        BN_bin2bn((const unsigned char*)raw_private_key->data, raw_private_key->len, NULL);
+    BIGNUM* privateKey = BN_bin2bn(
+        std::bit_cast<const unsigned char*>(raw_private_key->data), raw_private_key->len, NULL);
     if (!privateKey)
     {
         CRYPTO_LOG(WARNING) << "sm2: fast_sm2_derive_public_key: error of BN_bin2bn for privateKey";

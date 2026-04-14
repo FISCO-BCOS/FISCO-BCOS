@@ -14,6 +14,7 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <bit>
 #include <future>
 #include <optional>
 
@@ -34,7 +35,7 @@ public:
     {
         std::hash<std::string_view> hash;
         return bcos::crypto::HashType(
-            hash(std::string_view((const char*)_data.data(), _data.size())));
+            hash(std::string_view(std::bit_cast<const char*>(_data.data()), _data.size())));
     }
     bcos::crypto::hasher::AnyHasher hasher() const override
     {

@@ -194,7 +194,7 @@ std::string bcos::pthread_getThreadName()
 {
 #if defined(__GLIBC__) || defined(__APPLE__)
     std::array<char, 16> name = {0};
-    auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
+    auto err = pthread_getname_np(pthread_self(), name.data(), name.size());
     if (err == 0)
     {
         if (name[0] == '\0')

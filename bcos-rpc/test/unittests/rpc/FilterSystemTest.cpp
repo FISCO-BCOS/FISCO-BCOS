@@ -4,6 +4,7 @@
 #include <bcos-rpc/filter/FilterSystem.h>
 #include <bcos-utilities/Common.h>
 #include <json/json.h>
+#include <bit>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -34,7 +35,8 @@ public:
                 request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
             auto jsonBytes = promise.get_future().get();
             std::string_view json(
-                (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
+                std::bit_cast<const char*>(jsonBytes.data()),
+                std::bit_cast<const char*>(jsonBytes.data()) + jsonBytes.size());
             reader.parse(json.begin(), json.end(), value);
         }
         else

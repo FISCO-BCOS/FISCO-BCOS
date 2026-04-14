@@ -5,6 +5,7 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/filtering_stream.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <bit>
 
 using namespace bcos::rpc;
 
@@ -159,7 +160,8 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
                     RPC_IMPL_LOG(TRACE)
                         << LOG_BADGE("onRPCRequest")
                         << LOG_KV("response",
-                               std::string_view((const char*)strResp.data(), strResp.size()));
+                               std::string_view(
+                                   std::bit_cast<const char*>(strResp.data()), strResp.size()));
                 }
                 _sender(std::move(strResp));
             });
@@ -191,7 +193,8 @@ void JsonRpcInterface::onRPCRequest(std::string_view _requestBody, Sender _sende
     RPC_IMPL_LOG(DEBUG) << LOG_BADGE("onRPCRequest") << LOG_DESC("response with exception")
                         << LOG_KV("request", _requestBody)
                         << LOG_KV("response",
-                               std::string_view((const char*)strResp.data(), strResp.size()));
+                               std::string_view(
+                                   std::bit_cast<const char*>(strResp.data()), strResp.size()));
     _sender(std::move(strResp));
 }
 

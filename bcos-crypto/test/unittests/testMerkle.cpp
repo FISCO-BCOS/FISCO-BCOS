@@ -6,6 +6,7 @@
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <bit>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/test/unit_test.hpp>
@@ -22,8 +23,8 @@ namespace std
 std::ostream& operator<<(std::ostream& stream, const HashType& hash)
 {
     std::string hex;
-    boost::algorithm::hex_lower(
-        (char*)hash.data(), (char*)hash.data() + hash.size(), std::back_inserter(hex));
+    boost::algorithm::hex_lower(std::bit_cast<char*>(hash.data()),
+        std::bit_cast<char*>(hash.data()) + hash.size(), std::back_inserter(hex));
     std::string_view view{hex.data(), 8};
     stream << view;
     return stream;

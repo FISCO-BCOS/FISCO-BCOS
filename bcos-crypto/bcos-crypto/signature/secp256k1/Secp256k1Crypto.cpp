@@ -26,6 +26,7 @@
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <bit>
 #include <array>
 #include <memory>
 
@@ -55,14 +56,16 @@ std::shared_ptr<bytes> bcos::crypto::secp256k1Sign(
     // secp256k1_ecdsa_recoverable_signature rawSig;
     auto* rawSig = (secp256k1_ecdsa_recoverable_signature*)(signatureData->data());
     if (secp256k1_ecdsa_sign_recoverable(g_SECP256K1_CTX.get(), rawSig, _hash.data(),
-            (const unsigned char*)_keyPair.secretKey()->constData(), nullptr, nullptr) == 0)
+            std::bit_cast<const unsigned char*>(_keyPair.secretKey()->constData()), nullptr,
+            nullptr) == 0)
     {
         BOOST_THROW_EXCEPTION(SignException() << errinfo_comment(
                                   "secp256k1Sign exception, raw data: " + _hash.hex()));
     }
     int recid = 0;
     secp256k1_ecdsa_recoverable_signature_serialize_compact(
-        g_SECP256K1_CTX.get(), (unsigned char*)signatureData->data(), &recid, rawSig);
+        g_SECP256K1_CTX.get(), std::bit_cast<unsigned char*>(signatureData->data()), &recid,
+        rawSig);
     signatureData->back() = (uint8_t)recid;
     return signatureData;
 }

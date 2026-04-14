@@ -23,6 +23,7 @@
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-utilities/ZstdCompress.h"
+#include <bit>
 #include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcos;
@@ -261,7 +262,7 @@ bool P2PMessage::encode(bcos::bytes& _buffer)
     if (isCompressSuccess)
     {
         P2PMSG_LOG(TRACE) << LOG_DESC("compress payload success")
-                          << LOG_KV("compressedData", (char*)compressData.data())
+                          << LOG_KV("compressedData", std::bit_cast<char*>(compressData.data()))
                           << LOG_KV("packageType", m_packetType) << LOG_KV("ext", m_ext)
                           << LOG_KV("seq", m_seq);
         _buffer.insert(_buffer.end(), compressData.begin(), compressData.end());

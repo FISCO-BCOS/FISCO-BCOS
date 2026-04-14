@@ -39,7 +39,7 @@ public:
     bcos::group::GroupInfo::Ptr deserialize(const std::string& _encodedData) override
     {
         tars::TarsInputStream<tars::BufferReader> input;
-        input.setBuffer((const char*)_encodedData.data(), _encodedData.size());
+        input.setBuffer(_encodedData.data(), _encodedData.size());
 
         bcostars::GroupInfo tarsGroupInfo;
         tarsGroupInfo.readFrom(input);

@@ -18,6 +18,7 @@
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Common.h>
+#include <bit>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
@@ -110,7 +111,8 @@ BOOST_AUTO_TEST_CASE(stateSwitchTest)
     dmcExecutor->setOnTxFinishedHandler(
         [&dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
-            std::string outputStr((char*)outputBytes.data(), outputBytes.size());
+            std::string outputStr(
+                std::bit_cast<const char*>(outputBytes.data()), outputBytes.size());
             SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
             if (outputStr == "Call Finished!")
             {
@@ -274,7 +276,8 @@ BOOST_AUTO_TEST_CASE(keyLocksTest)
     dmcExecutor->setOnTxFinishedHandler(
         [&dmcFlagStruct](bcos::protocol::ExecutionMessage::UniquePtr output) {
             auto outputBytes = output->data();
-            std::string outputStr((char*)outputBytes.data(), outputBytes.size());
+            std::string outputStr(
+                std::bit_cast<const char*>(outputBytes.data()), outputBytes.size());
             SCHEDULER_LOG(DEBUG) << LOG_KV("output data is ", outputStr);
             if (outputStr == "Call Finished!")
             {

@@ -11,6 +11,7 @@
 #include <boost/iostreams/stream.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <initializer_list>
 #include <type_traits>
@@ -303,14 +304,14 @@ private:
     template <typename T>
     [[nodiscard]] auto inputValueView(const T& value) const -> std::string_view
     {
-        std::string_view view((const char*)value.data(), value.size());
+        std::string_view view(std::bit_cast<const char*>(value.data()), value.size());
         return view;
     }
 
     template <typename T>
     [[nodiscard]] auto inputValueView(const std::shared_ptr<T>& value) const -> std::string_view
     {
-        std::string_view view((const char*)value->data(), value->size());
+        std::string_view view(std::bit_cast<const char*>(value->data()), value->size());
         return view;
     }
 

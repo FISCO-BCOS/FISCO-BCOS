@@ -25,6 +25,7 @@
 #include "kzgPrecompiled.h"
 #include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
+#include <bit>
 #include <algorithm>
 
 using namespace std;
@@ -193,8 +194,8 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 {
     pair<bool, bytes> ret{false, bytes(64, 0)};
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.second.data(), 64};
+    CInputBuffer in{std::bit_cast<const char*>(_in.data()), _in.size()};
+    COutputBuffer result{std::bit_cast<char*>(ret.second.data()), 64};
     if (wedpr_fb_alt_bn128_g1_add(&in, &result) != 0)
     {
         return ret;
@@ -206,8 +207,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
 {
     pair<bool, bytes> ret{false, bytes(64, 0)};
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.second.data(), 64};
+    CInputBuffer in{std::bit_cast<const char*>(_in.data()), _in.size()};
+    COutputBuffer result{std::bit_cast<char*>(ret.second.data()), 64};
     if (wedpr_fb_alt_bn128_g1_mul(&in, &result) != 0)
     {
         return ret;
@@ -229,8 +230,8 @@ ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
         return ret;
     }
 
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.second.data(), 32};
+    CInputBuffer in{std::bit_cast<const char*>(_in.data()), _in.size()};
+    COutputBuffer result{std::bit_cast<char*>(ret.second.data()), 32};
     if (wedpr_fb_alt_bn128_pairing_product(&in, &result) != 0)
     {
         return ret;
@@ -347,8 +348,8 @@ namespace crypto
 h256 sha256(bytesConstRef _in) noexcept
 {
     h256 ret;
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.data(), h256::SIZE};
+    CInputBuffer in{std::bit_cast<const char*>(_in.data()), _in.size()};
+    COutputBuffer result{std::bit_cast<char*>(ret.data()), h256::SIZE};
     if (wedpr_sha256_hash(&in, &result) != 0) [[unlikely]]
     {
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("sha256 failed.") << _in.toString();
@@ -360,8 +361,8 @@ h256 sha256(bytesConstRef _in) noexcept
 h160 ripemd160(bytesConstRef _in)
 {
     h160 ret;
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.data(), h160::SIZE};
+    CInputBuffer in{std::bit_cast<const char*>(_in.data()), _in.size()};
+    COutputBuffer result{std::bit_cast<char*>(ret.data()), h160::SIZE};
     if (wedpr_ripemd160_hash(&in, &result) != 0) [[unlikely]]
     {
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ripemd160 failed.")
@@ -556,7 +557,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
                     << LOG_DESC("wedpr_secp256k1_recover_public_key success");
     // keccak256 and set first 12 byte to zero
     CInputBuffer pubkeyBuffer{pk->constData(), PUBLIC_KEY_LENGTH};
-    COutputBuffer pubkeyHash{(char*)ret.second.data(), crypto::HashType::SIZE};
+    COutputBuffer pubkeyHash{std::bit_cast<char*>(ret.second.data()), crypto::HashType::SIZE};
     auto retCode = wedpr_keccak256_hash(&pubkeyBuffer, &pubkeyHash);
     if (retCode != 0)
     {

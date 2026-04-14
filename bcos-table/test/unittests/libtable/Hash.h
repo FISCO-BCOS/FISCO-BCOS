@@ -20,6 +20,7 @@
 #pragma once
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage/Table.h"
+#include <bit>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <functional>
@@ -64,7 +65,7 @@ public:
     HashType hash(bytesConstRef _data) const override
     {
         std::hash<std::string_view> hash;
-        auto h = hash(std::string_view((const char*)_data.data(), _data.size()));
+        auto h = hash(std::string_view(std::bit_cast<const char*>(_data.data()), _data.size()));
         uint8_t hash_result[32] = {0};
         memcpy(hash_result, &h, sizeof(h));
         return HashType(hash_result, 32);

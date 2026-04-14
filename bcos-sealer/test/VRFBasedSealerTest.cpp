@@ -29,6 +29,7 @@
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <wedpr-crypto/WedprUtilities.h>
+#include <bit>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -114,39 +115,40 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
     blockFactory = createBlockFactory(cryptoSuite);
     keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
 
-    CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
+    CInputBuffer privateKey{std::bit_cast<const char*>(keyPair->secretKey()->data().data()),
         keyPair->secretKey()->size()};
     bytes vrfPublicKey;
     bcos::bytes vrfProof;
     int8_t vrfProve = -1;
     int8_t pubkeyDerive = -1;
     CInputBuffer inputMsg = {
-        .data = reinterpret_cast<const char*>("test"),
+        .data = "test",
         .len = 4,
     };
 
     vrfPublicKey.resize(sealer::secp256k1PublicKeySize);
-    COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+    COutputBuffer publicKey{std::bit_cast<char*>(vrfPublicKey.data()), vrfPublicKey.size()};
     pubkeyDerive = wedpr_secp256k1_vrf_derive_public_key(&privateKey, &publicKey);
 
     vrfProof.resize(sealer::secp256k1VRFProofSize);
     // vrfProof.resize(200);
-    COutputBuffer proof{(char*)vrfProof.data(), sealer::secp256k1VRFProofSize};
+    COutputBuffer proof{std::bit_cast<char*>(vrfProof.data()), sealer::secp256k1VRFProofSize};
     vrfProve = wedpr_secp256k1_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
     BOOST_CHECK(vrfProve == 0);
     BOOST_CHECK(pubkeyDerive == 0);
 
-    CInputBuffer publicKeyInput{
-        reinterpret_cast<const char*>(vrfPublicKey.data()), vrfPublicKey.size()};
+    CInputBuffer publicKeyInput{std::bit_cast<const char*>(vrfPublicKey.data()),
+        vrfPublicKey.size()};
 
     uint8_t isSuccessFlag = wedpr_secp256k1_vrf_is_valid_public_key(&publicKeyInput);
     BOOST_CHECK(isSuccessFlag == 0);
 
     bytes vrfProofHash;
     vrfProofHash.resize(32);
-    COutputBuffer proofHash{(char*)vrfProofHash.data(), vrfProofHash.size()};
+    COutputBuffer proofHash{std::bit_cast<char*>(vrfProofHash.data()), vrfProofHash.size()};
 
-    CInputBuffer proofBuffer{reinterpret_cast<const char*>(vrfProof.data()), vrfProof.size()};
+    CInputBuffer proofBuffer{
+        std::bit_cast<const char*>(vrfProof.data()), vrfProof.size()};
     uint8_t proofToHash = wedpr_secp256k1_vrf_proof_to_hash(&proofBuffer, &proofHash);
     BOOST_CHECK(proofToHash == 0);
 
@@ -154,7 +156,7 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
     BOOST_CHECK(verifyFlag == 0);
 
     CInputBuffer inputMsgError = {
-        .data = reinterpret_cast<const char*>("test error"),
+        .data = "test error",
         .len = 10,
     };
 
@@ -165,8 +167,8 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
     // check error public key
     bytes vrfPublicKeyError;
     vrfPublicKeyError.resize(sealer::secp256k1PublicKeySize);
-    CInputBuffer publicKeyError{
-        reinterpret_cast<const char*>(vrfPublicKeyError.data()), vrfPublicKeyError.size()};
+    CInputBuffer publicKeyError{std::bit_cast<const char*>(vrfPublicKeyError.data()),
+        vrfPublicKeyError.size()};
     int8_t verifyFlagErrorPublicKey =
         wedpr_secp256k1_vrf_verify_utf8(&publicKeyError, &inputMsg, &proofBuffer);
     BOOST_CHECK(verifyFlagErrorPublicKey == -1);
@@ -174,8 +176,8 @@ BOOST_AUTO_TEST_CASE(testVRFSecp256k1)
     // check error proof
     bytes vrfProofError;
     vrfProofError.resize(sealer::secp256k1VRFProofSize);
-    CInputBuffer proofBufferError{
-        reinterpret_cast<const char*>(vrfProofError.data()), vrfProofError.size()};
+    CInputBuffer proofBufferError{std::bit_cast<const char*>(vrfProofError.data()),
+        vrfProofError.size()};
 
     int8_t verifyFlagErrorProof =
         wedpr_secp256k1_vrf_verify_utf8(&publicKeyInput, &inputMsg, &proofBufferError);

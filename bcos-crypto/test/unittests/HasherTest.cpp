@@ -24,6 +24,7 @@
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/test/unit_test_suite.hpp>
+#include <bit>
 #include <iterator>
 #include <string>
 
@@ -127,7 +128,7 @@ template <size_t length>
 {
     std::string str;
     str.reserve(hash.size() * 2);
-    std::span<char> view{(char*)hash.data(), hash.size()};
+    std::span<char> view{std::bit_cast<char*>(hash.data()), hash.size()};
 
     boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(str));
     stream << str;

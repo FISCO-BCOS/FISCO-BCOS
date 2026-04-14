@@ -33,6 +33,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/core/ignore_unused.hpp>
 #include <cassert>
+#include <bit>
 #include <ethash/keccak.hpp>
 #include <span>
 
@@ -336,11 +337,12 @@ void encryptPerf(SymmetricEncryption::Ptr _encryptor, std::string const& _inputD
     auto startT = utcTime();
     for (size_t i = 0; i < _count; i++)
     {
-        encryptedData = _encryptor->symmetricEncrypt((const unsigned char*)_inputData.c_str(),
-            _inputData.size(), (const unsigned char*)key.c_str(), key.size());
+        encryptedData = _encryptor->symmetricEncrypt(
+            std::bit_cast<const unsigned char*>(_inputData.c_str()), _inputData.size(),
+            std::bit_cast<const unsigned char*>(key.c_str()), key.size());
     }
     std::cout << "PlainData size:" << (double)_inputData.size() / 1000.0 << " KB, loops: " << _count
-              << ", timeCost: " << utcTime() - startT << " ms" << std::endl;
+                  << ", timeCost: " << utcTime() - startT << " ms" << std::endl;
     std::cout << "TPS of " << _encryptorName << " encrypt:"
               << (getTPS(utcTime(), startT, _count) * (double)(_inputData.size())) / 1000.0
               << "KB/s" << std::endl;
@@ -350,8 +352,9 @@ void encryptPerf(SymmetricEncryption::Ptr _encryptor, std::string const& _inputD
     bytesPointer decryptedData;
     for (size_t i = 0; i < _count; i++)
     {
-        decryptedData = _encryptor->symmetricDecrypt((const unsigned char*)encryptedData->data(),
-            encryptedData->size(), (const unsigned char*)key.c_str(), key.size());
+            decryptedData = _encryptor->symmetricDecrypt(
+                std::bit_cast<const unsigned char*>(encryptedData->data()), encryptedData->size(),
+                std::bit_cast<const unsigned char*>(key.c_str()), key.size());
     }
     std::cout << "CiperData size:" << (double)encryptedData->size() / 1000.0
               << " KB, loops: " << _count << ", timeCost:" << utcTime() - startT << " ms"

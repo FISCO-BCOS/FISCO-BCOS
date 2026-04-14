@@ -4,6 +4,7 @@
 #include "Hasher.h"
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <bit>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <span>
@@ -104,7 +105,7 @@ public:
             m_init = true;
         }
 
-        if (!EVP_DigestUpdate(m_mdCtx.get(), reinterpret_cast<unsigned char const*>(in.data()),
+        if (!EVP_DigestUpdate(m_mdCtx.get(), std::bit_cast<unsigned char const*>(in.data()),
                 in.size())) [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestUpdate error!"});
@@ -117,7 +118,7 @@ public:
         bcos::crypto::trivial::resizeTo(out, HASH_SIZE);
         auto view = bcos::crypto::trivial::toView(std::forward<decltype(out)>(out));
 
-        if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(view.data()), nullptr))
+            if (!EVP_DigestFinal(m_mdCtx.get(), std::bit_cast<unsigned char*>(view.data()), nullptr))
             [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});
@@ -128,7 +129,7 @@ public:
     {
         m_init = false;
 
-        if (!EVP_DigestFinal(m_mdCtx.get(), reinterpret_cast<unsigned char*>(out.data()), nullptr))
+            if (!EVP_DigestFinal(m_mdCtx.get(), std::bit_cast<unsigned char*>(out.data()), nullptr))
             [[unlikely]]
         {
             BOOST_THROW_EXCEPTION(std::runtime_error{"EVP_DigestFinal error!"});

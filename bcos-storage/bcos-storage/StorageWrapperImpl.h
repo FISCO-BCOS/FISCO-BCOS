@@ -3,6 +3,7 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/storage/Storage.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bit>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::storage
@@ -55,7 +56,7 @@ public:
         for (auto&& it : keys)
         {
             viewArray.emplace_back(
-                std::string_view((const char*)RANGES::data(it), RANGES::size(it)));
+                std::string_view(std::bit_cast<const char*>(RANGES::data(it)), RANGES::size(it)));
         }
         storage().asyncGetRows(table, viewArray, std::move(callback));
 

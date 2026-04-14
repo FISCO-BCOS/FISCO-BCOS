@@ -23,6 +23,7 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <bit>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
@@ -84,7 +85,8 @@ int32_t bcostars::protocol::TransactionReceiptImpl::status() const
 }
 bcos::bytesConstRef bcostars::protocol::TransactionReceiptImpl::output() const
 {
-    return {(const unsigned char*)m_inner()->data.output.data(), m_inner()->data.output.size()};
+    return {std::bit_cast<const unsigned char*>(m_inner()->data.output.data()),
+        m_inner()->data.output.size()};
 }
 gsl::span<const bcos::protocol::LogEntry> bcostars::protocol::TransactionReceiptImpl::logEntries()
     const

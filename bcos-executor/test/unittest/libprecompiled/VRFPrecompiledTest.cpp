@@ -23,6 +23,7 @@
 #include "vm/gas_meter/GasInjector.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
+#include <bit>
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -86,9 +87,9 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
     std::string input = "abcd";
     bytes vrfPublicKey;
     vrfPublicKey.resize(32);
-    CInputBuffer privateKey{
-        (const char*)keyPair->secretKey()->data().data(), keyPair->secretKey()->size()};
-    COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+    CInputBuffer privateKey{std::bit_cast<const char*>(keyPair->secretKey()->data().data()),
+        keyPair->secretKey()->size()};
+    COutputBuffer publicKey{std::bit_cast<char*>(vrfPublicKey.data()), vrfPublicKey.size()};
     // derive the public key
     std::cout << "try to wedpr_curve25519_vrf_derive_public_key" << std::endl;
     auto ret = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
@@ -97,11 +98,11 @@ void testVRFVerify(VRFPrecompiledFixture _fixture)
 
     // generate proof
     bytes inputBytes = bytes(input.begin(), input.end());
-    CInputBuffer inputMsg{(const char*)inputBytes.data(), inputBytes.size()};
+    CInputBuffer inputMsg{std::bit_cast<const char*>(inputBytes.data()), inputBytes.size()};
     bytes vrfProof;
     size_t proofSize = 96;
     vrfProof.resize(proofSize);
-    COutputBuffer proof{(char*)vrfProof.data(), proofSize};
+    COutputBuffer proof{std::bit_cast<char*>(vrfProof.data()), proofSize};
     std::cout << "try to wedpr_curve25519_vrf_prove_utf8" << std::endl;
     ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
     BOOST_CHECK_EQUAL(ret, WEDPR_SUCCESS);

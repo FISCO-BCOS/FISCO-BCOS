@@ -21,6 +21,7 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bit>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -54,8 +55,8 @@ public:
 
     const bytes& data() const override { return *m_keyData; }
     size_t size() const override { return m_keyData->size(); }
-    char* mutableData() override { return (char*)m_keyData->data(); }
-    const char* constData() const override { return (const char*)m_keyData->data(); }
+    char* mutableData() override { return std::bit_cast<char*>(m_keyData->data()); }
+    const char* constData() const override { return std::bit_cast<const char*>(m_keyData->data()); }
     bytes encode() const override { return *m_keyData; }
     void decode(bytesConstRef _data) override { *m_keyData = _data.toBytes(); }
 

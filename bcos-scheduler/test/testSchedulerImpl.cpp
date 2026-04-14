@@ -23,6 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
+#include <bit>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -534,7 +535,7 @@ BOOST_AUTO_TEST_CASE(call)
         BOOST_CHECK_GT(receipt->gasUsed(), 0);
         auto output = receipt->output();
 
-        std::string outputStr((char*)output.data(), output.size());
+        std::string outputStr(std::bit_cast<const char*>(output.data()), output.size());
         SCHEDULER_LOG(DEBUG) << LOG_KV("outputStr", outputStr);
         BOOST_CHECK_EQUAL(outputStr, "Hello world! response");
     }

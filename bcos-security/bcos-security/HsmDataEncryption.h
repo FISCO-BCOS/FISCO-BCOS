@@ -27,6 +27,7 @@
 #include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bit>
 #include <memory>
 
 namespace bcos
@@ -43,11 +44,11 @@ public:
     // use to encrypt/decrypt in rocksdb
     std::string encrypt(const std::string& data) override
     {
-        return encrypt((unsigned char*)(data.data()), data.size());
+        return encrypt(std::bit_cast<unsigned char*>(const_cast<char*>(data.data())), data.size());
     }
     std::string decrypt(const std::string& data) override
     {
-        return decrypt((unsigned char*)(data.data()), data.size());
+        return decrypt(std::bit_cast<unsigned char*>(const_cast<char*>(data.data())), data.size());
     }
     std::string encrypt(uint8_t* data, size_t size);
     std::string decrypt(uint8_t* data, size_t size);

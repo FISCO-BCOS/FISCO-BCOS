@@ -26,6 +26,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bit>
 #include <time.h>
 
 #include <chrono>
@@ -95,7 +96,7 @@ bcostars::TransactionDataUniquePtr TransactionBuilder::decodeTransactionData(
     const bcos::bytes& _txBytes)
 {
     tars::TarsInputStream<tars::BufferReader> inputStream;
-    inputStream.setBuffer((const char*)_txBytes.data(), _txBytes.size());
+    inputStream.setBuffer(std::bit_cast<const char*>(_txBytes.data()), _txBytes.size());
     auto txData = std::make_unique<bcostars::TransactionData>();
     txData->readFrom(inputStream);
     return txData;
@@ -239,7 +240,7 @@ bytesConstPtr TransactionBuilder::encodeTransaction(const bcostars::Transaction&
 bcostars::TransactionUniquePtr TransactionBuilder::decodeTransaction(const bcos::bytes& _txBytes)
 {
     tars::TarsInputStream<tars::BufferReader> inputStream;
-    inputStream.setBuffer((const char*)_txBytes.data(), _txBytes.size());
+    inputStream.setBuffer(std::bit_cast<const char*>(_txBytes.data()), _txBytes.size());
     auto tx = std::make_unique<bcostars::Transaction>();
     tx->readFrom(inputStream);
     return tx;

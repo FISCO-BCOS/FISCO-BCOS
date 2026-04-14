@@ -34,6 +34,7 @@
 #include "bcos-utilities/IOServicePool.h"
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <bit>
 #include <chrono>
 #include <exception>
 #include <optional>
@@ -440,7 +441,8 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
                                           *_smCertConfig.enNodeKey));
             }
         }
-        std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
+        std::string enNodeKeyStr(
+            std::bit_cast<const char*>(enNodeKeyContent->data()), enNodeKeyContent->size());
         if (SSL_CTX_use_enc_PrivateKey(
                 sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
         {

@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "Exceptions.h"
+#include <bit>
 #include <bcos-utilities/Common.h>
 #include <wedpr-crypto/WedprUtilities.h>
 
@@ -35,7 +36,7 @@ inline CInputBuffer bytesToInputBuffer(bytes const& data, size_t _length)
             InvalidInputInput() << errinfo_comment(
                 "InvalidInputInput: the data size must be at least " + std::to_string(_length)));
     }
-    return CInputBuffer{(const char*)data.data(), _length};
+    return CInputBuffer{std::bit_cast<const char*>(data.data()), _length};
 }
 }  // namespace crypto
 }  // namespace bcos

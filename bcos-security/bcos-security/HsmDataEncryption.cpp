@@ -25,6 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
+#include <bit>
 
 using namespace std;
 using namespace bcos;
@@ -52,10 +53,10 @@ std::string HsmDataEncryption::encrypt(uint8_t* data, size_t size)
     auto originIvData = ivData;
 
     bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(data), size, m_encKeyIndex, ivData.data(),
+        std::bit_cast<const unsigned char*>(data), size, m_encKeyIndex, ivData.data(),
         SM4_IV_DATA_SIZE);
     // append iv data to end of encData
-    std::string value((char*)encData->data(), encData->size());
+    std::string value(std::bit_cast<const char*>(encData->data()), encData->size());
     value.insert(value.end(), originIvData.begin(), originIvData.end());
 
     return value;
@@ -66,7 +67,7 @@ std::string HsmDataEncryption::decrypt(uint8_t* data, size_t size)
     size_t cipherDataSize = size - SM4_IV_DATA_SIZE;
     bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
         data, cipherDataSize, m_encKeyIndex, data + cipherDataSize, SM4_IV_DATA_SIZE);
-    std::string value((char*)decData->data(), decData->size());
+    std::string value(std::bit_cast<const char*>(decData->data()), decData->size());
 
     return value;
 }

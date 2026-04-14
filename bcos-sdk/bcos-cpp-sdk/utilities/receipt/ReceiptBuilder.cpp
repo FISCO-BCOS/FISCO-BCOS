@@ -20,6 +20,7 @@
 
 #include "ReceiptBuilder.h"
 #include "bcos-tars-protocol/impl/TarsHashable.h"
+#include <bit>
 
 bcostars::ReceiptDataUniquePtr bcos::cppsdk::utilities::ReceiptBuilder::createReceiptData(
     const std::string& _gasUsed, const std::string& _contractAddress, const bcos::bytes& _output,
@@ -83,7 +84,7 @@ std::string bcos::cppsdk::utilities::ReceiptBuilder::decodeReceiptDataToJsonObj(
     const bcos::bytes& _receiptBytes)
 {
     tars::TarsInputStream<tars::BufferReader> inputStream;
-    inputStream.setBuffer((const char*)_receiptBytes.data(), _receiptBytes.size());
+    inputStream.setBuffer(std::bit_cast<const char*>(_receiptBytes.data()), _receiptBytes.size());
     bcostars::TransactionReceiptData receiptData;
     receiptData.readFrom(inputStream);
     auto receiptDataJson = TarsReceiptDataWriteToJsonString(receiptData);

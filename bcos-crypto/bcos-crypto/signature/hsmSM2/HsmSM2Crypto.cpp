@@ -25,6 +25,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <hsm-crypto/hsm/CryptoProvider.h>
 #include <hsm-crypto/hsm/SDFCryptoProvider.h>
+#include <bit>
 #include <algorithm>
 
 using namespace bcos;
@@ -75,7 +76,7 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
     unsigned char hashResult[HSM_SM3_DIGEST_LENGTH];
     unsigned int uiHashResultLen;
     unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
-        (unsigned char*)hashResult, &uiHashResultLen);
+        hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HSMSignature::sign] ERROR of compute H(M')"
@@ -85,8 +86,8 @@ std::shared_ptr<bytes> HsmSM2Crypto::sign(
 
     // step 3 : signature = Sign(e)
     unsigned int signLen;
-    code = provider.Sign(
-        key, hsm::SM2, (const unsigned char*)hashResult, 32, signatureData->data(), &signLen);
+    code = provider.Sign(key, hsm::SM2, hashResult, 32,
+        signatureData->data(), &signLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HSMSignature::sign] ERROR of Sign"
@@ -127,7 +128,7 @@ bool HsmSM2Crypto::verify(
     bytes hashResult(HSM_SM3_DIGEST_LENGTH);
     unsigned int uiHashResultLen;
     unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(), HSM_SM3_DIGEST_LENGTH,
-        (unsigned char*)hashResult.data(), &uiHashResultLen);
+        std::bit_cast<unsigned char*>(hashResult.data()), &uiHashResultLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(WARNING) << "[HSMSignature::verify] ERROR of Hash"
@@ -135,7 +136,7 @@ bool HsmSM2Crypto::verify(
         return false;
     }
 
-    code = provider.Verify(key, hsm::SM2, (const unsigned char*)hashResult.data(),
+    code = provider.Verify(key, hsm::SM2, std::bit_cast<const unsigned char*>(hashResult.data()),
         HSM_SM3_DIGEST_LENGTH, _signatureData.data(), 64, &verifyResult);
     if (code != SDR_OK)
     {

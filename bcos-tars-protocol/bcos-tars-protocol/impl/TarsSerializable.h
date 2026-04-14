@@ -1,6 +1,7 @@
 #pragma once
 #include "../Common.h"
 #include "TarsStruct.h"
+#include <bit>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 
@@ -22,7 +23,7 @@ void impl_decode(bcos::concepts::bytebuffer::ByteBuffer auto const& buffer,
     bcostars::protocol::impl::TarsStruct auto& out)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)RANGES::data(buffer), RANGES::size(buffer));
+    input.setBuffer(std::bit_cast<const char*>(RANGES::data(buffer)), RANGES::size(buffer));
     out.readFrom(input);
 }
 

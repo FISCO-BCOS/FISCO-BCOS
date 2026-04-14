@@ -25,6 +25,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
+#include <bit>
 
 using namespace std;
 using namespace bcos;
@@ -52,7 +53,7 @@ std::shared_ptr<bytes> HsmKeyEncryption::encryptContents(const std::shared_ptr<b
     auto originIvData = ivData;
 
     bytesPointer encData = m_symmetricEncrypt->symmetricEncryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(contents->data()), contents->size(), m_encKeyIndex,
+        std::bit_cast<const unsigned char*>(contents->data()), contents->size(), m_encKeyIndex,
         ivData.data(), SM4_IV_DATA_SIZE);
     // append iv data to end of encData
     encData->insert(encData->end(), originIvData.begin(), originIvData.end());
@@ -63,8 +64,8 @@ std::shared_ptr<bytes> HsmKeyEncryption::decryptContents(const std::shared_ptr<b
 {
     size_t cipherDataSize = contents->size() - SM4_IV_DATA_SIZE;
     bytesPointer decData = m_symmetricEncrypt->symmetricDecryptWithInternalKey(
-        reinterpret_cast<const unsigned char*>(contents->data()), cipherDataSize, m_encKeyIndex,
-        reinterpret_cast<const unsigned char*>(contents->data() + cipherDataSize),
+        std::bit_cast<const unsigned char*>(contents->data()), cipherDataSize, m_encKeyIndex,
+        std::bit_cast<const unsigned char*>(contents->data() + cipherDataSize),
         SM4_IV_DATA_SIZE);
     return decData;
 }

@@ -29,6 +29,7 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/AnyHolder.h"
+#include <bit>
 #include <boost/throw_exception.hpp>
 
 using namespace bcostars;
@@ -263,7 +264,7 @@ size_t bcostars::protocol::BlockImpl::size() const
 bcos::bytesConstRef bcostars::protocol::BlockImpl::logsBloom() const
 {
     const auto& data = inner();
-    return {(const unsigned char*)data.logsBloom.data(), data.logsBloom.size()};
+    return {std::bit_cast<const unsigned char*>(data.logsBloom.data()), data.logsBloom.size()};
 }
 
 void bcostars::protocol::BlockImpl::setLogsBloom(bcos::bytesConstRef logsBloom)

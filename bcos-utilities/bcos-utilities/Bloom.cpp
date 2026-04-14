@@ -19,10 +19,11 @@
  */
 
 #include "Bloom.h"
+#include <bit>
 
 using namespace bcos;
 
 std::string_view bcos::toStringView(Bloom const& bloom)
 {
-    return {reinterpret_cast<const char*>(bloom.data()), bloom.size()};
+    return {std::bit_cast<const char*>(bloom.data()), bloom.size()};
 }

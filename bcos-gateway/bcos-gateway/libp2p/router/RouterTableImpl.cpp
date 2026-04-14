@@ -22,6 +22,7 @@
 #include "../P2PSession.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-utilities/BoostLog.h"
+#include <bit>
 #include <boost/algorithm/string/join.hpp>
 
 using namespace bcos;
@@ -45,7 +46,7 @@ void RouterTable::encode(bcos::bytes& _encodedData)
 void RouterTable::decode(bcos::bytesConstRef _decodedData)
 {
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)_decodedData.data(), _decodedData.size());
+    input.setBuffer(std::bit_cast<const char*>(_decodedData.data()), _decodedData.size());
     WriteGuard writeGuard(x_routerEntries);
     m_inner()->readFrom(input);
     // decode into m_routerEntries

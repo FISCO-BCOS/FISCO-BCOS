@@ -55,7 +55,7 @@ std::string ContextBuilder::readFileContent(boost::filesystem::path const& _file
     }
     fileStream.seekg(0, boost::filesystem::ifstream::beg);
     content.resize(length);
-    fileStream.read((char*)content.data(), length);
+    fileStream.read(content.data(), length);
     return content;
 }
 

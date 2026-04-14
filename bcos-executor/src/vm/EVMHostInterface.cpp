@@ -28,6 +28,7 @@
 #include "HostContext.h"
 #include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
+#include <bit>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
 
@@ -225,7 +226,8 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     else
     {
         auto origin = fromHex(hostContext.origin());
-        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
+        result.tx_origin =
+            toEvmC(std::string_view(std::bit_cast<const char*>(origin.data()), origin.size()));
     }
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
@@ -307,7 +309,7 @@ bool wasmAccountExists(
     evmc_host_context* _context, const uint8_t* address, int32_t addressLength) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.exists(string_view((char*)address, addressLength));
+    return hostContext.exists(string_view(std::bit_cast<const char*>(address), addressLength));
 }
 
 int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
@@ -317,8 +319,8 @@ int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressL
     auto& hostContext = static_cast<HostContext&>(*_context);
 
     // programming assert for debug
-    assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
-    auto value = hostContext.get(std::string_view((char*)_key, _keyLength));
+    assert(string_view(std::bit_cast<const char*>(_addr), _addressLength) == hostContext.myAddress());
+    auto value = hostContext.get(std::string_view(std::bit_cast<const char*>(_key), _keyLength));
     if (value.size() > (size_t)_valueLength)
     {
         return -1;
@@ -337,9 +339,9 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
     // {  // FIXME: RETURN STATUS INSTEAD OF THROW EXCEPTION
     //     BOOST_THROW_EXCEPTION(PERMISSIONDENIED());
     // }
-    assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
-    string key((char*)_key, _keyLength);
-    string value((char*)_value, _valueLength);
+    assert(string_view(std::bit_cast<const char*>(_addr), _addressLength) == hostContext.myAddress());
+    string key(std::bit_cast<const char*>(_key), _keyLength);
+    string value(std::bit_cast<const char*>(_value), _valueLength);
 
     auto status = EVMC_STORAGE_MODIFIED;
     if (value.empty())  // TODO: should use 32 bytes 0?
@@ -354,14 +356,14 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
 size_t wasmGetCodeSize(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.codeSizeAt(string_view((char*)_addr, _addressLength));
+    return hostContext.codeSizeAt(string_view(std::bit_cast<const char*>(_addr), _addressLength));
 }
 
 evmc_bytes32 wasmGetCodeHash(
     evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength)
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
-    return toEvmC(hostContext.codeHashAt(string_view((char*)_addr, _addressLength)));
+    return toEvmC(hostContext.codeHashAt(string_view(std::bit_cast<const char*>(_addr), _addressLength)));
 }
 
 size_t wasmCopyCode(evmc_host_context* _context, const uint8_t*, int32_t, size_t,
@@ -393,7 +395,7 @@ void wasmLog(evmc_host_context* _context, const uint8_t* _addr, int32_t _address
     boost::ignore_unused(_addr, _addressLength);
 
     auto& hostContext = static_cast<HostContext&>(*_context);
-    assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
+    assert(string_view(std::bit_cast<const char*>(_addr), _addressLength) == hostContext.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }

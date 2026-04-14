@@ -60,6 +60,7 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
@@ -308,7 +309,8 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
                 for (size_t i = range.begin(); i < range.end(); ++i)
                 {
                     auto hash = transactionsBlock->transactionHash(i);
-                    txsHash[i] = std::string((char*)hash.data(), hash.size());
+                    txsHash[i] =
+                        std::string(std::bit_cast<const char*>(hash.data()), hash.size());
                     auto receipt = blockReceipts[i];
                     if (receipt->status() != 0)
                     {
@@ -474,9 +476,11 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             for (size_t i = range.begin(); i < range.end(); ++i)
             {
                 auto hash = blockTxs ? blockTxs->at(i)->hash() : transactions[i]->hash();
-                txsHash[i] = std::string((char*)hash.data(), hash.size());
+                txsHash[i] = std::string(std::bit_cast<const char*>(hash.data()), hash.size());
                 blockReceipts[i]->encode(receipts[i]);
-                receiptsView[i] = std::string_view((char*)receipts[i].data(), receipts[i].size());
+                receiptsView[i] =
+                    std::string_view(std::bit_cast<const char*>(receipts[i].data()),
+                        receipts[i].size());
             }
         });
     auto promise = std::make_shared<std::promise<bcos::Error::Ptr>>();

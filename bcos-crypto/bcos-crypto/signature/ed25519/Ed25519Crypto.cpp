@@ -23,6 +23,7 @@
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/ed25519/Ed25519KeyPair.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <bit>
 #include <memory>
 
 using namespace bcos;
@@ -31,9 +32,9 @@ std::shared_ptr<bytes> bcos::crypto::ed25519Sign(
     const KeyPairInterface& _keyPair, const HashType& _messageHash, bool _signatureWithPub)
 {
     CInputBuffer privateKey{_keyPair.secretKey()->constData(), _keyPair.secretKey()->size()};
-    CInputBuffer messagHash{(const char*)_messageHash.data(), HashType::SIZE};
+    CInputBuffer messagHash{std::bit_cast<const char*>(_messageHash.data()), HashType::SIZE};
     FixedBytes<ED25519_SIGNATURE_LEN> signatureArray;
-    COutputBuffer signatureResult{(char*)signatureArray.data(), ED25519_SIGNATURE_LEN};
+    COutputBuffer signatureResult{std::bit_cast<char*>(signatureArray.data()), ED25519_SIGNATURE_LEN};
     auto retCode = wedpr_ed25519_sign(&privateKey, &messagHash, &signatureResult);
     if (retCode != WEDPR_SUCCESS)
     {
@@ -69,10 +70,11 @@ bool bcos::crypto::ed25519Verify(
     PublicPtr _pubKey, const HashType& _messageHash, bytesConstRef _signatureData)
 {
     CInputBuffer publicKey{_pubKey->constData(), _pubKey->size()};
-    CInputBuffer msgHash{(const char*)_messageHash.data(), HashType::SIZE};
+    CInputBuffer msgHash{std::bit_cast<const char*>(_messageHash.data()), HashType::SIZE};
 
     auto signatureWithoutPub = bytesConstRef(_signatureData.data(), ED25519_SIGNATURE_LEN);
-    CInputBuffer signatureData{(const char*)signatureWithoutPub.data(), signatureWithoutPub.size()};
+    CInputBuffer signatureData{
+        std::bit_cast<const char*>(signatureWithoutPub.data()), signatureWithoutPub.size()};
     return wedpr_ed25519_verify(&publicKey, &msgHash, &signatureData) == WEDPR_SUCCESS;
 }
 

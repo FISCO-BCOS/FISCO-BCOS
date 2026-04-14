@@ -21,6 +21,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <bit>
 #include <boost/endian/conversion.hpp>
 
 using namespace bcos;
@@ -283,24 +284,24 @@ public:
         crypto::KeyPairInterface::UniquePtr const& keyPair, HashType const& blockHash,
         protocol::BlockNumber blockNumber = 0)
     {
-        CInputBuffer privateKey{reinterpret_cast<const char*>(keyPair->secretKey()->data().data()),
+        CInputBuffer privateKey{std::bit_cast<const char*>(keyPair->secretKey()->data().data()),
             keyPair->secretKey()->size()};
         bytes vrfPublicKey;
         vrfPublicKey.resize(32);
-        COutputBuffer publicKey{(char*)vrfPublicKey.data(), vrfPublicKey.size()};
+        COutputBuffer publicKey{std::bit_cast<char*>(vrfPublicKey.data()), vrfPublicKey.size()};
         auto ret = wedpr_curve25519_vrf_derive_public_key(&privateKey, &publicKey);
         BOOST_CHECK_EQUAL(ret, WEDPR_SUCCESS);
 
         auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
         CInputBuffer inputMsg{.data = blockNumber > 0 ?
-                                          reinterpret_cast<const char*>(&blockNumberBigEndian) :
-                                          reinterpret_cast<const char*>(blockHash.data()),
+                          std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)) :
+                          std::bit_cast<const char*>(blockHash.data()),
             .len = blockNumber > 0 ? sizeof(blockNumberBigEndian) : (size_t)blockHash.size()};
         bytes vrfInput(inputMsg.data, inputMsg.data + inputMsg.len);
         bytes vrfProof;
         size_t proofSize = 96;
         vrfProof.resize(proofSize);
-        COutputBuffer proof{(char*)vrfProof.data(), proofSize};
+        COutputBuffer proof{std::bit_cast<char*>(vrfProof.data()), proofSize};
         ret = wedpr_curve25519_vrf_prove_utf8(&privateKey, &inputMsg, &proof);
         BOOST_CHECK(ret == WEDPR_SUCCESS);
 
@@ -744,8 +745,9 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     // case4: invalid public key(the origin is not one of the sealers)
     auto blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
     bytes input;
-    input.assign(reinterpret_cast<const char*>(&blockNumberBigEndian),
-        reinterpret_cast<const char*>(&blockNumberBigEndian) + sizeof(blockNumberBigEndian));
+    input.assign(std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)),
+        std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)) +
+            sizeof(blockNumberBigEndian));
     result = rotate(blockNumber++, keyPair->publicKey()->data(), input, vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));
     BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
@@ -754,8 +756,9 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
     // case5: invalid proof
     // vrfProof invalid now
     blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
-    input.assign(reinterpret_cast<const char*>(&blockNumberBigEndian),
-        reinterpret_cast<const char*>(&blockNumberBigEndian) + sizeof(blockNumberBigEndian));
+    input.assign(std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)),
+        std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)) +
+            sizeof(blockNumberBigEndian));
     result = rotate(blockNumber++, vrfPublicKey, input, vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));
     BOOST_CHECK(result->status() == (uint32_t)TransactionStatus::PrecompiledError);
@@ -763,8 +766,9 @@ BOOST_AUTO_TEST_CASE(rotateValidTest)
 
     // case6: valid proof now
     blockNumberBigEndian = boost::endian::native_to_big(blockNumber);
-    input.assign(reinterpret_cast<const char*>(&blockNumberBigEndian),
-        reinterpret_cast<const char*>(&blockNumberBigEndian) + sizeof(blockNumberBigEndian));
+    input.assign(std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)),
+        std::bit_cast<const char*>(std::addressof(blockNumberBigEndian)) +
+            sizeof(blockNumberBigEndian));
     std::tie(vrfPublicKey, vrfProof, vrfInput) = generateVRFProof(keyPair, blockHash, blockNumber);
     result = rotate(blockNumber++, vrfPublicKey, input, vrfProof,
         covertPublicToHexAddress(keyPair->publicKey()));

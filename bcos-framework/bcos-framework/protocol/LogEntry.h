@@ -20,6 +20,7 @@
 #pragma once
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bit>
 #include <gsl/span>
 
 namespace bcos::protocol
@@ -38,7 +39,10 @@ public:
     {}
     ~LogEntry() noexcept = default;
 
-    std::string_view address() const { return {(const char*)m_address.data(), m_address.size()}; }
+    std::string_view address() const
+    {
+        return {std::bit_cast<const char*>(m_address.data()), m_address.size()};
+    }
     gsl::span<const bcos::h256> topics() const { return {m_topics.data(), m_topics.size()}; }
     bcos::bytesConstRef data() const { return ref(m_data); }
     bytes takeAddress() { return std::move(m_address); }

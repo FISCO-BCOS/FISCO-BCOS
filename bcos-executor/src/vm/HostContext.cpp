@@ -31,6 +31,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-utilities/Common.h"
+#include <bit>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>
@@ -150,7 +151,8 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     case EVMC_CALL:
         if (blockContext.isWasm())
         {
-            request->receiveAddress.assign((char*)_msg->destination_ptr, _msg->destination_len);
+            request->receiveAddress.assign(
+                std::bit_cast<const char*>(_msg->destination_ptr), _msg->destination_len);
         }
         else
         {
@@ -500,8 +502,8 @@ bcos::bytes HostContext::externalCodeRequest(const std::string_view& address)
             precompiled::isDynamicPrecompiledAccountCode(fromBytes(response->data))) ||
         (m_executive->blockContext().features().get(
              ledger::Features::Flag::bugfix_eoa_match_failed) &&
-            bcos::precompiled::matchDynamicAccountCode(
-                std::string_view((char*)response->data.data(), response->data.size()))))
+            bcos::precompiled::matchDynamicAccountCode(std::string_view(
+                std::bit_cast<const char*>(response->data.data()), response->data.size()))))
     {
         return bytes();
     }
@@ -571,7 +573,8 @@ VMSchedule const& HostContext::vmSchedule() const
 evmc_bytes32 HostContext::store(const evmc_bytes32* key)
 {
     evmc_bytes32 result;
-    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    auto keyView =
+        std::string_view(std::bit_cast<const char*>(key->bytes + 0), sizeof(key->bytes));
 
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
@@ -588,7 +591,8 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
 evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
 {
     evmc_bytes32 result;
-    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    auto keyView =
+        std::string_view(std::bit_cast<const char*>(key->bytes + 0), sizeof(key->bytes));
 
     auto transientStorageMap = m_executive->blockContext().getTransientStorageMap();
     using TSMap = bcos::BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
@@ -618,7 +622,8 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
 
 void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    auto keyView =
+        std::string_view(std::bit_cast<const char*>(key->bytes + 0), sizeof(key->bytes));
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
     Entry entry;
@@ -628,7 +633,8 @@ void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
 
 void HostContext::setTransientStorage(const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    auto keyView = std::string_view((char*)key->bytes, sizeof(key->bytes));
+    auto keyView =
+        std::string_view(std::bit_cast<const char*>(key->bytes + 0), sizeof(key->bytes));
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
     Entry entry;
@@ -719,7 +725,8 @@ std::optional<storage::Entry> HostContext::code()
     if (blockVersion() >= uint32_t(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto hash = codeHash();
-        auto entry = m_executive->getCodeByHash(std::string_view((char*)hash.data(), hash.size()));
+        auto entry =
+            m_executive->getCodeByHash(std::string_view(std::bit_cast<const char*>(hash.data()), hash.size()));
         if (entry && entry.has_value() && !entry->get().empty())
         {
             return entry;

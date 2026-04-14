@@ -29,6 +29,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
+#include <bit>
 
 using namespace std;
 using namespace bcos;
@@ -108,18 +109,18 @@ std::string BcosKmsDataEncryption::encrypt(const std::string& data)
         std::generate(std::begin(ivData), std::end(ivData), std::ref(rbe));
 
         encData = m_symmetricEncrypt->symmetricEncrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
+            std::bit_cast<const unsigned char*>(data.data()), data.size(),
+            std::bit_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
             ivData.data(), 16);
         encData->insert(encData->end(), ivData.begin(), ivData.end());
     }
     else
     {
         encData = m_symmetricEncrypt->symmetricEncrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
+            std::bit_cast<const unsigned char*>(data.data()), data.size(),
+            std::bit_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
     }
-    std::string value((char*)encData->data(), encData->size());
+    std::string value(std::bit_cast<const char*>(encData->data()), encData->size());
 
     return value;
 }
@@ -132,17 +133,17 @@ std::string BcosKmsDataEncryption::decrypt(const std::string& data)
         size_t offsetIv = data.size() - 16;
         size_t cipherDataSize = data.size() - 16;
         decData = m_symmetricEncrypt->symmetricDecrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), cipherDataSize,
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
-            reinterpret_cast<const unsigned char*>(data.data() + offsetIv), 16);
+            std::bit_cast<const unsigned char*>(data.data()), cipherDataSize,
+            std::bit_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size(),
+            std::bit_cast<const unsigned char*>(data.data() + offsetIv), 16);
     }
     else
     {
         decData = m_symmetricEncrypt->symmetricDecrypt(
-            reinterpret_cast<const unsigned char*>(data.data()), data.size(),
-            reinterpret_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
+            std::bit_cast<const unsigned char*>(data.data()), data.size(),
+            std::bit_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
     }
-    std::string value((char*)decData->data(), decData->size());
+    std::string value(std::bit_cast<const char*>(decData->data()), decData->size());
 
     return value;
 }

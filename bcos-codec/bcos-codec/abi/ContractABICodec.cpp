@@ -19,6 +19,7 @@
  */
 
 #include "ContractABICodec.h"
+#include <bit>
 
 using namespace std;
 using namespace bcos;
@@ -103,7 +104,7 @@ bytes ContractABICodec::serialise(const Address& _in)
 bytes ContractABICodec::serialise(const string32& _in)
 {
     bytes ret(32, 0);
-    bytesConstRef((byte const*)_in.data(), 32).populate(bytesRef(&ret));
+    bytesConstRef(std::bit_cast<byte const*>(_in.data()), 32).populate(bytesRef(&ret));
     return ret;
 }
 
@@ -185,7 +186,7 @@ void ContractABICodec::deserialize(string32& _out, std::size_t _offset)
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
     data.getCroppedData(_offset, MAX_BYTE_LENGTH)
-        .populate(bytesRef((byte*)_out.data(), MAX_BYTE_LENGTH));
+        .populate(bytesRef(std::bit_cast<byte*>(_out.data()), MAX_BYTE_LENGTH));
 }
 
 void ContractABICodec::deserialize(std::string& _out, std::size_t _offset)
@@ -195,7 +196,7 @@ void ContractABICodec::deserialize(std::string& _out, std::size_t _offset)
     u256 len = fromBigEndian<u256>(data.getCroppedData(_offset, MAX_BYTE_LENGTH));
     validOffset(_offset + MAX_BYTE_LENGTH + (std::size_t)len - 1);
     auto result = data.getCroppedData(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len));
-    _out.assign((const char*)result.data(), result.size());
+    _out.assign(std::bit_cast<const char*>(result.data()), result.size());
 }
 
 void ContractABICodec::deserialize(bytes& _out, std::size_t _offset)

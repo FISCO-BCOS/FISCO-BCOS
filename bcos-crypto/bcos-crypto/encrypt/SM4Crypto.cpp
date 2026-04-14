@@ -22,23 +22,24 @@
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <wedpr-crypto/WedprCrypto.h>
+#include <bit>
 using namespace bcos;
 using namespace bcos::crypto;
 
 bytesPointer bcos::crypto::SM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
-    CInputBuffer plain{(const char*)_plainData, _plainDataSize};
+    CInputBuffer plain{std::bit_cast<const char*>(_plainData), _plainDataSize};
 
     FixedBytes<SM4_KEY_SIZE> fixedKeyData(_key, _keySize);
-    CInputBuffer key{(const char*)fixedKeyData.data(), SM4_KEY_SIZE};
+    CInputBuffer key{std::bit_cast<const char*>(fixedKeyData.data()), SM4_KEY_SIZE};
 
     FixedBytes<SM4_IV_SIZE> fixedIVData(_ivData, _ivDataSize);
-    CInputBuffer iv{(const char*)fixedIVData.data(), SM4_IV_SIZE};
+    CInputBuffer iv{std::bit_cast<const char*>(fixedIVData.data()), SM4_IV_SIZE};
 
     auto encryptedData = std::make_shared<bytes>();
     encryptedData->resize(_plainDataSize + SM4_MAX_PADDING_LEN);
-    COutputBuffer ciper{(char*)(encryptedData->data()), encryptedData->size()};
+    COutputBuffer ciper{std::bit_cast<char*>(encryptedData->data()), encryptedData->size()};
 
     if (wedpr_sm4_encrypt(&plain, &key, &iv, &ciper) == WEDPR_ERROR)
     {
@@ -52,17 +53,17 @@ bytesPointer bcos::crypto::SM4Encrypt(const unsigned char* _plainData, size_t _p
 bytesPointer bcos::crypto::SM4Decrypt(const unsigned char* _cipherData, size_t _cipherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData, size_t _ivDataSize)
 {
-    CInputBuffer cipher{(const char*)_cipherData, _cipherDataSize};
+    CInputBuffer cipher{std::bit_cast<const char*>(_cipherData), _cipherDataSize};
 
     FixedBytes<SM4_KEY_SIZE> fixedKeyData(_key, _keySize);
-    CInputBuffer key{(const char*)fixedKeyData.data(), SM4_KEY_SIZE};
+    CInputBuffer key{std::bit_cast<const char*>(fixedKeyData.data()), SM4_KEY_SIZE};
 
     FixedBytes<SM4_IV_SIZE> fixedIVData(_ivData, _ivDataSize);
-    CInputBuffer iv{(const char*)fixedIVData.data(), SM4_IV_SIZE};
+    CInputBuffer iv{std::bit_cast<const char*>(fixedIVData.data()), SM4_IV_SIZE};
 
     auto decryptedData = std::make_shared<bytes>();
     decryptedData->resize(_cipherDataSize);
-    COutputBuffer plain{(char*)decryptedData->data(), decryptedData->size()};
+    COutputBuffer plain{std::bit_cast<char*>(decryptedData->data()), decryptedData->size()};
 
     if (wedpr_sm4_decrypt(&cipher, &key, &iv, &plain) == WEDPR_ERROR)
     {

@@ -1,4 +1,5 @@
 #include "HttpSession.h"
+#include <bit>
 #include <boost/system/error_code.hpp>
 
 bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)
@@ -139,7 +140,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
             version, {}, m_corsConfig);
 
         BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("options response")
-                        << LOG_KV("body", std::string_view((const char*)resp->body().data(),
+                        << LOG_KV("body", std::string_view(std::bit_cast<const char*>(resp->body().data()),
                                               resp->body().size()))
                         << LOG_KV("keep_alive", resp->keep_alive())
                         << LOG_KV("need_eof", resp->need_eof())
@@ -159,7 +160,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
                 std::move(_content), session->corsConfig());
             // put the response into the queue and waiting to be send
             BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
-                            << LOG_KV("body", std::string_view((const char*)resp->body().data(),
+                            << LOG_KV("body", std::string_view(std::bit_cast<const char*>(resp->body().data()),
                                                   resp->body().size()))
                             << LOG_KV("keep_alive", resp->keep_alive())
                             << LOG_KV("need_eof", resp->need_eof())
@@ -174,7 +175,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
             _httpRequest.keep_alive(), version, {}, m_corsConfig);
         // put the response into the queue and waiting to be send
         HTTP_SESSION(WARNING) << LOG_BADGE("handleRequest") << LOG_DESC("unsupported http service")
-                              << LOG_KV("body", std::string_view((const char*)resp->body().data(),
+                              << LOG_KV("body", std::string_view(std::bit_cast<const char*>(resp->body().data()),
                                                     resp->body().size()));
         queue().enqueue(std::move(resp));
     }

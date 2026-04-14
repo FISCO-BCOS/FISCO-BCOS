@@ -20,6 +20,7 @@
 
 #include "VRFInfo.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
+#include <bit>
 #include <wedpr-crypto/WedprCrypto.h>
 #include <wedpr-crypto/WedprUtilities.h>
 
@@ -29,7 +30,7 @@ using namespace bcos::precompiled;
 
 bool VRFInfo::isValidVRFPublicKey()
 {
-    CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};
+    CInputBuffer rawPk{std::bit_cast<const char*>(m_vrfPublicKey.data()), m_vrfPublicKey.size()};
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:
@@ -43,9 +44,9 @@ bool VRFInfo::isValidVRFPublicKey()
 
 bool VRFInfo::verifyProof()
 {
-    CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};
-    CInputBuffer rawInput{(const char*)m_vrfInput.data(), m_vrfInput.size()};
-    CInputBuffer rawProof{(const char*)m_vrfProof.data(), m_vrfProof.size()};
+    CInputBuffer rawPk{std::bit_cast<const char*>(m_vrfPublicKey.data()), m_vrfPublicKey.size()};
+    CInputBuffer rawInput{std::bit_cast<const char*>(m_vrfInput.data()), m_vrfInput.size()};
+    CInputBuffer rawProof{std::bit_cast<const char*>(m_vrfProof.data()), m_vrfProof.size()};
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:
@@ -59,9 +60,10 @@ bool VRFInfo::verifyProof()
 
 HashType VRFInfo::getHashFromProof()
 {
-    CInputBuffer rawProof{.data = (const char*)m_vrfProof.data(), .len = m_vrfProof.size()};
+    CInputBuffer rawProof{
+        .data = std::bit_cast<const char*>(m_vrfProof.data()), .len = m_vrfProof.size()};
     HashType vrfHash;
-    COutputBuffer outputHash{.data = (char*)vrfHash.data(), .len = vrfHash.size()};
+    COutputBuffer outputHash{.data = std::bit_cast<char*>(vrfHash.data()), .len = vrfHash.size()};
     switch (m_vrfCurveType)
     {
     case sealer::VrfCurveType::CURVE25519:

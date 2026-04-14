@@ -31,6 +31,7 @@
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <bit>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -104,7 +105,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_withoutCallback)
                 frontService->moduleID2MessageDispatcher().end());
 
     frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
-        bytesConstRef((unsigned char*)data.data(), data.size()), 0, CallbackFunc());
+        bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()), 0,
+        CallbackFunc());
     BOOST_CHECK(frontService->callback().empty());
     f.get();
 }
@@ -169,11 +171,12 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_callback)
             p.set_value(true);
         };
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
-            bytesConstRef((unsigned char*)data.data(), data.size()), 0, callback);
+            bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()), 0,
+            callback);
         BOOST_CHECK(!frontService->callback().empty());
         auto uuid = frontService->callback().begin()->first;
         frontService->asyncSendResponse(uuid, moduleID, dstNodeID,
-            bytesConstRef((unsigned char*)data.data(), data.size()),
+            bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()),
             [](Error::Ptr _error) { (void)_error; });
         f.get();
         BOOST_CHECK(frontService->callback().empty());
@@ -207,7 +210,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
         };
 
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
-            bytesConstRef((unsigned char*)data.data(), data.size()), 2000, callback);
+            bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()), 2000,
+            callback);
 
         BOOST_CHECK(frontService->callback().size() == 1);
         std::future<void> barrier_future = barrier.get_future();
@@ -241,7 +245,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendBroadcastMessage)
 
     task::syncWait(
         frontService->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, moduleID,
-            ::ranges::views::single(bytesConstRef((unsigned char*)data.data(), data.size()))));
+            ::ranges::views::single(
+                bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()))));
     BOOST_CHECK(frontService->callback().empty());
     f.get();
 }
@@ -270,7 +275,7 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDs)
                 frontService->moduleID2MessageDispatcher().end());
 
     frontService->asyncSendMessageByNodeIDs(moduleID, bcos::crypto::NodeIDs{dstNodeID},
-        bytesConstRef((unsigned char*)data.data(), data.size()));
+        bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()));
 
     BOOST_CHECK(frontService->callback().empty());
     f.get();
@@ -306,7 +311,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
         };
 
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
-            bytesConstRef((unsigned char*)data.data(), data.size()), 2000, callback);
+            bytesConstRef(std::bit_cast<const unsigned char*>(data.data()), data.size()), 2000,
+            callback);
     }
 
     BOOST_CHECK(frontService->callback().size() == barriers.size());

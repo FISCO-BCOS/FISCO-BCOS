@@ -20,6 +20,7 @@
  */
 #include "DiscreteLogarithmZkp.h"
 #include "bcos-crypto/zkp/Common.h"
+#include <bit>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -32,7 +33,8 @@ bool DiscreteLogarithmZkp::verifyEitherEqualityProof(bytes const& c1PointData,
     auto c1Point = bytesToInputBuffer(c1PointData, m_pointLen);
     auto c2Point = bytesToInputBuffer(c2PointData, m_pointLen);
     auto c3Point = bytesToInputBuffer(c3PointData, m_pointLen);
-    CInputBuffer proof{(const char*)equalityProofData.data(), equalityProofData.size()};
+    CInputBuffer proof{std::bit_cast<const char*>(equalityProofData.data()),
+        equalityProofData.size()};
     auto basePoint = bytesToInputBuffer(basePointData, m_pointLen);
     auto blindingBasePoint = bytesToInputBuffer(blindingBasePointData, m_pointLen);
     auto ret = wedpr_verify_either_equality_relationship_proof(
@@ -49,7 +51,8 @@ bool DiscreteLogarithmZkp::verifyKnowledgeProof(bytes const& pointData,
     bytes const& knowledgeProofData, bytes const& basePointData, bytes const& blindingBasePointData)
 {
     auto point = bytesToInputBuffer(pointData, m_pointLen);
-    CInputBuffer proof{(const char*)knowledgeProofData.data(), knowledgeProofData.size()};
+    CInputBuffer proof{std::bit_cast<const char*>(knowledgeProofData.data()),
+        knowledgeProofData.size()};
     auto basePoint = bytesToInputBuffer(basePointData, m_pointLen);
     auto blindingBasePoint = bytesToInputBuffer(blindingBasePointData, m_pointLen);
 
@@ -68,7 +71,8 @@ bool DiscreteLogarithmZkp::verifyFormatProof(bytes const& c1Point, bytes const& 
 {
     auto c1 = bytesToInputBuffer(c1Point, m_pointLen);
     auto c2 = bytesToInputBuffer(c2Point, m_pointLen);
-    CInputBuffer proof{(const char*)formatProofData.data(), formatProofData.size()};
+    CInputBuffer proof{std::bit_cast<const char*>(formatProofData.data()),
+        formatProofData.size()};
     auto c1BasePoint = bytesToInputBuffer(c1BasePointData, m_pointLen);
     auto c2BasePoint = bytesToInputBuffer(c2BasePointData, m_pointLen);
     auto blindingBasePoint = bytesToInputBuffer(blindingBasePointData, m_pointLen);
@@ -89,7 +93,8 @@ bool DiscreteLogarithmZkp::verifySumProof(bytes const& c1Point, bytes const& c2P
     auto c1 = bytesToInputBuffer(c1Point, m_pointLen);
     auto c2 = bytesToInputBuffer(c2Point, m_pointLen);
     auto c3 = bytesToInputBuffer(c3Point, m_pointLen);
-    CInputBuffer proof{(const char*)arithmeticProofData.data(), arithmeticProofData.size()};
+    CInputBuffer proof{std::bit_cast<const char*>(arithmeticProofData.data()),
+        arithmeticProofData.size()};
     auto valueBasePoint = bytesToInputBuffer(valueBasePointData, m_pointLen);
     auto blindingBasePoint = bytesToInputBuffer(blindingBasePointData, m_pointLen);
     auto ret =
@@ -109,7 +114,8 @@ bool DiscreteLogarithmZkp::verifyProductProof(bytes const& c1Point, bytes const&
     auto c1 = bytesToInputBuffer(c1Point, m_pointLen);
     auto c2 = bytesToInputBuffer(c2Point, m_pointLen);
     auto c3 = bytesToInputBuffer(c3Point, m_pointLen);
-    CInputBuffer proof{(const char*)arithmeticProofData.data(), arithmeticProofData.size()};
+    CInputBuffer proof{std::bit_cast<const char*>(arithmeticProofData.data()),
+        arithmeticProofData.size()};
     auto valueBasePoint = bytesToInputBuffer(valueBasePointData, m_pointLen);
     auto blindingBasePoint = bytesToInputBuffer(blindingBasePointData, m_pointLen);
     auto ret = wedpr_verify_product_relationship(
@@ -127,7 +133,8 @@ bool DiscreteLogarithmZkp::verifyEqualityProof(bytes const& c1Point, bytes const
 {
     auto c1 = bytesToInputBuffer(c1Point, m_pointLen);
     auto c2 = bytesToInputBuffer(c2Point, m_pointLen);
-    CInputBuffer proof{(const char*)equalityProofData.data(), equalityProofData.size()};
+    CInputBuffer proof{std::bit_cast<const char*>(equalityProofData.data()),
+        equalityProofData.size()};
 
     auto basePoint1 = bytesToInputBuffer(basePoint1Data, m_pointLen);
     auto basePoint2 = bytesToInputBuffer(basePoint2Data, m_pointLen);
@@ -151,7 +158,7 @@ bytes DiscreteLogarithmZkp::aggregateRistrettoPoint(bytes const& pointSum, bytes
     auto pointShareInput = bytesToInputBuffer(pointShare, m_pointLen);
     bytes aggregatedResult;
     aggregatedResult.resize(m_pointLen);
-    COutputBuffer result{(char*)aggregatedResult.data(), m_pointLen};
+    COutputBuffer result{std::bit_cast<char*>(aggregatedResult.data()), m_pointLen};
     auto ret = wedpr_aggregate_ristretto_point(&pointSumInput, &pointShareInput, &result);
     if (ret == WEDPR_SUCCESS)
     {

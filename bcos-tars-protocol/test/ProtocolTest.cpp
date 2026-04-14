@@ -22,6 +22,7 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
+#include <bit>
 #include <memory>
 
 using namespace std::string_view_literals;
@@ -135,7 +136,7 @@ BOOST_AUTO_TEST_CASE(transactionMetaData)
     bcostars::protocol::TransactionMetaDataImpl metaData2(
         [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });
     tars::TarsInputStream<tars::BufferReader> input;
-    input.setBuffer((const char*)buffer.data(), buffer.size());
+    input.setBuffer(std::bit_cast<const char*>(buffer.data()), buffer.size());
     metaData2.mutableInner().readFrom(input);
 
     BOOST_CHECK_EQUAL(metaData2.hash().hex(), metaData.hash().hex());

@@ -23,6 +23,7 @@
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <bit>
 
 using namespace bcos;
 using namespace bcos::crypto;
@@ -38,11 +39,12 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     std::string plainData = "testAESx%$234sdfjl234129p";
     std::string key = "abcd";
     // encrypt
-    auto ciperData = _encrypt->symmetricEncrypt((const unsigned char*)plainData.c_str(),
-        plainData.size(), (const unsigned char*)key.c_str(), key.size());
+    auto ciperData = _encrypt->symmetricEncrypt(std::bit_cast<const unsigned char*>(plainData.c_str()),
+        plainData.size(), std::bit_cast<const unsigned char*>(key.c_str()), key.size());
     // decrypt
-    auto decryptedData = _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(),
-        ciperData->size(), (const unsigned char*)key.c_str(), key.size());
+    auto decryptedData = _encrypt->symmetricDecrypt(
+        std::bit_cast<const unsigned char*>(ciperData->data()), ciperData->size(),
+        std::bit_cast<const unsigned char*>(key.c_str()), key.size());
     bytes plainDataBytes(plainData.begin(), plainData.end());
     BOOST_CHECK(*decryptedData == plainDataBytes);
 
@@ -50,9 +52,9 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
     std::string invalidKey = "ABCDCD";
     try
     {
-        _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(), ciperData->size(),
-            (const unsigned char*)invalidKey.c_str(), invalidKey.size());
-        BOOST_CHECK(std::string_view((const char*)ciperData->data(), ciperData->size()) !=
+        _encrypt->symmetricDecrypt(std::bit_cast<const unsigned char*>(ciperData->data()), ciperData->size(),
+            std::bit_cast<const unsigned char*>(invalidKey.c_str()), invalidKey.size());
+        BOOST_CHECK(std::string_view(std::bit_cast<const char*>(ciperData->data()), ciperData->size()) !=
                     std::string_view(plainData));
     }
     catch (std::exception& e)
@@ -65,29 +67,29 @@ void testEncryption(SymmetricEncryption::Ptr _encrypt)
 
     // invalid ciper
     (*ciperData)[0] += 10;
-    decryptedData = _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(),
-        ciperData->size(), (const unsigned char*)key.c_str(), key.size());
+    decryptedData = _encrypt->symmetricDecrypt(std::bit_cast<const unsigned char*>(ciperData->data()),
+        ciperData->size(), std::bit_cast<const unsigned char*>(key.c_str()), key.size());
     plainDataBytes = bytes(plainData.begin(), plainData.end());
     BOOST_CHECK(*decryptedData != plainDataBytes);
     // test encrypt/decrypt with given ivData
     std::string ivData = "adfwerivswerwerwerpi9werlwerwasdfa234523423dsfa";
     key = "werwlerewkrjewwwwwwwr4234981034%wer23423&3453453453465646778)7897678";
     plainData += "testAESx%$234sdfjl234129p" + ivData + key;
-    ciperData = _encrypt->symmetricEncrypt((const unsigned char*)plainData.c_str(),
-        plainData.size(), (const unsigned char*)key.c_str(), key.size(),
-        (const unsigned char*)ivData.c_str(), ivData.size());
+    ciperData = _encrypt->symmetricEncrypt(std::bit_cast<const unsigned char*>(plainData.c_str()),
+        plainData.size(), std::bit_cast<const unsigned char*>(key.c_str()), key.size(),
+        std::bit_cast<const unsigned char*>(ivData.c_str()), ivData.size());
 
-    decryptedData = _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(),
-        ciperData->size(), (const unsigned char*)key.c_str(), key.size(),
-        (const unsigned char*)ivData.c_str(), ivData.size());
+    decryptedData = _encrypt->symmetricDecrypt(std::bit_cast<const unsigned char*>(ciperData->data()),
+        ciperData->size(), std::bit_cast<const unsigned char*>(key.c_str()), key.size(),
+        std::bit_cast<const unsigned char*>(ivData.c_str()), ivData.size());
     plainDataBytes = bytes(plainData.begin(), plainData.end());
     BOOST_CHECK(*decryptedData == plainDataBytes);
 
     // invalid ivData
     std::string invalidIVData = "bdfwerivswerwerwerpi9werlwerwasdfa234523423dsf";
-    decryptedData = _encrypt->symmetricDecrypt((const unsigned char*)ciperData->data(),
-        ciperData->size(), (const unsigned char*)key.c_str(), key.size(),
-        (const unsigned char*)invalidIVData.c_str(), invalidIVData.size());
+    decryptedData = _encrypt->symmetricDecrypt(std::bit_cast<const unsigned char*>(ciperData->data()),
+        ciperData->size(), std::bit_cast<const unsigned char*>(key.c_str()), key.size(),
+        std::bit_cast<const unsigned char*>(invalidIVData.c_str()), invalidIVData.size());
     plainDataBytes = bytes(plainData.begin(), plainData.end());
     BOOST_CHECK(*decryptedData != plainDataBytes);
 }

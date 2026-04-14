@@ -23,6 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bit>
 #include <memory>
 namespace bcos::crypto
 {
@@ -42,7 +43,7 @@ public:
     virtual HashType hash(bytesConstRef _data) const = 0;
     HashType hash(std::string_view view) const
     {
-        return hash(bytesConstRef((const unsigned char*)view.data(), view.size()));
+        return hash(bytesConstRef(std::bit_cast<const unsigned char*>(view.data()), view.size()));
     }
     virtual HashType emptyHash()
     {

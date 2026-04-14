@@ -31,6 +31,7 @@
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-utilities/BoostLog.h"
 #include "filter/ReadOnlyFilter.h"
+#include <bit>
 
 
 namespace bcos::gateway
@@ -133,7 +134,7 @@ public:
             {
                 auto payload = message->payload();
                 int respCode = boost::lexical_cast<int>(std::string_view(
-                    reinterpret_cast<const char*>(payload.data()), payload.size()));
+                    std::bit_cast<const char*>(payload.data()), payload.size()));
                 // the peer gateway not response not ok ,it means the gateway not dispatch the
                 // message successfully,find another gateway and try again
                 if (respCode != bcos::protocol::CommonError::SUCCESS)

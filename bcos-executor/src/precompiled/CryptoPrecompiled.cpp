@@ -27,6 +27,7 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include <bit>
 
 using namespace bcos;
 using namespace bcos::codec;
@@ -126,11 +127,11 @@ void CryptoPrecompiled::curve25519VRFVerify(
         bytes publicKey;
         bytes proof;
         codec.decode(_paramData, message, publicKey, proof);
-        CInputBuffer rawPublicKey{(const char*)publicKey.data(), publicKey.size()};
-        CInputBuffer rawMsg{(const char*)message.data(), message.size()};
-        CInputBuffer rawProof{(const char*)proof.data(), proof.size()};
+        CInputBuffer rawPublicKey{std::bit_cast<const char*>(publicKey.data()), publicKey.size()};
+        CInputBuffer rawMsg{std::bit_cast<const char*>(message.data()), message.size()};
+        CInputBuffer rawProof{std::bit_cast<const char*>(proof.data()), proof.size()};
         HashType vrfHash;
-        COutputBuffer outputHash{(char*)vrfHash.data(), vrfHash.size()};
+        COutputBuffer outputHash{std::bit_cast<char*>(vrfHash.data()), vrfHash.size()};
         if ((wedpr_curve25519_vrf_is_valid_public_key(&rawPublicKey) == WEDPR_SUCCESS) &&
             (wedpr_curve25519_vrf_verify_utf8(&rawPublicKey, &rawMsg, &rawProof) ==
                 WEDPR_SUCCESS) &&

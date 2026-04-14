@@ -23,6 +23,7 @@
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
+#include <bit>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -259,7 +260,7 @@ void LedgerStorage::asyncPutProposal(std::string const& _dbName, std::string con
     // Note: asyncPut now is a sync implementation, but no need to async here since this
     // timeout-head is only between 5-10ms
     m_storage->asyncPut(_dbName, _key,
-        std::string((const char*)_committedData->data(), _committedData->size()),
+        std::string(std::bit_cast<const char*>(_committedData->data()), _committedData->size()),
         [startT, _dbName, _committedData, _key, _proposalIndex, _retryTime, self](
             Error::UniquePtr&& _error) {
             if (_error == nullptr)

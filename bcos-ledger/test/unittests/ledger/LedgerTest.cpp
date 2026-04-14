@@ -56,6 +56,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <bit>
 #include <memory>
 
 using namespace bcos;
@@ -634,7 +635,8 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
 
             Entry numberEntry;
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER,
-                std::string_view((const char*)hash.data(), hash.size()), std::move(numberEntry),
+                std::string_view(std::bit_cast<const char*>(hash.data()), hash.size()),
+                std::move(numberEntry),
                 [&](auto&& error) {
                     BOOST_CHECK(!error);
 
@@ -1489,7 +1491,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                 bcos::bytesConstRef((const uint8_t*)codeView.data(), codeView.size()));
             auto codeHashBytes = codeHash.asBytes();
             BOOST_CHECK_EQUAL(codeHashEntry->get(),
-                std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
+                std::string_view(
+                    std::bit_cast<const char*>(codeHashBytes.data()), codeHashBytes.size()));
         }
     }());
 }

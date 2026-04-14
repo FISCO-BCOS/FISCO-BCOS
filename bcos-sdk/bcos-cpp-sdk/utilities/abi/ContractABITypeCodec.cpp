@@ -25,6 +25,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bit>
 #include <climits>
 #include <exception>
 #include <iterator>
@@ -369,7 +370,7 @@ void ContractABITypeCodecSolImpl::deserialize(
                           .getCroppedData(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len))
                           .toBytes();
 
-    _out.assign((const char*)bytesValue.data(), bytesValue.size());
+    _out.assign(std::bit_cast<const char*>(bytesValue.data()), bytesValue.size());
 }
 
 // AbstractType

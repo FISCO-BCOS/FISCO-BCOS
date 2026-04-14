@@ -23,6 +23,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bit>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/NativeExecutionMessage.h>
@@ -228,7 +229,7 @@ BOOST_AUTO_TEST_CASE(call)
         BOOST_CHECK_GT(receipt->gasUsed(), 0);
         auto output = receipt->output();
 
-        std::string outputStr((char*)output.data(), output.size());
+        std::string outputStr(std::bit_cast<const char*>(output.data()), output.size());
         BOOST_CHECK_EQUAL(outputStr, "Hello world! response");
     }
 

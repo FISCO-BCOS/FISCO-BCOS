@@ -35,6 +35,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
+#include <bit>
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -277,12 +278,12 @@ inline u256 fromEvmC(evmc_bytes32 const& _n)
  */
 inline std::string_view fromEvmC(evmc_address const& _addr)
 {
-    return {(char*)_addr.bytes, 20};
+    return {std::bit_cast<const char*>(_addr.bytes + 0), 20};
 }
 
 inline std::string fromBytes(const bytes& _addr)
 {
-    return {(char*)_addr.data(), _addr.size()};
+    return {std::bit_cast<const char*>(_addr.data()), _addr.size()};
 }
 
 inline std::string fromBytes(const bytesConstRef& _addr)
@@ -292,7 +293,8 @@ inline std::string fromBytes(const bytesConstRef& _addr)
 
 inline bytes toBytes(const std::string_view& _addr)
 {
-    return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
+    return {std::bit_cast<const char*>(_addr.data()),
+        std::bit_cast<const char*>(_addr.data() + _addr.size())};
 }
 
 inline std::string getContractTableName(

@@ -43,6 +43,7 @@
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <bit>
 #include <exception>
 #include <iterator>
 #include <stdexcept>
@@ -78,7 +79,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     auto buffer = _msg->payload();
-    auto req = std::string_view((const char*)buffer->data(), buffer->size());
+    auto req = std::string_view(std::bit_cast<const char*>(buffer->data()), buffer->size());
 
     auto start = std::chrono::high_resolution_clock::now();
     auto seq = _msg->seq();

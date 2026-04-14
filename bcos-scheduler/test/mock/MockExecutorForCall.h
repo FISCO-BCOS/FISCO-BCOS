@@ -4,6 +4,7 @@
 #include "MockExecutor.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bit>
 #include <boost/lexical_cast.hpp>
 #include <tuple>
 
@@ -58,7 +59,7 @@ public:
         // BOOST_CHECK_EQUAL(input->from().size(), 40);
 
         auto inputBytes = input->data();
-        std::string inputStr((char*)inputBytes.data(), inputBytes.size());
+        std::string inputStr(std::bit_cast<const char*>(inputBytes.data()), inputBytes.size());
 
         BOOST_CHECK_EQUAL(inputStr, "Hello world! request");
 

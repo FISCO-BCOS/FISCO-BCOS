@@ -35,6 +35,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
+#include <bit>
 
 using namespace std;
 using namespace bcos;
@@ -106,7 +107,7 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptContents(const std::shared_p
     bytesPointer decFileBytesBase64Ptr = nullptr;
     try
     {
-        std::string encContextsStr((const char*)content->data(), content->size());
+        std::string encContextsStr(std::bit_cast<const char*>(content->data()), content->size());
 
         bytes encFileBytes = fromHex(encContextsStr);
         BCOS_LOG(DEBUG) << LOG_BADGE("DECFILE") << LOG_DESC("Decrypt file contents")
@@ -126,8 +127,9 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptContents(const std::shared_p
         // else
         //{
         decFileBytesBase64Ptr =
-            m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
-                encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
+            m_symmetricEncrypt->symmetricDecrypt(
+                std::bit_cast<const unsigned char*>(encFileBytes.data()), encFileBytes.size(),
+                std::bit_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
         //}
 
         BCOS_LOG(DEBUG) << "[ENCFILE] DecryptedFile Base64 key: "
@@ -150,7 +152,7 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptFile(const std::string& file
     try
     {
         std::shared_ptr<bytes> keyContent = readContents(boost::filesystem::path(filename));
-        std::string encContextsStr((const char*)keyContent->data(), keyContent->size());
+        std::string encContextsStr(std::bit_cast<const char*>(keyContent->data()), keyContent->size());
         bytes encFileBytes = fromHex(encContextsStr);
         BCOS_LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
                         << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
@@ -170,8 +172,9 @@ std::shared_ptr<bytes> BcosKmsKeyEncryption::decryptFile(const std::string& file
         // else
         // {
         decFileBytesBase64Ptr =
-            m_symmetricEncrypt->symmetricDecrypt((const unsigned char*)encFileBytes.data(),
-                encFileBytes.size(), (const unsigned char*)m_dataKey.data(), m_dataKey.size());
+            m_symmetricEncrypt->symmetricDecrypt(
+                std::bit_cast<const unsigned char*>(encFileBytes.data()), encFileBytes.size(),
+                std::bit_cast<const unsigned char*>(m_dataKey.data()), m_dataKey.size());
         //}
         BCOS_LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: "
                         << asString(*decFileBytesBase64Ptr) << endl;
