@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(seal_single_sender_contiguous)
 
     MapStateStorage state{};  // empty state implies starting nonce = 0
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(100, state, std::back_inserter(out)));
+    pool.seal(100, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 3);
     auto nonce = readNonce(state, sender);
@@ -167,7 +167,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_within_single_sender)
 
     MapStateStorage state{};  // empty state -> start nonces at 0
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit, state, std::back_inserter(out)));
+    pool.seal(kSealLimit, state, std::back_inserter(out));
 
     // Expect only first two from the first sender
     BOOST_CHECK_EQUAL(out.size(), 2);
@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_across_senders)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit, state, std::back_inserter(out)));
+    pool.seal(kSealLimit, state, std::back_inserter(out));
 
     // Expect A:0 and B:0
     BOOST_CHECK_EQUAL(out.size(), 2);
@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(seal_limit_exact_boundary)
     pool.add(std::vector{makeTx(sender, 0), makeTx(sender, 1), makeTx(sender, 2)});
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit, state, std::back_inserter(out)));
+    pool.seal(kSealLimit, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
     auto nonces = ::ranges::views::transform(out, [](auto& txPtr) {
@@ -266,7 +266,7 @@ BOOST_AUTO_TEST_CASE(seal_multiple_senders_and_gaps)
 
     MapStateStorage state{};
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit, state, std::back_inserter(out)));
+    pool.seal(kSealLimit, state, std::back_inserter(out));
 
     // Expect to seal A:0 and B:0 only; A:2 is blocked by gap at 1
     // Order across senders is implementation-defined; check membership and counts
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE(seal_with_existing_ledger_nonce)
         makeTx(sender, kNonce6)});
 
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit2, state, std::back_inserter(out)));
+    pool.seal(kSealLimit2, state, std::back_inserter(out));
 
     // Expect only 5 and 6 sealed
     BOOST_CHECK_EQUAL(out.size(), 2);
@@ -345,12 +345,12 @@ BOOST_AUTO_TEST_CASE(remove_by_state_drops_confirmed)
     MapStateStorage state{};
     // Ledger reports nonce = 3 (i.e., 0..3 already confirmed)
     setNonce(state, sender, "3");
-    task::syncWait(pool.remove(state));
+    pool.remove(state);
 
     // Now set ledger to 4 and seal, should only see 4 and 5
     setNonce(state, sender, "4");
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit, state, std::back_inserter(out)));
+    pool.seal(kSealLimit, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 2);
     auto firstNonce = std::stoll(std::string(out[0]->nonce()));
@@ -397,7 +397,7 @@ BOOST_AUTO_TEST_CASE(remove_by_hashes_respects_per_sender_max)
     setNonce(state, senderBName, "2");
 
     std::vector<protocol::Transaction::Ptr> out;
-    task::syncWait(pool.seal(kSealLimit, state, std::back_inserter(out)));
+    pool.seal(kSealLimit, state, std::back_inserter(out));
 
     // Expect three txs: A:4,5 and B:2
     BOOST_CHECK_EQUAL(out.size(), 3);

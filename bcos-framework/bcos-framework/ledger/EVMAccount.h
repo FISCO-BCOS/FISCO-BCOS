@@ -3,7 +3,6 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
@@ -231,7 +230,8 @@ public:
                 auto addressView = std::span(address.bytes);
                 m_tableName.reserve(ledger::SYS_DIRECTORY::USER_APPS.size() + addressView.size());
                 m_tableName.append(ledger::SYS_DIRECTORY::USER_APPS);
-                m_tableName.append((const char*)addressView.data(), addressView.size());
+                m_tableName.append(reinterpret_cast<const char*>(addressView.data()),  // NOLINT
+                    addressView.size());
             }
             else
             {
@@ -279,7 +279,7 @@ public:
             storage,
             [](const bcos::Address& address) {
                 evmc_address evmcAddress;
-                ::ranges::copy(address, evmcAddress.bytes);
+                ::ranges::copy(address, std::span{evmcAddress.bytes}.data());
                 return evmcAddress;
             }(address),
             binaryAddress)
