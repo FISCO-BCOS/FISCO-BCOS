@@ -46,7 +46,7 @@ struct Fixture
     }
 
     using MutableStorage = MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
-        Attribute(ORDERED | LOGICAL_DELETION)>;
+        Attribute(ORDERED)>;
     using BackendStorage = MemoryStorage<executor_v1::StateKey, executor_v1::StateValue,
         Attribute(ORDERED | CONCURRENT), std::hash<executor_v1::StateKey>>;
 

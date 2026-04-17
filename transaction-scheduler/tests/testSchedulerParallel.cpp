@@ -48,7 +48,7 @@ class TestSchedulerParallelFixture
 {
 public:
     using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
+        memory_storage::Attribute(memory_storage::ORDERED)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;

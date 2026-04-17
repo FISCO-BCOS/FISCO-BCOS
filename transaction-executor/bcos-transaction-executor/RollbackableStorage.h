@@ -9,20 +9,6 @@ namespace bcos::executor_v1
 {
 
 template <class Storage>
-concept HasReadOneDirect = requires(Storage& storage) {
-    {
-        storage2::readOne(storage, std::declval<typename Storage::Key>(), storage2::DIRECT)
-    } -> task::IsAwaitable;
-};
-template <class Storage>
-concept HasReadSomeDirect = requires(Storage& storage) {
-    {
-        storage2::readSome(
-            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT)
-    } -> task::IsAwaitable;
-};
-
-template <class Storage>
 class Rollbackable
 {
 public:
@@ -51,8 +37,7 @@ public:
             }
             else
             {
-                co_await storage2::removeOne(
-                    m_storage.get(), std::move(record.key), storage2::DIRECT);
+                co_await storage2::removeOne(m_storage.get(), std::move(record.key));
             }
             m_records.pop_back();
         }
@@ -62,9 +47,7 @@ private:
     struct Record
     {
         Key key;
-        task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, Storage&, Key, storage2::DIRECT_TYPE>>
-            oldValue;
+        task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne, Storage&, Key>> oldValue;
     };
     std::vector<Record> m_records;
     std::reference_wrapper<Storage> m_storage;
@@ -73,7 +56,7 @@ private:
         requires ::ranges::sized_range<Keys> && ::ranges::input_range<Keys>
     task::Task<void> storeOldValues(Keys keys, bool withEmpty)
     {
-        auto oldValues = co_await storage2::readSome(m_storage.get(), keys, storage2::DIRECT);
+        auto oldValues = co_await storage2::readSome(m_storage.get(), keys);
         m_records.reserve(m_records.size() + ::ranges::size(keys));
         for (auto&& [key, oldValue] : ranges::views::zip(keys, oldValues))
         {
@@ -89,7 +72,6 @@ private:
         ::ranges::input_range auto keyValues)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome,
             std::add_lvalue_reference_t<Storage>, decltype(keyValues)>>>
-        requires HasReadSomeDirect<Storage>
     {
         if constexpr (::ranges::borrowed_range<decltype(keyValues)>)
         {
@@ -126,12 +108,10 @@ private:
         storage2::tag_t<storage2::writeOne> /*unused*/, Rollbackable& storage, auto key, auto value)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
-        requires HasReadOneDirect<Storage>
     {
         auto& record = storage.m_records.emplace_back();
         record.key = key;
-        record.oldValue =
-            co_await storage2::readOne(storage.m_storage.get(), key, storage2::DIRECT);
+        record.oldValue = co_await storage2::readOne(storage.m_storage.get(), key);
         co_await storage2::writeOne(storage.m_storage.get(), std::move(key), std::move(value));
     }
 

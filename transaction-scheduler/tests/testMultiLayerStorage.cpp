@@ -18,7 +18,7 @@ class TestMultiLayerStorageFixture
 {
 public:
     using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
+        memory_storage::Attribute(memory_storage::ORDERED)>;
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
@@ -111,14 +111,8 @@ BOOST_AUTO_TEST_CASE(merge)
         auto values2 = co_await storage2::readSome(view3, keys);
         for (auto&& [index, value] : ::ranges::views::enumerate(values2))
         {
-            if (index >= 20 && index < 30)
-            {
-                BOOST_CHECK(!value);
-            }
-            else
-            {
-                BOOST_CHECK(value);
-            }
+            BOOST_CHECK(value);
+            BOOST_CHECK_EQUAL(value->get(), fmt::format("value: {}", index));
         }
 
         co_return;
@@ -128,7 +122,7 @@ BOOST_AUTO_TEST_CASE(merge)
 BOOST_AUTO_TEST_CASE(rangeMulti)
 {
     using MutableStorage = memory_storage::MemoryStorage<int, int,
-        memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
+        memory_storage::Attribute(memory_storage::ORDERED)>;
     using BackendStorage = memory_storage::MemoryStorage<int, int,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LRU)>;
 
@@ -156,7 +150,7 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
                        ::ranges::views::transform([](auto input) { return input.value_or(-1); }) |
                        ::ranges::to<std::vector>();
         BOOST_CHECK_EQUAL(resultList.size(), 8);
-        auto expectList = std::vector<int>({0, 0, -1, 1, 2, 2, 2, 2});
+        auto expectList = std::vector<int>({0, 0, 0, 1, 2, 2, 2, 2});
         BOOST_CHECK_EQUAL_COLLECTIONS(
             vecList.begin(), vecList.end(), expectList.begin(), expectList.end());
 
@@ -205,16 +199,16 @@ BOOST_AUTO_TEST_CASE(deletedEntry)
         view2.newMutable();
         co_await storage2::removeOne(view2, key);
 
-        BOOST_CHECK(!co_await storage2::existsOne(view2, key));
+        BOOST_CHECK(co_await storage2::existsOne(view2, key));
 
         auto values = co_await storage2::readSome(view2, ::ranges::views::single(key));
-        BOOST_CHECK(!values[0]);
+        BOOST_CHECK(values[0]);
 
         auto range = co_await storage2::range(view2);
         auto keyValue = co_await range.next();
         BOOST_CHECK(keyValue);
         BOOST_CHECK_EQUAL(std::get<0>(*keyValue), key);
-        BOOST_CHECK(std::holds_alternative<DELETED_TYPE>(std::get<1>(*keyValue)));
+        BOOST_CHECK(std::holds_alternative<StateValue>(std::get<1>(*keyValue)));
         keyValue = co_await range.next();
         BOOST_CHECK(keyValue);
         BOOST_CHECK_EQUAL(std::get<0>(*keyValue), key2);

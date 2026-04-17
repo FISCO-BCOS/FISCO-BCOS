@@ -31,7 +31,7 @@ constexpr static s256 singleIssue = 1000000;
 constexpr static s256 singleTransfer = 1;
 constexpr static std::string_view transferMethod{"transfer(address,address,int256)"};
 
-using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
+using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED)>;
 using BackendStorage = MemoryStorage<StateKey, StateValue, ORDERED | LRU | CONCURRENT>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;

@@ -33,7 +33,7 @@ namespace bcos::storage2
 // 说明
 // - 批量 API 接受通用 range；AnyStorage 在内部使用 any_view 别名进行适配
 // - merge(to, from) 会遍历来源的 range，并以通用方式对目标执行写入/删除
-// - 使用 DIRECT 进行删除时，如果底层存储支持，将绕过“逻辑删除”
+// - 删除接口统一为物理删除，不再区分 DIRECT 语义
 //
 // 通过将 Key/Value 作为模板参数保留，在擦除具体存储实现的同时保持强类型。
 
@@ -57,7 +57,7 @@ namespace bcos::storage2
 // Notes
 // - Bulk APIs accept generic ranges; AnyStorage adapts them internally using any_view aliases
 // - merge(to, from) iterates source's range and applies writes/removes to destination generically
-// - Removing with DIRECT will bypass logical-deletion if the underlying storage supports it
+// - Remove APIs always perform physical deletion
 //
 // Keep Key/Value as template parameters to preserve strong types while
 // erasing the concrete storage implementation.
@@ -108,11 +108,11 @@ private:
         virtual ~StorageConcept() = default;
         virtual task::Task<std::vector<std::optional<ValueType>>> readSome(AnyKeyView keys) = 0;
         virtual task::Task<void> writeSome(AnyKeyValueView keyValues) = 0;
-        virtual task::Task<void> removeSome(AnyKeyView keys, bool direct) = 0;
+        virtual task::Task<void> removeSome(AnyKeyView keys) = 0;
 
         virtual task::Task<std::optional<ValueType>> readOne(Key key) = 0;
         virtual task::Task<void> writeOne(Key key, ValueType value) = 0;
-        virtual task::Task<void> removeOne(Key key, bool direct) = 0;
+        virtual task::Task<void> removeOne(Key key) = 0;
 
         virtual task::Task<std::unique_ptr<IteratorConcept>> rangeBegin() = 0;
         virtual task::Task<std::unique_ptr<IteratorConcept>> rangeSeekBegin(const Key& key) = 0;
@@ -177,16 +177,9 @@ private:
             co_await storage2::writeSome(*m_storage, ::ranges::views::all(keyValues));
         }
 
-        task::Task<void> removeSome(AnyKeyView keys, bool direct) override
+        task::Task<void> removeSome(AnyKeyView keys) override
         {
-            if (direct)
-            {
-                co_await storage2::removeSome(*m_storage, ::ranges::views::all(keys), DIRECT);
-            }
-            else
-            {
-                co_await storage2::removeSome(*m_storage, ::ranges::views::all(keys));
-            }
+            co_await storage2::removeSome(*m_storage, ::ranges::views::all(keys));
         }
 
         task::Task<std::optional<ValueType>> readOne(Key key) override
@@ -199,16 +192,9 @@ private:
             co_await storage2::writeOne(*m_storage, std::move(key), std::move(value));
         }
 
-        task::Task<void> removeOne(Key key, bool direct) override
+        task::Task<void> removeOne(Key key) override
         {
-            if (direct)
-            {
-                co_await storage2::removeOne(*m_storage, std::move(key), DIRECT);
-            }
-            else
-            {
-                co_await storage2::removeOne(*m_storage, std::move(key));
-            }
+            co_await storage2::removeOne(*m_storage, std::move(key));
         }
 
         task::Task<std::unique_ptr<IteratorConcept>> rangeBegin() override
@@ -297,13 +283,7 @@ public:
     friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, AnyStorage& storage,
         ::ranges::input_range auto keys) -> task::Task<void>
     {
-        co_await storage.m_self->removeSome(::ranges::views::all(keys), false);
-    }
-
-    friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, AnyStorage& storage,
-        ::ranges::input_range auto keys, DIRECT_TYPE /*unused*/) -> task::Task<void>
-    {
-        co_await storage.m_self->removeSome(::ranges::views::all(keys), true);
+        co_await storage.m_self->removeSome(::ranges::views::all(keys));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, AnyStorage& storage,
@@ -321,13 +301,7 @@ public:
     friend auto tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/, AnyStorage& storage,
         auto key) -> task::Task<void>
     {
-        co_await storage.m_self->removeOne(std::move(key), false);
-    }
-
-    friend auto tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/, AnyStorage& storage,
-        auto key, DIRECT_TYPE /*unused*/) -> task::Task<void>
-    {
-        co_await storage.m_self->removeOne(std::move(key), true);
+        co_await storage.m_self->removeOne(std::move(key));
     }
 
     friend auto tag_invoke(storage2::tag_t<storage2::range> /*unused*/, AnyStorage& storage)

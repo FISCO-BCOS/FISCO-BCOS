@@ -56,8 +56,7 @@ enum Attribute : uint8_t
     UNORDERED = 0,
     ORDERED = 1,
     CONCURRENT = 1 << 1,
-    LRU = 1 << 2,
-    LOGICAL_DELETION = 1 << 3
+    LRU = 1 << 2
 };
 
 template <class KeyType, class ValueType = Empty, uint8_t attribute = Attribute::UNORDERED,
@@ -69,7 +68,6 @@ public:
     constexpr static bool withOrdered = (attribute & Attribute::ORDERED) != 0;
     constexpr static bool withConcurrent = (attribute & Attribute::CONCURRENT) != 0;
     constexpr static bool withLRU = (attribute & Attribute::LRU) != 0;
-    constexpr static bool withLogicalDeletion = (attribute & Attribute::LOGICAL_DELETION) != 0;
 
     using Key = KeyType;
     using Value = ValueType;
@@ -221,8 +219,7 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    bool writeOne(
-        Bucket& bucket, auto key, auto value, bool ignoreLogicalDeletion, bool insertOnly = false)
+    bool writeOne(Bucket& bucket, auto key, auto value, bool insertOnly = false)
     {
         auto const& index = bucket.container.template get<0>();
         int64_t updatedCapacity = 0;
@@ -251,7 +248,7 @@ public:
             {
                 return false;
             }
-            if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
+            if (!deleteOP)
             {
                 bucket.container.modify(it, [&](Data& data) mutable {
                     if constexpr (withLRU)
@@ -271,12 +268,12 @@ public:
                 {
                     updatedCapacity = -(getSize(it->key) + getSize(it->value));
                 }
-                it = bucket.container.erase(it);
+                bucket.container.erase(it);
             }
         }
         else
         {
-            if (!deleteOP || (withLogicalDeletion && !ignoreLogicalDeletion))
+            if (!deleteOP)
             {
                 it = bucket.container.emplace_hint(
                     it, Data{.key = Key{std::move(key)}, .value = {std::move(value)}});
@@ -287,21 +284,24 @@ public:
             }
         }
 
-        if constexpr (withLRU && !deleteOP)
+        if constexpr (withLRU)
         {
             bucket.capacity += updatedCapacity;
-            updateLRUAndCheck(bucket, it);
+            if constexpr (!deleteOP)
+            {
+                updateLRUAndCheck(bucket, it);
+            }
         }
         return !found;
     }
 
-    void removeSome(::ranges::input_range auto keys, bool ignoreLogicalDeletion)
+    void removeSome(::ranges::input_range auto keys)
     {
         for (auto&& key : keys)
         {
             auto& bucket = getBucket(key);
             Lock lock(bucket.mutex, true);
-            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem, ignoreLogicalDeletion);
+            writeOne(bucket, std::forward<decltype(key)>(key), deleteItem);
         }
     }
 
@@ -335,7 +335,7 @@ public:
     {
         auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, true);
-        storage.writeOne(bucket, std::move(key), std::move(value), false);
+        storage.writeOne(bucket, std::move(key), std::move(value));
         return {};
     }
 
@@ -345,8 +345,7 @@ public:
     {
         auto& bucket = storage.getBucket(key);
         Lock lock(bucket.mutex, true);
-        return {
-            storage.writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
+        return {storage.writeOne(bucket, std::move(key), std::move(value), /*insertOnly=*/true)};
     }
 
     friend task::AwaitableValue<bool> tag_invoke(storage2::tag_t<storage2::writeOneIf> /*unused*/,
@@ -371,7 +370,7 @@ public:
             return {false};
         }
 
-        storage.writeOne(bucket, std::move(key), std::move(value), false);
+        storage.writeOne(bucket, std::move(key), std::move(value));
         return {true};
     }
 
@@ -383,7 +382,7 @@ public:
             auto& bucket = storage.getBucket(key);
             Lock lock(bucket.mutex, true);
             storage.writeOne(bucket, std::forward<decltype(key)>(key),
-                std::forward<decltype(value)>(value), false);
+                std::forward<decltype(value)>(value));
         }
 
         return {};
@@ -392,28 +391,14 @@ public:
     friend task::AwaitableValue<void> tag_invoke(
         storage2::tag_t<storage2::removeOne> /*unused*/, MemoryStorage& storage, auto key)
     {
-        storage.removeSome(::ranges::views::single(std::move(key)), false);
-        return {};
-    }
-
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/,
-        MemoryStorage& storage, auto key, DIRECT_TYPE /*unused*/)
-    {
-        storage.removeSome(::ranges::views::single(std::move(key)), true);
+        storage.removeSome(::ranges::views::single(std::move(key)));
         return {};
     }
 
     friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
         MemoryStorage& storage, ::ranges::input_range auto keys)
     {
-        storage.removeSome(std::move(keys), false);
-        return {};
-    }
-
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        MemoryStorage& storage, ::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
-    {
-        storage.removeSome(std::move(keys), true);
+        storage.removeSome(std::move(keys));
         return {};
     }
 
@@ -553,7 +538,7 @@ public:
                     auto&& [key, value] = *data;
                     std::visit(
                         [&](auto& innerValue) {
-                            toStorage.writeOne(bucket, key, std::move(innerValue), false);
+                            toStorage.writeOne(bucket, key, std::move(innerValue));
                         },
                         value);
                 }

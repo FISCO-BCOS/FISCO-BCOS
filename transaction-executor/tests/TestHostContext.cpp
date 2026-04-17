@@ -44,10 +44,7 @@ public:
     Rollbackable<decltype(storage)> rollbackableStorage;
     using MemoryStorageType =
         bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-            bcos::executor_v1::StateValue,
-            bcos::storage2::memory_storage::Attribute(
-                bcos::storage2::memory_storage::ORDERED |
-                bcos::storage2::memory_storage::LOGICAL_DELETION)>;
+            bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
     MemoryStorageType transientStorage;
     Rollbackable<MemoryStorageType> rollbackableTransientStorage;
     evmc_address helloworldAddress{};

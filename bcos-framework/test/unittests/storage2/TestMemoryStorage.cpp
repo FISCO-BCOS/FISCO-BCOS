@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(lru)
 BOOST_AUTO_TEST_CASE(logicalDeletion)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, storage::Entry, Attribute(ORDERED | LOGICAL_DELETION)> storage;
+        MemoryStorage<int, storage::Entry, ORDERED> storage;
 
         // Write 100 items
         co_await storage2::writeSome(
@@ -201,22 +201,24 @@ BOOST_AUTO_TEST_CASE(logicalDeletion)
             storage, ::ranges::views::iota(0, 50) |
                          ::ranges::views::transform([](int num) { return num * 2; }));
 
-        // Query and check if deleted items
-        int i = 0;
+        // Query and check deleted items are physically removed
+        int i = 1;
         auto values = co_await storage2::range(storage);
         while (auto item = co_await values.next())
         {
             auto [key, value] = *item;
-            if (i % 2 == 0)
-            {
-                BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(value));
-            }
-            else
-            {
-                BOOST_CHECK_EQUAL(
-                    std::get<storage::Entry>(value).get(), fmt::format("Item: {}", i));
-            }
-            ++i;
+            BOOST_CHECK_EQUAL(key, i);
+            BOOST_CHECK_EQUAL(std::get<storage::Entry>(value).get(), fmt::format("Item: {}", i));
+            i += 2;
+        }
+        BOOST_CHECK_EQUAL(i, 101);
+
+        auto removedValues = co_await storage2::readSome(
+            storage, ::ranges::views::iota(0, 50) |
+                         ::ranges::views::transform([](int num) { return num * 2; }));
+        for (auto const& removed : removedValues)
+        {
+            BOOST_CHECK(!removed);
         }
 
         co_return;
@@ -264,7 +266,6 @@ BOOST_AUTO_TEST_CASE(range)
 
         MemoryStorage<int, int,
             bcos::storage2::memory_storage::Attribute(
-                bcos::storage2::memory_storage::LOGICAL_DELETION |
                 bcos::storage2::memory_storage::ORDERED)>
             intStorage;
         co_await storage2::writeSome(intStorage,
@@ -336,8 +337,7 @@ BOOST_AUTO_TEST_CASE(merge)
 BOOST_AUTO_TEST_CASE(directDelete)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, int, bcos::storage2::memory_storage::LOGICAL_DELETION, std::hash<int>>
-            storage;
+        MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED, std::hash<int>> storage;
         co_await storage2::writeSome(storage,
             ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
 
@@ -349,7 +349,7 @@ BOOST_AUTO_TEST_CASE(directDelete)
         }
         BOOST_CHECK_EQUAL(count1, 10);
 
-        co_await storage2::removeOne(storage, 6, bcos::storage2::DIRECT);
+        co_await storage2::removeOne(storage, 6);
         auto range2 = co_await storage2::range(storage);
         int count2 = 0;
         while (co_await range2.next())
@@ -403,9 +403,7 @@ BOOST_AUTO_TEST_CASE(keyComp)
 
     bcos::task::syncWait([&]() -> task::Task<void> {
         bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-            bcos::executor_v1::StateValue,
-            bcos::storage2::memory_storage::ORDERED |
-                bcos::storage2::memory_storage::LOGICAL_DELETION>
+            bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>
             storage;
         for (const auto& key : keys)
         {
@@ -493,10 +491,7 @@ BOOST_AUTO_TEST_CASE(concurrentRange)
 BOOST_AUTO_TEST_CASE(dirtctReadOne)
 {
     task::syncWait([]() -> task::Task<void> {
-        MemoryStorage<int, int,
-            bcos::storage2::memory_storage::ORDERED |
-                bcos::storage2::memory_storage::LOGICAL_DELETION>
-            storage;
+        MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED> storage;
         co_await storage2::writeSome(storage,
             ::ranges::views::zip(::ranges::views::iota(0, 10), ::ranges::repeat_view<int>(100)));
         co_await storage2::removeOne(storage, 6);
@@ -504,7 +499,7 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         auto value = co_await storage2::readOne(storage, 6);
         BOOST_CHECK(!value);
         auto value2 = storage.readOne(6);
-        BOOST_CHECK(std::holds_alternative<bcos::storage2::DELETED_TYPE>(value2));
+        BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value2));
 
         auto value3 = storage.readOne(11);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value3));

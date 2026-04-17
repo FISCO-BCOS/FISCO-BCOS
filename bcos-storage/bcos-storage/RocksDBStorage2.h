@@ -1,4 +1,5 @@
 #pragma once
+#include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-utilities/Error.h"
@@ -11,6 +12,7 @@
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <range/v3/view/chunk.hpp>
+#include <type_traits>
 #include <variant>
 
 namespace bcos::storage2::rocksdb
@@ -186,17 +188,26 @@ public:
         {
             auto&& [key, variantValue] = *keyValue;
             auto encodedKey = m_keyResolver.encode(key);
+            auto keySlice =
+                ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
             if (auto* value = std::get_if<ValueType>(std::addressof(variantValue)))
             {
+                if constexpr (std::is_same_v<std::remove_cvref_t<ValueType>, bcos::storage::Entry>)
+                {
+                    if (value->status() == bcos::storage::Entry::DELETED)
+                    {
+                        writeBatch.Delete(keySlice);
+                        continue;
+                    }
+                }
+
                 auto encodedValue = m_valueResolver.encode(*value);
-                writeBatch.Put(
-                    ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)),
+                writeBatch.Put(keySlice,
                     ::rocksdb::Slice(::ranges::data(encodedValue), ::ranges::size(encodedValue)));
             }
             else
             {
-                writeBatch.Delete(
-                    ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)));
+                continue;
             }
         }
         co_await writeToBatch(writeBatch, fromStorage...);

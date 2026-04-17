@@ -10,8 +10,7 @@
 #include <boost/throw_exception.hpp>
 
 using MutableStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
-    bcos::executor_v1::StateValue,
-    bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
+    bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
 using CacheStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
     bcos::executor_v1::StateValue,
     bcos::storage2::memory_storage::CONCURRENT | bcos::storage2::memory_storage::LRU>;

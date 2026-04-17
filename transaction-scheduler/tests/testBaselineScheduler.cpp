@@ -28,7 +28,7 @@ using namespace bcos::executor_v1;
 using namespace bcos::scheduler_v1;
 
 using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
-    memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
+    memory_storage::Attribute(memory_storage::ORDERED)>;
 using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
     std::hash<StateKey>>;

@@ -151,30 +151,28 @@ BOOST_AUTO_TEST_CASE(merge_cross_types)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(merge_with_logical_deletion)
+BOOST_AUTO_TEST_CASE(merge_without_logical_deletion)
 {
     task::syncWait([]() -> task::Task<void> {
-        // Source enables logical deletion so its range() emits DELETED_TYPE; destination plain
-        // ordered
-        MemoryStorage<int, std::string, ORDERED> toPlain;                         // dest
-        MemoryStorage<int, std::string, Attribute(LOGICAL_DELETION)> fromWithLD;  // source
+        MemoryStorage<int, std::string, ORDERED> toPlain;    // dest
+        MemoryStorage<int, std::string, ORDERED> fromPlain;  // source
 
         AnyStorage<int, std::string> anyTo(toPlain);
-        AnyStorage<int, std::string> anyFrom(fromWithLD);
+        AnyStorage<int, std::string> anyFrom(fromPlain);
 
         // Seed data
         co_await writeSome(
             anyTo, std::vector<std::pair<int, std::string>>{{1, "x1"}, {2, "x2"}, {3, "x3"}});
         co_await writeSome(anyFrom, std::vector<std::pair<int, std::string>>{{2, "y2"}});
 
-        // Source expresses a deletion for key=1 via removeOne (kept as logical deletion in source)
+        // Source performs physical deletion for key=1; merge won't carry deletion tombstones.
         co_await removeOne(anyFrom, 1);
 
-        // Merge: expect key=1 deleted in dest, key=2 overwritten to y2, key=3 untouched
+        // Merge: key=2 overwritten, key=3 untouched, key=1 keeps destination value.
         co_await merge(anyTo, anyFrom);
 
         auto res = co_await readSome(anyTo, std::vector<int>{1, 2, 3});
-        BOOST_CHECK(!res[0]);  // deleted
+        BOOST_CHECK(res[0] && *res[0] == "x1");
         BOOST_CHECK(res[1] && *res[1] == "y2");
         BOOST_CHECK(res[2] && *res[2] == "x3");
     }());

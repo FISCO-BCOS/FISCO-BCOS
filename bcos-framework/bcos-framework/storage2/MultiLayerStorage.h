@@ -178,29 +178,6 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, View& view,
-        ::ranges::input_range auto keys, storage2::DIRECT_TYPE /*unused*/)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
-    {
-        if (view.m_mutableStorage)
-        {
-            co_return co_await storage2::readSome(*view.m_mutableStorage, std::move(keys));
-        }
-
-        for (auto& immutableStorage : view.m_immutableStorages)
-        {
-            co_return co_await storage2::readSome(*immutableStorage, std::move(keys));
-        }
-
-        if constexpr (View::withCacheStorage)
-        {
-            co_return co_await storage2::readSome(view.m_cacheStorage.get(), std::move(keys));
-        }
-
-        co_return co_await storage2::readSome(view.m_backendStorage.get(), std::move(keys));
-    }
-
     friend auto tag_invoke(
         storage2::tag_t<storage2::readOne> /*unused*/, View& view, const auto& key)
         -> task::Task<task::AwaitableReturnType<
@@ -230,29 +207,6 @@ public:
             {
                 co_return value;
             }
-        }
-
-        co_return co_await storage2::readOne(view.m_backendStorage.get(), key);
-    }
-
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, View& view,
-        const auto& key, storage2::DIRECT_TYPE /*unused*/)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, MutableStorage&, decltype(key)>>>
-    {
-        if (view.m_mutableStorage)
-        {
-            co_return co_await storage2::readOne(*view.m_mutableStorage, key);
-        }
-
-        for (auto& immutableStorage : view.m_immutableStorages)
-        {
-            co_return co_await storage2::readOne(*immutableStorage, key);
-        }
-
-        if constexpr (View::withCacheStorage)
-        {
-            co_return co_await storage2::readOne(view.m_cacheStorage.get(), key);
         }
 
         co_return co_await storage2::readOne(view.m_backendStorage.get(), key);
@@ -406,7 +360,6 @@ public:
 };
 
 template <class MutableStorageType, class CachedStorage, class BackendStorage>
-    requires MutableStorageType::withLogicalDeletion
 class MultiLayerStorage
 {
 public:
