@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
             "t_test", {}, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!keys.empty());
-                BOOST_CHECK_EQUAL(keys.size(), 9);
+                BOOST_CHECK_EQUAL(keys.size(), 10);
                 auto expectedKeys = std::vector<std::string>{
                     "0",
                     "1",
@@ -79,6 +79,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
                     "6",
                     "7",
                     "8",
+                    "9",
                 };
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     keys.begin(), keys.end(), expectedKeys.begin(), expectedKeys.end());
@@ -138,11 +139,12 @@ BOOST_AUTO_TEST_CASE(balanceCase)
             [](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!gotKeys.empty());
-                BOOST_CHECK_EQUAL(gotKeys.size(), 3);
+                BOOST_CHECK_EQUAL(gotKeys.size(), 4);
                 auto expectedKeys =
                     std::vector<std::string>{"00000000000000000000000000000195cb2ccc38",
                         "57e8f689daed377a69915c0ddce26da288f3aa65",
-                        "893de00e32b0765e03366ce8b3bfcd0404b24995"};
+                        "893de00e32b0765e03366ce8b3bfcd0404b24995",
+                        "d24180cc0fef2f3e545de4f9aafc09345cd08903"};
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     gotKeys.begin(), gotKeys.end(), expectedKeys.begin(), expectedKeys.end());
             });

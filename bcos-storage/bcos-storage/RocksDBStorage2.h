@@ -205,10 +205,6 @@ public:
                 writeBatch.Put(keySlice,
                     ::rocksdb::Slice(::ranges::data(encodedValue), ::ranges::size(encodedValue)));
             }
-            else
-            {
-                continue;
-            }
         }
         co_await writeToBatch(writeBatch, fromStorage...);
     }

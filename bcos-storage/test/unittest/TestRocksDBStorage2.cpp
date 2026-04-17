@@ -207,4 +207,37 @@ BOOST_AUTO_TEST_CASE(merge)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(mergeDeletedEntryToDelete)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        RocksDBStorage2<StateKey, StateValue, StateKeyResolver,
+            bcos::storage2::rocksdb::StateValueResolver>
+            rocksDB(*originRocksDB, StateKeyResolver{}, StateValueResolver{});
+
+        StateKey key{"test_table"sv, "deleted_key"sv};
+        storage::Entry initialEntry;
+        initialEntry.set("initial value");
+        co_await storage2::writeOne(rocksDB, key, initialEntry);
+
+        auto beforeMerge = co_await storage2::readOne(rocksDB, key);
+        BOOST_REQUIRE(beforeMerge);
+        BOOST_CHECK_EQUAL(beforeMerge->get(), "initial value");
+
+        storage2::memory_storage::MemoryStorage<StateKey, StateValue,
+            storage2::memory_storage::ORDERED>
+            memoryStorage;
+
+        storage::Entry deletedEntry;
+        deletedEntry.setStatus(storage::Entry::DELETED);
+        co_await storage2::writeOne(memoryStorage, key, deletedEntry);
+
+        co_await storage2::merge(rocksDB, memoryStorage);
+
+        auto afterMerge = co_await storage2::readOne(rocksDB, key);
+        BOOST_CHECK(!afterMerge);
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
