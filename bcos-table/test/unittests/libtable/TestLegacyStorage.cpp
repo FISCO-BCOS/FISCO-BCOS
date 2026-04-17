@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
             "t_test", {}, [](bcos::Error::UniquePtr error, std::vector<std::string> keys) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!keys.empty());
-                BOOST_CHECK_EQUAL(keys.size(), 10);
+                BOOST_CHECK_EQUAL(keys.size(), 9);
                 auto expectedKeys = std::vector<std::string>{
                     "0",
                     "1",
@@ -79,7 +79,6 @@ BOOST_AUTO_TEST_CASE(getPrimaryKeys)
                     "6",
                     "7",
                     "8",
-                    "9",
                 };
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     keys.begin(), keys.end(), expectedKeys.begin(), expectedKeys.end());
@@ -139,14 +138,53 @@ BOOST_AUTO_TEST_CASE(balanceCase)
             [](bcos::Error::UniquePtr error, std::vector<std::string> gotKeys) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(!gotKeys.empty());
-                BOOST_CHECK_EQUAL(gotKeys.size(), 4);
+                BOOST_CHECK_EQUAL(gotKeys.size(), 3);
                 auto expectedKeys =
                     std::vector<std::string>{"00000000000000000000000000000195cb2ccc38",
                         "57e8f689daed377a69915c0ddce26da288f3aa65",
-                        "893de00e32b0765e03366ce8b3bfcd0404b24995",
-                        "d24180cc0fef2f3e545de4f9aafc09345cd08903"};
+                        "893de00e32b0765e03366ce8b3bfcd0404b24995"};
                 BOOST_CHECK_EQUAL_COLLECTIONS(
                     gotKeys.begin(), gotKeys.end(), expectedKeys.begin(), expectedKeys.end());
+            });
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(getRowAndRowsFilterDeletedEntry)
+{
+    bcos::task::syncWait([this]() -> bcos::task::Task<void> {
+        co_await bcos::storage2::writeSome(
+            storage, ::ranges::views::iota(0, 3) | ::ranges::views::transform([](int i) {
+                auto key = bcos::executor_v1::StateKey("t_test", std::to_string(i));
+                return std::make_tuple(key, bcos::storage::Entry("value"));
+            }));
+
+        bcos::storage::LegacyStorageWrapper legacyStorage(storage);
+
+        bcos::storage::Entry deletedEntry;
+        deletedEntry.setStatus(bcos::storage::Entry::DELETED);
+        legacyStorage.asyncSetRow(
+            "t_test", "1", deletedEntry, [](bcos::Error::UniquePtr error) { BOOST_CHECK(!error); });
+
+        legacyStorage.asyncGetRow(
+            "t_test", "0", [](bcos::Error::UniquePtr error, std::optional<bcos::storage::Entry> entry) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(entry.has_value());
+            });
+
+        legacyStorage.asyncGetRow(
+            "t_test", "1", [](bcos::Error::UniquePtr error, std::optional<bcos::storage::Entry> entry) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(!entry.has_value());
+            });
+
+        std::string_view keys[] = {"0", "1", "3"};
+        legacyStorage.asyncGetRows(
+            "t_test", keys, [](bcos::Error::UniquePtr error, std::vector<std::optional<bcos::storage::Entry>> entries) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK_EQUAL(entries.size(), 3);
+                BOOST_CHECK(entries[0].has_value());
+                BOOST_CHECK(!entries[1].has_value());
+                BOOST_CHECK(!entries[2].has_value());
             });
     }());
 }

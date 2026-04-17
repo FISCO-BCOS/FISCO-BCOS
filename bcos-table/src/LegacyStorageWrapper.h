@@ -56,6 +56,12 @@ public:
                 if ((!condition || condition->isValid(entryKey)) &&
                     std::holds_alternative<storage::Entry>(value))
                 {
+                    auto const& entry = std::get<storage::Entry>(value);
+                    if (entry.status() == storage::Entry::DELETED)
+                    {
+                        continue;
+                    }
+
                     if (start != 0 || count != 0)
                     {
                         if (((start == 0 || index >= start) &&
@@ -85,6 +91,12 @@ public:
             {
                 auto value = co_await storage2::readOne(
                     self->m_storage.get(), executor_v1::StateKeyView{table, key});
+
+                if (value && value->status() == storage::Entry::DELETED)
+                {
+                    value.reset();
+                }
+
                 callback(nullptr, std::move(value));
             }
             catch (std::exception& e)
@@ -110,6 +122,15 @@ public:
                     return executor_v1::StateKeyView{table, std::forward<decltype(key)>(key)};
                 });
                 auto values = co_await storage2::readSome(self->m_storage.get(), stateKeys);
+
+                for (auto& value : values)
+                {
+                    if (value && value->status() == storage::Entry::DELETED)
+                    {
+                        value.reset();
+                    }
+                }
+
                 callback(nullptr, std::move(values));
             }
             catch (std::exception& e)
