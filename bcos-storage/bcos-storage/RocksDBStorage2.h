@@ -43,7 +43,7 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    auto readSome(::ranges::input_range auto keys)
+    auto readSomeRaw(::ranges::input_range auto keys)
     {
         auto encodedKeys = keys | ::ranges::views::transform([&](auto&& key) {
             return m_keyResolver.encode(std::forward<decltype(key)>(key));
@@ -77,11 +77,10 @@ public:
         return values;
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, RocksDBStorage2& storage,
-        ::ranges::input_range auto keys)
+    auto readSome(::ranges::input_range auto keys)
         -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
     {
-        auto values = storage.readSome(std::move(keys));
+        auto values = readSomeRaw(std::move(keys));
         return {::ranges::views::transform(values, [](auto&& value) -> std::optional<ValueType> {
             if (auto* entry = std::get_if<ValueType>(std::addressof(value)))
             {
@@ -91,17 +90,16 @@ public:
         }) | ::ranges::to<std::vector>()};
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/, RocksDBStorage2& storage,
-        auto key) -> task::AwaitableValue<std::optional<ValueType>>
+    auto readOne(auto key) -> task::AwaitableValue<std::optional<ValueType>>
     {
         task::AwaitableValue<std::optional<ValueType>> result;
 
-        auto rocksDBKey = storage.m_keyResolver.encode(key);
+        auto rocksDBKey = m_keyResolver.encode(key);
         std::string value;
-        auto status = storage.m_rocksDB.get().Get(::rocksdb::ReadOptions(),
-            storage.m_rocksDB.get().DefaultColumnFamily(),
-            ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
-            std::addressof(value));
+        auto status =
+            m_rocksDB.get().Get(::rocksdb::ReadOptions(), m_rocksDB.get().DefaultColumnFamily(),
+                ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
+                std::addressof(value));
         if (!status.ok())
         {
             if (!status.IsNotFound())
@@ -111,25 +109,24 @@ public:
             }
             return result;
         }
-        result.value().emplace(storage.m_valueResolver.decode(std::move(value)));
+        result.value().emplace(m_valueResolver.decode(std::move(value)));
 
         return result;
     }
 
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/,
-        RocksDBStorage2& storage, ::ranges::input_range auto keyValues)
+    task::AwaitableValue<void> writeSome(::ranges::input_range auto keyValues)
     {
         ::rocksdb::WriteBatch writeBatch;
         for (auto&& [key, value] : keyValues)
         {
-            auto encodedKey = storage.m_keyResolver.encode(key);
-            auto encodedValue = storage.m_valueResolver.encode(value);
+            auto encodedKey = m_keyResolver.encode(key);
+            auto encodedValue = m_valueResolver.encode(value);
             writeBatch.Put(::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)),
                 ::rocksdb::Slice(::ranges::data(encodedValue), ::ranges::size(encodedValue)));
         }
 
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.get().Write(options, std::addressof(writeBatch));
+        auto status = m_rocksDB.get().Write(options, std::addressof(writeBatch));
         if (!status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
@@ -137,14 +134,13 @@ public:
         return {};
     }
 
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
-        RocksDBStorage2& storage, auto key, auto value)
+    task::AwaitableValue<void> writeOne(auto key, auto value)
     {
-        auto rocksDBKey = storage.m_keyResolver.encode(key);
-        auto rocksDBValue = storage.m_valueResolver.encode(value);
+        auto rocksDBKey = m_keyResolver.encode(key);
+        auto rocksDBValue = m_valueResolver.encode(value);
 
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.get().Put(options,
+        auto status = m_rocksDB.get().Put(options,
             ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
             ::rocksdb::Slice(::ranges::data(rocksDBValue), ::ranges::size(rocksDBValue)));
 
@@ -155,20 +151,19 @@ public:
         return {};
     }
 
-    friend task::AwaitableValue<void> tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/,
-        RocksDBStorage2& storage, ::ranges::input_range auto keys)
+    task::AwaitableValue<void> removeSome(::ranges::input_range auto keys)
     {
         ::rocksdb::WriteBatch writeBatch;
 
         for (auto const& key : keys)
         {
-            auto encodedKey = storage.m_keyResolver.encode(key);
+            auto encodedKey = m_keyResolver.encode(key);
             writeBatch.Delete(
                 ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)));
         }
 
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.get().Write(options, &writeBatch);
+        auto status = m_rocksDB.get().Write(options, &writeBatch);
         if (!status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
@@ -202,16 +197,15 @@ public:
         co_await writeToBatch(writeBatch, fromStorage...);
     }
 
-    friend task::Task<void> tag_invoke(
-        storage2::tag_t<storage2::merge> /*unused*/, RocksDBStorage2& storage, auto&... fromStorage)
+    task::Task<void> merge(auto&... fromStorage)
     {
         static thread_local std::unique_ptr<::rocksdb::WriteBatch> writeBatch;
         auto currentWriteBatch =
             writeBatch ? std::move(writeBatch) : std::make_unique<::rocksdb::WriteBatch>();
 
-        co_await storage.writeToBatch(*currentWriteBatch, fromStorage...);
+        co_await writeToBatch(*currentWriteBatch, fromStorage...);
         ::rocksdb::WriteOptions options;
-        auto status = storage.m_rocksDB.get().Write(options, currentWriteBatch.get());
+        auto status = m_rocksDB.get().Write(options, currentWriteBatch.get());
 
         currentWriteBatch->Clear();
         if (!writeBatch || currentWriteBatch->Data().capacity() > writeBatch->Data().capacity())
@@ -279,7 +273,7 @@ public:
         }
     };
 
-    static task::AwaitableValue<Iterator> range(
+    static task::AwaitableValue<Iterator> rangeImpl(
         RocksDBStorage2& storage, const ::rocksdb::Slice* startSlice = nullptr)
     {
         const auto* snapshot = storage.m_rocksDB.get().GetSnapshot();
@@ -297,19 +291,13 @@ public:
         return Iterator{snapshot, iterator, std::addressof(storage)};
     }
 
-    friend task::AwaitableValue<Iterator> tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, RocksDBStorage2& storage)
-    {
-        return range(storage);
-    }
+    task::AwaitableValue<Iterator> range() { return rangeImpl(*this); }
 
-    friend task::AwaitableValue<Iterator> tag_invoke(
-        bcos::storage2::tag_t<storage2::range> /*unused*/, RocksDBStorage2& storage,
-        storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
+    task::AwaitableValue<Iterator> range(storage2::RANGE_SEEK_TYPE /*unused*/, auto&& startKey)
     {
-        auto encodedKey = storage.m_keyResolver.encode(startKey);
+        auto encodedKey = m_keyResolver.encode(startKey);
         ::rocksdb::Slice slice(::ranges::data(encodedKey), ::ranges::size(encodedKey));
-        return range(storage, std::addressof(slice));
+        return rangeImpl(*this, std::addressof(slice));
     }
 };
 

@@ -39,16 +39,14 @@ struct MyStorage
     T value{};
     using Value = T;
 
-    friend task::Task<std::vector<std::optional<int>>> tag_invoke(
-        storage2::tag_t<storage2::readSome> /*unused*/, MyStorage& storage, auto&& keys)
+    auto readSome(auto&& keys) -> task::Task<std::vector<std::optional<int>>>
     {
         std::vector<std::optional<int>> result;
         result.emplace_back(200);
         co_return result;
     }
 
-    friend auto tag_invoke(storage2::tag_t<bcos::storage2::readOne> /*unused*/, MyStorage& storage,
-        auto&& key) -> task::Task<std::optional<int>>
+    auto readOne(auto&& key) -> task::Task<std::optional<int>>
     {
         co_return std::make_optional(100);
     }
@@ -503,17 +501,17 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
 
         auto value = co_await storage2::readOne(storage, 6);
         BOOST_CHECK(!value);
-        auto value2 = storage.readOne(6);
+        auto value2 = storage.readOneRaw(6);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::DELETED_TYPE>(value2));
 
-        auto value3 = storage.readOne(11);
+        auto value3 = storage.readOneRaw(11);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value3));
         auto value4 = co_await storage2::readOne(storage, 11);
         BOOST_CHECK(!value4);
 
         auto value5 = co_await storage2::readOne(storage, 3);
         BOOST_CHECK(value5);
-        auto value6 = storage.readOne(3);
+        auto value6 = storage.readOneRaw(3);
         BOOST_CHECK(std::holds_alternative<int>(value6));
 
         MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED> storage_2;
@@ -524,10 +522,10 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         auto value21 = co_await storage2::readOne(storage_2, 6);
         BOOST_CHECK(!value21);
 
-        auto value22 = storage_2.readOne(6);
+        auto value22 = storage_2.readOneRaw(6);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value22));
 
-        auto value23 = storage_2.readOne(11);
+        auto value23 = storage_2.readOneRaw(11);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value23));
         auto value24 = co_await storage2::readOne(storage_2, 11);
         BOOST_CHECK(!value24);

@@ -58,6 +58,7 @@ BOOST_AUTO_TEST_CASE(readWriteMutable)
         ::ranges::single_view keyViews(key);
         auto values = co_await storage2::readSome(*view, keyViews);
 
+        BOOST_REQUIRE(values[0].has_value());
         BOOST_CHECK_EQUAL(values[0]->get(), entry.get());
         BOOST_CHECK_NO_THROW(multiLayerStorage.pushView(std::move(*view)));
 
@@ -98,6 +99,7 @@ BOOST_AUTO_TEST_CASE(merge)
 
         for (auto&& [index, value] : ::ranges::views::enumerate(values))
         {
+            BOOST_REQUIRE(value.has_value());
             BOOST_CHECK_EQUAL(value->get(), fmt::format("value: {}", index));
         }
         BOOST_CHECK_EQUAL(::ranges::size(values), 100);

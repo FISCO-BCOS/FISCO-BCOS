@@ -23,78 +23,82 @@ using namespace bcos::executor_v1;
 
 namespace bcos::test
 {
-// A tiny in-memory storage implementing storage2 tag_invoke for StateKeyView/StateValue.
 struct MapStateStorage
 {
     using Value = storage::Entry;
     std::unordered_map<std::string, std::unordered_map<std::string, Value>> data;
-};
-
-// ReadOne
-inline task::Task<std::optional<MapStateStorage::Value>> tag_invoke(
-    bcos::storage2::tag_t<bcos::storage2::readOne>, MapStateStorage& storage,
-    const StateKeyView key)
-{
-    auto [table, field] = key.get();
-    if (auto tIt = storage.data.find(std::string(table)); tIt != storage.data.end())
+    task::Task<std::optional<Value>> readOne(StateKeyView key)
     {
-        if (auto fIt = tIt->second.find(std::string(field)); fIt != tIt->second.end())
-        {
-            co_return std::make_optional(fIt->second);
-        }
-    }
-    co_return std::nullopt;
-}
-
-// WriteOne
-inline task::Task<void> tag_invoke(bcos::storage2::tag_t<bcos::storage2::writeOne>,
-    MapStateStorage& storage, StateKey key, MapStateStorage::Value value)
-{
-    StateKeyView view{key};
-    auto [table, field] = view.get();
-    storage.data[std::string(table)][std::string(field)] = std::move(value);
-    co_return;
-}
-
-// ReadSome: return vector<optional<Entry>> in the same order
-template <class Keys>
-inline task::Task<std::vector<std::optional<MapStateStorage::Value>>> tag_invoke(
-    bcos::storage2::tag_t<bcos::storage2::readSome>, MapStateStorage& storage, Keys keys)
-{
-    std::vector<std::optional<MapStateStorage::Value>> results;
-    results.reserve(::ranges::distance(keys));
-    for (auto&& k : keys)
-    {
-        StateKeyView key{k};
         auto [table, field] = key.get();
-        if (auto tIt = storage.data.find(std::string(table)); tIt != storage.data.end())
+        if (auto tIt = data.find(std::string(table)); tIt != data.end())
         {
             if (auto fIt = tIt->second.find(std::string(field)); fIt != tIt->second.end())
             {
-                results.emplace_back(fIt->second);
-                continue;
+                co_return std::make_optional(fIt->second);
             }
         }
-        results.emplace_back(std::nullopt);
+        co_return std::nullopt;
     }
-    co_return results;
-}
 
-// WriteSome: accept range of pair(StateKey, Entry)
-template <class KVs>
-inline task::Task<void> tag_invoke(
-    bcos::storage2::tag_t<bcos::storage2::writeSome>, MapStateStorage& storage, KVs keyValues)
-{
-    for (auto&& kv : keyValues)
+    task::Task<std::optional<Value>> readOne(StateKey key) { co_return co_await readOne(StateKeyView{key}); }
+
+    template <class Keys>
+    task::Task<std::vector<std::optional<Value>>> readSome(Keys keys)
     {
-        StateKey key{std::get<0>(kv)};
-        auto& value = std::get<1>(kv);
+        std::vector<std::optional<Value>> results;
+        if constexpr (::ranges::sized_range<Keys>)
+        {
+            results.reserve(::ranges::size(keys));
+        }
+        else
+        {
+            results.reserve(::ranges::distance(keys));
+        }
+
+        for (auto&& k : keys)
+        {
+            results.emplace_back(co_await readOne(StateKeyView{k}));
+        }
+        co_return results;
+    }
+
+    task::Task<void> writeOne(StateKey key, Value value)
+    {
         StateKeyView view{key};
         auto [table, field] = view.get();
-        storage.data[std::string(table)][std::string(field)] = value;
+        data[std::string(table)][std::string(field)] = std::move(value);
+        co_return;
     }
-    co_return;
-}
+
+    task::Task<void> writeOne(StateKeyView key, Value value)
+    {
+        auto [table, field] = key.get();
+        data[std::string(table)][std::string(field)] = std::move(value);
+        co_return;
+    }
+
+    template <class KVs>
+    task::Task<void> writeSome(KVs keyValues)
+    {
+        for (auto&& kv : keyValues)
+        {
+            StateKey key{std::get<0>(kv)};
+            auto& value = std::get<1>(kv);
+            StateKeyView view{key};
+            auto [table, field] = view.get();
+            data[std::string(table)][std::string(field)] = value;
+        }
+        co_return;
+    }
+
+    task::Task<bool> existsOne(StateKeyView key)
+    {
+        auto value = co_await readOne(key);
+        co_return value.has_value();
+    }
+
+    task::Task<bool> existsOne(StateKey key) { co_return co_await existsOne(StateKeyView{key}); }
+};
 
 static bytes toBytes(std::string_view s)
 {

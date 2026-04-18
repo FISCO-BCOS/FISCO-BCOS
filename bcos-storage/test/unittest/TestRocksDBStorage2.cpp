@@ -78,18 +78,18 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
             auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
-        auto gotValues = co_await storage2::readSome(rocksDB, queryKeys);
+        auto gotValues = rocksDB.readSomeRaw(queryKeys);
         for (auto&& [i, value] : ::ranges::views::enumerate(gotValues))
         {
             if (i < 100)
             {
-                BOOST_CHECK(value);
-                BOOST_CHECK_EQUAL(
-                    value->get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
+                BOOST_CHECK(std::holds_alternative<storage::Entry>(value));
+                BOOST_CHECK_EQUAL(std::get<storage::Entry>(value).get(),
+                    fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             }
             else
             {
-                BOOST_CHECK(!value);
+                BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value));
             }
         }
 
@@ -102,22 +102,22 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         });
         co_await storage2::removeSome(rocksDB, removeKeys);
 
-        auto gotValues2 = co_await storage2::readSome(rocksDB, queryKeys);
+        auto gotValues2 = rocksDB.readSomeRaw(queryKeys);
         for (auto&& [i, value] : ::ranges::views::enumerate(gotValues2))
         {
             if (i >= 50 && i < 70)
             {
-                BOOST_CHECK(!value);
+                BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value));
             }
             else if (i < 100)
             {
-                BOOST_CHECK(value);
-                BOOST_CHECK_EQUAL(
-                    value->get(), fmt::format("Entry value is: i am a value!!!!!!! {}", i));
+                BOOST_CHECK(std::holds_alternative<storage::Entry>(value));
+                BOOST_CHECK_EQUAL(std::get<storage::Entry>(value).get(),
+                    fmt::format("Entry value is: i am a value!!!!!!! {}", i));
             }
             else
             {
-                BOOST_CHECK(!value);
+                BOOST_CHECK(std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value));
             }
         }
 
@@ -193,14 +193,15 @@ BOOST_AUTO_TEST_CASE(merge)
                           ::ranges::repeat_view<storage::Entry>(storage::Entry{"Hello"})));
         co_await storage2::merge(rocksDB2, storage3, storage4);
 
-        auto values2 = co_await storage2::readSome(
-            rocksDB2, ::ranges::views::iota(0, 20) | ::ranges::views::transform([](int i) {
+        auto values2 = rocksDB2.readSomeRaw(
+            ::ranges::views::iota(0, 20) | ::ranges::views::transform([](int i) {
                 return StateKey{"Hello"sv, fmt::format("key{}", i)};
             }));
         BOOST_CHECK_EQUAL(values2.size(), 20);
         for (auto& value : values2)
         {
-            BOOST_CHECK_EQUAL(value.value().get(), "Hello");
+            BOOST_CHECK(std::holds_alternative<storage::Entry>(value));
+            BOOST_CHECK_EQUAL(std::get<storage::Entry>(value).get(), "Hello");
         }
 
         co_return;

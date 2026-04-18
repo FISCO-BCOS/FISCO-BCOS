@@ -92,6 +92,18 @@ namespace bcos::test
 class MockStorage : public virtual StateStorage
 {
 public:
+    static executor_v1::StateKeyView toStateKeyView(const auto& key)
+    {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(key)>, executor_v1::StateKeyView>)
+        {
+            return key;
+        }
+        else
+        {
+            return executor_v1::StateKeyView{key};
+        }
+    }
+
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
@@ -110,6 +122,66 @@ public:
             asyncSetRow(tableName, keys[i], e, [](Error::UniquePtr) {});
         }
         return nullptr;
+    }
+
+    task::Task<std::optional<Entry>> readOne(auto key)
+    {
+        auto keyView = toStateKeyView(key);
+        auto [error, entry] = getRow(keyView.m_table, keyView.m_key);
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        co_return entry;
+    }
+
+    task::Task<std::vector<std::optional<Entry>>> readSome(::ranges::input_range auto keys)
+    {
+        std::vector<std::optional<Entry>> entries;
+        for (auto&& key : keys)
+        {
+            auto keyView = toStateKeyView(key);
+            auto [error, entry] = getRow(keyView.m_table, keyView.m_key);
+            if (error)
+            {
+                BOOST_THROW_EXCEPTION(*error);
+            }
+            entries.emplace_back(std::move(entry));
+        }
+        co_return entries;
+    }
+
+    task::Task<void> writeOne(auto key, Entry value)
+    {
+        auto keyView = toStateKeyView(key);
+        std::promise<Error::UniquePtr> setPromise;
+        asyncSetRow(keyView.m_table, keyView.m_key, std::move(value),
+            [&setPromise](Error::UniquePtr error) { setPromise.set_value(std::move(error)); });
+        auto error = setPromise.get_future().get();
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        co_return;
+    }
+
+    task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    {
+        for (auto&& [key, value] : keyValues)
+        {
+            co_await writeOne(key, value);
+        }
+    }
+
+    task::Task<bool> existsOne(auto key)
+    {
+        auto keyView = toStateKeyView(key);
+        auto [error, entry] = getRow(keyView.m_table, keyView.m_key);
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        co_return !!entry;
     }
 };
 
