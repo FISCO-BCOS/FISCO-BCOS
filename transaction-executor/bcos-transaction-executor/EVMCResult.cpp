@@ -79,7 +79,7 @@ bcos::executor_v1::fillErrorOutputInPlace(
 
     auto* output = new uint8_t[errorBytes.size()];  // NOLINT
     ::ranges::copy(errorBytes, output);
-    auto release = +[](const struct evmc_result* result) {
+    constexpr static auto* release = +[](const struct evmc_result* result) {
         gsl::owner<decltype(result->output_data)> ptr{result->output_data};
         delete[] ptr;
     };
