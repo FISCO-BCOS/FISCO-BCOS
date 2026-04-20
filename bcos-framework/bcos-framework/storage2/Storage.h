@@ -45,8 +45,7 @@ inline constexpr struct ReadSome
             storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...);
         }
     {
-        co_return co_await storage.readSome(
-            std::move(keys), std::forward<decltype(args)>(args)...);
+        co_return co_await storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
     auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
@@ -216,8 +215,8 @@ inline constexpr struct WriteOne
     }
 
     auto operator()(auto& storage, auto key, auto value, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, storage,
-            std::move(key), std::move(value), std::forward<decltype(args)>(args)...))>>
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, storage, std::move(key),
+            std::move(value), std::forward<decltype(args)>(args)...))>>
         requires(!requires {
             storage.writeOne(
                 std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
@@ -246,22 +245,17 @@ inline constexpr struct WriteOneIf
     // Predicate: (Value const&) -> bool
     // Returns true if the write was performed.
     auto operator()(auto& storage, auto key, auto value, auto predicate, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(storage.writeOneIf(std::move(key),
-            std::move(value), std::move(predicate), std::forward<decltype(args)>(args)...))>>
-    {
-        using Return = decltype(storage.writeOneIf(std::move(key), std::move(value),
-            std::move(predicate), std::forward<decltype(args)>(args)...));
-        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-        {
-            co_await storage.writeOneIf(std::move(key), std::move(value), std::move(predicate),
+        -> task::Task<bool>
+        requires requires {
+            storage.writeOneIf(std::move(key), std::move(value), std::move(predicate),
                 std::forward<decltype(args)>(args)...);
-            co_return;
-        }
-        else
-        {
-            co_return co_await storage.writeOneIf(std::move(key), std::move(value),
-                std::move(predicate), std::forward<decltype(args)>(args)...);
-        }
+        } && std::is_same_v<task::AwaitableReturnType<decltype(storage.writeOneIf(std::move(key),
+                                std::move(value), std::move(predicate),
+                                std::forward<decltype(args)>(args)...))>,
+                 bool>
+    {
+        co_return co_await storage.writeOneIf(std::move(key), std::move(value),
+            std::move(predicate), std::forward<decltype(args)>(args)...);
     }
 } writeOneIf;
 
@@ -332,23 +326,18 @@ inline constexpr struct ExistsOne
 
 inline constexpr struct InsertIfAbsent
 {
-    auto operator()(auto& storage, auto key, auto value, auto&&... args) const
-        -> task::Task<task::AwaitableReturnType<decltype(storage.insertIfAbsent(
-            std::move(key), std::move(value), std::forward<decltype(args)>(args)...))>>
+    auto operator()(auto& storage, auto key, auto value, auto&&... args) const -> task::Task<bool>
+        requires requires {
+            storage.insertIfAbsent(
+                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
+        } &&
+                 std::is_same_v<
+                     task::AwaitableReturnType<decltype(storage.insertIfAbsent(
+                         std::move(key), std::move(value), std::forward<decltype(args)>(args)...))>,
+                     bool>
     {
-        using Return = decltype(storage.insertIfAbsent(
-            std::move(key), std::move(value), std::forward<decltype(args)>(args)...));
-        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-        {
-            co_await storage.insertIfAbsent(
-                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-            co_return;
-        }
-        else
-        {
-            co_return co_await storage.insertIfAbsent(
-                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-        }
+        co_return co_await storage.insertIfAbsent(
+            std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
     }
 } insertIfAbsent;
 
