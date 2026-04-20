@@ -36,71 +36,34 @@ using StorageValueType = std::variant<NOT_EXISTS_TYPE, DELETED_TYPE, Value>;
 template <class Invoke>
 using ReturnType = typename task::AwaitableReturnType<Invoke>;
 
-namespace detail
-{
-template <class T>
-struct AwaitableOrSelfReturnType
-{
-    using type = T;
-};
-
-template <task::IsAwaitable T>
-struct AwaitableOrSelfReturnType<T>
-{
-    using type = task::AwaitableReturnType<std::remove_cvref_t<T>>;
-};
-
-template <class T>
-using AwaitableOrSelfReturnTypeT = typename AwaitableOrSelfReturnType<T>::type;
-}  // namespace detail
-
 inline constexpr struct ReadSome
 {
     auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.readSome(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.readSome(
             std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires requires {
             storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...);
         }
     {
-        using Return =
-            decltype(storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
-        {
-            co_return co_await storage.readSome(
-                std::move(keys), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            co_return storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...);
-        }
+        co_return co_await storage.readSome(
+            std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
     auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(tag_invoke(
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires(
             !requires { storage.readSome(std::move(keys), std::forward<decltype(args)>(args)...); })
     {
-        using Return = decltype(tag_invoke(
-            *this, storage, std::move(keys), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
-        {
-            co_return co_await tag_invoke(
-                *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            co_return tag_invoke(
-                *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
-        }
+        co_return co_await tag_invoke(
+            *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
     }
 } readSome;
 
 inline constexpr struct WriteSome
 {
     auto operator()(auto& storage, ::ranges::input_range auto keyValues, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.writeSome(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.writeSome(
             std::move(keyValues), std::forward<decltype(args)>(args)...))>>
         requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2) && requires {
             storage.writeSome(std::move(keyValues), std::forward<decltype(args)>(args)...);
@@ -108,37 +71,20 @@ inline constexpr struct WriteSome
     {
         using Return = decltype(storage.writeSome(
             std::move(keyValues), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await storage.writeSome(
-                    std::move(keyValues), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await storage.writeSome(
-                    std::move(keyValues), std::forward<decltype(args)>(args)...);
-            }
+            co_await storage.writeSome(std::move(keyValues), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                storage.writeSome(std::move(keyValues), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return storage.writeSome(
-                    std::move(keyValues), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await storage.writeSome(
+                std::move(keyValues), std::forward<decltype(args)>(args)...);
         }
     }
 
     auto operator()(auto& storage, ::ranges::input_range auto keyValues, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(tag_invoke(
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...))>>
         requires(std::tuple_size_v<::ranges::range_value_t<decltype(keyValues)>> >= 2) &&
                 (!requires {
@@ -147,33 +93,16 @@ inline constexpr struct WriteSome
     {
         using Return = decltype(tag_invoke(
             *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await tag_invoke(
-                    *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await tag_invoke(
-                    *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...);
-            }
+            co_await tag_invoke(
+                *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                tag_invoke(
-                    *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return tag_invoke(
-                    *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await tag_invoke(
+                *this, storage, std::move(keyValues), std::forward<decltype(args)>(args)...);
         }
     }
 } writeSome;
@@ -181,7 +110,7 @@ inline constexpr struct WriteSome
 inline constexpr struct RemoveSome
 {
     auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.removeSome(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.removeSome(
             std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires requires {
             storage.removeSome(std::move(keys), std::forward<decltype(args)>(args)...);
@@ -189,36 +118,20 @@ inline constexpr struct RemoveSome
     {
         using Return =
             decltype(storage.removeSome(std::move(keys), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await storage.removeSome(std::move(keys), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await storage.removeSome(
-                    std::move(keys), std::forward<decltype(args)>(args)...);
-            }
+            co_await storage.removeSome(std::move(keys), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                storage.removeSome(std::move(keys), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return storage.removeSome(
-                    std::move(keys), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await storage.removeSome(
+                std::move(keys), std::forward<decltype(args)>(args)...);
         }
     }
 
     auto operator()(auto& storage, ::ranges::input_range auto keys, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(tag_invoke(
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(keys), std::forward<decltype(args)>(args)...))>>
         requires(!requires {
             storage.removeSome(std::move(keys), std::forward<decltype(args)>(args)...);
@@ -226,32 +139,16 @@ inline constexpr struct RemoveSome
     {
         using Return = decltype(tag_invoke(
             *this, storage, std::move(keys), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await tag_invoke(
-                    *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await tag_invoke(
-                    *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
-            }
+            co_await tag_invoke(
+                *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                tag_invoke(*this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return tag_invoke(
-                    *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await tag_invoke(
+                *this, storage, std::move(keys), std::forward<decltype(args)>(args)...);
         }
     }
 } removeSome;
@@ -273,50 +170,30 @@ inline constexpr struct Range
 inline constexpr struct ReadOne
 {
     auto operator()(auto& storage, auto key, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.readOne(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.readOne(
             std::move(key), std::forward<decltype(args)>(args)...))>>
         requires requires {
             storage.readOne(std::move(key), std::forward<decltype(args)>(args)...);
         }
     {
-        using Return =
-            decltype(storage.readOne(std::move(key), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
-        {
-            co_return co_await storage.readOne(
-                std::move(key), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            co_return storage.readOne(std::move(key), std::forward<decltype(args)>(args)...);
-        }
+        co_return co_await storage.readOne(std::move(key), std::forward<decltype(args)>(args)...);
     }
 
     auto operator()(auto& storage, auto key, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(tag_invoke(
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(key), std::forward<decltype(args)>(args)...))>>
         requires(
             !requires { storage.readOne(std::move(key), std::forward<decltype(args)>(args)...); })
     {
-        using Return = decltype(tag_invoke(
-            *this, storage, std::move(key), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
-        {
-            co_return co_await tag_invoke(
-                *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-        }
-        else
-        {
-            co_return tag_invoke(
-                *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-        }
+        co_return co_await tag_invoke(
+            *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
     }
 } readOne;
 
 inline constexpr struct WriteOne
 {
     auto operator()(auto& storage, auto key, auto value, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.writeOne(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.writeOne(
             std::move(key), std::move(value), std::forward<decltype(args)>(args)...))>>
         requires requires {
             storage.writeOne(
@@ -325,38 +202,21 @@ inline constexpr struct WriteOne
     {
         using Return = decltype(storage.writeOne(
             std::move(key), std::move(value), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await storage.writeOne(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await storage.writeOne(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-            }
+            co_await storage.writeOne(
+                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                storage.writeOne(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return storage.writeOne(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await storage.writeOne(
+                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
         }
     }
 
     auto operator()(auto& storage, auto key, auto value, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(tag_invoke(*this, storage,
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(*this, storage,
             std::move(key), std::move(value), std::forward<decltype(args)>(args)...))>>
         requires(!requires {
             storage.writeOne(
@@ -365,33 +225,16 @@ inline constexpr struct WriteOne
     {
         using Return = decltype(tag_invoke(*this, storage, std::move(key), std::move(value),
             std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await tag_invoke(*this, storage, std::move(key), std::move(value),
-                    std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await tag_invoke(*this, storage, std::move(key), std::move(value),
-                    std::forward<decltype(args)>(args)...);
-            }
+            co_await tag_invoke(*this, storage, std::move(key), std::move(value),
+                std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                tag_invoke(*this, storage, std::move(key), std::move(value),
-                    std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return tag_invoke(*this, storage, std::move(key), std::move(value),
-                    std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await tag_invoke(*this, storage, std::move(key), std::move(value),
+                std::forward<decltype(args)>(args)...);
         }
     }
 } writeOne;
@@ -403,38 +246,21 @@ inline constexpr struct WriteOneIf
     // Predicate: (Value const&) -> bool
     // Returns true if the write was performed.
     auto operator()(auto& storage, auto key, auto value, auto predicate, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.writeOneIf(std::move(key),
+        -> task::Task<task::AwaitableReturnType<decltype(storage.writeOneIf(std::move(key),
             std::move(value), std::move(predicate), std::forward<decltype(args)>(args)...))>>
     {
         using Return = decltype(storage.writeOneIf(std::move(key), std::move(value),
             std::move(predicate), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await storage.writeOneIf(std::move(key), std::move(value), std::move(predicate),
-                    std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await storage.writeOneIf(std::move(key), std::move(value),
-                    std::move(predicate), std::forward<decltype(args)>(args)...);
-            }
+            co_await storage.writeOneIf(std::move(key), std::move(value), std::move(predicate),
+                std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                storage.writeOneIf(std::move(key), std::move(value), std::move(predicate),
-                    std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return storage.writeOneIf(std::move(key), std::move(value), std::move(predicate),
-                    std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await storage.writeOneIf(std::move(key), std::move(value),
+                std::move(predicate), std::forward<decltype(args)>(args)...);
         }
     }
 } writeOneIf;
@@ -442,7 +268,7 @@ inline constexpr struct WriteOneIf
 inline constexpr struct RemoveOne
 {
     auto operator()(auto& storage, auto key, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.removeOne(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.removeOne(
             std::move(key), std::forward<decltype(args)>(args)...))>>
         requires requires {
             storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...);
@@ -450,67 +276,36 @@ inline constexpr struct RemoveOne
     {
         using Return =
             decltype(storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await storage.removeOne(
-                    std::move(key), std::forward<decltype(args)>(args)...);
-            }
+            co_await storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await storage.removeOne(
+                std::move(key), std::forward<decltype(args)>(args)...);
         }
     }
 
     auto operator()(auto& storage, auto key, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(tag_invoke(
+        -> task::Task<task::AwaitableReturnType<decltype(tag_invoke(
             *this, storage, std::move(key), std::forward<decltype(args)>(args)...))>>
         requires(
             !requires { storage.removeOne(std::move(key), std::forward<decltype(args)>(args)...); })
     {
         using Return = decltype(tag_invoke(
             *this, storage, std::move(key), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await tag_invoke(
-                    *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await tag_invoke(
-                    *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-            }
+            co_await tag_invoke(
+                *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                tag_invoke(*this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return tag_invoke(
-                    *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await tag_invoke(
+                *this, storage, std::move(key), std::forward<decltype(args)>(args)...);
         }
     }
 } removeOne;
@@ -538,38 +333,21 @@ inline constexpr struct ExistsOne
 inline constexpr struct InsertIfAbsent
 {
     auto operator()(auto& storage, auto key, auto value, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(storage.insertIfAbsent(
+        -> task::Task<task::AwaitableReturnType<decltype(storage.insertIfAbsent(
             std::move(key), std::move(value), std::forward<decltype(args)>(args)...))>>
     {
         using Return = decltype(storage.insertIfAbsent(
             std::move(key), std::move(value), std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await storage.insertIfAbsent(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await storage.insertIfAbsent(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-            }
+            co_await storage.insertIfAbsent(
+                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                storage.insertIfAbsent(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return storage.insertIfAbsent(
-                    std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await storage.insertIfAbsent(
+                std::move(key), std::move(value), std::forward<decltype(args)>(args)...);
         }
     }
 } insertIfAbsent;
@@ -577,35 +355,19 @@ inline constexpr struct InsertIfAbsent
 inline constexpr struct Merge
 {
     auto operator()(auto& toStorage, auto& fromStorage, auto&&... args) const
-        -> task::Task<detail::AwaitableOrSelfReturnTypeT<decltype(toStorage.merge(
+        -> task::Task<task::AwaitableReturnType<decltype(toStorage.merge(
             fromStorage, std::forward<decltype(args)>(args)...))>>
     {
         using Return =
             decltype(toStorage.merge(fromStorage, std::forward<decltype(args)>(args)...));
-        if constexpr (task::IsAwaitable<Return>)
+        if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
         {
-            if constexpr (std::is_void_v<task::AwaitableReturnType<Return>>)
-            {
-                co_await toStorage.merge(fromStorage, std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return co_await toStorage.merge(
-                    fromStorage, std::forward<decltype(args)>(args)...);
-            }
+            co_await toStorage.merge(fromStorage, std::forward<decltype(args)>(args)...);
+            co_return;
         }
         else
         {
-            if constexpr (std::is_void_v<Return>)
-            {
-                toStorage.merge(fromStorage, std::forward<decltype(args)>(args)...);
-                co_return;
-            }
-            else
-            {
-                co_return toStorage.merge(fromStorage, std::forward<decltype(args)>(args)...);
-            }
+            co_return co_await toStorage.merge(fromStorage, std::forward<decltype(args)>(args)...);
         }
     }
 } merge;

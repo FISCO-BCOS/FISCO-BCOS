@@ -134,8 +134,7 @@ public:
         requires ::ranges::sized_range<Keys>
     {
         auto keySize = static_cast<size_t>(keys.size());
-        detail::AwaitableOrSelfReturnTypeT<decltype(m_mutableStorage->readSomeRaw(keys))> values(
-            keySize);
+        std::vector<storage2::StorageValueType<Value>> values(keySize);
         if (m_mutableStorage &&
             co_await fillMissingValues<typename View::Key, typename View::Value>(
                 *m_mutableStorage, keys, values))
