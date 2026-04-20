@@ -265,7 +265,7 @@ private:
     };
 
     // Use a probe instantiation to derive inline buffer size and avoid a hard-coded constant.
-    static constexpr std::size_t INLINE_STORAGE_MODEL_SIZE = sizeof(StorageModel<std::byte>);
+    static constexpr std::size_t INLINE_STORAGE_MODEL_SIZE = sizeof(StorageModel<char>);
     bcos::AnyHolder<StorageConcept, INLINE_STORAGE_MODEL_SIZE> m_self;
 
 public:
