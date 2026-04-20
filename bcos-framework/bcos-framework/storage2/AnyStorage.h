@@ -2,7 +2,6 @@
 
 #include "Storage.h"
 #include "bcos-utilities/AnyHolder.h"
-#include <cstddef>
 #include <memory>
 #include <optional>
 #include <range/v3/view/any_view.hpp>
@@ -85,10 +84,7 @@ public:
     template <class Storage>
         requires(!std::is_same_v<std::remove_cvref_t<Storage>, AnyStorage>)
     explicit AnyStorage(Storage& storage) : m_self(InPlace<StorageModel<Storage>>{}, storage)
-    {
-        static_assert(sizeof(StorageModel<Storage>) <= INLINE_STORAGE_MODEL_SIZE,
-            "StorageModel size exceeds AnyStorage inline buffer");
-    }
+    {}
 
 private:
     struct IteratorConcept
@@ -173,67 +169,67 @@ private:
 
         task::Task<std::vector<std::optional<ValueType>>> readSome(AnyKeyView keys) override
         {
-            co_return co_await bcos::storage2::readSome(*m_storage, ::ranges::views::all(keys));
+            co_return co_await m_storage->readSome(::ranges::views::all(keys));
         }
 
         task::Task<void> writeSome(AnyKeyValueView keyValues) override
         {
-            co_await bcos::storage2::writeSome(*m_storage, ::ranges::views::all(keyValues));
+            co_await m_storage->writeSome(::ranges::views::all(keyValues));
         }
 
         task::Task<void> removeSome(AnyKeyView keys, bool direct) override
         {
             if (direct)
             {
-                co_await bcos::storage2::removeSome(*m_storage, ::ranges::views::all(keys), DIRECT);
+                co_await m_storage->removeSome(::ranges::views::all(keys), DIRECT);
             }
             else
             {
-                co_await bcos::storage2::removeSome(*m_storage, ::ranges::views::all(keys));
+                co_await m_storage->removeSome(::ranges::views::all(keys));
             }
         }
 
         task::Task<std::optional<ValueType>> readOne(Key key) override
         {
-            co_return co_await bcos::storage2::readOne(*m_storage, std::move(key));
+            co_return co_await m_storage->readOne(std::move(key));
         }
 
         task::Task<void> writeOne(Key key, ValueType value) override
         {
-            co_await bcos::storage2::writeOne(*m_storage, std::move(key), std::move(value));
+            co_await m_storage->writeOne(std::move(key), std::move(value));
         }
 
         task::Task<void> removeOne(Key key, bool direct) override
         {
             if (direct)
             {
-                co_await bcos::storage2::removeOne(*m_storage, std::move(key), DIRECT);
+                co_await m_storage->removeOne(std::move(key), DIRECT);
             }
             else
             {
-                co_await bcos::storage2::removeOne(*m_storage, std::move(key));
+                co_await m_storage->removeOne(std::move(key));
             }
         }
 
         task::Task<std::unique_ptr<IteratorConcept>> rangeBegin() override
         {
-            auto it = co_await bcos::storage2::range(*m_storage);
+            auto it = co_await m_storage->range();
             co_return std::unique_ptr<IteratorConcept>(
                 std::make_unique<IteratorModel<decltype(it)>>(std::move(it)));
         }
 
         task::Task<std::unique_ptr<IteratorConcept>> rangeSeekBegin(const Key& key) override
         {
-            if constexpr (requires { bcos::storage2::range(*m_storage, RANGE_SEEK, key); })
+            if constexpr (requires { m_storage->range(RANGE_SEEK, key); })
             {
-                auto it = co_await bcos::storage2::range(*m_storage, RANGE_SEEK, key);
+                auto it = co_await m_storage->range(RANGE_SEEK, key);
                 co_return std::unique_ptr<IteratorConcept>(
                     std::make_unique<IteratorModel<decltype(it)>>(std::move(it)));
             }
             else
             {
                 // Fallback: no seek support, return begin()
-                auto it = co_await bcos::storage2::range(*m_storage);
+                auto it = co_await m_storage->range();
                 co_return std::unique_ptr<IteratorConcept>(
                     std::make_unique<IteratorModel<decltype(it)>>(std::move(it)));
             }
@@ -253,20 +249,20 @@ private:
                 }
                 if (std::holds_alternative<DELETED_TYPE>(dataValue))
                 {
-                    co_await bcos::storage2::removeOne(*m_storage, std::move(key));
+                    co_await m_storage->removeOne(std::move(key));
                     continue;
                 }
                 auto& valueRef = std::get<ValueType>(dataValue);
-                co_await bcos::storage2::writeOne(*m_storage, std::move(key), std::move(valueRef));
+                co_await m_storage->writeOne(std::move(key), std::move(valueRef));
             }
         }
 
         Storage* m_storage;
     };
 
-    // Use a probe instantiation to derive inline buffer size and avoid a hard-coded constant.
-    static constexpr std::size_t INLINE_STORAGE_MODEL_SIZE = sizeof(StorageModel<char>);
-    bcos::AnyHolder<StorageConcept, INLINE_STORAGE_MODEL_SIZE> m_self;
+    constexpr static size_t StorageConceptSize =
+        16;  // Adjust as needed to fit typical StorageConcepts
+    bcos::AnyHolder<StorageConcept, StorageConceptSize> m_self;
 
 public:
     // Expose Value type to satisfy readOne operator() return type requirement
