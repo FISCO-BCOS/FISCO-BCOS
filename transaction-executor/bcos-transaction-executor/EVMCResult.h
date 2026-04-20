@@ -22,6 +22,8 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <evmc/instructions.h>
+#include <gsl/pointers>
+#include <tuple>
 
 namespace bcos::executor_v1
 {
@@ -29,7 +31,7 @@ class EVMCResult : public evmc_result
 {
 public:
     explicit EVMCResult(evmc_result from);
-    EVMCResult(evmc_result from, protocol::TransactionStatus _status);
+    EVMCResult(evmc_result from, protocol::TransactionStatus statusCode);
     EVMCResult(const EVMCResult&) = delete;
     EVMCResult(EVMCResult&& from) noexcept;
     EVMCResult& operator=(const EVMCResult&) = delete;
@@ -40,6 +42,9 @@ public:
 };
 
 bytes writeErrInfoToOutput(const crypto::Hash& hashImpl, std::string const& errInfo);
+
+std::tuple<gsl::owner<uint8_t*>, size_t, decltype(evmc_result::release)> fillErrorOutputInPlace(
+    const crypto::Hash& hashImpl, evmc_status_code status, const std::string& errorInfo = "");
 
 protocol::TransactionStatus evmcStatusToTransactionStatus(evmc_status_code status);
 std::tuple<bcos::protocol::TransactionStatus, bcos::bytes> evmcStatusToErrorMessage(

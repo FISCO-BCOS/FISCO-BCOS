@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(testMakeErrorEVMCResult)
         BOOST_CHECK_EQUAL(result.status, TransactionStatus::Unknown);
         BOOST_CHECK_EQUAL(result.output_size, 0);
         BOOST_CHECK_EQUAL(result.output_data, nullptr);
-        BOOST_CHECK_NE(result.release, nullptr);  // Release function is still set
+        BOOST_CHECK_EQUAL(result.release, nullptr);
     }
 }
 

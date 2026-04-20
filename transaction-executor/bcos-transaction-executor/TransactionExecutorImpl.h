@@ -161,7 +161,9 @@ public:
                 if (auto gasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     gasPrice > 0)
                 {
-                    m_data->m_gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+                    constexpr static const auto GAS_PRICE_DIGITS = 256;
+                    m_data->m_gasPriceStr =
+                        "0x" + gasPrice.str(GAS_PRICE_DIGITS, std::ios_base::hex);
 
                     auto balanceUsed = m_data->m_gasUsed * gasPrice;
                     auto senderAccount = getAccount(m_data->m_hostContext, evmcMessage.sender);
@@ -209,17 +211,17 @@ public:
             {
                 TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
 
-                auto [_, errorMessage] = evmcStatusToErrorMessage(
+                auto [outputData, outputSize, release] = fillErrorOutputInPlace(
                     *m_data->m_executor.get().m_hashImpl, evmcResult.status_code);
-                if (!errorMessage.empty())
+                if (release != nullptr)
                 {
-                    auto output = std::make_unique_for_overwrite<uint8_t[]>(errorMessage.size());
-                    std::uninitialized_copy(errorMessage.begin(), errorMessage.end(), output.get());
-                    evmcResult.output_data = output.release();
-                    evmcResult.output_size = errorMessage.size();
-                    evmcResult.release = [](const struct evmc_result* result) {
-                        delete[] result->output_data;
-                    };
+                    if (evmcResult.release != nullptr)
+                    {
+                        evmcResult.release(std::addressof(evmcResult));
+                    }
+                    evmcResult.output_data = outputData;
+                    evmcResult.output_size = outputSize;
+                    evmcResult.release = release;
                 }
                 if (m_data->m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_revert_logs))

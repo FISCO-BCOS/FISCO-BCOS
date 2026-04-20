@@ -6,7 +6,7 @@
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
-#include <memory>
+#include <gsl/pointers>
 
 DERIVE_BCOS_EXCEPTION(UnknownEVMCStatus);
 
@@ -21,8 +21,8 @@ bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from)
   : evmc_result(from), status{evmcStatusToTransactionStatus(from.status_code)}
 {}
 
-bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from, protocol::TransactionStatus _status)
-  : evmc_result(from), status(_status)
+bcos::executor_v1::EVMCResult::EVMCResult(evmc_result from, protocol::TransactionStatus statusCode)
+  : evmc_result(from), status(statusCode)
 {}
 
 bcos::executor_v1::EVMCResult::EVMCResult(EVMCResult&& from) noexcept
@@ -54,6 +54,37 @@ bcos::bytes bcos::executor_v1::writeErrInfoToOutput(
 {
     bcos::codec::abi::ContractABICodec abi(hashImpl);
     return abi.abiIn("Error(string)", errInfo);
+}
+
+std::tuple<gsl::owner<uint8_t*>, size_t, decltype(evmc_result::release)>
+bcos::executor_v1::fillErrorOutputInPlace(
+    const crypto::Hash& hashImpl, evmc_status_code status, const std::string& errorInfo)
+{
+    bytes errorBytes;
+    if (!errorInfo.empty())
+    {
+        errorBytes = writeErrInfoToOutput(hashImpl, errorInfo);
+    }
+    else
+    {
+        auto [ignoredStatus, errorMessage] = evmcStatusToErrorMessage(hashImpl, status);
+        (void)ignoredStatus;
+        errorBytes.swap(errorMessage);
+    }
+
+    if (errorBytes.empty())
+    {
+        return {nullptr, 0, nullptr};
+    }
+
+    auto* output = new uint8_t[errorBytes.size()];  // NOLINT
+    ::ranges::copy(errorBytes, output);
+    constexpr static auto* release = +[](const struct evmc_result* result) {
+        gsl::owner<decltype(result->output_data)> ptr{result->output_data};
+        delete[] ptr;
+    };
+
+    return {output, errorBytes.size(), release};
 }
 
 bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStatus(
@@ -133,36 +164,18 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Has
     protocol::TransactionStatus status, evmc_status_code evmStatus, int64_t gas,
     const std::string& errorInfo)
 {
-    bytes errorBytes;
-    if (!errorInfo.empty())
-    {
-        errorBytes = writeErrInfoToOutput(hashImpl, errorInfo);
-    }
-    else
-    {
-        auto [_, errorMessage] = evmcStatusToErrorMessage(hashImpl, evmStatus);
-        errorBytes.swap(errorMessage);
-    }
-
-    std::unique_ptr<uint8_t[]> output;
-    size_t outputSize = 0;
-    if (!errorBytes.empty())
-    {
-        output = std::make_unique_for_overwrite<uint8_t[]>(errorBytes.size());
-        outputSize = errorBytes.size();
-        ::ranges::copy(errorBytes, output.get());
-    }
-
-    return EVMCResult{
-        evmc_result{.status_code = evmStatus,
-            .gas_left = gas,
-            .gas_refund = 0,
-            .output_data = output.release(),
-            .output_size = outputSize,
-            .release = +[](const struct evmc_result* result) { delete[] result->output_data; },
-            .create_address = {},
-            .padding = {}},
+    auto [outputData, outputSize, release] = fillErrorOutputInPlace(hashImpl, evmStatus, errorInfo);
+    EVMCResult result{evmc_result{.status_code = evmStatus,
+                          .gas_left = gas,
+                          .gas_refund = 0,
+                          .output_data = outputData,
+                          .output_size = outputSize,
+                          .release = release,
+                          .create_address = {},
+                          .padding = {}},
         status};
+
+    return result;
 }
 
 std::ostream& operator<<(std::ostream& output, const evmc_message& message)
@@ -189,7 +202,7 @@ std::ostream& operator<<(std::ostream& output, const evmc_result& result)
     output << "gas_refund: " << result.gas_refund << ", ";
     output << "output_data: " << bcos::bytesConstRef(result.output_data, result.output_size)
            << ", ";
-    output << "release: " << result.release << ", ";
+    output << "release: " << (result.release != nullptr) << ", ";
     output << "create_address: " << bcos::bytesConstRef(result.create_address.bytes) << "}";
     return output;
 }
