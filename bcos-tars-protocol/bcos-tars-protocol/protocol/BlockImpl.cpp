@@ -30,6 +30,7 @@
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <boost/throw_exception.hpp>
+#include <range/v3/algorithm/transform.hpp>
 
 using namespace bcostars;
 using namespace bcostars::protocol;
