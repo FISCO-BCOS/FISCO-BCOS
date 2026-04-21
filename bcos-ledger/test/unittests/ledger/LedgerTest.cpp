@@ -688,7 +688,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockNumberByHash(
-        HashType("123"), [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
+        HashType("1234"), [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_number, -1);
             p2.set_value(true);

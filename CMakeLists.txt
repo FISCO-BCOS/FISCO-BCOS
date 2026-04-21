@@ -90,6 +90,7 @@ if(FULLNODE)
     endif()
 
     if(TESTS)
+        include(CTest)
         enable_testing()
         add_subdirectory(tests)
         add_subdirectory(benchmark)

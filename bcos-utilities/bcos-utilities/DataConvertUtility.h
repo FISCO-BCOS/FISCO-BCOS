@@ -127,11 +127,6 @@ Out fromHex(const Hex& hex)
         }
     }();
 
-    if (hexView.empty())
-    {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Empty input hex string"));
-    }
-
     auto payload = hexView;
     if (payload.starts_with("0x") || payload.starts_with("0X"))
     {
