@@ -42,8 +42,9 @@
 #include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
-#include <range/v3/algorithm/move.hpp>
+#include <range/v3/algorithm/copy.hpp>
 
 namespace bcostars
 {
@@ -443,13 +444,15 @@ inline bcos::protocol::LogEntry takeToBcosLogEntry(bcostars::LogEntry&& _logEntr
     for (auto&& topicIt : _logEntry.topic)
     {
         bcos::h256 topic;
-        ::ranges::move(topicIt.begin(), topicIt.end(), topic.mutableData().data());
+        ::ranges::copy(topicIt.begin(), topicIt.end(), topic.mutableData().data());
         topics.push_back(topic);
     }
     bcos::bytes address;
-    ::ranges::move(std::move(_logEntry.address), std::back_inserter(address));
+    ::ranges::copy(std::make_move_iterator(_logEntry.address.begin()),
+        std::make_move_iterator(_logEntry.address.end()), std::back_inserter(address));
     bcos::bytes data;
-    ::ranges::move(std::move(_logEntry.data), std::back_inserter(data));
+    ::ranges::copy(std::make_move_iterator(_logEntry.data.begin()),
+        std::make_move_iterator(_logEntry.data.end()), std::back_inserter(data));
     return {std::move(address), std::move(topics), std::move(data)};
 }
 }  // namespace bcostars
