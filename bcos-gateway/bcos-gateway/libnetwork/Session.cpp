@@ -469,10 +469,15 @@ void Session::doRead()
 {
     if (m_active && m_server.get().haveNetwork())
     {
+        // NOTE: Capture m_socket as a shared_ptr to keep the SSL context alive for the duration
+        // of this async read. The handler never references `socket` directly — it touches
+        // the socket only via the Session recovered from `self.lock()` — but removing this
+        // capture re-introduces the FIB-97 use-after-free: a concurrent drop() can free
+        // the SSL stream while this read is still in flight.
         auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this()), socket = m_socket](
-                             boost::system::error_code ec, std::size_t bytesTransferred) {
-            auto session = self.lock();
-            if (session)
+                             const boost::system::error_code& ec, std::size_t bytesTransferred) {
+            std::ignore = socket;
+            if (const auto session = self.lock())
             {
                 if (ec)
                 {
