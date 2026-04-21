@@ -182,6 +182,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_auth_check_revert_status",
         "bugfix_auth_table_raw_address",
         "bugfix_auth_table_squatting",
+        "bugfix_v1_exec_error_gas_used",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -351,18 +352,19 @@ BOOST_AUTO_TEST_CASE(upgrade)
         BOOST_CHECK(features12.get(feature));
     }
 
-    // 3.16.0 to 3.16.4: no new features added in roadmap
+    // 3.16.0 to 3.16.4: bugfix_revert_logs + bugfix_v1_exec_error_gas_used
     Features features13;
     features13.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_0_VERSION,
         bcos::protocol::BlockVersion::V3_16_4_VERSION);
-    BOOST_TEST(validFlags(features13).size() == 1);
+    BOOST_TEST(validFlags(features13).size() == 2);
 
-    // 3.15.2 to 3.16.4: expect 3.16.0 feature flags
+    // 3.15.2 to 3.16.4: expect 3.16.0 and 3.16.4 feature flags
     Features features14;
     features14.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_15_2_VERSION,
         bcos::protocol::BlockVersion::V3_16_4_VERSION);
-    auto expect11 = std::to_array<std::string_view>({"bugfix_delegatecall_transfer",
-        "bugfix_nonce_initialize", "bugfix_v1_timestamp", "bugfix_revert_logs"});
+    auto expect11 =
+        std::to_array<std::string_view>({"bugfix_delegatecall_transfer", "bugfix_nonce_initialize",
+            "bugfix_v1_timestamp", "bugfix_revert_logs", "bugfix_v1_exec_error_gas_used"});
     BOOST_CHECK_EQUAL(validFlags(features14).size(), expect11.size());
     for (auto feature : expect11)
     {
@@ -532,7 +534,8 @@ BOOST_AUTO_TEST_CASE(genesis)
         "bugfix_method_auth_sender", "bugfix_precompiled_evm_status",
         // 3.16.0
         "bugfix_delegatecall_transfer", "bugfix_nonce_initialize", "bugfix_v1_timestamp",
-        "bugfix_revert_logs"});
+        // 3.16.4
+        "bugfix_revert_logs", "bugfix_v1_exec_error_gas_used"});
     BOOST_CHECK_EQUAL(validFlags(features3_16_4).size(), expect3_16_4.size());
     for (auto feature : expect3_16_4)
     {

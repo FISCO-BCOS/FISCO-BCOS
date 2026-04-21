@@ -397,6 +397,9 @@ public:
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
         std::optional<EVMCResult> evmResult;
+        // FIB-88/89/92: read once, gate receipt-affecting error paths for hard-fork compat
+        const bool fixErrorGas = m_ledgerConfig.get().features().get(
+            ledger::Features::Flag::bugfix_v1_exec_error_gas_used);
         try
         {
             // FIB-91: checkAuth() moved inside try block so exceptions
@@ -460,10 +463,10 @@ public:
         {
             HOST_CONTEXT_LOG(DEBUG)
                 << "NotEnoughCash exception: " << boost::diagnostic_information(e);
-            // FIB-88: fatal error consumes all gas
+            // FIB-88: fatal error consumes all gas when bugfix flag enabled
             evmResult.emplace(
                 makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
-                    EVMC_INSUFFICIENT_BALANCE, 0, e.what()));
+                    EVMC_INSUFFICIENT_BALANCE, fixErrorGas ? 0 : ref->gas, e.what()));
         }
         catch (NotFoundCodeError& e)
         {
@@ -491,16 +494,18 @@ public:
             HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
             // FIB-88: fatal error consumes all gas
             // FIB-92: use Unknown instead of OutOfGas for EVMC_INTERNAL_ERROR
-            evmResult.emplace(makeErrorEVMCResult(
-                m_hashImpl, protocol::TransactionStatus::Unknown, EVMC_INTERNAL_ERROR, 0, ""));
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                fixErrorGas ? protocol::TransactionStatus::Unknown :
+                              protocol::TransactionStatus::OutOfGas,
+                EVMC_INTERNAL_ERROR, fixErrorGas ? 0 : ref->gas, ""));
         }
 
         if (evmResult->gas_left < 0)
         {
             HOST_CONTEXT_LOG(DEBUG) << "Execute gas < 0: " << evmResult->gas_left;
-            // FIB-88: fatal error consumes all gas (gas_left = 0) instead of refunding full limit
-            evmResult.emplace(makeErrorEVMCResult(
-                m_hashImpl, protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0, ""));
+            // FIB-88: fatal error consumes all gas when bugfix flag enabled
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_OUT_OF_GAS, fixErrorGas ? 0 : ref->gas, ""));
         }
 
         if (evmResult->status_code != EVMC_SUCCESS)

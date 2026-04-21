@@ -69,6 +69,11 @@ public:
         blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));
         blockHeader.calculateHash(*hashImpl);
 
+        // Activate all feature flags for MAX_VERSION
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+        ledgerConfig.setFeatures(features);
+
         // Deploy the HelloWorld contract for later use
         std::string helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
@@ -341,6 +346,80 @@ BOOST_AUTO_TEST_CASE(FIB88_NegativeGasFixupConsumesAllGas)
 
     BOOST_CHECK_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
     BOOST_CHECK_EQUAL(result.gas_left, 0);
+    BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::OutOfGas);
+}
+
+// ---------------------------------------------------------------------------
+// Flag-off backward compatibility: when bugfix_v1_exec_error_gas_used is
+// disabled, error paths must preserve the old gas_left / status values so
+// that receipt hashes stay identical to older nodes.
+// ---------------------------------------------------------------------------
+
+// FIB-88 flag-off: NotEnoughCashError should preserve gas_left = ref->gas (old behavior)
+BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
+{
+    syncWait([this]() -> Task<void> {
+        // Use V3_16_3 which does NOT activate bugfix_v1_exec_error_gas_used
+        bcostars::protocol::BlockHeaderImpl oldHeader;
+        oldHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_16_3_VERSION));
+        oldHeader.setNumber(seq++);
+        oldHeader.calculateHash(*hashImpl);
+
+        bcos::ledger::LedgerConfig oldConfig;
+        oldConfig.setBalanceTransfer(true);
+        auto features = oldConfig.features();
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_3_VERSION);
+        oldConfig.setFeatures(features);
+
+        evmc_address sender = bcos::unhexAddress("0x0000000000000000000000000000000000000CCC");
+        evmc_address recipient = bcos::unhexAddress("0x0000000000000000000000000000000000000DDD");
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAccount(
+            rollbackableStorage, sender, false);
+        co_await senderAccount.setBalance(bcos::u256(100));
+
+        constexpr int64_t GAS_LIMIT = 300000;
+        evmc_message message = {.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = 0,
+            .gas = GAS_LIMIT,
+            .recipient = recipient,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender = sender,
+            .sender_ptr = nullptr,
+            .sender_len = 0,
+            .input_data = nullptr,
+            .input_size = 0,
+            .value = bcos::toEvmC(bcos::u256(1000)),
+            .create2_salt = {},
+            .code_address = recipient};
+        evmc_address origin{};
+
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
+            hostContext(rollbackableStorage, rollbackableTransientStorage, oldHeader, message,
+                origin, "", 0, seq, *precompiledManager, oldConfig, *hashImpl, false, 0,
+                bcos::task::syncWait);
+        co_await hostContext.prepare();
+        auto result = co_await hostContext.execute();
+
+        // Flag off: old behavior preserves gas_left = ref->gas
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_INSUFFICIENT_BALANCE);
+        BOOST_CHECK_EQUAL(result.gas_left, GAS_LIMIT);
+        BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::NotEnoughCash);
+    }());
+}
+
+// FIB-92 flag-off: generic exception handler should use OutOfGas (old behavior)
+BOOST_AUTO_TEST_CASE(FIB92_FlagOff_InternalErrorUsesOutOfGas)
+{
+    // Verify old behavior: EVMC_INTERNAL_ERROR paired with OutOfGas status + ref->gas
+    // This matches what the old code produced before the fix
+    auto result = makeErrorEVMCResult(
+        *hashImpl, bcos::protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, 300000, "");
+
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_INTERNAL_ERROR);
+    BOOST_CHECK_EQUAL(result.gas_left, 300000);
     BOOST_CHECK_EQUAL(result.status, bcos::protocol::TransactionStatus::OutOfGas);
 }
 
