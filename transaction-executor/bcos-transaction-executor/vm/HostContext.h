@@ -397,79 +397,86 @@ public:
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
         std::optional<EVMCResult> evmResult;
-        if (m_ledgerConfig.get().authCheckStatus() != 0U)
-        {
-            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
-                                    << " gas: " << ref->gas;
-
-            if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
-                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                    m_hashImpl, m_ledgerConfig.get().features()))
-            {
-                HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
-                evmResult = std::move(result);
-            };
-        }
-
         if (!evmResult)
         {
             try
             {
-                // 先转账，再执行
-                // Transfer first, then proceed execute
-                if (m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_delegatecall_transfer))
+                // FIB-91: checkAuth() moved inside try block so exceptions
+                // trigger rollback/cleanup instead of bypassing it
+                if (m_ledgerConfig.get().authCheckStatus() != 0U)
                 {
-                    if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
-                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
-                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                        m_ledgerConfig.get().balanceTransfer())
+                    HOST_CONTEXT_LOG(DEBUG)
+                        << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
+                        << " gas: " << ref->gas;
+
+                    if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref,
+                            m_origin, buildLegacyExternalCaller(), m_precompiledManager.get(),
+                            m_contextID, m_seq, m_hashImpl))
                     {
-                        co_await transferBalance(*ref);
-                    }
-                }
-                else
-                {
-                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                        m_ledgerConfig.get().balanceTransfer())
-                    {
-                        co_await transferBalance(*ref);
-                    }
+                        HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
+                        evmResult = std::move(result);
+                    };
                 }
 
+                if (!evmResult)
+                {
+                    // Transfer first, then proceed execute
+                    if (m_ledgerConfig.get().features().get(
+                            ledger::Features::Flag::bugfix_delegatecall_transfer))
+                    {
+                        if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
+                                (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
+                            !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                            m_ledgerConfig.get().balanceTransfer())
+                        {
+                            co_await transferBalance(*ref);
+                        }
+                    }
+                    else
+                    {
+                        // FIB-90: DELEGATECALL should never trigger balance transfer
+                        if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                            m_ledgerConfig.get().balanceTransfer() &&
+                            ref->kind != EVMC_DELEGATECALL)
+                        {
+                            co_await transferBalance(*ref);
+                        }
+                    }
 
-                if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
-                {
-                    evmResult.emplace(co_await executeCreate());
-                }
-                else
-                {
-                    evmResult.emplace(co_await executeCall());
+
+                    if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
+                    {
+                        evmResult.emplace(co_await executeCreate());
+                    }
+                    else
+                    {
+                        evmResult.emplace(co_await executeCall());
+                    }
                 }
             }
             catch (protocol::OutOfGas& e)
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "OutOfGas exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(
-                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                        EVMC_OUT_OF_GAS, evmResult->gas_left, e.what()));
+                // FIB-89: use 0 instead of potentially uninitialized evmResult->gas_left
+                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                    protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0, e.what()));
             }
             catch (protocol::NotEnoughCashError& e)
 
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "NotEnoughCash exception: " << boost::diagnostic_information(e);
+                // FIB-88: fatal error consumes all gas
                 evmResult.emplace(
                     makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
-                        EVMC_INSUFFICIENT_BALANCE, ref->gas, e.what()));
+                        EVMC_INSUFFICIENT_BALANCE, 0, e.what()));
             }
             catch (NotFoundCodeError& e)
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "Not found code exception: " << boost::diagnostic_information(e);
 
-                // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
                 // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
                 // not exist
                 using namespace std::string_literals;
@@ -480,6 +487,7 @@ public:
                 }
                 else
                 {
+                    // FIB-88: EVMC_REVERT preserves ref->gas per EVM spec
                     evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
                         protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref->gas,
                         "Call address error."s));
@@ -489,8 +497,10 @@ public:
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "Execute exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                    protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref->gas, ""));
+                // FIB-88: fatal error consumes all gas
+                // FIB-92: use Unknown instead of OutOfGas for EVMC_INTERNAL_ERROR
+                evmResult.emplace(makeErrorEVMCResult(
+                    m_hashImpl, protocol::TransactionStatus::Unknown, EVMC_INTERNAL_ERROR, 0, ""));
             }
         }
 
