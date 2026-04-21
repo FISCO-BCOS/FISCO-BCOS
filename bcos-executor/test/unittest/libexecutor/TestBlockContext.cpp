@@ -7,8 +7,6 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/test/unit_test.hpp>
 
-
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -16,6 +14,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 BOOST_AUTO_TEST_SUITE(TestBlockContext)
 
 BOOST_AUTO_TEST_CASE(BlockContextTest)

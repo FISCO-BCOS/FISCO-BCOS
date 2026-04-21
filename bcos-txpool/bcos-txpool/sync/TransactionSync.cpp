@@ -23,6 +23,8 @@
 #include "bcos-txpool/sync/utilities/Common.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/zip.hpp>
 
 using namespace bcos;
 using namespace bcos::sync;

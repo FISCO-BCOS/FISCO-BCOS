@@ -17,6 +17,9 @@
  * @author: octopus
  * @date 2021-10-26
  */
+#include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/single.hpp>
 #include "AMOPImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-framework/protocol/CommonError.h"

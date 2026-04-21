@@ -73,11 +73,11 @@ void BlockHeaderImpl::clear()
     m_inner()->resetDefautlt();
 }
 
-RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+::ranges::any_view<bcos::protocol::ParentInfo, ::ranges::category::input | ::ranges::category::sized>
 BlockHeaderImpl::parentInfo() const
 {
     return m_inner()->data.parentInfo |
-           RANGES::views::transform([](const bcostars::ParentInfo& tarsParentInfo) {
+           ::ranges::views::transform([](const bcostars::ParentInfo& tarsParentInfo) {
                return bcos::protocol::ParentInfo{.blockNumber = tarsParentInfo.blockNumber,
                    .blockHash = bcos::crypto::HashType((bcos::byte*)tarsParentInfo.blockHash.data(),
                        tarsParentInfo.blockHash.size())};
@@ -121,7 +121,7 @@ bcos::u256 BlockHeaderImpl::gasUsed() const
     return {};
 }
 
-void BlockHeaderImpl::setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfos)
+void BlockHeaderImpl::setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfos)
 {
     auto* inner = m_inner();
     inner->data.parentInfo.clear();

@@ -23,7 +23,6 @@
 #include <bcos-framework/storage/Common.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/storage/Table.h>
-#include <bcos-utilities/Ranges.h>
 #include <boost/algorithm/string/join.hpp>
 
 namespace bcos::tool
@@ -52,7 +51,7 @@ constexpr static const std::string_view FS_KEY_EXTRA{"extra"};
 constexpr static const std::array<std::string_view, 6> FS_FIELDS = {
     FS_KEY_TYPE, FS_KEY_STAT, FS_ACL_TYPE, FS_ACL_WHITE, FS_ACL_BLACK, FS_KEY_EXTRA};
 // static const auto FS_DIR_FIELDS = boost::join(
-//     FS_FIELDS | RANGES::views::transform([](auto& str) -> std::string { return std::string(str);
+//     FS_FIELDS | ::ranges::views::transform([](auto& str) -> std::string { return std::string(str);
 //     }),
 //     ",");
 constexpr static const std::string_view FS_DIR_FIELDS{

@@ -43,6 +43,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <range/v3/algorithm/move.hpp>
 
 namespace bcostars
 {
@@ -442,13 +443,13 @@ inline bcos::protocol::LogEntry takeToBcosLogEntry(bcostars::LogEntry&& _logEntr
     for (auto&& topicIt : _logEntry.topic)
     {
         bcos::h256 topic;
-        RANGES::move(topicIt.begin(), topicIt.end(), topic.mutableData().data());
-        topics.push_back(std::move(topic));
+        ::ranges::move(topicIt.begin(), topicIt.end(), topic.mutableData().data());
+        topics.push_back(topic);
     }
     bcos::bytes address;
-    RANGES::move(std::move(_logEntry.address), std::back_inserter(address));
+    ::ranges::move(std::move(_logEntry.address), std::back_inserter(address));
     bcos::bytes data;
-    RANGES::move(std::move(_logEntry.data), std::back_inserter(data));
+    ::ranges::move(std::move(_logEntry.data), std::back_inserter(data));
     return {std::move(address), std::move(topics), std::move(data)};
 }
 }  // namespace bcostars

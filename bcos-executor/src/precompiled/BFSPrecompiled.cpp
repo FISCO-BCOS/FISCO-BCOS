@@ -351,7 +351,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 // max return is 500
                 keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
                 auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
-                for (const auto& key : keys | RANGES::views::all)
+                for (const auto& key : keys | ::ranges::views::all)
                 {
                     auto entry = _executive->storage().getRow(absolutePath, key);
                     auto fields = entry->getObject<std::vector<std::string>>();
@@ -488,7 +488,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         keyCondition->limit((size_t)offset, (size_t)count);
         auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
 
-        for (const auto& key : keys | RANGES::views::all)
+        for (const auto& key : keys | ::ranges::views::all)
         {
             auto entry = _executive->storage().getRow(absolutePath, key);
             auto fields = entry->getObject<std::vector<std::string>>();
@@ -883,7 +883,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     // create / dir
     _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
     // build root subs metadata
-    for (const auto& subName : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+    for (const auto& subName : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
     {
         Entry entry;
         // type, status, acl_type, acl_white, acl_black, extra

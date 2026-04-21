@@ -90,7 +90,7 @@ public:
 
     auto systemConfigs() const
     {
-        return ::ranges::views::iota(0LU, m_sysConfigs.size()) |
+        return ::ranges::views::iota(std::size_t{0}, std::size_t{m_sysConfigs.size()}) |
                ::ranges::views::transform([this](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
                    return std::make_tuple(
@@ -101,7 +101,8 @@ public:
     // return all config names
     static auto supportConfigs()
     {
-        return ::ranges::views::iota(0LU, magic_enum::enum_count<SystemConfig>()) |
+        return ::ranges::views::iota(
+               std::size_t{0}, std::size_t{magic_enum::enum_count<SystemConfig>()}) |
                ::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
                    return magic_enum::enum_name(flag);

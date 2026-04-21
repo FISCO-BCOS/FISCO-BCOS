@@ -40,6 +40,8 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/view/drop.hpp>
 #include <set>
 
 namespace bcos

@@ -19,6 +19,7 @@
  * @date 2021-04-09
  */
 #include "ConsensusConfig.h"
+#include <range/v3/algorithm/sort.hpp>
 
 using namespace bcos;
 using namespace bcos::crypto;

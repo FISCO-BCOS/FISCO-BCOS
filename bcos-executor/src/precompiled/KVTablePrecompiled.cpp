@@ -1,3 +1,8 @@
+#include <range/v3/range_fwd.hpp>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/result_types.hpp>
+#include <range/v3/view/drop.hpp>
 /**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0

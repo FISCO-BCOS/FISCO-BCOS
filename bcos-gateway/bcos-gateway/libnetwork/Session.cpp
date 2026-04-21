@@ -24,6 +24,8 @@
 #include <functional>
 #include <iterator>
 #include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/single.hpp>
 #include <range/v3/view/transform.hpp>
 #include <utility>
 #include <variant>

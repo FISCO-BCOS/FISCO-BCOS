@@ -59,6 +59,9 @@
 #include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/equal.hpp>
+#include <range/v3/algorithm/fill.hpp>
+#include <range/v3/algorithm/move.hpp>
 #include <string_view>
 
 namespace bcos::executor_v1::hostcontext

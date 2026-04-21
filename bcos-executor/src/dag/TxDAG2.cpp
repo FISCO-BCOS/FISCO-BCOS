@@ -23,7 +23,6 @@
 #include "TxDAG2.h"
 #include "CriticalFields.h"
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;
@@ -45,7 +44,7 @@ void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals)
     // Generate tasks in m_tasks
     // Note: we must generate every task in m_tasks before make_edge(). Otherwise, may lead to core.
     using Msg = const continue_msg&;
-    std::vector<size_t> id2TaskId(txsSize);
+    std::vector<std::size_t> id2TaskId(txsSize);
     for (ID id = 0; id < _txsCriticals->size(); ++id)
     {
         if (_txsCriticals->contains(id))

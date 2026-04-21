@@ -41,7 +41,6 @@
 #include <string>
 #include <unordered_map>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::crypto;
@@ -51,6 +50,8 @@ using namespace bcos::crypto;
 #endif
 namespace bcos::test
 {
+using namespace std;
+
 struct KeyPageStorageFixture
 {
     KeyPageStorageFixture()

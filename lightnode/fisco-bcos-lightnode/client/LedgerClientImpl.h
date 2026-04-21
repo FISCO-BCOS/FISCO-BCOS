@@ -14,6 +14,10 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>
+#include <range/v3/algorithm/move.hpp>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/traits.hpp>
 #include <random>
 #include <stdexcept>
 #include <type_traits>
@@ -132,9 +136,10 @@ private:
         std::swap(response.block, block);
     }
 
-    task::Task<void> impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
+    task::Task<void> impl_getTransactions(
+        ::ranges::range auto const& hashes, ::ranges::range auto& out)
     {
-        using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
+        using DataType = ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>;
         using RequestType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
             bcostars::RequestTransactions, bcostars::RequestReceipts>;
         using ResponseType = std::conditional_t<bcos::concepts::transaction::Transaction<DataType>,
@@ -144,7 +149,7 @@ private:
                             protocol::LIGHTNODE_GET_RECEIPTS;
 
         RequestType request;
-        request.hashes.reserve(RANGES::size(hashes));
+        request.hashes.reserve(::ranges::size(hashes));
         for (auto& hash : hashes)
         {
             request.hashes.emplace_back(std::vector<char>(hash.begin(), hash.end()));
@@ -161,14 +166,14 @@ private:
         if constexpr (bcos::concepts::transaction::Transaction<DataType>)
         {
             bcos::concepts::resizeTo(out, response.transactions.size());
-            std::move(RANGES::begin(response.transactions), RANGES::end(response.transactions),
-                RANGES::begin(out));
+            ::ranges::move(::ranges::begin(response.transactions), ::ranges::end(response.transactions),
+                ::ranges::begin(out));
         }
         else
         {
             bcos::concepts::resizeTo(out, response.receipts.size());
-            std::move(RANGES::begin(response.receipts), RANGES::end(response.receipts),
-                RANGES::begin(out));
+            ::ranges::move(::ranges::begin(response.receipts), ::ranges::end(response.receipts),
+                ::ranges::begin(out));
         }
     }
 

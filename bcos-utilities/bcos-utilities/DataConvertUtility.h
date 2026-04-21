@@ -20,7 +20,7 @@
 
 #include "Common.h"
 #include "Error.h"
-#include "Ranges.h"
+#include <range/v3/range/concepts.hpp>
 #include <boost/algorithm/hex.hpp>
 #include <boost/endian/conversion.hpp>
 #include <boost/throw_exception.hpp>

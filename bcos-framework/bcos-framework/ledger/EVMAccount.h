@@ -7,6 +7,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <range/v3/algorithm/copy.hpp>
 
 namespace bcos::ledger::account
 {

@@ -42,7 +42,8 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
 {
     try
     {
-        for (auto it = RANGES::begin(*getPullMessage()); it != RANGES::end(*getPullMessage()); ++it)
+           for (auto it = ::ranges::begin(*getPullMessage());
+               it != ::ranges::end(*getPullMessage()); ++it)
         {
             if (*it)
             {

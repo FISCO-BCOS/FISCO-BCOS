@@ -16,6 +16,7 @@
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
+#include <range/v3/algorithm/count.hpp>
 #include <map>
 
 using namespace bcos::ledger;
@@ -146,7 +147,7 @@ public:
         {
             _onGetConfig(nullptr, "20200", commitBlockNumber);
         }
-        else if (RANGES::count(ledger::Features::featureKeys(), _key) > 0)
+        else if (::ranges::count(ledger::Features::featureKeys(), _key) > 0)
         {
             _onGetConfig(BCOS_ERROR_PTR(-1, "Not found!"), "0", commitBlockNumber);
         }

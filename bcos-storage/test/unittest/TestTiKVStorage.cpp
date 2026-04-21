@@ -18,10 +18,11 @@
 #include <optional>
 
 using namespace bcos::storage;
-using namespace std;
 
 namespace bcos::test
 {
+using namespace std;
+
 size_t total = 500;
 
 class Header256Hash : public bcos::crypto::Hash

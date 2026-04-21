@@ -22,6 +22,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include <bcos-utilities/Common.h>
 #include <charconv>
+#include <range/v3/algorithm/binary_search.hpp>
 
 namespace bcos
 {
