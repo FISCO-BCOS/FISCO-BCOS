@@ -70,20 +70,18 @@ struct MockStorage
 {
     using Key = int;
     using Value = int;
+
+    auto readOne(auto&& key) -> task::Task<std::optional<int>>
+    {
+        BOOST_FAIL("Unexcept to here!");
+        co_return std::nullopt;
+    }
+
+    auto readOne(auto&& key, storage2::DIRECT_TYPE direct) -> task::Task<std::optional<int>>
+    {
+        co_return std::make_optional(100);
+    }
 };
-
-task::Task<std::optional<int>> tag_invoke(
-    storage2::tag_t<storage2::readOne> /*unused*/, MockStorage& storage, auto&& key)
-{
-    BOOST_FAIL("Unexcept to here!");
-    co_return std::nullopt;
-}
-
-task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    MockStorage& storage, auto&& key, storage2::DIRECT_TYPE direct)
-{
-    co_return std::make_optional(100);
-}
 
 BOOST_AUTO_TEST_CASE(directFlag)
 {
