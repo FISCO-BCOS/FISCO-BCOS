@@ -54,7 +54,8 @@ BOOST_AUTO_TEST_CASE(testHex)
     }
     // fromHexString Exception
     BOOST_CHECK_THROW(fromHex("0934xyza"), BadHexCharacter);
-    BOOST_CHECK_THROW(fromHex("093"), boost::wrapexcept<Error>);
+    BOOST_CHECK(fromHex("093") == fromHex("0093"));
+    BOOST_CHECK(fromHex("0xabc") == fromHex("0abc"));
     BOOST_CHECK(isHexString("0934xyz") == false);
 
     BOOST_CHECK(isHexString("0x000abc") == true);

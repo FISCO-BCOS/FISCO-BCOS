@@ -19,6 +19,7 @@
  * @date 2021-04-01
  */
 #pragma once
+#include "range/v3/view/any_view.hpp"
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/FixedBytes.h>
 

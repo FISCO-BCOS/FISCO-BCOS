@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(testString)
 
 BOOST_AUTO_TEST_CASE(testBytes1)
 {
-    std::string v = "0x1";
+    std::string v = "0x01";
     FixedBytes<1> fb1(v);
     ScaleEncoderStream s{};
     s << fb1;
@@ -555,8 +555,8 @@ BOOST_AUTO_TEST_CASE(scaleCompactTest)
                                        "655037778630591879033574393515952034305194542857496045"
                                        "531676044756160413302774714984450425759043258192756735"),
             fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-                           "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-                           "FFFF"));
+                    "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+                    "FFFF"));
     testCompactEncodeAndDecode(compactPair);
 }
 

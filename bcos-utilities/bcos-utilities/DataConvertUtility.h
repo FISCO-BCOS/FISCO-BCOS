@@ -19,14 +19,15 @@
 #pragma once
 
 #include "Common.h"
-#include "Error.h"
-#include "Ranges.h"
+#include "bcos-utilities/Exceptions.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/endian/conversion.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/single.hpp>
 #include <set>
 #include <string>
 #include <type_traits>
@@ -137,16 +138,22 @@ Out fromHex(const Hex& hex)
         return {};
     }
 
-    if (payload.size() % 2 != 0)
-    {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Invalid input hex string size"));
-    }
+    const bool needPadding = (payload.size() % 2 != 0);
 
     Out out;
-    out.reserve(payload.size() / 2);
+    out.reserve((payload.size() + (needPadding ? 1 : 0)) / 2);
     try
     {
-        boost::algorithm::unhex(payload.begin(), payload.end(), std::back_inserter(out));
+        if (needPadding)
+        {
+            auto padded = ::ranges::views::concat(::ranges::views::single('0'), payload);
+            boost::algorithm::unhex(
+                ::ranges::begin(padded), ::ranges::end(padded), std::back_inserter(out));
+        }
+        else
+        {
+            boost::algorithm::unhex(payload.begin(), payload.end(), std::back_inserter(out));
+        }
     }
     catch (...)
     {
