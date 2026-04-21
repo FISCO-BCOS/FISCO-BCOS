@@ -21,10 +21,8 @@
 #include "bcos-utilities/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
-#include <zstd.h>
-#include <cstring>
+#include <cstdint>
 #include <string>
-#include <vector>
 
 using namespace bcos;
 using namespace bcos::test;
