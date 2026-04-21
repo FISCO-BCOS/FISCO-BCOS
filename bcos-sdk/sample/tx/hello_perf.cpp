@@ -193,7 +193,7 @@ int main(int argc, char** argv)
     //           << std::endl;
 
     auto hexBin = getBinary(groupInfo->smCryptoType());
-    auto binBytes = fromHexString(hexBin);
+    auto binBytes = fromHex(hexBin);
 
     auto rpcService = sdk->jsonRpcService();
 
@@ -250,7 +250,7 @@ int main(int argc, char** argv)
         {
             ratelimit->acquire(1);
             sendRateReporter->update(1, true);
-            auto getBytes = fromHexString(getData);
+            auto getBytes = fromHex(getData);
             rpcService->sendTransaction(*keyPair, group, "", contractAddress, std::move(*getBytes),
                 "", 0, "extraData",
                 [&recvRateReporter](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {

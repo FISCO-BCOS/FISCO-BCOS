@@ -150,7 +150,7 @@ int main(int argc, char** argv)
                                               bcos::cppsdk::utilities::CryptoType::Secp256K1);
 
     auto transactionBuilder = std::make_shared<bcos::cppsdk::utilities::TransactionBuilder>();
-    auto code = *bcos::fromHexString(getBinary(smCrypto ? 1 : 0));
+    auto code = bcos::fromHex(getBinary(smCrypto ? 1 : 0));
 
     int64_t block_limit = 111111;
     const char* group_id = "group0";

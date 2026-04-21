@@ -86,7 +86,7 @@ PublicPtr SM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) con
     }
     BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                               "invalid signature: sm2 recover public key failed, msgHash : " +
-                              _hash.hex() + ", signature:" + *toHexString(_signData)));
+                              _hash.hex() + ", signature:" + toHex(_signData)));
 }
 
 std::pair<bool, bytes> SM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const

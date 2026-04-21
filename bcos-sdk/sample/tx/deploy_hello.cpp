@@ -188,7 +188,7 @@ int main(int argc, char** argv)
               << std::endl;
 
     auto hexBin = getBinary(groupInfo->smCryptoType());
-    auto binBytes = fromHexString(std::string(hexBin));
+    auto binBytes = fromHex(std::string(hexBin));
 
     auto rpcService = sdk->jsonRpcService();
 

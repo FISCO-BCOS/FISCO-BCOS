@@ -156,7 +156,7 @@ PublicPtr HsmSM2Crypto::recover(const HashType& _hash, bytesConstRef _signData) 
     }
     BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                               "invalid signature: hsm sm2 recover public key failed, msgHash : " +
-                              _hash.hex() + ", signature:" + *toHexString(_signData)));
+                              _hash.hex() + ", signature:" + toHex(_signData)));
 }
 
 std::pair<bool, bytes> HsmSM2Crypto::recoverAddress(Hash::Ptr _hashImpl, bytesConstRef _input) const

@@ -94,7 +94,7 @@ inline void toAddress(std::string& _hexAddress)
 inline std::string toChecksumAddressFromBytes(
     const std::string_view& _AddressBytes, crypto::Hash::Ptr _hashImpl)
 {
-    auto hexAddress = *toHexString(_AddressBytes);
+    auto hexAddress = toHex(_AddressBytes);
     toAddress(hexAddress);
     return hexAddress;
 }
@@ -159,9 +159,9 @@ inline std::string newLegacyEVMAddressString(
 inline std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
     const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
 {
-    auto hash = _hashImpl->hash(
-        bytes{0xff} + (_sender.starts_with("0x") ? fromHexWithPrefix(_sender) : fromHex(_sender)) +
-        toBigEndian(_salt) + _hashImpl->hash(_init));
+    auto hash = _hashImpl->hash(bytes{0xff} +
+                                (_sender.starts_with("0x") ? fromHex(_sender) : fromHex(_sender)) +
+                                toBigEndian(_salt) + _hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);

@@ -43,7 +43,7 @@ using namespace bcos::cppsdk::abi;
         {                                                                                         \
             std::stringstream ss;                                                                 \
             ss << "abi encode exception for offset overflow, offset: " << _offset                 \
-               << " ,buffer length: " << _buffer.size() << " ,buffer: " << *toHexString(_buffer); \
+               << " ,buffer length: " << _buffer.size() << " ,buffer: " << toHex(_buffer); \
             BOOST_THROW_EXCEPTION(std::length_error(ss.str().c_str()));                           \
         }                                                                                         \
     } while (0);

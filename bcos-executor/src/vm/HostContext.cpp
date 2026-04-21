@@ -658,7 +658,7 @@ void HostContext::log(h256s&& _topics, bytesConstRef _data)
     // else
     // {
     //     // convert solidity address to hex string
-    //     auto hexAddress = *toHexString(myAddress());
+    //     auto hexAddress = toHex(myAddress());
     //     boost::algorithm::to_lower(hexAddress);  // this is in case of toHexString be modified
     //     toChecksumAddress(hexAddress, hashImpl()->hash(hexAddress).hex());
     //     m_sub.logs->push_back(

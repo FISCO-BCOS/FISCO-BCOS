@@ -50,7 +50,7 @@ ssize_t AMOPMessage::decode(bcos::bytesConstRef _buffer)
             << LOG_BADGE("decode")
             << LOG_DESC("the topic length smaller than the minimum length(2), data size:" +
                         std::to_string(_buffer.size()))
-            << LOG_KV("data", *toHexString(_buffer));
+            << LOG_KV("data", toHex(_buffer));
         return -1;
     }
     std::size_t offset = 0;

@@ -188,7 +188,7 @@ public:
     /// Explicitly construct, copying from a  string.
     explicit FixedBytes(std::string const& _s, StringDataType _t = FromHex,
         DataAlignType _alignType = DataAlignType::AlignRight)
-      : FixedBytes(_t == FromHex ? *fromHexString(_s) : bcos::asBytes(_s), _alignType)
+      : FixedBytes(_t == FromHex ? fromHex(_s) : bcos::asBytes(_s), _alignType)
     {}
 
     // Convert to Arith type.
@@ -282,9 +282,9 @@ public:
     byte operator[](unsigned _index) const { return m_data[_index]; }
 
     // @returns an abridged version of the hash as a user-readable hex string
-    std::string abridged() const { return *toHexString(ref().getCroppedData(0, 4)) + "..."; }
+    std::string abridged() const { return toHex(ref().getCroppedData(0, 4)) + "..."; }
     /// @returns the hash as a user-readable hex string.
-    std::string hex() const { return *toHexString(ref()); }
+    std::string hex() const { return toHex(ref()); }
     /// @returns the hash as a user-readable hex string with 0x perfix.
     std::string hexPrefixed() const { return toHexStringWithPrefix(ref()); }
 
@@ -632,7 +632,7 @@ inline size_t FixedBytes<32>::hash::operator()(FixedBytes<32> const& value) cons
 template <unsigned N>
 inline std::ostream& operator<<(std::ostream& _out, FixedBytes<N> const& _h)
 {
-    _out << *toHexString(_h);
+    _out << toHex(_h);
     return _out;
 }
 
@@ -717,10 +717,10 @@ inline u256 fromAddress(Address _a)
 
 inline Address toAddress(std::string const& _address)
 {
-    auto address = fromHexString(_address);
-    if (address->size() == 20)
+    auto address = fromHex(_address);
+    if (address.size() == 20)
     {
-        return Address(*address);
+        return Address(address);
     }
     BOOST_THROW_EXCEPTION(InvalidAddress());
 }

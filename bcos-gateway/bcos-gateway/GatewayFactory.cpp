@@ -156,8 +156,7 @@ void GatewayFactory::initSSLContextPubHexHandler()
             return false;
         }
 
-        auto hex = bcos::toHexString(pubKey->data, pubKey->data + pubKey->length, "");
-        _pubHex = *hex.get();
+        _pubHex = bcos::toHex(bytesConstRef((const byte*)pubKey->data, pubKey->length));
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("[NEW]SSLContext pubHex: " + _pubHex);
         return true;

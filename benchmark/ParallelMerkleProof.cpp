@@ -104,16 +104,16 @@ void bcos::protocol::calculateMerkleProof(bcos::crypto::CryptoSuite::Ptr _crypto
                     }
                     higherLevelList[i] = _cryptoSuite->hash(byteValue).asBytes();
                     std::lock_guard<std::mutex> l(mapMutex);
-                    std::string parentNode = *toHexString(higherLevelList[i]);
+                    std::string parentNode = toHex(higherLevelList[i]);
                     for (const auto& child : childList)
                     {
-                        (*_parent2ChildList)[parentNode].emplace_back(*toHexString(child));
+                        (*_parent2ChildList)[parentNode].emplace_back(toHex(child));
                     }
                 }
             });
         bytesCachesTemp = std::move(higherLevelList);
     }
 
-    (*_parent2ChildList)[*toHexString(_cryptoSuite->hash(bytesCachesTemp[0]).asBytes())].push_back(
-        *toHexString(bytesCachesTemp[0]));
+    (*_parent2ChildList)[toHex(_cryptoSuite->hash(bytesCachesTemp[0]).asBytes())].push_back(
+        toHex(bytesCachesTemp[0]));
 }

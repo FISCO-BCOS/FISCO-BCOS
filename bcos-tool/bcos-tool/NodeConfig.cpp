@@ -1353,7 +1353,7 @@ std::string bcos::tool::generateGenesisData(
         for (const auto& node : ledgerConfig.consensusNodeList())
         {
             ss << "node." + boost::lexical_cast<std::string>(j) + ":" +
-                      *toHexString(node.nodeID->data()) + "," + std::to_string(node.voteWeight) +
+                      toHex(node.nodeID->data()) + "," + std::to_string(node.voteWeight) +
                       "\n";
             ++j;
         }
@@ -1375,7 +1375,7 @@ std::string bcos::tool::generateGenesisData(
        << executorStream.str();
     for (const auto& node : ledgerConfig.consensusNodeList())
     {
-        ss << *toHexString(node.nodeID->data()) << "," << node.voteWeight << ";";
+        ss << toHex(node.nodeID->data()) << "," << node.voteWeight << ";";
     }
     auto genesisdata = ss.str();
     NodeConfig_LOG(INFO) << LOG_BADGE("generateGenesisData") << LOG_KV("genesisData", genesisdata);
