@@ -227,23 +227,31 @@ BOOST_AUTO_TEST_CASE(testPeerStatusUpdateReorgWindow)
     BOOST_REQUIRE(peer != nullptr);
     BOOST_CHECK_EQUAL(peer->number(), 100);
 
-    // decrease within tolerance: PeerStatus::update rejects m_number > _status->number()
+    // decrease within reorg window (10): 100 -> 95 is accepted to handle legitimate reorgs
     auto statusMsg2 = msgFactory->createBlockSyncStatusMsg();
     statusMsg2->setNumber(95);
-    statusMsg2->setHash(config->hash());
+    auto reorgHash = cryptoSuite->hashImpl()->hash(bytes{0xAA});
+    statusMsg2->setHash(reorgHash);
     statusMsg2->setGenesisHash(config->genesisHash());
-    // PeerStatus::update returns false when new number < current number
     bool updated = peer->update(statusMsg2);
-    BOOST_CHECK(!updated);
-    BOOST_CHECK_EQUAL(peer->number(), 100);
+    BOOST_CHECK(updated);
+    BOOST_CHECK_EQUAL(peer->number(), 95);
 
-    // increase should be accepted
+    // decrease outside reorg window: 95 -> 80 (delta 15 > 10) must be rejected
     auto statusMsg3 = msgFactory->createBlockSyncStatusMsg();
-    statusMsg3->setNumber(110);
-    auto newHash = cryptoSuite->hashImpl()->hash(bytes{1, 2, 3});
-    statusMsg3->setHash(newHash);
+    statusMsg3->setNumber(80);
+    statusMsg3->setHash(cryptoSuite->hashImpl()->hash(bytes{0xBB}));
     statusMsg3->setGenesisHash(config->genesisHash());
     updated = peer->update(statusMsg3);
+    BOOST_CHECK(!updated);
+    BOOST_CHECK_EQUAL(peer->number(), 95);
+
+    // increase should be accepted
+    auto statusMsg4 = msgFactory->createBlockSyncStatusMsg();
+    statusMsg4->setNumber(110);
+    statusMsg4->setHash(cryptoSuite->hashImpl()->hash(bytes{1, 2, 3}));
+    statusMsg4->setGenesisHash(config->genesisHash());
+    updated = peer->update(statusMsg4);
     BOOST_CHECK(updated);
     BOOST_CHECK_EQUAL(peer->number(), 110);
 }
@@ -497,46 +505,51 @@ BOOST_AUTO_TEST_CASE(testUpdatePeerStatusConcurrent)
 
 BOOST_AUTO_TEST_CASE(testHashFieldExactSizeValidation)
 {
-    // correct 32-byte hash should be accepted
+    HashType const genesisHash =
+        HashType("0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
+
+    // correct 32-byte hash + genesis hash should round-trip
     {
         auto statusMsg = std::make_shared<BlockSyncStatusImpl>();
         HashType correctHash =
             HashType("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
         statusMsg->setHash(correctHash);
+        statusMsg->setGenesisHash(genesisHash);
         auto encoded = statusMsg->encode();
         auto decoded =
             std::make_shared<BlockSyncStatusImpl>(bytesConstRef(encoded->data(), encoded->size()));
         BOOST_CHECK(decoded->hash() == correctHash);
+        BOOST_CHECK(decoded->genesisHash() == genesisHash);
     }
 
-    // oversized hash (40 bytes) — construct via raw protobuf
+    // oversized hash (40 bytes) — must be rejected with PBObjectDecodeException
     {
         auto rawMsg = std::make_shared<BlockSyncMessage>();
         rawMsg->set_packettype(BlockSyncPacketType::BlockStatusPacket);
         rawMsg->set_number(1);
-        // set 40-byte hash
         std::string oversizedHash(40, '\xAB');
         rawMsg->set_hash(oversizedHash);
+        rawMsg->set_genesishash(
+            std::string(genesisHash.data(), genesisHash.data() + HashType::SIZE));
         auto data = bcos::protocol::encodePBObject(rawMsg);
-        auto decoded =
-            std::make_shared<BlockSyncStatusImpl>(bytesConstRef(data->data(), data->size()));
-        // deserializeObject checks hashData.size() >= HashType::SIZE (32),
-        // and only reads the first 32 bytes
-        BOOST_CHECK(decoded->hash() != HashType());
+        BOOST_CHECK_THROW(
+            std::make_shared<BlockSyncStatusImpl>(bytesConstRef(data->data(), data->size())),
+            bcos::protocol::PBObjectDecodeException);
     }
 
-    // undersized hash (16 bytes) — should result in default hash
+    // undersized hash (16 bytes) — must be rejected with PBObjectDecodeException
     {
         auto rawMsg = std::make_shared<BlockSyncMessage>();
         rawMsg->set_packettype(BlockSyncPacketType::BlockStatusPacket);
         rawMsg->set_number(1);
         std::string undersizedHash(16, '\xCD');
         rawMsg->set_hash(undersizedHash);
+        rawMsg->set_genesishash(
+            std::string(genesisHash.data(), genesisHash.data() + HashType::SIZE));
         auto data = bcos::protocol::encodePBObject(rawMsg);
-        auto decoded =
-            std::make_shared<BlockSyncStatusImpl>(bytesConstRef(data->data(), data->size()));
-        // undersized hash should be left as default (zeroed)
-        BOOST_CHECK(decoded->hash() == HashType());
+        BOOST_CHECK_THROW(
+            std::make_shared<BlockSyncStatusImpl>(bytesConstRef(data->data(), data->size())),
+            bcos::protocol::PBObjectDecodeException);
     }
 }
 
@@ -545,20 +558,24 @@ BOOST_AUTO_TEST_CASE(testProtobufFieldsClearedAfterCopy)
     auto statusMsg = std::make_shared<BlockSyncStatusImpl>();
     HashType testHash =
         HashType("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    HashType genesisHash =
+        HashType("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
     statusMsg->setHash(testHash);
+    statusMsg->setGenesisHash(genesisHash);
     statusMsg->setNumber(42);
     auto encoded = statusMsg->encode();
 
-    // decode: the protobuf hash field is consumed into m_hash
+    // decode: hash/genesisHash are copied into m_hash/m_genesisHash, then the underlying
+    // protobuf strings are explicitly released to free their backing allocations.
     auto decoded =
         std::make_shared<BlockSyncStatusImpl>(bytesConstRef(encoded->data(), encoded->size()));
     BOOST_CHECK(decoded->hash() == testHash);
+    BOOST_CHECK(decoded->genesisHash() == genesisHash);
     BOOST_CHECK_EQUAL(decoded->number(), 42);
 
-    // verify the underlying protobuf message's hash field is still populated
-    // (it's used for the decode, so it persists in the protobuf object)
     auto syncMessage = decoded->syncMessage();
-    BOOST_CHECK(!syncMessage->hash().empty());
+    BOOST_CHECK(syncMessage->hash().empty());
+    BOOST_CHECK(syncMessage->genesishash().empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -574,20 +591,30 @@ BOOST_AUTO_TEST_CASE(testUninitializedTimeField)
 
 BOOST_AUTO_TEST_CASE(testTimeFieldRoundTrip)
 {
-    // set time, encode, decode => same time
+    HashType const testHash =
+        HashType("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+    HashType const genesisHash =
+        HashType("0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
+
+    // time within ±24h drift window: preserved on round-trip
     {
+        auto const peerTime = static_cast<std::int64_t>(utcTime());
         auto statusMsg = std::make_shared<BlockSyncStatusImpl>();
-        statusMsg->setTime(1234567890);
+        statusMsg->setHash(testHash);
+        statusMsg->setGenesisHash(genesisHash);
+        statusMsg->setTime(peerTime);
         statusMsg->setNumber(1);
         auto encoded = statusMsg->encode();
         auto decoded =
             std::make_shared<BlockSyncStatusImpl>(bytesConstRef(encoded->data(), encoded->size()));
-        BOOST_CHECK_EQUAL(decoded->time(), 1234567890);
+        BOOST_CHECK_EQUAL(decoded->time(), peerTime);
     }
 
-    // no setTime => time should be 0 after round-trip
+    // no setTime => default 0 falls outside the drift window, decoder zeroes it
     {
         auto statusMsg = std::make_shared<BlockSyncStatusImpl>();
+        statusMsg->setHash(testHash);
+        statusMsg->setGenesisHash(genesisHash);
         statusMsg->setNumber(1);
         auto encoded = statusMsg->encode();
         auto decoded =

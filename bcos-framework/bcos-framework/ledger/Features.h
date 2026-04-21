@@ -62,6 +62,8 @@ public:
         bugfix_auth_table_raw_address,
         bugfix_auth_table_squatting,
         bugfix_v1_exec_error_gas_used,
+        bugfix_v1_precompiled_error_gas,  // FIB-76/79/80: precompiled gas overflow check,
+                                          // exception safety, and use remaining gas on revert
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
@@ -289,7 +291,6 @@ public:
                     .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize,
                         Flag::bugfix_v1_timestamp}},
                 {.to = protocol::BlockVersion::V3_16_4_VERSION,
-<<<<<<< HEAD
                     .flags = {Flag::bugfix_revert_logs}},
                 {.to = protocol::BlockVersion::V3_16_5_VERSION,
                     .flags = {
@@ -297,10 +298,9 @@ public:
                         Flag::bugfix_auth_check_revert_status,
                         Flag::bugfix_auth_table_raw_address,
                         Flag::bugfix_auth_table_squatting,
+                        Flag::bugfix_v1_exec_error_gas_used,
+                        Flag::bugfix_v1_precompiled_error_gas,
                     }}});
-=======
-                    .flags = {Flag::bugfix_revert_logs, Flag::bugfix_v1_exec_error_gas_used}}});
->>>>>>> ffe05ee4a (fix(vm): gate FIB-88/89/92 receipt-affecting fixes behind bugfix_v1_exec_error_gas_used flag)
         for (const auto& upgradeFeatures : upgradeRoadmap)
         {
             if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&

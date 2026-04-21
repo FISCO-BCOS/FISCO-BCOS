@@ -412,7 +412,7 @@ public:
 
                 if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref,
                         m_origin, buildLegacyExternalCaller(), m_precompiledManager.get(),
-                        m_contextID, m_seq, m_hashImpl))
+                        m_contextID, m_seq, m_hashImpl, m_ledgerConfig.get().features()))
                 {
                     HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
                     evmResult = std::move(result);
@@ -702,7 +702,7 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
@@ -732,7 +732,7 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
