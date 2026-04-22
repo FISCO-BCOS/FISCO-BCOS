@@ -201,7 +201,7 @@ int main(int argc, char** argv)
 
     std::promise<bool> p;
     auto f = p.get_future();
-    rpcService->sendTransaction(*keyPair, group, "", "", std::move(*binBytes), "", 0, "extraData",
+    rpcService->sendTransaction(*keyPair, group, "", "", std::move(binBytes), "", 0, "extraData",
         [&contractAddress, &p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {
@@ -251,7 +251,7 @@ int main(int argc, char** argv)
             ratelimit->acquire(1);
             sendRateReporter->update(1, true);
             auto getBytes = fromHex(getData);
-            rpcService->sendTransaction(*keyPair, group, "", contractAddress, std::move(*getBytes),
+            rpcService->sendTransaction(*keyPair, group, "", contractAddress, std::move(getBytes),
                 "", 0, "extraData",
                 [&recvRateReporter](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
                     recvRateReporter->update(1, true);

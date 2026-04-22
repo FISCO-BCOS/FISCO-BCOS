@@ -194,7 +194,7 @@ int main(int argc, char** argv)
 
     std::promise<bool> p;
     auto f = p.get_future();
-    rpcService->sendTransaction(*keyPair, group, "", "", std::move(*binBytes), "", 0, "extraData",
+    rpcService->sendTransaction(*keyPair, group, "", "", std::move(binBytes), "", 0, "extraData",
         [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {
