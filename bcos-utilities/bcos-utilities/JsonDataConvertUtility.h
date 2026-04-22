@@ -40,7 +40,7 @@ std::string toJonString(boost::multiprecision::number<boost::multiprecision::cpp
         _arithNumber)
 {
     auto hexString = toHex(toCompactBigEndian(_arithNumber, 1));
-    return "0x" + ((*hexString)[0] == '0' ? (hexString->substr(1)) : *hexString);
+    return "0x" + (hexString[0] == '0' ? (hexString.substr(1)) : hexString);
 }
 
 template <unsigned T>

@@ -487,7 +487,7 @@ int main(int argc, const char* argv[])
         if (hexEncoded)
         {
             auto keyBytes = fromHex(key);
-            key = std::string((char*)keyBytes->data(), keyBytes->size());
+            key = std::string((char*)keyBytes.data(), keyBytes.size());
         }
         // create secondary instance
         StorageInterface::Ptr storage = createBackendStorage(nodeConfig, logInitializer->logPath());
@@ -540,7 +540,7 @@ int main(int argc, const char* argv[])
         if (hexEncoded)
         {
             auto keyBytes = fromHex(key);
-            key = std::string((char*)keyBytes->data(), keyBytes->size());
+            key = std::string((char*)keyBytes.data(), keyBytes.size());
             auto tempBytes = fromHex(writeParameters[2]);
             value = std::string((char*)tempBytes.data(), tempBytes.size());
         }
