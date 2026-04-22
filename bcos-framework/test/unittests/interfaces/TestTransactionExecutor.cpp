@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(single_view)
     int i = 100;
     auto& ref = i;
 
-    auto view = RANGES::views::single(ref);
+    auto view = ::ranges::views::single(ref);
     auto&& j = view[0];
     BOOST_CHECK_EQUAL(view[0], 100);
 }

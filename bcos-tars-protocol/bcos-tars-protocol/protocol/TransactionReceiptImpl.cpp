@@ -24,9 +24,6 @@
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
 
-using namespace bcostars;
-using namespace bcostars::protocol;
-
 DERIVE_BCOS_EXCEPTION(EmptyReceiptHash);
 
 bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl()
@@ -35,17 +32,17 @@ bcostars::protocol::TransactionReceiptImpl::TransactionReceiptImpl()
     })
 {}
 
-void TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
+void bcostars::protocol::TransactionReceiptImpl::decode(bcos::bytesConstRef _receiptData)
 {
     bcos::concepts::serialize::decode(_receiptData, *m_inner());
 }
 
-void TransactionReceiptImpl::encode(bcos::bytes& _encodedData) const
+void bcostars::protocol::TransactionReceiptImpl::encode(bcos::bytes& _encodedData) const
 {
     bcos::concepts::serialize::encode(*m_inner(), _encodedData);
 }
 
-bcos::crypto::HashType TransactionReceiptImpl::hash() const
+bcos::crypto::HashType bcostars::protocol::TransactionReceiptImpl::hash() const
 {
     if (m_inner()->dataHash.empty())
     {
@@ -62,7 +59,7 @@ void bcostars::protocol::TransactionReceiptImpl::calculateHash(const bcos::crypt
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
-bcos::u256 TransactionReceiptImpl::gasUsed() const
+bcos::u256 bcostars::protocol::TransactionReceiptImpl::gasUsed() const
 {
     if (!m_inner()->data.gasUsed.empty())
     {

@@ -20,7 +20,7 @@ public:
     void encode(bytes& _encodeData) const override {}
     void clear() override {}
     uint32_t version() const override { return 0; }
-    RANGES::any_view<bcos::protocol::ParentInfo, RANGES::category::input | RANGES::category::sized>
+    ::ranges::any_view<bcos::protocol::ParentInfo, ::ranges::category::input | ::ranges::category::sized>
     parentInfo() const override
     {
         return {};
@@ -38,7 +38,7 @@ public:
     gsl::span<const uint64_t> consensusWeights() const override { return {}; }
 
     void setVersion(uint32_t _version) override {}
-    void setParentInfo(RANGES::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
+    void setParentInfo(::ranges::any_view<bcos::protocol::ParentInfo> parentInfo) override {}
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override {}
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override {}
     void setStateRoot(bcos::crypto::HashType _stateRoot) override {}

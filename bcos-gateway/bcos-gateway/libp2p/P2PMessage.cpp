@@ -18,6 +18,8 @@
  * @date 2021-05-04
  */
 
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/transform.hpp>
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"

@@ -15,7 +15,10 @@
 #include <bcos-table/src/StateStorageFactory.h>
 #include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Ranges.h>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/traits.hpp>
+#include <range/v3/view/transform.hpp>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/lexical_cast.hpp>
@@ -60,7 +63,7 @@ public:
         std::array<std::byte, Hasher::HASH_SIZE> parentHash;
         bcos::concepts::hash::calculate(parentBlock, m_hasher.clone(), parentHash);
 
-        if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+        if (::ranges::empty(block.blockHeader.data.parentInfo) ||
             (block.blockHeader.data.parentInfo[0].blockNumber !=
                 parentBlock.blockHeader.data.blockNumber) ||
             !bcos::concepts::bytebuffer::equalTo(
@@ -224,19 +227,19 @@ private:
         co_return abiStr;
     }
 
-    task::Task<void> impl_getTransactions(RANGES::range auto const& hashes, RANGES::range auto& out)
+    task::Task<void> impl_getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
     {
-        bcos::concepts::resizeTo(out, RANGES::size(hashes));
-        using DataType = RANGES::range_value_t<std::remove_cvref_t<decltype(out)>>;
+        bcos::concepts::resizeTo(out, ::ranges::size(hashes));
+        using DataType = ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>;
 
         constexpr auto tableName =
             bcos::concepts::transaction::Transaction<DataType> ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
 
-        LEDGER_LOG(INFO) << "getTransactions: " << tableName << " " << RANGES::size(hashes);
+        LEDGER_LOG(INFO) << "getTransactions: " << tableName << " " << ::ranges::size(hashes);
         auto entries = storage().getRows(std::string_view{tableName}, hashes);
 
-        bcos::concepts::resizeTo(out, RANGES::size(hashes));
-        tbb::parallel_for(tbb::blocked_range<size_t>(0U, RANGES::size(entries)),
+        bcos::concepts::resizeTo(out, ::ranges::size(hashes));
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, ::ranges::size(entries)),
             [&entries, &out](const tbb::blocked_range<size_t>& range) {
                 for (auto index = range.begin(); index != range.end(); ++index)
                 {
@@ -264,7 +267,7 @@ private:
 
         bcos::concepts::ledger::Status status;
         auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
-        for (auto i = 0U; i < RANGES::size(entries); ++i)
+        for (auto i = 0U; i < ::ranges::size(entries); ++i)
         {
             auto& entry = entries[i];
 
@@ -347,7 +350,7 @@ private:
                     blockNumber, block, syncNodeList);
             }
             // if getBlockByNodeList return empty block, break
-            if (RANGES::empty(block.blockHeader.data.parentInfo))
+            if (::ranges::empty(block.blockHeader.data.parentInfo))
             {
                 LEDGER_LOG(WARNING)
                     << LOG_DESC("No blockHeader in block") << LOG_KV("blockNumber", blockNumber);
@@ -425,7 +428,7 @@ private:
     {
         LEDGER_LOG(DEBUG) << "getBlockData transactions or receipts: " << blockNumberKey;
 
-        if (RANGES::empty(block.transactionsMetaData))
+        if (::ranges::empty(block.transactionsMetaData))
         {
             LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
             co_return;
@@ -433,10 +436,10 @@ private:
 
         auto hashesRange =
             block.transactionsMetaData |
-            RANGES::views::transform(
+            ::ranges::views::transform(
                 [](typename decltype(block.transactionsMetaData)::value_type const& metaData)
                     -> auto& { return metaData.hash; });
-        auto outputSize = RANGES::size(block.transactionsMetaData);
+        auto outputSize = ::ranges::size(block.transactionsMetaData);
 
         if constexpr (std::is_same_v<Type, concepts::ledger::TRANSACTIONS>)
         {
@@ -547,7 +550,7 @@ private:
     {
         LEDGER_LOG(DEBUG) << "setBlockData transaction metadata: " << blockNumberKey;
 
-        if (RANGES::empty(block.transactionsMetaData) && !RANGES::empty(block.transactions))
+        if (::ranges::empty(block.transactionsMetaData) && !::ranges::empty(block.transactions))
         {
             block.transactionsMetaData.resize(block.transactions.size());
             tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),

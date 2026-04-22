@@ -310,7 +310,7 @@ bool precompiled::checkPathValid(std::string_view _path,
     }
     std::vector<std::string> pathList;
     //    constexpr std::string_view delim{"/"};
-    //    auto spliter = RANGES::split_view(absoluteDir, delim);
+    //    auto spliter = ::ranges::split_view(absoluteDir, delim);
     boost::split(pathList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
     if (pathList.size() > FS_PATH_MAX_LEVEL || pathList.empty())
     {

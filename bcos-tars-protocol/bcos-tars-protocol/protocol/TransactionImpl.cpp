@@ -29,9 +29,6 @@
 #include <boost/throw_exception.hpp>
 #include <range/v3/view/any_view.hpp>
 
-using namespace bcostars;
-using namespace bcostars::protocol;
-
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
 bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
@@ -43,17 +40,17 @@ bcostars::protocol::TransactionImpl::TransactionImpl()
     })
 {}
 
-void TransactionImpl::decode(bcos::bytesConstRef _txData)
+void bcostars::protocol::TransactionImpl::decode(bcos::bytesConstRef _txData)
 {
     bcos::concepts::serialize::decode(_txData, *m_inner());
 }
 
-void TransactionImpl::encode(bcos::bytes& txData) const
+void bcostars::protocol::TransactionImpl::encode(bcos::bytes& txData) const
 {
     bcos::concepts::serialize::encode(*m_inner(), txData);
 }
 
-bcos::crypto::HashType TransactionImpl::hash() const
+bcos::crypto::HashType bcostars::protocol::TransactionImpl::hash() const
 {
     if (m_inner()->dataHash.empty() && m_inner()->extraTransactionHash.empty())
     {
@@ -77,12 +74,12 @@ void bcostars::protocol::TransactionImpl::calculateHash(const bcos::crypto::Hash
     bcos::concepts::hash::calculate(*m_inner(), hashImpl.hasher(), m_inner()->dataHash);
 }
 
-std::string_view TransactionImpl::nonce() const
+std::string_view bcostars::protocol::TransactionImpl::nonce() const
 {
     return m_inner()->data.nonce;
 }
 
-bcos::bytesConstRef TransactionImpl::input() const
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::input() const
 {
     return {reinterpret_cast<const bcos::byte*>(m_inner()->data.input.data()),
         m_inner()->data.input.size()};
@@ -193,7 +190,7 @@ uint8_t bcostars::protocol::TransactionImpl::type() const
 {
     return static_cast<uint8_t>(m_inner()->type);
 }
-bcos::bytesConstRef TransactionImpl::extraTransactionBytes() const
+bcos::bytesConstRef bcostars::protocol::TransactionImpl::extraTransactionBytes() const
 {
     return {reinterpret_cast<const bcos::byte*>(m_inner()->extraTransactionBytes.data()),
         m_inner()->extraTransactionBytes.size()};

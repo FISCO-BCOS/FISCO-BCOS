@@ -131,8 +131,8 @@ void KeyPageStorage::asyncGetRow(std::string_view tableView, std::string_view ke
 }
 
 void KeyPageStorage::asyncGetRows(std::string_view tableView,
-    RANGES::any_view<std::string_view,
-        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+    ::ranges::any_view<std::string_view,
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
         keys,
     std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
 {

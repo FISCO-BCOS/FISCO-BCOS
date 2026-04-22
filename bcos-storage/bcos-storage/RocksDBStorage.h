@@ -54,8 +54,9 @@ public:
 
     // due to the blocking of m_db->MultiGet, this interface is actually a synchronous interface
     void asyncGetRows(std::string_view table,
-        RANGES::any_view<std::string_view,
-            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::input | ::ranges::category::random_access |
+                ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;
@@ -73,11 +74,11 @@ public:
     void asyncRollback(const bcos::protocol::TwoPCParams& params,
         std::function<void(Error::Ptr)> callback) override;
     Error::Ptr setRows(std::string_view tableName,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             keys,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             values) noexcept override;
     virtual Error::Ptr deleteRows(
         std::string_view, const std::variant<const gsl::span<std::string_view const>,

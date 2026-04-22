@@ -29,7 +29,11 @@
 #include <iostream>
 #include <string>
 
-using namespace std;
+using std::endl;
+using std::exception;
+using std::make_shared;
+using std::string;
+using std::to_string;
 using namespace bcos;
 using namespace crypto;
 using namespace security;

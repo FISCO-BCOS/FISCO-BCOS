@@ -51,7 +51,6 @@
 #include <iterator>
 #include <memory>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
@@ -62,6 +61,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()

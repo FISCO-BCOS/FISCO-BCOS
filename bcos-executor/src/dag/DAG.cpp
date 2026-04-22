@@ -20,7 +20,6 @@
  */
 
 #include "DAG.h"
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -33,7 +32,7 @@ void DAG::init(ID _maxSize)
 {
     clear();
     for (ID i = 0; i < _maxSize; ++i)
-        m_vtxs.emplace_back(make_shared<Vertex>());
+        m_vtxs.emplace_back(std::make_shared<Vertex>());
     m_totalVtxs = _maxSize;
     m_totalConsume = 0;
 }

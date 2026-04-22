@@ -26,7 +26,6 @@
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::crypto;
@@ -35,6 +34,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 struct AbiReaderFixture
 {
     AbiReaderFixture() { hashImpl = std::make_shared<Keccak256>(); }

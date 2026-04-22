@@ -16,6 +16,8 @@
 #include "bcos-utilities/Common.h"
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/transform.hpp>
 #include <shared_mutex>
 #include <utility>
 

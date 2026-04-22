@@ -22,6 +22,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <boost/endian/conversion.hpp>
+#include <range/v3/algorithm/any_of.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;

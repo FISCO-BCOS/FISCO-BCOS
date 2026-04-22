@@ -17,7 +17,10 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <range/v3/view/chunk.hpp>
+#include <range/v3/view/drop.hpp>
 #include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/zip.hpp>
 
 namespace bcos::scheduler_v1
 {

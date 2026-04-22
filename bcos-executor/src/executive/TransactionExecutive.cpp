@@ -36,6 +36,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include "bcos-utilities/Exceptions.h"
+#include <range/v3/view/reverse.hpp>
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -1532,7 +1533,7 @@ void TransactionExecutive::revert()
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))
     {
         // revert child beforehand from back to front
-        for (auto& childExecutive : RANGES::views::reverse(m_childExecutives))
+        for (auto& childExecutive : ::ranges::views::reverse(m_childExecutives))
         {
             childExecutive->revert();
         }

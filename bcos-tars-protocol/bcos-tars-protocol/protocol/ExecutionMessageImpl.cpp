@@ -19,10 +19,8 @@
  * @date 2022-05-09
  */
 #include "ExecutionMessageImpl.h"
-using namespace bcostars;
-using namespace bcostars::protocol;
 
-void ExecutionMessageImpl::decodeLogEntries()
+void bcostars::protocol::ExecutionMessageImpl::decodeLogEntries()
 {
     m_logEntries.reserve(m_inner()->logEntries.size());
     for (auto& it : m_inner()->logEntries)
@@ -32,7 +30,7 @@ void ExecutionMessageImpl::decodeLogEntries()
     }
 }
 
-void ExecutionMessageImpl::decodeKeyLocks()
+void bcostars::protocol::ExecutionMessageImpl::decodeKeyLocks()
 {
     for (auto const& _keyLock : m_inner()->keyLocks)
     {
@@ -40,16 +38,18 @@ void ExecutionMessageImpl::decodeKeyLocks()
     }
 }
 
-gsl::span<bcos::protocol::LogEntry const> const ExecutionMessageImpl::logEntries() const
+gsl::span<bcos::protocol::LogEntry const> const
+bcostars::protocol::ExecutionMessageImpl::logEntries() const
 {
     return m_logEntries;
 }
-std::vector<bcos::protocol::LogEntry> ExecutionMessageImpl::takeLogEntries()
+std::vector<bcos::protocol::LogEntry> bcostars::protocol::ExecutionMessageImpl::takeLogEntries()
 {
     return std::move(m_logEntries);
 }
 
-void ExecutionMessageImpl::setLogEntries(std::vector<bcos::protocol::LogEntry> _logEntries)
+void bcostars::protocol::ExecutionMessageImpl::setLogEntries(
+    std::vector<bcos::protocol::LogEntry> _logEntries)
 {
     m_logEntries = _logEntries;
     m_inner()->logEntries.clear();
@@ -62,18 +62,18 @@ void ExecutionMessageImpl::setLogEntries(std::vector<bcos::protocol::LogEntry> _
     }
 }
 
-gsl::span<std::string const> ExecutionMessageImpl::keyLocks() const
+gsl::span<std::string const> bcostars::protocol::ExecutionMessageImpl::keyLocks() const
 {
     return m_keyLocks;
 }
-std::vector<std::string> ExecutionMessageImpl::takeKeyLocks()
+std::vector<std::string> bcostars::protocol::ExecutionMessageImpl::takeKeyLocks()
 {
     // Note: must clear the tars-container here when takeKeyLocks
     m_inner()->keyLocks.clear();
     return std::move(m_keyLocks);
 }
 
-void ExecutionMessageImpl::setKeyLocks(std::vector<std::string> keyLocks)
+void bcostars::protocol::ExecutionMessageImpl::setKeyLocks(std::vector<std::string> keyLocks)
 {
     m_keyLocks = std::move(keyLocks);
     // Note: must clear the tars-container here before set new keyLocks

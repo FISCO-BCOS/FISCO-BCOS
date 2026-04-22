@@ -79,8 +79,8 @@ public:
     // get receipts size
     uint64_t receiptsSize() const override;
 
-    void setNonceList(RANGES::any_view<std::string> nonces) override;
-    RANGES::any_view<std::string> nonceList() const override;
+    void setNonceList(::ranges::any_view<std::string> nonces) override;
+    ::ranges::any_view<std::string> nonceList() const override;
 
     const bcostars::Block& inner() const;
     bcostars::Block& inner();

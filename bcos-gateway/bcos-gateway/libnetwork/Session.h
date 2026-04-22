@@ -21,7 +21,6 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
-#include <range/v3/numeric/accumulate.hpp>
 #include <utility>
 #include <variant>
 

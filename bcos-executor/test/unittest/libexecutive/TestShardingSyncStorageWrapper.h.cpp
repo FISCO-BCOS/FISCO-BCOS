@@ -21,8 +21,6 @@
 #include "../src/executive/ShardingSyncStorageWrapper.h"
 #include <boost/test/unit_test.hpp>
 
-
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -30,6 +28,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 BOOST_AUTO_TEST_SUITE(TestShardingSyncStorageWrapper)
 
 BOOST_AUTO_TEST_CASE(test_keyName)

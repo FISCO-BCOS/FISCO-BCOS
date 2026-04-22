@@ -32,6 +32,7 @@
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/single.hpp>
 
 using namespace bcos;
 using namespace bcos::test;

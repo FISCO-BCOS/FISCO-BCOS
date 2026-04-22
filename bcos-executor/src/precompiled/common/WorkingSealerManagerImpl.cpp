@@ -1,3 +1,6 @@
+#include <range/v3/range_fwd.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/result_types.hpp>
 /**
  *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -30,6 +33,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view/concat.hpp>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -449,7 +453,7 @@ static consensus::ConsensusNode& pickNodeByWeight(
     auto weight =
         nodeIt->offset - ((nodeWeightRanges.begin() == nodeIt) ? 0LU : (nodeIt - 1)->offset);
     totalWeight -= weight;
-    for (auto& it : RANGES::subrange<decltype(nodeIt)>(nodeIt + 1, nodeWeightRanges.end()))
+    for (auto& it : ::ranges::subrange<decltype(nodeIt)>(nodeIt + 1, nodeWeightRanges.end()))
     {
         it.offset -= weight;
     }
@@ -465,7 +469,7 @@ static std::vector<std::reference_wrapper<consensus::ConsensusNode>> getNodeList
         std::reference_wrapper<consensus::ConsensusNode>>
 {
     std::vector<NodeWeightRange> nodeWeightRanges;
-    nodeWeightRanges.reserve(RANGES::size(nodeList));
+    nodeWeightRanges.reserve(::ranges::size(nodeList));
 
     size_t totalWeight = 0;
     for (consensus::ConsensusNode& node : nodeList)

@@ -30,6 +30,8 @@
 #include <atomic>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/algorithm/unique.hpp>
 
 using namespace bcos::task;
 using namespace bcos::storage2;

@@ -33,7 +33,10 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <memory>
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/remove_if.hpp>
 #include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <variant>

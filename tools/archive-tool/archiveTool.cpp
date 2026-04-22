@@ -340,14 +340,14 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                 }
             });
         archiveStorage->setRows(ledger::SYS_HASH_2_TX,
-            keys | RANGES::views::transform(
+            keys | ::ranges::views::transform(
                        [](const std::string& str) { return std::string_view{str}; }),
-            transactionValues | RANGES::views::transform(
+            transactionValues | ::ranges::views::transform(
                                     [](const std::string& str) { return std::string_view{str}; }));
         archiveStorage->setRows(ledger::SYS_HASH_2_RECEIPT,
-            keys | RANGES::views::transform(
+            keys | ::ranges::views::transform(
                        [](const std::string& str) { return std::string_view{str}; }),
-            receiptValues | RANGES::views::transform(
+            receiptValues | ::ranges::views::transform(
                                 [](const std::string& str) { return std::string_view{str}; }));
         std::cout << "\r" << "write block " << i << " size: " << size << std::flush;
     }
