@@ -249,7 +249,7 @@ bcos::bytes decodeBytesFromString(const std::string& _str)
         try
         {
             // base64 format
-            return std::move(*base64DecodeBytes(_str.substr(base64Prefix.size())));
+            return base64DecodeBytes(_str.substr(base64Prefix.size()));
         }
         catch (...)
         {

@@ -63,8 +63,8 @@ std::string bcos::base64Decode(std::string const& _data)
     return ret;
 }
 
-std::shared_ptr<bcos::bytes> bcos::base64DecodeBytes(std::string const& _data)
+bcos::bytes bcos::base64DecodeBytes(std::string const& _data)
 {
     auto s = base64Decode(_data);
-    return std::make_shared<bcos::bytes>(s.begin(), s.end());
+    return {s.begin(), s.end()};
 }
