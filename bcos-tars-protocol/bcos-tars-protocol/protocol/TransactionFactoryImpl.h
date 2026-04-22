@@ -38,7 +38,8 @@ public:
     bcos::protocol::Transaction::Ptr createTransaction() override;
     bcos::protocol::Transaction::Ptr createTransaction(bcos::protocol::Transaction& input) override;
     bcos::protocol::Transaction::Ptr createTransaction(
-        bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false) override;
+        bcos::bytesConstRef txData, bool checkSig = true, bool checkHash = false,
+        bool tainted = true) override;
 
     std::shared_ptr<bcos::protocol::Transaction> createTransaction(int32_t _version,
         std::string _to, bcos::bytes const& _input, std::string const& _nonce, int64_t _blockLimit,
@@ -54,7 +55,8 @@ public:
         std::string _value = {}, std::string _gasPrice = {}, int64_t _gasLimit = 0,
         std::string _maxFeePerGas = {}, std::string _maxPriorityFeePerGas = {}) override;
 
-    bcos::protocol::Transaction::Ptr decodeTransaction(bcos::bytesConstRef txData) override;
+    bcos::protocol::Transaction::Ptr decodeTransaction(
+        bcos::bytesConstRef txData, bool tainted = true) override;
 
     void setCryptoSuite(bcos::crypto::CryptoSuite::Ptr cryptoSuite);
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() override;

@@ -33,6 +33,12 @@
 #include <boost/throw_exception.hpp>
 #include <utility>
 
+namespace bcostars::protocol
+{
+class TransactionImpl;
+class TransactionFactoryImpl;
+}
+
 namespace bcos::protocol
 {
 enum class TransactionType : uint8_t
@@ -81,6 +87,7 @@ public:
         m_sealed(other.m_sealed),
         m_invalid(other.m_invalid),
         m_systemTx(other.m_systemTx.load(std::memory_order_acquire)),
+                m_tainted(other.m_tainted),
         m_storeToBackend(other.m_storeToBackend)
     {}
     Transaction(Transaction&& other) noexcept
@@ -91,6 +98,7 @@ public:
         m_sealed(other.m_sealed),
         m_invalid(other.m_invalid),
         m_systemTx(other.m_systemTx.load(std::memory_order_acquire)),
+                m_tainted(other.m_tainted),
         m_storeToBackend(other.m_storeToBackend)
     {}
     Transaction& operator=(const Transaction& other)
@@ -105,6 +113,7 @@ public:
             m_invalid = other.m_invalid;
             m_systemTx.store(
                 other.m_systemTx.load(std::memory_order_acquire), std::memory_order_release);
+            m_tainted = other.m_tainted;
             m_storeToBackend = other.m_storeToBackend;
         }
         return *this;
@@ -121,6 +130,7 @@ public:
             m_invalid = other.m_invalid;
             m_systemTx.store(
                 other.m_systemTx.load(std::memory_order_acquire), std::memory_order_release);
+            m_tainted = other.m_tainted;
             m_storeToBackend = other.m_storeToBackend;
         }
         return *this;
@@ -139,7 +149,7 @@ public:
             ittapi::ITT_DOMAINS::instance().VERIFY_TRANSACTION);
 #endif
         // The tx has already been verified
-        if (!sender().empty())
+        if (!tainted())
         {
             return;
         }
@@ -168,6 +178,7 @@ public:
                 std::invalid_argument("recover sender address from signature failed"));
         }
         forceSender(sender);
+        setTainted(false);
     }
 
     virtual int32_t version() const = 0;
@@ -199,7 +210,7 @@ public:
     virtual uint8_t type() const = 0;
 
     virtual void forceSender(const bcos::bytes& _sender) = 0;
-    // Clear both sender and hash fields so that verify() will recompute them
+    // Clear both sender and hash fields and mark transaction tainted for re-verification
     virtual void clearSenderAndHash() = 0;
     // Recompute hash from transaction data fields
     virtual void calculateHash(const crypto::Hash& hashImpl) = 0;
@@ -235,12 +246,20 @@ public:
     void setBatchHash(bcos::crypto::HashType const& _hash) const { m_batchHash = _hash; }
     bcos::crypto::HashType const& batchHash() const { return m_batchHash; }
 
+    bool tainted() const { return m_tainted; }
+
     bool storeToBackend() const { return m_storeToBackend; }
     void setStoreToBackend(bool _storeToBackend) const { m_storeToBackend = _storeToBackend; }
 
     virtual size_t size() const { return 0; }
 
+protected:
+    void setTainted(bool _tainted) const { m_tainted = _tainted; }
+
 private:
+    friend class bcostars::protocol::TransactionImpl;
+    friend class bcostars::protocol::TransactionFactoryImpl;
+
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
 
@@ -257,6 +276,8 @@ private:
     mutable bool m_invalid = {false};
     // the transaction is the system transaction or not
     mutable std::atomic<bool> m_systemTx = {false};
+    // tainted transactions come from external input and must be verified before trusted use
+    mutable bool m_tainted = {true};
     // the transaction has been stored to the storage or not
     mutable bool m_storeToBackend = {false};
 };

@@ -39,7 +39,8 @@ public:
     virtual Transaction::Ptr createTransaction() = 0;
     virtual Transaction::Ptr createTransaction(Transaction& input) = 0;
     virtual Transaction::Ptr createTransaction(
-        bytesConstRef txData, bool checkSig = true, bool checkHash = false) = 0;
+        bytesConstRef txData, bool checkSig = true, bool checkHash = false,
+        bool tainted = true) = 0;
     virtual Transaction::Ptr createTransaction(int32_t _version, std::string _to,
         bytes const& _input, std::string const& _nonce, int64_t blockLimit, std::string _chainId,
         std::string _groupId, int64_t _importTime, std::string _abi = "", std::string _value = "",
@@ -62,7 +63,7 @@ public:
     }
     // Decode transaction from bytes without hash computation or signature verification.
     // Caller should call clearSenderAndHash() before submitting for verification.
-    virtual Transaction::Ptr decodeTransaction(bytesConstRef txData) = 0;
+    virtual Transaction::Ptr decodeTransaction(bytesConstRef txData, bool tainted = true) = 0;
 
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() = 0;
 };

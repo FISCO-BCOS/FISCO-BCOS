@@ -33,6 +33,8 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
+#include <thread>
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;
@@ -77,6 +79,28 @@ BOOST_AUTO_TEST_CASE(testConsensusNodeTreeSync)
             co_await txpool.submitTransaction(std::move(transaction), true);
     }(txpool, tx));
     task::syncWait(txpool.broadcastTransactionBufferByTree(bcos::ref(data), true));
+
+    // TREE_PUSH_TRANSACTION is forwarded asynchronously in FakeGateWay; wait briefly
+    // until all destination txpools have received and inserted the transaction.
+    for (size_t i = 0; i < 100; ++i)
+    {
+        bool allReady = true;
+        for (const auto& item : this->m_nodeIdList)
+        {
+            auto& nodeTxpool = dynamic_cast<TxPool&>(*m_fakeGateWay->m_nodeId2TxPool.at(item));
+            if (nodeTxpool.txpoolStorage()->size() != 1)
+            {
+                allReady = false;
+                break;
+            }
+        }
+        if (allReady)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
     // broadcast to all nodes finally
     auto totalMsg = m_frontService->totalSendMsgSize();
     for (const auto& item : this->m_nodeIdList)
