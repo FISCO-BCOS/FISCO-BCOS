@@ -528,10 +528,11 @@ BOOST_AUTO_TEST_CASE(testAddNullTransaction)
 BOOST_AUTO_TEST_CASE(testAddEmptyHashTransaction)
 {
     Web3Transactions pool;
-    // Create a transaction without calling calculateHash() — hash() will throw EmptyTransactionHash
-    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    // Create a clean transaction without calculateHash() so hash() throws EmptyTransactionHash
+    auto tx = std::make_shared<TestTransactionImpl>();
     tx->setNonce("0");
     tx->forceSender(toBytes("aaaaaaaaaaaaaaaaaaaa"));
+    tx->markClean();
     // Do NOT call tx->calculateHash() so that hash() throws
     std::vector<protocol::Transaction::Ptr> txs{tx};
     BOOST_CHECK_NO_THROW(pool.add(txs));
@@ -540,12 +541,13 @@ BOOST_AUTO_TEST_CASE(testAddEmptyHashTransaction)
 BOOST_AUTO_TEST_CASE(testAddInvalidNonceTransaction)
 {
     Web3Transactions pool;
-    // Create a transaction with a non-numeric nonce — TransactionData ctor will throw InvalidNonce
-    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    // Create a clean transaction with a non-numeric nonce — TransactionData ctor throws InvalidNonce
+    auto tx = std::make_shared<TestTransactionImpl>();
     tx->setNonce("not_a_number");
     tx->forceSender(toBytes("bbbbbbbbbbbbbbbbbbbb"));
     Keccak256 hasher;
     tx->calculateHash(hasher);
+    tx->markClean();
     std::vector<protocol::Transaction::Ptr> txs{tx};
     BOOST_CHECK_NO_THROW(pool.add(txs));
 }
@@ -553,14 +555,14 @@ BOOST_AUTO_TEST_CASE(testAddInvalidNonceTransaction)
 BOOST_AUTO_TEST_CASE(testAddTaintedTransaction)
 {
     Web3Transactions pool;
-    auto taintedTx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    auto taintedTx = std::make_shared<TestTransactionImpl>();
     taintedTx->setNonce("0");
     taintedTx->forceSender(toBytes("cccccccccccccccccccc"));
     Keccak256 hasher;
     taintedTx->calculateHash(hasher);
 
     auto taintedHash = taintedTx->hash();
-    pool.add(std::vector<protocol::Transaction::Ptr>{taintedTx});
+    BOOST_CHECK_THROW(pool.add(std::vector<protocol::Transaction::Ptr>{taintedTx}), bcos::Exception);
 
     auto result = pool.get(std::vector<bcos::crypto::HashType>{taintedHash});
     BOOST_CHECK_EQUAL(result.size(), 1);
