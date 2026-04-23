@@ -258,7 +258,7 @@ private:
         protocol::Block::Ptr m_block;
         bool m_sysBlock{};
     };
-    std::deque<ExecuteResult> m_results;
+    std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
 
     /**
@@ -282,41 +282,22 @@ private:
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
-            std::unique_lock resultsLock(m_resultsMutex);
-            auto lastExecNum = m_lastExecutedBlockNumber.load();
-            if (lastExecNum != -1 && blockHeader->number() - lastExecNum != 1)
             {
-                // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
-                // If the block has been executed, the result will be returned directly without
-                // error, which is used for the scenario of consensus and synchronous execution of a
-                // block at the same time
+                std::unique_lock resultsLock(m_resultsMutex);
                 if (!m_results.empty())
                 {
                     auto number = blockHeader->number();
-                    auto frontNumber = m_results.front().m_executedBlockHeader->number();
-                    auto backNumber = m_results.back().m_executedBlockHeader->number();
+                    auto frontNumber = m_results.front()->m_executedBlockHeader->number();
+                    auto backNumber = m_results.back()->m_executedBlockHeader->number();
                     if (number <= frontNumber && number >= backNumber)
                     {
                         BASELINE_SCHEDULER_LOG(INFO)
                             << "Block has been executed, return result directly";
                         auto& result = m_results.at(frontNumber - number);
-                        co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
+                        co_return {nullptr, result->m_executedBlockHeader, result->m_sysBlock};
                     }
-
-                    BASELINE_SCHEDULER_LOG(INFO)
-                        << "Block number out of cache range! front: " << frontNumber
-                        << " back: " << backNumber << " input: " << blockHeader->number();
                 }
-
-                auto message =
-                    fmt::format("Discontinuous execute block number! expect: {} input: {}",
-                        lastExecNum + 1, blockHeader->number());
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr, false};
             }
-            resultsLock.unlock();
 
             std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
             if (!executeLock.owns_lock())
@@ -326,6 +307,54 @@ private:
                 BASELINE_SCHEDULER_LOG(INFO) << message;
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr, false};
+            }
+
+            static constexpr size_t MAX_PENDING_RESULTS = 16;
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
+                auto lastExecNum = m_lastExecutedBlockNumber.load();
+                if (lastExecNum != -1 && blockHeader->number() - lastExecNum != 1)
+                {
+                    // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
+                    // If the block has been executed, the result will be returned directly without
+                    // error, which is used for the scenario of consensus and synchronous execution
+                    // of a block at the same time.
+                    if (!m_results.empty())
+                    {
+                        auto number = blockHeader->number();
+                        auto frontNumber = m_results.front()->m_executedBlockHeader->number();
+                        auto backNumber = m_results.back()->m_executedBlockHeader->number();
+                        if (number <= frontNumber && number >= backNumber)
+                        {
+                            BASELINE_SCHEDULER_LOG(INFO)
+                                << "Block has been executed, return result directly";
+                            auto& result = m_results.at(frontNumber - number);
+                            co_return {nullptr, result->m_executedBlockHeader, result->m_sysBlock};
+                        }
+
+                        BASELINE_SCHEDULER_LOG(INFO)
+                            << "Block number out of cache range! front: " << frontNumber
+                            << " back: " << backNumber << " input: " << blockHeader->number();
+                    }
+
+                    auto message =
+                        fmt::format("Discontinuous execute block number! expect: {} input: {}",
+                            lastExecNum + 1, blockHeader->number());
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr, false};
+                }
+
+                if (m_results.size() >= MAX_PENDING_RESULTS)
+                {
+                    auto message =
+                        fmt::format("Too many pending execution results: {}", m_results.size());
+                    BASELINE_SCHEDULER_LOG(WARNING) << message;
+                    co_return {
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                        nullptr, false};
+                }
             }
 
             auto now = current();
@@ -378,25 +407,38 @@ private:
                     nullptr, false};
             }
 
-            m_multiLayerStorage.get().pushView(std::move(view));
-            m_lastExecutedBlockNumber.store(blockHeader->number());
+            auto executeResult = std::make_shared<ExecuteResult>(
+                ExecuteResult{.m_transactions = std::make_shared<protocol::ConstTransactions>(
+                                  std::move(transactions)),
+                    .m_receipts = std::move(receipts),
+                    .m_executedBlockHeader = executedBlockHeader,
+                    .m_block = std::move(block),
+                    .m_sysBlock = sysBlock});
 
-            static constexpr size_t MAX_PENDING_RESULTS = 16;
-            resultsLock.lock();
-            if (m_results.size() >= MAX_PENDING_RESULTS)
             {
-                auto message =
-                    fmt::format("Too many pending execution results: {}", m_results.size());
-                BASELINE_SCHEDULER_LOG(WARNING) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
+                std::unique_lock resultsLock(m_resultsMutex);
+                if (m_results.size() >= MAX_PENDING_RESULTS)
+                {
+                    auto message =
+                        fmt::format("Too many pending execution results: {}", m_results.size());
+                    BASELINE_SCHEDULER_LOG(WARNING) << message;
+                    co_return {
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                        nullptr, false};
+                }
+
+                m_multiLayerStorage.get().pushView(std::move(view));
+                try
+                {
+                    m_results.push_front(std::move(executeResult));
+                }
+                catch (...)
+                {
+                    m_multiLayerStorage.get().popFrontStorage();
+                    throw;
+                }
+                m_lastExecutedBlockNumber.store(blockHeader->number());
             }
-            m_results.push_front({.m_transactions = std::make_shared<protocol::ConstTransactions>(
-                                      std::move(transactions)),
-                .m_receipts = std::move(receipts),
-                .m_executedBlockHeader = executedBlockHeader,
-                .m_block = std::move(block),
-                .m_sysBlock = sysBlock});
 
             BASELINE_SCHEDULER_LOG(INFO)
                 << "Execute block finished: " << executedBlockHeader->number() << " | "
@@ -449,7 +491,23 @@ private:
                     nullptr};
             }
 
-            auto lastCommitNum = m_lastCommittedBlockNumber.load();
+            auto lastCommitNum = m_lastCommittedBlockNumber.load(std::memory_order_relaxed);
+            if (lastCommitNum == -1)
+            {
+                auto ledgerBlockNumber = co_await ledger::getCurrentBlockNumber(m_ledger.get());
+                m_lastCommittedBlockNumber.store(ledgerBlockNumber, std::memory_order_acquire);
+                lastCommitNum = ledgerBlockNumber;
+            }
+            if (lastCommitNum != -1 && header->number() <= lastCommitNum)
+            {
+                auto message = fmt::format(
+                    "Block already committed: {}! latest: {}", header->number(), lastCommitNum);
+
+                BASELINE_SCHEDULER_LOG(INFO) << message;
+                co_return {
+                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
+                    nullptr};
+            }
             if (lastCommitNum != -1 && header->number() - lastCommitNum != 1)
             {
                 auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
@@ -461,46 +519,62 @@ private:
                     nullptr};
             }
 
-            std::unique_lock resultsLock(m_resultsMutex);
-            if (m_results.empty())
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
+                std::unique_lock resultsLock(m_resultsMutex);
+                if (m_results.empty())
+                {
+                    BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
+                }
+
+                auto resultBlockNumber = m_results.back()->m_executedBlockHeader->number();
+                if (resultBlockNumber != header->number())
+                {
+                    auto message = fmt::format(
+                        "Commit block does not match pending execution result: input: {} pending: "
+                        "{}",
+                        header->number(), resultBlockNumber);
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr};
+                }
             }
 
             auto now = current();
-            auto result = std::move(m_results.back());
-            m_results.pop_back();
-            resultsLock.unlock();
+            std::shared_ptr<ExecuteResult> result;
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
+                result = m_results.back();
+            }
 
             Bloom logsBloom;
-            for (auto& receipt : result.m_receipts)
+            for (auto& receipt : result->m_receipts)
             {
                 orBloom(logsBloom, receipt->logsBloom());
             }
-            result.m_block->setBlockHeader(header);
-            result.m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
+            result->m_block->setBlockHeader(header);
+            result->m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
             typename MultiLayerStorage::MutableStorage prewriteStorage;
-            if (result.m_block->blockHeader()->number() != 0)
+            if (result->m_block->blockHeader()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                co_await ledger::prewriteBlock(
-                    m_ledger.get(), result.m_transactions, result.m_block, false, prewriteStorage);
+                co_await ledger::prewriteBlock(m_ledger.get(), result->m_transactions,
+                    result->m_block, false, prewriteStorage);
             }
 
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                    task::tbb::syncWait(
-                        m_multiLayerStorage.get().mergeBackStorage(prewriteStorage));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
-                    task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
-                        m_ledger.get(), result.m_transactions, result.m_block));
-                });
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
+                co_await ledger::storeTransactionsAndReceipts(
+                    m_ledger.get(), result->m_transactions, result->m_block);
+            }
+
+            {
+                ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+                co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
+            }
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
@@ -508,6 +582,17 @@ private:
             // FIB-101: Update m_lastCommittedBlockNumber only after all persistence
             // operations succeed, preventing out-of-order commits on retry (FIB-104)
             m_lastCommittedBlockNumber.store(header->number());
+
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
+                if (m_results.empty() ||
+                    m_results.back()->m_executedBlockHeader->number() != header->number())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        std::runtime_error("Pending execution result changed during commit!"));
+                }
+                m_results.pop_back();
+            }
 
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
@@ -520,7 +605,7 @@ private:
 
                 auto submitResults =
                     ::ranges::views::zip(
-                        ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
+                        ::ranges::views::iota(0), *result->m_transactions, result->m_receipts) |
                     ::ranges::views::transform(
                         [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
                             auto&& [index, transaction, receipt] = input;

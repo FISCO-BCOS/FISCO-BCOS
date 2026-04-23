@@ -148,15 +148,29 @@ public:
     {
         // Ledger: asyncPrewriteBlock => invoke callback(success)
         fakeit::When(Method(mockLedger, asyncPrewriteBlock))
-            .AlwaysDo([](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
+            .AlwaysDo([this](storage::StorageInterface::Ptr, protocol::ConstTransactionsPtr,
                           protocol::Block::ConstPtr,
                           std::function<void(std::string, Error::Ptr&&)> callback, bool,
-                          std::optional<ledger::Features>) { callback({}, nullptr); });
+                          std::optional<ledger::Features>) {
+                if (prewriteBlockFails)
+                {
+                    callback({},
+                        BCOS_ERROR_PTR(scheduler::SchedulerError::UnknownError, prewriteFailure));
+                    return;
+                }
+                callback({}, nullptr);
+            });
         // Ledger: storeTransactionsAndReceipts => no error
         fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
-            .AlwaysDo([](protocol::ConstTransactionsPtr, protocol::Block::ConstPtr) -> Error::Ptr {
-                return nullptr;
-            });
+            .AlwaysDo(
+                [this](protocol::ConstTransactionsPtr, protocol::Block::ConstPtr) -> Error::Ptr {
+                    if (storeTransactionsFails)
+                    {
+                        return BCOS_ERROR_PTR(
+                            scheduler::SchedulerError::UnknownError, storeTransactionsFailure);
+                    }
+                    return nullptr;
+                });
 
         // TxPool: getTransactions => empty list
         using HashView =
@@ -164,6 +178,11 @@ public:
         fakeit::When(Method(mockTxPool, getTransactions)).AlwaysDo([](HashView) {
             return emptyTxsTaskFIB();
         });
+
+        fakeit::When(Method(mockLedger, asyncGetBlockNumber))
+            .AlwaysDo([this](std::function<void(Error::Ptr, protocol::BlockNumber)> callback) {
+                callback(nullptr, ledgerBlockNumber);
+            });
     }
 
     void writeBlock(std::shared_ptr<bcostars::protocol::BlockImpl> block)
@@ -218,6 +237,11 @@ public:
     std::shared_ptr<protocol::TransactionSubmitResultFactoryImpl> transactionSubmitResultFactory;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    protocol::BlockNumber ledgerBlockNumber = -1;
+    bool prewriteBlockFails = false;
+    std::string prewriteFailure = "injected prewrite failure";
+    bool storeTransactionsFails = false;
+    std::string storeTransactionsFailure = "injected store transactions failure";
 
     FIBMockScheduler mockScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
@@ -302,6 +326,50 @@ BOOST_AUTO_TEST_CASE(maxPendingResultsBound)
     BOOST_CHECK_EQUAL(execError->errorCode(), scheduler::SchedulerError::InvalidStatus);
 }
 
+BOOST_AUTO_TEST_CASE(maxPendingRejectionDoesNotAdvanceExecutionState)
+{
+    for (int i = 0; i < 16; ++i)
+    {
+        auto header = executeOneBlock(600 + i);
+        BOOST_CHECK(header);
+    }
+
+    auto rejectedBlock = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto rejectedHeader = rejectedBlock->blockHeader();
+    rejectedHeader->setNumber(616);
+    rejectedHeader->setVersion(200);
+    rejectedHeader->calculateHash(*hashImpl);
+    bytes input;
+    rejectedBlock->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "616", 100, "chain", "group", 0));
+    writeBlock(rejectedBlock);
+
+    Error::Ptr rejectedError;
+    baselineScheduler.executeBlock(
+        rejectedBlock, false, [&](Error::Ptr error, protocol::BlockHeader::Ptr, bool) {
+            rejectedError = std::move(error);
+        });
+    BOOST_REQUIRE(rejectedError);
+    BOOST_CHECK_EQUAL(rejectedError->errorCode(), scheduler::SchedulerError::InvalidStatus);
+
+    auto skippedBlock = std::make_shared<bcostars::protocol::BlockImpl>();
+    auto skippedHeader = skippedBlock->blockHeader();
+    skippedHeader->setNumber(617);
+    skippedHeader->setVersion(200);
+    skippedHeader->calculateHash(*hashImpl);
+    skippedBlock->appendTransaction(
+        transactionFactory->createTransaction(0, "to", input, "617", 100, "chain", "group", 0));
+    writeBlock(skippedBlock);
+
+    Error::Ptr skippedError;
+    baselineScheduler.executeBlock(
+        skippedBlock, false, [&](Error::Ptr error, protocol::BlockHeader::Ptr, bool) {
+            skippedError = std::move(error);
+        });
+    BOOST_REQUIRE(skippedError);
+    BOOST_CHECK_EQUAL(skippedError->errorCode(), scheduler::SchedulerError::InvalidBlockNumber);
+}
+
 // FIB-103: Verify that results within the bound succeed
 BOOST_AUTO_TEST_CASE(withinPendingResultsBound)
 {
@@ -317,10 +385,72 @@ BOOST_AUTO_TEST_CASE(withinPendingResultsBound)
     BOOST_CHECK(header16);
 }
 
-// FIB-101/FIB-104: Verify the code structure is correct by checking that
-// sequential execution works after the atomic counter changes.
-// The actual m_lastCommittedBlockNumber update is verified by code inspection
-// (the store() is placed AFTER persistence in coCommitBlock).
+BOOST_AUTO_TEST_CASE(failedCommitRetainsExecutionResultForRetry)
+{
+    auto executedHeader = executeOneBlock(700);
+    BOOST_REQUIRE(executedHeader);
+
+    prewriteBlockFails = true;
+
+    Error::Ptr firstError;
+    baselineScheduler.commitBlock(executedHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { firstError = std::move(error); });
+    BOOST_REQUIRE(firstError);
+    BOOST_CHECK(firstError->errorMessage().find(prewriteFailure) != std::string::npos);
+
+    Error::Ptr retryError;
+    baselineScheduler.commitBlock(executedHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { retryError = std::move(error); });
+    BOOST_REQUIRE(retryError);
+    BOOST_CHECK(retryError->errorMessage().find(prewriteFailure) != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(failedStoreTransactionsRetainsExecutionResultForRetry)
+{
+    auto executedHeader = executeOneBlock(710);
+    BOOST_REQUIRE(executedHeader);
+
+    storeTransactionsFails = true;
+
+    Error::Ptr firstError;
+    baselineScheduler.commitBlock(executedHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { firstError = std::move(error); });
+    BOOST_REQUIRE(firstError);
+    BOOST_CHECK(firstError->errorMessage().find(storeTransactionsFailure) != std::string::npos);
+
+    Error::Ptr retryError;
+    baselineScheduler.commitBlock(executedHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { retryError = std::move(error); });
+    BOOST_REQUIRE(retryError);
+    BOOST_CHECK(retryError->errorMessage().find(storeTransactionsFailure) != std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(commitHeaderMustMatchOldestExecutionResult)
+{
+    auto executedHeader = executeOneBlock(720);
+    BOOST_REQUIRE(executedHeader);
+
+    auto wrongHeader = blockHeaderFactory->createBlockHeader();
+    wrongHeader->setNumber(719);
+    wrongHeader->setVersion(200);
+    wrongHeader->calculateHash(*hashImpl);
+
+    Error::Ptr commitError;
+    baselineScheduler.commitBlock(wrongHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { commitError = std::move(error); });
+    BOOST_REQUIRE(commitError);
+    BOOST_CHECK_EQUAL(commitError->errorCode(), scheduler::SchedulerError::InvalidBlockNumber);
+
+    prewriteBlockFails = true;
+    Error::Ptr retryError;
+    baselineScheduler.commitBlock(executedHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { retryError = std::move(error); });
+    BOOST_REQUIRE(retryError);
+    BOOST_CHECK(retryError->errorMessage().find(prewriteFailure) != std::string::npos);
+}
+
+// FIB-101/FIB-104: Verify sequential execution and cached duplicate execution still work after
+// tightening the block number counters and pending-result bookkeeping.
 BOOST_AUTO_TEST_CASE(sequentialExecutionWithAtomicCounters)
 {
     // Execute a sequence of blocks to verify the atomic counters work correctly
