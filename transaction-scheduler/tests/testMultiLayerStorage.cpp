@@ -6,6 +6,7 @@
 #include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/repeat.hpp>
 #include <variant>
 
 using namespace bcos;

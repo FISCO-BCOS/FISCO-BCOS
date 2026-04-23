@@ -66,6 +66,10 @@
 #include <future>
 #include <iterator>
 #include <memory>
+#include <range/v3/algorithm/sort.hpp>
+#include <range/v3/view/chunk.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/take.hpp>
 #include <utility>
 
 using namespace bcos;

@@ -32,6 +32,8 @@
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/view/filter.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;

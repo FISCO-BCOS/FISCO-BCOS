@@ -208,8 +208,8 @@ BOOST_AUTO_TEST_CASE(feature)
 auto validFlags(const Features& features)
 {
     return features.flags() |
-           RANGES::views::filter([](auto feature) { return std::get<2>(feature); }) |
-           RANGES::to<std::vector>();
+           ::ranges::views::filter([](auto feature) { return std::get<2>(feature); }) |
+           ::ranges::to<std::vector>();
 }
 
 BOOST_AUTO_TEST_CASE(upgrade)

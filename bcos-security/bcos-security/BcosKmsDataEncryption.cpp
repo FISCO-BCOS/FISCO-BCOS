@@ -30,7 +30,6 @@
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
 
-using namespace std;
 using namespace bcos;
 using namespace crypto;
 using namespace tool;
@@ -39,6 +38,8 @@ namespace bcos
 {
 namespace security
 {
+using namespace std;
+
 BcosKmsDataEncryption::BcosKmsDataEncryption(const bcos::tool::NodeConfig::Ptr nodeConfig)
 {
     m_nodeConfig = nodeConfig;

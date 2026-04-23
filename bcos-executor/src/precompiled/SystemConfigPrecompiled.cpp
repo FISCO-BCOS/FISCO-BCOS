@@ -28,8 +28,10 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-tool/VersionConverter.h"
+#include <algorithm>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <range/v3/algorithm/find.hpp>
 
 using namespace bcos;
 using namespace bcos::storage;

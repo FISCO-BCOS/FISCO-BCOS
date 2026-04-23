@@ -35,8 +35,8 @@ public:
     }
 
     void asyncGetRows(std::string_view table,
-        RANGES::any_view<std::string_view,
-            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<storage::Entry>>)>
             _callback) noexcept override

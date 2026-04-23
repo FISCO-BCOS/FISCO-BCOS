@@ -295,7 +295,7 @@ public:
     }
 
     auto rawNewHelloWorld(uint blockNumber, TransactionType type, std::string contractAddress,
-        RANGES::input_range auto nonces, int32_t status)
+        ::ranges::input_range auto nonces, int32_t status)
     {
         auto const sender = keyPair->address(hashImpl);
         bcos::ledger::account::EVMAccount eoa(*storage, sender.hex(), false);
@@ -316,7 +316,7 @@ public:
             params->setNonce(toQuantity(nonce));
             params->setTransactionHash(hash);
             params->setContextID(blockNumber);
-            params->setSeq(RANGES::distance(RANGES::begin(nonces), it));
+            params->setSeq(::ranges::distance(::ranges::begin(nonces), it));
             params->setDepth(0);
             params->setFrom(sender.hex());
             params->setTo(contractAddress);
@@ -419,7 +419,7 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
     nextBlock(newBlock, protocol::BlockVersion::MAX_VERSION, web3Features);
     // [10000, 10020)
     rawNewHelloWorld(
-        newBlock, TransactionType::Web3Transaction, address, RANGES::views::iota(10000, 10020), 0);
+        newBlock, TransactionType::Web3Transaction, address, ::ranges::views::iota(10000, 10020), 0);
     commitBlock(newBlock);
 
     auto const sender = keyPair->address(hashImpl);
@@ -433,7 +433,7 @@ BOOST_AUTO_TEST_CASE(testMultiNonce)
     // protocol::BlockVersion::MAX_VERSION, web3Features);
     // // [10000, 10020)
     // rawNewHelloWorld(
-    //     newBlock, TransactionType::Web3Transaction, address, RANGES::views::iota(10000, 10020),
+    //     newBlock, TransactionType::Web3Transaction, address, ::ranges::views::iota(10000, 10020),
     //     16);
     // commitBlock(newBlock);
 }

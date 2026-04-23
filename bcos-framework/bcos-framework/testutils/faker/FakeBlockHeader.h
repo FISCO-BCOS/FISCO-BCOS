@@ -29,6 +29,7 @@
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
+#include <range/v3/view/zip.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
@@ -45,7 +46,7 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
     auto decodedParent = decodedBlockHeader->parentInfo();
     BOOST_CHECK_EQUAL(originParent.size(), decodedParent.size());
     for (auto [originParentInfo, decodedParentInfo] :
-        RANGES::views::zip(originParent, decodedParent))
+        ::ranges::views::zip(originParent, decodedParent))
     {
         BOOST_CHECK_EQUAL(originParentInfo.blockHash, decodedParentInfo.blockHash);
         BOOST_CHECK_EQUAL(originParentInfo.blockNumber, decodedParentInfo.blockNumber);

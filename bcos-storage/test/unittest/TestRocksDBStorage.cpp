@@ -19,7 +19,6 @@
 #include <random>
 
 using namespace bcos::storage;
-using namespace std;
 
 // ostream& operator<<(ostream& os, const std::unique_ptr<bcos::Error>& error)
 // {
@@ -29,6 +28,8 @@ using namespace std;
 
 namespace bcos::test::rocksdb_test
 {
+using namespace std;
+
 class Header256Hash : public bcos::crypto::Hash
 {
 public:

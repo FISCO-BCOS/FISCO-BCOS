@@ -24,6 +24,7 @@
 #include "StorageInterface.h"
 #include <future>
 #include <gsl/span>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::storage
 {
@@ -41,8 +42,8 @@ public:
     ~Table() = default;
 
     std::optional<Entry> getRow(std::string_view _key);
-    std::vector<std::optional<Entry>> getRows(RANGES::any_view<std::string_view,
-        RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+    std::vector<std::optional<Entry>> getRows(::ranges::any_view<std::string_view,
+        ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
             keys);
     std::vector<std::string> getPrimaryKeys(const std::optional<const Condition>& _condition);
 
@@ -55,8 +56,8 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) noexcept;
 
     void asyncGetRows(
-        RANGES::any_view<std::string_view,
-            RANGES::category::input | RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::input | ::ranges::category::random_access | ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)>
             _callback) noexcept;

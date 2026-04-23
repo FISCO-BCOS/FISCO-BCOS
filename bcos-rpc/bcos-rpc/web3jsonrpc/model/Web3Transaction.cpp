@@ -25,6 +25,7 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/algorithm/move.hpp>
 #include <utility>
 
 namespace bcos

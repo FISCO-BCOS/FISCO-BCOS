@@ -30,13 +30,12 @@
 #include <cstring>
 #include <string>
 
-using namespace std;
 using namespace bcos::executor;
 
 ParameterAbi parseParameter(const Json::Value& input)
 {
     auto paramType = input["type"].asString();
-    auto components = vector<ParameterAbi>();
+    auto components = std::vector<ParameterAbi>();
     if (boost::starts_with(paramType, "tuple"))
     {
         auto& paramComponents = input["components"];
@@ -52,13 +51,13 @@ ParameterAbi parseParameter(const Json::Value& input)
     return parameterAbi;
 }
 
-vector<string> flattenStaticParameter(const ParameterAbi& param)
+std::vector<std::string> flattenStaticParameter(const ParameterAbi& param)
 {  // TODO: return vector<std::pair<string, vector<uint8>>>, pair is type and access path
     const auto TUPLE_STR = "tuple";
-    auto flatTypes = vector<string>();
+    auto flatTypes = std::vector<std::string>();
     if (boost::starts_with(param.type, TUPLE_STR))
     {
-        for (auto i = (size_t)0; i < param.components.size(); i++)
+        for (auto i = (std::size_t)0; i < param.components.size(); i++)
         {
             auto types = flattenStaticParameter(param.components[i]);
             flatTypes.insert(flatTypes.end(), types.begin(), types.end());
@@ -68,7 +67,7 @@ vector<string> flattenStaticParameter(const ParameterAbi& param)
              !boost::algorithm::contains(param.type, "[]"))
     {
         auto type = param.type.substr(0, param.type.find("["));
-        size_t len = std::stoi(param.type.substr(param.type.find("["), param.type.find("]")));
+        std::size_t len = std::stoi(param.type.substr(param.type.find("["), param.type.find("]")));
         flatTypes.insert(flatTypes.end(), len, type);
     }
     else
@@ -78,8 +77,8 @@ vector<string> flattenStaticParameter(const ParameterAbi& param)
     return flatTypes;
 }
 
-unique_ptr<FunctionAbi> FunctionAbi::deserialize(
-    string_view abiStr, const bytes& expected, bool isSMCrypto)
+std::unique_ptr<FunctionAbi> FunctionAbi::deserialize(
+    std::string_view abiStr, const bytes& expected, bool isSMCrypto)
 {
     try
     {
@@ -158,13 +157,13 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
             }
 
             auto& functionConflictFields = function["conflictFields"];
-            auto conflictFields = vector<ConflictField>();
+            auto conflictFields = std::vector<ConflictField>();
             conflictFields.reserve(functionConflictFields.size());
             if (!functionConflictFields.isNull())
             {
                 for (auto& conflictField : functionConflictFields)
                 {
-                    auto value = vector<uint8_t>();
+                    auto value = std::vector<uint8_t>();
                     if (!conflictField["value"].isNull())
                     {
                         value.reserve(conflictField["value"].size());
@@ -185,9 +184,9 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
 
             auto& functionInputs = function["inputs"];
             assert(!functionInputs.isNull());
-            auto inputs = vector<ParameterAbi>();
+            auto inputs = std::vector<ParameterAbi>();
             inputs.reserve(functionInputs.size());
-            auto flatInputs = vector<string>();
+            auto flatInputs = std::vector<std::string>();
             for (auto i = (Json::ArrayIndex)0; i < functionInputs.size(); ++i)
             {
                 auto param = parseParameter(functionInputs[i]);
@@ -196,7 +195,7 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
                 inputs.emplace_back(std::move(param));
             }
 
-            return unique_ptr<FunctionAbi>(new FunctionAbi{
+            return std::unique_ptr<FunctionAbi>(new FunctionAbi{
                 functionName.asString(), inputs, selector, conflictFields, flatInputs});
         }
     }

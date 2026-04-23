@@ -108,11 +108,11 @@ public:
       : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
     bcos::Error::Ptr setRows(std::string_view tableName,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             keys,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             values) override
     {
         for (size_t i = 0; i < keys.size(); ++i)
@@ -1528,8 +1528,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         std::string hexCode;
         boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
 
-        genesisConfig.m_allocs = RANGES::views::iota(0, 10) |
-                                 RANGES::views::transform([&](int index) {
+        genesisConfig.m_allocs = ::ranges::views::iota(0, 10) |
+                                 ::ranges::views::transform([&](int index) {
                                      Alloc alloc{.address = fmt::format("{:0>40}", index),
                                          .balance = bcos::u256(index * 10),
                                          .nonce = {},
@@ -1543,11 +1543,11 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                                      }
                                      return alloc;
                                  }) |
-                                 RANGES::to<std::vector>();
+                                 ::ranges::to<std::vector>();
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
-        for (auto i : RANGES::views::iota(0, 10))
+        for (auto i : ::ranges::views::iota(0, 10))
         {
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
             auto codeHashEntry = co_await storage2::readOne(

@@ -20,6 +20,7 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
+#include <range/v3/view/concat.hpp>
 
 using namespace bcos;
 using namespace bcos::sealer;

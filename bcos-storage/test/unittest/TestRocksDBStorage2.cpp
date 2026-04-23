@@ -8,6 +8,10 @@
 #include <fmt/format.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/iota.hpp>
+#include <range/v3/view/repeat.hpp>
+#include <range/v3/view/zip.hpp>
 #include <string_view>
 
 using namespace bcos;
@@ -184,13 +188,13 @@ BOOST_AUTO_TEST_CASE(merge)
                           ::ranges::views::iota(0, 10) | ::ranges::views::transform([](int i) {
                               return StateKey{"Hello"sv, fmt::format("key{}", i)};
                           }),
-                          ::ranges::repeat_view<storage::Entry>(storage::Entry{"Hello"})));
+                          ::ranges::views::repeat(storage::Entry{"Hello"})));
         co_await storage2::writeSome(
             storage4, ::ranges::views::zip(
                           ::ranges::views::iota(10, 20) | ::ranges::views::transform([](int i) {
                               return StateKey{"Hello"sv, fmt::format("key{}", i)};
                           }),
-                          ::ranges::repeat_view<storage::Entry>(storage::Entry{"Hello"})));
+                          ::ranges::views::repeat(storage::Entry{"Hello"})));
         co_await storage2::merge(rocksDB2, storage3, storage4);
 
         auto values2 = rocksDB2.readSomeRaw(

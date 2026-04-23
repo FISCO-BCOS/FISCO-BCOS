@@ -5,6 +5,10 @@
 #include "ShardingTransactionExecutive.h"
 #include "ShardingSyncStorageWrapper.h"
 #include "bcos-table/src/ContractShardUtils.h"
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/view/drop.hpp>
+#include <range/v3/view/all.hpp>
 
 using namespace bcos::executor;
 using namespace bcos::storage;

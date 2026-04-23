@@ -73,10 +73,10 @@ struct MockMemoryStorage : bcos::concepts::storage::StorageBase<MockMemoryStorag
     }
 
     std::vector<std::optional<bcos::storage::Entry>> impl_getRows(
-        std::string_view table, RANGES::range auto const& keys)
+        std::string_view table, ::ranges::range auto const& keys)
     {
         std::vector<std::optional<bcos::storage::Entry>> output;
-        output.reserve(RANGES::size(keys));
+        output.reserve(::ranges::size(keys));
         for (auto&& key : keys)
         {
             output.emplace_back(getRow(table, bcos::concepts::bytebuffer::toView(key)));
@@ -238,7 +238,7 @@ BOOST_AUTO_TEST_CASE(notExistsBlock)
 
     std::vector<std::byte> hash;
     bcos::task::syncWait(ledger.getBlockHashByNumber(50, hash));
-    BOOST_CHECK(RANGES::empty(hash));
+    BOOST_CHECK(::ranges::empty(hash));
 
     int64_t number = 0;
     bcos::task::syncWait(ledger.getBlockNumberByHash(hash, number));

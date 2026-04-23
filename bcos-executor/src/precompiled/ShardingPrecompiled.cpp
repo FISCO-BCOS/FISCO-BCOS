@@ -28,6 +28,7 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/algorithm/find_if.hpp>
 
 using namespace bcos;
 using namespace bcos::executor;

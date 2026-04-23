@@ -13,6 +13,7 @@
 #include <exception>
 #include <limits>
 #include <memory>
+#include <range/v3/algorithm/copy.hpp>
 #include <variant>
 
 namespace bcos::executor_v1

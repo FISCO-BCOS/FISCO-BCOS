@@ -26,6 +26,8 @@
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <range/v3/range/access.hpp>
+#include <range/v3/view/transform.hpp>
 #include <stdexcept>
 
 namespace bcos::rpc
@@ -295,7 +297,7 @@ public:
                     {
                         BOOST_THROW_EXCEPTION(std::runtime_error{e.what()});
                     }
-                    if (RANGES::empty(block.transactionsMetaData) && blockNumber != 0)
+                    if (::ranges::empty(block.transactionsMetaData) && blockNumber != 0)
                     {
                         LIGHTNODE_LOG(ERROR)
                             << LOG_DESC("getBlockByNumber")
@@ -304,19 +306,19 @@ public:
                         self->toErrorResp(error, respFunc);
                         co_return;
                     }
-                    if (!RANGES::empty(block.transactionsMetaData))
+                    if (!::ranges::empty(block.transactionsMetaData))
                     {
                         // Check transaction merkle
                         crypto::merkle::Merkle<Hasher> merkle(self->m_hasher.clone());
                         auto hashesRange =
                             block.transactionsMetaData |
-                            RANGES::views::transform(
+                            ::ranges::views::transform(
                                 [](const bcostars::TransactionMetaData& transactionMetaData)
                                     -> auto& { return transactionMetaData.hash; });
                         std::vector<bcos::bytes> merkles;
                         merkle.generateMerkle(hashesRange, merkles);
 
-                        if (RANGES::empty(merkles))
+                        if (::ranges::empty(merkles))
                         {
                             BOOST_THROW_EXCEPTION(
                                 std::runtime_error{"Unable to generate transaction merkle root!"});
@@ -328,9 +330,9 @@ public:
                             << LOG_KV("transaction number", block.transactions.size());
 
                         if (!bcos::concepts::bytebuffer::equalTo(
-                                block.blockHeader.data.txsRoot, *RANGES::rbegin(merkles)))
+                                block.blockHeader.data.txsRoot, *::ranges::rbegin(merkles)))
                         {
-                            auto merkleRoot = *RANGES::rbegin(merkles);
+                            auto merkleRoot = *::ranges::rbegin(merkles);
                             std::ostringstream strHex;
                             strHex << "0x" << std::hex << std::setfill('0');
                             for (size_t i = 0; i < Hasher::HASH_SIZE; ++i)
@@ -364,7 +366,7 @@ public:
                         bcos::concepts::hash::calculate(
                             parentBlock, self->m_hasher.clone(), parentHash);
 
-                        if (RANGES::empty(block.blockHeader.data.parentInfo) ||
+                        if (::ranges::empty(block.blockHeader.data.parentInfo) ||
                             (block.blockHeader.data.parentInfo[0].blockNumber !=
                                 parentBlock.blockHeader.data.blockNumber) ||
                             !bcos::concepts::bytebuffer::equalTo(
@@ -632,9 +634,9 @@ private:
     void decodeData(bcos::concepts::bytebuffer::ByteBuffer auto const& input,
         bcos::concepts::bytebuffer::ByteBuffer auto& out)
     {
-        auto begin = RANGES::begin(input);
-        auto end = RANGES::end(input);
-        auto length = RANGES::size(input);
+        auto begin = ::ranges::begin(input);
+        auto end = ::ranges::end(input);
+        auto length = ::ranges::size(input);
 
         if ((length == 0) || (length % 2 != 0)) [[unlikely]]
         {
@@ -648,7 +650,7 @@ private:
         }
 
         bcos::concepts::resizeTo(out, length / 2);
-        boost::algorithm::unhex(begin, end, RANGES::begin(out));
+        boost::algorithm::unhex(begin, end, ::ranges::begin(out));
     }
 
     LocalLedgerType m_localLedger;
