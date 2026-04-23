@@ -65,6 +65,7 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
     {
         // Defensively reset sender/hash and mark tx tainted so verify() always performs
         // signature recovery even when the input transaction was previously clean.
+        _tx.clearSenderAndHash();
         _tx.verify(*m_cryptoSuite->hashImpl(), *m_cryptoSuite->signatureImpl());
     }
     catch (...)
