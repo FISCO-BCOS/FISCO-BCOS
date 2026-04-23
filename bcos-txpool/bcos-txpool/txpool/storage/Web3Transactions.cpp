@@ -1,7 +1,10 @@
 #include "Web3Transactions.h"
+#include "bcos-utilities/Exceptions.h"
 #include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
+
+DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
 
 int64_t bcos::txpool::TransactionData::importTime() const
 {
@@ -37,6 +40,11 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     if (!transaction) [[unlikely]]
     {
         return;
+    }
+
+    if (transaction->tainted()) [[unlikely]]
+    {
+        bcos::throwTrace(InvalidTaintedTransaction{});
     }
 
     auto& nonceIndex = m_transactions.get<0>();

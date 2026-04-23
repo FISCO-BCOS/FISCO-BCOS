@@ -152,7 +152,8 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                 {
                     auto field = txEntry->getField(0);
                     auto transaction = blockFactory.transactionFactory()->createTransaction(
-                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false);
+                        bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false,
+                        false, false);
                     block->appendTransaction(std::move(transaction));
                 }
             }

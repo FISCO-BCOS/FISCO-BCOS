@@ -163,12 +163,17 @@ std::string_view bcostars::protocol::TransactionImpl::sender() const
 }
 void bcostars::protocol::TransactionImpl::forceSender(const bcos::bytes& _sender)
 {
+    if (!tainted())
+    {
+        BOOST_THROW_EXCEPTION(std::invalid_argument("sender of clean transaction is immutable"));
+    }
     m_inner()->sender.assign(_sender.begin(), _sender.end());
 }
 void bcostars::protocol::TransactionImpl::clearSenderAndHash()
 {
     m_inner()->sender.clear();
     m_inner()->dataHash.clear();
+    setTainted(true);
 }
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)
 {

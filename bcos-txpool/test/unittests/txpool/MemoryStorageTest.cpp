@@ -31,6 +31,8 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
+#include <future>
+#include <thread>
 #include <fakeit.hpp>
 
 using namespace bcos;
@@ -826,6 +828,85 @@ BOOST_AUTO_TEST_CASE(FIB48_AlreadyInTxPoolAndAcceptReturnsNone)
     auto result2 = storage.verifyAndSubmitTransaction(tx1, nullptr, false, false);
     BOOST_CHECK(result2 == TransactionStatus::AlreadyInTxPool);
     BOOST_CHECK_EQUAL(storage.size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
+{
+    // Regression for double-resume risk in submitTransaction(waitForReceipt=true).
+    // Scenario:
+    // 1) tx already exists in pool without callback.
+    // 2) submitTransaction(waitForReceipt=true) registers callback on existing tx
+    //    through AlreadyInTxPoolAndAccept path.
+    // 3) batchRemoveSealedTxs notifies result and resumes awaiting coroutine.
+    // Expectation: coroutine continuation runs exactly once.
+
+    // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
+    auto sharedStorage = std::make_shared<MemoryStorage>(config);
+
+    auto tx = makeTx("fib48_submit_once", false);
+    BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
+
+    std::atomic<int> resumeCount{0};
+    std::promise<void> donePromise;
+    auto doneFuture = donePromise.get_future();
+
+    std::thread waitThread([&]() {
+        try
+        {
+            auto submitResult = task::syncWait(sharedStorage->submitTransaction(tx, true));
+            BOOST_REQUIRE(submitResult);
+            resumeCount.fetch_add(1, std::memory_order_relaxed);
+            donePromise.set_value();
+        }
+        catch (...)
+        {
+            donePromise.set_exception(std::current_exception());
+        }
+    });
+
+    // Wait until callback is attached, or submit coroutine has already completed.
+    bool callbackAttached = false;
+    for (size_t i = 0; i < 10000; ++i)
+    {
+        if (tx->submitCallback())
+        {
+            callbackAttached = true;
+            break;
+        }
+        if (doneFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        {
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    TransactionSubmitResults txsResult;
+    if (callbackAttached)
+    {
+        // Seal tx then notify execution result to trigger callback resume path.
+        HashType batchHash = HashType::generateRandomFixedBytes();
+        HashList txHashes{tx->hash()};
+        BOOST_CHECK(
+            sharedStorage->batchMarkTxs(txHashes, /*batchId*/ 1, batchHash, /*sealFlag*/ true));
+
+        auto txResult = std::make_shared<TransactionSubmitResultImpl>();
+        txResult->setTxHash(tx->hash());
+        txResult->setStatus(static_cast<uint32_t>(TransactionStatus::None));
+        txsResult.push_back(txResult);
+        sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
+    }
+
+    BOOST_CHECK(doneFuture.wait_for(std::chrono::seconds(1)) == std::future_status::ready);
+    if (waitThread.joinable())
+    {
+        waitThread.join();
+    }
+    BOOST_REQUIRE_NO_THROW(doneFuture.get());
+    BOOST_REQUIRE(callbackAttached);
+
+    // Triggering removal notification again should not re-run continuation.
+    sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
+    BOOST_CHECK_EQUAL(resumeCount.load(std::memory_order_relaxed), 1);
 }
 
 BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)

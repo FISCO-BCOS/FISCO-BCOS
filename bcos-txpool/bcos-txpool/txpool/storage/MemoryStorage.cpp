@@ -32,6 +32,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <atomic>
 #include <memory>
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/remove_if.hpp>
@@ -88,6 +89,17 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
         co_return nullptr;
     }
     transaction->setImportTime(utcTime());
+    // SharedState holds the once-flag and result independently of the Awaitable's lifetime.
+    // The callback lambda captures a shared_ptr<SharedState>, so even if the coroutine frame
+    // (and the Awaitable embedded in it) is destroyed after the first resume(), a late second
+    // callback invocation will only touch the still-alive SharedState and safely see
+    // m_resumed==true — avoiding heap-use-after-free on the sentinel (FIB-48).
+    struct SharedState
+    {
+        std::atomic_bool m_resumed{false};
+        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
+            m_submitResult;
+    };
     struct Awaitable
     {
         [[maybe_unused]] bool await_ready()
@@ -104,7 +116,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                                   << LOG_KV(
                                          "TxHash", m_transaction ? m_transaction->hash().hex() : "")
                                   << LOG_KV("result", result);
-                m_submitResult.emplace<Error::Ptr>(
+                m_state->m_submitResult.emplace<Error::Ptr>(
                     BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
             }
             else
@@ -114,34 +126,43 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                 res->setTxHash(m_transaction->hash());
                 res->setSender(std::string(m_transaction->sender()));
                 res->setTo(std::string(m_transaction->to()));
-                m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
+                m_state->m_submitResult.emplace<TransactionSubmitResult::Ptr>(std::move(res));
             }
             return true;
         }
 
         [[maybe_unused]] void await_suspend(std::coroutine_handle<> handle)
         {
+            // Build a self-contained completeOnce that owns SharedState via shared_ptr.
+            // This lambda may outlive the Awaitable (e.g. stored in a Transaction callback),
+            // so it must NOT capture 'this'.
+            auto completeOnce = [state = m_state, handle](Error::Ptr error,
+                                     bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                bool expected = false;
+                if (!state->m_resumed.compare_exchange_strong(
+                        expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+                {
+                    return;
+                }
+                if (error)
+                {
+                    state->m_submitResult.emplace<Error::Ptr>(std::move(error));
+                }
+                else
+                {
+                    state->m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
+                        std::move(result));
+                }
+                if (handle)
+                {
+                    handle.resume();
+                }
+            };
+
             try
             {
                 auto result = m_self->verifyAndSubmitTransaction(
-                    m_transaction,
-                    [this, m_handle = handle](Error::Ptr error,
-                        bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
-                        if (error)
-                        {
-                            m_submitResult.emplace<Error::Ptr>(std::move(error));
-                        }
-                        else
-                        {
-                            m_submitResult.emplace<bcos::protocol::TransactionSubmitResult::Ptr>(
-                                std::move(result));
-                        }
-                        if (m_handle)
-                        {
-                            m_handle.resume();
-                        }
-                    },
-                    true, true);
+                    m_transaction, completeOnce, true, true);
 
                 if (result != TransactionStatus::None)
                 {
@@ -149,38 +170,38 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         << "Submit transaction failed! "
                         << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
                         << LOG_KV("result", result);
-                    m_submitResult.emplace<Error::Ptr>(
-                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)));
-                    handle.resume();
+                    completeOnce(
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)),
+                        nullptr);
                 }
             }
             catch (std::exception& e)
             {
                 TXPOOL_LOG(WARNING) << "Unexpected exception: " << boost::diagnostic_information(e);
-                m_submitResult.emplace<Error::Ptr>(
-                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"));
-                handle.resume();
+                completeOnce(
+                    BCOS_ERROR_PTR((int32_t)TransactionStatus::Malformed, "Unknown exception"),
+                    nullptr);
             }
         }
+
         bcos::protocol::TransactionSubmitResult::Ptr await_resume()
         {
-            if (std::holds_alternative<Error::Ptr>(m_submitResult))
+            if (std::holds_alternative<Error::Ptr>(m_state->m_submitResult))
             {
-                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_submitResult));
+                BOOST_THROW_EXCEPTION(*std::get<Error::Ptr>(m_state->m_submitResult));
             }
 
             return std::move(
-                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_submitResult));
+                std::get<bcos::protocol::TransactionSubmitResult::Ptr>(m_state->m_submitResult));
         }
 
         protocol::Transaction::Ptr m_transaction;
         std::shared_ptr<MemoryStorage> m_self;
-        std::variant<std::monostate, bcos::protocol::TransactionSubmitResult::Ptr, Error::Ptr>
-            m_submitResult;
+        std::shared_ptr<SharedState> m_state;
         bool m_waitForReceipt;
     } awaitable{.m_transaction = std::move(transaction),
         .m_self = shared_from_this(),
-        .m_submitResult = {},
+        .m_state = std::make_shared<SharedState>(),
         .m_waitForReceipt = waitForReceipt};
 
     co_return co_await awaitable;

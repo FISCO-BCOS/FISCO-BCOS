@@ -92,12 +92,23 @@ BOOST_AUTO_TEST_CASE(transaction)
     auto tx = factory.createTransaction(
         0, to, input, nonce, 100, "testChain", "testGroup", 1000, *keyPair);
 
+    BOOST_CHECK(tx->tainted());
+
     tx->verify(*cryptoSuite->hashImpl(), *cryptoSuite->signatureImpl());
     BOOST_CHECK(!tx->sender().empty());
+    BOOST_CHECK(!tx->tainted());
+    BOOST_CHECK_THROW(tx->forceSender(bcos::bytes{0x1}), std::invalid_argument);
     bcos::bytes buffer;
     tx->encode(buffer);
 
     auto decodedTx = factory.createTransaction(bcos::ref(buffer), true);
+    BOOST_CHECK(!decodedTx->tainted());
+
+    auto storageTx = factory.createTransaction(bcos::ref(buffer), false, false, false);
+    BOOST_CHECK(!storageTx->tainted());
+    BOOST_CHECK_THROW(storageTx->forceSender(bcos::bytes{0x2}), std::invalid_argument);
+    storageTx->clearSenderAndHash();
+    BOOST_CHECK(storageTx->tainted());
 
     BOOST_CHECK_EQUAL(tx->hash(), decodedTx->hash());
     BOOST_CHECK_EQUAL(tx->version(), 0);
