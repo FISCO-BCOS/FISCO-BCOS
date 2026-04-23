@@ -4,7 +4,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
 
-DERIVE_BCOS_EXCEPTION(InvalidTainedTransaction);
+DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
 
 int64_t bcos::txpool::TransactionData::importTime() const
 {
@@ -44,7 +44,7 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
 
     if (transaction->tainted()) [[unlikely]]
     {
-        bcos::throwTrace(InvalidTainedTransaction{});
+        bcos::throwTrace(InvalidTaintedTransaction{});
     }
 
     auto& nonceIndex = m_transactions.get<0>();
