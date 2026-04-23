@@ -75,8 +75,8 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
 
         auto sm3Hash = crypto::sm3Hash(ref(inputData));
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: sm3")
-                               << LOG_KV("input", toHexString(inputData))
-                               << LOG_KV("result", toHexString(sm3Hash));
+                               << LOG_KV("input", toHex(inputData))
+                               << LOG_KV("result", toHex(sm3Hash));
         _callParameters->setExecResult(codec.encode(codec::toString32(sm3Hash)));
     }
     else if (funcSelector == name2Selector[CRYPTO_METHOD_KECCAK256_STR])
@@ -85,8 +85,8 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
         codec.decode(paramData, inputData);
         auto keccak256Hash = crypto::keccak256Hash(ref(inputData));
         PRECOMPILED_LOG(TRACE) << LOG_DESC("CryptoPrecompiled: keccak256")
-                               << LOG_KV("input", toHexString(inputData))
-                               << LOG_KV("result", toHexString(keccak256Hash));
+                               << LOG_KV("input", toHex(inputData))
+                               << LOG_KV("result", toHex(keccak256Hash));
         _callParameters->setExecResult(codec.encode(codec::toString32(keccak256Hash)));
     }
     else if (funcSelector == name2Selector[CRYPTO_METHOD_SM2_VERIFY_STR])

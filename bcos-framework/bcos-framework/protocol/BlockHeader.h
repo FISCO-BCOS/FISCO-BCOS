@@ -89,7 +89,7 @@ public:
             {
                 throwTrace(InvalidSignatureList() << errinfo_comment(
                                    "Invalid signatureList for verify failed, signatureData:" +
-                                   *toHexString(signatureData)));
+                                   toHex(signatureData)));
             }
         }
     }

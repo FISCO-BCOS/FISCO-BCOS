@@ -19,14 +19,16 @@
 #pragma once
 
 #include "Common.h"
-#include "Error.h"
-#include <range/v3/range/concepts.hpp>
+#include "bcos-utilities/Exceptions.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/endian/conversion.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/single.hpp>
 #include <set>
 #include <string>
 #include <type_traits>
@@ -114,36 +116,60 @@ concept BigNumber = !std::is_integral_v<T> && std::convertible_to<T, bigint>;
 std::string toQuantity(BigNumber auto number);
 
 template <class Hex, class Out = bytes>
-Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
+Out fromHex(const Hex& hex)
 {
-    if (hex.empty())
+    std::string_view hexView = [&]() -> std::string_view {
+        if constexpr (std::is_convertible_v<Hex, std::string_view>)
+        {
+            return std::string_view{hex};
+        }
+        else
+        {
+            return std::string_view{hex.data(), hex.size()};
+        }
+    }();
+
+    auto payload = hexView;
+    if (payload.starts_with("0x") || payload.starts_with("0X"))
     {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Empty input hex string"));
+        payload.remove_prefix(2);
+    }
+    if (payload.empty())
+    {
+        return {};
     }
 
-    if ((hex.size() < prefix.size() + 2) || (hex.size() % 2 != 0))
-    {
-        // can be 0x
-        if (hex == prefix)
-        {
-            return {};
-        }
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Invalid input hex string size"));
-    }
+    const bool needPadding = (payload.size() % 2 != 0);
 
     Out out;
-    out.reserve(hex.size() / 2);
+    out.reserve((payload.size() + (needPadding ? 1 : 0)) / 2);
+    try
+    {
+        if (needPadding)
+        {
+            auto padded = ::ranges::views::concat(::ranges::views::single('0'), payload);
+            boost::algorithm::unhex(
+                ::ranges::begin(padded), ::ranges::end(padded), std::back_inserter(out));
+        }
+        else
+        {
+            boost::algorithm::unhex(payload.begin(), payload.end(), std::back_inserter(out));
+        }
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(BadHexCharacter());
+    }
 
-    boost::algorithm::unhex(hex.begin() + prefix.size(), hex.end(), std::back_inserter(out));
     return out;
 }
 
 template <class Hex, class Out = bytes>
-std::optional<Out> safeFromHex(const Hex& hex, std::string_view prefix = std::string_view())
+std::optional<Out> safeFromHex(const Hex& hex)
 {
     try
     {
-        auto out = fromHex(hex, prefix);
+        auto out = fromHex(hex);
         return std::make_optional(std::move(out));
     }
     catch (...)
@@ -155,62 +181,18 @@ std::optional<Out> safeFromHex(const Hex& hex, std::string_view prefix = std::st
 template <class Hex, class Out = bytes>
 std::optional<Out> safeFromHexWithPrefix(const Hex& hex)
 {
-    return safeFromHex(hex, "0x");
+    return safeFromHex(hex);
 }
-
 
 template <class Hex, class Out = bytes>
 Out fromHexWithPrefix(const Hex& hex)
 {
-    return fromHex(hex, "0x");
+    return fromHex(hex);
 }
 
 uint64_t fromQuantity(std::string const& quantity);
 
 u256 fromBigQuantity(std::string_view quantity);
-
-/**
- * @brief convert the specified bytes data into hex string
- *
- * @tparam Iterator: the iterator type of the data
- * @param _begin : the begin pointer of the data that need to be converted to hex string
- * @param _end : the end pointer of the data that need to be converted to the hex string
- * @param _prefix: prefix of the converted hex string
- * @return std::shared_ptr<std::string> : the converted hex string
- */
-template <class Iterator>
-std::shared_ptr<std::string> toHexString(
-    Iterator _begin, Iterator _end, std::string const& _prefix = "")
-{
-    static_assert(sizeof(typename std::iterator_traits<Iterator>::value_type) == 1,
-        "only support byte-sized element type");
-    auto hexStringSize = std::distance(_begin, _end) * 2 + _prefix.size();
-    std::shared_ptr<std::string> hexString = std::make_shared<std::string>(hexStringSize, '0');
-    // set the _prefix
-    memcpy((void*)hexString->data(), (const void*)_prefix.data(), _prefix.size());
-    static char const* hexCharsCollection = "0123456789abcdef";
-    // covert the bytes into hex chars
-    size_t offset = _prefix.size();
-    for (auto it = _begin; it != _end; it++)
-    {
-        (*hexString)[offset++] = hexCharsCollection[(*it >> 4) & 0x0f];
-        (*hexString)[offset++] = hexCharsCollection[*it & 0x0f];
-    }
-    return hexString;
-}
-
-/**
- * @brief : convert the given data to hex string(without prefix)
- *
- * @tparam T : the type of the given data
- * @param _data : the data need to be converted to hex
- * @return std::shared_ptr<std::string> : the pointer of the converted hex string
- */
-template <class T>
-std::shared_ptr<std::string> toHexString(T const& _data)
-{
-    return toHexString(_data.begin(), _data.end());
-}
 
 /**
  * @brief convert the bytes into hex string with 0x prefixed
@@ -247,14 +229,6 @@ std::string toPaddingHexStringWithPrefix(size_t paddingSize, T const& _data)
 
     return out;
 }
-
-/**
- * @brief convert hex string to bytes
- *
- * @param _hexedString: the hex string need to be converted
- * @return std::shared_ptr<bytes>: the converted bytes
- */
-std::shared_ptr<bytes> fromHexString(std::string const& _hexedString);
 
 /**
  * @brief determine the input string is hex string or not

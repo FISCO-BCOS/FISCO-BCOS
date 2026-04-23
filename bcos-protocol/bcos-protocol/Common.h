@@ -82,7 +82,7 @@ void decodePBObject(T _pbObject, bytesConstRef _data)
         // Truncate hex output to avoid excessive memory usage for large payloads
         constexpr size_t c_maxHexBytes = 64;
         const auto truncatedRef = _data.getCroppedData(0, std::min(_data.size(), c_maxHexBytes));
-        auto hexStr = *toHexString(truncatedRef);
+        auto hexStr = toHex(truncatedRef);
         const auto shownBytes = std::min(_data.size(), c_maxHexBytes);
         if (_data.size() > c_maxHexBytes)
         {

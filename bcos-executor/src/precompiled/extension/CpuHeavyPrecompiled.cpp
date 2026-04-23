@@ -84,7 +84,7 @@ std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CpuHeavyPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHexString(_callParameters->input()));
+                           << LOG_KV("param", toHex(_callParameters->input()));
 
     // parse function name
     // uint32_t func = getParamFunc(_param);

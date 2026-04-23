@@ -329,7 +329,7 @@ ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
     // U256(BLS_MODULUS).to_be_bytes32()) refer to
     // https://github.com/erigontech/silkworm/blob/85ba5171e88855a6702602d38f102aae9b896f9c/silkworm/core/execution/precompile.cpp#L502-L524
     return {true,
-        *bcos::fromHexString("000000000000000000000000000000000000000000000000000000000000100073eda"
+        bcos::fromHex("000000000000000000000000000000000000000000000000000000000000100073eda"
                              "753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")};
 }
 
@@ -552,7 +552,7 @@ pair<bool, bytes> ecRecover(bytesConstRef _in)
     pair<bool, bytes> ret{true, bytes(crypto::HashType::SIZE, 0)};
     BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("wedpr_secp256k1_recover_public_key")
                     << LOG_KV("hash", toHexStringWithPrefix(mHash))
-                    << LOG_KV("rsv", *toHexString(rawRSV, rawRSV + RSV_LENGTH));
+                    << LOG_KV("rsv", toHex(bytesConstRef(rawRSV, RSV_LENGTH)));
     if (pk == nullptr)
     {
         BCOS_LOG(TRACE) << LOG_BADGE("Precompiled") << LOG_DESC("ecRecover publicKey failed");

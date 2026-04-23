@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(test_encodeMethod)
     auto solcImpl = std::make_shared<ContractABITypeCodecSolImpl>();
     ContractABICodec codec(hashImpl, solcImpl);
 
-    auto methodID = *toHexString(test->getMethodID(hashImpl));
+    auto methodID = toHex(test->getMethodID(hashImpl));
 
     BOOST_CHECK_EQUAL(methodID, "00a3c75d");
 
@@ -135,8 +135,8 @@ BOOST_AUTO_TEST_CASE(test_encodeMethod)
     auto encodeBytes = codec.encodeMethod(abi, "test", objParams);
     auto arrayParamsEncodeBytes = codec.encodeMethod(abi, "test", objParams);
 
-    BOOST_CHECK_EQUAL(*toHexString(encodeBytes), expectEncode);
-    BOOST_CHECK_EQUAL(*toHexString(arrayParamsEncodeBytes), expectEncode);
+    BOOST_CHECK_EQUAL(toHex(encodeBytes), expectEncode);
+    BOOST_CHECK_EQUAL(toHex(arrayParamsEncodeBytes), expectEncode);
 
     auto decodeParams = codec.decodeMethodInput(abi, "test", encodeBytes);
 
@@ -188,7 +188,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
         bcos::bytes buffer;
         solcImpl->serialize(*sPtr, buffer);
         BOOST_CHECK_EQUAL("000000000000000000000000000000000000000000000000000000000001b207",
-            *toHexString(buffer));
+            toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
             "00000000000000000000000000000000000000000000000000000000000000010000000000000000000000"
             "00000000000000000000000000000000000000000200000000000000000000000000000000000000000000"
             "00000000000000000003",
-            *toHexString(buffer));
+            toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -300,7 +300,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
             "00000000000000000000000000000000000000000000000000000000000700000000000000000000000000"
             "00000000000000000000000000000000000008000000000000000000000000000000000000000000000000"
             "00000000000000090000000000000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -327,7 +327,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
         bcos::bytes buffer;
         solcImpl->serialize(*sPtr, buffer);
         BOOST_CHECK_EQUAL("fffffffffffffffffffffffffffffffffffffffffffffda5aa5b91a256638e39",
-            *toHexString(buffer));
+            toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -376,7 +376,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
             "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
             "fffffffffffffffffffffffffffffffffffffffffeffffffffffffffffffffffffffffffffffffffffffff"
             "fffffffffffffffffffd",
-            *toHexString(buffer));
+            toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);
@@ -439,7 +439,7 @@ BOOST_AUTO_TEST_CASE(test_initAbstractTypeWithJsonParams)
             "00000000000000000000000000000000000000000000000000000000000700000000000000000000000000"
             "00000000000000000000000000000000000008000000000000000000000000000000000000000000000000"
             "00000000000000090000000000000000000000000000000000000000000000000000000000000000",
-            *toHexString(buffer));
+            toHex(buffer));
         sPtr->clear();
         solcImpl->deserialize(*sPtr, buffer, 0);
         BOOST_CHECK_EQUAL(sPtr->toJsonString(), params);

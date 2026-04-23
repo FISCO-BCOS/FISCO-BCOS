@@ -96,11 +96,11 @@ struct WasmExecutorFixture
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
-            fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
+            fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
                 ->data(),
             32);
         memcpy(keyPair->publicKey()->mutableData(),
-            fromHexString(
+            fromHex(
                 "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
                 "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto tx = fakeTransaction(
         cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = toHex(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -452,7 +452,7 @@ BOOST_AUTO_TEST_CASE(deployError)
 
     auto tx = fakeTransaction(
         cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = toHex(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -655,7 +655,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     auto tx = fakeTransaction(
         cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1", helloWorldAbi);
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = toHex(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);

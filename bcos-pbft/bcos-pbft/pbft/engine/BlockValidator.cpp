@@ -114,7 +114,7 @@ bool BlockValidator::checkSealerListAndWeightList(Block::Ptr _block)
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: inconsistent sealerList")
                             << LOG_KV("blkSealer", consNodePtr.nodeID->shortHex())
-                            << LOG_KV("chainSealer", *toHexString(blockSealer))
+                            << LOG_KV("chainSealer", toHex(blockSealer))
                             << LOG_KV("number", blockHeader->number())
                             << LOG_KV("weight", consNodePtr.voteWeight)
                             << m_config->printCurrentState();
@@ -129,7 +129,7 @@ bool BlockValidator::checkSealerListAndWeightList(Block::Ptr _block)
                             << LOG_KV("chainWeight", consNodePtr.voteWeight)
                             << LOG_KV("number", blockHeader->number())
                             << LOG_KV("blkSealer", consNodePtr.nodeID->shortHex())
-                            << LOG_KV("chainSealer", *toHexString(blockSealer))
+                            << LOG_KV("chainSealer", toHex(blockSealer))
                             << m_config->printCurrentState();
             return false;
         }

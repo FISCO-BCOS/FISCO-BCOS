@@ -623,8 +623,8 @@ void checkExecutionMessage(bcostars::protocol::ExecutionMessageImpl::Ptr executi
     BOOST_CHECK_EQUAL(anotherExecutionMsg->internalCreate(), executionMsg->internalCreate());
     BOOST_CHECK_EQUAL(anotherExecutionMsg->internalCall(), executionMsg->internalCall());
     BOOST_CHECK_EQUAL(anotherExecutionMsg->gasAvailable(), executionMsg->gasAvailable());
-    BOOST_CHECK_EQUAL(*(bcos::toHexString(anotherExecutionMsg->data().toBytes())),
-        *(bcos::toHexString(executionMsg->data().toBytes())));
+    BOOST_CHECK_EQUAL(bcos::toHex(anotherExecutionMsg->data().toBytes()),
+        bcos::toHex(executionMsg->data().toBytes()));
     BOOST_CHECK_EQUAL(anotherExecutionMsg->staticCall(), executionMsg->staticCall());
     BOOST_CHECK_EQUAL(
         anotherExecutionMsg->createSalt().value(), executionMsg->createSalt().value());
@@ -697,8 +697,7 @@ BOOST_AUTO_TEST_CASE(testExecutionMessage)
     BOOST_CHECK_EQUAL(executionMsg->internalCreate(), internalCreate);
     BOOST_CHECK_EQUAL(executionMsg->internalCall(), internalCall);
     BOOST_CHECK_EQUAL(executionMsg->gasAvailable(), gasAvailable);
-    BOOST_CHECK_EQUAL(
-        *(bcos::toHexString(executionMsg->data().toBytes())), *(bcos::toHexString(data)));
+    BOOST_CHECK_EQUAL(bcos::toHex(executionMsg->data().toBytes()), bcos::toHex(data));
     BOOST_CHECK_EQUAL(executionMsg->staticCall(), staticCall);
     BOOST_CHECK_EQUAL(executionMsg->createSalt().value(), salt);
     BOOST_CHECK_EQUAL(executionMsg->status(), status);

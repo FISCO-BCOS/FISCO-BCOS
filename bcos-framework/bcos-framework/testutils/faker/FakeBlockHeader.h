@@ -89,7 +89,7 @@ inline void checkBlockHeader(BlockHeader::Ptr blockHeader, BlockHeader::Ptr deco
     std::cout << "### PBBlockHeaderTest: timestamp:" << decodedBlockHeader->timestamp()
               << std::endl;
     std::cout << "### PBBlockHeaderTest: sealer:" << decodedBlockHeader->sealer() << std::endl;
-    std::cout << "### PBBlockHeaderTest: sealer:" << *toHexString(decodedBlockHeader->extraData())
+    std::cout << "### PBBlockHeaderTest: sealer:" << toHex(decodedBlockHeader->extraData())
               << std::endl;
     std::cout << "#### hash:" << decodedBlockHeader->hash().hex() << std::endl;
     if (blockHeader->parentInfo().size() >= 1)
@@ -153,7 +153,7 @@ inline BlockHeader::Ptr fakeAndTestBlockHeader(CryptoSuite::Ptr _cryptoSuite, in
         BOOST_CHECK(!decodedBlockHeaderImpl->inner().dataHash.empty());
         decodedBlockHeader->calculateHash(*_cryptoSuite->hashImpl());
 #if 0
-    std::cout << "### PBBlockHeaderTest: encodedData:" << *toHexString(*encodedData) << std::endl;
+    std::cout << "### PBBlockHeaderTest: encodedData:" << toHex(*encodedData) << std::endl;
 #endif
         // update the hash data field
         blockHeader->setNumber(_number + 1);

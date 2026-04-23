@@ -61,56 +61,56 @@ BOOST_AUTO_TEST_CASE(DecodeCompactInteger)
 BOOST_AUTO_TEST_CASE(CalculateEncodingLength)
 {
     // Encoding of string "Alice"
-    auto encodedBytes = fromHexString("14616c696365");
+    auto encodedBytes = fromHex("14616c696365");
     auto paramAbi = ParameterAbi("string");
 
-    auto result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    auto result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 6);
 
     // Encoding of uint32 number 20210926
-    encodedBytes = fromHexString("ee643401");
+    encodedBytes = fromHex("ee643401");
     paramAbi.type = "uint32";
-    result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 4);
 
     // Encoding of int128 number 20180710
-    encodedBytes = fromHexString("e6ee3301000000000000000000000000");
+    encodedBytes = fromHex("e6ee3301000000000000000000000000");
     paramAbi.type = "int128";
-    result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 16);
 
     // Encoding of vector of string ["Alice", "Bob"]
-    encodedBytes = fromHexString("0814416c6963650c426f62");
+    encodedBytes = fromHex("0814416c6963650c426f62");
     paramAbi.type = "string[]";
-    result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 11);
 
     // Encoding of static array of string ["Alice", "Bob"]
-    encodedBytes = fromHexString("14416c6963650c426f62");
+    encodedBytes = fromHex("14416c6963650c426f62");
     paramAbi.type = "string[2]";
-    result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 10);
 
     // Encoding of tuple<string, bytes32, bytes, bool>("Alice", [0, 0, ...], [0, 0, 0], false)
-    encodedBytes = fromHexString(
+    encodedBytes = fromHex(
         "14416c69636500000000000000000000000000000000000000000000000000000000000000000c00000000");
     paramAbi.type = "tuple";
     paramAbi.components.push_back(ParameterAbi("string"));
     paramAbi.components.push_back(ParameterAbi("bytes32"));
     paramAbi.components.push_back(ParameterAbi("bytes"));
     paramAbi.components.push_back(ParameterAbi("bool"));
-    result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 43);
 
     // Encoding of tuple<string, tuple<uint32[], string>>("Alice", ([0, 1], "Dwell not negative
     // signs"))
-    encodedBytes = fromHexString(
+    encodedBytes = fromHex(
         "14416c696365080000000001000000604477656c6c206e6f74206e65676174697665207369676e73");
     paramAbi.type = "tuple";
     paramAbi.components.clear();
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(CalculateEncodingLength)
                                                             ParameterAbi("uint32[]"),
                                                             ParameterAbi("string"),
                                                         }));
-    result = scaleEncodingLength(paramAbi, *encodedBytes, 0);
+    result = scaleEncodingLength(paramAbi, encodedBytes, 0);
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(result.value(), 40);
 }

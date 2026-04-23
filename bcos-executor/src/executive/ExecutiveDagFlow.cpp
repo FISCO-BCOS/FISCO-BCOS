@@ -345,7 +345,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
 
                                 DAGFLOW_LOG(TRACE) << "generateDags: " << LOG_DESC("ABI loaded")
                                                    << LOG_KV("address", to)
-                                                   << LOG_KV("selector", toHexString(selector))
+                                                   << LOG_KV("selector", toHex(selector))
                                                    << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);

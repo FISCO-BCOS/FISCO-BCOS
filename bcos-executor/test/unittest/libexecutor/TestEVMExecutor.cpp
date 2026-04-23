@@ -86,16 +86,17 @@ struct TransactionExecutorFixture
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+        auto secretKeyBytes =
+            fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         memcpy(keyPair->secretKey()->mutableData(),
-            fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
-                ->data(),
+            secretKeyBytes.data(),
             32);
         // address: "11ac3ca85a307ae2aff614e83949ab691ba019c5"
+        auto publicKeyBytes = fromHex(
+            "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
+            "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae");
         memcpy(keyPair->publicKey()->mutableData(),
-            fromHexString(
-                "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
-                "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
-                ->data(),
+            publicKeyBytes.data(),
             64);
         eoa = keyPair->address(hashImpl).hex();
 
@@ -162,7 +163,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     boost::algorithm::unhex(helloworld, std::back_inserter(input));
     auto tx =
         fakeTransaction(cryptoSuite, keyPair, "", input, std::to_string(101), 100001, "1", "1");
-    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+    auto sender = toHex(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
     txpool->hash2Transaction.emplace(hash, tx);
@@ -1040,7 +1041,7 @@ BOOST_AUTO_TEST_CASE(multiDeploy)
         params->setContextID(100 + i);
         params->setSeq(1000);
         params->setDepth(0);
-        auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+        auto sender = toHex(string_view((char*)tx->sender().data(), tx->sender().size()));
 
         auto addressCreate =
             cryptoSuite->hashImpl()->hash("i am a address" + boost::lexical_cast<std::string>(i));

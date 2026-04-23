@@ -188,13 +188,13 @@ int main(int argc, char** argv)
               << std::endl;
 
     auto hexBin = getBinary(groupInfo->smCryptoType());
-    auto binBytes = fromHexString(std::string(hexBin));
+    auto binBytes = fromHex(std::string(hexBin));
 
     auto rpcService = sdk->jsonRpcService();
 
     std::promise<bool> p;
     auto f = p.get_future();
-    rpcService->sendTransaction(*keyPair, group, "", "", std::move(*binBytes), "", 0, "extraData",
+    rpcService->sendTransaction(*keyPair, group, "", "", std::move(binBytes), "", 0, "extraData",
         [&p](bcos::Error::Ptr _error, std::shared_ptr<bcos::bytes> _resp) {
             if (_error && _error->errorCode() != 0)
             {

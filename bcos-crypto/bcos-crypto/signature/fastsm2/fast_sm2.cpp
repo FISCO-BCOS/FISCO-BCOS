@@ -76,9 +76,10 @@ int8_t bcos::crypto::fast_sm2_sign(const CInputBuffer* raw_private_key,
         CRYPTO_LOG(WARNING) << LOG_DESC(
                                    "sm2: fast_sm2_sign: error of EC_POINT_bn2point for publicKey")
                             << LOG_KV("len", raw_public_key->len)
-                            << LOG_KV(
-                                   "pubHex", *toHexString(raw_public_key->data,
-                                                 raw_public_key->data + raw_public_key->len, "0x"));
+                    << LOG_KV("pubHex",
+                        toHex(bytesConstRef((const byte*)raw_public_key->data,
+                            raw_public_key->len),
+                            "0x"));
         goto done;
     }
     sm2Key = EC_KEY_new();

@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
+    auto result = FunctionAbi::deserialize(abiStr, fromHex("150666b3"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK_EQUAL(result->inputs.size(), 1);
 
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
 BOOST_AUTO_TEST_CASE(InvalidAbi)
 {
     auto abiStr = "vita"sv;
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
+    auto result = FunctionAbi::deserialize(abiStr, fromHex("150666b3"), false);
     BOOST_CHECK(!result);
 }
 
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
+    auto result = FunctionAbi::deserialize(abiStr, fromHex("150666b3"), false);
     BOOST_CHECK(!result);
 }
 
@@ -237,7 +237,7 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), false);
+    auto result = FunctionAbi::deserialize(abiStr, fromHex("4ed3885e"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK(result->conflictFields.empty());
 }

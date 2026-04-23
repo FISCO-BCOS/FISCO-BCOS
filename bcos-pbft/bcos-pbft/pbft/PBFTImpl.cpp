@@ -110,7 +110,7 @@ void PBFTImpl::asyncGetConsensusStatus(
 {
     auto config = m_pbftEngine->pbftConfig();
     Json::Value consensusStatus;
-    consensusStatus["nodeID"] = *toHexString(config->nodeID()->data());
+    consensusStatus["nodeID"] = toHex(config->nodeID()->data());
     consensusStatus["index"] = (Json::UInt64)config->nodeIndex();
     consensusStatus["leaderIndex"] = (Json::UInt64)config->getLeader();
     consensusStatus["consensusNodesNum"] = (Json::UInt64)config->consensusNodesNum();
@@ -118,7 +118,7 @@ void PBFTImpl::asyncGetConsensusStatus(
     consensusStatus["minRequiredQuorum"] = (Json::UInt64)config->minRequiredQuorum();
     consensusStatus["isConsensusNode"] = config->isConsensusNode();
     consensusStatus["blockNumber"] = (Json::UInt64)config->committedProposal()->index();
-    consensusStatus["hash"] = *toHexString(config->committedProposal()->hash());
+    consensusStatus["hash"] = toHex(config->committedProposal()->hash());
     if (config->isConsensusNode())
     {
         consensusStatus["timeout"] = config->timeout();
@@ -138,7 +138,7 @@ void PBFTImpl::asyncGetConsensusStatus(
     for (auto const& node : nodeList)
     {
         Json::Value info;
-        info["nodeID"] = *toHexString(node.nodeID->data());
+        info["nodeID"] = toHex(node.nodeID->data());
         info["weight"] = (Json::UInt64)node.voteWeight;
         info["termWeight"] = (Json::UInt64)node.termWeight;
         info["index"] = (Json::Int64)(i);

@@ -416,7 +416,7 @@ private:
         {
             std::stringstream ss;
             ss << " deserialize failed, invalid offset , offset is " << _offset << " , length is "
-               << data.size() << " , data is " << *toHexString(data);
+               << data.size() << " , data is " << toHex(data);
 
             throw std::length_error(ss.str().c_str());
         }
@@ -504,7 +504,7 @@ public:
     template <class... T>
     bool abiOutHex(const std::string& _data, T&... _t)
     {
-        auto dataFromHex = *fromHexString(_data);
+        auto dataFromHex = fromHex(_data);
         return abiOut(bytesConstRef(&dataFromHex), _t...);
     }
 
@@ -528,7 +528,7 @@ public:
     template <class... T>
     std::string abiInHex(const std::string& _sig, T const&... _t)
     {
-        return *toHexString(abiIn(_sig, _t...));
+        return toHex(abiIn(_sig, _t...));
     }
 };
 

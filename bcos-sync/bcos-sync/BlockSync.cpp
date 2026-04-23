@@ -1058,15 +1058,15 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
 {
     Json::Value syncInfo;
     syncInfo["isSyncing"] = isSyncing();
-    syncInfo["genesisHash"] = *toHexString(m_config->genesisHash());
-    syncInfo["nodeID"] = *toHexString(m_config->nodeID()->data());
+    syncInfo["genesisHash"] = toHex(m_config->genesisHash());
+    syncInfo["nodeID"] = toHex(m_config->nodeID()->data());
 
     int64_t currentNumber = m_config->blockNumber();
     syncInfo["blockNumber"] = currentNumber;
     syncInfo["archivedBlockNumber"] = m_config->archiveBlockNumber();
-    syncInfo["latestHash"] = *toHexString(m_config->hash());
+    syncInfo["latestHash"] = toHex(m_config->hash());
     syncInfo["knownHighestNumber"] = m_config->knownHighestNumber();
-    syncInfo["knownLatestHash"] = *toHexString(m_config->knownLatestHash());
+    syncInfo["knownLatestHash"] = toHex(m_config->knownLatestHash());
 
     Json::Value peersInfo(Json::arrayValue);
     m_syncStatus->foreachPeer([&](PeerStatus::Ptr _p) {
@@ -1076,10 +1076,10 @@ void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _o
             return true;
         }
         Json::Value info;
-        info["nodeID"] = *toHexString(_p->nodeId()->data());
-        info["genesisHash"] = *toHexString(_p->genesisHash());
+        info["nodeID"] = toHex(_p->nodeId()->data());
+        info["genesisHash"] = toHex(_p->genesisHash());
         info["blockNumber"] = Json::UInt64(_p->number());
-        info["latestHash"] = *toHexString(_p->hash());
+        info["latestHash"] = toHex(_p->hash());
         info["archivedBlockNumber"] = Json::UInt64(_p->archivedBlockNumber());
         peersInfo.append(info);
         return true;
@@ -1199,12 +1199,12 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync verify archived block failed")
                            << LOG_KV("number", topBlockNumber)
-                           << LOG_KV("transactionRoot", *toHexString(transactionRoot))
+                           << LOG_KV("transactionRoot", toHex(transactionRoot))
                            << LOG_KV(
-                                  "localTransactionRoot", *toHexString(localBlockHeader->txsRoot()))
-                           << LOG_KV("receiptRoot", *toHexString(receiptRoot))
+                                  "localTransactionRoot", toHex(localBlockHeader->txsRoot()))
+                           << LOG_KV("receiptRoot", toHex(receiptRoot))
                            << LOG_KV("localReceiptRoot",
-                                  *toHexString(localBlockHeader->receiptsRoot()))
+                                  toHex(localBlockHeader->receiptsRoot()))
                            << LOG_KV("reason", "transactionRoot or receiptRoot not match");
         WriteGuard lock(x_archivedBlockQueue);
         m_archivedBlockQueue.pop();

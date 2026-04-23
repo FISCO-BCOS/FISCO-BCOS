@@ -1686,7 +1686,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("ABI loaded") << LOG_KV("address", to)
-                                    << LOG_KV("selector", toHexString(selector))
+                                    << LOG_KV("selector", toHex(selector))
                                     << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);
