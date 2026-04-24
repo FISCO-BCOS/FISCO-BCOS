@@ -45,6 +45,22 @@ private:
 
 public:
 
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<
+            decltype(m_storage.get().readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...))>>
+    {
+        co_return co_await m_storage.get().readSomeRaw(
+            std::move(keys), std::forward<decltype(args)>(args)...);
+    }
+
+    auto readOneRaw(auto key, auto&&... args)
+        -> task::Task<task::AwaitableReturnType<
+            decltype(m_storage.get().readOneRaw(std::move(key), std::forward<decltype(args)>(args)...))>>
+    {
+        co_return co_await m_storage.get().readOneRaw(
+            std::move(key), std::forward<decltype(args)>(args)...);
+    }
+
     auto readSome(::ranges::input_range auto keys)
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>

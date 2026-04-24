@@ -43,7 +43,8 @@ public:
     using Key = KeyType;
     using Value = ValueType;
 
-    auto readSomeRaw(::ranges::input_range auto keys)
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... /*args*/)
+        -> task::Task<std::vector<StorageValueType<ValueType>>>
     {
         auto encodedKeys = keys | ::ranges::views::transform([&](auto&& key) {
             return m_keyResolver.encode(std::forward<decltype(key)>(key));
@@ -74,44 +75,53 @@ public:
                 return {m_valueResolver.decode(result.ToStringView())};
             }) |
             ::ranges::to<std::vector>();
-        return values;
+        co_return values;
     }
 
-    auto readSome(::ranges::input_range auto keys)
-        -> task::AwaitableValue<std::vector<std::optional<ValueType>>>
+    auto readOneRaw(auto key, auto&&... args) -> task::Task<StorageValueType<ValueType>>
     {
-        auto values = readSomeRaw(std::move(keys));
-        return {::ranges::views::transform(values, [](auto&& value) -> std::optional<ValueType> {
+        (void)sizeof...(args);
+
+        auto encodedKey = m_keyResolver.encode(std::move(key));
+        ::rocksdb::PinnableSlice result;
+        auto status = m_rocksDB.get().Get(::rocksdb::ReadOptions(),
+            m_rocksDB.get().DefaultColumnFamily(),
+            ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)), &result);
+
+        if (!status.ok())
+        {
+            if (status.IsNotFound())
+            {
+                co_return StorageValueType<ValueType>{};
+            }
+            BOOST_THROW_EXCEPTION(RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
+        }
+
+        co_return StorageValueType<ValueType>{m_valueResolver.decode(result.ToStringView())};
+    }
+
+    auto readSome(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<std::optional<ValueType>>>
+    {
+        auto values =
+            co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
+        co_return ::ranges::views::transform(values, [](auto&& value) -> std::optional<ValueType> {
             if (auto* entry = std::get_if<ValueType>(std::addressof(value)))
             {
                 return std::make_optional(std::move(*entry));
             }
             return {};
-        }) | ::ranges::to<std::vector>()};
+        }) | ::ranges::to<std::vector>();
     }
 
-    auto readOne(auto key) -> task::AwaitableValue<std::optional<ValueType>>
+    auto readOne(auto key, auto&&... args) -> task::Task<std::optional<ValueType>>
     {
-        task::AwaitableValue<std::optional<ValueType>> result;
-
-        auto rocksDBKey = m_keyResolver.encode(key);
-        std::string value;
-        auto status =
-            m_rocksDB.get().Get(::rocksdb::ReadOptions(), m_rocksDB.get().DefaultColumnFamily(),
-                ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
-                std::addressof(value));
-        if (!status.ok())
+        auto value = co_await readOneRaw(std::move(key), std::forward<decltype(args)>(args)...);
+        if (auto* typed = std::get_if<ValueType>(std::addressof(value)))
         {
-            if (!status.IsNotFound())
-            {
-                BOOST_THROW_EXCEPTION(
-                    RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
-            }
-            return result;
+            co_return std::optional<ValueType>{std::move(*typed)};
         }
-        result.value().emplace(m_valueResolver.decode(std::move(value)));
-
-        return result;
+        co_return std::nullopt;
     }
 
     task::AwaitableValue<void> writeSome(::ranges::input_range auto keyValues)

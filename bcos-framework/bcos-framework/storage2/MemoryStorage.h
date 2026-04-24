@@ -194,7 +194,7 @@ public:
         }
     }
 
-    DataValue readOneRaw(const auto& key)
+    auto readOneRaw(const auto& key, auto&&... /*args*/) -> task::Task<DataValue>
     {
         auto& bucket = this->getBucket(key);
         Lock lock(bucket.mutex, false);
@@ -209,16 +209,25 @@ public:
                     updateLRUAndCheck(bucket, it);
                 }
             }
-            return it->value;
+            co_return it->value;
         }
-        return {};
+        co_return DataValue{};
     }
 
-    auto readSomeRaw(::ranges::input_range auto keys)
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
+        -> task::Task<std::vector<DataValue>>
     {
-        return ::ranges::views::transform(keys, [&](auto&& key) {
-            return readOneRaw(std::forward<decltype(key)>(key));
-        }) | ::ranges::to<std::vector>();
+        std::vector<DataValue> values;
+        if constexpr (::ranges::sized_range<decltype(keys)>)
+        {
+            values.reserve(::ranges::size(keys));
+        }
+        for (auto&& key : keys)
+        {
+            values.emplace_back(
+                co_await readOneRaw(std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...));
+        }
+        co_return values;
     }
 
     static std::optional<Value> toOptional(DataValue&& value)
@@ -314,22 +323,10 @@ public:
         }
     }
 
-    auto readSome(::ranges::input_range auto keys) -> task::Task<std::vector<std::optional<Value>>>
-    {
-        auto rawValues = readSomeRaw(std::move(keys));
-        std::vector<std::optional<Value>> values;
-        values.reserve(rawValues.size());
-        for (auto& value : rawValues)
-        {
-            values.emplace_back(toOptional(std::move(value)));
-        }
-        co_return values;
-    }
-
-    auto readSome(::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
+    auto readSome(::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<Value>>>
     {
-        auto rawValues = readSomeRaw(std::move(keys));
+        auto rawValues = co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
         std::vector<std::optional<Value>> values;
         values.reserve(rawValues.size());
         for (auto& value : rawValues)
@@ -339,24 +336,17 @@ public:
         co_return values;
     }
 
-    auto readOne(auto key) -> task::Task<std::optional<Value>>
+    auto readOne(auto key, auto&&... args) -> task::Task<std::optional<Value>>
     {
-        co_return toOptional(readOneRaw(key));
+        co_return toOptional(
+            co_await readOneRaw(std::move(key), std::forward<decltype(args)>(args)...));
     }
 
-    auto readOne(auto key, DIRECT_TYPE /*unused*/) -> task::Task<std::optional<Value>>
+    auto existsOne(auto key, auto&&... args) -> task::Task<bool>
     {
-        co_return toOptional(readOneRaw(key));
-    }
-
-    auto existsOne(auto key) -> task::Task<bool>
-    {
-        co_return toOptional(readOneRaw(key)).has_value();
-    }
-
-    auto existsOne(auto key, DIRECT_TYPE /*unused*/) -> task::Task<bool>
-    {
-        co_return toOptional(readOneRaw(key)).has_value();
+        co_return toOptional(
+                      co_await readOneRaw(std::move(key), std::forward<decltype(args)>(args)...))
+            .has_value();
     }
 
     task::AwaitableValue<void> writeOne(auto key, auto value)
