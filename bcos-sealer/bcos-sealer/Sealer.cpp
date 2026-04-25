@@ -37,7 +37,7 @@ bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
     m_lastFetchTimepoint(std::chrono::steady_clock::now())
 {
     m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
-    m_sealingManager->onReady([this]() { noteGenerateProposal(); });
+    m_sealingManager->setOnReadyCallback([this]() { noteGenerateProposal(); });
     m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
 }
 
