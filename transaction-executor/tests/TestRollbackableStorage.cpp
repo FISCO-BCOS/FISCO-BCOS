@@ -21,6 +21,8 @@ BOOST_FIXTURE_TEST_SUITE(TestRollbackableStorage, TestRollbackableStorageFixture
 
 using BackendStorag2 =
     memory_storage::MemoryStorage<StateKey, int, storage2::memory_storage::ORDERED>;
+using LogicalDeletionStorage = memory_storage::MemoryStorage<StateKey, StateValue,
+    storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION>;
 
 BOOST_AUTO_TEST_CASE(addRollback)
 {
@@ -497,6 +499,39 @@ BOOST_AUTO_TEST_CASE(mixedOperationsRollback)
         BOOST_CHECK(restoredDeleted);
         BOOST_CHECK_EQUAL(restoredDeleted->get(), "BaseValue2");
         BOOST_CHECK(!removedNew);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(rollbackToLogicalDeletionState)
+{
+    task::syncWait([]() -> task::Task<void> {
+        LogicalDeletionStorage memoryStorage;
+        Rollbackable rollbackableStorage(memoryStorage);
+
+        std::string_view tableID = "table1";
+        auto key = StateKey{tableID, "Key1"sv};
+
+        // add -> logical delete
+        co_await storage2::writeOne(rollbackableStorage, key, storage::Entry{"Value1"});
+        co_await storage2::removeOne(rollbackableStorage, key);
+
+        // Savepoint after logical deletion
+        auto savepoint = rollbackableStorage.current();
+
+        // Update value after deleted state
+        co_await storage2::writeOne(rollbackableStorage, key, storage::Entry{"Value2"});
+        auto updated = co_await storage2::readOne(rollbackableStorage, key);
+        BOOST_REQUIRE(updated);
+        BOOST_CHECK_EQUAL(updated->get(), "Value2");
+
+        // Rollback should restore the logical deleted state rather than not-exists
+        co_await rollbackableStorage.rollback(savepoint);
+
+        auto valueAfterRollback = co_await storage2::readOne(rollbackableStorage, key);
+        BOOST_CHECK(!valueAfterRollback);
+
+        auto rawValue = co_await memoryStorage.readOneRaw(key, storage2::DIRECT);
+        BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(rawValue));
     }());
 }
 
