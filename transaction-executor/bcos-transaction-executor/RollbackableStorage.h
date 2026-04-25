@@ -74,14 +74,14 @@ private:
     task::Task<void> storeOldValues(Keys keys, bool withEmpty)
     {
         auto& storage = m_storage.get();
-        decltype(auto) keyList = [&]() {
+        auto keyList = [&]() {
             if constexpr (std::is_same_v<::ranges::range_value_t<std::decay_t<Keys>>, Key>)
             {
                 return ::ranges::views::all(keys);
             }
             else
             {
-                return keys | ::ranges::views::transform([](auto&& k) { return Key(k); }) |
+                return keys | ::ranges::views::transform([](auto&& key) { return Key(key); }) |
                        ::ranges::to<std::vector<Key>>;
             }
         }();
@@ -95,7 +95,7 @@ private:
                 continue;
             }
             m_records.emplace_back(typename Rollbackable::Record{
-                .key = std::move(key), .oldValue = std::move(oldValue)});
+                .key = Key(key), .oldValue = std::move(oldValue)});
         }
     }
 

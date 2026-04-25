@@ -105,9 +105,8 @@ BOOST_AUTO_TEST_CASE(directFlag)
         MockStorage lhsStorage;
         ReadWriteSetStorage<decltype(lhsStorage)> firstStorage(lhsStorage);
 
-        auto value = co_await storage2::readOne(firstStorage, 100, storage2::DIRECT);
-        BOOST_CHECK(value);
-        BOOST_CHECK_EQUAL(*value, 100);
+        auto value = co_await firstStorage.readOneRaw(100, storage2::DIRECT);
+        BOOST_CHECK_EQUAL(std::get<int>(value), 100);
     }());
 }
 

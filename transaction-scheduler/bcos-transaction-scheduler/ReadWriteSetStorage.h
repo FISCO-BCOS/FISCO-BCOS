@@ -44,39 +44,30 @@ private:
     }
 
 public:
-
     auto readSomeRaw(::ranges::input_range auto keys, auto&&... args)
-        -> task::Task<task::AwaitableReturnType<
-            decltype(m_storage.get().readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...))>>
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.get().readSomeRaw(
+            std::move(keys), std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await m_storage.get().readSomeRaw(
             std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
     auto readOneRaw(auto key, auto&&... args)
-        -> task::Task<task::AwaitableReturnType<
-            decltype(m_storage.get().readOneRaw(std::move(key), std::forward<decltype(args)>(args)...))>>
+        -> task::Task<task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(
+            std::move(key), std::forward<decltype(args)>(args)...))>>
     {
         co_return co_await m_storage.get().readOneRaw(
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         for (auto&& key : keys)
         {
             putSet(false, key);
         }
         co_return co_await storage2::readSome(m_storage.get(), std::move(keys));
-    }
-
-    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
-        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome,
-            std::add_lvalue_reference_t<Storage>, decltype(std::move(keys))>>>
-    {
-        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), direct);
     }
 
     auto readOne(auto key)
@@ -87,32 +78,22 @@ public:
         co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
-    auto readOne(const auto& key, storage2::DIRECT_TYPE direct)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
-    {
-        co_return co_await storage2::readOne(m_storage.get(), key, direct);
-    }
-
-    auto existsOne(auto key)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ExistsOne, Storage&, decltype(key)>>>
+    auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ExistsOne, Storage&, decltype(key)>>>
     {
         putSet(false, key);
         co_return co_await storage2::existsOne(m_storage.get(), std::move(key));
     }
 
-    auto writeOne(auto key, auto value)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
+    auto writeOne(auto key, auto value) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
     {
         putSet(true, key);
         co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
     }
 
-    auto writeSome(::ranges::input_range auto keyValues)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
+    auto writeSome(::ranges::input_range auto keyValues) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
     {
         for (auto&& [key, _] : keyValues)
         {
@@ -140,12 +121,10 @@ public:
             m_storage.get(), std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
-    auto range(auto&&... args)
-        -> task::Task<storage2::ReturnType<
-            std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
+    auto range(auto&&... args) -> task::Task<
+        storage2::ReturnType<std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
     {
-        co_return co_await storage2::range(
-            m_storage.get(), std::forward<decltype(args)>(args)...);
+        co_return co_await storage2::range(m_storage.get(), std::forward<decltype(args)>(args)...);
     }
 
     friend auto& readWriteSet(ReadWriteSetStorage& storage) { return storage.m_readWriteSet; }
