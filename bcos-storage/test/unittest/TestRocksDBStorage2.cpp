@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
             auto stateKey = StateKey{std::string_view(tableName), std::string_view(key)};
             return stateKey;
         });
-        auto gotValues = rocksDB.readSomeRaw(queryKeys);
+        auto gotValues = co_await rocksDB.readSomeRaw(queryKeys);
         for (auto&& [i, value] : ::ranges::views::enumerate(gotValues))
         {
             if (i < 100)
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(readWriteRemoveSeek)
         });
         co_await storage2::removeSome(rocksDB, removeKeys);
 
-        auto gotValues2 = rocksDB.readSomeRaw(queryKeys);
+        auto gotValues2 = co_await rocksDB.readSomeRaw(queryKeys);
         for (auto&& [i, value] : ::ranges::views::enumerate(gotValues2))
         {
             if (i >= 50 && i < 70)
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(merge)
                           ::ranges::views::repeat(storage::Entry{"Hello"})));
         co_await storage2::merge(rocksDB2, storage3, storage4);
 
-        auto values2 = rocksDB2.readSomeRaw(
+        auto values2 = co_await rocksDB2.readSomeRaw(
             ::ranges::views::iota(0, 20) | ::ranges::views::transform([](int i) {
                 return StateKey{"Hello"sv, fmt::format("key{}", i)};
             }));

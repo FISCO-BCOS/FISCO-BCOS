@@ -506,17 +506,17 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
 
         auto value = co_await storage2::readOne(storage, 6);
         BOOST_CHECK(!value);
-        auto value2 = storage.readOneRaw(6);
+        auto value2 = co_await storage.readOneRaw(6);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::DELETED_TYPE>(value2));
 
-        auto value3 = storage.readOneRaw(11);
+        auto value3 = co_await storage.readOneRaw(11);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value3));
         auto value4 = co_await storage2::readOne(storage, 11);
         BOOST_CHECK(!value4);
 
         auto value5 = co_await storage2::readOne(storage, 3);
         BOOST_CHECK(value5);
-        auto value6 = storage.readOneRaw(3);
+        auto value6 = co_await storage.readOneRaw(3);
         BOOST_CHECK(std::holds_alternative<int>(value6));
 
         MemoryStorage<int, int, bcos::storage2::memory_storage::ORDERED> storage_2;
@@ -527,10 +527,10 @@ BOOST_AUTO_TEST_CASE(dirtctReadOne)
         auto value21 = co_await storage2::readOne(storage_2, 6);
         BOOST_CHECK(!value21);
 
-        auto value22 = storage_2.readOneRaw(6);
+        auto value22 = co_await storage_2.readOneRaw(6);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value22));
 
-        auto value23 = storage_2.readOneRaw(11);
+        auto value23 = co_await storage_2.readOneRaw(11);
         BOOST_CHECK(std::holds_alternative<bcos::storage2::NOT_EXISTS_TYPE>(value23));
         auto value24 = co_await storage2::readOne(storage_2, 11);
         BOOST_CHECK(!value24);

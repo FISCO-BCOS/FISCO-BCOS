@@ -166,6 +166,82 @@ public:
     }
 
     template <::ranges::input_range Keys>
+    auto readSomeRaw(Keys keys, storage2::DIRECT_TYPE /*unused*/)
+        -> task::Task<std::vector<storage2::StorageValueType<Value>>>
+        requires ::ranges::sized_range<Keys>
+    {
+        if (m_mutableStorage)
+        {
+            co_return co_await m_mutableStorage->readSomeRaw(std::move(keys));
+        }
+
+        for (auto& immutableStorage : m_immutableStorages)
+        {
+            co_return co_await immutableStorage->readSomeRaw(std::move(keys));
+        }
+
+        if constexpr (withCacheStorage)
+        {
+            co_return co_await m_cacheStorage.get().readSomeRaw(std::move(keys));
+        }
+
+        co_return co_await m_backendStorage.get().readSomeRaw(std::move(keys));
+    }
+
+    auto readOneRaw(const auto& key) -> task::Task<storage2::StorageValueType<Value>>
+    {
+        if (m_mutableStorage)
+        {
+            if (auto value = co_await m_mutableStorage->readOneRaw(key);
+                !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+            {
+                co_return value;
+            }
+        }
+
+        for (auto& immutableStorage : m_immutableStorages)
+        {
+            if (auto value = co_await immutableStorage->readOneRaw(key);
+                !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+            {
+                co_return value;
+            }
+        }
+
+        if constexpr (withCacheStorage)
+        {
+            if (auto value = co_await m_cacheStorage.get().readOneRaw(key);
+                !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+            {
+                co_return value;
+            }
+        }
+
+        co_return co_await m_backendStorage.get().readOneRaw(key);
+    }
+
+    auto readOneRaw(const auto& key, storage2::DIRECT_TYPE /*unused*/)
+        -> task::Task<storage2::StorageValueType<Value>>
+    {
+        if (m_mutableStorage)
+        {
+            co_return co_await m_mutableStorage->readOneRaw(key);
+        }
+
+        for (auto& immutableStorage : m_immutableStorages)
+        {
+            co_return co_await immutableStorage->readOneRaw(key);
+        }
+
+        if constexpr (withCacheStorage)
+        {
+            co_return co_await m_cacheStorage.get().readOneRaw(key);
+        }
+
+        co_return co_await m_backendStorage.get().readOneRaw(key);
+    }
+
+    template <::ranges::input_range Keys>
     task::Task<std::vector<std::optional<Value>>> readSome(Keys keys)
     {
         auto values = co_await readSomeRaw(std::move(keys));
@@ -178,35 +254,13 @@ public:
         }) | ::ranges::to<std::vector>();
     }
 
-    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE /*unused*/)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, MutableStorage&, decltype(keys)>>>
-    {
-        if (m_mutableStorage)
-        {
-            co_return co_await storage2::readSome(*m_mutableStorage, std::move(keys));
-        }
-
-        for (auto& immutableStorage : m_immutableStorages)
-        {
-            co_return co_await storage2::readSome(*immutableStorage, std::move(keys));
-        }
-
-        if constexpr (View::withCacheStorage)
-        {
-            co_return co_await storage2::readSome(m_cacheStorage.get(), std::move(keys));
-        }
-
-        co_return co_await storage2::readSome(m_backendStorage.get(), std::move(keys));
-    }
-
     auto readOne(const auto& key) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ReadOne, MutableStorage&, decltype(key)>>>
     {
         if (m_mutableStorage)
         {
-            auto value = m_mutableStorage->readOneRaw(key);
-            if (!std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+            if (auto value = co_await m_mutableStorage->readOneRaw(key);
+                !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
             {
                 co_return getValue<Value>(value);
             }
@@ -214,8 +268,8 @@ public:
 
         for (auto& immutableStorage : m_immutableStorages)
         {
-            auto value = immutableStorage->readOneRaw(key);
-            if (!std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
+            if (auto value = co_await immutableStorage->readOneRaw(key);
+                !std::holds_alternative<storage2::NOT_EXISTS_TYPE>(value))
             {
                 co_return getValue<Value>(value);
             }
@@ -227,28 +281,6 @@ public:
             {
                 co_return value;
             }
-        }
-
-        co_return co_await storage2::readOne(m_backendStorage.get(), key);
-    }
-
-    auto readOne(const auto& key, storage2::DIRECT_TYPE /*unused*/)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, MutableStorage&, decltype(key)>>>
-    {
-        if (m_mutableStorage)
-        {
-            co_return co_await storage2::readOne(*m_mutableStorage, key);
-        }
-
-        for (auto& immutableStorage : m_immutableStorages)
-        {
-            co_return co_await storage2::readOne(*immutableStorage, key);
-        }
-
-        if constexpr (View::withCacheStorage)
-        {
-            co_return co_await storage2::readOne(m_cacheStorage.get(), key);
         }
 
         co_return co_await storage2::readOne(m_backendStorage.get(), key);
