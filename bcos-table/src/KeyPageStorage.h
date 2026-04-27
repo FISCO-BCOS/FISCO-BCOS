@@ -21,6 +21,7 @@
 #pragma once
 
 #include "StateStorageInterface.h"
+#include <fmt/format.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
