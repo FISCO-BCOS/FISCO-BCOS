@@ -32,35 +32,25 @@ class MemberImpl : public bcos::protocol::MemberInterface
 {
 public:
     using Ptr = std::shared_ptr<MemberImpl>;
-    MemberImpl(std::function<bcostars::Member*()> _inner) : m_inner(_inner) {}
-    MemberImpl() : m_inner([m_rawMember = bcostars::Member()]() mutable { return &m_rawMember; }) {}
-    MemberImpl(std::string const& _memberData) : MemberImpl() { decode(_memberData); }
+    MemberImpl(std::function<bcostars::Member*()> _inner);
+    MemberImpl();
+    MemberImpl(std::string const& _memberData);
 
-    ~MemberImpl() override {}
+    ~MemberImpl() override;
 
     // the memberID of different service, should be unique
-    void setMemberID(std::string const& _memberID) override { m_inner()->memberID = _memberID; }
+    void setMemberID(std::string const& _memberID) override;
     // the memberConfig of different service
-    void setMemberConfig(std::string const& _config) override { m_inner()->memberConfig = _config; }
+    void setMemberConfig(std::string const& _config) override;
 
-    std::string const& memberID() const override { return m_inner()->memberID; }
-    virtual std::string const& memberConfig() const override { return m_inner()->memberConfig; }
+    std::string const& memberID() const override;
+    virtual std::string const& memberConfig() const override;
 
     // encode the member into string
-    virtual void encode(std::string& _encodedData) override
-    {
-        tars::TarsOutputStream<tars::BufferWriterString> output;
-        m_inner()->writeTo(output);
-        output.swap(_encodedData);
-    }
+    virtual void encode(std::string& _encodedData) override;
 
     // decode the member info
-    virtual void decode(std::string const& _memberData) override
-    {
-        tars::TarsInputStream<tars::BufferReader> input;
-        input.setBuffer(_memberData.data(), _memberData.length());
-        m_inner()->readFrom(input);
-    }
+    virtual void decode(std::string const& _memberData) override;
 
 private:
     std::function<bcostars::Member*()> m_inner;
@@ -71,16 +61,10 @@ class MemberFactoryImpl : public bcos::protocol::MemberFactoryInterface
 public:
     using Ptr = std::shared_ptr<MemberFactoryImpl>;
     MemberFactoryImpl() = default;
-    ~MemberFactoryImpl() override {}
+    ~MemberFactoryImpl() override;
 
-    bcos::protocol::MemberInterface::Ptr createMember() override
-    {
-        return std::make_shared<MemberImpl>();
-    }
-    bcos::protocol::MemberInterface::Ptr createMember(std::string const& _memberData) override
-    {
-        return std::make_shared<MemberImpl>(_memberData);
-    }
+    bcos::protocol::MemberInterface::Ptr createMember() override;
+    bcos::protocol::MemberInterface::Ptr createMember(std::string const& _memberData) override;
 };
 }  // namespace protocol
 }  // namespace bcostars

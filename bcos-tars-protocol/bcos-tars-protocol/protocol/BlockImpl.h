@@ -44,14 +44,14 @@ public:
     BlockImpl(BlockImpl&&) = delete;
     BlockImpl& operator=(const BlockImpl&) = delete;
     BlockImpl& operator=(BlockImpl&&) = delete;
-    explicit BlockImpl(bcostars::Block _block) : BlockImpl() { m_inner = std::move(_block); }
+    explicit BlockImpl(bcostars::Block _block);
     ~BlockImpl() noexcept override = default;
 
     void decode(bcos::bytesConstRef _data, bool _calculateHash, bool _checkSig) override;
     void encode(bcos::bytes& _encodeData) const override;
 
-    int32_t version() const override { return m_inner.blockHeader.data.version; }
-    void setVersion(int32_t _version) override { m_inner.blockHeader.data.version = _version; }
+    int32_t version() const override;
+    void setVersion(int32_t _version) override;
 
     bcos::protocol::BlockType blockType() const override;
     // FIXME: this will cause the same blockHeader calculate hash multiple times

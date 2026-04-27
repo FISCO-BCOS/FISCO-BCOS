@@ -39,6 +39,7 @@ bcostars::GatewayServiceClient::GatewayServiceClient(
     bcostars::GatewayServicePrx _prx, std::string const& _serviceName)
   : m_prx(_prx), m_gatewayServiceName(_serviceName)
 {}
+bcostars::GatewayServiceClient::~GatewayServiceClient() = default;
 void bcostars::GatewayServiceClient::setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory)
 {
     m_keyFactory = std::move(keyFactory);
