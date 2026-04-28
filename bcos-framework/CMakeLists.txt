@@ -22,6 +22,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(Boost REQUIRED COMPONENTS log log_setup thread)
+find_package(TBB REQUIRED)
 
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
@@ -35,7 +37,8 @@ add_library(bcos-framework STATIC ${BCOS_FRAMEWORK_SOURCES})
 target_include_directories(bcos-framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
-target_link_libraries(bcos-framework PUBLIC bcos-task Microsoft.GSL::GSL fmt::fmt)
+target_link_libraries(bcos-framework PUBLIC bcos-task bcos-utilities bcos-crypto Microsoft.GSL::GSL fmt::fmt Boost::log Boost::log_setup Boost::thread TBB::tbb)
+set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()
