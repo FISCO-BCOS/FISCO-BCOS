@@ -2,7 +2,6 @@
 
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/BoostLog.h>
-#include <cstring>
 
 namespace bcos::storage
 {
@@ -16,12 +15,6 @@ std::string_view Entry::getField(size_t index) const&
     }
 
     return get();
-}
-
-void Entry::set(const char* pointer)
-{
-    auto view = std::string_view(pointer, std::strlen(pointer));
-    set(view);
 }
 
 void Entry::setStatus(Status status)

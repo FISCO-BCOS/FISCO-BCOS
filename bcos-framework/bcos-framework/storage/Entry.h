@@ -110,8 +110,6 @@ public:
         set(std::forward<T>(input));
     }
 
-    void set(const char* pointer);
-
     void set(EntryBufferInput auto value)
     {
         auto view = inputValueView(value);
@@ -147,6 +145,15 @@ public:
 
         m_status = MODIFIED;
     }
+
+    template <typename T>
+        requires(!EntryBufferInput<std::remove_cvref_t<T>> &&
+                 std::convertible_to<T, std::string_view>)
+    void set(T&& value)
+    {
+        set(std::string_view(std::forward<T>(value)));
+    }
+
     template <EntryBufferInput T>
     void set(std::shared_ptr<T> value)
     {
