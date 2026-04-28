@@ -40,6 +40,11 @@ bcostars::protocol::TransactionImpl::TransactionImpl()
     })
 {}
 
+bool bcostars::protocol::TransactionImpl::operator==(const Transaction& rhs) const
+{
+    return this->hash() == rhs.hash();
+}
+
 void bcostars::protocol::TransactionImpl::decode(bcos::bytesConstRef _txData)
 {
     bcos::concepts::serialize::decode(_txData, *m_inner());

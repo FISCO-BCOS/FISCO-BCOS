@@ -35,7 +35,7 @@ public:
     GatewayServiceClient(bcostars::GatewayServicePrx _prx, std::string const& _serviceName,
         bcos::crypto::KeyFactory::Ptr _keyFactory);
     GatewayServiceClient(bcostars::GatewayServicePrx _prx, std::string const& _serviceName);
-    virtual ~GatewayServiceClient() {}
+    ~GatewayServiceClient() override;
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory);
 

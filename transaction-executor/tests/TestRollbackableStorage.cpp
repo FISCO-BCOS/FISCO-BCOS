@@ -535,4 +535,119 @@ BOOST_AUTO_TEST_CASE(rollbackToLogicalDeletionState)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(rollbackRestoresIntValues)
+{
+    task::syncWait([]() -> task::Task<void> {
+        using IntStorage =
+            memory_storage::MemoryStorage<int, int, storage2::memory_storage::ORDERED>;
+
+        IntStorage storage;
+        Rollbackable rollbackableStorage(storage);
+
+        constexpr int key1 = 1;
+        constexpr int key2 = 2;
+        constexpr int initialValue = 100;
+        constexpr int updatedValue = 200;
+        constexpr int newValue = 300;
+
+        co_await storage2::writeOne(rollbackableStorage, key1, initialValue);
+        auto savepoint = rollbackableStorage.current();
+
+        co_await storage2::writeOne(rollbackableStorage, key1, updatedValue);
+        co_await storage2::writeOne(rollbackableStorage, key2, newValue);
+
+        auto value1 = co_await storage2::readOne(rollbackableStorage, key1);
+        auto value2 = co_await storage2::readOne(rollbackableStorage, key2);
+        BOOST_REQUIRE(value1);
+        BOOST_REQUIRE(value2);
+        BOOST_CHECK_EQUAL(*value1, updatedValue);
+        BOOST_CHECK_EQUAL(*value2, newValue);
+
+        co_await rollbackableStorage.rollback(savepoint);
+
+        value1 = co_await storage2::readOne(rollbackableStorage, key1);
+        value2 = co_await storage2::readOne(rollbackableStorage, key2);
+        BOOST_REQUIRE(value1);
+        BOOST_CHECK_EQUAL(*value1, initialValue);
+        BOOST_CHECK(!value2);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(rollbackRestoresBatchIntValues)
+{
+    task::syncWait([]() -> task::Task<void> {
+        using IntStorage =
+            memory_storage::MemoryStorage<int, int, storage2::memory_storage::ORDERED>;
+
+        IntStorage storage;
+        Rollbackable rollbackableStorage(storage);
+
+        constexpr int key1 = 1;
+        constexpr int key2 = 2;
+        constexpr int key3 = 3;
+        constexpr int initialValue1 = 10;
+        constexpr int initialValue2 = 20;
+        constexpr int updatedValue1 = 11;
+        constexpr int updatedValue2 = 21;
+        constexpr int insertedValue = 31;
+
+        std::vector<std::pair<int, int>> initialValues{{key1, initialValue1}, {key2, initialValue2}};
+        co_await storage2::writeSome(rollbackableStorage, initialValues);
+
+        auto savepoint = rollbackableStorage.current();
+        std::vector<std::pair<int, int>> updatedValues{{key1, updatedValue1},
+            {key2, updatedValue2}, {key3, insertedValue}};
+        co_await storage2::writeSome(rollbackableStorage, updatedValues);
+
+        auto valuesBeforeRollback =
+            co_await storage2::readSome(rollbackableStorage, std::vector<int>{key1, key2, key3});
+        BOOST_REQUIRE(valuesBeforeRollback[0]);
+        BOOST_REQUIRE(valuesBeforeRollback[1]);
+        BOOST_REQUIRE(valuesBeforeRollback[2]);
+        BOOST_CHECK_EQUAL(*valuesBeforeRollback[0], updatedValue1);
+        BOOST_CHECK_EQUAL(*valuesBeforeRollback[1], updatedValue2);
+        BOOST_CHECK_EQUAL(*valuesBeforeRollback[2], insertedValue);
+
+        co_await rollbackableStorage.rollback(savepoint);
+
+        auto valuesAfterRollback =
+            co_await storage2::readSome(rollbackableStorage, std::vector<int>{key1, key2, key3});
+        BOOST_REQUIRE(valuesAfterRollback[0]);
+        BOOST_REQUIRE(valuesAfterRollback[1]);
+        BOOST_CHECK_EQUAL(*valuesAfterRollback[0], initialValue1);
+        BOOST_CHECK_EQUAL(*valuesAfterRollback[1], initialValue2);
+        BOOST_CHECK(!valuesAfterRollback[2]);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(rollbackRestoresLogicalDeletionForStringValues)
+{
+    task::syncWait([]() -> task::Task<void> {
+        using StringLogicalDeletionStorage = memory_storage::MemoryStorage<int, std::string,
+            storage2::memory_storage::ORDERED | storage2::memory_storage::LOGICAL_DELETION>;
+
+        StringLogicalDeletionStorage storage;
+        Rollbackable rollbackableStorage(storage);
+
+        constexpr int key = 7;
+
+        co_await storage2::writeOne(rollbackableStorage, key, "value-1"s);
+        co_await storage2::removeOne(rollbackableStorage, key);
+        auto savepoint = rollbackableStorage.current();
+
+        co_await storage2::writeOne(rollbackableStorage, key, "value-2"s);
+        auto updatedValue = co_await storage2::readOne(rollbackableStorage, key);
+        BOOST_REQUIRE(updatedValue);
+        BOOST_CHECK_EQUAL(*updatedValue, "value-2");
+
+        co_await rollbackableStorage.rollback(savepoint);
+
+        auto rolledBackValue = co_await storage2::readOne(rollbackableStorage, key);
+        BOOST_CHECK(!rolledBackValue);
+
+        auto rawValue = co_await storage.readOneRaw(key, storage2::DIRECT);
+        BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(rawValue));
+    }());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

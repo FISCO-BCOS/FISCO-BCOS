@@ -32,6 +32,21 @@
 #include <boost/throw_exception.hpp>
 #include <range/v3/view/transform.hpp>
 
+bcostars::protocol::BlockImpl::BlockImpl(bcostars::Block _block) : BlockImpl()
+{
+    m_inner = std::move(_block);
+}
+
+int32_t bcostars::protocol::BlockImpl::version() const
+{
+    return m_inner.blockHeader.data.version;
+}
+
+void bcostars::protocol::BlockImpl::setVersion(int32_t _version)
+{
+    m_inner.blockHeader.data.version = _version;
+}
+
 void bcostars::protocol::BlockImpl::decode(bcos::bytesConstRef _data, bool, bool)
 {
     bcos::concepts::serialize::decode(_data, m_inner);

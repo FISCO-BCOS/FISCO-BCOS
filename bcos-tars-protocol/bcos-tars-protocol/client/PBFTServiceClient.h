@@ -37,8 +37,8 @@ public:
     PBFTServiceClient(bcostars::PBFTServicePrx _proxy);
     ~PBFTServiceClient() override;
 
-    void start() override {}
-    void stop() override {}
+    void start() override;
+    void stop() override;
     // called by frontService to dispatch message
     void asyncNotifyConsensusMessage(bcos::Error::Ptr _error, std::string const& _uuid,
         bcos::crypto::NodeIDPtr _nodeID, bcos::bytesConstRef _data,
@@ -99,8 +99,8 @@ class BlockSyncServiceClient : virtual public bcos::sync::BlockSyncInterface,
 {
 public:
     using Ptr = std::shared_ptr<BlockSyncServiceClient>;
-    BlockSyncServiceClient(bcostars::PBFTServicePrx _proxy) : PBFTServiceClient(_proxy) {}
-    ~BlockSyncServiceClient() override {}
+    BlockSyncServiceClient(bcostars::PBFTServicePrx _proxy);
+    ~BlockSyncServiceClient() override;
 
     // called by the consensus module when commit a new block
     void asyncNotifyNewBlock(
