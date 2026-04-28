@@ -21,16 +21,13 @@
 
 #pragma once
 
-#include "TransactionReceiptImpl.h"
-#include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
-#include <memory>
-#include <utility>
+#include <functional>
 
 namespace bcostars::protocol
 {
@@ -38,78 +35,38 @@ namespace bcostars::protocol
 class TransactionSubmitResultImpl : public bcos::protocol::TransactionSubmitResult
 {
 public:
-    TransactionSubmitResultImpl()
-      : m_inner([inner = bcostars::TransactionSubmitResult()]() mutable { return &inner; })
-    {}
+    TransactionSubmitResultImpl();
 
-    TransactionSubmitResultImpl(std::function<bcostars::TransactionSubmitResult*()> inner)
-      : m_inner(std::move(inner))
-    {}
-    uint32_t status() const override { return m_inner()->status; }
-    void setStatus(uint32_t status) override { m_inner()->status = status; }
+    TransactionSubmitResultImpl(std::function<bcostars::TransactionSubmitResult*()> inner);
+    uint32_t status() const override;
+    void setStatus(uint32_t status) override;
 
-    bcos::crypto::HashType txHash() const override
-    {
-        if (m_inner()->txHash.size() == bcos::crypto::HashType::SIZE)
-        {
-            bcos::crypto::HashType hash(
-                (const bcos::byte*)m_inner()->txHash.data(), m_inner()->txHash.size());
-            return hash;
-        }
-        return {};
-    }
-    void setTxHash(bcos::crypto::HashType txHash) override
-    {
-        m_inner()->txHash.assign(txHash.begin(), txHash.end());
-    }
+    bcos::crypto::HashType txHash() const override;
+    void setTxHash(bcos::crypto::HashType txHash) override;
 
-    bcos::crypto::HashType blockHash() const override
-    {
-        if (m_inner()->blockHash.size() == bcos::crypto::HashType::SIZE)
-        {
-            bcos::crypto::HashType hash(
-                (const bcos::byte*)m_inner()->blockHash.data(), m_inner()->blockHash.size());
-            return hash;
-        }
-        return {};
-    }
-    void setBlockHash(bcos::crypto::HashType blockHash) override
-    {
-        m_inner()->blockHash.assign(blockHash.begin(), blockHash.end());
-    }
+    bcos::crypto::HashType blockHash() const override;
+    void setBlockHash(bcos::crypto::HashType blockHash) override;
 
-    int64_t transactionIndex() const override { return m_inner()->transactionIndex; }
-    void setTransactionIndex(int64_t index) override { m_inner()->transactionIndex = index; }
+    int64_t transactionIndex() const override;
+    void setTransactionIndex(int64_t index) override;
 
-    bcos::protocol::NonceType nonce() const override { return {m_inner()->nonce}; }
-    void setNonce(bcos::protocol::NonceType nonce) override { m_inner()->nonce = std::move(nonce); }
+    bcos::protocol::NonceType nonce() const override;
+    void setNonce(bcos::protocol::NonceType nonce) override;
 
-    bcos::protocol::TransactionReceipt::ConstPtr transactionReceipt() const override
-    {
-        return std::make_shared<bcostars::protocol::TransactionReceiptImpl>(
-            [innerPtr = &m_inner()->transactionReceipt]() { return innerPtr; });
-    }
+    bcos::protocol::TransactionReceipt::ConstPtr transactionReceipt() const override;
     void setTransactionReceipt(
-        bcos::protocol::TransactionReceipt::ConstPtr transactionReceipt) override
-    {
-        auto transactionReceiptImpl =
-            std::dynamic_pointer_cast<TransactionReceiptImpl const>(transactionReceipt);
-        m_inner()->transactionReceipt = transactionReceiptImpl->inner();  // FIXME: copy here!
-    }
+        bcos::protocol::TransactionReceipt::ConstPtr transactionReceipt) override;
 
-    bcostars::TransactionSubmitResult const& inner() { return *m_inner(); }
+    bcostars::TransactionSubmitResult const& inner();
 
-    std::string const& sender() const override { return m_inner()->sender; }
-    void setSender(std::string const& _sender) override { m_inner()->sender = _sender; }
+    std::string const& sender() const override;
+    void setSender(std::string const& _sender) override;
 
-    std::string const& to() const override { return m_inner()->to; }
-    void setTo(std::string const& _to) override { m_inner()->to = _to; }
+    std::string const& to() const override;
+    void setTo(std::string const& _to) override;
 
-    uint8_t type() const override { return m_inner()->type; }
-    void setType(uint8_t _type) override
-    {
-        m_inner()->type = static_cast<decltype(m_inner()->type)>(_type);
-    }
+    uint8_t type() const override;
+    void setType(uint8_t _type) override;
 
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

@@ -32,6 +32,7 @@ if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
 endif ()
 find_package(tarscpp REQUIRED)
 find_package(TBB REQUIRED)
+find_package(jsoncpp REQUIRED)
 
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
 target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
@@ -39,7 +40,7 @@ target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
 set_target_properties(${TARS_PROTOCOL_TARGET} PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
