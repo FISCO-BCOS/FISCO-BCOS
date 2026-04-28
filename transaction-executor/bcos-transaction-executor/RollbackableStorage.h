@@ -33,6 +33,11 @@ public:
 
     task::Task<void> rollback(Savepoint savepoint)
     {
+        if (m_records.empty())
+        {
+            co_return;
+        }
+
         while (static_cast<int64_t>(m_records.size()) > savepoint)
         {
             auto& record = m_records.back();
