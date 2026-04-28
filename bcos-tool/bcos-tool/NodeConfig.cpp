@@ -59,6 +59,39 @@ NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(std::move(_keyFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {}
 
+NodeConfig::NodeConfig() : m_ledgerConfig(std::make_shared<LedgerConfig>()) {}
+
+void NodeConfig::loadConfig(std::string const& _configPath, bool _enforceMemberID,
+    bool enforceChainConfig, bool enforceGroupId)
+{
+    boost::property_tree::ptree iniConfig;
+    boost::property_tree::read_ini(_configPath, iniConfig);
+    loadConfig(iniConfig, _enforceMemberID, enforceChainConfig, enforceGroupId);
+}
+
+void NodeConfig::loadGenesisConfig(std::string const& _genesisConfigPath)
+{
+    boost::property_tree::ptree genesisConfig;
+    boost::property_tree::read_ini(_genesisConfigPath, genesisConfig);
+    loadGenesisConfig(genesisConfig);
+}
+
+void NodeConfig::loadConfigFromString(std::string const& _content)
+{
+    boost::property_tree::ptree iniConfig;
+    std::stringstream contentStream(_content);
+    boost::property_tree::read_ini(contentStream, iniConfig);
+    loadConfig(iniConfig);
+}
+
+void NodeConfig::loadGenesisConfigFromString(std::string const& _content)
+{
+    boost::property_tree::ptree genesisConfig;
+    std::stringstream contentStream(_content);
+    boost::property_tree::read_ini(contentStream, genesisConfig);
+    loadGenesisConfig(genesisConfig);
+}
+
 void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforceMemberID,
     bool _enforceChainConfig, bool _enforceGroupId)
 {
@@ -1307,6 +1340,668 @@ std::string bcos::tool::NodeConfig::getDefaultServiceName(
     std::string const& _nodeName, std::string const& _serviceName) const
 {
     return m_genesisConfig.m_chainID + "." + _nodeName + _serviceName;
+}
+
+size_t NodeConfig::txpoolLimit() const
+{
+    return m_txpoolLimit;
+}
+
+size_t NodeConfig::notifyWorkerNum() const
+{
+    return m_notifyWorkerNum;
+}
+
+size_t NodeConfig::verifierWorkerNum() const
+{
+    return m_verifierWorkerNum;
+}
+
+int64_t NodeConfig::txsExpirationTime() const
+{
+    return m_txsExpirationTime;
+}
+
+bool NodeConfig::checkBlockLimit() const
+{
+    return m_checkBlockLimit;
+}
+
+bool NodeConfig::smCryptoType() const
+{
+    return m_genesisConfig.m_smCrypto;
+}
+
+std::string const& NodeConfig::chainId() const
+{
+    return m_genesisConfig.m_chainID;
+}
+
+std::string const& NodeConfig::groupId() const
+{
+    return m_genesisConfig.m_groupID;
+}
+
+size_t NodeConfig::blockLimit() const
+{
+    return m_blockLimit;
+}
+
+std::string const& NodeConfig::privateKeyPath() const
+{
+    return m_privateKeyPath;
+}
+
+std::string const& NodeConfig::hsmLibPath() const
+{
+    return m_hsmLibPath;
+}
+
+int const& NodeConfig::keyIndex() const
+{
+    return m_keyIndex;
+}
+
+int const& NodeConfig::encKeyIndex() const
+{
+    return m_encKeyIndex;
+}
+
+std::string const& NodeConfig::password() const
+{
+    return m_password;
+}
+
+size_t NodeConfig::minSealTime() const
+{
+    return m_minSealTime;
+}
+
+bool NodeConfig::allowFreeNodeSync() const
+{
+    return m_allowFreeNode;
+}
+
+size_t NodeConfig::checkPointTimeoutInterval() const
+{
+    return m_checkPointTimeoutInterval;
+}
+
+size_t NodeConfig::pipelineSize() const
+{
+    return m_pipelineSize;
+}
+
+std::string const& NodeConfig::storagePath() const
+{
+    return m_storagePath;
+}
+
+std::string const& NodeConfig::stateDBPath() const
+{
+    return m_stateDBPath;
+}
+
+std::string const& NodeConfig::blockDBPath() const
+{
+    return m_blockDBPath;
+}
+
+std::string const& NodeConfig::storageType() const
+{
+    return m_storageType;
+}
+
+size_t NodeConfig::keyPageSize() const
+{
+    return m_keyPageSize;
+}
+
+int NodeConfig::maxWriteBufferNumber() const
+{
+    return m_maxWriteBufferNumber;
+}
+
+bool NodeConfig::enableStatistics() const
+{
+    return m_enableDBStatistics;
+}
+
+int NodeConfig::maxBackgroundJobs() const
+{
+    return m_maxBackgroundJobs;
+}
+
+size_t NodeConfig::writeBufferSize() const
+{
+    return m_writeBufferSize;
+}
+
+int NodeConfig::minWriteBufferNumberToMerge() const
+{
+    return m_minWriteBufferNumberToMerge;
+}
+
+size_t NodeConfig::blockCacheSize() const
+{
+    return m_blockCacheSize;
+}
+
+bool NodeConfig::enableRocksDBBlob() const
+{
+    return m_enableRocksDBBlob;
+}
+
+std::vector<std::string> const& NodeConfig::pdAddrs() const
+{
+    return m_pd_addrs;
+}
+
+std::string const& NodeConfig::pdCaPath() const
+{
+    return m_pdCaPath;
+}
+
+std::string const& NodeConfig::pdCertPath() const
+{
+    return m_pdCertPath;
+}
+
+std::string const& NodeConfig::pdKeyPath() const
+{
+    return m_pdKeyPath;
+}
+
+std::string const& NodeConfig::storageDBName() const
+{
+    return m_storageDBName;
+}
+
+std::string const& NodeConfig::stateDBName() const
+{
+    return m_stateDBName;
+}
+
+bool NodeConfig::enableArchive() const
+{
+    return m_enableArchive;
+}
+
+bool NodeConfig::syncArchivedBlocks() const
+{
+    return m_syncArchivedBlocks;
+}
+
+bool NodeConfig::enableSeparateBlockAndState() const
+{
+    return m_enableSeparateBlockAndState;
+}
+
+std::string const& NodeConfig::archiveListenIP() const
+{
+    return m_archiveListenIP;
+}
+
+uint16_t NodeConfig::archiveListenPort() const
+{
+    return m_archiveListenPort;
+}
+
+bcos::crypto::KeyFactory::Ptr NodeConfig::keyFactory()
+{
+    return m_keyFactory;
+}
+
+bcos::ledger::LedgerConfig::Ptr NodeConfig::ledgerConfig()
+{
+    return m_ledgerConfig;
+}
+
+std::string const& NodeConfig::consensusType() const
+{
+    return m_genesisConfig.m_consensusType;
+}
+
+size_t NodeConfig::txGasLimit() const
+{
+    return m_genesisConfig.m_txGasLimit;
+}
+
+std::string const& NodeConfig::genesisData() const
+{
+    return m_genesisData;
+}
+
+std::int64_t NodeConfig::epochSealerNum() const
+{
+    return m_genesisConfig.m_epochSealerNum;
+}
+
+std::int64_t NodeConfig::epochBlockNum() const
+{
+    return m_genesisConfig.m_epochBlockNum;
+}
+
+bool NodeConfig::isWasm() const
+{
+    return m_genesisConfig.m_isWasm;
+}
+
+bool NodeConfig::isAuthCheck() const
+{
+    return m_genesisConfig.m_isAuthCheck;
+}
+
+bool NodeConfig::isSerialExecute() const
+{
+    return m_genesisConfig.m_isSerialExecute;
+}
+
+size_t NodeConfig::vmCacheSize() const
+{
+    return m_vmCacheSize;
+}
+
+std::string const& NodeConfig::authAdminAddress() const
+{
+    return m_genesisConfig.m_authAdminAccount;
+}
+
+std::string const& NodeConfig::rpcServiceName() const
+{
+    return m_rpcServiceName;
+}
+
+std::string const& NodeConfig::gatewayServiceName() const
+{
+    return m_gatewayServiceName;
+}
+
+std::string const& NodeConfig::schedulerServiceName() const
+{
+    return m_schedulerServiceName;
+}
+
+std::string const& NodeConfig::executorServiceName() const
+{
+    return m_executorServiceName;
+}
+
+std::string const& NodeConfig::txpoolServiceName() const
+{
+    return m_txpoolServiceName;
+}
+
+std::string const& NodeConfig::nodeName() const
+{
+    return m_nodeName;
+}
+
+const std::string& NodeConfig::rpcListenIP() const
+{
+    return m_rpcListenIP;
+}
+
+uint16_t NodeConfig::rpcListenPort() const
+{
+    return m_rpcListenPort;
+}
+
+uint32_t NodeConfig::rpcThreadPoolSize() const
+{
+    return m_rpcThreadPoolSize;
+}
+
+uint32_t NodeConfig::rpcFilterTimeout() const
+{
+    return m_rpcFilterTimeout;
+}
+
+uint32_t NodeConfig::rpcMaxProcessBlock() const
+{
+    return m_rpcMaxProcessBlock;
+}
+
+bool NodeConfig::rpcSmSsl() const
+{
+    return m_rpcSmSsl;
+}
+
+bool NodeConfig::rpcDisableSsl() const
+{
+    return m_rpcDisableSsl;
+}
+
+bool NodeConfig::enableWeb3Rpc() const
+{
+    return m_enableWeb3Rpc;
+}
+
+const std::string& NodeConfig::web3RpcListenIP() const
+{
+    return m_web3RpcListenIP;
+}
+
+uint16_t NodeConfig::web3RpcListenPort() const
+{
+    return m_web3RpcListenPort;
+}
+
+uint32_t NodeConfig::web3RpcThreadSize() const
+{
+    return m_web3RpcThreadSize;
+}
+
+uint32_t NodeConfig::web3FilterTimeout() const
+{
+    return m_web3FilterTimeout;
+}
+
+uint32_t NodeConfig::web3MaxProcessBlock() const
+{
+    return m_web3MaxProcessBlock;
+}
+
+uint32_t NodeConfig::web3BatchRequestSizeLimit() const
+{
+    return m_web3BatchRequestSizeLimit;
+}
+
+uint32_t NodeConfig::web3HttpBodySizeLimit() const
+{
+    return m_web3HttpBodySizeLimit;
+}
+
+bool NodeConfig::web3EnableCors() const
+{
+    return m_web3EnableCors;
+}
+
+std::string NodeConfig::web3CorsAllowedOrigins() const
+{
+    return m_web3CorsAllowedOrigins;
+}
+
+std::string NodeConfig::web3CorsAllowedMethods() const
+{
+    return m_web3CorsAllowedMethods;
+}
+
+std::string NodeConfig::web3CorsAllowedHeaders() const
+{
+    return m_web3CorsAllowedHeaders;
+}
+
+int32_t NodeConfig::web3CorsMaxAge() const
+{
+    return m_web3CorsMaxAge;
+}
+
+bool NodeConfig::web3CorsAllowCredentials() const
+{
+    return m_web3CorsAllowCredentials;
+}
+
+bool NodeConfig::web3SyncTransaction() const
+{
+    return m_web3SyncTransaction;
+}
+
+const std::string& NodeConfig::p2pListenIP() const
+{
+    return m_p2pListenIP;
+}
+
+uint16_t NodeConfig::p2pListenPort() const
+{
+    return m_p2pListenPort;
+}
+
+bool NodeConfig::p2pSmSsl() const
+{
+    return m_p2pSmSsl;
+}
+
+const std::string& NodeConfig::p2pNodeDir() const
+{
+    return m_p2pNodeDir;
+}
+
+const std::string& NodeConfig::p2pNodeFileName() const
+{
+    return m_p2pNodeFileName;
+}
+
+const std::string& NodeConfig::certPath()
+{
+    return m_certPath;
+}
+
+void NodeConfig::setCertPath(const std::string& _certPath)
+{
+    m_certPath = _certPath;
+}
+
+const std::string& NodeConfig::caCert()
+{
+    return m_caCert;
+}
+
+void NodeConfig::setCaCert(const std::string& _caCert)
+{
+    m_caCert = _caCert;
+}
+
+const std::string& NodeConfig::nodeCert()
+{
+    return m_nodeCert;
+}
+
+void NodeConfig::setNodeCert(const std::string& _nodeCert)
+{
+    m_nodeCert = _nodeCert;
+}
+
+const std::string& NodeConfig::nodeKey()
+{
+    return m_nodeKey;
+}
+
+void NodeConfig::setNodeKey(const std::string& _nodeKey)
+{
+    m_nodeKey = _nodeKey;
+}
+
+const std::string& NodeConfig::smCaCert() const
+{
+    return m_smCaCert;
+}
+
+void NodeConfig::setSmCaCert(const std::string& _smCaCert)
+{
+    m_smCaCert = _smCaCert;
+}
+
+const std::string& NodeConfig::smNodeCert() const
+{
+    return m_smNodeCert;
+}
+
+void NodeConfig::setSmNodeCert(const std::string& _smNodeCert)
+{
+    m_smNodeCert = _smNodeCert;
+}
+
+const std::string& NodeConfig::smNodeKey() const
+{
+    return m_smNodeKey;
+}
+
+void NodeConfig::setSmNodeKey(const std::string& _smNodeKey)
+{
+    m_smNodeKey = _smNodeKey;
+}
+
+const std::string& NodeConfig::enSmNodeCert() const
+{
+    return m_enSmNodeCert;
+}
+
+void NodeConfig::setEnSmNodeCert(const std::string& _enSmNodeCert)
+{
+    m_enSmNodeCert = _enSmNodeCert;
+}
+
+const std::string& NodeConfig::enSmNodeKey() const
+{
+    return m_enSmNodeKey;
+}
+
+void NodeConfig::setEnSmNodeKey(const std::string& _enSmNodeKey)
+{
+    m_enSmNodeKey = _enSmNodeKey;
+}
+
+bool NodeConfig::enableLRUCacheStorage() const
+{
+    return m_enableLRUCacheStorage;
+}
+
+ssize_t NodeConfig::cacheSize() const
+{
+    return m_cacheSize;
+}
+
+uint32_t NodeConfig::compatibilityVersion() const
+{
+    return m_genesisConfig.m_compatibilityVersion;
+}
+
+std::string NodeConfig::compatibilityVersionStr() const
+{
+    std::stringstream ss;
+    ss << (bcos::protocol::BlockVersion)m_genesisConfig.m_compatibilityVersion;
+    return ss.str();
+}
+
+std::string const& NodeConfig::memberID() const
+{
+    return m_memberID;
+}
+
+unsigned NodeConfig::leaseTTL() const
+{
+    return m_leaseTTL;
+}
+
+bool NodeConfig::enableFailOver() const
+{
+    return m_enableFailOver;
+}
+
+std::string const& NodeConfig::failOverClusterUrl() const
+{
+    return m_failOverClusterUrl;
+}
+
+bool NodeConfig::storageSecurityEnable() const
+{
+    return m_storageSecurityEnable;
+}
+
+std::string NodeConfig::storageSecuirtyKeyCenterUrl() const
+{
+    return m_storageSecurityUrl;
+}
+
+std::string NodeConfig::storageSecurityCipherDataKey() const
+{
+    return m_storageSecurityCipherDataKey;
+}
+
+security::KeyEncryptionType NodeConfig::keyEncryptionType() const
+{
+    return m_keyEncryptionType;
+}
+
+security::StorageEncryptionType NodeConfig::storageEncryptionType() const
+{
+    return m_storageEncryptionType;
+}
+
+security::CloudKmsType NodeConfig::cloudKmsType() const
+{
+    return m_cloudKmsType;
+}
+
+std::string NodeConfig::bcosKmsKeySecurityCipherDataKey() const
+{
+    return m_bcosKmsKeySecurityCipherDataKey;
+}
+
+std::string NodeConfig::keyEncryptionUrl() const
+{
+    return m_KeyEncryptionUrl;
+}
+
+bool NodeConfig::enableSendBlockStatusByTree() const
+{
+    return m_enableSendBlockStatusByTree;
+}
+
+bool NodeConfig::enableSendTxByTree() const
+{
+    return m_enableSendTxByTree;
+}
+
+std::int64_t NodeConfig::treeWidth() const
+{
+    return m_treeWidth;
+}
+
+int NodeConfig::sendTxTimeout() const
+{
+    return m_sendTxTimeout;
+}
+
+bool NodeConfig::withoutTarsFramework() const
+{
+    return m_withoutTarsFramework;
+}
+
+void NodeConfig::setWithoutTarsFramework(bool _withoutTarsFramework)
+{
+    m_withoutTarsFramework = _withoutTarsFramework;
+}
+
+NodeConfig::BaselineSchedulerConfig const& NodeConfig::baselineSchedulerConfig() const
+{
+    return m_baselineSchedulerConfig;
+}
+
+NodeConfig::TarsRPCConfig const& NodeConfig::tarsRPCConfig() const
+{
+    return m_tarsRPCConfig;
+}
+
+bool NodeConfig::enableTxsFromFreeNode() const
+{
+    return m_enableTxsFromFreeNode;
+}
+
+void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
+{
+    if (auto node = ptree.get_child_optional("alloc"))
+    {
+        for (const auto& it : *node)
+        {
+            auto flag = it.first;
+            auto enableNumber = it.second.get_value<bool>();
+            m_genesisConfig.m_features.emplace_back(
+                ledger::FeatureSet{.flag = ledger::Features::string2Flag(flag),
+                    .enable = static_cast<int>(enableNumber)});
+        }
+    }
 }
 
 std::string bcos::tool::generateGenesisData(

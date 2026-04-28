@@ -29,32 +29,15 @@ namespace protocol
 class GroupInfoCodecImpl : public bcos::group::GroupInfoCodec
 {
 public:
-    GroupInfoCodecImpl()
-      : m_nodeFactory(std::make_shared<bcos::group::ChainNodeInfoFactory>()),
-        m_groupFactory(std::make_shared<bcos::group::GroupInfoFactory>())
-    {}
+    GroupInfoCodecImpl();
 
-    ~GroupInfoCodecImpl() override {}
+    ~GroupInfoCodecImpl() override;
 
-    bcos::group::GroupInfo::Ptr deserialize(const std::string& _encodedData) override
-    {
-        tars::TarsInputStream<tars::BufferReader> input;
-        input.setBuffer((const char*)_encodedData.data(), _encodedData.size());
+    bcos::group::GroupInfo::Ptr deserialize(const std::string& _encodedData) override;
 
-        bcostars::GroupInfo tarsGroupInfo;
-        tarsGroupInfo.readFrom(input);
-        return toBcosGroupInfo(m_nodeFactory, m_groupFactory, tarsGroupInfo);
-    }
+    Json::Value serialize(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
-    Json::Value serialize(bcos::group::GroupInfo::Ptr) override { return {}; }
-
-    void serialize(std::string& _encodedData, bcos::group::GroupInfo::Ptr _groupInfo) override
-    {
-        auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
-        tars::TarsOutputStream<tars::BufferWriterString> output;
-        tarsGroupInfo.writeTo(output);
-        output.swap(_encodedData);
-    }
+    void serialize(std::string& _encodedData, bcos::group::GroupInfo::Ptr _groupInfo) override;
 
 private:
     bcos::group::ChainNodeInfoFactory::Ptr m_nodeFactory;
