@@ -26,6 +26,35 @@ using namespace bcos::codec::abi;
 
 const int ContractABICodec::MAX_BYTE_LENGTH;
 
+ContractABICodec::ContractABICodec(const bcos::crypto::Hash& hashImpl) : m_hashImpl(hashImpl) {}
+
+size_t ContractABICodec::getOffset()
+{
+    return offset;
+}
+
+void ContractABICodec::validOffset(std::size_t _offset)
+{
+    if (_offset >= data.size())
+    {
+        std::stringstream ss;
+        ss << " deserialize failed, invalid offset , offset is " << _offset << " , length is "
+           << data.size() << " , data is " << toHex(data);
+
+        throw std::length_error(ss.str().c_str());
+    }
+}
+
+void ContractABICodec::abiInAux()
+{
+    return;
+}
+
+void ContractABICodec::abiOutAux()
+{
+    return;
+}
+
 bool ContractABICodec::abiOutByFuncSelector(
     bytesConstRef _data, const std::vector<std::string>& _allTypes, std::vector<std::string>& _out)
 {

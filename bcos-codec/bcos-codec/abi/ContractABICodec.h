@@ -285,7 +285,7 @@ struct Offset<T>
 class ContractABICodec
 {
 public:
-    explicit ContractABICodec(const bcos::crypto::Hash& hashImpl) : m_hashImpl(hashImpl) {}
+    explicit ContractABICodec(const bcos::crypto::Hash& hashImpl);
     // explicit ContractABICodec(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl) {}
 
     template <class T, std::enable_if_t<!std::is_integral<T>::value>>
@@ -408,19 +408,9 @@ private:
     bytesConstRef data;
 
 private:
-    size_t getOffset() { return offset; }
+    size_t getOffset();
     // check if offset valid and std::length_error will be throw
-    void validOffset(std::size_t _offset)
-    {
-        if (_offset >= data.size())
-        {
-            std::stringstream ss;
-            ss << " deserialize failed, invalid offset , offset is " << _offset << " , length is "
-               << data.size() << " , data is " << toHex(data);
-
-            throw std::length_error(ss.str().c_str());
-        }
-    }
+    void validOffset(std::size_t _offset);
 
     template <class T>
     std::string toString(const T& _t)
@@ -430,7 +420,7 @@ private:
         return ss.str();
     }
 
-    inline void abiInAux() { return; }
+    void abiInAux();
 
     template <class T, class... U>
     void abiInAux(T const& _t, U const&... _u)
@@ -451,7 +441,7 @@ private:
         abiInAux(_u...);
     }
 
-    void abiOutAux() { return; }
+    void abiOutAux();
 
     template <class T, class... U>
     void abiOutAux(T& _t, U&... _u)

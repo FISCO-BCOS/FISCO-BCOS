@@ -24,6 +24,22 @@
 #include <wedpr-crypto/WedprUtilities.h>
 #include <wedpr-crypto/WedprCrypto.h>
 
+bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair()
+  : KeyPair(SECP256K1_PUBLIC_LEN, SECP256K1_PRIVATE_LEN, KeyPairType::Secp256K1)
+{}
+
+bcos::crypto::Secp256k1KeyPair::Secp256k1KeyPair(SecretPtr _secretKey) : Secp256k1KeyPair()
+{
+    m_secretKey = _secretKey;
+    m_publicKey = priToPub(_secretKey);
+    m_type = KeyPairType::Secp256K1;
+}
+
+bcos::crypto::PublicPtr bcos::crypto::Secp256k1KeyPair::priToPub(SecretPtr _secret)
+{
+    return secp256k1PriToPub(_secret);
+}
+
 bcos::crypto::PublicPtr bcos::crypto::secp256k1PriToPub(bcos::crypto::SecretPtr _secret)
 {
     CInputBuffer privateKey{_secret->constData(), _secret->size()};
