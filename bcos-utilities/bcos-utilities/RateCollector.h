@@ -19,15 +19,17 @@
  */
 #pragma once
 
-#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ObjectCounter.h"
-#include "bcos-utilities/Timer.h"
+#include <atomic>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace bcos
 {
+
+class Timer;
 
 struct RateCollectorStat
 {
@@ -47,93 +49,28 @@ public:
     using Ptr = std::shared_ptr<RateCollector>;
     using ConstPtr = std::shared_ptr<const RateCollector>;
 
-    RateCollector(std::string _moduleName, uint64_t _intervalMS)
-      : m_moduleName(std::move(_moduleName)), m_intervalMS(_intervalMS)
-    {
-        m_reportTimer = std::make_shared<Timer>(_intervalMS, _moduleName);
-        m_reportTimer->registerTimeoutHandler([this]() {
-            report();
-            flush();
-            m_reportTimer->restart();
-        });
-    }
+    RateCollector(std::string _moduleName, uint64_t _intervalMS);
 
-    ~RateCollector() { stop(); }
+    ~RateCollector();
 
     RateCollector(const RateCollector&) = delete;
     RateCollector(RateCollector&&) = delete;
     RateCollector& operator=(const RateCollector&) = delete;
     RateCollector& operator=(RateCollector&&) = delete;
 
-    void start()
-    {
-        if (m_reportTimer)
-        {
-            m_reportTimer->start();
-        }
-    }
+    void start();
 
-    void stop()
-    {
-        if (m_reportTimer)
-        {
-            m_reportTimer->stop();
-            m_reportTimer->destroy();
-        }
-    }
+    void stop();
 
     static void enable();
     static void disable();
     bool isEnable();
 
-    void report()
-    {
-        if (!isEnable())
-        {
-            return;
-        }
+    void report();
 
-        auto& stat = m_rateCollectorStat;
-        BCOS_LOG(INFO) << LOG_BADGE("RateCollector")
-                       << LOG_BADGE(m_moduleName)
-                       //    << LOG_KV("totalCount", stat.totalCount)
-                       //    << LOG_KV("totalFailedCount", stat.totalFailedCount)
-                       //    << LOG_KV("totalDataSize", stat.totalDataSize)
-                       //    << LOG_KV("totalFailedDataSize", stat.totalFailedDataSize)
-                       << LOG_KV("lastCount", stat.lastCount)
-                       << LOG_KV("lastTotalDataSize", stat.lastTotalDataSize)
-                       << LOG_KV("lastFailedCount", stat.lastFailedCount)
-                       << LOG_KV("lastTotalFailedDataSize", stat.lastTotalFailedDataSize)
-                       << LOG_KV(
-                              "lastRate(Mb/s)", calcAvgRate(stat.lastTotalDataSize, m_intervalMS))
-                       << LOG_KV("lastQPS(request/s)", calcAvgQPS(stat.lastCount, m_intervalMS));
-    }
+    void flush();
 
-    void flush()
-    {
-        m_rateCollectorStat.lastCount = 0;
-        m_rateCollectorStat.lastFailedCount = 0;
-        m_rateCollectorStat.lastTotalDataSize = 0;
-        m_rateCollectorStat.lastTotalFailedDataSize = 0;
-    }
-
-    void update(std::size_t _dataSize, bool _success)
-    {
-        if (_success)
-        {
-            m_rateCollectorStat.totalCount++;
-            m_rateCollectorStat.lastCount++;
-            m_rateCollectorStat.totalDataSize += _dataSize;
-            m_rateCollectorStat.lastTotalDataSize += _dataSize;
-        }
-        else
-        {
-            m_rateCollectorStat.totalFailedCount++;
-            m_rateCollectorStat.lastFailedCount++;
-            m_rateCollectorStat.totalFailedDataSize += _dataSize;
-            m_rateCollectorStat.lastTotalFailedDataSize += _dataSize;
-        }
-    }
+    void update(std::size_t _dataSize, bool _success);
 
 private:
     std::string m_moduleName;

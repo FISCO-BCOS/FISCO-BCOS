@@ -2,6 +2,7 @@
 
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Trait.h"
+#include "bcos-utilities/Overloaded.h"
 #include <range/v3/view/map.hpp>
 #include <type_traits>
 
@@ -36,25 +37,25 @@ public:
         {
             co_return;
         }
-        for (auto index = static_cast<int64_t>(m_records.size()); index > savepoint; --index)
-        {
-            assert(index > 0);
-            auto& record = m_records[index - 1];
 
-            if (std::holds_alternative<storage2::NOT_EXISTS_TYPE>(record.oldValue))
-            {
-                co_await storage2::removeOne(m_storage.get(), std::move(record.key));
-            }
-            else if (std::holds_alternative<storage2::DELETED_TYPE>(record.oldValue))
-            {
-                co_await storage2::writeOne(
-                    m_storage.get(), std::move(record.key), storage2::deleteItem);
-            }
-            else if (auto* value = std::get_if<Value>(&record.oldValue))
-            {
-                co_await storage2::writeOne(
-                    m_storage.get(), std::move(record.key), std::move(*value));
-            }
+        while (static_cast<int64_t>(m_records.size()) > savepoint)
+        {
+            auto& record = m_records.back();
+
+            co_await std::visit(
+                bcos::overloaded{[&](storage2::NOT_EXISTS_TYPE) -> task::Task<void> {
+                                     co_await storage2::removeOne(
+                                         m_storage.get(), std::move(record.key), storage2::DIRECT);
+                                 },
+                    [&](storage2::DELETED_TYPE) -> task::Task<void> {
+                        co_await storage2::writeOne(
+                            m_storage.get(), std::move(record.key), storage2::deleteItem);
+                    },
+                    [&](Value& value) -> task::Task<void> {
+                        co_await storage2::writeOne(
+                            m_storage.get(), std::move(record.key), std::move(value));
+                    }},
+                record.oldValue);
 
             m_records.pop_back();
         }
@@ -94,8 +95,8 @@ private:
             {
                 continue;
             }
-            m_records.emplace_back(typename Rollbackable::Record{
-                .key = Key(key), .oldValue = std::move(oldValue)});
+            m_records.emplace_back(
+                typename Rollbackable::Record{.key = Key(key), .oldValue = std::move(oldValue)});
         }
     }
 

@@ -1,5 +1,5 @@
-/**
- *  Copyright (C) 2023 FISCO BCOS.
+/*
+ *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,20 +13,16 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file RateCollector.cpp
- * @author: Jimmy Shi
- * @date 2023/3/8
+ * @file RateReporter.cpp
  */
 
-#include "RateCollector.h"
+#include "bcos-utilities/ratelimiter/RateReporter.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Timer.h"
 
 using namespace bcos;
 
-bool c_enableStatCollector = false;
-
-RateCollector::RateCollector(std::string _moduleName, uint64_t _intervalMS)
+RateReporter::RateReporter(std::string _moduleName, uint64_t _intervalMS)
   : m_moduleName(std::move(_moduleName)), m_intervalMS(_intervalMS)
 {
     m_reportTimer = std::make_shared<Timer>(_intervalMS, m_moduleName);
@@ -37,12 +33,12 @@ RateCollector::RateCollector(std::string _moduleName, uint64_t _intervalMS)
     });
 }
 
-RateCollector::~RateCollector()
+RateReporter::~RateReporter()
 {
     stop();
 }
 
-void RateCollector::start()
+void RateReporter::start()
 {
     if (m_reportTimer)
     {
@@ -50,40 +46,18 @@ void RateCollector::start()
     }
 }
 
-void RateCollector::stop()
+void RateReporter::stop()
 {
     if (m_reportTimer)
     {
         m_reportTimer->stop();
-        m_reportTimer->destroy();
     }
 }
 
-
-void RateCollector::enable()
+void RateReporter::report()
 {
-    c_enableStatCollector = true;
-}
-
-void RateCollector::disable()
-{
-    c_enableStatCollector = false;
-}
-
-bool RateCollector::isEnable()
-{
-    return c_enableStatCollector;
-}
-
-void RateCollector::report()
-{
-    if (!isEnable())
-    {
-        return;
-    }
-
-    auto& stat = m_rateCollectorStat;
-    BCOS_LOG(INFO) << LOG_BADGE("RateCollector")
+    auto& stat = m_rateReporterStat;
+    BCOS_LOG(INFO) << LOG_BADGE("RateReporter")
                    << LOG_BADGE(m_moduleName)
                    << LOG_KV("lastCount", stat.lastCount)
                    << LOG_KV("lastTotalDataSize", stat.lastTotalDataSize)
@@ -93,28 +67,34 @@ void RateCollector::report()
                    << LOG_KV("lastQPS(request/s)", calcAvgQPS(stat.lastCount, m_intervalMS));
 }
 
-void RateCollector::flush()
+void RateReporter::flush()
 {
-    m_rateCollectorStat.lastCount = 0;
-    m_rateCollectorStat.lastFailedCount = 0;
-    m_rateCollectorStat.lastTotalDataSize = 0;
-    m_rateCollectorStat.lastTotalFailedDataSize = 0;
+    m_rateReporterStat.lastCount = 0;
+    m_rateReporterStat.lastFailedCount = 0;
+    m_rateReporterStat.lastTotalDataSize = 0;
+    m_rateReporterStat.lastTotalFailedDataSize = 0;
 }
 
-void RateCollector::update(std::size_t _dataSize, bool _success)
+void RateReporter::update(std::size_t _dataSize, bool _success)
 {
+    auto const dataSize = static_cast<int64_t>(_dataSize);
     if (_success)
     {
-        m_rateCollectorStat.totalCount++;
-        m_rateCollectorStat.lastCount++;
-        m_rateCollectorStat.totalDataSize += _dataSize;
-        m_rateCollectorStat.lastTotalDataSize += _dataSize;
+        m_rateReporterStat.totalCount++;
+        m_rateReporterStat.lastCount++;
+        m_rateReporterStat.totalDataSize += dataSize;
+        m_rateReporterStat.lastTotalDataSize += dataSize;
     }
     else
     {
-        m_rateCollectorStat.totalFailedCount++;
-        m_rateCollectorStat.lastFailedCount++;
-        m_rateCollectorStat.totalFailedDataSize += _dataSize;
-        m_rateCollectorStat.lastTotalFailedDataSize += _dataSize;
+        m_rateReporterStat.totalFailedCount++;
+        m_rateReporterStat.lastFailedCount++;
+        m_rateReporterStat.totalFailedDataSize += dataSize;
+        m_rateReporterStat.lastTotalFailedDataSize += dataSize;
     }
+}
+
+RateReporter::Ptr RateReporterFactory::build(std::string _moduleName, uint64_t _intervalMS)
+{
+    return std::make_shared<RateReporter>(std::move(_moduleName), _intervalMS);
 }

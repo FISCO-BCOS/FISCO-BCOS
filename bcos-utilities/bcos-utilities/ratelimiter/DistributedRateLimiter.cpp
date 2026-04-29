@@ -21,9 +21,46 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/ratelimiter/DistributedRateLimiter.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Timer.h"
 
 using namespace bcos;
 using namespace bcos::ratelimiter;
+
+DistributedRateLimiter::DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis,
+    std::string _rateLimiterKey, int64_t _maxPermitsSize, bool _allowExceedMaxPermitSize,
+    int32_t _intervalSec, bool _enableLocalCache, int32_t _localCachePercent)
+  : m_redis(_redis),
+    m_rateLimiterKey(std::move(_rateLimiterKey)),
+    m_maxPermitsSize(_maxPermitsSize),
+    m_allowExceedMaxPermitSize(_allowExceedMaxPermitSize),
+    m_intervalSec(_intervalSec),
+    m_enableLocalCache(_enableLocalCache),
+    m_localCachePercent(_localCachePercent)
+{
+    if (m_enableLocalCache)
+    {
+        m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec), "clearTimer");
+        m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
+        m_clearCacheTimer->start();
+    }
+
+    m_statTimer = std::make_shared<Timer>(60000, "statTimer");
+    m_statTimer->registerTimeoutHandler([this]() { stat(); });
+    m_statTimer->start();
+}
+
+DistributedRateLimiter::~DistributedRateLimiter()
+{
+    if (m_clearCacheTimer)
+    {
+        m_clearCacheTimer->stop();
+    }
+
+    if (m_statTimer)
+    {
+        m_statTimer->stop();
+    }
+}
 
 // lua script for redis distributed rate limit
 const std::string DistributedRateLimiter::LUA_SCRIPT = R"(
@@ -223,7 +260,7 @@ int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
             m_stat.updateMore1MS();
         }
 
-        m_stat.lastRequestTotalCostMS += (end - start);
+        m_stat.lastRequestTotalCostMS += static_cast<int64_t>(end - start);
 
         return result;
     }
