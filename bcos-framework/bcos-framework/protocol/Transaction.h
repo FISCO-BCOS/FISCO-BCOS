@@ -24,9 +24,9 @@
 #include <bcos-utilities/Error.h>
 #include "bcos-utilities/AnyHolder.h"
 #include <atomic>
-#include <compare>
 #include <concepts>
 #include <functional>
+#include <iosfwd>
 #include <utility>
 
 namespace bcostars::protocol
