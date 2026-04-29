@@ -182,6 +182,8 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_auth_check_revert_status",
         "bugfix_auth_table_raw_address",
         "bugfix_auth_table_squatting",
+        "bugfix_v1_exec_error_gas_used",
+        "bugfix_v1_precompiled_error_gas",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -351,18 +353,21 @@ BOOST_AUTO_TEST_CASE(upgrade)
         BOOST_CHECK(features12.get(feature));
     }
 
-    // 3.16.0 to 3.16.4: no new features added in roadmap
+    // 3.16.0 to 3.16.4: bugfix_revert_logs only
     Features features13;
     features13.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_0_VERSION,
         bcos::protocol::BlockVersion::V3_16_4_VERSION);
     BOOST_TEST(validFlags(features13).size() == 1);
 
-    // 3.15.2 to 3.16.4: expect 3.16.0 feature flags
+    // 3.15.2 to 3.16.5: expect 3.16.0, 3.16.4 and 3.16.5 feature flags
     Features features14;
     features14.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_15_2_VERSION,
-        bcos::protocol::BlockVersion::V3_16_4_VERSION);
-    auto expect11 = std::to_array<std::string_view>({"bugfix_delegatecall_transfer",
-        "bugfix_nonce_initialize", "bugfix_v1_timestamp", "bugfix_revert_logs"});
+        bcos::protocol::BlockVersion::V3_16_5_VERSION);
+    auto expect11 = std::to_array<std::string_view>(
+        {"bugfix_delegatecall_transfer", "bugfix_nonce_initialize", "bugfix_v1_timestamp",
+            "bugfix_revert_logs", "bugfix_auth_check_create2", "bugfix_auth_check_revert_status",
+            "bugfix_auth_table_raw_address", "bugfix_auth_table_squatting",
+            "bugfix_v1_exec_error_gas_used", "bugfix_v1_precompiled_error_gas"});
     BOOST_CHECK_EQUAL(validFlags(features14).size(), expect11.size());
     for (auto feature : expect11)
     {
@@ -512,10 +517,10 @@ BOOST_AUTO_TEST_CASE(genesis)
         BOOST_CHECK(features3_152.get(feature));
     }
 
-    // 3.16.4
-    Features features3_16_4;
-    features3_16_4.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_4_VERSION);
-    auto expect3_16_4 = std::to_array<std::string_view>({// up to 3.15.1
+    // 3.16.5
+    Features features3_16_5;
+    features3_16_5.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION);
+    auto expect3_16_5 = std::to_array<std::string_view>({// up to 3.15.1
         "bugfix_revert", "bugfix_statestorage_hash",
         "bugfix_evm_create2_delegatecall_staticcall_codecopy", "bugfix_event_log_order",
         "bugfix_call_noaddr_return", "bugfix_precompiled_codehash", "bugfix_dmc_revert",
@@ -532,14 +537,18 @@ BOOST_AUTO_TEST_CASE(genesis)
         "bugfix_method_auth_sender", "bugfix_precompiled_evm_status",
         // 3.16.0
         "bugfix_delegatecall_transfer", "bugfix_nonce_initialize", "bugfix_v1_timestamp",
-        "bugfix_revert_logs"});
-    BOOST_CHECK_EQUAL(validFlags(features3_16_4).size(), expect3_16_4.size());
-    for (auto feature : expect3_16_4)
+        // 3.16.4
+        "bugfix_revert_logs",
+        // 3.16.5
+        "bugfix_auth_check_create2", "bugfix_auth_check_revert_status",
+        "bugfix_auth_table_raw_address", "bugfix_auth_table_squatting",
+        "bugfix_v1_exec_error_gas_used", "bugfix_v1_precompiled_error_gas"});
+    BOOST_CHECK_EQUAL(validFlags(features3_16_5).size(), expect3_16_5.size());
+    for (auto feature : expect3_16_5)
     {
-        BOOST_CHECK(features3_16_4.get(feature));
+        BOOST_CHECK(features3_16_5.get(feature));
     }
-    // ensure bugfix_revert_logs is not enabled by genesis of 3.16.4
-    BOOST_CHECK_EQUAL(features3_16_4.get(bcos::ledger::Features::Flag::bugfix_revert_logs), true);
+    BOOST_CHECK_EQUAL(features3_16_5.get(bcos::ledger::Features::Flag::bugfix_revert_logs), true);
 }
 
 

@@ -397,25 +397,30 @@ public:
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
         std::optional<EVMCResult> evmResult;
-        if (m_ledgerConfig.get().authCheckStatus() != 0U)
+        // FIB-88/89/92: read once, gate receipt-affecting error paths for hard-fork compat
+        const bool fixErrorGas = m_ledgerConfig.get().features().get(
+            ledger::Features::Flag::bugfix_v1_exec_error_gas_used);
+        try
         {
-            HOST_CONTEXT_LOG(DEBUG) << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
-                                    << " gas: " << ref->gas;
-
-            if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref, m_origin,
-                    buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                    m_hashImpl, m_ledgerConfig.get().features()))
+            // FIB-91: checkAuth() moved inside try block so exceptions
+            // trigger rollback/cleanup instead of bypassing it
+            if (m_ledgerConfig.get().authCheckStatus() != 0U)
             {
-                HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
-                evmResult = std::move(result);
-            };
-        }
+                HOST_CONTEXT_LOG(DEBUG)
+                    << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
+                    << " gas: " << ref->gas;
 
-        if (!evmResult)
-        {
-            try
+                if (auto result = checkAuth(m_rollbackableStorage.get(), m_blockHeader, *ref,
+                        m_origin, buildLegacyExternalCaller(), m_precompiledManager.get(),
+                        m_contextID, m_seq, m_hashImpl, m_ledgerConfig.get().features()))
+                {
+                    HOST_CONTEXT_LOG(DEBUG) << "Auth check failed";
+                    evmResult = std::move(result);
+                };
+            }
+
+            if (!evmResult)
             {
-                // 先转账，再执行
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -437,7 +442,6 @@ public:
                     }
                 }
 
-
                 if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                 {
                     evmResult.emplace(co_await executeCreate());
@@ -447,58 +451,61 @@ public:
                     evmResult.emplace(co_await executeCall());
                 }
             }
-            catch (protocol::OutOfGas& e)
-            {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "OutOfGas exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(
-                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                        EVMC_OUT_OF_GAS, evmResult->gas_left, e.what()));
-            }
-            catch (protocol::NotEnoughCashError& e)
+        }
+        catch (protocol::OutOfGas& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
+            // FIB-89: use 0 instead of potentially uninitialized evmResult->gas_left
+            evmResult.emplace(makeErrorEVMCResult(
+                m_hashImpl, protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0, e.what()));
+        }
+        catch (protocol::NotEnoughCashError& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG)
+                << "NotEnoughCash exception: " << boost::diagnostic_information(e);
+            // FIB-88: fatal error consumes all gas when bugfix flag enabled
+            evmResult.emplace(
+                makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
+                    EVMC_INSUFFICIENT_BALANCE, fixErrorGas ? 0 : ref->gas, e.what()));
+        }
+        catch (NotFoundCodeError& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG)
+                << "Not found code exception: " << boost::diagnostic_information(e);
 
+            // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
+            // not exist
+            using namespace std::string_literals;
+            if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
             {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "NotEnoughCash exception: " << boost::diagnostic_information(e);
+                evmResult.emplace(makeErrorEVMCResult(
+                    m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, {}));
+            }
+            else
+            {
+                // FIB-88: EVMC_REVERT preserves ref->gas per EVM spec
                 evmResult.emplace(
-                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
-                        EVMC_INSUFFICIENT_BALANCE, ref->gas, e.what()));
+                    makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::RevertInstruction,
+                        EVMC_REVERT, ref->gas, "Call address error."s));
             }
-            catch (NotFoundCodeError& e)
-            {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "Not found code exception: " << boost::diagnostic_information(e);
-
-                // Static call或delegate call时，合约不存在要返回EVMC_SUCCESS
-                // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
-                // not exist
-                using namespace std::string_literals;
-                if (ref->flags == EVMC_STATIC || ref->kind == EVMC_DELEGATECALL)
-                {
-                    evmResult.emplace(makeErrorEVMCResult(
-                        m_hashImpl, protocol::TransactionStatus::None, EVMC_SUCCESS, ref->gas, {}));
-                }
-                else
-                {
-                    evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                        protocol::TransactionStatus::RevertInstruction, EVMC_REVERT, ref->gas,
-                        "Call address error."s));
-                }
-            }
-            catch (std::exception& e)
-            {
-                HOST_CONTEXT_LOG(DEBUG)
-                    << "Execute exception: " << boost::diagnostic_information(e);
-                evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                    protocol::TransactionStatus::OutOfGas, EVMC_INTERNAL_ERROR, ref->gas, ""));
-            }
+        }
+        catch (std::exception& e)
+        {
+            HOST_CONTEXT_LOG(DEBUG) << "Execute exception: " << boost::diagnostic_information(e);
+            // FIB-88: fatal error consumes all gas
+            // FIB-92: use Unknown instead of OutOfGas for EVMC_INTERNAL_ERROR
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                fixErrorGas ? protocol::TransactionStatus::Unknown :
+                              protocol::TransactionStatus::OutOfGas,
+                EVMC_INTERNAL_ERROR, fixErrorGas ? 0 : ref->gas, ""));
         }
 
         if (evmResult->gas_left < 0)
         {
             HOST_CONTEXT_LOG(DEBUG) << "Execute gas < 0: " << evmResult->gas_left;
-            evmResult.emplace(makeErrorEVMCResult(
-                m_hashImpl, protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, ref->gas, ""));
+            // FIB-88: fatal error consumes all gas when bugfix flag enabled
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_OUT_OF_GAS, fixErrorGas ? 0 : ref->gas, ""));
         }
 
         if (evmResult->status_code != EVMC_SUCCESS)
@@ -695,7 +702,7 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
@@ -725,7 +732,7 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
