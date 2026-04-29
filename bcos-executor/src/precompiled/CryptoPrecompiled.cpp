@@ -27,6 +27,8 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include <wedpr-crypto/WedprCrypto.h>
+#include <wedpr-crypto/WedprUtilities.h>
 
 using namespace bcos;
 using namespace bcos::codec;

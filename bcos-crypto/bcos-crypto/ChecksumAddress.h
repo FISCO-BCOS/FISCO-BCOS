@@ -20,156 +20,44 @@
 
 #pragma once
 
-#include <bcos-codec/bcos-codec/rlp/RLPDecode.h>
-#include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
-#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
-#include <fmt/format.h>
-#include <boost/algorithm/string.hpp>
-#include <memory>
 #include <string>
+#include <string_view>
 
 namespace bcos
 {
-inline void toChecksumAddress(
-    std::string& _addr, const std::string_view& addressHashHex, std::string_view prefix = "")
-{
-    auto convertHexCharToInt = [](char byte) {
-        int ret = 0;
-        if (byte >= '0' && byte <= '9')
-        {
-            ret = byte - '0';
-        }
-        else if (byte >= 'a' && byte <= 'f')
-        {
-            ret = byte - 'a' + 10;
-        }
-        else if (byte >= 'A' && byte <= 'F')
-        {
-            ret = byte - 'A' + 10;
-        }
-        return ret;
-    };
-    for (size_t i = prefix.size(); i < _addr.size(); ++i)
-    {
-        if (isdigit(_addr[i]))
-        {
-            continue;
-        }
-        if (convertHexCharToInt(addressHashHex[i]) >= 8)
-        {
-            _addr[i] = toupper(_addr[i]);
-        }
-    }
-}
+void toChecksumAddress(
+    std::string& _addr, const std::string_view& addressHashHex, std::string_view prefix = "");
 
-inline void toCheckSumAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashImpl)
-{
-    boost::algorithm::to_lower(_hexAddress);
-    toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex());
-}
+void toCheckSumAddress(std::string& _hexAddress, crypto::Hash::Ptr _hashImpl);
 
 // for EIP-1191, hexAdress input should NOT have prefix "0x"
-inline void toCheckSumAddressWithChainId(
-    std::string& _hexAddress, crypto::Hash::Ptr _hashImpl, uint64_t _chainId = 0)
-{
-    boost::algorithm::to_lower(_hexAddress);
-    std::string hashInput = _hexAddress;
-    if (_chainId != 0 && _chainId != 1)
-    {
-        hashInput = fmt::format("{}0x{}", _chainId, _hexAddress);
-    }
-    toChecksumAddress(_hexAddress, _hashImpl->hash(hashInput).hex());
-}
+void toCheckSumAddressWithChainId(
+    std::string& _hexAddress, crypto::Hash::Ptr _hashImpl, uint64_t _chainId = 0);
 
-inline void toAddress(std::string& _hexAddress)
-{
-    boost::algorithm::to_lower(_hexAddress);
-    // toChecksumAddress(_hexAddress, _hashImpl->hash(_hexAddress).hex()); notice :
-    // toChecksumAddress must be used before rpc return
-}
+void toAddress(std::string& _hexAddress);
 
-inline std::string toChecksumAddressFromBytes(
-    const std::string_view& _AddressBytes, crypto::Hash::Ptr _hashImpl)
-{
-    auto hexAddress = toHex(_AddressBytes);
-    toAddress(hexAddress);
-    return hexAddress;
-}
+std::string toChecksumAddressFromBytes(
+    const std::string_view& _AddressBytes, crypto::Hash::Ptr _hashImpl);
 
 // address based on blockNumber, contextID, seq
-inline std::string newEVMAddress(
-    const bcos::crypto::Hash& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
-{
-    auto hash = _hashImpl.hash(boost::lexical_cast<std::string>(blockNumber) + "_" +
-                               boost::lexical_cast<std::string>(contextID) + "_" +
-                               boost::lexical_cast<std::string>(seq));
+std::string newEVMAddress(
+    const bcos::crypto::Hash& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq);
 
-    std::string hexAddress;
-    hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data(), hash.data() + 20, std::back_inserter(hexAddress));
-
-    toAddress(hexAddress);
-
-    return hexAddress;
-}
-
-inline std::string newEVMAddress(
-    const bcos::crypto::Hash::Ptr& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq)
-{
-    return newEVMAddress(*_hashImpl, blockNumber, contextID, seq);
-}
+std::string newEVMAddress(
+    const bcos::crypto::Hash::Ptr& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq);
 
 // keccak256(rlp.encode([normalize_address(sender), nonce]))[12:]
-inline evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
-{
-    codec::rlp::Header header{.isList = true, .payloadLength = 1 + sender.size()};
-    header.payloadLength += codec::rlp::length(nonce);
-    bcos::bytes rlp;
-    codec::rlp::encodeHeader(rlp, header);
-    codec::rlp::encode(rlp, sender);
-    codec::rlp::encode(rlp, nonce);
-    auto hash = bcos::crypto::keccak256Hash(ref(rlp));
-    evmc_address address;
-    std::uninitialized_copy(hash.begin() + 12, hash.end(), address.bytes);
+evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept;
 
-    return address;
-}
+std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept;
 
-inline std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept
-{
-    auto address = newLegacyEVMAddress(sender, nonce);
-    auto view = std::span{address.bytes};
-    std::string out;
-    out.reserve(view.size() * 2);
-    boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(out));
-    return out;
-}
-
-inline std::string newLegacyEVMAddressString(
-    bytesConstRef sender, std::string const& nonce) noexcept
-{
-    const auto uNonce = hex2u(nonce);
-    return newLegacyEVMAddressString(sender, uNonce);
-}
+std::string newLegacyEVMAddressString(bytesConstRef sender, std::string const& nonce) noexcept;
 
 // EIP-1014
-inline std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
-{
-    auto hash = _hashImpl->hash(bytes{0xff} +
-                                (_sender.starts_with("0x") ? fromHex(_sender) : fromHex(_sender)) +
-                                toBigEndian(_salt) + _hashImpl->hash(_init));
-
-    std::string hexAddress;
-    hexAddress.reserve(40);
-    boost::algorithm::hex(hash.data() + 12, hash.data() + 32, std::back_inserter(hexAddress));
-
-    toAddress(hexAddress);
-
-    return hexAddress;
-}
+std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
+    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
 }  // namespace bcos
