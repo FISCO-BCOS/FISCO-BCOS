@@ -82,6 +82,10 @@ public:
         m_executeContexts.reserve(::ranges::size(m_contexts));
         for (auto& context : m_contexts)
         {
+            if (m_hasRAW.get().test())
+            {
+                break;
+            }
             m_executeContexts.emplace_back(
                 co_await m_executor.get().createExecuteContext(m_readWriteSetStorage, blockHeader,
                     *context.transaction, context.contextID, ledgerConfig, false));

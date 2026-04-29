@@ -29,6 +29,8 @@ namespace bcos
 class ZstdCompress
 {
 public:
+    inline static constexpr size_t MAX_UNCOMPRESSED_SIZE = 32 * 1024 * 1024;  // 32MB
+
     static bool compress(bytesConstRef inputData, bytes& compressedData, int compressionLevel);
     static bool uncompress(bytesConstRef compressedData, bytes& uncompressedData);
 };
