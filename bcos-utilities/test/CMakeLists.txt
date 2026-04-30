@@ -26,7 +26,7 @@ find_package(OpenSSL REQUIRED)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(${TEST_BINARY_NAME} PRIVATE bcos-utilities Boost::unit_test_framework Boost::log_setup TBB::tbb OpenSSL::Crypto)
+target_link_libraries(${TEST_BINARY_NAME} PRIVATE bcos-utilities bcos-crypto Boost::unit_test_framework Boost::log_setup TBB::tbb OpenSSL::Crypto)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
