@@ -33,7 +33,7 @@ class HsmSM4Crypto : public SymmetricEncryption
 {
 public:
     using Ptr = std::shared_ptr<HsmSM4Crypto>;
-    HsmSM4Crypto(std::string _libPath) { m_hsmLibPath = _libPath; }
+    HsmSM4Crypto(std::string _libPath);
     ~HsmSM4Crypto() override {}
 
     // encrypt decrypt with external key

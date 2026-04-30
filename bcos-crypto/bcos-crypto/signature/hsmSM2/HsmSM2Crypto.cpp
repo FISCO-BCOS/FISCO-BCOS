@@ -35,6 +35,12 @@ using namespace hsm;
 #define SDR_BASE 0x01000000
 #define SDR_VERIFYERR (SDR_BASE + 0x0000000E)
 
+HsmSM2Crypto::HsmSM2Crypto(std::string _libPath)
+{
+    m_hsmLibPath = std::move(_libPath);
+    m_keyPairFactory = std::make_shared<HsmSM2KeyPairFactory>(m_hsmLibPath);
+}
+
 std::shared_ptr<bytes> HsmSM2Crypto::sign(
     const KeyPairInterface& _keyPair, const HashType& _hash, bool _signatureWithPub) const
 {

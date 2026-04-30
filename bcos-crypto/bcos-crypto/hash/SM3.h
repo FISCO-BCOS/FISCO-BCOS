@@ -19,32 +19,19 @@
  * @author yujiechen
  */
 #pragma once
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <wedpr-crypto/WedprCrypto.h>
 
 namespace bcos::crypto
 {
-HashType inline sm3Hash(bytesConstRef _data)
-{
-    hasher::openssl::OpenSSL_SM3_Hasher hasher;
-    hasher.update(_data);
+HashType sm3Hash(bytesConstRef _data);
 
-    HashType out;
-    hasher.final(out);
-    return out;
-}
 class SM3 : public Hash
 {
 public:
     using Ptr = std::shared_ptr<SM3>;
-    SM3() { setHashImplType(HashImplType::Sm3Hash); }
+    SM3();
     ~SM3() override = default;
-    HashType hash(bytesConstRef _data) const override { return sm3Hash(_data); }
-
-    bcos::crypto::hasher::AnyHasher hasher() const override
-    {
-        return bcos::crypto::hasher::AnyHasher{bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}};
-    };
+    HashType hash(bytesConstRef _data) const override;
+    bcos::crypto::hasher::AnyHasher hasher() const override;
 };
 }  // namespace bcos::crypto

@@ -149,6 +149,27 @@ bool ScaleDecoderStream::hasMore(uint64_t n) const
     return static_cast<SizeType>(m_currentIndex + n) <= m_span.size();
 }
 
+uint8_t ScaleDecoderStream::nextByte()
+{
+    if (!hasMore(1))
+    {
+        BOOST_THROW_EXCEPTION(ScaleDecodeException()
+                              << errinfo_comment("nextByte exception for NOT_ENOUGH_DATA"));
+    }
+    ++m_currentIndex;
+    return *m_currentIterator++;
+}
+
+gsl::span<const unsigned char> ScaleDecoderStream::span() const
+{
+    return m_span;
+}
+
+ScaleDecoderStream::SizeType ScaleDecoderStream::currentIndex() const
+{
+    return m_currentIndex;
+}
+
 ScaleDecoderStream& ScaleDecoderStream::operator>>(u256& v)
 {
     bytes decodedBigEndianData;

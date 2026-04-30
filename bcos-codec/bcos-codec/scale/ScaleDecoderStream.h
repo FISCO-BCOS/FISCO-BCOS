@@ -369,20 +369,11 @@ public:
      * advances current byte iterator by one
      * @return current byte
      */
-    uint8_t nextByte()
-    {
-        if (!hasMore(1))
-        {
-            BOOST_THROW_EXCEPTION(ScaleDecodeException()
-                                  << errinfo_comment("nextByte exception for NOT_ENOUGH_DATA"));
-        }
-        ++m_currentIndex;
-        return *m_currentIterator++;
-    }
+    uint8_t nextByte();
     using SizeType = gsl::span<const byte>::size_type;
 
-    gsl::span<byte const> span() const { return m_span; }
-    SizeType currentIndex() const { return m_currentIndex; }
+    gsl::span<byte const> span() const;
+    SizeType currentIndex() const;
 
 private:
     bool decodeBool();

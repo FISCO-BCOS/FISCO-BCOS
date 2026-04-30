@@ -26,6 +26,14 @@
 
 using namespace bcos;
 using namespace bcos::crypto;
+
+SM2Crypto::SM2Crypto()
+{
+    m_signer = wedpr_sm2_sign_fast;
+    m_verifier = wedpr_sm2_verify;
+    m_keyPairFactory = std::make_shared<SM2KeyPairFactory>();
+}
+
 bool SM2Crypto::verify(std::shared_ptr<bytes const> _pubKeyBytes, const HashType& _hash,
     bytesConstRef _signatureData) const
 {

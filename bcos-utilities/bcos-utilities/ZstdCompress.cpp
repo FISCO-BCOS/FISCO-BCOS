@@ -66,6 +66,16 @@ bool ZstdCompress::uncompress(bytesConstRef compressedData, bytes& uncompressedD
         return false;
     }
 
+    // Guard against decompression bombs: reject payloads declaring excessive decompressed size
+    if (cBuffSize > ZstdCompress::MAX_UNCOMPRESSED_SIZE)
+    {
+        BCOS_LOG(WARNING) << LOG_BADGE("ZstdUncompress")
+                          << LOG_DESC("decompressed size exceeds maximum allowed size")
+                          << LOG_KV("declaredSize", cBuffSize)
+                          << LOG_KV("maxAllowedSize", ZstdCompress::MAX_UNCOMPRESSED_SIZE);
+        return false;
+    }
+
     uncompressedData.resize(cBuffSize);
     auto uncompressedDataPtr = const_cast<void*>(static_cast<const void*>(&uncompressedData[0]));
     auto compressedDataPtr = static_cast<const void*>(compressedData.data());
