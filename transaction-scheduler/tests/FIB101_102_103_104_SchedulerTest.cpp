@@ -42,6 +42,12 @@
 #include <fakeit.hpp>
 #include <future>
 
+// Wrap the entire fixture / mock surface in an anonymous namespace so the
+// `using namespace bcos::*` directives below do not leak into other unity-build
+// translation units. This keeps the file unity-build-friendly and lets the
+// tests live alongside testBaselineScheduler.cpp without symbol conflicts.
+namespace
+{
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
@@ -112,16 +118,18 @@ struct FIBMockScheduler
     }
 };
 
-// Keep storage-level getLedgerConfig stub minimal for tests
-inline task::AwaitableValue<void> tag_invoke(
+// Storage-level getLedgerConfig stub for tests. Found via ADL when the
+// BaselineScheduler template is instantiated; clang's -Wunused-function can't
+// see indirect template uses, so [[maybe_unused]] silences a false positive.
+[[maybe_unused]] task::AwaitableValue<void> tag_invoke(
     ledger::tag_t<bcos::ledger::getLedgerConfig> /*unused*/,
-    FIBMultiLayerStorage::ViewType& storage, bcos::ledger::LedgerConfig& ledgerConfig,
-    protocol::BlockNumber blockNumber, protocol::BlockFactory& blockFactory)
+    FIBMultiLayerStorage::ViewType& /*storage*/, bcos::ledger::LedgerConfig& /*ledgerConfig*/,
+    protocol::BlockNumber /*blockNumber*/, protocol::BlockFactory& /*blockFactory*/)
 {
     return {};
 }
 
-static bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>> emptyTxsTaskFIB()
+bcos::task::Task<std::vector<bcos::protocol::Transaction::ConstPtr>> emptyTxsTaskFIB()
 {
     co_return std::vector<bcos::protocol::Transaction::ConstPtr>{};
 }
@@ -160,17 +168,9 @@ public:
                 }
                 callback({}, nullptr);
             });
-        // Ledger: storeTransactionsAndReceipts => no error
-        fakeit::When(Method(mockLedger, storeTransactionsAndReceipts))
-            .AlwaysDo(
-                [this](protocol::ConstTransactionsPtr, protocol::Block::ConstPtr) -> Error::Ptr {
-                    if (storeTransactionsFails)
-                    {
-                        return BCOS_ERROR_PTR(
-                            scheduler::SchedulerError::UnknownError, storeTransactionsFailure);
-                    }
-                    return nullptr;
-                });
+        // FIB-104: storeTransactionsAndReceipts is no longer called by coCommitBlock
+        // (the unified prewriteBlockToBuffer path writes txs/receipts directly into
+        // the prewrite buffer). The mock is intentionally not registered.
 
         // TxPool: getTransactions => empty list
         using HashView =
@@ -240,8 +240,6 @@ public:
     protocol::BlockNumber ledgerBlockNumber = -1;
     bool prewriteBlockFails = false;
     std::string prewriteFailure = "injected prewrite failure";
-    bool storeTransactionsFails = false;
-    std::string storeTransactionsFailure = "injected store transactions failure";
 
     FIBMockScheduler mockScheduler;
     fakeit::Mock<ledger::LedgerInterface> mockLedger;
@@ -255,13 +253,11 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(FIB101_102_103_104_SchedulerTest, FIBSchedulerFixture)
 
-// FIB-102: Verify atomic types are used for block number counters.
-// The fact that BaselineScheduler compiles with std::atomic<int64_t> members
-// and this test links and runs correctly verifies the data-race fix.
-BOOST_AUTO_TEST_CASE(atomicBlockNumberCounters)
+// FIB-102: Two consecutive executes succeed under the mutex-owned counter
+// regime — exercises the m_executeMutex-protected read/write of
+// m_lastExecutedBlockNumber on the discontinuity-check fast path.
+BOOST_AUTO_TEST_CASE(consecutiveExecutesAdvanceCounter)
 {
-    // Execute two consecutive blocks to exercise the atomic load/store paths
-    // in coExecuteBlock (m_lastExecutedBlockNumber)
     auto executedHeader = executeOneBlock(200);
     BOOST_CHECK(executedHeader);
     BOOST_CHECK_EQUAL(executedHeader->number(), 200);
@@ -271,7 +267,7 @@ BOOST_AUTO_TEST_CASE(atomicBlockNumberCounters)
     BOOST_CHECK_EQUAL(executedHeader2->number(), 201);
 }
 
-// FIB-102: Verify the discontinuous block number check works with atomics
+// FIB-102: Verify the discontinuity check fires when the input skips a number.
 BOOST_AUTO_TEST_CASE(discontinuousBlockNumberRejected)
 {
     auto executedHeader = executeOneBlock(100);
@@ -405,26 +401,6 @@ BOOST_AUTO_TEST_CASE(failedCommitRetainsExecutionResultForRetry)
     BOOST_CHECK(retryError->errorMessage().find(prewriteFailure) != std::string::npos);
 }
 
-BOOST_AUTO_TEST_CASE(failedStoreTransactionsRetainsExecutionResultForRetry)
-{
-    auto executedHeader = executeOneBlock(710);
-    BOOST_REQUIRE(executedHeader);
-
-    storeTransactionsFails = true;
-
-    Error::Ptr firstError;
-    baselineScheduler.commitBlock(executedHeader,
-        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { firstError = std::move(error); });
-    BOOST_REQUIRE(firstError);
-    BOOST_CHECK(firstError->errorMessage().find(storeTransactionsFailure) != std::string::npos);
-
-    Error::Ptr retryError;
-    baselineScheduler.commitBlock(executedHeader,
-        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { retryError = std::move(error); });
-    BOOST_REQUIRE(retryError);
-    BOOST_CHECK(retryError->errorMessage().find(storeTransactionsFailure) != std::string::npos);
-}
-
 BOOST_AUTO_TEST_CASE(commitHeaderMustMatchOldestExecutionResult)
 {
     auto executedHeader = executeOneBlock(720);
@@ -449,11 +425,11 @@ BOOST_AUTO_TEST_CASE(commitHeaderMustMatchOldestExecutionResult)
     BOOST_CHECK(retryError->errorMessage().find(prewriteFailure) != std::string::npos);
 }
 
-// FIB-101/FIB-104: Verify sequential execution and cached duplicate execution still work after
-// tightening the block number counters and pending-result bookkeeping.
-BOOST_AUTO_TEST_CASE(sequentialExecutionWithAtomicCounters)
+// FIB-101 / FIB-104: Sequential execution and cached-duplicate execution still
+// work after tightening the block-number counters (now mutex-owned) and the
+// pending-result bookkeeping.
+BOOST_AUTO_TEST_CASE(sequentialExecutionAndDuplicateCacheLookup)
 {
-    // Execute a sequence of blocks to verify the atomic counters work correctly
     for (int i = 0; i < 10; ++i)
     {
         auto header = executeOneBlock(500 + i);
@@ -487,3 +463,4 @@ BOOST_AUTO_TEST_CASE(sequentialExecutionWithAtomicCounters)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+}  // namespace
