@@ -12,25 +12,16 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
- * @file Common.h
- * @author: octopus
- * @date 2021-06-14
  */
 
-#pragma once
-#include <bcos-utilities/BoostLog.h>
-#include <openssl/bio.h>
-#include <openssl/pem.h>
+#include <bcos-boostssl/websocket/WsError.h>
 
-
-#define CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL][CTX]"
-#define NODEINFO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL][NODEINFO]"
-
-namespace bcos::boostssl
+bool bcos::boostssl::ws::notRetryAgain(int _wsError)
 {
-X509* toX509(const char* _pemBuffer);
+    return (_wsError == boostssl::ws::WsError::MessageOverflow);
+}
 
-EVP_PKEY* toEvpPkey(const char* _pemBuffer);
-
-}  // namespace bcos::boostssl
+std::string bcos::boostssl::ws::wsErrorToString(WsError _wsError)
+{
+    return std::to_string(_wsError);
+}

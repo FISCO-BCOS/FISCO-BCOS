@@ -12,25 +12,25 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
- * @file Common.h
- * @author: octopus
- * @date 2021-06-14
  */
 
-#pragma once
-#include <bcos-utilities/BoostLog.h>
-#include <openssl/bio.h>
-#include <openssl/pem.h>
+#include <bcos-boostssl/context/Common.h>
 
+using namespace bcos::boostssl;
 
-#define CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL][CTX]"
-#define NODEINFO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL][NODEINFO]"
-
-namespace bcos::boostssl
+X509* bcos::boostssl::toX509(const char* _pemBuffer)
 {
-X509* toX509(const char* _pemBuffer);
+    BIO* bio_mem = BIO_new(BIO_s_mem());
+    BIO_puts(bio_mem, _pemBuffer);
+    X509* x509 = PEM_read_bio_X509(bio_mem, NULL, NULL, NULL);
+    BIO_free(bio_mem);
+    return x509;
+}
 
-EVP_PKEY* toEvpPkey(const char* _pemBuffer);
-
-}  // namespace bcos::boostssl
+EVP_PKEY* bcos::boostssl::toEvpPkey(const char* _pemBuffer)
+{
+    BIO* bio_mem = BIO_new_mem_buf(_pemBuffer, -1);
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio_mem, NULL, NULL, NULL);
+    BIO_free(bio_mem);
+    return pkey;
+}

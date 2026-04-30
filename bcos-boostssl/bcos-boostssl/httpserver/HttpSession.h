@@ -85,13 +85,10 @@ public:
     std::shared_ptr<std::string> nodeId();
     void setNodeId(std::shared_ptr<std::string> _nodeId);
 
-    uint32_t httpBodySizeLimit() const { return m_httpBodySizeLimit; }
-    void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit)
-    {
-        m_httpBodySizeLimit = _httpBodySizeLimit;
-    }
-    CorsConfig corsConfig() const { return m_corsConfig; }
-    void setCorsConfig(CorsConfig _corsConfig) { m_corsConfig = std::move(_corsConfig); }
+    uint32_t httpBodySizeLimit() const;
+    void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit);
+    CorsConfig corsConfig() const;
+    void setCorsConfig(CorsConfig _corsConfig);
 
 private:
     HttpStream::Ptr m_httpStream;

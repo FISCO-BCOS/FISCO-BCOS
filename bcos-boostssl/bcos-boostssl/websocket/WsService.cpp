@@ -56,6 +56,130 @@ WsService::~WsService()
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[DELOBJ][WsService]", this);
 }
 
+std::shared_ptr<MessageFaceFactory> WsService::messageFactory()
+{
+    return m_messageFactory;
+}
+
+void WsService::setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
+{
+    m_messageFactory = std::move(_messageFactory);
+}
+
+std::shared_ptr<WsSessionFactory> WsService::sessionFactory()
+{
+    return m_sessionFactory;
+}
+
+void WsService::setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
+{
+    m_sessionFactory = std::move(_sessionFactory);
+}
+
+int32_t WsService::waitConnectFinishTimeout() const
+{
+    return m_waitConnectFinishTimeout;
+}
+
+void WsService::setWaitConnectFinishTimeout(int32_t _timeout)
+{
+    m_waitConnectFinishTimeout = _timeout;
+}
+
+void WsService::setIOServicePool(IOServicePool::Ptr _ioservicePool)
+{
+    m_ioservicePool = std::move(_ioservicePool);
+    m_timerIoc = m_ioservicePool->getIOService();
+}
+
+std::shared_ptr<WsConnector> WsService::connector() const noexcept
+{
+    return m_connector;
+}
+
+void WsService::setConnector(std::shared_ptr<WsConnector> _connector)
+{
+    m_connector = std::move(_connector);
+}
+
+void WsService::setHostPort(std::string host, uint16_t port)
+{
+    m_listenHost = std::move(host);
+    m_listenPort = port;
+}
+
+std::string WsService::listenHost() const noexcept
+{
+    return m_listenHost;
+}
+
+uint16_t WsService::listenPort() const noexcept
+{
+    return m_listenPort;
+}
+
+WsConfig::Ptr WsService::config() const noexcept
+{
+    return m_config;
+}
+
+void WsService::setConfig(WsConfig::Ptr _config)
+{
+    m_config = std::move(_config);
+}
+
+std::shared_ptr<bcos::boostssl::http::HttpServer> WsService::httpServer() const noexcept
+{
+    return m_httpServer;
+}
+
+void WsService::setHttpServer(std::shared_ptr<bcos::boostssl::http::HttpServer> _httpServer)
+{
+    m_httpServer = std::move(_httpServer);
+}
+
+void WsService::setTimerFactory(timer::TimerFactory::Ptr _timerFactory)
+{
+    m_timerFactory = std::move(_timerFactory);
+}
+
+timer::TimerFactory::Ptr WsService::timerFactory() const
+{
+    return m_timerFactory;
+}
+
+void WsService::registerConnectHandler(ConnectHandler _connectHandler)
+{
+    m_connectHandlers.push_back(std::move(_connectHandler));
+}
+
+void WsService::registerDisconnectHandler(DisconnectHandler _disconnectHandler)
+{
+    m_disconnectHandlers.push_back(std::move(_disconnectHandler));
+}
+
+void WsService::registerHandshakeHandler(HandshakeHandler _handshakeHandler)
+{
+    m_handshakeHandlers.push_back(std::move(_handshakeHandler));
+}
+
+void WsService::setReconnectedPeers(EndPointsPtr _reconnectedPeers)
+{
+    WriteGuard l(x_peers);
+    m_reconnectedPeers = std::move(_reconnectedPeers);
+}
+
+EndPointsPtr WsService::reconnectedPeers() const
+{
+    ReadGuard l(x_peers);
+    return m_reconnectedPeers;
+}
+
+void WsService::initTaskArena(uint32_t _taskArenaPoolSize)
+{
+    m_taskArena.initialize(_taskArenaPoolSize, 0);
+}
+
 void WsService::start()
 {
     if (m_running)

@@ -40,6 +40,36 @@ using namespace bcos::boostssl::context;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
+std::shared_ptr<MessageFaceFactory> WsInitializer::messageFactory() const
+{
+    return m_messageFactory;
+}
+
+void WsInitializer::setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
+{
+    m_messageFactory = std::move(_messageFactory);
+}
+
+std::shared_ptr<WsConfig> WsInitializer::config() const
+{
+    return m_config;
+}
+
+void WsInitializer::setConfig(std::shared_ptr<WsConfig> _config)
+{
+    m_config = std::move(_config);
+}
+
+std::shared_ptr<WsSessionFactory> WsInitializer::sessionFactory()
+{
+    return m_sessionFactory;
+}
+
+void WsInitializer::setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
+{
+    m_sessionFactory = std::move(_sessionFactory);
+}
+
 void WsInitializer::initWsService(WsService::Ptr _wsService)
 {
     std::shared_ptr<WsConfig> _config = m_config;

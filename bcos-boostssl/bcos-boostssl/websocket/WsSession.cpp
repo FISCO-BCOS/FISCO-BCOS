@@ -50,6 +50,148 @@ WsSession::WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
 
     m_buffer = std::make_shared<boost::beast::flat_buffer>();
 }
+
+WsSession::~WsSession() noexcept
+{
+    WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
+}
+
+bool WsSession::isConnected()
+{
+    return !m_isDrop && m_wsStreamDelegate && m_wsStreamDelegate->open();
+}
+
+std::string WsSession::endPoint() const
+{
+    return m_endPoint;
+}
+
+void WsSession::setEndPoint(const std::string& _endPoint)
+{
+    m_endPoint = _endPoint;
+}
+
+void WsSession::setConnectHandler(WsConnectHandler _connectHandler)
+{
+    m_connectHandler = std::move(_connectHandler);
+}
+
+WsConnectHandler WsSession::connectHandler()
+{
+    return m_connectHandler;
+}
+
+void WsSession::setDisconnectHandler(WsDisconnectHandler _disconnectHandler)
+{
+    m_disconnectHandler = std::move(_disconnectHandler);
+}
+
+WsDisconnectHandler WsSession::disconnectHandler()
+{
+    return m_disconnectHandler;
+}
+
+void WsSession::setRecvMessageHandler(WsRecvMessageHandler _recvMessageHandler)
+{
+    m_recvMessageHandler = std::move(_recvMessageHandler);
+}
+
+const WsRecvMessageHandler& WsSession::recvMessageHandler()
+{
+    return m_recvMessageHandler;
+}
+
+std::shared_ptr<MessageFaceFactory> WsSession::messageFactory()
+{
+    return m_messageFactory;
+}
+
+void WsSession::setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
+{
+    m_messageFactory = std::move(_messageFactory);
+}
+
+std::shared_ptr<boost::asio::io_context> WsSession::ioc() const
+{
+    return m_ioc;
+}
+
+void WsSession::setIoc(std::shared_ptr<boost::asio::io_context> _ioc)
+{
+    m_ioc = std::move(_ioc);
+}
+
+void WsSession::setVersion(uint16_t _version)
+{
+    m_version.store(_version);
+}
+
+uint16_t WsSession::version() const
+{
+    return m_version.load();
+}
+
+WsStreamDelegate::Ptr WsSession::wsStreamDelegate()
+{
+    return m_wsStreamDelegate;
+}
+
+void WsSession::setWsStreamDelegate(WsStreamDelegate::Ptr _wsStreamDelegate)
+{
+    m_wsStreamDelegate = std::move(_wsStreamDelegate);
+}
+
+int32_t WsSession::sendMsgTimeout() const
+{
+    return m_sendMsgTimeout;
+}
+
+void WsSession::setSendMsgTimeout(int32_t _sendMsgTimeout)
+{
+    m_sendMsgTimeout = _sendMsgTimeout;
+}
+
+int32_t WsSession::maxWriteMsgSize() const
+{
+    return m_maxWriteMsgSize;
+}
+
+void WsSession::setMaxWriteMsgSize(int32_t _maxWriteMsgSize)
+{
+    m_maxWriteMsgSize = _maxWriteMsgSize;
+}
+
+std::size_t WsSession::writeQueueSize()
+{
+    bcos::Guard lockGuard(x_writeQueue);
+    return m_writeQueue.size();
+}
+
+std::size_t WsSession::callbackQueueSize()
+{
+    bcos::Guard lockGuard(x_callback);
+    return m_callbacks.size();
+}
+
+std::string WsSession::nodeId()
+{
+    return m_nodeId;
+}
+
+void WsSession::setNodeId(std::string _nodeId)
+{
+    m_nodeId = std::move(_nodeId);
+}
+
+bool WsSession::needCheckRspPacket() const
+{
+    return m_needCheckRspPacket;
+}
+
+void WsSession::setNeedCheckRspPacket(bool _needCheckRespPacket)
+{
+    m_needCheckRspPacket = _needCheckRespPacket;
+}
 void WsSession::drop(WsError _reason)
 {
     if (m_isDrop)
@@ -114,6 +256,12 @@ void WsSession::drop(WsError _reason)
             }
         });
     });
+}
+
+WsSession::Ptr WsSessionFactory::createSession(
+    tbb::task_arena& taskArena, tbb::task_group& taskGroup)
+{
+    return std::make_shared<WsSession>(taskArena, taskGroup);
 }
 
 // start WsSession as client

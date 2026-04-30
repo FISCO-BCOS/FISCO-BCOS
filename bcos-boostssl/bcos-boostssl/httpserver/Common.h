@@ -56,12 +56,6 @@ struct CorsConfig
     std::string allowedHeaders{"Content-Type, Authorization, X-Requested-With"};
     int maxAge{86400};
 
-    std::string toString() const
-    {
-        return std::string("CorsConfig{") + "enableCORS=" + (enableCORS ? "true" : "false") +
-               ", allowedOrigins=" + allowedOrigins + ", allowedMethods=" + allowedMethods +
-               ", allowedHeaders=" + allowedHeaders + ", maxAge=" + std::to_string(maxAge) +
-               ", allowCredentials=" + (allowCredentials ? "true" : "false") + "}}";
-    }
+    std::string toString() const;
 };
 }  // namespace bcos::boostssl::http

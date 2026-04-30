@@ -12,25 +12,10 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
- * @file Common.h
- * @author: octopus
- * @date 2021-06-14
  */
 
-#pragma once
-#include <bcos-utilities/BoostLog.h>
-#include <openssl/bio.h>
-#include <openssl/pem.h>
+#include <bcos-boostssl/websocket/Common.h>
 
+bcos::boostssl::ws::Options::Options(uint32_t _timeout) : timeout(_timeout) {}
 
-#define CONTEXT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL][CTX]"
-#define NODEINFO_LOG(LEVEL) BCOS_LOG(LEVEL) << "[BOOSTSSL][NODEINFO]"
-
-namespace bcos::boostssl
-{
-X509* toX509(const char* _pemBuffer);
-
-EVP_PKEY* toEvpPkey(const char* _pemBuffer);
-
-}  // namespace bcos::boostssl
+bcos::boostssl::ws::Options::Options() = default;
