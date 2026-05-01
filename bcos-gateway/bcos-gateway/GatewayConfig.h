@@ -182,8 +182,8 @@ public:
     uint16_t listenPort() const;
     uint32_t threadPoolSize() const;
     bool smSSL() const;
-    auto sslClientMode() const;
-    auto sslServerMode() const;
+    uint8_t sslClientMode() const;
+    uint8_t sslServerMode() const;
 
     CertConfig certConfig() const;
     SMCertConfig smCertConfig() const;

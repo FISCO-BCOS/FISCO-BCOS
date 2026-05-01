@@ -133,12 +133,12 @@ bool GatewayConfig::smSSL() const
     return m_smSSL;
 }
 
-auto GatewayConfig::sslClientMode() const
+uint8_t GatewayConfig::sslClientMode() const
 {
     return m_ssl_client_mode;
 }
 
-auto GatewayConfig::sslServerMode() const
+uint8_t GatewayConfig::sslServerMode() const
 {
     return m_ssl_server_mode;
 }
