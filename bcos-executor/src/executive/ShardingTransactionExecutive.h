@@ -43,23 +43,11 @@ public:
     CallParameters::UniquePtr resume() override;
 
     TransactionExecutive::Ptr buildChildExecutive(
-        const std::string& _contractAddress, int64_t contextID, int64_t seq) override
-    {
-        ShardingExecutiveFactory executiveFactory = ShardingExecutiveFactory(
-            m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
-
-        if (m_blockContext.features().get(
-                ledger::Features::Flag::bugfix_sharding_call_in_child_executive))
-        {
-            return executiveFactory.buildChild(this, _contractAddress, contextID, seq);
-        }
-
-        return executiveFactory.build(_contractAddress, contextID, seq, ExecutiveType::common);
-    }
+        const std::string& _contractAddress, int64_t contextID, int64_t seq) override;
 
     std::string getContractShard(const std::string_view& contractAddress);
 
-    bool isUsePromise() const { return m_usePromise; }
+    bool isUsePromise() const;
 
 private:
     std::optional<std::string> m_shardName;
@@ -74,43 +62,14 @@ public:
         int64_t seq, const wasm::GasInjector& gasInjector, ThreadPool::Ptr pool = nullptr,
         bool usePromise = false);
 
-    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override
-    {
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
-                                 << "ShardingChildTransactionExecutive start: "
-                                 << input->toFullString();
-        }
+    CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;
 
-        return TransactionExecutive::start(std::move(input));
-    }
+    CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override;
 
-    CallParameters::UniquePtr externalCall(CallParameters::UniquePtr input) override
-    {
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
-                                 << "ShardingChildTransactionExecutive externalCall: "
-                                 << input->toFullString();
-        }
+    virtual std::optional<Coroutine::pull_type>& getPullMessage() override;
+    virtual std::optional<Coroutine::push_type>& getPushMessage() override;
 
-        return ShardingTransactionExecutive::externalCall(std::move(input));
-    }
-
-    virtual std::optional<Coroutine::pull_type>& getPullMessage() override
-    {
-        return m_pullMessageRef;
-    }
-    virtual std::optional<Coroutine::push_type>& getPushMessage() override
-    {
-        return m_pushMessageRef;
-    }
-
-    virtual CallParameters::UniquePtr& getExchangeMessageRef() override
-    {
-        return m_exchangeMessageRef;
-    }
+    virtual CallParameters::UniquePtr& getExchangeMessageRef() override;
 
 private:
     std::optional<Coroutine::pull_type>& m_pullMessageRef;

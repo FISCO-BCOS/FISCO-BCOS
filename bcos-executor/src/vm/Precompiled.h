@@ -54,31 +54,18 @@ public:
 
     /// Register an executor. In general just use ETH_REGISTER_PRECOMPILED.
     static PrecompiledExecutor registerExecutor(
-        std::string const& _name, PrecompiledExecutor const& _exec)
-    {
-        return (get()->m_execs[_name] = _exec);
-    }
+        std::string const& _name, PrecompiledExecutor const& _exec);
     /// Unregister an executor. Shouldn't generally be necessary.
-    static void unregisterExecutor(std::string const& _name) { get()->m_execs.erase(_name); }
+    static void unregisterExecutor(std::string const& _name);
 
     /// Register a pricer. In general just use ETH_REGISTER_PRECOMPILED_PRICER.
     static PrecompiledPricer registerPricer(
-        std::string const& _name, PrecompiledPricer const& _exec)
-    {
-        return (get()->m_pricers[_name] = _exec);
-    }
+        std::string const& _name, PrecompiledPricer const& _exec);
     /// Unregister a pricer. Shouldn't generally be necessary.
-    static void unregisterPricer(std::string const& _name) { get()->m_pricers.erase(_name); }
+    static void unregisterPricer(std::string const& _name);
 
 private:
-    static PrecompiledRegistrar* get()
-    {
-        if (s_this == nullptr)
-        {
-            s_this = new PrecompiledRegistrar;
-        }
-        return s_this;
-    }
+    static PrecompiledRegistrar* get();
 
     std::unordered_map<std::string, PrecompiledExecutor> m_execs;
     std::unordered_map<std::string, PrecompiledPricer> m_pricers;
@@ -104,26 +91,15 @@ public:
     typedef std::shared_ptr<PrecompiledContract> Ptr;
     PrecompiledContract() = default;
     PrecompiledContract(PrecompiledPricer const& _cost, PrecompiledExecutor const& _exec,
-        u256 const& _startingBlock = 0)
-      : m_cost(_cost), m_execute(_exec), m_startingBlock(_startingBlock)
-    {}
+                u256 const& _startingBlock = 0);
 
     PrecompiledContract(unsigned _base, unsigned _word, PrecompiledExecutor const& _exec,
-        u256 const& _startingBlock = 0)
-      : PrecompiledContract(
-            [=](bytesConstRef _in) -> bigint {
-                bigint s = _in.size();
-                bigint b = _base;
-                bigint w = _word;
-                return b + (s + 31) / 32 * w;
-            },
-            _exec, _startingBlock)
-    {}
+                u256 const& _startingBlock = 0);
 
-    bigint cost(bytesConstRef _in) const { return m_cost(_in); }
-    std::pair<bool, bytes> execute(bytesConstRef _in) const { return m_execute(_in); }
+        bigint cost(bytesConstRef _in) const;
+        std::pair<bool, bytes> execute(bytesConstRef _in) const;
 
-    u256 const& startingBlock() const { return m_startingBlock; }
+        u256 const& startingBlock() const;
 
 private:
     PrecompiledPricer m_cost;
@@ -144,20 +120,15 @@ public:
         std::function<void(const std::shared_ptr<executor::TransactionExecutive>& executive,
             PrecompiledExecResult::Ptr const& callParameters)>;
 
-    Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(std::move(_hashImpl))
-    {
-        assert(m_hashImpl);
-        m_precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
-        assert(m_precompiledGasFactory);
-    }
+    Precompiled(crypto::Hash::Ptr _hashImpl);
     virtual ~Precompiled() = default;
 
     virtual std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) = 0;
-    virtual bool isParallelPrecompiled() { return false; }
+    virtual bool isParallelPrecompiled();
 
-    virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef, bool);
 
 protected:
     std::map<std::string, uint32_t, std::less<>> name2Selector;

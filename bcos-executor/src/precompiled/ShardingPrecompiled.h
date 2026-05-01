@@ -53,12 +53,9 @@ private:
 
 
 private:
-    std::string getThisAddress(bool _isWasm) override
-    {
-        return std::string(_isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS);
-    }
+    std::string getThisAddress(bool _isWasm) override;
 
-    std::string_view getLinkRootDir() override { return executor::USER_SHARD_PREFIX; }
+    std::string_view getLinkRootDir() override;
 
     bool checkPathPrefixValid(
         const std::string_view& path, uint32_t blockVersion, const std::string_view& type) override;

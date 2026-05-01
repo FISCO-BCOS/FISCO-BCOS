@@ -140,6 +140,48 @@ void BlockContext::setVMSchedule()
     }
 }
 
+void BlockContext::stop()
+{
+    std::vector<ExecutiveFlowInterface::Ptr> executiveFlow2Stop;
+    {
+        bcos::ReadGuard l(x_executiveFlows);
+        for (auto it : m_executiveFlows)
+        {
+            EXECUTOR_LOG(INFO) << "Try to stop flow: " << it.first;
+            executiveFlow2Stop.push_back(it.second);
+        }
+    }
+
+    if (executiveFlow2Stop.empty())
+    {
+        return;
+    }
+
+    for (auto& executiveFlow : executiveFlow2Stop)
+    {
+        executiveFlow->stop();
+    }
+}
+
+void BlockContext::clear()
+{
+    bcos::WriteGuard l(x_executiveFlows);
+    m_executiveFlows.clear();
+}
+
+void BlockContext::registerNeedSwitchEvent(std::function<void()> event)
+{
+    f_onNeedSwitchEvent = std::move(event);
+}
+
+void BlockContext::triggerSwitch()
+{
+    if (f_onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent();
+    }
+}
+
 void BlockContext::suicide(std::string_view contract2Suicide)
 {
     {

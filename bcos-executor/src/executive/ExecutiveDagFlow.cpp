@@ -16,6 +16,42 @@ using namespace bcos::executor;
 using namespace bcos::executor::critical;
 using namespace std;
 
+ExecutiveDagFlow::ExecutiveDagFlow(ExecutiveFactory::Ptr executiveFactory,
+    std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
+  : ExecutiveStackFlow(std::move(executiveFactory)), m_abiCache(std::move(abiCache))
+{}
+
+void ExecutiveDagFlow::stop()
+{
+    EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveDagFlow";
+    if (!m_isRunning)
+    {
+        EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+        return;
+    }
+
+    m_isRunning = false;
+    ExecutiveStackFlow::stop();
+}
+
+void ExecutiveDagFlow::setDagFlowIfNotExists(TxDAGFlow::Ptr dagFlow)
+{
+    bcos::RecursiveGuard lock(x_lock);
+    if (!m_dagFlow)
+    {
+        m_dagFlow = std::move(dagFlow);
+    }
+}
+
+TxDAGFlow::Ptr ExecutiveDagFlow::prepareDagFlow(const BlockContext& blockContext,
+    ExecutiveFactory::Ptr executiveFactory, std::vector<std::unique_ptr<CallParameters>>& inputs,
+    std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> abiCache)
+{
+    critical::CriticalFieldsInterface::Ptr criticals =
+        generateDagCriticals(blockContext, std::move(executiveFactory), inputs, std::move(abiCache));
+    return generateDagFlow(blockContext, std::move(criticals));
+}
+
 
 void ExecutiveDagFlow::submit(CallParameters::UniquePtr txInput)
 {

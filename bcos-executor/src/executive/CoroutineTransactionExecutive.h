@@ -42,14 +42,9 @@ public:
     class ResumeHandler
     {
     public:
-        ResumeHandler(CoroutineTransactionExecutive& executive) : m_executive(executive) {}
+        ResumeHandler(CoroutineTransactionExecutive& executive);
 
-        void operator()()
-        {
-            COROUTINE_TRACE_LOG(TRACE, m_executive.contextID(), m_executive.seq())
-                << "Context switch to executive coroutine, from ResumeHandler";
-            (*m_executive.m_pullMessage)();
-        }
+        void operator()();
 
     private:
         CoroutineTransactionExecutive& m_executive;
@@ -57,16 +52,7 @@ public:
 
 
     CoroutineTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
-      : TransactionExecutive(
-            std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector),
-        m_syncStorageWrapper(std::make_shared<SyncStorageWrapper>(
-            m_blockContext.storage(),
-            [this](auto&& PH1) { externalAcquireKeyLocks(std::forward<decltype(PH1)>(PH1)); },
-            m_recoder))
-    {
-        m_storageWrapper = m_syncStorageWrapper.get();
-    }
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to
@@ -82,43 +68,20 @@ public:
     // External request key locks, throw exception if dead lock detected
     void externalAcquireKeyLocks(std::string acquireKeyLock);
 
-    virtual void setExchangeMessage(CallParameters::UniquePtr callParameters)
-    {
-        getExchangeMessageRef() = std::move(callParameters);
-    }
+    virtual void setExchangeMessage(CallParameters::UniquePtr callParameters);
 
-    std::string getExchangeMessageStr()
-    {
-        if (getExchangeMessageRef())
-        {
-            return getExchangeMessageRef()->toString();
-        }
-        else
-        {
-            return "[empty exchange message]";
-        }
-    }
+    std::string getExchangeMessageStr();
 
 
-    virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks)
-    {
-        std::copy(keyLocks.begin(), keyLocks.end(),
-            std::back_inserter(getExchangeMessageRef()->keyLocks));
-    }
+    virtual void appendResumeKeyLocks(std::vector<std::string> keyLocks);
 
-    virtual CallParameters::UniquePtr resume()
-    {
-        EXECUTOR_LOG(TRACE) << "Context switch to executive coroutine, from resume";
-        (*m_pullMessage)();
+    virtual CallParameters::UniquePtr resume();
 
-        return dispatcher();
-    }
+    virtual std::optional<Coroutine::pull_type>& getPullMessage();
+    virtual std::optional<Coroutine::push_type>& getPushMessage();
+    virtual CallParameters::UniquePtr& getExchangeMessageRef();
 
-    virtual std::optional<Coroutine::pull_type>& getPullMessage() { return m_pullMessage; }
-    virtual std::optional<Coroutine::push_type>& getPushMessage() { return m_pushMessage; }
-    virtual CallParameters::UniquePtr& getExchangeMessageRef() { return m_exchangeMessage; }
-
-    std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper() { return m_syncStorageWrapper; }
+    std::shared_ptr<SyncStorageWrapper> getSyncStorageWrapper();
 
 protected:
     CallParameters::UniquePtr m_exchangeMessage = nullptr;

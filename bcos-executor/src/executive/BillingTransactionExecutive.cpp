@@ -5,6 +5,12 @@ using namespace bcos::executor;
 using namespace bcos::codec;
 using namespace bcos::precompiled;
 
+BillingTransactionExecutive::BillingTransactionExecutive(const BlockContext& blockContext,
+        std::string contractAddress, int64_t contextID, int64_t seq,
+        const wasm::GasInjector& gasInjector)
+    : TransactionExecutive(blockContext, std::move(contractAddress), contextID, seq, gasInjector)
+{}
+
 CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::UniquePtr input)
 {
     int64_t originGas = input->gas;

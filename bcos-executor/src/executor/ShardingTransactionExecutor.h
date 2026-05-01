@@ -34,10 +34,8 @@ public:
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
         bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
-        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name)
-      : TransactionExecutor(ledger, txpool, cachedStorage, backendStorage, executionMessageFactory,
-            stateStorageFactory, hashImpl, isWasm, isAuthCheck, vmFactory, keyPageIgnoreTables,
-            name){};
+                std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables,
+                std::string name);
 
     ~ShardingTransactionExecutor() override = default;
 

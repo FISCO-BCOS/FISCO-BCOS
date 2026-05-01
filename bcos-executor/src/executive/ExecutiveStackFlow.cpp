@@ -26,6 +26,25 @@
 using namespace bcos;
 using namespace bcos::executor;
 
+ExecutiveStackFlow::ExecutiveStackFlow(ExecutiveFactory::Ptr executiveFactory)
+    : m_executiveFactory(std::move(executiveFactory))
+{}
+
+ExecutiveStackFlow::~ExecutiveStackFlow() = default;
+
+void ExecutiveStackFlow::stop()
+{
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveStackFlow";
+        if (!m_isRunning)
+        {
+                EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+                return;
+        }
+
+        m_isRunning = false;
+        ExecutiveFlowInterface::stop();
+}
+
 void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
 {
     auto contextID = txInput->contextID;

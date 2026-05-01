@@ -35,6 +35,69 @@ namespace bcos::executor
 {
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
+PrecompiledRegistrar* PrecompiledRegistrar::get()
+{
+    if (s_this == nullptr)
+    {
+        s_this = new PrecompiledRegistrar;
+    }
+    return s_this;
+}
+
+PrecompiledExecutor PrecompiledRegistrar::registerExecutor(
+    std::string const& _name, PrecompiledExecutor const& _exec)
+{
+    return (get()->m_execs[_name] = _exec);
+}
+
+void PrecompiledRegistrar::unregisterExecutor(std::string const& _name)
+{
+    get()->m_execs.erase(_name);
+}
+
+PrecompiledPricer PrecompiledRegistrar::registerPricer(
+    std::string const& _name, PrecompiledPricer const& _exec)
+{
+    return (get()->m_pricers[_name] = _exec);
+}
+
+void PrecompiledRegistrar::unregisterPricer(std::string const& _name)
+{
+    get()->m_pricers.erase(_name);
+}
+
+PrecompiledContract::PrecompiledContract(PrecompiledPricer const& _cost,
+    PrecompiledExecutor const& _exec, u256 const& _startingBlock)
+  : m_cost(_cost), m_execute(_exec), m_startingBlock(_startingBlock)
+{}
+
+PrecompiledContract::PrecompiledContract(
+    unsigned _base, unsigned _word, PrecompiledExecutor const& _exec, u256 const& _startingBlock)
+  : PrecompiledContract(
+        [=](bytesConstRef _in) -> bigint {
+            bigint size = _in.size();
+            bigint base = _base;
+            bigint word = _word;
+            return base + (size + 31) / 32 * word;
+        },
+        _exec, _startingBlock)
+{}
+
+bigint PrecompiledContract::cost(bytesConstRef _in) const
+{
+    return m_cost(_in);
+}
+
+std::pair<bool, bytes> PrecompiledContract::execute(bytesConstRef _in) const
+{
+    return m_execute(_in);
+}
+
+u256 const& PrecompiledContract::startingBlock() const
+{
+    return m_startingBlock;
+}
+
 bcos::precompiled::Precompiled::Ptr bcos::executor::PrecompiledMap::at(std::string_view _key,
     uint32_t version, bool isAuth, ledger::Features const& features) const noexcept
 {
@@ -80,6 +143,29 @@ PrecompiledPricer const& PrecompiledRegistrar::pricer(std::string const& _name)
 }
 
 }  // namespace bcos::executor
+
+namespace bcos::precompiled
+{
+
+Precompiled::Precompiled(crypto::Hash::Ptr _hashImpl)
+  : m_hashImpl(std::move(_hashImpl))
+{
+    assert(m_hashImpl);
+    m_precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
+    assert(m_precompiledGasFactory);
+}
+
+bool Precompiled::isParallelPrecompiled()
+{
+    return false;
+}
+
+std::vector<std::string> Precompiled::getParallelTag(bytesConstRef, bool)
+{
+    return {};
+}
+
+}  // namespace bcos::precompiled
 
 namespace
 {

@@ -13,6 +13,26 @@
 using namespace bcos::executor;
 using namespace bcos::storage;
 
+TransactionExecutive::Ptr ShardingTransactionExecutive::buildChildExecutive(
+    const std::string& _contractAddress, int64_t contextID, int64_t seq)
+{
+    ShardingExecutiveFactory executiveFactory = ShardingExecutiveFactory(
+        m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
+
+    if (m_blockContext.features().get(
+            ledger::Features::Flag::bugfix_sharding_call_in_child_executive))
+    {
+        return executiveFactory.buildChild(this, _contractAddress, contextID, seq);
+    }
+
+    return executiveFactory.build(_contractAddress, contextID, seq, ExecutiveType::common);
+}
+
+bool ShardingTransactionExecutive::isUsePromise() const
+{
+    return m_usePromise;
+}
+
 ShardingTransactionExecutive::ShardingTransactionExecutive(const BlockContext& blockContext,
     std::string contractAddress, int64_t contextID, int64_t seq,
     const wasm::GasInjector& gasInjector, ThreadPool::Ptr pool, bool usePromise)
@@ -128,6 +148,48 @@ std::string ShardingTransactionExecutive::getContractShard(const std::string_vie
 {
     auto tableName = getContractTableName(contractAddress, m_blockContext.isWasm());
     return ContractShardUtils::getContractShard(storage(), tableName);
+}
+
+CallParameters::UniquePtr ShardingChildTransactionExecutive::start(CallParameters::UniquePtr input)
+{
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
+                             << "ShardingChildTransactionExecutive start: "
+                             << input->toFullString();
+    }
+
+    return TransactionExecutive::start(std::move(input));
+}
+
+CallParameters::UniquePtr ShardingChildTransactionExecutive::externalCall(
+    CallParameters::UniquePtr input)
+{
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
+                             << "ShardingChildTransactionExecutive externalCall: "
+                             << input->toFullString();
+    }
+
+    return ShardingTransactionExecutive::externalCall(std::move(input));
+}
+
+std::optional<CoroutineTransactionExecutive::Coroutine::pull_type>&
+ShardingChildTransactionExecutive::getPullMessage()
+{
+    return m_pullMessageRef;
+}
+
+std::optional<CoroutineTransactionExecutive::Coroutine::push_type>&
+ShardingChildTransactionExecutive::getPushMessage()
+{
+    return m_pushMessageRef;
+}
+
+CallParameters::UniquePtr& ShardingChildTransactionExecutive::getExchangeMessageRef()
+{
+    return m_exchangeMessageRef;
 }
 
 ShardingChildTransactionExecutive::ShardingChildTransactionExecutive(

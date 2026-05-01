@@ -27,6 +27,34 @@ using namespace bcos;
 using namespace bcos::crypto;
 using namespace bcos::precompiled;
 
+VRFInfo::VRFInfo(bcos::bytes _vrfProof, bcos::bytes _vrfPk, bcos::bytes _vrfInput,
+    bcos::sealer::VrfCurveType vrfCurveType)
+  : m_vrfProof(std::move(_vrfProof)),
+    m_vrfPublicKey(std::move(_vrfPk)),
+    m_vrfInput(std::move(_vrfInput)),
+    m_vrfCurveType(vrfCurveType)
+{}
+
+bcos::bytes const& VRFInfo::vrfProof() const
+{
+    return m_vrfProof;
+}
+
+bcos::bytes const& VRFInfo::vrfPublicKey() const
+{
+    return m_vrfPublicKey;
+}
+
+bcos::bytes const& VRFInfo::vrfInput() const
+{
+    return m_vrfInput;
+}
+
+bcos::sealer::VrfCurveType VRFInfo::vrfCurveType() const
+{
+    return m_vrfCurveType;
+}
+
 bool VRFInfo::isValidVRFPublicKey()
 {
     CInputBuffer rawPk{(const char*)m_vrfPublicKey.data(), m_vrfPublicKey.size()};

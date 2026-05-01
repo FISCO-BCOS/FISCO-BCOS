@@ -183,6 +183,16 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     start();
 }
 
+void TransactionExecutor::start()
+{
+    m_isRunning = true;
+}
+
+void TransactionExecutor::registerNeedSwitchEvent(std::function<void()> event)
+{
+    f_onNeedSwitchEvent = std::move(event);
+}
+
 void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
 {
     if (m_blockVersion == blockVersion)

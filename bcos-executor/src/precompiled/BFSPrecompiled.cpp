@@ -116,6 +116,16 @@ BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashI
         std::string(FS_TYPE_DIR), std::string(FS_TYPE_CONTRACT), std::string(FS_TYPE_LINK)};
 }
 
+std::string BFSPrecompiled::getThisAddress(bool _isWasm)
+{
+    return std::string(_isWasm ? BFS_NAME : BFS_ADDRESS);
+}
+
+std::string_view BFSPrecompiled::getLinkRootDir()
+{
+    return executor::USER_APPS_PREFIX;
+}
+
 std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)

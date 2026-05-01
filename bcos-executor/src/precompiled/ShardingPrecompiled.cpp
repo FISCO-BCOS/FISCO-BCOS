@@ -57,6 +57,16 @@ ShardingPrecompiled::ShardingPrecompiled(crypto::Hash::Ptr _hashImpl) : BFSPreco
         getFuncSelector(FILE_SYSTEM_GET_CONTRACT_SHARD_INTERNAL, _hashImpl);
 }
 
+std::string ShardingPrecompiled::getThisAddress(bool _isWasm)
+{
+    return std::string(_isWasm ? SHARDING_PRECOMPILED_NAME : SHARDING_PRECOMPILED_ADDRESS);
+}
+
+std::string_view ShardingPrecompiled::getLinkRootDir()
+{
+    return executor::USER_SHARD_PREFIX;
+}
+
 inline bool isFromThisOrSDK(
     PrecompiledExecResult::Ptr _callParameters, const std::string& thisAddress)
 {

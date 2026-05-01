@@ -6,6 +6,25 @@
 using namespace bcos;
 using namespace bcos::executor;
 
+ExecutiveSerialFlow::ExecutiveSerialFlow(ExecutiveFactory::Ptr executiveFactory)
+    : m_executiveFactory(std::move(executiveFactory))
+{}
+
+ExecutiveSerialFlow::~ExecutiveSerialFlow() = default;
+
+void ExecutiveSerialFlow::stop()
+{
+        EXECUTOR_LOG(DEBUG) << "Try to stop ExecutiveSerialFlow";
+        if (!m_isRunning)
+        {
+                EXECUTOR_LOG(DEBUG) << "Executor has tried to stop";
+                return;
+        }
+
+        m_isRunning = false;
+        ExecutiveFlowInterface::stop();
+}
+
 void ExecutiveSerialFlow::submit(CallParameters::UniquePtr txInput)
 {
     WriteGuard lock(x_lock);

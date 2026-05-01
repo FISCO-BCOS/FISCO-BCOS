@@ -101,6 +101,37 @@ void HostContext::set(const std::string_view& _key, std::string _value)
     m_executive->storage().setRow(m_tableName, _key, std::move(entry));
 }
 
+int64_t HostContext::blockGasLimit() const
+{
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        return m_executive->blockContext().txGasLimit();
+    }
+
+    return 3000000000;
+}
+
+CallParameters::UniquePtr&& HostContext::takeCallParameters()
+{
+    if (m_executive->blockContext().blockVersion() >=
+        (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    {
+        for (const auto& response : m_responseStore)
+        {
+            m_callParameters->logEntries.insert(m_callParameters->logEntries.end(),
+                std::make_move_iterator(response->logEntries.begin()),
+                std::make_move_iterator(response->logEntries.end()));
+        }
+    }
+    return std::move(m_callParameters);
+}
+
+std::string HostContext::getContractTableName(const std::string_view& _address)
+{
+    return m_executive->getContractTableName(_address, isWasm(), isCreate());
+}
+
 
 std::string addressBytesStr2String(std::string_view receiveAddressBytes)
 {
