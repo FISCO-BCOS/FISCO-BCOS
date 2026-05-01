@@ -8,6 +8,32 @@
 
 using namespace bcos::scheduler;
 
+SerialBlockExecutive::SerialBlockExecutive(bcos::protocol::Block::Ptr block,
+        SchedulerImpl* scheduler, size_t startContextID,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txPool)
+    : BlockExecutive(std::move(block), scheduler, startContextID,
+                std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+                std::move(_txPool))
+{}
+
+SerialBlockExecutive::SerialBlockExecutive(bcos::protocol::Block::Ptr block,
+        SchedulerImpl* scheduler, size_t startContextID,
+        bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
+        bool _syncBlock)
+    : BlockExecutive(std::move(block), scheduler, startContextID,
+                std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+                std::move(_txPool), _gasLimit, _gasPrice, _syncBlock)
+{}
+
+SerialBlockExecutive::~SerialBlockExecutive() = default;
+
+void SerialBlockExecutive::serialPrepareExecutor()
+{}
+
 
 void SerialBlockExecutive::prepare()
 {

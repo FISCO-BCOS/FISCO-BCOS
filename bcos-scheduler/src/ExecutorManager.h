@@ -24,32 +24,16 @@ class ExecutorManager
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
 
-    ExecutorManager()
-    {
-        m_timer = std::make_shared<Timer>(EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
-        m_timer->registerTimeoutHandler([this]() { checkExecutorStatus(); });
-    }
+    ExecutorManager();
 
-    virtual ~ExecutorManager() { stopTimer(); }
+    virtual ~ExecutorManager();
 
     /**
      * Only used in max version
      */
-    void startTimer()
-    {
-        if (m_timer)
-        {
-            m_timer->start();
-        }
-    }
+    void startTimer();
 
-    void stopTimer()
-    {
-        if (m_timer)
-        {
-            m_timer->stop();
-        }
-    }
+    void stopTimer();
 
     bool addExecutor(std::string name,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, int64_t seq = -1);
@@ -83,81 +67,17 @@ public:
 
     void forEachExecutor(
         std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
-            handleExecutor)
-    {
-        ReadGuard lock(m_mutex);
-        if (m_name2Executors.empty())
-        {
-            return;
-        }
+            handleExecutor);
 
-        for (auto it : m_name2Executors)
-        {
-            handleExecutor(std::string(it.first), it.second->executor);
-        }
-    }
+    size_t size() const;
 
-    size_t size() const
-    {
-        ReadGuard lock(m_mutex);
-        return m_name2Executors.size();
-    }
+    void clear();
 
-    void clear()
-    {
-        bool notify = false;
-        {
-            WriteGuard lock(m_mutex);
-            if (!m_name2Executors.empty())
-            {
-                notify = true;
-                m_contract2ExecutorInfo.clear();
-                m_name2Executors.clear();
-                m_executorPriorityQueue = std::priority_queue<ExecutorInfo::Ptr,
-                    std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>();
-            }
-        }
+    virtual void stop();
 
-        if (notify && m_executorChangeHandler)
-        {
-            m_executorChangeHandler();
-        }
-    };
+    virtual void setExecutorChangeHandler(std::function<void()> _handler);
 
-    virtual void stop()
-    {
-        EXECUTOR_MANAGER_LOG(INFO) << "Try to stop ExecutorManager";
-
-
-        std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors;
-        {
-            if (m_name2Executors.empty())
-            {
-                return;
-            }
-
-            WriteGuard lock(m_mutex);
-            for (auto it : m_name2Executors)
-            {
-                executors.push_back(it.second->executor);
-            }
-        }
-
-        // no lock blocking to stop
-        for (auto& executor : executors)
-        {
-            executor->stop();
-        }
-
-        stopTimer();
-    }
-
-    virtual void setExecutorChangeHandler(std::function<void()> _handler)
-    {
-        m_executorChangeHandler = _handler;
-    }
-
-    std::function<void()> executorChangeHandler() { return m_executorChangeHandler; }
+    std::function<void()> executorChangeHandler();
 
     struct ExecutorInfo
     {
@@ -170,10 +90,7 @@ public:
     };
 
     ExecutorInfo::Ptr getExecutorInfo(const std::string_view& contract);
-    ExecutorInfo::Ptr getExecutorInfoByName(const std::string_view& name)
-    {
-        return m_name2Executors[name];
-    }
+    ExecutorInfo::Ptr getExecutorInfoByName(const std::string_view& name);
 
 private:
     std::shared_ptr<Timer> m_timer;
@@ -190,10 +107,7 @@ private:
         }
     };
 
-    inline std::string toLowerAddress(const std::string_view& address)
-    {
-        return boost::algorithm::hex_lower(std::string(address));
-    }
+    std::string toLowerAddress(const std::string_view& address);
 
     std::function<void()> m_executorChangeHandler;
 

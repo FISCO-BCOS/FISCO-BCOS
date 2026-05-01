@@ -53,18 +53,9 @@ public:
     DmcExecutor(std::string name, std::string contractAddress, bcos::protocol::Block::Ptr block,
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
         GraphKeyLocks::Ptr keyLocks, bcos::crypto::Hash::Ptr hashImpl,
-        DmcStepRecorder::Ptr dmcRecorder, bool isCall)
-      : m_name(name),
-        m_contractAddress(contractAddress),
-        m_block(block),
-        m_executor(executor),
-        m_keyLocks(keyLocks),
-        m_hashImpl(hashImpl),
-        m_dmcRecorder(dmcRecorder),
-        m_isCall(isCall)
-    {}
+                DmcStepRecorder::Ptr dmcRecorder, bool isCall);
 
-    virtual ~DmcExecutor() = default;
+        virtual ~DmcExecutor();
 
     virtual void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
     bool prepare();        // return true if has schedule out message
@@ -73,65 +64,33 @@ public:
     bool detectLockAndRevert();  // return true if detect a tx and revert
 
     virtual void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
-    bool hasFinished() { return m_executivePool.empty(); }
+    bool hasFinished();
 
     void scheduleIn(ExecutiveState::Ptr executive);
 
-    void setSchedulerOutHandler(std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
-    {
-        f_onSchedulerOut = std::move(onSchedulerOut);
-    };
+    void setSchedulerOutHandler(std::function<void(ExecutiveState::Ptr)> onSchedulerOut);
 
     void setOnTxFinishedHandler(
-        std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> onTxFinished)
-    {
-        f_onTxFinished = std::move(onTxFinished);
-    }
+        std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> onTxFinished);
 
-    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
-    {
-        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
-    }
+    void setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent);
 
-    void setOnGetCodeHandler(std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
-    {
-        f_onGetCodeEvent = std::move(onGetCodeEvent);
-    }
+    void setOnGetCodeHandler(std::function<bcos::bytes(std::string_view)> onGetCodeEvent);
 
 
-    void setGetAddrHandler(std::function<std::string(const std::string_view&)> getFromFunc)
-    {
-        f_getAddr = std::move(getFromFunc);
-    }
+    void setGetAddrHandler(std::function<std::string(const std::string_view&)> getFromFunc);
 
-    void triggerSwitch()
-    {
-        if (f_onNeedSwitchEvent)
-        {
-            f_onNeedSwitchEvent();
-        }
-    }
+    void triggerSwitch();
 
-    void forEachExecutive(std::function<void(ContextID, ExecutiveState::Ptr)> handler)
-    {
-        m_executivePool.forEach(
-            ExecutivePool::MessageHint::ALL, [handler = std::move(handler)](ContextID contextID,
-                                                 ExecutiveState::Ptr executiveState) {
-                handler(contextID, executiveState);
-                return true;
-            });
-    }
+    void forEachExecutive(std::function<void(ContextID, ExecutiveState::Ptr)> handler);
 
-    virtual void preExecute()
-    {
-        // do nothing
-    }
+    virtual void preExecute();
 
-    bool hasContractTableChanged() { return m_hasContractTableChanged; }
+    bool hasContractTableChanged();
 
-    void setIsCall(bool isCall) { m_isCall = isCall; }
+    void setIsCall(bool isCall);
 
-    void setEnablePreFinishType(bool enable) { m_enablePreFinishType = enable; }
+    void setEnablePreFinishType(bool enable);
 
 protected:
     virtual void executorCall(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -159,7 +118,7 @@ protected:
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
     std::string newCreate2EVMAddress(
         const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
-    bool isCall() { return m_isCall; }
+    bool isCall();
 
 protected:
     std::string m_name;

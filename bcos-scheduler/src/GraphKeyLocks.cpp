@@ -15,6 +15,51 @@
 
 using namespace bcos::scheduler;
 
+GraphKeyLocks::GraphKeyLocks() = default;
+
+GraphKeyLocks::~GraphKeyLocks() = default;
+
+bool GraphKeyLocks::Vertex::operator==(const KeyLockView& rhs) const
+{
+    if (index() != 1)
+    {
+        return false;
+    }
+
+    auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(*this))),
+        std::string_view(std::get<1>(std::get<1>(*this))));
+    return view == rhs;
+}
+
+namespace std
+{
+bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
+    const bcos::scheduler::GraphKeyLocks::KeyLockView& rhs)
+{
+    if (lhs.index() != 1)
+    {
+        return true;
+    }
+
+    auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(lhs))),
+        std::string_view(std::get<1>(std::get<1>(lhs))));
+    return view < rhs;
+}
+
+bool operator<(const bcos::scheduler::GraphKeyLocks::KeyLockView& lhs,
+    const bcos::scheduler::GraphKeyLocks::Vertex& rhs)
+{
+    if (rhs.index() != 1)
+    {
+        return false;
+    }
+
+    auto view = std::make_tuple(std::string_view(std::get<0>(std::get<1>(rhs))),
+        std::string_view(std::get<1>(std::get<1>(rhs))));
+    return lhs < view;
+}
+}  // namespace std
+
 bool GraphKeyLocks::batchAcquireKeyLock(
     std::string_view contract, gsl::span<std::string const> keys, ContextID contextID, Seq seq)
 {

@@ -4,6 +4,19 @@
 
 using namespace bcos::scheduler;
 
+ShardingDmcExecutor::ShardingDmcExecutor(std::string name, std::string contractAddress,
+    bcos::protocol::Block::Ptr block,
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, GraphKeyLocks::Ptr keyLocks,
+    bcos::crypto::Hash::Ptr hashImpl, DmcStepRecorder::Ptr dmcRecorder,
+    int64_t schedulerTermId, bool isCall)
+  : DmcExecutor(std::move(name), std::move(contractAddress), std::move(block),
+        std::move(executor), std::move(keyLocks), std::move(hashImpl), std::move(dmcRecorder),
+        isCall),
+    m_schedulerTermId(schedulerTermId)
+{}
+
+ShardingDmcExecutor::~ShardingDmcExecutor() = default;
+
 void ShardingDmcExecutor::submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG)
 {
     (void)withDAG;  // no need to use this param

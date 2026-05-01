@@ -47,28 +47,21 @@ public:
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
     TarsExecutorManager(
-        const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig)
-      : m_nodeConfig(_nodeConfig)
-    {
-        m_executorServiceName = _executorServiceName + "." + bcos::protocol::EXECUTOR_SERVANT_NAME;
-
-        TARS_EXECUTOR_MANAGER_LOG(INFO)
-            << "Initialize " << LOG_KV("executorServiceName", m_executorServiceName);
-    }
+                const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig);
 
     TarsExecutorManager(TarsExecutorManager&&) = delete;
     TarsExecutorManager(const TarsExecutorManager&) = delete;
     const TarsExecutorManager& operator=(const TarsExecutorManager&) = delete;
     TarsExecutorManager&& operator=(TarsExecutorManager&&) = delete;
 
-    ~TarsExecutorManager() override = default;
+    ~TarsExecutorManager() override;
 
     void start();
-    void stop() override { m_running = false; }
+    void stop() override;
 
     void waitForExecutorConnection();
 
-    std::string executorServiceName() { return m_executorServiceName; }
+    std::string executorServiceName();
 
 private:
     bool m_running = false;

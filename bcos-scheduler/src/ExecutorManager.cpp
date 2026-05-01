@@ -12,6 +12,123 @@
 using namespace bcos;
 using namespace bcos::scheduler;
 
+ExecutorManager::ExecutorManager()
+{
+    m_timer = std::make_shared<Timer>(EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
+    m_timer->registerTimeoutHandler([this]() { checkExecutorStatus(); });
+}
+
+ExecutorManager::~ExecutorManager()
+{
+    stopTimer();
+}
+
+void ExecutorManager::startTimer()
+{
+    if (m_timer)
+    {
+        m_timer->start();
+    }
+}
+
+void ExecutorManager::stopTimer()
+{
+    if (m_timer)
+    {
+        m_timer->stop();
+    }
+}
+
+void ExecutorManager::forEachExecutor(
+    std::function<void(std::string, bcos::executor::ParallelTransactionExecutorInterface::Ptr)>
+        handleExecutor)
+{
+    ReadGuard lock(m_mutex);
+    if (m_name2Executors.empty())
+    {
+        return;
+    }
+
+    for (auto const& it : m_name2Executors)
+    {
+        handleExecutor(std::string(it.first), it.second->executor);
+    }
+}
+
+size_t ExecutorManager::size() const
+{
+    ReadGuard lock(m_mutex);
+    return m_name2Executors.size();
+}
+
+void ExecutorManager::clear()
+{
+    bool notify = false;
+    {
+        WriteGuard lock(m_mutex);
+        if (!m_name2Executors.empty())
+        {
+            notify = true;
+            m_contract2ExecutorInfo.clear();
+            m_name2Executors.clear();
+            m_executorPriorityQueue = std::priority_queue<ExecutorInfo::Ptr,
+                std::vector<ExecutorInfo::Ptr>, ExecutorInfoComp>();
+        }
+    }
+
+    if (notify && m_executorChangeHandler)
+    {
+        m_executorChangeHandler();
+    }
+}
+
+void ExecutorManager::stop()
+{
+    EXECUTOR_MANAGER_LOG(INFO) << "Try to stop ExecutorManager";
+
+    std::vector<bcos::executor::ParallelTransactionExecutorInterface::Ptr> executors;
+    {
+        if (m_name2Executors.empty())
+        {
+            return;
+        }
+
+        WriteGuard lock(m_mutex);
+        for (auto const& it : m_name2Executors)
+        {
+            executors.push_back(it.second->executor);
+        }
+    }
+
+    for (auto& executor : executors)
+    {
+        executor->stop();
+    }
+
+    stopTimer();
+}
+
+void ExecutorManager::setExecutorChangeHandler(std::function<void()> _handler)
+{
+    m_executorChangeHandler = std::move(_handler);
+}
+
+std::function<void()> ExecutorManager::executorChangeHandler()
+{
+    return m_executorChangeHandler;
+}
+
+ExecutorManager::ExecutorInfo::Ptr ExecutorManager::getExecutorInfoByName(
+    const std::string_view& name)
+{
+    return m_name2Executors[name];
+}
+
+std::string ExecutorManager::toLowerAddress(const std::string_view& address)
+{
+    return boost::algorithm::hex_lower(std::string(address));
+}
+
 bool ExecutorManager::addExecutor(std::string name,
     bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, int64_t seq)
 {

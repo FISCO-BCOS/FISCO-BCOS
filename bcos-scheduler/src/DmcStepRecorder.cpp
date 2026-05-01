@@ -6,6 +6,49 @@
 
 using namespace bcos::scheduler;
 
+uint32_t DmcStepRecorder::getRound()
+{
+    return m_round;
+}
+
+std::string DmcStepRecorder::toHex(uint32_t x)
+{
+    std::stringstream ss;
+    ss << std::setbase(16) << x;
+    return ss.str();
+}
+
+std::string DmcStepRecorder::getChecksum()
+{
+    return toHex(m_checksum) + ":" + getSendChecksum() + ":" + getReceiveChecksum() + ":" +
+           std::to_string(m_round);
+}
+
+std::string DmcStepRecorder::getSendChecksum()
+{
+    return toHex(m_sendChecksum);
+}
+
+std::string DmcStepRecorder::getReceiveChecksum()
+{
+    return toHex(m_receiveChecksum);
+}
+
+void DmcStepRecorder::clear()
+{
+    m_sendChecksum = 0;
+    m_receiveChecksum = 0;
+    m_checksum = 0;
+    m_round = 0;
+}
+
+std::string DmcStepRecorder::dumpAndClearChecksum()
+{
+    std::string checksum = getChecksum();
+    clear();
+    return checksum;
+}
+
 uint32_t DmcStepRecorder::getMessageChecksum(const protocol::ExecutionMessage::UniquePtr& message)
 {
     bool staticCall = message->staticCall();

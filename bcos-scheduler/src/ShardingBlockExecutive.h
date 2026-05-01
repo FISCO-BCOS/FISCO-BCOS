@@ -38,11 +38,7 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool,
-        std::shared_ptr<ShardCache> _contract2ShardCache, size_t _keyPageSize)
-      : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool),
-        m_contract2ShardCache(_contract2ShardCache),
-        m_keyPageSize(_keyPageSize){};
+        std::shared_ptr<ShardCache> _contract2ShardCache, size_t _keyPageSize);
 
     ShardingBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
@@ -66,7 +62,7 @@ public:
         bcos::executor::ParallelTransactionExecutorInterface::Ptr executor) override;
 
 private:
-    bool needPrepareExecutor() override { return false; }
+    bool needPrepareExecutor() override;
 
     std::string getContractShard(const std::string& contractAddress);
 

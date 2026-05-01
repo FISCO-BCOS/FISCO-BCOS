@@ -24,6 +24,28 @@
 using namespace bcos;
 using namespace bcos::scheduler;
 
+TarsExecutorManager::TarsExecutorManager(
+    const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig)
+  : m_nodeConfig(_nodeConfig)
+{
+    m_executorServiceName = _executorServiceName + "." + bcos::protocol::EXECUTOR_SERVANT_NAME;
+
+    TARS_EXECUTOR_MANAGER_LOG(INFO)
+        << "Initialize " << LOG_KV("executorServiceName", m_executorServiceName);
+}
+
+TarsExecutorManager::~TarsExecutorManager() = default;
+
+void TarsExecutorManager::stop()
+{
+    m_running = false;
+}
+
+std::string TarsExecutorManager::executorServiceName()
+{
+    return m_executorServiceName;
+}
+
 void TarsExecutorManager::start()
 {
     if (m_running)
