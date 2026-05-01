@@ -32,36 +32,19 @@ class FrontServiceInfo : public ObjectCounter<FrontServiceInfo>
 public:
     using Ptr = std::shared_ptr<FrontServiceInfo>;
     FrontServiceInfo(std::string _nodeID, bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcos::protocol::NodeType _type, bcostars::FrontServicePrx _frontServicePrx)
-      : m_nodeID(_nodeID),
-        m_nodeType(_type),
-        m_frontService(_frontService),
-        m_frontServicePrx(_frontServicePrx)
-    {}
-    bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
-    bcostars::FrontServicePrx frontServicePrx() { return m_frontServicePrx; }
+        bcos::protocol::NodeType _type, bcostars::FrontServicePrx _frontServicePrx);
+    bcos::front::FrontServiceInterface::Ptr frontService();
+    bcostars::FrontServicePrx frontServicePrx();
 
-    bool unreachable()
-    {
-        if (!m_frontServicePrx)
-        {
-            return false;
-        }
+    bool unreachable();
 
-        return !bcostars::checkConnection(
-            "FrontService", "unreachable", m_frontServicePrx, nullptr, false);
-    }
+    std::string const& nodeID() const;
 
-    std::string const& nodeID() const { return m_nodeID; }
-
-    bcos::protocol::NodeType nodeType() const { return m_nodeType; }
+    bcos::protocol::NodeType nodeType() const;
 
     // the protocolInfo of the nodeService
-    void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
-    {
-        m_protocolInfo = _protocolInfo;
-    }
-    bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const { return m_protocolInfo; }
+    void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
+    bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
 private:
     std::string m_nodeID;

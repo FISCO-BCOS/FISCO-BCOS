@@ -31,6 +31,13 @@ using namespace bcos::gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
 
+AMOPImpl::~AMOPImpl() = default;
+
+TopicManager::Ptr AMOPImpl::topicManager()
+{
+    return m_topicManager;
+}
+
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
     P2PInterface::Ptr _network, P2pID const& _p2pNodeID)

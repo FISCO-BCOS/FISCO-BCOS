@@ -28,10 +28,10 @@ public:
     virtual bool has(P2PNodeID _peer) const;
     virtual bool has(const std::string& _peer) const;
     virtual bool hasValueWhenDisable() const = 0;
-    virtual void setEnable(bool _enable) { m_enable = _enable; }
-    virtual bool enable() const { return m_enable; }
+    virtual void setEnable(bool _enable);
+    virtual bool enable() const;
     virtual std::string dump(bool _isAbridged = false);
-    virtual size_t size() { return m_peerList.size(); }
+    virtual size_t size();
     virtual void update(std::set<std::string> const& _strList, bool _enable);
 
 protected:

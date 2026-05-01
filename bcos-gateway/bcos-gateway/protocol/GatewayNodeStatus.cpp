@@ -28,6 +28,46 @@ GatewayNodeStatus::GatewayNodeStatus()
   : m_tarsStatus(std::make_shared<bcostars::GatewayNodeStatus>())
 {}
 
+void GatewayNodeStatus::setUUID(std::string const& _uuid)
+{
+    m_tarsStatus->uuid = _uuid;
+}
+
+void GatewayNodeStatus::setSeq(uint32_t _seq)
+{
+    m_tarsStatus->seq = _seq;
+}
+
+void GatewayNodeStatus::setGroupNodeInfos(std::vector<GroupNodeInfo::Ptr>&& _groupNodeInfos)
+{
+    m_groupNodeInfos = std::move(_groupNodeInfos);
+}
+
+std::string const& GatewayNodeStatus::uuid() const
+{
+    return m_tarsStatus->uuid;
+}
+
+uint32_t GatewayNodeStatus::seq() const
+{
+    return m_tarsStatus->seq;
+}
+
+std::vector<GroupNodeInfo::Ptr> const& GatewayNodeStatus::groupNodeInfos() const
+{
+    return m_groupNodeInfos;
+}
+
+GatewayNodeStatus::Ptr GatewayNodeStatusFactory::createGatewayNodeStatus()
+{
+    return std::make_shared<GatewayNodeStatus>();
+}
+
+GroupNodeInfo::Ptr GatewayNodeStatusFactory::createGroupNodeInfo()
+{
+    return std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+}
+
 bytesPointer GatewayNodeStatus::encode()
 {
     // append groupInfos to m_tarsStatus

@@ -133,19 +133,16 @@ public:
 
     std::pair<std::string, std::string> inAndOutStat(uint32_t _intervalMS);
 
-    const auto& inStat() const { return m_inStat; }
-    const auto& outStat() const { return m_outStat; }
+    const auto& inStat() const;
+    const auto& outStat() const;
 
-    int32_t statInterval() const { return m_statInterval; }
-    void setStatInterval(int32_t _statInterval) { m_statInterval = _statInterval; }
+    int32_t statInterval() const;
+    void setStatInterval(int32_t _statInterval);
 
-    bool enableConnectDebugInfo() const { return m_enableConnectDebugInfo; }
-    void setEnableConnectDebugInfo(bool _enableConnectDebugInfo)
-    {
-        m_enableConnectDebugInfo = _enableConnectDebugInfo;
-    }
+    bool enableConnectDebugInfo() const;
+    void setEnableConnectDebugInfo(bool _enableConnectDebugInfo);
 
-    bool working() const { return m_running; }
+    bool working() const;
 
 private:
     bool m_running = false;

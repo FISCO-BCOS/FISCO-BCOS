@@ -28,6 +28,65 @@ using namespace bcos::amop;
 
 const size_t AMOPMessage::HEADER_LENGTH;
 
+AMOPMessage::AMOPMessage() = default;
+
+AMOPMessage::AMOPMessage(bytesConstRef _data)
+{
+    decode(_data);
+}
+
+AMOPMessage::~AMOPMessage() = default;
+
+uint16_t AMOPMessage::type() const
+{
+    return m_type;
+}
+
+void AMOPMessage::setType(uint16_t _type)
+{
+    m_type = _type;
+}
+
+bytesConstRef AMOPMessage::data() const
+{
+    return m_data;
+}
+
+void AMOPMessage::setData(bcos::bytesConstRef _data)
+{
+    m_data = _data;
+}
+
+void AMOPMessage::setStatus(uint16_t _status)
+{
+    m_status = _status;
+}
+
+uint16_t AMOPMessage::status() const
+{
+    return m_status;
+}
+
+uint16_t AMOPMessage::version() const
+{
+    return m_version;
+}
+
+void AMOPMessage::setVersion(uint16_t version)
+{
+    m_version = version;
+}
+
+AMOPMessage::Ptr AMOPMessageFactory::buildMessage()
+{
+    return std::make_shared<AMOPMessage>();
+}
+
+AMOPMessage::Ptr AMOPMessageFactory::buildMessage(bytesConstRef _data)
+{
+    return std::make_shared<AMOPMessage>(_data);
+}
+
 bool AMOPMessage::encode(bcos::bytes& _buffer)
 {
     // encode version

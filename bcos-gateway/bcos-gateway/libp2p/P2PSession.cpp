@@ -29,6 +29,64 @@ P2PSession::~P2PSession()
     P2PSESSION_LOG(INFO) << "[P2PSession::~P2PSession] this=" << this;
 }
 
+bool P2PSession::active()
+{
+    return m_run;
+}
+
+SessionFace::Ptr P2PSession::session()
+{
+    return m_session;
+}
+
+void P2PSession::setSession(std::shared_ptr<SessionFace> session)
+{
+    m_session = std::move(session);
+}
+
+P2pID P2PSession::p2pID()
+{
+    return m_p2pInfo->rawP2pID;
+}
+
+std::string P2PSession::printP2pID()
+{
+    return printShortP2pID(m_p2pInfo->rawP2pID);
+}
+
+void P2PSession::setP2PInfo(P2PInfo const& p2pInfo)
+{
+    *m_p2pInfo = p2pInfo;
+    m_p2pInfo->nodeIPEndpoint = m_session->nodeIPEndpoint();
+}
+
+std::shared_ptr<P2PInfo> P2PSession::mutableP2pInfo()
+{
+    return m_p2pInfo;
+}
+
+std::weak_ptr<Service> P2PSession::service()
+{
+    return m_service;
+}
+
+void P2PSession::setService(std::weak_ptr<Service> service)
+{
+    m_service = service;
+}
+
+void P2PSession::setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
+{
+    WriteGuard guard(x_protocolInfo);
+    *m_protocolInfo = *_protocolInfo;
+}
+
+bcos::protocol::ProtocolInfo::ConstPtr P2PSession::protocolInfo() const
+{
+    ReadGuard guard(x_protocolInfo);
+    return m_protocolInfo;
+}
+
 void P2PSession::start()
 {
     P2PSESSION_LOG(INFO) << "[P2PSession::start] this=" << this;

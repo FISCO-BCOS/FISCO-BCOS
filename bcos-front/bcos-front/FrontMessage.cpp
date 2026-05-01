@@ -24,6 +24,64 @@
 using namespace bcos;
 using namespace front;
 
+uint16_t FrontMessage::moduleID()
+{
+    return m_moduleID;
+}
+
+void FrontMessage::setModuleID(uint16_t _moduleID)
+{
+    m_moduleID = _moduleID;
+}
+
+uint16_t FrontMessage::ext()
+{
+    return m_ext;
+}
+
+void FrontMessage::setExt(uint16_t _ext)
+{
+    m_ext = _ext;
+}
+
+bytesConstRef FrontMessage::uuid()
+{
+    return bcos::ref(m_uuid);
+}
+
+void FrontMessage::setUuid(bytes _uuid)
+{
+    m_uuid = std::move(_uuid);
+}
+
+bytesConstRef FrontMessage::payload()
+{
+    return m_payload;
+}
+
+void FrontMessage::setPayload(bytesConstRef _payload)
+{
+    m_payload = _payload;
+}
+
+void FrontMessage::setResponse()
+{
+    m_ext |= ExtFlag::Response;
+}
+
+bool FrontMessage::isResponse()
+{
+    return m_ext & ExtFlag::Response;
+}
+
+FrontMessageFactory::~FrontMessageFactory() = default;
+
+FrontMessage::Ptr FrontMessageFactory::buildMessage()
+{
+    auto message = std::make_shared<FrontMessage>();
+    return message;
+}
+
 bool bcos::front::FrontMessage::encodeHeader(bytes& buffer)
 {
     /// moduleID          :2 bytes

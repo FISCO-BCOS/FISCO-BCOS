@@ -43,11 +43,7 @@ public:
     using ConstPtr = std::shared_ptr<const RateLimiterManager>;
     using UniquePtr = std::unique_ptr<RateLimiterManager>;
 
-    RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
-      : m_rateLimiterConfig(_rateLimiterConfig)
-    {
-        initP2pBasicMsgTypes();
-    }
+        RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
     bcos::ratelimiter::RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 
@@ -64,62 +60,30 @@ public:
     bcos::ratelimiter::RateLimiterInterface::Ptr getInRateLimiter(
         const std::string& _groupID, uint16_t _moduleID, bool /***/);
 
-    ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const { return m_rateLimiterFactory; }
-    void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr& _rateLimiterFactory)
-    {
-        m_rateLimiterFactory = _rateLimiterFactory;
-    }
+    ratelimiter::RateLimiterFactory::Ptr rateLimiterFactory() const;
+    void setRateLimiterFactory(ratelimiter::RateLimiterFactory::Ptr& _rateLimiterFactory);
 
-    inline const std::array<bool, std::numeric_limits<uint16_t>::max()>& modulesWithoutLimit() const
-    {
-        return m_modulesWithoutLimit;
-    }
+    const std::array<bool, std::numeric_limits<uint16_t>::max()>& modulesWithoutLimit() const;
 
-    void setRateLimiterConfig(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
-    {
-        m_rateLimiterConfig = _rateLimiterConfig;
-    }
-    const GatewayConfig::RateLimiterConfig& rateLimiterConfig() const
-    {
-        return m_rateLimiterConfig;
-    }
+    void setRateLimiterConfig(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
+    const GatewayConfig::RateLimiterConfig& rateLimiterConfig() const;
 
-    void resetModulesWithoutLimit(const std::set<uint16_t>& _modulesWithoutLimit)
-    {
-        m_modulesWithoutLimit.fill(false);
-        for (const auto& moduleID : _modulesWithoutLimit)
-        {
-            m_modulesWithoutLimit.at(moduleID) = true;
-        }
-    }
+    void resetModulesWithoutLimit(const std::set<uint16_t>& _modulesWithoutLimit);
 
-    void resetP2pBasicMsgTypes(const std::set<uint16_t>& _p2pBasicMsgTypes)
-    {
-        m_p2pBasicMsgTypes.fill(false);
-        for (const auto& msgType : _p2pBasicMsgTypes)
-        {
-            m_p2pBasicMsgTypes.at(msgType) = true;
-        }
-    }
+    void resetP2pBasicMsgTypes(const std::set<uint16_t>& _p2pBasicMsgTypes);
 
-    bool enableOutGroupRateLimit() const { return m_enableOutGroupRateLimit; }
-    bool enableOutConRateLimit() const { return m_enableOutConRateLimit; }
-    bool enableInRateLimit() const { return m_enableInRateLimit; }
+    bool enableOutGroupRateLimit() const;
+    bool enableOutConRateLimit() const;
+    bool enableInRateLimit() const;
 
-    void setEnableOutGroupRateLimit(bool _enableOutGroupRateLimit)
-    {
-        m_enableOutGroupRateLimit = _enableOutGroupRateLimit;
-    }
-    void setEnableOutConRateLimit(bool _enableOutConRateLimit)
-    {
-        m_enableOutConRateLimit = _enableOutConRateLimit;
-    }
-    void setEnableInRateLimit(bool _enableInRateLimit) { m_enableInRateLimit = _enableInRateLimit; }
+    void setEnableOutGroupRateLimit(bool _enableOutGroupRateLimit);
+    void setEnableOutConRateLimit(bool _enableOutConRateLimit);
+    void setEnableInRateLimit(bool _enableInRateLimit);
 
     //----------------------------------------------------------------------
     void initP2pBasicMsgTypes();
 
-    inline bool isP2pBasicMsgType(uint16_t _type) { return m_p2pBasicMsgTypes.at(_type); }
+    bool isP2pBasicMsgType(uint16_t _type);
     //----------------------------------------------------------------------
 
 private:

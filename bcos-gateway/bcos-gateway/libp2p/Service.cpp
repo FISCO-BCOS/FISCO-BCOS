@@ -55,6 +55,11 @@ Service::Service(P2PInfo const& _p2pInfo) : m_selfInfo(_p2pInfo), m_nodeID(m_sel
         });
 }
 
+Service::~Service()
+{
+    stop();
+}
+
 void Service::start()
 {
     if (!m_run)

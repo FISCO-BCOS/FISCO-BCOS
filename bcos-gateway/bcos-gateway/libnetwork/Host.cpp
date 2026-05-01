@@ -29,7 +29,6 @@
 #include <utility>
 
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
