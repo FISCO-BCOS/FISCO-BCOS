@@ -40,9 +40,7 @@ public:
     using Ptr = std::shared_ptr<WsConnector>;
     using ConstPtr = std::shared_ptr<const WsConnector>;
 
-    explicit WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
-      : m_resolver(std::move(_resolver))
-    {}
+        explicit WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver);
 
     /**
      * @brief: connect to the server
@@ -57,38 +55,20 @@ public:
             std::shared_ptr<WsStreamDelegate>, std::shared_ptr<std::string>)>
             _callback);
 
-    bool erasePendingConns(const std::string& _nodeIPEndpoint)
-    {
-        std::lock_guard<std::mutex> lock(x_pendingConns);
-        return m_pendingConns.erase(_nodeIPEndpoint) != 0U;
-    }
+    bool erasePendingConns(const std::string& _nodeIPEndpoint);
 
-    bool insertPendingConns(const std::string& _nodeIPEndpoint)
-    {
-        std::lock_guard<std::mutex> lock(x_pendingConns);
-        auto result = m_pendingConns.insert(_nodeIPEndpoint);
-        return result.second;
-    }
+    bool insertPendingConns(const std::string& _nodeIPEndpoint);
 
-    void setResolver(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
-    {
-        m_resolver = std::move(_resolver);
-    }
-    std::shared_ptr<boost::asio::ip::tcp::resolver> resolver() const { return m_resolver; }
+    void setResolver(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver);
+    std::shared_ptr<boost::asio::ip::tcp::resolver> resolver() const;
 
-    void setIOServicePool(IOServicePool::Ptr _ioservicePool)
-    {
-        m_ioservicePool = std::move(_ioservicePool);
-    }
+    void setIOServicePool(IOServicePool::Ptr _ioservicePool);
 
-    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = std::move(_ctx); }
-    std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
+    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx);
+    std::shared_ptr<boost::asio::ssl::context> ctx() const;
 
-    void setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder)
-    {
-        m_builder = std::move(_builder);
-    }
-    std::shared_ptr<WsStreamDelegateBuilder> builder() const { return m_builder; }
+    void setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder);
+    std::shared_ptr<WsStreamDelegateBuilder> builder() const;
 
 private:
     std::shared_ptr<WsStreamDelegateBuilder> m_builder;

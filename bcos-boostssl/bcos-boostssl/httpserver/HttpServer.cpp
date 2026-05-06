@@ -29,6 +29,19 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::http;
 using namespace bcos::boostssl::context;
 
+HttpServer::HttpServer(std::string _listenIP, uint16_t _listenPort, uint32_t _httpBodySizeLimit,
+        CorsConfig _corsConfig)
+    : m_listenIP(std::move(_listenIP)),
+        m_listenPort(_listenPort),
+        m_httpBodySizeLimit(_httpBodySizeLimit),
+        m_corsConfig(std::move(_corsConfig))
+{}
+
+HttpServer::~HttpServer()
+{
+        stop();
+}
+
 // start http server
 void HttpServer::start()
 {
@@ -212,6 +225,91 @@ HttpSession::Ptr HttpServer::buildHttpSession(
     session->setNodeId(std::move(_nodeId));
 
     return session;
+}
+
+HttpReqHandler HttpServer::httpReqHandler() const
+{
+    return m_httpReqHandler;
+}
+
+void HttpServer::setHttpReqHandler(HttpReqHandler _httpReqHandler)
+{
+    m_httpReqHandler = std::move(_httpReqHandler);
+}
+
+std::shared_ptr<boost::asio::ip::tcp::acceptor> HttpServer::acceptor() const
+{
+    return m_acceptor;
+}
+
+void HttpServer::setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
+{
+    m_acceptor = std::move(_acceptor);
+}
+
+std::shared_ptr<boost::asio::ssl::context> HttpServer::ctx() const
+{
+    return m_ctx;
+}
+
+void HttpServer::setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx)
+{
+    m_ctx = std::move(_ctx);
+}
+
+WsUpgradeHandler HttpServer::wsUpgradeHandler() const
+{
+    return m_wsUpgradeHandler;
+}
+
+void HttpServer::setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler)
+{
+    m_wsUpgradeHandler = std::move(_wsUpgradeHandler);
+}
+
+HttpStreamFactory::Ptr HttpServer::httpStreamFactory() const
+{
+    return m_httpStreamFactory;
+}
+
+void HttpServer::setHttpStreamFactory(HttpStreamFactory::Ptr _httpStreamFactory)
+{
+    m_httpStreamFactory = std::move(_httpStreamFactory);
+}
+
+bool HttpServer::disableSsl() const
+{
+    return m_disableSsl;
+}
+
+void HttpServer::setDisableSsl(bool _disableSsl)
+{
+    m_disableSsl = _disableSsl;
+}
+
+void HttpServer::setIOServicePool(bcos::IOServicePool::Ptr _ioservicePool)
+{
+    m_ioservicePool = std::move(_ioservicePool);
+}
+
+uint32_t HttpServer::httpBodySizeLimit() const
+{
+    return m_httpBodySizeLimit;
+}
+
+void HttpServer::setHttpBodySizeLimit(uint32_t _httpBodySizeLimit)
+{
+    m_httpBodySizeLimit = _httpBodySizeLimit;
+}
+
+CorsConfig HttpServer::corsConfig() const
+{
+    return m_corsConfig;
+}
+
+void HttpServer::setCorsConfig(CorsConfig _corsConfig)
+{
+    m_corsConfig = std::move(_corsConfig);
 }
 
 /**

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "bcos-utilities/Error.h"
+#include <bcos-framework/Common.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <set>
 #include <string>

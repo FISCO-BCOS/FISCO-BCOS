@@ -3,6 +3,11 @@
 
 using namespace bcos::storage;
 
+CacheStorageFactory::CacheStorageFactory(
+        bcos::storage::TransactionalStorageInterface::Ptr backendStorage, ssize_t cacheSize)
+    : m_cacheSize(cacheSize), m_backendStorage(std::move(backendStorage))
+{}
+
 MergeableStorageInterface::Ptr CacheStorageFactory::build()
 {
     auto cache = std::make_shared<bcos::storage::LRUStateStorage>(m_backendStorage, false);
