@@ -5,6 +5,7 @@
 #include "bcos-utilities/Overloaded.h"
 #include <range/v3/view/map.hpp>
 #include <type_traits>
+#include <variant>
 
 namespace bcos::executor_v1
 {
@@ -19,17 +20,72 @@ concept HasReadSomeRaw = requires(Storage& storage) {
     storage.readSomeRaw(std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT);
 };
 
+// FIB-109: Any inner storage that exposes a savepoint API (e.g.
+// ReadWriteSetStorage) is rolled back alongside Rollbackable so that
+// tracked reads/writes from a reverted transaction do not pollute
+// downstream conflict detection. Storages without this API are ignored.
+template <class S>
+concept HasSavepointAPI = requires(S& storage) {
+    { storage.current() };
+    { storage.rollback(storage.current()) } -> task::IsAwaitable;
+};
+
+namespace detail
+{
+// Lazy resolver: only instantiates `decltype(storage.current())` when the
+// inner storage actually supplies the API, so conditional_t doesn't force
+// the false branch to type-check against every storage type.
+template <class S, bool HasAPI>
+struct InnerSavepointOf
+{
+    using type = std::monostate;
+};
+
+template <class S>
+struct InnerSavepointOf<S, true>
+{
+    using type = decltype(std::declval<S&>().current());
+};
+}  // namespace detail
+
 template <class Storage>
 class Rollbackable
 {
 public:
     using Key = typename Storage::Key;
     using Value = typename Storage::Value;
-    using Savepoint = int64_t;
+
+private:
+    using InnerSavepoint =
+        typename detail::InnerSavepointOf<Storage, HasSavepointAPI<Storage>>::type;
+
+public:
+    struct Savepoint
+    {
+        int64_t records = 0;
+        InnerSavepoint inner{};
+        bool exactInner = true;
+
+        friend bool operator==(Savepoint const&, Savepoint const&) = default;
+
+        // Arithmetic on the outer record count only; preserves the inner
+        // savepoint unchanged so callers can express "a few steps past sp".
+        // The result is not an exact snapshot of the inner storage.
+        Savepoint operator+(int64_t offset) const { return {records + offset, inner, false}; }
+    };
 
     Rollbackable(Storage& storage) : m_storage(storage) {}
 
-    Savepoint current() { return static_cast<Savepoint>(m_records.size()); }
+    Savepoint current()
+    {
+        Savepoint sp;
+        sp.records = static_cast<int64_t>(m_records.size());
+        if constexpr (HasSavepointAPI<Storage>)
+        {
+            sp.inner = m_storage.get().current();
+        }
+        return sp;
+    }
 
     task::Task<void> rollback(Savepoint savepoint)
     {
@@ -38,6 +94,13 @@ public:
             co_return;
         }
 
+
+        // Restore old values first; each restore goes back through m_storage
+        // and may itself append entries to an inner log (e.g.
+        // ReadWriteSetStorage.m_log). Rolling back the inner storage
+        // afterwards reclaims both the original and the restore entries,
+        // bringing the inner tracking back to the savepoint state.
+        auto const currentRecords = static_cast<int64_t>(m_records.size());
         while (static_cast<int64_t>(m_records.size()) > savepoint)
         {
             auto& record = m_records.back();
@@ -58,6 +121,17 @@ public:
                 record.oldValue);
 
             m_records.pop_back();
+        }
+        if constexpr (HasSavepointAPI<Storage>)
+        {
+            // Savepoint arithmetic only advances the outer record counter. An
+            // offset-derived savepoint is not an exact inner snapshot, so when
+            // it lands at or beyond the current outer record count, rollback
+            // must stay a no-op for the inner tracking state as well.
+            if (savepoint.exactInner || savepoint.records < currentRecords)
+            {
+                co_await m_storage.get().rollback(savepoint.inner);
+            }
         }
     }
 

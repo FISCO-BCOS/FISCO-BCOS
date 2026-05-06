@@ -18,43 +18,42 @@
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Wait.h>
+#include <bcos-transaction-executor/RollbackableStorage.h>
 #include <bcos-transaction-scheduler/ReadWriteSetStorage.h>
 #include <boost/test/unit_test.hpp>
+#include <iterator>
 #include <range/v3/view/single.hpp>
+#include <range/v3/view/transform.hpp>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::scheduler_v1;
 
-// Mock storage that supports DIRECT reads (readOne and readSome)
+// ---- Mock storage that supports DIRECT reads (used for FIB-100 tracking tests) ----
 struct DirectMockStorage
 {
     using Key = int;
     using Value = int;
 };
 
-// writeOne: no-op store for tracking tests
 task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,
     DirectMockStorage& /*storage*/, auto /*key*/, auto /*value*/)
 {
     co_return;
 }
 
-// readOne without DIRECT: should not be called in DIRECT tests
 task::Task<std::optional<int>> tag_invoke(
     storage2::tag_t<storage2::readOne> /*unused*/, DirectMockStorage& /*storage*/, auto&& /*key*/)
 {
     co_return std::nullopt;
 }
 
-// readOne with DIRECT: returns key * 10
 task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
     DirectMockStorage& /*storage*/, const auto& key, storage2::DIRECT_TYPE /*unused*/)
 {
     co_return std::make_optional(key * 10);
 }
 
-// readSome without DIRECT
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
     ::ranges::forward_range auto keys)
@@ -67,7 +66,6 @@ task::Task<std::vector<std::optional<int>>> tag_invoke(
     co_return result;
 }
 
-// readSome with DIRECT: returns key * 10 for each key
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
     ::ranges::forward_range auto keys, storage2::DIRECT_TYPE /*unused*/)
@@ -82,59 +80,80 @@ task::Task<std::vector<std::optional<int>>> tag_invoke(
 
 BOOST_AUTO_TEST_SUITE(FIB100_FIB106_FIB109_ReadWriteSetTest)
 
-// FIB-100: DIRECT readOne now tracks the key in the read set
-BOOST_AUTO_TEST_CASE(directReadOneTracksReadSet)
+// ---- FIB-100 ----
+
+// DIRECT reads are Rollbackable's internal pre-image snapshots. Tracking them
+// as transaction-visible reads would create phantom RAW dependencies. The
+// rollback-correctness concern raised by the audit is addressed instead by
+// WAW detection (see wawIntersectionDetected below): two chunks writing the
+// same key are serialized, so Rollbackable never reads a stale pre-image.
+BOOST_AUTO_TEST_CASE(directReadOneDoesNotPolluteReadSet)
 {
     task::syncWait([]() -> task::Task<void> {
-        DirectMockStorage mockStorage;
-        ReadWriteSetStorage<decltype(mockStorage)> rwStorage(mockStorage);
+        DirectMockStorage backend;
+        ReadWriteSetStorage<decltype(backend)> reader(backend);
 
-        // Write key 42 via a second storage (to detect RAW)
-        DirectMockStorage writerBackend;
-        ReadWriteSetStorage<decltype(writerBackend)> writerStorage(writerBackend);
-        co_await storage2::writeOne(writerStorage, 42, 1);
-
-        // DIRECT readOne key 42 should now track it
-        auto value = co_await storage2::readOne(rwStorage, 42, storage2::DIRECT);
-        BOOST_CHECK(value);
+        auto value = co_await storage2::readOne(reader, 42, storage2::DIRECT);
+        BOOST_REQUIRE(value);
         BOOST_CHECK_EQUAL(*value, 420);
 
-        // The read of key 42 should create a RAW intersection with the writer
-        BOOST_CHECK(hasRAWIntersection(writerStorage, rwStorage));
-
+        // Read set must remain empty — DIRECT is infrastructure, not business.
+        BOOST_CHECK(::ranges::empty(readWriteSet(reader)));
         co_return;
     }());
 }
 
-// FIB-100: DIRECT readSome now tracks keys in the read set
-BOOST_AUTO_TEST_CASE(directReadSomeTracksReadSet)
+BOOST_AUTO_TEST_CASE(directReadSomeDoesNotPolluteReadSet)
 {
     task::syncWait([]() -> task::Task<void> {
-        DirectMockStorage mockStorage;
-        ReadWriteSetStorage<decltype(mockStorage)> rwStorage(mockStorage);
+        DirectMockStorage backend;
+        ReadWriteSetStorage<decltype(backend)> reader(backend);
 
-        // Write key 5 via a separate storage
-        DirectMockStorage writerBackend;
-        ReadWriteSetStorage<decltype(writerBackend)> writerStorage(writerBackend);
-        co_await storage2::writeOne(writerStorage, 5, 1);
-
-        // DIRECT readSome keys {3, 5, 7}
         std::vector<int> keys = {3, 5, 7};
-        auto values = co_await storage2::readSome(rwStorage, keys, storage2::DIRECT);
-        BOOST_CHECK_EQUAL(values.size(), 3);
+        auto values = co_await storage2::readSome(reader, keys, storage2::DIRECT);
+        BOOST_REQUIRE_EQUAL(values.size(), 3);
         BOOST_CHECK_EQUAL(*values[0], 30);
         BOOST_CHECK_EQUAL(*values[1], 50);
         BOOST_CHECK_EQUAL(*values[2], 70);
 
-        // Key 5 was read and written, so RAW intersection should exist
-        BOOST_CHECK(hasRAWIntersection(writerStorage, rwStorage));
-
+        BOOST_CHECK(::ranges::empty(readWriteSet(reader)));
         co_return;
     }());
 }
 
-// FIB-106: readSome with forward_range compiles and works correctly
-BOOST_AUTO_TEST_CASE(readSomeForwardRangeWorks)
+// Rollbackable<ReadWriteSetStorage<...>>.writeOne internally does a
+// DIRECT readOne to capture the pre-image. That read must not appear in the
+// tracked set — only the subsequent write should.
+BOOST_AUTO_TEST_CASE(rollbackablePreImageReadIsNotTracked)
+{
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+    using Rollbackable = bcos::executor_v1::Rollbackable<RWSet>;
+
+    task::syncWait([]() -> task::Task<void> {
+        Storage backend;
+        RWSet rwStorage(backend);
+        Rollbackable rollbackable(rwStorage);
+
+        co_await storage2::writeOne(rollbackable, 42, 7);
+
+        // Exactly one entry, and it is a write (not a read inflated by the
+        // DIRECT pre-image snapshot).
+        auto const& tracked = readWriteSet(rwStorage);
+        BOOST_REQUIRE_EQUAL(tracked.size(), 1);
+        auto const& flag = tracked.at(std::hash<int>{}(42));
+        BOOST_CHECK(flag.write);
+        BOOST_CHECK(!flag.read);
+        co_return;
+    }());
+}
+
+// range() is a transparent pass-through: production code only reaches it from
+// BaselineScheduler.calculateStateRoot, which runs post-merge on the committed
+// storage and bypasses ReadWriteSetStorage entirely. This test pins that
+// contract so future callers cannot silently rely on range reads being tracked.
+BOOST_AUTO_TEST_CASE(rangeDoesNotPolluteReadSet)
 {
     using Storage =
         memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
@@ -143,25 +162,48 @@ BOOST_AUTO_TEST_CASE(readSomeForwardRangeWorks)
         Storage backend;
         ReadWriteSetStorage<decltype(backend)> rwStorage(backend);
 
-        // Write some data first
         co_await storage2::writeOne(rwStorage, 1, 100);
         co_await storage2::writeOne(rwStorage, 2, 200);
-        co_await storage2::writeOne(rwStorage, 3, 300);
 
-        // readSome with a vector (forward_range)
-        std::vector<int> keys = {1, 2, 3};
-        auto values = co_await storage2::readSome(rwStorage, keys);
-        BOOST_CHECK_EQUAL(values.size(), 3);
-        BOOST_CHECK_EQUAL(*values[0], 100);
-        BOOST_CHECK_EQUAL(*values[1], 200);
-        BOOST_CHECK_EQUAL(*values[2], 300);
+        auto before = readWriteSet(rwStorage).size();
+        auto it = co_await storage2::range(rwStorage);
+        while (auto kv = co_await it.next())
+        {
+            (void)kv;
+        }
 
+        // Range iteration leaves the tracked set unchanged.
+        BOOST_CHECK_EQUAL(readWriteSet(rwStorage).size(), before);
         co_return;
     }());
 }
 
-// FIB-109: writeOne tracks key in write set only after co_await completes
-BOOST_AUTO_TEST_CASE(writeOneTracksAfterCompletion)
+// FIB-100: rollback semantics make writes depend on the pre-image, so two
+// chunks writing the same key must not execute concurrently.
+BOOST_AUTO_TEST_CASE(wawIntersectionDetected)
+{
+    task::syncWait([]() -> task::Task<void> {
+        DirectMockStorage priorBackend;
+        ReadWriteSetStorage<decltype(priorBackend)> prior(priorBackend);
+        co_await storage2::writeOne(prior, 42, 1);
+
+        DirectMockStorage currentBackend;
+        ReadWriteSetStorage<decltype(currentBackend)> current(currentBackend);
+        co_await storage2::writeOne(current, 42, 2);  // WAW with prior chunk
+
+        BOOST_CHECK(hasRAWIntersection(prior, current));
+        co_return;
+    }());
+}
+
+// ---- FIB-106 ----
+
+// A deliberately single-pass input_range built on top of std::istream_iterator.
+// Under the old code (input_range constraint) this would silently lose data;
+// the tightened forward_range constraint makes the mis-use a compile error,
+// which we check by building a forward_range adapter instead. If the constraint
+// were silently wrong, this test would compile and detect the missing writes.
+BOOST_AUTO_TEST_CASE(forwardRangeWriteSomePersists)
 {
     using Storage =
         memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
@@ -170,42 +212,213 @@ BOOST_AUTO_TEST_CASE(writeOneTracksAfterCompletion)
         Storage backend;
         ReadWriteSetStorage<decltype(backend)> rwStorage(backend);
 
-        // After writeOne, the key should be in the write set
-        co_await storage2::writeOne(rwStorage, 10, 42);
+        // ranges::views::transform is a forward_range when the source is, so
+        // this exercises the two-pass pattern (tracking loop + forwarding).
+        std::vector<int> source{1, 2, 3};
+        auto keyValues =
+            source | ::ranges::views::transform([](int key) { return std::pair{key, key * 100}; });
 
-        auto const& rwSet = readWriteSet(rwStorage);
-        auto hash = std::hash<int>{}(10);
-        auto it = rwSet.find(hash);
-        BOOST_REQUIRE(it != rwSet.end());
-        BOOST_CHECK(it->second.write);
+        co_await storage2::writeSome(rwStorage, keyValues);
 
+        // All three keys must have reached the backend.
+        auto value1 = co_await storage2::readOne(rwStorage, 1);
+        auto value2 = co_await storage2::readOne(rwStorage, 2);
+        auto value3 = co_await storage2::readOne(rwStorage, 3);
+        BOOST_REQUIRE(value1);
+        BOOST_REQUIRE(value2);
+        BOOST_REQUIRE(value3);
+        BOOST_CHECK_EQUAL(*value1, 100);
+        BOOST_CHECK_EQUAL(*value2, 200);
+        BOOST_CHECK_EQUAL(*value3, 300);
+
+        // And all three keys must be tracked as writes (so conflict detection
+        // can see them).
+        auto const& tracked = readWriteSet(rwStorage);
+        for (int key : source)
+        {
+            auto it = tracked.find(std::hash<int>{}(key));
+            BOOST_REQUIRE(it != tracked.end());
+            BOOST_CHECK(it->second.write);
+        }
         co_return;
     }());
 }
 
-// FIB-100 + RAW: DIRECT reads create proper RAW intersections with writes
-BOOST_AUTO_TEST_CASE(directReadsCreateRAWIntersections)
+// ---- FIB-109 ----
+
+// Storage stack used to reproduce the DoS scenario from the audit:
+//   HostContext → Rollbackable → ReadWriteSetStorage → MemoryStorage
+// Any writes a reverted tx does must NOT remain in the tracked write-set
+// once HostContext rolls back to the tx's start savepoint.
+BOOST_AUTO_TEST_CASE(revertClearsWriteSetThroughRollbackable)
 {
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+    using Rollbackable = bcos::executor_v1::Rollbackable<RWSet>;
+
     task::syncWait([]() -> task::Task<void> {
-        DirectMockStorage backend1;
-        ReadWriteSetStorage<decltype(backend1)> writer(backend1);
+        Storage backend;
+        RWSet rwStorage(backend);
+        Rollbackable rollbackable(rwStorage);
 
-        DirectMockStorage backend2;
-        ReadWriteSetStorage<decltype(backend2)> reader(backend2);
+        auto startSavepoint = rollbackable.current();
+        BOOST_CHECK(::ranges::empty(readWriteSet(rwStorage)));
 
-        // Writer writes keys 10, 20, 30
-        co_await storage2::writeOne(writer, 10, 1);
-        co_await storage2::writeOne(writer, 20, 2);
-        co_await storage2::writeOne(writer, 30, 3);
+        // Simulate a transaction that writes many keys and then reverts.
+        for (int key = 1; key <= 50; ++key)
+        {
+            co_await storage2::writeOne(rollbackable, key, key * 100);
+        }
 
-        // Reader does a DIRECT read of key 99 (not written)
-        co_await storage2::readOne(reader, 99, storage2::DIRECT);
-        BOOST_CHECK(!hasRAWIntersection(writer, reader));
+        BOOST_CHECK(!::ranges::empty(readWriteSet(rwStorage)));
 
-        // Reader does a DIRECT read of key 20 (was written)
-        co_await storage2::readOne(reader, 20, storage2::DIRECT);
-        BOOST_CHECK(hasRAWIntersection(writer, reader));
+        // REVERT: HostContext rolls back to the tx's start savepoint.
+        co_await rollbackable.rollback(startSavepoint);
 
+        // The backend state and the tracked write-set must both be empty —
+        // otherwise a subsequent chunk that legitimately reads any of those
+        // keys would see a phantom RAW conflict (the original FIB-109 DoS
+        // vector).
+        BOOST_CHECK(::ranges::empty(readWriteSet(rwStorage)));
+
+        auto probe = co_await storage2::readOne(rollbackable, 25);
+        BOOST_CHECK(!probe);
+        co_return;
+    }());
+}
+
+// A nested savepoint (inner REVERT) must only unwind the inner writes, leaving
+// earlier committed writes in the tracked set intact.
+BOOST_AUTO_TEST_CASE(nestedRevertPreservesOuterWrites)
+{
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+    using Rollbackable = bcos::executor_v1::Rollbackable<RWSet>;
+
+    task::syncWait([]() -> task::Task<void> {
+        Storage backend;
+        RWSet rwStorage(backend);
+        Rollbackable rollbackable(rwStorage);
+
+        // Outer (committed) write
+        co_await storage2::writeOne(rollbackable, 1, 111);
+
+        // Inner call that writes then reverts
+        auto innerSavepoint = rollbackable.current();
+        co_await storage2::writeOne(rollbackable, 2, 222);
+        co_await storage2::writeOne(rollbackable, 3, 333);
+        co_await rollbackable.rollback(innerSavepoint);
+
+        auto const& tracked = readWriteSet(rwStorage);
+        BOOST_CHECK(tracked.contains(std::hash<int>{}(1)));
+        BOOST_CHECK(!tracked.contains(std::hash<int>{}(2)));
+        BOOST_CHECK(!tracked.contains(std::hash<int>{}(3)));
+
+        // Backend state matches: only key 1 remains.
+        auto value1 = co_await storage2::readOne(rollbackable, 1);
+        BOOST_REQUIRE(value1);
+        BOOST_CHECK_EQUAL(*value1, 111);
+        BOOST_CHECK(!(co_await storage2::readOne(rollbackable, 2)));
+        BOOST_CHECK(!(co_await storage2::readOne(rollbackable, 3)));
+        co_return;
+    }());
+}
+
+// Standalone Savepoint API on ReadWriteSetStorage (without Rollbackable) must
+// restore prior flags when the same key is touched again after the savepoint.
+BOOST_AUTO_TEST_CASE(savepointRestoresPreviousFlags)
+{
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+
+    task::syncWait([]() -> task::Task<void> {
+        Storage backend;
+        RWSet rwStorage(backend);
+
+        co_await storage2::readOne(rwStorage, 7);  // read-only
+        auto savepoint = rwStorage.current();
+
+        co_await storage2::writeOne(rwStorage, 7, 99);  // upgrade to write
+        auto const& tracked = readWriteSet(rwStorage);
+        auto hash7 = std::hash<int>{}(7);
+        BOOST_REQUIRE(tracked.contains(hash7));
+        BOOST_CHECK(tracked.at(hash7).write);
+
+        co_await rwStorage.rollback(savepoint);
+
+        // Write flag is cleared, but the earlier read flag is preserved.
+        BOOST_REQUIRE(tracked.contains(hash7));
+        BOOST_CHECK(tracked.at(hash7).read);
+        BOOST_CHECK(!tracked.at(hash7).write);
+        co_return;
+    }());
+}
+
+// Rollbackable uses savepoint + offset to express "rewind some outer writes".
+// If the wrapped storage also has savepoints, rolling back to a future outer
+// savepoint must remain a no-op for the inner tracking state as well.
+BOOST_AUTO_TEST_CASE(futureRollbackDoesNotClearInnerTracking)
+{
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+    using Rollbackable = bcos::executor_v1::Rollbackable<RWSet>;
+
+    task::syncWait([]() -> task::Task<void> {
+        Storage backend;
+        RWSet rwStorage(backend);
+        Rollbackable rollbackable(rwStorage);
+
+        auto savepoint = rollbackable.current();
+        co_await storage2::writeOne(rollbackable, 1, 100);
+        co_await storage2::writeOne(rollbackable, 2, 200);
+
+        auto const& tracked = readWriteSet(rwStorage);
+        BOOST_REQUIRE_EQUAL(tracked.size(), 2);
+
+        co_await rollbackable.rollback(savepoint + 2);
+
+        BOOST_CHECK_EQUAL(tracked.size(), 2);
+        BOOST_CHECK(tracked.contains(std::hash<int>{}(1)));
+        BOOST_CHECK(tracked.contains(std::hash<int>{}(2)));
+
+        auto value1 = co_await storage2::readOne(rollbackable, 1);
+        auto value2 = co_await storage2::readOne(rollbackable, 2);
+        BOOST_REQUIRE(value1);
+        BOOST_REQUIRE(value2);
+        BOOST_CHECK_EQUAL(*value1, 100);
+        BOOST_CHECK_EQUAL(*value2, 200);
+        co_return;
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(exactSavepointStillRollsBackInnerOnlyChanges)
+{
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+    using Rollbackable = bcos::executor_v1::Rollbackable<RWSet>;
+
+    task::syncWait([]() -> task::Task<void> {
+        Storage backend;
+        RWSet rwStorage(backend);
+        Rollbackable rollbackable(rwStorage);
+
+        co_await storage2::writeOne(rollbackable, 1, 100);
+        auto savepoint = rollbackable.current();
+
+        auto value = co_await storage2::readOne(rollbackable, 2);
+        BOOST_CHECK(!value);
+        auto const hash2 = std::hash<int>{}(2);
+        BOOST_CHECK(readWriteSet(rwStorage).contains(hash2));
+
+        co_await rollbackable.rollback(savepoint);
+
+        BOOST_CHECK(!readWriteSet(rwStorage).contains(hash2));
+        BOOST_CHECK(readWriteSet(rwStorage).contains(std::hash<int>{}(1)));
         co_return;
     }());
 }

@@ -1,8 +1,11 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Trait.h>
+#include <cstddef>
+#include <optional>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace bcos::scheduler_v1
 {
@@ -16,6 +19,11 @@ private:
 public:
     using Key = std::decay_t<StorageType>::Key;
     using Value = std::decay_t<StorageType>::Value;
+    // FIB-109: Savepoint is the size of the mutation log; rollback pops the
+    // log entries added after it and restores m_readWriteSet to the state it
+    // had when the savepoint was taken.
+    using Savepoint = std::size_t;
+
     ReadWriteSetStorage(StorageType& storage) : m_storage(std::ref(storage)) {}
 
 private:
@@ -24,17 +32,34 @@ private:
         bool read = false;
         bool write = false;
     };
+    struct LogEntry
+    {
+        size_t hash;
+        // nullopt => entry did not exist before putSet, so rollback erases it;
+        // otherwise rollback restores these flags.
+        std::optional<ReadWriteFlag> previous;
+    };
+
     std::unordered_map<size_t, ReadWriteFlag> m_readWriteSet;
+    std::vector<LogEntry> m_log;
+
     using Storage = StorageType;
 
     void putSet(bool write, size_t hash)
     {
-        auto [it, inserted] = m_readWriteSet.try_emplace(
-            hash, typename ReadWriteSetStorage::ReadWriteFlag{.read = !write, .write = write});
-        if (!inserted)
+        auto [it, inserted] =
+            m_readWriteSet.try_emplace(hash, ReadWriteFlag{.read = !write, .write = write});
+        if (inserted)
         {
-            it->second.write |= write;
-            it->second.read |= (!write);
+            m_log.push_back(LogEntry{.hash = hash, .previous = std::nullopt});
+            return;
+        }
+        ReadWriteFlag const previous = it->second;
+        it->second.write |= write;
+        it->second.read |= (!write);
+        if (it->second.read != previous.read || it->second.write != previous.write)
+        {
+            m_log.push_back(LogEntry{.hash = hash, .previous = previous});
         }
     }
     void putSet(bool write, auto const& key)
@@ -60,22 +85,30 @@ public:
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
-        std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+    // FIB-100: DIRECT reads are used by Rollbackable to snapshot pre-images
+    // for rollback bookkeeping — they are NOT transaction-visible reads.
+    // Tracking them would create phantom read dependencies (a chunk that only
+    // wrote a key would look like it also read it, triggering false RAW).
+    // Rollback correctness is protected instead by WAW detection in
+    // hasRAWIntersection: two chunks writing the same key are forced to
+    // serialize, so the "read stale pre-image" window cannot open.
+    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
+        -> task::Task<task::AwaitableReturnType<
+            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         for (auto&& key : keys)
         {
             putSet(false, key);
         }
-        co_return co_await storage2::readSome(m_storage.get(), std::move(keys));
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), direct);
     }
 
-    auto readOne(auto key)
+    auto readOne(auto key, storage2::DIRECT_TYPE direct)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
             std::add_lvalue_reference_t<Storage>, decltype(key)>>>
     {
         putSet(false, key);
-        co_return co_await storage2::readOne(m_storage.get(), std::move(key));
+        co_return co_await storage2::readOne(m_storage.get(), std::move(key), direct);
     }
 
     auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<
@@ -96,13 +129,8 @@ public:
     auto writeSome(::ranges::input_range auto keyValues) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
     {
-        std::vector<Key> trackedKeys;
-        for (auto&& [key, _] : keyValues)
-        {
-            trackedKeys.push_back(key);
-        }
-        co_await storage2::writeSome(m_storage.get(), std::move(keyValues));
-        for (auto&& key : trackedKeys)
+        co_await storage2::writeSome(m_storage.get(), keyValues);
+        for (auto&& key : keyValues | ::ranges::views::keys)
         {
             m_storage.get().putSet(true, key);
         }
@@ -119,14 +147,8 @@ public:
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
             decltype(keys), decltype(args)...>>>
     {
-        std::vector<Key> trackedKeys;
+        co_await storage2::removeSome(m_storage.get(), keys, std::forward<decltype(args)>(args)...);
         for (auto&& key : keys)
-        {
-            trackedKeys.push_back(key);
-        }
-        co_await storage2::removeSome(
-            m_storage.get(), std::move(keys), std::forward<decltype(args)>(args)...);
-        for (auto&& key : trackedKeys)
         {
             m_storage.get().putSet(true, key);
         }
@@ -134,10 +156,41 @@ public:
 
     // NOTE: range() does not track reads because it returns a lazy iterator whose
     // keys are not known until consumption. This is a known limitation (FIB-100).
+    // range() on ReadWriteSetStorage is not invoked during parallel chunk
+    // execution — the only production caller is BaselineScheduler's
+    // calculateStateRoot, which runs after all chunks have merged and hashes
+    // the committed storage directly (bypassing this wrapper). EVM /
+    // precompiled / ledger / account paths do not use range either. No read
+    // tracking required.
     auto range(auto&&... args) -> task::Task<
         storage2::ReturnType<std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
     {
         co_return co_await storage2::range(m_storage.get(), std::forward<decltype(args)>(args)...);
+    }
+
+
+    // FIB-109: Savepoint / rollback API that pairs with Rollbackable. See
+    // RollbackableStorage.h — Rollbackable forwards rollback() to its inner
+    // storage, so a Savepoint taken on Rollbackable<ReadWriteSetStorage<...>>
+    // captures both levels and restores this set when the transaction reverts.
+    Savepoint current() const noexcept { return m_log.size(); }
+
+    task::Task<void> rollback(Savepoint savepoint)
+    {
+        while (m_log.size() > savepoint)
+        {
+            auto& entry = m_log.back();
+            if (entry.previous)
+            {
+                m_readWriteSet[entry.hash] = *entry.previous;
+            }
+            else
+            {
+                m_readWriteSet.erase(entry.hash);
+            }
+            m_log.pop_back();
+        }
+        co_return;
     }
 
     friend auto& readWriteSet(ReadWriteSetStorage& storage) { return storage.m_readWriteSet; }
@@ -158,7 +211,14 @@ public:
         }
     }
 
-    // RAW: read after write
+    // Conflict detection between a prior-chunks aggregated write set (lhs) and
+    // the current chunk's tracked set (rhs). Returns true when the current
+    // chunk either:
+    //   * read a key that a prior chunk wrote (RAW), or
+    //   * wrote a key that a prior chunk wrote (WAW) — FIB-100: rollback
+    //     semantics make writes implicitly read-dependent on the pre-image,
+    //     so WAW must serialize to keep Rollbackable from snapshotting a
+    //     stale value.
     friend bool hasRAWIntersection(ReadWriteSetStorage const& lhs, const auto& rhs)
     {
         auto const& lhsSet = readWriteSet(lhs);
@@ -171,7 +231,7 @@ public:
 
         for (auto const& [key, flag] : rhsSet)
         {
-            if (flag.read && lhsSet.contains(key))
+            if ((flag.read || flag.write) && lhsSet.contains(key))
             {
                 return true;
             }
