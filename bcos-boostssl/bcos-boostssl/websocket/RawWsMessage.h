@@ -36,58 +36,34 @@ class RawWsMessage : public boostssl::MessageFace, public bcos::ObjectCounter<Ra
 {
 public:
     using Ptr = std::shared_ptr<RawWsMessage>;
-    RawWsMessage()
-    {
-        m_payload = std::make_shared<bcos::bytes>();
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][RawWsMessage]", this);
-        }
-    }
+    RawWsMessage();
 
     RawWsMessage(const RawWsMessage&) = delete;
     RawWsMessage& operator=(const RawWsMessage&) = delete;
     RawWsMessage(RawWsMessage&&) = delete;
     RawWsMessage& operator=(RawWsMessage&&) = delete;
-    ~RawWsMessage() override
-    {
-        if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
-        {
-            WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[DELOBJ][RawWsMessage]", this);
-        }
-    }
+    ~RawWsMessage() override;
 
-    uint16_t version() const override { return 0; }
-    void setVersion(uint16_t /*unused*/) override {}
-    uint16_t packetType() const override { return m_packetType; }
-    void setPacketType(uint16_t _packetType) override {}
+    uint16_t version() const override;
+    void setVersion(uint16_t /*unused*/) override;
+    uint16_t packetType() const override;
+    void setPacketType(uint16_t _packetType) override;
 
-    std::string const& seq() const override { return m_seq; }
-    void setSeq(std::string _seq) override { m_seq = _seq; }
-    std::shared_ptr<bcos::bytes> payload() const override { return m_payload; }
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override
-    {
-        m_payload = std::move(_payload);
-    }
-    uint16_t ext() const override { return 0; }
-    void setExt(uint16_t /*unused*/) override {}
+    std::string const& seq() const override;
+    void setSeq(std::string _seq) override;
+    std::shared_ptr<bcos::bytes> payload() const override;
+    void setPayload(std::shared_ptr<bcos::bytes> _payload) override;
+    uint16_t ext() const override;
+    void setExt(uint16_t /*unused*/) override;
 
-    bool encode(bcos::bytes& _buffer) override
-    {
-        _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
-        return true;
-    }
+    bool encode(bcos::bytes& _buffer) override;
 
-    int64_t decode(bytesConstRef _buffer) override
-    {
-        m_payload = std::make_shared<bcos::bytes>(_buffer.begin(), _buffer.end());
-        return static_cast<int64_t>(_buffer.size());
-    }
+    int64_t decode(bytesConstRef _buffer) override;
 
-    bool isRespPacket() const override { return false; }
-    void setRespPacket() override {}
+    bool isRespPacket() const override;
+    void setRespPacket() override;
 
-    uint32_t length() const override { return m_payload->size(); }
+    uint32_t length() const override;
 
 private:
     uint16_t m_packetType = WS_RAW_MESSAGE_TYPE;
@@ -106,11 +82,7 @@ public:
     RawWsMessageFactory& operator=(RawWsMessageFactory&&) = delete;
     ~RawWsMessageFactory() override = default;
 
-    boostssl::MessageFace::Ptr buildMessage() override
-    {
-        auto msg = std::make_shared<RawWsMessage>();
-        return msg;
-    }
+    boostssl::MessageFace::Ptr buildMessage() override;
 };
 
 }  // namespace bcos::boostssl::ws

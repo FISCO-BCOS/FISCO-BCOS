@@ -34,6 +34,58 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::context;
 
+WsConnector::WsConnector(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
+  : m_resolver(std::move(_resolver))
+{}
+
+bool WsConnector::erasePendingConns(const std::string& _nodeIPEndpoint)
+{
+    std::lock_guard<std::mutex> lock(x_pendingConns);
+    return m_pendingConns.erase(_nodeIPEndpoint) != 0U;
+}
+
+bool WsConnector::insertPendingConns(const std::string& _nodeIPEndpoint)
+{
+    std::lock_guard<std::mutex> lock(x_pendingConns);
+    auto result = m_pendingConns.insert(_nodeIPEndpoint);
+    return result.second;
+}
+
+void WsConnector::setResolver(std::shared_ptr<boost::asio::ip::tcp::resolver> _resolver)
+{
+    m_resolver = std::move(_resolver);
+}
+
+std::shared_ptr<boost::asio::ip::tcp::resolver> WsConnector::resolver() const
+{
+    return m_resolver;
+}
+
+void WsConnector::setIOServicePool(IOServicePool::Ptr _ioservicePool)
+{
+    m_ioservicePool = std::move(_ioservicePool);
+}
+
+void WsConnector::setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx)
+{
+    m_ctx = std::move(_ctx);
+}
+
+std::shared_ptr<boost::asio::ssl::context> WsConnector::ctx() const
+{
+    return m_ctx;
+}
+
+void WsConnector::setBuilder(std::shared_ptr<WsStreamDelegateBuilder> _builder)
+{
+    m_builder = std::move(_builder);
+}
+
+std::shared_ptr<WsStreamDelegateBuilder> WsConnector::builder() const
+{
+    return m_builder;
+}
+
 // TODO: how to set timeout for connect to wsServer ???
 void WsConnector::connectToWsServer(const std::string& _host, uint16_t _port, bool _disableSsl,
     std::function<void(boost::beast::error_code, const std::string&,

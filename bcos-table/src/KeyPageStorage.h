@@ -90,24 +90,7 @@ public:
         size_t _pageSize = 10240,
         uint32_t _blockVersion = (uint32_t)bcos::protocol::BlockVersion::V3_0_VERSION,
         std::shared_ptr<const std::set<std::string, std::less<>>> _ignoreTables = nullptr,
-        bool _ignoreNotExist = false)
-      : storage::StateStorageInterface(std::move(_prev)),
-        m_blockVersion(_blockVersion),
-        m_pageSize(_pageSize > MIN_PAGE_SIZE ? _pageSize : MIN_PAGE_SIZE),
-        m_splitSize(m_pageSize / 3 * 2),
-        m_mergeSize(m_pageSize / 4),
-        m_buckets(std::max(1u, std::thread::hardware_concurrency())),
-        m_ignoreTables(std::move(_ignoreTables)),
-        m_ignoreNotExist(_ignoreNotExist),
-        m_setRowWithDirtyFlag(setRowWithDirtyFlag)
-    {
-        if (!m_ignoreTables)
-        {
-            auto ignore = std::make_shared<std::set<std::string, std::less<>>>();
-            ignore->insert(std::string(SYS_TABLES));
-            m_ignoreTables = ignore;
-        }
-    }
+        bool _ignoreNotExist = false);
 
     KeyPageStorage(const KeyPageStorage&) = delete;
     KeyPageStorage& operator=(const KeyPageStorage&) = delete;
@@ -115,11 +98,7 @@ public:
     KeyPageStorage(KeyPageStorage&&) = delete;
     KeyPageStorage& operator=(KeyPageStorage&&) = delete;
 
-    ~KeyPageStorage() override
-    {
-        m_recoder.clear();
-        m_buckets.clear();
-    }
+    ~KeyPageStorage() override;
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<storage::Condition const>& _condition,

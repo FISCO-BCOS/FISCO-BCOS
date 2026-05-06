@@ -32,44 +32,12 @@ namespace bcos::boostssl::ws
 class WsTools
 {
 public:
-    static bool isIPAddress(std::string const& _input)
-    {
-        const static boost::regex ipv4_regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
-        const static boost::regex ipv6_regex(
-            "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|:|((([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})"
-            "?::("
-            "([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?))$");
+    static bool isIPAddress(std::string const& _input);
+    static bool validIP(const std::string& _ip);
 
-        return boost::regex_match(_input, ipv4_regex) || boost::regex_match(_input, ipv6_regex);
-    }
-    static bool validIP(const std::string& _ip)
-    {
-        boost::system::error_code ec;
-        boost::asio::ip::make_address(_ip, ec);
-        return !static_cast<bool>(ec);
-    }
+    static bool isHostname(const std::string& _input);
 
-    static bool isHostname(const std::string& _input)
-    {
-        if (_input.empty())
-        {
-            return false;
-        }
-        boost::asio::io_context io_context;
-        boost::asio::ip::tcp::resolver resolver(io_context);
-
-        try
-        {
-            boost::asio::ip::tcp::resolver::results_type results = resolver.resolve(_input, "80");
-            return true;
-        }
-        catch (...)
-        {
-            return false;
-        }
-    }
-
-    static bool validPort(uint16_t _port) { return _port > 1024; }
+    static bool validPort(uint16_t _port);
     static bool hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
 
     static void close(boost::asio::ip::tcp::socket& skt);

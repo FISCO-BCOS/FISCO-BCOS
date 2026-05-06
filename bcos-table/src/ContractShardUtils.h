@@ -46,9 +46,6 @@ private:
     static void setShard(bcos::storage::StorageWrapper& storage,
         const std::string_view& contractTableName, const std::string_view& shard);
 
-    static bool isInherent(std::optional<bcos::storage::Entry> entry)
-    {
-        return !entry ? false : entry->getField(0).starts_with(INHERENT_PREFIX);
-    }
+    static bool isInherent(std::optional<bcos::storage::Entry> entry);
 };
 }  // namespace bcos::storage

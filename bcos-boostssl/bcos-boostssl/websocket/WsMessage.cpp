@@ -26,8 +26,92 @@ using namespace bcos;
 using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 
+void CHECK_OFFSET(uint64_t offset, uint64_t length)
+{
+    if (std::cmp_greater(offset, length))
+    {
+        throw std::out_of_range("Out of range error, offset:" + std::to_string(offset) +
+                                " ,length: " + std::to_string(length));
+    }
+}
+
 // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
 constexpr size_t WsMessage::MESSAGE_MIN_LENGTH = 10;
+
+WsMessage::WsMessage()
+{
+    m_payload = std::make_shared<bcos::bytes>();
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][WsMessage]", this);
+    }
+}
+
+WsMessage::~WsMessage()
+{
+    if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
+    {
+        WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[DELOBJ][WsMessage]", this);
+    }
+}
+
+uint16_t WsMessage::version() const
+{
+    return m_version;
+}
+
+void WsMessage::setVersion(uint16_t)
+{}
+
+uint16_t WsMessage::packetType() const
+{
+    return m_packetType;
+}
+
+void WsMessage::setPacketType(uint16_t _packetType)
+{
+    m_packetType = _packetType;
+}
+
+int16_t WsMessage::status() const
+{
+    return m_status;
+}
+
+void WsMessage::setStatus(int16_t _status)
+{
+    m_status = _status;
+}
+
+std::string const& WsMessage::seq() const
+{
+    return m_seq;
+}
+
+void WsMessage::setSeq(std::string _seq)
+{
+    m_seq = std::move(_seq);
+}
+
+std::shared_ptr<bcos::bytes> WsMessage::payload() const
+{
+    return m_payload;
+}
+
+void WsMessage::setPayload(std::shared_ptr<bcos::bytes> _payload)
+{
+    m_payload = std::move(_payload);
+}
+
+uint16_t WsMessage::ext() const
+{
+    return m_ext;
+}
+
+void WsMessage::setExt(uint16_t _ext)
+{
+    m_ext = _ext;
+}
 
 bool WsMessage::encode(bytes& _buffer)
 {
@@ -105,4 +189,24 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
     }
     m_length = length;
     return length;
+}
+
+bool WsMessage::isRespPacket() const
+{
+    return (m_ext & bcos::protocol::MessageExtFieldFlag::RESPONSE) != 0;
+}
+
+void WsMessage::setRespPacket()
+{
+    m_ext |= bcos::protocol::MessageExtFieldFlag::RESPONSE;
+}
+
+uint32_t WsMessage::length() const
+{
+    return m_length;
+}
+
+boostssl::MessageFace::Ptr WsMessageFactory::buildMessage()
+{
+    return std::make_shared<WsMessage>();
 }

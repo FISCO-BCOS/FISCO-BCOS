@@ -32,20 +32,14 @@ public:
     using Ptr = std::shared_ptr<WsInitializer>;
     using ConstPtr = std::shared_ptr<const WsInitializer>;
 
-    std::shared_ptr<MessageFaceFactory> messageFactory() const { return m_messageFactory; }
-    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
-    {
-        m_messageFactory = std::move(_messageFactory);
-    }
+    std::shared_ptr<MessageFaceFactory> messageFactory() const;
+    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory);
 
-    std::shared_ptr<WsConfig> config() const { return m_config; }
-    void setConfig(std::shared_ptr<WsConfig> _config) { m_config = std::move(_config); }
+    std::shared_ptr<WsConfig> config() const;
+    void setConfig(std::shared_ptr<WsConfig> _config);
 
-    std::shared_ptr<WsSessionFactory> sessionFactory() { return m_sessionFactory; }
-    void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
-    {
-        m_sessionFactory = std::move(_sessionFactory);
-    }
+    std::shared_ptr<WsSessionFactory> sessionFactory();
+    void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory);
 
     void initWsService(WsService::Ptr _wsService);
 

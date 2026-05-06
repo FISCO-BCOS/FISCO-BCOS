@@ -54,8 +54,8 @@ using VerifyCallback = boost::function<bool(bool, boost::asio::ssl::verify_conte
 
 struct Options
 {
-    Options(uint32_t _timeout) : timeout(_timeout) {}
-    Options() = default;
+    Options(uint32_t _timeout);
+    Options();
     uint32_t timeout = 0;  ///< The timeout value of async function, in milliseconds.
 };
 
