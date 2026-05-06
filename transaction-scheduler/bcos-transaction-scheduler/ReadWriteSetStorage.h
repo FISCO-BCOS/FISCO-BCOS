@@ -88,18 +88,24 @@ public:
     auto writeOne(auto key, auto value) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
     {
-        putSet(true, key);
+        auto keyCopy = key;
         co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
+        m_storage.get().putSet(true, keyCopy);
     }
 
     auto writeSome(::ranges::input_range auto keyValues) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
     {
+        std::vector<Key> trackedKeys;
         for (auto&& [key, _] : keyValues)
         {
-            putSet(true, key);
+            trackedKeys.push_back(key);
         }
-        co_return co_await storage2::writeSome(m_storage.get(), std::move(keyValues));
+        co_await storage2::writeSome(m_storage.get(), std::move(keyValues));
+        for (auto&& key : trackedKeys)
+        {
+            m_storage.get().putSet(true, key);
+        }
     }
 
     task::Task<void> removeOne(auto key, auto&&... args)
@@ -113,14 +119,21 @@ public:
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
             decltype(keys), decltype(args)...>>>
     {
+        std::vector<Key> trackedKeys;
         for (auto&& key : keys)
         {
-            putSet(true, key);
+            trackedKeys.push_back(key);
         }
-        co_return co_await storage2::removeSome(
+        co_await storage2::removeSome(
             m_storage.get(), std::move(keys), std::forward<decltype(args)>(args)...);
+        for (auto&& key : trackedKeys)
+        {
+            m_storage.get().putSet(true, key);
+        }
     }
 
+    // NOTE: range() does not track reads because it returns a lazy iterator whose
+    // keys are not known until consumption. This is a known limitation (FIB-100).
     auto range(auto&&... args) -> task::Task<
         storage2::ReturnType<std::invoke_result_t<storage2::Range, Storage&, decltype(args)...>>>
     {
