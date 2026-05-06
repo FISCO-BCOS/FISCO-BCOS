@@ -85,29 +85,43 @@ public:
             std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    // FIB-100: DIRECT reads are used by Rollbackable to snapshot pre-images
-    // for rollback bookkeeping — they are NOT transaction-visible reads.
-    // Tracking them would create phantom read dependencies (a chunk that only
-    // wrote a key would look like it also read it, triggering false RAW).
-    // Rollback correctness is protected instead by WAW detection in
-    // hasRAWIntersection: two chunks writing the same key are forced to
-    // serialize, so the "read stale pre-image" window cannot open.
-    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+    // Transaction-visible reads must be tracked so that hasRAWIntersection
+    // can detect a chunk reading a key written by an earlier chunk.
+    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
         for (auto&& key : keys)
         {
             putSet(false, key);
         }
-        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), direct);
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys));
     }
 
-    auto readOne(auto key, storage2::DIRECT_TYPE direct)
+    auto readOne(auto key)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne,
             std::add_lvalue_reference_t<Storage>, decltype(key)>>>
     {
         putSet(false, key);
+        co_return co_await storage2::readOne(m_storage.get(), std::move(key));
+    }
+
+    // FIB-100: DIRECT reads are Rollbackable's pre-image snapshots — internal
+    // bookkeeping, not transaction-visible reads. Tracking them would create
+    // phantom read dependencies (a chunk that only wrote a key would look
+    // like it also read it, triggering false RAW). Rollback correctness is
+    // protected instead by WAW detection in hasRAWIntersection: two chunks
+    // writing the same key are forced to serialize, so the "read stale
+    // pre-image" window cannot open.
+    auto readSome(::ranges::input_range auto keys, storage2::DIRECT_TYPE direct)
+        -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::ReadSome, Storage&,
+            decltype(keys), storage2::DIRECT_TYPE>>>
+    {
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys), direct);
+    }
+
+    auto readOne(auto key, storage2::DIRECT_TYPE direct) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key), storage2::DIRECT_TYPE>>>
+    {
         co_return co_await storage2::readOne(m_storage.get(), std::move(key), direct);
     }
 
@@ -121,19 +135,20 @@ public:
     auto writeOne(auto key, auto value) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
     {
-        auto keyCopy = key;
+        putSet(true, key);
         co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
-        m_storage.get().putSet(true, keyCopy);
     }
 
-    auto writeSome(::ranges::input_range auto keyValues) -> task::Task<task::AwaitableReturnType<
+    // FIB-106: forward_range is required so the two-pass pattern (track keys
+    // then forward to backend) does not silently consume a single-pass input.
+    auto writeSome(::ranges::forward_range auto keyValues) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::WriteSome, Storage&, decltype(keyValues)>>>
     {
-        co_await storage2::writeSome(m_storage.get(), keyValues);
-        for (auto&& key : keyValues | ::ranges::views::keys)
+        for (auto&& [key, _] : keyValues)
         {
-            m_storage.get().putSet(true, key);
+            putSet(true, key);
         }
+        co_return co_await storage2::writeSome(m_storage.get(), std::move(keyValues));
     }
 
     task::Task<void> removeOne(auto key, auto&&... args)
@@ -143,15 +158,16 @@ public:
             m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    auto removeSome(::ranges::input_range auto keys, auto&&... args)
+    auto removeSome(::ranges::forward_range auto keys, auto&&... args)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome, Storage&,
             decltype(keys), decltype(args)...>>>
     {
-        co_await storage2::removeSome(m_storage.get(), keys, std::forward<decltype(args)>(args)...);
         for (auto&& key : keys)
         {
-            m_storage.get().putSet(true, key);
+            putSet(true, key);
         }
+        co_return co_await storage2::removeSome(
+            m_storage.get(), std::move(keys), std::forward<decltype(args)>(args)...);
     }
 
     // NOTE: range() does not track reads because it returns a lazy iterator whose

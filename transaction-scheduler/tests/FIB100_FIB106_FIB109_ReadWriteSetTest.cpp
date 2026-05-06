@@ -30,10 +30,30 @@ using namespace bcos::storage2;
 using namespace bcos::scheduler_v1;
 
 // ---- Mock storage that supports DIRECT reads (used for FIB-100 tracking tests) ----
+// ReadWriteSetStorage forwards readSomeRaw/readOneRaw via direct member access,
+// so the wrapped backend must expose those (matching MemoryStorage's interface).
 struct DirectMockStorage
 {
     using Key = int;
     using Value = int;
+
+    auto readOneRaw(auto /*key*/, auto&&... /*args*/)
+        -> task::Task<storage2::StorageValueType<Value>>
+    {
+        co_return storage2::NOT_EXISTS_TYPE{};
+    }
+
+    auto readSomeRaw(::ranges::input_range auto keys, auto&&... /*args*/)
+        -> task::Task<std::vector<storage2::StorageValueType<Value>>>
+    {
+        std::vector<storage2::StorageValueType<Value>> result;
+        for (auto&& key : keys)
+        {
+            (void)key;
+            result.emplace_back(storage2::NOT_EXISTS_TYPE{});
+        }
+        co_return result;
+    }
 };
 
 task::Task<void> tag_invoke(storage2::tag_t<storage2::writeOne> /*unused*/,

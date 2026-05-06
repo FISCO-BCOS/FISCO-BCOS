@@ -101,7 +101,7 @@ public:
         // afterwards reclaims both the original and the restore entries,
         // bringing the inner tracking back to the savepoint state.
         auto const currentRecords = static_cast<int64_t>(m_records.size());
-        while (static_cast<int64_t>(m_records.size()) > savepoint)
+        while (static_cast<int64_t>(m_records.size()) > savepoint.records)
         {
             auto& record = m_records.back();
 
