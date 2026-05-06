@@ -322,7 +322,7 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
     }
     else
     {
-        auto tableName = getContractTableName(contractAddress);
+        auto tableName = ::getContractTableName(contractAddress);
         shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
         m_contract2ShardCache->insert(accessor, {contractAddress, shardName});
         DMC_LOG(DEBUG) << LOG_BADGE("Sharding")

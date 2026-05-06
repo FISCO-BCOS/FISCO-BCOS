@@ -136,7 +136,7 @@ bcos::crypto::Hash::Ptr SchedulerImpl::getHashImpl()
     return m_hashImpl;
 }
 
-const ledger::LedgerConfig& SchedulerImpl::ledgerConfig() const
+const bcos::ledger::LedgerConfig& SchedulerImpl::ledgerConfig() const
 {
     return *m_ledgerConfig;
 }
