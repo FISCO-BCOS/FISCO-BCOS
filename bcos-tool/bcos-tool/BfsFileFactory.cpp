@@ -20,6 +20,7 @@
 
 #include "BfsFileFactory.h"
 #include "bcos-executor/src/Common.h"
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/Table.h>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/serialization/vector.hpp>

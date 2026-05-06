@@ -22,12 +22,28 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(TBB REQUIRED)
 
-add_library(bcos-framework INTERFACE)
-target_include_directories(bcos-framework INTERFACE
+set(BCOS_FRAMEWORK_SOURCES
+    bcos-framework/ledger/Features.cpp
+    bcos-framework/multigroup/ChainNodeInfo.cpp
+    bcos-framework/multigroup/GroupInfo.cpp
+    bcos-framework/protocol/Protocol.cpp
+    bcos-framework/protocol/Transaction.cpp
+    bcos-framework/storage/Entry.cpp)
+
+add_library(bcos-framework STATIC ${BCOS_FRAMEWORK_SOURCES})
+target_include_directories(bcos-framework PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-framework>)
-target_link_libraries(bcos-framework INTERFACE bcos-task Microsoft.GSL::GSL fmt::fmt)
+target_link_libraries(bcos-framework PUBLIC
+    bcos-task
+    bcos-utilities
+    bcos-crypto
+    Microsoft.GSL::GSL
+    fmt::fmt
+    TBB::tbb)
+set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

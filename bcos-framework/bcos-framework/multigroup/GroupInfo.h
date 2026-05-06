@@ -35,16 +35,7 @@ public:
 
     virtual std::string const& genesisConfig() const { return m_genesisConfig; }
     virtual std::string const& iniConfig() const { return m_iniConfig; }
-    virtual ChainNodeInfo::Ptr nodeInfo(std::string_view _nodeName) const
-    {
-        ReadGuard l(x_nodeInfos);
-        auto it = m_nodeInfos.find(_nodeName);
-        if (it == m_nodeInfos.end())
-        {
-            return nullptr;
-        }
-        return it->second;
-    }
+    virtual ChainNodeInfo::Ptr nodeInfo(std::string_view _nodeName) const;
 
     std::string const& groupID() const { return m_groupID; }
     std::string const& chainID() const { return m_chainID; }
@@ -54,53 +45,15 @@ public:
         m_genesisConfig = _genesisConfig;
     }
     virtual void setIniConfig(std::string const& _iniConfig) { m_iniConfig = _iniConfig; }
-    virtual bool appendNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
-    {
-        UpgradableGuard l(x_nodeInfos);
-        auto const& nodeName = _nodeInfo->nodeName();
-        auto it = m_nodeInfos.find(nodeName);
-        if (it != m_nodeInfos.end())
-        {
-            return false;
-        }
-        UpgradeGuard ul(l);
-        m_nodeInfos[nodeName] = _nodeInfo;
-        return true;
-    }
+    virtual bool appendNodeInfo(ChainNodeInfo::Ptr _nodeInfo);
 
-    virtual void updateNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
-    {
-        WriteGuard l(x_nodeInfos);
-        auto const& nodeName = _nodeInfo->nodeName();
-        auto it = m_nodeInfos.find(nodeName);
-        if (it != m_nodeInfos.end())
-        {
-            *(it->second) = *_nodeInfo;
-            return;
-        }
-        m_nodeInfos[nodeName] = _nodeInfo;
-    }
+    virtual void updateNodeInfo(ChainNodeInfo::Ptr _nodeInfo);
 
-    virtual bool removeNodeInfo(std::string const& _nodeName)
-    {
-        UpgradableGuard l(x_nodeInfos);
-        auto it = m_nodeInfos.find(_nodeName);
-        if (it == m_nodeInfos.end())
-        {
-            return false;
-        }
-        UpgradeGuard ul(l);
-        m_nodeInfos.erase(it);
-        return true;
-    }
+    virtual bool removeNodeInfo(std::string const& _nodeName);
 
     virtual void setGroupID(std::string const& _groupID) { m_groupID = _groupID; }
     virtual void setChainID(std::string const& _chainID) { m_chainID = _chainID; }
-    virtual int64_t nodesNum() const
-    {
-        ReadGuard l(x_nodeInfos);
-        return m_nodeInfos.size();
-    }
+    virtual int64_t nodesNum() const;
 
     auto nodeInfos() const
     {
@@ -148,15 +101,5 @@ private:
     mutable SharedMutex x_nodeInfos;
 };
 
-inline std::string printGroupInfo(const GroupInfo::Ptr& _groupInfo)
-{
-    if (!_groupInfo)
-    {
-        return "";
-    }
-    std::stringstream oss;
-    oss << LOG_KV("group", _groupInfo->groupID()) << LOG_KV("chain", _groupInfo->chainID())
-        << LOG_KV("nodeSize", _groupInfo->nodesNum());
-    return oss.str();
-}
+std::string printGroupInfo(const GroupInfo::Ptr& _groupInfo);
 }  // namespace bcos::group
