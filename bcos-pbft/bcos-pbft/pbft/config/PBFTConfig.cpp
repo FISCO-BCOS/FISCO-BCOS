@@ -160,7 +160,16 @@ void PBFTConfig::notifyResetSealing(std::function<void()> _callback)
     }
     // only notify the non-leader to reset sealing
     PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing") << printCurrentState();
-    auto committedIndex = m_committedProposal->index();
+    // FIB-116: hold x_committedProposal while reading m_committedProposal to prevent
+    // null-pointer dereference or data race with concurrent setCommittedProposal().
+    bcos::protocol::BlockNumber committedIndex = 0;
+    {
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIndex = m_committedProposal->index();
+        }
+    }
     m_sealerResetNotifier(
         [this, _callback = std::move(_callback), committedIndex](Error::Ptr _error) {
             if (_error)
@@ -183,7 +192,16 @@ void PBFTConfig::notifyResetSealing(std::function<void()> _callback)
 
 void PBFTConfig::reNotifySealer(bcos::protocol::BlockNumber _index)
 {
-    if (_index >= highWaterMark() || _index < m_committedProposal->index())
+    // FIB-116: hold x_committedProposal while reading m_committedProposal.
+    bcos::protocol::BlockNumber committedIdx = 0;
+    {
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIdx = m_committedProposal->index();
+        }
+    }
+    if (_index >= highWaterMark() || _index < committedIdx)
     {
         PBFT_LOG(INFO) << LOG_DESC("reNotifySealer return for invalid expectedStart")
                        << LOG_KV("expectedStart", _index)
@@ -326,7 +344,15 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     {
         return;
     }
-    auto committedIndex = m_committedProposal->index();
+    // FIB-116: hold x_committedProposal while reading m_committedProposal.
+    bcos::protocol::BlockNumber committedIndex = 0;
+    {
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIndex = m_committedProposal->index();
+        }
+    }
     if (m_validator->resettingProposalSize() > 0 && (startSealIndex > (committedIndex + 1)))
     {
         PBFT_LOG(INFO) << LOG_DESC(
