@@ -237,7 +237,6 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
 
 
     // front
-    front->setMessageFactory(std::make_shared<bcos::front::FrontMessageFactory>());
     front->setGroupID(nodeConfig->groupId());
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
     front->setIoService(std::make_shared<boost::asio::io_context>());

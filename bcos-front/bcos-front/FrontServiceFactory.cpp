@@ -39,7 +39,6 @@ FrontService::Ptr FrontServiceFactory::buildFrontService(
                     << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID->hex());
 
     auto frontService = std::make_shared<FrontService>();
-    frontService->setMessageFactory(std::make_shared<FrontMessageFactory>());
     frontService->setGroupID(_groupID);
     frontService->setNodeID(std::move(_nodeID));
     frontService->setIoService(std::make_shared<boost::asio::io_context>());

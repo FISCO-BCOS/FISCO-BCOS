@@ -149,10 +149,6 @@ public:
     void onMessageTimeout(const boost::system::error_code& _error, bcos::crypto::NodeIDPtr _nodeID,
         const std::string& _uuid);
 
-    FrontMessageFactory::Ptr messageFactory() const;
-
-    void setMessageFactory(FrontMessageFactory::Ptr _messageFactory);
-
     bcos::crypto::NodeIDPtr nodeID() const;
     void setNodeID(bcos::crypto::NodeIDPtr _nodeID);
     std::string groupID() const;
@@ -222,7 +218,6 @@ private:
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
     std::shared_ptr<bcos::gateway::GatewayInterface> m_gatewayInterface;
-    FrontMessageFactory::Ptr m_messageFactory;
 
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>

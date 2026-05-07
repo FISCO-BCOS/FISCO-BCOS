@@ -74,14 +74,6 @@ bool FrontMessage::isResponse()
     return m_ext & ExtFlag::Response;
 }
 
-FrontMessageFactory::~FrontMessageFactory() = default;
-
-FrontMessage::Ptr FrontMessageFactory::buildMessage()
-{
-    auto message = std::make_shared<FrontMessage>();
-    return message;
-}
-
 bool bcos::front::FrontMessage::encodeHeader(bytes& buffer)
 {
     /// moduleID          :2 bytes

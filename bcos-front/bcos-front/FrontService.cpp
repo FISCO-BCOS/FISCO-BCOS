@@ -52,16 +52,6 @@ FrontService::~FrontService() noexcept
     FRONT_LOG(INFO) << LOG_DESC("~FrontService") << LOG_KV("this", this);
 }
 
-FrontMessageFactory::Ptr FrontService::messageFactory() const
-{
-    return m_messageFactory;
-}
-
-void FrontService::setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
-{
-    m_messageFactory = std::move(_messageFactory);
-}
-
 bcos::crypto::NodeIDPtr FrontService::nodeID() const
 {
     return m_nodeID;
@@ -190,12 +180,6 @@ void FrontService::checkParams()
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   " FrontService gatewayInterface is uninitialized"));
-    }
-
-    if (!m_messageFactory)
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment(" FrontService messageFactory is uninitialized"));
     }
 
     if (!m_ioService)
@@ -585,8 +569,7 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
         callback->timeoutHandler->cancel();
     }
 
-    // construct shared_ptr<bytes> from message->payload() first for
-    // thead safe
+    // Copy the payload before dispatching asynchronously.
     auto buffer = bytes(_payLoad.begin(), _payLoad.end());
     m_taskArena.execute([&]() {
         m_asyncGroup.run([_uuid, _error = std::move(_error), callback = std::move(callback),
@@ -610,8 +593,8 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
 {
     try
     {
-        auto message = messageFactory()->buildMessage();
-        auto ret = message->decode(_data);
+        FrontMessage message;
+        auto ret = message.decode(_data);
         if (MessageDecodeStatus::MESSAGE_COMPLETE != ret)
         {
             FRONT_LOG(ERROR) << LOG_DESC("onReceiveMessage") << LOG_DESC("illegal message")
@@ -619,18 +602,18 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
             BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment("illegal message"));
         }
 
-        int moduleID = message->moduleID();
-        int ext = message->ext();
-        std::string uuid = std::string(message->uuid().begin(), message->uuid().end());
+        int moduleID = message.moduleID();
+        int ext = message.ext();
+        std::string uuid = std::string(message.uuid().begin(), message.uuid().end());
 
         FRONT_LOG(TRACE) << LOG_BADGE("onReceiveMessage") << LOG_KV("moduleID", moduleID)
                          << LOG_KV("uuid", uuid) << LOG_KV("ext", ext)
                          << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID->hex())
                          << LOG_KV("length", _data.size());
 
-        if (message->isResponse())
+        if (message.isResponse())
         {
-            handleCallback(nullptr, message->payload(), uuid, moduleID, _nodeID);
+            handleCallback(nullptr, message.payload(), uuid, moduleID, _nodeID);
         }
         else
         {
@@ -638,14 +621,12 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
                 it != m_moduleID2MessageDispatcher.end())
             {
                 auto callback = it->second;
-                // construct shared_ptr<bytes> from message->payload() first for
-                // thead safe
-                bytes buffer(message->payload().begin(), message->payload().end());
+                // Copy the payload before dispatching asynchronously.
+                bytes buffer(message.payload().begin(), message.payload().end());
 
                 m_taskArena.execute([&]() mutable {
                     m_asyncGroup.run(
-                        [uuid, callback = std::move(callback), buffer = std::move(buffer),
-                            message = std::move(message), _nodeID] {
+                        [uuid, callback = std::move(callback), buffer = std::move(buffer), _nodeID] {
                             callback(_nodeID, uuid, bytesConstRef(buffer.data(), buffer.size()));
                         });
                 });
@@ -701,17 +682,17 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
     const std::string& _uuid, bytesConstRef _data, bool isResponse,
     const ReceiveMsgFunc& _receiveMsgCallback)
 {
-    auto message = messageFactory()->buildMessage();
-    message->setModuleID(_moduleID);
-    message->setUuid(bytes(_uuid.begin(), _uuid.end()));
-    message->setPayload(_data);
+    FrontMessage message;
+    message.setModuleID(_moduleID);
+    message.setUuid(bytes(_uuid.begin(), _uuid.end()));
+    message.setPayload(_data);
     if (isResponse)
     {
-        message->setResponse();
+        message.setResponse();
     }
 
     auto buffer = std::make_shared<bytes>();
-    message->encode(*buffer);
+    message.encode(*buffer);
 
     // call gateway interface to send the message
     m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, std::move(_nodeID),

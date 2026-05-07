@@ -75,7 +75,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_buildFrontService)
     BOOST_CHECK_EQUAL(frontService->groupID(), g_groupID);
     // BOOST_CHECK_EQUAL(frontService->nodeID()->hex(), g_srcNodeID);
     BOOST_CHECK(frontService->gatewayInterface());
-    BOOST_CHECK(frontService->messageFactory());
     BOOST_CHECK(frontService->ioService());
     BOOST_CHECK(frontService->callback().empty());
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().empty());
@@ -185,7 +184,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
 {
     auto frontService = buildFrontService();
     auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
-    auto message = frontService->messageFactory()->buildMessage();
 
     int moduleID = 222;
     auto dstNodeID = createKey(g_dstNodeID_0);
@@ -281,7 +279,6 @@ BOOST_AUTO_TEST_CASE(testFrontService_loopTimeout)
 {
     auto frontService = buildFrontService();
     auto gateway = std::static_pointer_cast<FakeGateway>(frontService->gatewayInterface());
-    auto message = frontService->messageFactory()->buildMessage();
 
     int moduleID = 12345;
     auto dstNodeID = createKey(g_dstNodeID_0);
