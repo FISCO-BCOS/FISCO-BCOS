@@ -140,10 +140,55 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
         return;
     }
     auto proposalResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(response);
-    // TODO: check the proposal to ensure security
-    // load the fetched checkpoint proposal into the cache
+    // FIB-127: verify signature proofs on each recovered proposal before loading into cache.
+    // An untrusted peer could otherwise inject arbitrary committed-proposal data.
     auto proposals = proposalResponse->proposals();
-    m_pbftCache->initState(proposals, _nodeID);
+    PBFTProposalList validProposals;
+    for (const auto& proposal : proposals)
+    {
+        auto proofSize = proposal->signatureProofSize();
+        if (proofSize == 0)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("onRecvCommittedProposalsResponse: drop proposal with no sig proofs")
+                << LOG_KV("from", _nodeID->shortHex()) << LOG_KV("index", proposal->index())
+                << LOG_KV("hash", proposal->hash().abridged());
+            continue;
+        }
+        uint64_t weight = 0;
+        bool sigValid = true;
+        for (size_t i = 0; i < proofSize; i++)
+        {
+            auto proof = proposal->signatureProof(i);
+            auto* nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
+            if (!nodeInfo)
+            {
+                sigValid = false;
+                break;
+            }
+            if (!m_config->cryptoSuite()->signatureImpl()->verify(
+                    nodeInfo->nodeID, proposal->hash(), proof.second))
+            {
+                sigValid = false;
+                break;
+            }
+            weight += nodeInfo->voteWeight;
+        }
+        if (!sigValid || weight < m_config->minRequiredQuorum())
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC(
+                       "onRecvCommittedProposalsResponse: drop proposal with invalid/insufficient "
+                       "sig proofs")
+                << LOG_KV("from", _nodeID->shortHex()) << LOG_KV("index", proposal->index())
+                << LOG_KV("hash", proposal->hash().abridged()) << LOG_KV("weight", weight)
+                << LOG_KV("required", m_config->minRequiredQuorum());
+            continue;
+        }
+        validProposals.push_back(proposal);
+    }
+    // load the fetched checkpoint proposals into the cache
+    m_pbftCache->initState(validProposals, _nodeID);
     PBFT_LOG(INFO) << LOG_DESC("onRecvCommittedProposalsResponse")
                    << LOG_KV("from", _nodeID->shortHex())
                    << LOG_KV("proposalSize", proposals.size());
