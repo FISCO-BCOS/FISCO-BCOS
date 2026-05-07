@@ -184,6 +184,10 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
         (uint32_t)g_BCOSConfig.maxSupportedVersion());
     _block->blockHeader()->setVersion(version);
+    // FIB-142: bind transaction commitment to proposal hash before hashing.
+    // Without this, byzantine leader can equivocate under same proposalHash.
+    auto txsRoot = _block->calculateTransactionRoot(*m_hashImpl);
+    _block->blockHeader()->setTxsRoot(txsRoot);
     _block->blockHeader()->calculateHash(*m_hashImpl);
 
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
