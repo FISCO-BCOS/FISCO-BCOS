@@ -31,48 +31,60 @@ void BlockValidator::asyncCheckBlock(
     auto self = weak_from_this();
     m_taskPool->enqueue([self, _block, _onVerifyFinish]() {
         auto blockHeader = _block->blockHeader();
-        // ignore the genesis block
-        if (blockHeader->number() == 0)
-        {
-            _onVerifyFinish(nullptr, true);
-            return;
-        }
+
+        // Separate result computation from callback delivery (FIB-139):
+        // compute the verification result inside the try block, then invoke
+        // _onVerifyFinish exactly once in a dedicated no-throw wrapper at the end.
+        bool verifyResult = false;
         try
         {
-            auto validator = self.lock();
-            if (!validator)
+            // ignore the genesis block
+            if (blockHeader->number() == 0)
             {
-                _onVerifyFinish(nullptr, false);
-                return;
+                verifyResult = true;
             }
-            auto config = validator->m_config;
-            if (blockHeader->number() <= config->committedProposal()->index())
+            else
             {
-                _onVerifyFinish(nullptr, false);
-                return;
+                auto validator = self.lock();
+                if (!validator)
+                {
+                    verifyResult = false;
+                }
+                else
+                {
+                    auto config = validator->m_config;
+                    if (blockHeader->number() <= config->committedProposal()->index())
+                    {
+                        verifyResult = false;
+                    }
+                    else if (_block->transactionsSize() == 0)
+                    {
+                        verifyResult = true;
+                    }
+                    else
+                    {
+                        verifyResult = validator->checkSealerListAndWeightList(_block) &&
+                                       validator->checkSignatureList(_block);
+                    }
+                }
             }
-            if (_block->transactionsSize() == 0)
-            {
-                _onVerifyFinish(nullptr, true);
-                return;
-            }
-            if (!validator->checkSealerListAndWeightList(_block))
-            {
-                _onVerifyFinish(nullptr, false);
-                return;
-            }
-            if (!validator->checkSignatureList(_block))
-            {
-                _onVerifyFinish(nullptr, false);
-                return;
-            }
-            _onVerifyFinish(nullptr, true);
         }
         catch (std::exception const& e)
         {
             PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock exception")
                               << LOG_KV("message", boost::diagnostic_information(e));
-            _onVerifyFinish(nullptr, false);
+            verifyResult = false;
+        }
+        // Invoke the callback exactly once; catch any exception it may throw so that
+        // the worker thread is not terminated and the callback is not double-fired.
+        try
+        {
+            _onVerifyFinish(nullptr, verifyResult);
+        }
+        catch (std::exception const& e)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish exception")
+                              << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
 }
