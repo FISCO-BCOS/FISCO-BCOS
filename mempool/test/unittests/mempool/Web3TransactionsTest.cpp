@@ -7,6 +7,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/ledger/EVMAccount.h>
+#include <bcos-framework/mempool/MemPool.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -102,6 +103,8 @@ struct MapStateStorage
 
     task::Task<bool> existsOne(StateKey key) { co_return co_await existsOne(StateKeyView{key}); }
 };
+
+static_assert(mempool::MemPool<Web3Transactions, MapStateStorage>);
 
 static bytes toBytes(std::string_view s)
 {
