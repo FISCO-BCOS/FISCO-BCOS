@@ -21,6 +21,9 @@ set(TARS_PROTOCOL_TARGET "protocol-tars")
 # bcos-txpool
 set(TXPOOL_TARGET "txpool")
 
+# bcos-mempool
+set(MEMPOOL_TARGET "mempool")
+
 # bcos-sealer
 set(SEALER_TARGET "sealer")
 

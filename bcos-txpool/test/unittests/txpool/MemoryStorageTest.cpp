@@ -238,10 +238,10 @@ BOOST_AUTO_TEST_CASE(GetTxsHash)
     }
 }
 
-BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsWithWeb3Transactions)
+BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsUpdatesWeb3NonceCache)
 {
-    // This test verifies that batchRemoveSealedTxs correctly updates Web3 transaction nonces
-    // when transactions are removed after being sealed (addressing the synchronization issue)
+    // This test verifies that batchRemoveSealedTxs correctly updates the Web3 nonce cache
+    // when sealed Web3 transactions are removed.
 
     // Create test data: Web3 transactions with different senders and nonces
     const std::string sender1Hex = "0x1234567890123456789012345678901234567890";
@@ -306,7 +306,7 @@ BOOST_AUTO_TEST_CASE(BatchRemoveSealedTxsWithWeb3Transactions)
     BOOST_CHECK_EQUAL(storage.exists(bcosTx->hash()), false);
     BOOST_CHECK_EQUAL(storage.size(), 0U);
 
-    // The key part of the test: verify that Web3NonceChecker was called with correct data
+    // The key part of the test: verify that Web3NonceChecker was updated with correct data.
     // The web3NonceChecker should have been updated with:
     // - sender1: nonces {5, 7} -> max nonce 7+1=8
     // - sender2: nonce {3} -> max nonce 3+1=4
