@@ -420,8 +420,20 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
                            << m_config->printCurrentState();
             return false;
         }
-        // TODO: use lastAppliedProposal to check the current proposal's parent block header info
-        // the number,hash and timestamp should be checked
+        // FIB-128: verify the proposal is consecutive with the last applied block.
+        // A proposal whose index does not equal lastApplied->index()+1 has an inconsistent
+        // parent block number and must be rejected before reaching applyStateMachine(),
+        // which would otherwise hit a FATAL assertion on the mismatch.
+        if (proposal->index() != lastAppliedProposal->index() + 1)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC(
+                       "tryToApplyCommitQueue: reject proposal with non-consecutive parent index")
+                << LOG_KV("proposalIndex", proposal->index())
+                << LOG_KV("lastAppliedIndex", lastAppliedProposal->index())
+                << m_config->printCurrentState();
+            return false;
+        }
         // commit the proposal
         m_committedQueue.pop();
         // in case of the same block execute more than once

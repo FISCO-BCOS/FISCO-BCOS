@@ -117,6 +117,44 @@ public:
         PBFTCacheProcessor::checkPrecommitWeight(_precommitMsg);
         return true;
     }
+
+    // Test helpers: allow direct queue manipulation for FIB regression tests.
+    void pushToCommittedQueueForTest(PBFTProposalInterface::Ptr _proposal)
+    {
+        m_committedQueue.push(std::move(_proposal));
+    }
+    // Inject an already-applied checkpoint so getAppliedCheckPointProposal(_slotIndex)
+    // returns _proposal.  _slotIndex is the key in m_caches; _proposal->index() may
+    // intentionally differ (e.g. stale) to exercise parent-consistency checks.
+    void setAppliedCheckPointAtSlotForTest(
+        bcos::protocol::BlockNumber _slotIndex, PBFTProposalInterface::Ptr _proposal)
+    {
+        if (!m_caches.contains(_slotIndex))
+        {
+            m_caches[_slotIndex] = m_cacheFactory->createPBFTCache(
+                m_config, _slotIndex, [](bcos::protocol::BlockNumber) {});
+        }
+        m_caches[_slotIndex]->setCheckPointProposal(std::move(_proposal));
+    }
+    // Override getAppliedCheckPointProposal to return an injected stale proposal regardless
+    // of internal state.  Used by FIB-128 regression test to simulate a corrupt cache entry.
+    void injectStaleLastAppliedForTest(ProposalInterface::Ptr _staleProposal)
+    {
+        m_staleLastAppliedForTest = std::move(_staleProposal);
+    }
+
+    ProposalInterface::ConstPtr getAppliedCheckPointProposal(
+        bcos::protocol::BlockNumber _index) override
+    {
+        if (m_staleLastAppliedForTest)
+        {
+            return m_staleLastAppliedForTest;
+        }
+        return PBFTCacheProcessor::getAppliedCheckPointProposal(_index);
+    }
+
+private:
+    ProposalInterface::Ptr m_staleLastAppliedForTest;
 };
 
 
