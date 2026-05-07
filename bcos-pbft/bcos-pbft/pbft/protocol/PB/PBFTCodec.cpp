@@ -19,7 +19,9 @@
  * @date 2021-04-13
  */
 #include "PBFTCodec.h"
+#include "PBFTMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
+#include "bcos-pbft/pbft/utilities/PacketTypeDigest.h"
 #include <bcos-protocol/Common.h>
 
 using namespace bcos;
@@ -43,8 +45,9 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
     // set signature
     if (shouldHandleSignature(packetType))
     {
-        // get hash of the payLoad
-        auto hash = m_cryptoSuite->hashImpl()->hash(*payLoad);
+        // FIB-134: bind packetType into the outer-wrapper digest when version >= 1.
+        auto hash = PacketTypeDigest::outer(_version, static_cast<int32_t>(packetType),
+            bytesConstRef(payLoad->data(), payLoad->size()), m_cryptoSuite->hashImpl());
         // sign for the payload
         auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
         pbMessage->set_signaturedata(signatureData->data(), signatureData->size());
@@ -97,8 +100,11 @@ PBFTBaseMessageInterface::Ptr PBFTCodec::decode(bytesConstRef _data) const
     }
     if (shouldHandleSignature(packetType))
     {
-        // set signature data for the message
-        auto hash = m_cryptoSuite->hashImpl()->hash(payLoadRefData);
+        // FIB-134: dual-mode receiver — branch on the outer wrapper's wire
+        // `version` (matches the `_version` argument the encoder passed). v=0 keeps
+        // the legacy formula `hash(payload)`; v>=1 binds `packetType` into the digest.
+        auto hash = PacketTypeDigest::outer(pbMessage->version(), static_cast<int32_t>(packetType),
+            payLoadRefData, m_cryptoSuite->hashImpl());
         decodedMsg->setSignatureDataHash(hash);
 
         auto const& signatureData = pbMessage->signaturedata();
@@ -106,5 +112,13 @@ PBFTBaseMessageInterface::Ptr PBFTCodec::decode(bytesConstRef _data) const
         decodedMsg->setSignatureData(std::move(signatureBytes));
     }
     decodedMsg->setPacketType(packetType);
+    // FIB-134: the inner PBFTMessage's signatureDataHash was computed inside its
+    // ctor (via decodeAndSetSignature) using the default packetType, because the
+    // codec sets the wire packetType only AFTER construction. Under wire-version >= 1
+    // the digest binds packetType, so re-derive the hash now that packetType is set.
+    if (auto innerMsg = std::dynamic_pointer_cast<PBFTMessage>(decodedMsg))
+    {
+        innerMsg->refreshSignatureDataHash(m_cryptoSuite);
+    }
     return decodedMsg;
 }

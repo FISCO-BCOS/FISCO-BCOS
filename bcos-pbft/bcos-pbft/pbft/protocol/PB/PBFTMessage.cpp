@@ -21,6 +21,7 @@
 #include "PBFTMessage.h"
 #include "PBFTProposal.h"
 #include "bcos-pbft/core/Proposal.h"
+#include "bcos-pbft/pbft/utilities/PacketTypeDigest.h"
 #include <utility>
 
 using namespace bcos;
@@ -95,7 +96,9 @@ HashType PBFTMessage::getHashFieldsDataHash(CryptoSuite::Ptr _cryptoSuite) const
     auto const& hashFieldsData = m_pbftRawMessage->hashfieldsdata();
     auto hashFieldsDataRef =
         bytesConstRef((byte const*)hashFieldsData.data(), hashFieldsData.size());
-    return _cryptoSuite->hash(hashFieldsDataRef);
+    // FIB-134: dual-mode digest — receiver-side branch on message version.
+    return PacketTypeDigest::inner(
+        version(), packetType(), hashFieldsDataRef, _cryptoSuite->hashImpl());
 }
 
 void PBFTMessage::generateAndSetSignatureData(

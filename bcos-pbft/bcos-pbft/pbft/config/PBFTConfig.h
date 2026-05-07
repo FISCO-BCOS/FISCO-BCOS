@@ -488,7 +488,7 @@ protected:
     std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
-    const unsigned c_pbftMsgDefaultVersion = 0;
+    const unsigned c_pbftMsgDefaultVersion = 1;  // FIB-134: bind packetType into digest
     const unsigned c_networkTimeoutInterval = 1000;
     // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};
