@@ -35,7 +35,6 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 include(IncludeDirectories)
-include(TargetSettings)
 
 add_subdirectory(bcos-boostssl)
 add_subdirectory(concepts)

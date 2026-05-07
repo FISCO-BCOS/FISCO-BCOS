@@ -20,9 +20,9 @@ cmake_minimum_required(VERSION 3.10)
 
 aux_source_directory(bcos-front SRCS)
 
-add_library(${FRONT_TARGET} ${SRCS})
-target_link_libraries(${FRONT_TARGET} PUBLIC bcos-framework ${UTILITIES_TARGET})
-set_target_properties(${FRONT_TARGET} PROPERTIES UNITY_BUILD "ON")
+add_library(front ${SRCS})
+target_link_libraries(front PUBLIC bcos-framework bcos-utilities)
+set_target_properties(front PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()

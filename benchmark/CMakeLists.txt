@@ -1,7 +1,7 @@
 find_package(Boost REQUIRED program_options)
 
 add_executable(merkleBench merkleBench.cpp ParallelMerkleProof.cpp)
-target_link_libraries(merkleBench ${TOOL_TARGET} bcos-crypto Boost::program_options)
+target_link_libraries(merkleBench tool bcos-crypto Boost::program_options)
 
 find_package(fmt REQUIRED)
 find_package(benchmark REQUIRED)

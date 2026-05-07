@@ -20,12 +20,12 @@ cmake_minimum_required(VERSION 3.10)
 
 find_package(Boost REQUIRED serialization)
 
-add_library(${LEDGER_TARGET} bcos-ledger/Ledger.cpp bcos-ledger/LedgerMethods.cpp bcos-ledger/ConsensusNode.cpp)
-target_include_directories(${LEDGER_TARGET} PUBLIC
+add_library(ledger bcos-ledger/Ledger.cpp bcos-ledger/LedgerMethods.cpp bcos-ledger/ConsensusNode.cpp)
+target_include_directories(ledger PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-ledger>)
-target_link_libraries(${LEDGER_TARGET} PUBLIC ${TOOL_TARGET} ${TARS_PROTOCOL_TARGET} ${CODEC_TARGET} ${TABLE_TARGET} bcos-concepts Boost::serialization)
-set_target_properties(${LEDGER_TARGET} PROPERTIES UNITY_BUILD "ON")
+target_link_libraries(ledger PUBLIC tool protocol-tars codec table bcos-concepts Boost::serialization)
+set_target_properties(ledger PROPERTIES UNITY_BUILD "ON")
 
 # test related
 if (TESTS)
@@ -35,5 +35,5 @@ if (TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS ${LEDGER_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS ledger EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-ledger" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

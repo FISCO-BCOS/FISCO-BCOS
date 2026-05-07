@@ -24,13 +24,13 @@ aux_source_directory(bcos-codec/scale SRC_LIST)
 
 find_package(Microsoft.GSL CONFIG REQUIRED)
 
-add_library(${CODEC_TARGET} ${SRC_LIST} ${HEADERS})
-target_include_directories(${CODEC_TARGET} PUBLIC
+add_library(codec ${SRC_LIST} ${HEADERS})
+target_include_directories(codec PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-codec>
 )
-target_link_libraries(${CODEC_TARGET} PUBLIC bcos-crypto Microsoft.GSL::GSL)
-set_target_properties(${CODEC_TARGET} PROPERTIES UNITY_BUILD "ON")
+target_link_libraries(codec PUBLIC bcos-crypto Microsoft.GSL::GSL)
+set_target_properties(codec PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()
@@ -45,5 +45,5 @@ endif()
 #endif ()
 
 include(GNUInstallDirs)
-install(TARGETS ${CODEC_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS codec EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-codec" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
