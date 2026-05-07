@@ -277,29 +277,44 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    // the leader is the current node
-    if (_leaderIndex == nodeIndex())
+    // FIB-115: replace unbounded recursion with a bounded iterative loop.
+    // Each iteration represents one leader candidate.  We must not iterate more
+    // than consensusNodesNum() times so that a sequence of consecutive faulty
+    // leaders (or a byzantine node that triggers the path repeatedly) cannot
+    // exhaust the call stack.
+    auto maxIterations = m_consensusNodeNum.load();
+    auto currentLeader = _leaderIndex;
+    bool triggered = false;
+    for (IndexType i = 0; i < maxIterations; ++i)
     {
-        return false;
+        // the leader is the current node — no view-change needed
+        if (currentLeader == nodeIndex())
+        {
+            break;
+        }
+        // FIB-125: getConsensusNodeByIndex() returns std::optional<ConsensusNode>.
+        auto leaderNodeInfo = getConsensusNodeByIndex(currentLeader);
+        if (!leaderNodeInfo)
+        {
+            break;
+        }
+        // Note: must register m_faultyDiscriminator before start the PBFTEngine.
+        // FIB-118: guard against an unregistered callback to avoid std::bad_function_call;
+        // a null discriminator (or a healthy next candidate) stops the iteration.
+        if (!m_faultyDiscriminator || !m_faultyDiscriminator(leaderNodeInfo->nodeID))
+        {
+            break;
+        }
+        PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
+                       << LOG_KV("leaderIndex", currentLeader)
+                       << LOG_KV("leader", leaderNodeInfo->nodeID->shortHex())
+                       << printCurrentState();
+        m_fastViewChangeHandler();
+        triggered = true;
+        // advance to the next candidate leader
+        currentLeader = leaderIndexInNewViewPeriod(m_toView);
     }
-    auto leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
-    if (!leaderNodeInfo)
-    {
-        return false;
-    }
-    // Note: must register m_faultyDiscriminator before start the PBFTEngine.
-    // Guard against unregistered callback to avoid std::bad_function_call (FIB-118).
-    if (!m_faultyDiscriminator || !m_faultyDiscriminator(leaderNodeInfo->nodeID))
-    {
-        return false;
-    }
-    PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
-                   << LOG_KV("leaderIndex", _leaderIndex)
-                   << LOG_KV("leader", leaderNodeInfo->nodeID->shortHex()) << printCurrentState();
-    m_fastViewChangeHandler();
-    // check the newLeader connection
-    auto newLeader = leaderIndexInNewViewPeriod(m_toView);
-    return tryTriggerFastViewChange(newLeader);
+    return triggered;
 }
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
