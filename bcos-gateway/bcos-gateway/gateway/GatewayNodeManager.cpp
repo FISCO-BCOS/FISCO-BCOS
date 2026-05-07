@@ -82,16 +82,16 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
-        boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException const& _e, P2PSession::Ptr _session,
+            std::shared_ptr<P2PMessage> _msg) { onReceiveStatusSeq(_e, _session, std::move(_msg)); });
     // RequestNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
-        boost::bind(&GatewayNodeManager::onRequestNodeStatus, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException const& _e, P2PSession::Ptr _session,
+            std::shared_ptr<P2PMessage> _msg) { onRequestNodeStatus(_e, _session, std::move(_msg)); });
     // ResponseNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
-        boost::bind(&GatewayNodeManager::onReceiveNodeStatus, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](NetworkException const& _e, P2PSession::Ptr _session,
+            std::shared_ptr<P2PMessage> _msg) { onReceiveNodeStatus(_e, _session, std::move(_msg)); });
     m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
     // broadcast seq periodically
     m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });

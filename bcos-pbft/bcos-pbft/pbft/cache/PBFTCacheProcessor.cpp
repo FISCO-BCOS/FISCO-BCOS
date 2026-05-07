@@ -22,7 +22,6 @@
 #include "bcos-task/Wait.h"
 #include <bcos-framework/protocol/CommonError.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <boost/bind/bind.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -209,8 +208,7 @@ void PBFTCacheProcessor::addCache(
     if (!_pbftCache.contains(index))
     {
         _pbftCache[index] = m_cacheFactory->createPBFTCache(m_config, index,
-            boost::bind(
-                &PBFTCacheProcessor::notifyCommittedProposalIndex, this, boost::placeholders::_1));
+            [this](bcos::protocol::BlockNumber _index) { notifyCommittedProposalIndex(_index); });
     }
     _handler(_pbftCache[index], _pbftReq);
 }

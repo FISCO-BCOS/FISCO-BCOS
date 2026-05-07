@@ -33,7 +33,6 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ITTAPI.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <boost/bind/bind.hpp>
 #include <utility>
 
 using namespace bcos;
@@ -50,9 +49,11 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
     m_logSync = std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor);
     // register the timeout function
-    m_config->timer()->registerTimeoutHandler(boost::bind(&PBFTEngine::onTimeout, this));
-    m_config->storage()->registerFinalizeHandler(boost::bind(
-        &PBFTEngine::finalizeConsensus, this, boost::placeholders::_1, boost::placeholders::_2));
+    m_config->timer()->registerTimeoutHandler([this]() { onTimeout(); });
+    m_config->storage()->registerFinalizeHandler(
+        [this](std::shared_ptr<bcos::ledger::LedgerConfig> _ledgerConfig, bool _syncedBlock) {
+            finalizeConsensus(std::move(_ledgerConfig), _syncedBlock);
+        });
 
     m_config->storage()->registerOnStableCheckPointCommitFailed(
         [this](Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal) {
@@ -60,12 +61,16 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
         });
 
     m_config->registerFastViewChangeHandler([this]() { triggerTimeout(false); });
-    m_cacheProcessor->registerProposalAppliedHandler(boost::bind(&PBFTEngine::onProposalApplied,
-        this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+    m_cacheProcessor->registerProposalAppliedHandler(
+        [this](int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
+            PBFTProposalInterface::Ptr _executedProposal) {
+            onProposalApplied(_errorCode, std::move(_proposal), std::move(_executedProposal));
+        });
 
     m_cacheProcessor->registerOnLoadAndVerifyProposalFinish(
-        boost::bind(&PBFTEngine::onLoadAndVerifyProposalFinish, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal) {
+            onLoadAndVerifyProposalFinish(_verifyResult, _error, _proposal);
+        });
     initSendResponseHandler();
     // when the node first setup, set timeout to be true for view recovery
     // set timeout to be true to in case of notify-seal before the PBFTEngine

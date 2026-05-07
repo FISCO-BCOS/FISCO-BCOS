@@ -34,7 +34,6 @@
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-table/src/StateStorage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
-#include <boost/bind/bind.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -130,11 +129,14 @@ public:
         m_cacheProcessor = std::make_shared<FakeCacheProcessor>(cacheFactory, _config);
         m_logSync = std::make_shared<PBFTLogSync>(_config, m_cacheProcessor);
         m_cacheProcessor->registerProposalAppliedHandler(
-            boost::bind(&FakePBFTEngine::onProposalApplied, this, boost::placeholders::_1,
-                boost::placeholders::_2, boost::placeholders::_3));
+            [this](int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
+                PBFTProposalInterface::Ptr _executedProposal) {
+                onProposalApplied(_errorCode, std::move(_proposal), std::move(_executedProposal));
+            });
         m_cacheProcessor->registerOnLoadAndVerifyProposalFinish(
-            boost::bind(&FakePBFTEngine::onLoadAndVerifyProposalFinish, this,
-                boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+            [this](bool _verifyResult, Error::Ptr _error, PBFTProposalInterface::Ptr _proposal) {
+                onLoadAndVerifyProposalFinish(_verifyResult, _error, _proposal);
+            });
         initSendResponseHandler();
         _config->enableAsMasterNode(true);
     }
