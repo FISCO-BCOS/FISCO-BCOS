@@ -22,7 +22,6 @@
 #include "Common.h"
 #include <bcos-framework/protocol/MemberInterface.h>
 #include <bcos-utilities/Timer.h>
-#include <boost/bind/bind.hpp>
 #include <etcd/Client.hpp>
 #include <etcd/Watcher.hpp>
 

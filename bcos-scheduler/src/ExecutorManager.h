@@ -55,14 +55,22 @@ public:
 
     auto begin() const
     {
-        return boost::make_transform_iterator(m_name2Executors.cbegin(),
-            std::bind(&ExecutorManager::executorView, this, std::placeholders::_1));
+        return boost::make_transform_iterator(
+            m_name2Executors.cbegin(),
+            +[](const decltype(m_name2Executors)::value_type& value)
+                -> bcos::executor::ParallelTransactionExecutorInterface::Ptr const& {
+                return value.second->executor;
+            });
     }
 
     auto end() const
     {
-        return boost::make_transform_iterator(m_name2Executors.cend(),
-            std::bind(&ExecutorManager::executorView, this, std::placeholders::_1));
+        return boost::make_transform_iterator(
+            m_name2Executors.cend(),
+            +[](const decltype(m_name2Executors)::value_type& value)
+                -> bcos::executor::ParallelTransactionExecutorInterface::Ptr const& {
+                return value.second->executor;
+            });
     }
 
     void forEachExecutor(
