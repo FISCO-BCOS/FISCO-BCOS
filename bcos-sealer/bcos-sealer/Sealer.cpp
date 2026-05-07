@@ -38,7 +38,11 @@ bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
     m_lastFetchTimepoint(std::chrono::steady_clock::now())
 {
     m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
-    m_sealingManager->setOnReadyCallback([this]() { noteGenerateProposal(); });
+    // FIB-164: do NOT register the onReady callback here. weak_from_this() is
+    // not yet usable because Sealer is not under shared_ptr ownership during
+    // its constructor; capturing raw `this` would dangle if Sealer is
+    // destroyed before SealingManager fires the callback. Registration moves
+    // to Sealer::start() where the shared_ptr is already established.
     m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
 }
 
@@ -50,6 +54,15 @@ void Sealer::start()
         return;
     }
     SEAL_LOG(INFO) << LOG_DESC("start the sealer");
+    // FIB-164: register the onReady callback now via weak_from_this() so the
+    // callback safely no-ops after Sealer is destroyed.
+    auto self = weak_from_this();
+    m_sealingManager->setOnReadyCallback([self]() {
+        if (auto sealer = self.lock())
+        {
+            sealer->noteGenerateProposal();
+        }
+    });
     startWorking();
     m_running = true;
 }
