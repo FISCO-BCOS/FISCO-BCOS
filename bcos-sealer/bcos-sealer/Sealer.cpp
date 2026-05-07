@@ -197,14 +197,29 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("sysTxs", _containSysTxs)
                    << LOG_KV("txsSize", _block->transactionsHashSize())
                    << LOG_KV("version", version);
+    auto sealingManager = m_sealingManager;
     m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, *_block,
-        _block->blockHeader()->number(), _block->blockHeader()->hash(), [_block](auto&& _error) {
+        _block->blockHeader()->number(), _block->blockHeader()->hash(),
+        [_block, sealingManager](auto&& _error) {
             if (_error == nullptr)
             {
                 return;
             }
             SEAL_LOG(WARNING) << LOG_DESC("asyncSubmitProposal failed: put back the transactions")
                               << LOG_KV("txsSize", _block->transactionsHashSize());
+            // FIB-151: unseal — return the proposal's transactions to the pool
+            // so they remain selectable; otherwise repeated submit failures
+            // silently exhaust the sealer's effective txpool capacity.
+            try
+            {
+                auto hashes = ::ranges::to<std::vector>(_block->transactionHashes());
+                sealingManager->notifyResetTxsFlag(hashes, false);
+            }
+            catch (std::exception const& e)
+            {
+                SEAL_LOG(WARNING) << LOG_DESC("submitProposal failure unseal exception")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
         });
 }
 
