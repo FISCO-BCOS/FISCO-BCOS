@@ -30,7 +30,7 @@
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
@@ -126,7 +126,7 @@ public:
     {
         using Ptr = std::shared_ptr<CallBack>;
         RespCallBack respCallBack;
-        std::shared_ptr<boost::asio::deadline_timer> timer;
+        std::shared_ptr<boost::asio::steady_timer> timer;
     };
     virtual void addRespCallback(const std::string& _seq, CallBack::Ptr _callback);
     CallBack::Ptr getAndRemoveRespCallback(

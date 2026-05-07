@@ -23,6 +23,7 @@
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-utilities/Common.h>
+#include <chrono>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_arena.h>
 #include <boost/uuid/random_generator.hpp>
@@ -371,8 +372,8 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
             if (_timeout > 0)
             {
                 // create new timer to handle timeout
-                auto timeoutHandler = std::make_shared<boost::asio::deadline_timer>(
-                    *m_ioService, boost::posix_time::milliseconds(_timeout));
+                auto timeoutHandler = std::make_shared<boost::asio::steady_timer>(
+                    *m_ioService, std::chrono::milliseconds(_timeout));
 
                 callback->timeoutHandler = timeoutHandler;
                 auto frontServiceWeakPtr = std::weak_ptr<FrontService>(shared_from_this());

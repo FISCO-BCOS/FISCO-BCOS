@@ -14,7 +14,7 @@
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <openssl/x509.h>
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/ssl/stream_base.hpp>
 #include <boost/system/error_code.hpp>
 #include <memory>
@@ -134,7 +134,7 @@ protected:
         std::shared_ptr<std::string> endpointPublicKey,
         std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>
             callback,
-        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
+        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr);
 
     void erasePendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 

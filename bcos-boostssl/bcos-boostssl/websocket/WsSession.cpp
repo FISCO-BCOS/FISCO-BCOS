@@ -23,6 +23,7 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <chrono>
 #include <bcos-utilities/ThreadPool.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
@@ -568,8 +569,8 @@ void WsSession::asyncSendMessage(
         if (timeout > 0)
         {
             // create new timer to handle timeout
-            auto timer = std::make_shared<boost::asio::deadline_timer>(
-                *m_ioc, boost::posix_time::milliseconds(timeout));
+            auto timer = std::make_shared<boost::asio::steady_timer>(
+                *m_ioc, std::chrono::milliseconds(timeout));
 
             callback->timer = timer;
             auto self = weak_from_this();

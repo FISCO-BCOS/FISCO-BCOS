@@ -23,6 +23,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <set>
@@ -450,8 +451,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 
     std::shared_ptr<SocketFace> socket = m_asioInterface->newSocket(false, _nodeIPEndpoint);
     /// if async connect timeout, close the socket directly
-    auto connectTimer = std::make_shared<boost::asio::deadline_timer>(
-        socket->ioService(), boost::posix_time::milliseconds(m_connectTimeThre));
+    auto connectTimer = std::make_shared<boost::asio::steady_timer>(
+        socket->ioService(), std::chrono::milliseconds(m_connectTimeThre));
     connectTimer->async_wait(
         [this, socket, _nodeIPEndpoint](const boost::system::error_code& error) {
             /// return when cancel has been called
@@ -520,7 +521,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string> endpointPublicKey,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback,
-    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
+    NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::steady_timer> timerPtr)
 {
     timerPtr->cancel();
     erasePendingConns(_nodeIPEndpoint);

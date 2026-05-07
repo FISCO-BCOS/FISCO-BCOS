@@ -193,7 +193,7 @@ public:
         using Ptr = std::shared_ptr<Callback>;
         uint64_t startTime = utcSteadyTime();
         CallbackFunc callbackFunc;
-        std::shared_ptr<boost::asio::deadline_timer> timeoutHandler;
+        std::shared_ptr<boost::asio::steady_timer> timeoutHandler;
     };
     // lock m_callback
     mutable bcos::Mutex x_callback;

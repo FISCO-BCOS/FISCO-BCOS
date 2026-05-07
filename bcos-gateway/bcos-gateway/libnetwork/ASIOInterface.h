@@ -47,7 +47,7 @@ public:
     virtual void setSrvContext(std::shared_ptr<ba::ssl::context> _srvContext);
     virtual void setClientContext(std::shared_ptr<ba::ssl::context> _clientContext);
 
-    virtual boost::asio::deadline_timer newTimer(uint32_t timeout);
+    virtual boost::asio::steady_timer newTimer(uint32_t timeout);
 
     virtual std::shared_ptr<SocketFace> newSocket(
         bool _server, NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint());

@@ -7,6 +7,8 @@
  */
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 
+#include <chrono>
+
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 using namespace bcos;
@@ -127,9 +129,9 @@ void ASIOInterface::setClientContext(std::shared_ptr<ba::ssl::context> _clientCo
     m_clientContext = std::move(_clientContext);
 }
 
-boost::asio::deadline_timer ASIOInterface::newTimer(uint32_t timeout)
+boost::asio::steady_timer ASIOInterface::newTimer(uint32_t timeout)
 {
-    return {*(m_timerIOService), boost::posix_time::milliseconds(timeout)};
+    return boost::asio::steady_timer(*(m_timerIOService), std::chrono::milliseconds(timeout));
 }
 
 std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
