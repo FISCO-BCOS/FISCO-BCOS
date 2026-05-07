@@ -77,11 +77,10 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     }
     if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
     {
-        PBFT_LOG(INFO)
-            << LOG_DESC("compatibilityVersion updated")
-            << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
-            << LOG_KV("updatedVersion",
-                   (bcos::protocol::BlockVersion)(_ledgerConfig->compatibilityVersion()));
+        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
+                       << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
+                       << LOG_KV("updatedVersion", (bcos::protocol::BlockVersion)(
+                                                       _ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {
@@ -257,8 +256,9 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    // Note: must register m_faultyDiscriminator before start the PBFTEngine
-    if (!m_faultyDiscriminator(leaderNodeInfo->nodeID))
+    // Note: must register m_faultyDiscriminator before start the PBFTEngine.
+    // Guard against unregistered callback to avoid std::bad_function_call (FIB-118).
+    if (!m_faultyDiscriminator || !m_faultyDiscriminator(leaderNodeInfo->nodeID))
     {
         return false;
     }
