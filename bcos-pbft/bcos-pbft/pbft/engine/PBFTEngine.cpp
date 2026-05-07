@@ -1006,6 +1006,20 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     if (!_generatedFromNewView)
     {
+        // FIB-133: reject PrePrepare messages whose view() does not match the local view.
+        // checkPBFTMsgState() accepts messages with view() >= local view (up to watermark),
+        // so without this check a byzantine leader can send a PrePrepare with a higher view
+        // that still passes the leader check (computed from local view) and causes the node
+        // to emit a Prepare at m_config->view() while caching a pre-prepare at a different
+        // view — breaking liveness and cross-view consistency.
+        if (_prePrepareMsg->view() != m_config->view())
+        {
+            PBFT_LOG(INFO) << LOG_DESC(
+                                  "handlePrePrepareMsg: reject non-local-view PrePrepare "
+                                  "in the normal path")
+                           << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
         // packet can be processed in this round of consensus
         // check the proposal is generated from the leader
         auto expectedLeader = m_config->leaderIndex(_prePrepareMsg->index());
