@@ -173,6 +173,10 @@ public:
         return PBFTEngine::handlePrePrepareMsg(
             _prePrepareMsg, _needVerifyProposal, _generatedFromNewView, _needCheckSignature);
     }
+
+    // Test-only: inject a committed-block timestamp so FIB-126 monotonicity tests
+    // can exercise the timestamp check without a real ledger.
+    void setCommittedBlockTimestampForTest(int64_t _ts) { m_ledgerConfig->setTimestamp(_ts); }
 };
 
 class FakePBFTImpl : public PBFTImpl

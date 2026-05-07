@@ -1101,6 +1101,47 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
             return false;
         }
     }
+
+    // FIB-126: Validate the proposed block's header timestamp.
+    // A Byzantine leader can craft a PrePreparePacket with an arbitrary timestamp; reject it here
+    // before either the no-verify fast-path or the async verifyProposal path proceeds.
+    //
+    // Two invariants enforced:
+    //   1. Proposed timestamp must be strictly greater than the last committed block timestamp
+    //      (monotonicity — prevents time-reversal attacks).
+    //   2. Proposed timestamp must not exceed the current wall-clock time by more than
+    //      c_maxAllowedFutureTimestampMs (prevents far-future timestamp attacks).
+    {
+        auto blockHeader = block->blockHeader();
+        if (blockHeader)
+        {
+            int64_t proposedTs = blockHeader->timestamp();
+            int64_t parentTs = m_ledgerConfig->timestamp();
+            int64_t nowTs = utcTime();
+
+            // Only enforce monotonicity when parentTs is non-zero (i.e., a real committed
+            // block exists with a known timestamp).  When parentTs==0 the ledger is at
+            // genesis / uninitialized and we skip the check to avoid false positives.
+            if (parentTs > 0 && proposedTs <= parentTs)
+            {
+                PBFT_LOG(WARNING)
+                    << LOG_DESC("handlePrePrepareMsg: reject proposal with non-monotonic timestamp")
+                    << LOG_KV("proposedTs", proposedTs) << LOG_KV("parentTs", parentTs)
+                    << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+                return false;
+            }
+            if (proposedTs > nowTs + c_maxAllowedFutureTimestampMs)
+            {
+                PBFT_LOG(WARNING)
+                    << LOG_DESC("handlePrePrepareMsg: reject proposal with far-future timestamp")
+                    << LOG_KV("proposedTs", proposedTs) << LOG_KV("nowTs", nowTs)
+                    << LOG_KV("maxDrift", c_maxAllowedFutureTimestampMs)
+                    << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+                return false;
+            }
+        }
+    }
+
     // add the prePrepareReq to the cache
     if (!_needVerifyProposal)
     {
