@@ -255,6 +255,17 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     // case6: valid pre-prepare
+    // FIB-142: receiver now recomputes the decoded block hash and rejects any
+    // (proposal hash, body) mismatch. To keep this test exercising the success
+    // path, build a proposal whose hash matches the encoded block's actual hash.
+    auto validBlockHash = block->blockHeader()->hash();
+    auto validFakedProposal =
+        leaderMsgFixture->fakePBFTProposal(leaderFaker->ledger()->blockNumber() + 1, validBlockHash,
+            *blockData, std::vector<int64_t>(), std::vector<bytes>());
+    pbftMsg = fakePBFTMessage(utcTime(), 1, (leaderFaker->pbftConfig()->view()), expectedLeader,
+        validBlockHash, index, bytes(), 0, leaderMsgFixture, PacketType::PrePreparePacket);
+    pbftMsg->setConsensusProposal(validFakedProposal);
+    data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->txpool()->setVerifyResult(true);
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
         nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);

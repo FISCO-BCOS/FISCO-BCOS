@@ -71,6 +71,21 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
     // Note: to fetch the remote proposal(the from node hits all transactions)
     auto self = weak_from_this();
     auto block = m_config->blockFactory().createBlock(_proposal->data(), false, false);
+    // FIB-142 receiver-side: reject log-sync responses where the decoded block
+    // does not bind to the carried proposal hash; same-hash equivocation must
+    // be impossible at this trust boundary.
+    block->blockHeader()->calculateHash(*m_config->blockFactory().cryptoSuite()->hashImpl());
+    if (block->blockHeader()->hash() != _proposal->hash())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "loadAndVerifyProposal: reject for decoded block hash "
+                                 "does not match proposal hash (FIB-142)")
+                          << LOG_KV("expected", _proposal->hash().abridged())
+                          << LOG_KV("decoded", block->blockHeader()->hash().abridged())
+                          << printPBFTProposal(_proposal);
+        m_onLoadAndVerifyProposalFinish(false, nullptr, _proposal);
+        return;
+    }
     m_config->validator()->verifyProposal(_fromNode, _proposal->index(), block,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try
