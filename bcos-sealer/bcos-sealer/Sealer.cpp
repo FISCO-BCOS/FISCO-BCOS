@@ -131,18 +131,38 @@ void Sealer::executeWorker()
     }
 
     // try to generateProposal
-    if (m_sealingManager->shouldGenerateProposal())
+    // FIB-152: contain exceptions inside the worker iteration. Any throw from
+    // generateProposal / hookWhenSealBlock / submitProposal would otherwise
+    // escape the Worker loop and halt block production until restart.
+    try
     {
-        auto ret = m_sealingManager->generateProposal(
-            [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
-                return hookWhenSealBlock(std::move(_block));
-            });
-        submitProposal(ret.first, std::move(ret.second));
+        if (m_sealingManager->shouldGenerateProposal())
+        {
+            auto ret = m_sealingManager->generateProposal(
+                [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
+                    return hookWhenSealBlock(std::move(_block));
+                });
+            submitProposal(ret.first, std::move(ret.second));
+        }
+        else
+        {
+            boost::unique_lock<boost::mutex> lock(x_signalled);
+            m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
+        }
     }
-    else
+    catch (std::exception const& e)
     {
-        boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
+        SEAL_LOG(ERROR) << LOG_DESC("executeWorker iteration threw, resetting sealing state")
+                        << LOG_KV("message", boost::diagnostic_information(e));
+        try
+        {
+            m_sealingManager->resetSealing();
+        }
+        catch (std::exception const& nested)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
+                            << LOG_KV("message", boost::diagnostic_information(nested));
+        }
     }
 }
 
