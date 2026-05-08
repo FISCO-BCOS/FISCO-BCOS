@@ -105,10 +105,17 @@ public:
         m_blockTxCountLimit = _blockTxCountLimit;
     }
     virtual uint64_t blockTxCountLimit() const { return m_blockTxCountLimit.load(); }
-    bcos::protocol::BlockNumber syncingHighestNumber() const { return m_syncingHighestNumber; }
+    // FIB-150: m_syncingHighestNumber is read by the consensus layer
+    // (executeWorker etc.) and written by the sync layer; without atomic
+    // semantics, concurrent r/w on a plain BlockNumber field is a data race
+    // (UB). Use explicit load/store on the atomic member.
+    bcos::protocol::BlockNumber syncingHighestNumber() const
+    {
+        return m_syncingHighestNumber.load();
+    }
     void setSyncingHighestNumber(bcos::protocol::BlockNumber _number)
     {
-        m_syncingHighestNumber = _number;
+        m_syncingHighestNumber.store(_number);
     }
 
     IndexType consensusNodesNum() const { return m_consensusNodeNum.load(); }
@@ -185,7 +192,9 @@ protected:
     mutable bcos::SharedMutex x_committedProposal;
 
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
-    bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
+    // FIB-150: atomic to avoid data race between sync layer (writer) and
+    // consensus layer (reader)
+    std::atomic<bcos::protocol::BlockNumber> m_syncingHighestNumber = {0};
     std::function<void(uint32_t _version)> m_versionNotification;
 
     // FIB-160: protect m_features against concurrent reads from VRFBasedSealer
