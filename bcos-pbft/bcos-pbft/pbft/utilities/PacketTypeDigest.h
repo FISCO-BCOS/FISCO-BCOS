@@ -29,6 +29,9 @@
 
 namespace bcos::consensus
 {
+// Must stay <= PBFTConfig::c_pbftMsgDefaultVersion (sender default in PBFTConfig.h).
+// Bumping the receiver threshold without bumping the sender default would silently
+// break wire round-trip; both constants encode the same FIB-134 hardfork boundary.
 constexpr unsigned c_pbftMsgVersion_PacketTypeBound = 1;
 
 // FIB-134: helper that returns the digest of a PBFT message-bytes payload,

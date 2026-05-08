@@ -488,7 +488,10 @@ protected:
     std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
-    const unsigned c_pbftMsgDefaultVersion = 1;  // FIB-134: bind packetType into digest
+    // FIB-134: sender default. Must be >= c_pbftMsgVersion_PacketTypeBound (defined in
+    // PacketTypeDigest.h). Both constants encode the same hardfork boundary; a drift
+    // between sender default and receiver threshold breaks wire round-trip.
+    const unsigned c_pbftMsgDefaultVersion = 1;
     const unsigned c_networkTimeoutInterval = 1000;
     // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};
