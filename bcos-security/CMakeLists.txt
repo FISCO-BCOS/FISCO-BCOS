@@ -22,7 +22,7 @@ project(bcos-security VERSION ${VERSION})
 
 aux_source_directory(./bcos-security SRC_LIST)
 aux_source_directory(./bcos-security/cloudkms KMS_SRC_LIST)
-add_library(${SECURITY_TARGET} ${SRC_LIST} ${KMS_SRC_LIST})
+add_library(security ${SRC_LIST} ${KMS_SRC_LIST})
 
 find_package(jsoncpp REQUIRED)
 find_package(AWSSDK REQUIRED COMPONENTS kms)
@@ -30,22 +30,22 @@ find_package(ZLIB REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(CURL REQUIRED)
 
-target_link_libraries(${SECURITY_TARGET} PRIVATE
+target_link_libraries(security PRIVATE
     ${AWSSDK_LINK_LIBRARIES}
 )
 
-target_include_directories(${SECURITY_TARGET}
+target_include_directories(security
     PRIVATE
         ./bcos-security
         ./bcos-security/cloudkms
 )
 # add include directories
-target_include_directories(${SECURITY_TARGET} PRIVATE
+target_include_directories(security PRIVATE
     ${AWSSDK_INCLUDE_DIRS}
 )
 
-target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET} ${CRYPTO_TARGET} jsoncpp_static)
-set_target_properties(${SECURITY_TARGET} PROPERTIES UNITY_BUILD "ON")
+target_link_libraries(security PUBLIC bcos-utilities tool bcos-crypto jsoncpp_static)
+set_target_properties(security PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
   enable_testing()

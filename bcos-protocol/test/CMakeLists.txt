@@ -25,5 +25,5 @@ set(TEST_BINARY_NAME test-bcos-protocol)
 
 # find_package(Boost QUIET REQUIRED unit_test_framework)
 
-# target_link_libraries(${TEST_BINARY_NAME} ${PROTOCOL_TARGET} ${PBPROTOCOL_TARGET} ${UTILITIES_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)
+# target_link_libraries(${TEST_BINARY_NAME} protocol ${PBPROTOCOL_TARGET} bcos-utilities bcos-crypto Boost::unit_test_framework)
 # add_test(NAME test-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

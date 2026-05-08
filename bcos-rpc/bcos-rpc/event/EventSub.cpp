@@ -37,11 +37,15 @@ EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
   : bcos::Worker("t_event_sub"), m_wsService(_wsService)
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_SUBSCRIBE,
-        boost::bind(&EventSub::onRecvSubscribeEvent, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+        [this](std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+            std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
+            onRecvSubscribeEvent(std::move(_msg), std::move(_session));
+        });
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_UNSUBSCRIBE,
-        boost::bind(&EventSub::onRecvUnsubscribeEvent, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+        [this](std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+            std::shared_ptr<bcos::boostssl::ws::WsSession> _session) {
+            onRecvUnsubscribeEvent(std::move(_msg), std::move(_session));
+        });
 }
 
 void EventSub::start()

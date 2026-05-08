@@ -28,7 +28,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <memory>
 #include <string>
-#include <utility>
 
 namespace bcos::boostssl::ws
 {

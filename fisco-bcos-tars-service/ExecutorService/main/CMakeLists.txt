@@ -4,4 +4,4 @@ file(GLOB HEADERS "*.h")
 aux_source_directory(../ SRC_LIST)
 add_executable(${EXECUTOR_BINARY_NAME} ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(${EXECUTOR_BINARY_NAME} PUBLIC ${PROTOCOL_INIT_LIB} ${COMMAND_HELPER_LIB} ${EXECUTOR_TARGET} ${LEDGER_TARGET} ${STORAGE_TARGET})
+target_link_libraries(${EXECUTOR_BINARY_NAME} PUBLIC protocol_init command executor ledger storage)

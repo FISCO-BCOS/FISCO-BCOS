@@ -24,5 +24,5 @@ find_package(Boost REQUIRED unit_test_framework)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${SECURITY_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} PUBLIC security Boost::unit_test_framework)
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "${EXCLUDE_SUITES}" "")

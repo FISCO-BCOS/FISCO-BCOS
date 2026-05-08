@@ -10,7 +10,7 @@ find_package(Boost REQUIRED serialization thread context filesystem)
 set(SRC_LIST bcos-storage/Common.cpp)
 list(APPEND SRC_LIST bcos-storage/RocksDBStorage.cpp)
 
-set(LIB_LIST ${TABLE_TARGET} bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb ittapi)
+set(LIB_LIST table bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb ittapi)
 
 if (WITH_TIKV)
     include(ProjectTiKVClient)
@@ -20,15 +20,15 @@ if (WITH_TIKV)
     # list(APPEND LIB_LIST kv_client gRPC::gpr gRPC::upb gRPC::grpc gRPC::grpc++)
 endif ()
 
-add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_include_directories(${STORAGE_TARGET} PUBLIC
+add_library(storage ${SRC_LIST})
+target_include_directories(storage PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-storage>)
-target_link_libraries(${STORAGE_TARGET} PUBLIC ${LIB_LIST})
-set_target_properties(${STORAGE_TARGET} PROPERTIES UNITY_BUILD "ON")
+target_link_libraries(storage PUBLIC ${LIB_LIST})
+set_target_properties(storage PROPERTIES UNITY_BUILD "ON")
 
 if (APPLE)
-  target_link_libraries(${STORAGE_TARGET} PUBLIC "-framework SystemConfiguration")
+  target_link_libraries(storage PUBLIC "-framework SystemConfiguration")
 endif()
 
 if(TESTS)

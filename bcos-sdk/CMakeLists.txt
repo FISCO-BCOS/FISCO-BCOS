@@ -1,5 +1,5 @@
 file(GLOB_RECURSE SRC_LIST "bcos-cpp-sdk/*.cpp")
-list(APPEND LINK_LIB_LIST bcos-crypto bcos-boostssl bcos-utilities ${TARS_PROTOCOL_TARGET} jsoncpp_static OpenSSL::SSL OpenSSL::Crypto)
+list(APPEND LINK_LIB_LIST bcos-crypto bcos-boostssl bcos-utilities protocol-tars jsoncpp_static OpenSSL::SSL OpenSSL::Crypto)
 file(GLOB_RECURSE TARS_LIST "bcos-cpp-sdk/tarsRPC/*.cpp")
 if (ONLY_CPP_SDK AND (NOT WITH_SWIG_SDK))
     # for TARS_LIST

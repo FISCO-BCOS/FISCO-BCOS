@@ -28,9 +28,9 @@ file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 
 find_package(tarscpp REQUIRED)
 
-add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
-target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl ${LEDGER_TARGET} ${CODEC_TARGET} ${CRYPTO_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil)
-set_target_properties(${RPC_TARGET} PROPERTIES UNITY_BUILD "ON")
+add_library(rpc ${SRCS} ${HEADERS})
+target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto protocol-tars jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil)
+set_target_properties(rpc PROPERTIES UNITY_BUILD "ON")
 
  if (TESTS)
     enable_testing()

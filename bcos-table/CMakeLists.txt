@@ -25,9 +25,9 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 find_package(Boost REQUIRED serialization)
 find_package(TBB CONFIG REQUIRED)
 
-add_library(${TABLE_TARGET} ${SRCS})
-target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} bcos-framework Boost::serialization TBB::tbb)
-set_target_properties(${TABLE_TARGET} PROPERTIES UNITY_BUILD "ON")
+add_library(table ${SRCS})
+target_link_libraries(table PUBLIC bcos-utilities bcos-framework Boost::serialization TBB::tbb)
+set_target_properties(table PROPERTIES UNITY_BUILD "ON")
 
 if (TESTS)
     enable_testing()
@@ -42,4 +42,4 @@ endif()
 #endif ()
 
 include(GNUInstallDirs)
-install(TARGETS ${TABLE_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS table EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

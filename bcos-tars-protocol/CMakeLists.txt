@@ -34,14 +34,14 @@ find_package(tarscpp REQUIRED)
 find_package(TBB REQUIRED)
 find_package(jsoncpp REQUIRED)
 
-add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
-target_include_directories(${TARS_PROTOCOL_TARGET} PUBLIC
+add_library(protocol-tars ${SRC_LIST} ${OUT_TARS_H_LIST})
+target_include_directories(protocol-tars PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${TARSCPP_ROOT}/include>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:include/bcos-tars-protocol>)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC bcos-concepts bcos-framework bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
-set_target_properties(${TARS_PROTOCOL_TARGET} PROPERTIES UNITY_BUILD "ON")
+target_link_libraries(protocol-tars PUBLIC bcos-concepts bcos-framework bcos-crypto tarscpp::tarsservant tarscpp::tarsutil TBB::tbb jsoncpp_static)
+set_target_properties(protocol-tars PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)
     enable_testing()
@@ -51,6 +51,6 @@ if(TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS ${TARS_PROTOCOL_TARGET} EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS protocol-tars EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-tars-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
 install(DIRECTORY "${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")

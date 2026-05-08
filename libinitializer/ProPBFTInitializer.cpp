@@ -135,7 +135,7 @@ void ProPBFTInitializer::onGroupInfoChanged()
 
 void ProPBFTInitializer::init()
 {
-    m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
+    m_timer->registerTimeoutHandler([this]() { scheduledTask(); });
     m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
         INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
                               << LOG_KV("nodeName", m_nodeConfig->nodeName());

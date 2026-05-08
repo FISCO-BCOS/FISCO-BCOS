@@ -25,7 +25,6 @@
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include <boost/bind/bind.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;
@@ -52,8 +51,10 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
 
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,
-        boost::bind(&AMOPImpl::onAMOPMessage, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+        [this](bcos::gateway::NetworkException const& _e, bcos::gateway::P2PSession::Ptr _session,
+            std::shared_ptr<bcos::gateway::P2PMessage> _message) {
+            onAMOPMessage(_e, std::move(_session), std::move(_message));
+        });
 }
 
 void AMOPImpl::start()

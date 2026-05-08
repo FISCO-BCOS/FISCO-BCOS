@@ -1,8 +1,10 @@
 #include "Web3Transactions.h"
+#include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
-#include <bcos-framework/txpool/TxPoolTypeDef.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
+
+#define MEMPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MEMPOOL")
 
 DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
 
@@ -24,8 +26,7 @@ int64_t bcos::txpool::TransactionData::nonce() const
 }
 bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transaction)
   : m_transaction(std::move(transaction)), m_nonce([&]() {
-        int64_t nonce;  // NOLINT(cppcoreguidelines-init-variables) - initialized by
-                        // std::from_chars
+        int64_t nonce;
         auto view = m_transaction->nonce();
         if (auto result = std::from_chars(view.begin(), view.end(), nonce);
             result.ec != std::errc{})
@@ -57,14 +58,13 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     }
     catch (std::exception const& e)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: get hash failed, skip")
-                            << LOG_KV("reason", boost::diagnostic_information(e));
+        MEMPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: get hash failed, skip")
+                             << LOG_KV("reason", boost::diagnostic_information(e));
         return;
     }
 
     if (auto it = hashIndex.find(hash); it != hashIndex.end())
     {
-        // Duplicate transaction
         return;
     }
 
@@ -85,7 +85,7 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     }
     catch (InvalidNonce const& e)
     {
-        TXPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: invalid nonce, skip")
-                            << LOG_KV("reason", boost::diagnostic_information(e));
+        MEMPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: invalid nonce, skip")
+                             << LOG_KV("reason", boost::diagnostic_information(e));
     }
 }

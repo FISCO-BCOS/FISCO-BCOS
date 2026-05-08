@@ -39,16 +39,25 @@ using namespace bcos::protocol;
 void AMOPClient::initMsgHandler()
 {
     m_wsService->registerMsgHandler(AMOPClientMessageType::AMOP_SUBTOPIC,
-        boost::bind(
-            &AMOPClient::onRecvSubTopics, this, boost::placeholders::_1, boost::placeholders::_2));
+        [this](std::shared_ptr<boostssl::MessageFace> _msg,
+            std::shared_ptr<boostssl::ws::WsSession> _session) {
+            onRecvSubTopics(std::move(_msg), std::move(_session));
+        });
     m_wsService->registerMsgHandler(
-        AMOPClientMessageType::AMOP_REQUEST, boost::bind(&AMOPClient::onRecvAMOPRequest, this,
-                                                 boost::placeholders::_1, boost::placeholders::_2));
+        AMOPClientMessageType::AMOP_REQUEST,
+        [this](std::shared_ptr<boostssl::MessageFace> _msg,
+            std::shared_ptr<boostssl::ws::WsSession> _session) {
+            onRecvAMOPRequest(std::move(_msg), std::move(_session));
+        });
     m_wsService->registerMsgHandler(AMOPClientMessageType::AMOP_BROADCAST,
-        boost::bind(&AMOPClient::onRecvAMOPBroadcast, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+        [this](std::shared_ptr<boostssl::MessageFace> _msg,
+            std::shared_ptr<boostssl::ws::WsSession> _session) {
+            onRecvAMOPBroadcast(std::move(_msg), std::move(_session));
+        });
     m_wsService->registerDisconnectHandler(
-        boost::bind(&AMOPClient::onClientDisconnect, this, boost::placeholders::_1));
+        [this](std::shared_ptr<boostssl::ws::WsSession> _session) {
+            onClientDisconnect(std::move(_session));
+        });
 }
 
 bool AMOPClient::updateTopicInfos(

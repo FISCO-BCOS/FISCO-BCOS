@@ -36,7 +36,7 @@ target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-unused-variable)
 find_package(Boost REQUIRED unit_test_framework)
 find_package(FakeIt CONFIG REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TOOL_TARGET} ${TARS_PROTOCOL_TARGET} ${FRONT_TARGET} bcos-crypto FakeIt::FakeIt-boost Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} gateway tool protocol-tars front bcos-crypto FakeIt::FakeIt-boost Boost::unit_test_framework)
 set_source_files_properties("unittests/GatewayMessageTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" ${CMAKE_SOURCE_DIR}/bcos-gateway/test/unittests)

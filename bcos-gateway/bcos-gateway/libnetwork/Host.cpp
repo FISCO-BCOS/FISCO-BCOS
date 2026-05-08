@@ -79,8 +79,10 @@ void Host::startAccept(boost::system::error_code boost_error)
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::server,
-                    boost::bind(&Host::handshakeServer, shared_from_this(), ba::placeholders::error,
-                        endpointPublicKey, socket));
+                    [self = shared_from_this(), endpointPublicKey, socket](
+                        const boost::system::error_code& error) {
+                        self->handshakeServer(error, endpointPublicKey, socket);
+                    });
 
                 startAccept();
             },

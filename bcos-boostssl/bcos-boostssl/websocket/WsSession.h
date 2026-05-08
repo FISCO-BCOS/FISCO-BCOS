@@ -121,7 +121,6 @@ public:
     bool needCheckRspPacket() const;
     void setNeedCheckRspPacket(bool _needCheckRespPacket);
 
-public:
     struct CallBack : public bcos::ObjectCounter<CallBack>
     {
         using Ptr = std::shared_ptr<CallBack>;

@@ -6,10 +6,10 @@ find_package(FakeIt CONFIG REQUIRED)
 
 target_link_libraries(test-transaction-scheduler
 	transaction-scheduler
-	${EXECUTOR_TARGET}
-	${LEDGER_TARGET}
-	${TARS_PROTOCOL_TARGET}
-	${TABLE_TARGET}
+	executor
+	ledger
+	protocol-tars
+	table
 	bcos-framework
 	Boost::unit_test_framework
 	FakeIt::FakeIt-boost

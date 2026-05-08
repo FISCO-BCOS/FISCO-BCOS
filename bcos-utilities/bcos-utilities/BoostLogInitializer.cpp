@@ -262,7 +262,7 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHo
     boost::shared_ptr<sink_t> sink(new sink_t());
     sink->locked_backend()->set_open_mode(std::ios::ate);
     sink->locked_backend()->set_time_based_rotation(
-        boost::bind(&BoostLogInitializer::canRotate, this, (m_currentHourVec.size() - 1)));
+        [this, index = (m_currentHourVec.size() - 1)]() { return canRotate(index); });
 
     sink->locked_backend()->set_file_name_pattern(fileName);
     /// set rotation size MB
