@@ -118,6 +118,7 @@ std::string newEVMAddress(
     return newEVMAddress(*_hashImpl, blockNumber, contextID, seq);
 }
 
+#ifdef BCOS_CRYPTO_HAS_EVMC
 evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
 {
     codec::rlp::Header header{.isList = true, .payloadLength = 1 + sender.size()};
@@ -132,6 +133,7 @@ evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexce
 
     return address;
 }
+#endif
 
 std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept
 {

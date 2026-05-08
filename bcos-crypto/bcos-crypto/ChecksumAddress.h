@@ -22,9 +22,13 @@
 
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Common.h>
-#include <evmc/evmc.h>
 #include <string>
 #include <string_view>
+
+#if __has_include(<evmc/evmc.h>)
+#include <evmc/evmc.h>
+#define BCOS_CRYPTO_HAS_EVMC 1
+#endif
 
 namespace bcos
 {
@@ -50,7 +54,9 @@ std::string newEVMAddress(
     const bcos::crypto::Hash::Ptr& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq);
 
 // keccak256(rlp.encode([normalize_address(sender), nonce]))[12:]
+#ifdef BCOS_CRYPTO_HAS_EVMC
 evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept;
+#endif
 
 std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept;
 
