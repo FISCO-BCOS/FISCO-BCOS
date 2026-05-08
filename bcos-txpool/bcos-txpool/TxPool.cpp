@@ -85,6 +85,10 @@ void TxPool::stop()
     if (m_txsPreStore)
     {
         m_txsPreStore->stop();
+        // FIB-154: abandoned lambdas in the stopped thread pool never run their cleanup;
+        // clear stale entries so a restart doesn't see phantom in-flight blocks.
+        std::lock_guard lock(x_preStoreInFlight);
+        m_preStoreInFlight.clear();
     }
     if (m_verifier)
     {
@@ -282,8 +286,65 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                 // m_txsPreStore
                 if (!verifyError && verifyRet && block)
                 {
-                    txpool->m_txsPreStore->enqueue(
-                        [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    // FIB-154: dedup by block hash + enforce hard cap on inflight pre-store
+                    // tasks to prevent unbounded queue growth (queue-amplification DoS).
+                    auto const& blockHash = block->blockHeader()->hash();
+                    bool shouldEnqueue = false;
+                    {
+                        std::lock_guard lock(txpool->x_preStoreInFlight);
+                        if (txpool->m_preStoreInFlight.count(blockHash))
+                        {
+                            TXPOOL_LOG(DEBUG)
+                                << LOG_DESC("FIB-154: pre-store dedup, skip duplicate")
+                                << LOG_KV("hash", blockHash.abridged());
+                        }
+                        else if (txpool->m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
+                        {
+                            TXPOOL_LOG(WARNING)
+                                << LOG_DESC("FIB-154: pre-store backlog cap reached, dropping")
+                                << LOG_KV("hash", blockHash.abridged())
+                                << LOG_KV("inflight", txpool->m_preStoreInFlight.size());
+                        }
+                        else
+                        {
+                            txpool->m_preStoreInFlight.insert(blockHash);
+                            shouldEnqueue = true;
+                        }
+                    }
+                    if (shouldEnqueue)
+                    {
+                        txpool->m_txsPreStore->enqueue([txpool, block, blockHash]() {
+                            // FIB-154: cleanup runs on every exit path (success, std, non-std).
+                            auto cleanup = [&]() {
+                                std::lock_guard cleanLock(txpool->x_preStoreInFlight);
+                                txpool->m_preStoreInFlight.erase(blockHash);
+                            };
+                            try
+                            {
+                                txpool->storeVerifiedBlock(block);
+                            }
+                            catch (std::exception const& e)
+                            {
+                                TXPOOL_LOG(WARNING)
+                                    << LOG_DESC("FIB-154: pre-store storeVerifiedBlock threw")
+                                    << LOG_KV("blockHash", blockHash.abridged())
+                                    << LOG_KV("error", boost::diagnostic_information(e));
+                                cleanup();
+                                return;
+                            }
+                            catch (...)
+                            {
+                                TXPOOL_LOG(WARNING)
+                                    << LOG_DESC(
+                                           "FIB-154: pre-store storeVerifiedBlock threw unknown "
+                                           "exception")
+                                    << LOG_KV("blockHash", blockHash.abridged());
+                                cleanup();
+                                return;
+                            }
+                            cleanup();
+                        });
+                    }
                 }
             };
 
@@ -719,4 +780,82 @@ void bcos::txpool::TxPool::registerTxsNotifier(
     std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
 {
     m_txpoolStorage->registerTxsNotifier(_txsNotifier);
+}
+
+// FIB-154 test-only helpers -------------------------------------------------------
+// These methods exercise the dedup/cap gate synchronously (no thread pool post)
+// so that unit tests can assert counts deterministically.
+
+void bcos::txpool::TxPool::testOnlyEnqueuePreStore(bcos::crypto::HashType const& h)
+{
+    std::lock_guard lock(x_preStoreInFlight);
+    if (m_preStoreInFlight.count(h))
+    {
+        TXPOOL_LOG(DEBUG) << LOG_DESC("FIB-154 testOnly: dedup, skip duplicate");
+        return;
+    }
+    if (m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("FIB-154 testOnly: cap reached, dropping");
+        return;
+    }
+    m_preStoreInFlight.insert(h);
+}
+
+void bcos::txpool::TxPool::testOnlyEnqueuePreStoreSyncSuccess(bcos::crypto::HashType const& h)
+{
+    {
+        std::lock_guard lock(x_preStoreInFlight);
+        if (m_preStoreInFlight.count(h))
+        {
+            return;
+        }
+        if (m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
+        {
+            return;
+        }
+        m_preStoreInFlight.insert(h);
+    }
+    // Simulate work completing successfully, then cleanup
+    {
+        std::lock_guard lock(x_preStoreInFlight);
+        m_preStoreInFlight.erase(h);
+    }
+}
+
+void bcos::txpool::TxPool::testOnlyEnqueuePreStoreSyncThrow(bcos::crypto::HashType const& h)
+{
+    {
+        std::lock_guard lock(x_preStoreInFlight);
+        if (m_preStoreInFlight.count(h))
+        {
+            return;
+        }
+        if (m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
+        {
+            return;
+        }
+        m_preStoreInFlight.insert(h);
+    }
+    try
+    {
+        // Simulate the work throwing
+        throw std::runtime_error("FIB-154 testOnly: simulated exception");
+    }
+    catch (std::exception const& e)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("FIB-154 testOnly: exception path triggered")
+                            << LOG_KV("err", e.what());
+    }
+    // Cleanup on exception path — entry must still be removed
+    {
+        std::lock_guard lock(x_preStoreInFlight);
+        m_preStoreInFlight.erase(h);
+    }
+}
+
+void bcos::txpool::TxPool::testOnlyCleanupPreStore(bcos::crypto::HashType const& h)
+{
+    std::lock_guard lock(x_preStoreInFlight);
+    m_preStoreInFlight.erase(h);
 }

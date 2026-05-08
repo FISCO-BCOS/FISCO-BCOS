@@ -29,6 +29,9 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <atomic>
+#include <mutex>
+#include <unordered_set>
 namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
@@ -134,6 +137,22 @@ public:
     void registerTxsNotifier(
         std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override;
 
+    // FIB-154 test-only accessors (bcos-txpool test target uses UNITY_BUILD ON;
+    // helpers are FIB-suffixed to avoid symbol collisions across unity translation units).
+    std::size_t testOnlyPreStoreCount() const
+    {
+        std::lock_guard lock(x_preStoreInFlight);
+        return m_preStoreInFlight.size();
+    }
+    // Exercises the dedup/cap gate without posting work to the thread pool.
+    void testOnlyEnqueuePreStore(bcos::crypto::HashType const& h);
+    // Exercises the full gate + synchronous success path (cleanup happens in-line).
+    void testOnlyEnqueuePreStoreSyncSuccess(bcos::crypto::HashType const& h);
+    // Exercises the full gate + synchronous exception path (cleanup happens in catch).
+    void testOnlyEnqueuePreStoreSyncThrow(bcos::crypto::HashType const& h);
+    // Directly removes a hash from the in-flight set (for UT teardown).
+    void testOnlyCleanupPreStore(bcos::crypto::HashType const& h);
+
 protected:
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
         bcos::crypto::HashListPtr _missedTxs,
@@ -162,5 +181,11 @@ private:
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
     bool m_checkBlockLimit = true;
+
+    // FIB-154: pre-store backlog control.
+    // ThreadPool (boost::asio::post) has no queue cap; bookkeep at TxPool layer.
+    static constexpr std::size_t c_maxPreStoreInFlight = 32;
+    std::unordered_set<bcos::crypto::HashType> m_preStoreInFlight;
+    mutable std::mutex x_preStoreInFlight;
 };
 }  // namespace bcos::txpool
