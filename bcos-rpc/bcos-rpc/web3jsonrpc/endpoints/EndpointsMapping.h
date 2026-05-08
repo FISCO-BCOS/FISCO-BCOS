@@ -40,6 +40,7 @@ public:
 
 private:
     void addHandlers();
+    void addEngineHandlers();
     void addEthHandlers();
     void addNetHandlers();
     void addWeb3Handlers();

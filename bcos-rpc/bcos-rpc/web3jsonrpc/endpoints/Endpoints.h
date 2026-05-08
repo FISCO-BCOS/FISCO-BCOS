@@ -19,6 +19,7 @@
  */
 
 #pragma once
+#include "EngineEndpoint.h"
 #include "EthEndpoint.h"
 #include "NetEndpoint.h"
 #include "Web3Endpoint.h"
@@ -26,11 +27,12 @@
 
 namespace bcos::rpc
 {
-class Endpoints : public EthEndpoint, public NetEndpoint, public Web3Endpoint
+class Endpoints : public EngineEndpoint, public EthEndpoint, public NetEndpoint, public Web3Endpoint
 {
 public:
     Endpoints(NodeService::Ptr _nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
-      : EthEndpoint(_nodeService, filterSystem, syncTransaction),
+      : EngineEndpoint(_nodeService),
+        EthEndpoint(_nodeService, filterSystem, syncTransaction),
         NetEndpoint(_nodeService),
         Web3Endpoint(_nodeService)
     {}

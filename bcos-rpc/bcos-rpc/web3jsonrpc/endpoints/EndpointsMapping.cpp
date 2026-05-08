@@ -39,6 +39,7 @@ std::optional<EndpointsMapping::Handler> EndpointsMapping::findHandler(
 
 void EndpointsMapping::addHandlers()
 {
+    addEngineHandlers();
     addEthHandlers();
     addNetHandlers();
     addWeb3Handlers();
@@ -47,6 +48,20 @@ void EndpointsMapping::addHandlers()
         WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("method", method);
     }
     WEB3_LOG(INFO) << LOG_BADGE("initHandler") << LOG_KV("size", m_handlers.size());
+}
+
+void EndpointsMapping::addEngineHandlers()
+{
+    // clang-format off
+    m_handlers[methodString(EthMethod::engine_exchangeCapabilities)] = &Endpoints::exchangeCapabilities;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV1)] = &Endpoints::forkchoiceUpdatedV1;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV2)] = &Endpoints::forkchoiceUpdatedV2;
+    m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV3)] = &Endpoints::forkchoiceUpdatedV3;
+    m_handlers[methodString(EthMethod::engine_getPayloadV2)] = &Endpoints::getPayloadV2;
+    m_handlers[methodString(EthMethod::engine_getPayloadV3)] = &Endpoints::getPayloadV3;
+    m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
+    m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
+    // clang-format on
 }
 
 void EndpointsMapping::addEthHandlers()
