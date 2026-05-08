@@ -29,7 +29,7 @@ namespace bcos::rpc
 class EngineEndpoint
 {
 public:
-    explicit EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService)) {}
+    explicit EngineEndpoint(NodeService::Ptr nodeService);
     ~EngineEndpoint() = default;
 
 protected:

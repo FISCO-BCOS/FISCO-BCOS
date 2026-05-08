@@ -20,7 +20,6 @@
 
 #include "EngineEndpoint.h"
 
-#include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 using namespace bcos;
@@ -28,135 +27,20 @@ using namespace bcos::rpc;
 
 namespace
 {
-void requireArray(Json::Value const& request)
-{
-    if (!request.isArray())
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "The params field must be an array"));
-    }
-}
-
-void requireParamSize(Json::Value const& request, Json::ArrayIndex minSize, Json::ArrayIndex maxSize)
-{
-    if (request.size() < minSize || request.size() > maxSize)
-    {
-        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid params size"));
-    }
-}
-
-std::string requireString(Json::Value const& value, std::string_view fieldName)
-{
-    if (!value.isString())
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, std::string(fieldName) + " must be a string"));
-    }
-    return value.asString();
-}
-
-void requireObject(Json::Value const& value, std::string_view fieldName)
-{
-    if (!value.isObject())
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, std::string(fieldName) + " must be an object"));
-    }
-}
-
-std::string requireStringField(Json::Value const& value, std::string_view fieldName)
-{
-    auto fieldNameString = std::string(fieldName);
-    if (!value.isMember(fieldNameString))
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, std::string(fieldName) + " is required"));
-    }
-    return requireString(value[fieldNameString], fieldName);
-}
-
-std::vector<std::string> parseCapabilities(Json::Value const& request)
-{
-    requireArray(request);
-    auto const& params = request;
-    requireParamSize(params, 1, 1);
-
-    auto const& capabilities = params[0U];
-    if (!capabilities.isArray())
-    {
-        BOOST_THROW_EXCEPTION(
-            JsonRpcException(InvalidParams, "capabilities must be an array of strings"));
-    }
-
-    std::vector<std::string> result;
-    result.reserve(capabilities.size());
-    for (auto const& capability : capabilities)
-    {
-        result.push_back(requireString(capability, "capability"));
-    }
-    return result;
-}
-
-void parseForkchoiceState(Json::Value const& request)
-{
-    requireObject(request[0U], "forkchoiceState");
-    auto const& forkchoiceState = request[0U];
-    requireStringField(forkchoiceState, "headBlockHash");
-    requireStringField(forkchoiceState, "safeBlockHash");
-    requireStringField(forkchoiceState, "finalizedBlockHash");
-}
-
-void parsePayloadAttributes(Json::Value const& request)
-{
-    if (request.size() < 2 || request[1U].isNull())
-    {
-        return;
-    }
-
-    requireObject(request[1U], "payloadAttributes");
-    auto const& payloadAttributes = request[1U];
-    requireStringField(payloadAttributes, "timestamp");
-}
-
-void parseGetPayloadRequest(Json::Value const& request)
-{
-    requireArray(request);
-    auto const& params = request;
-    requireParamSize(params, 1, 1);
-    requireString(params[0U], "payloadId");
-}
-
-void parseExecutionPayloadRequest(Json::Value const& request)
-{
-    requireArray(request);
-    auto const& params = request;
-    requireParamSize(params, 1, 1);
-
-    requireObject(params[0U], "executionPayload");
-    auto const& payload = params[0U];
-    requireStringField(payload, "parentHash");
-    requireStringField(payload, "blockHash");
-}
-
 Json::Value mockArrayResult()
 {
-    return Json::Value(Json::arrayValue);
+    return {Json::arrayValue};
 }
 
 Json::Value mockObjectResult()
 {
-    return Json::Value(Json::objectValue);
+    return {Json::objectValue};
 }
 
 task::Task<void> handleForkchoiceRequest(NodeService::Ptr nodeService, std::uint32_t version,
     Json::Value const& request, Json::Value& response)
 {
-    boost::ignore_unused(nodeService, version);
-    requireArray(request);
-    auto const& params = request;
-    requireParamSize(params, 1, 2);
-
-    parseForkchoiceState(params);
-    parsePayloadAttributes(params);
+    boost::ignore_unused(nodeService, version, request);
     auto result = mockObjectResult();
     buildJsonContent(result, response);
     co_return;
@@ -165,8 +49,7 @@ task::Task<void> handleForkchoiceRequest(NodeService::Ptr nodeService, std::uint
 task::Task<void> handleGetPayloadRequest(NodeService::Ptr nodeService, std::uint32_t version,
     Json::Value const& request, Json::Value& response)
 {
-    boost::ignore_unused(nodeService, version);
-    parseGetPayloadRequest(request);
+    boost::ignore_unused(nodeService, version, request);
     auto result = mockObjectResult();
     buildJsonContent(result, response);
     co_return;
@@ -175,19 +58,20 @@ task::Task<void> handleGetPayloadRequest(NodeService::Ptr nodeService, std::uint
 task::Task<void> handleNewPayloadRequest(NodeService::Ptr nodeService, std::uint32_t version,
     Json::Value const& request, Json::Value& response)
 {
-    boost::ignore_unused(nodeService, version);
-    parseExecutionPayloadRequest(request);
+    boost::ignore_unused(nodeService, version, request);
     auto result = mockObjectResult();
     buildJsonContent(result, response);
     co_return;
 }
 }  // namespace
 
+EngineEndpoint::EngineEndpoint(NodeService::Ptr nodeService) : m_nodeService(std::move(nodeService))
+{}
+
 task::Task<void> EngineEndpoint::exchangeCapabilities(
     const Json::Value& request, Json::Value& response)
 {
-    auto capabilities = parseCapabilities(request);
-    boost::ignore_unused(capabilities);
+    boost::ignore_unused(request);
     auto result = mockArrayResult();
     buildJsonContent(result, response);
     co_return;
