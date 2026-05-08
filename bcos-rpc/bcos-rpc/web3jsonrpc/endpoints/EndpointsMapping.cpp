@@ -57,8 +57,10 @@ void EndpointsMapping::addEngineHandlers()
     m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV1)] = &Endpoints::forkchoiceUpdatedV1;
     m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV2)] = &Endpoints::forkchoiceUpdatedV2;
     m_handlers[methodString(EthMethod::engine_forkchoiceUpdatedV3)] = &Endpoints::forkchoiceUpdatedV3;
+    m_handlers[methodString(EthMethod::engine_getPayloadV1)] = &Endpoints::getPayloadV1;
     m_handlers[methodString(EthMethod::engine_getPayloadV2)] = &Endpoints::getPayloadV2;
     m_handlers[methodString(EthMethod::engine_getPayloadV3)] = &Endpoints::getPayloadV3;
+    m_handlers[methodString(EthMethod::engine_newPayloadV1)] = &Endpoints::newPayloadV1;
     m_handlers[methodString(EthMethod::engine_newPayloadV2)] = &Endpoints::newPayloadV2;
     m_handlers[methodString(EthMethod::engine_newPayloadV3)] = &Endpoints::newPayloadV3;
     // clang-format on

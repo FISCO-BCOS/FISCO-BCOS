@@ -37,8 +37,10 @@ protected:
     task::Task<void> forkchoiceUpdatedV1(const Json::Value&, Json::Value&);
     task::Task<void> forkchoiceUpdatedV2(const Json::Value&, Json::Value&);
     task::Task<void> forkchoiceUpdatedV3(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadV1(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV3(const Json::Value&, Json::Value&);
+    task::Task<void> newPayloadV1(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV3(const Json::Value&, Json::Value&);
 
