@@ -330,6 +330,15 @@ void Session::write()
 
 void Session::drop(DisconnectReason _reason)
 {
+    // FIB-97-new: idempotency guard — only the first caller (wins the CAS) proceeds
+    // with the actual teardown; all subsequent or concurrent calls are no-ops.
+    bool expected = false;
+    if (!m_dropped.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+        return;
+    }
+
     m_active = false;
 
     int errorCode = P2PExceptionType::Disconnect;
