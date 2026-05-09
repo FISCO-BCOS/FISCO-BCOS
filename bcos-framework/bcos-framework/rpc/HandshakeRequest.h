@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-utilities/Common.h"
+#include <fmt/format.h>
 #include <json/json.h>
 #include <memory>
 
@@ -39,13 +40,14 @@ public:
 
     bcos::bytes encode() const
     {
-        Json::Value request;
-        request["minVersion"] = m_protocol->minVersion();
-        request["maxVersion"] = m_protocol->maxVersion();
-        request["moduleID"] = m_protocol->protocolModuleID();
-        Json::FastWriter fastWriter;
-        auto requestStr = fastWriter.write(request);
-        return bcos::bytes(requestStr.begin(), requestStr.end());
+        // Format JSON directly into bytes via fmt::format_to, avoiding
+        // intermediate std::string.
+        // Format: {"minVersion":X,"maxVersion":Y,"moduleID":Z}
+        bcos::bytes result;
+        fmt::format_to(std::back_inserter(result),
+            R"({{"minVersion":{},"maxVersion":{},"moduleID":{}}})", m_protocol->minVersion(),
+            m_protocol->maxVersion(), static_cast<unsigned>(m_protocol->protocolModuleID()));
+        return result;
     }
 
     bool decode(bcos::bytesConstRef _data)
