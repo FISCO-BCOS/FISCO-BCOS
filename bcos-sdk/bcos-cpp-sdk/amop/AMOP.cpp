@@ -106,7 +106,7 @@ void AMOP::sendResponse(
 {
     auto msg = m_messageFactory->buildMessage();
     msg->setSeq(_seq);
-    msg->setPayload(std::make_shared<bytes>(_data.begin(), _data.end()));
+    msg->setPayload(bcos::bytes(_data.begin(), _data.end()));
     msg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_RESPONSE);
 
     m_service->asyncSendMessageByEndPoint(_endPoint, msg);
@@ -126,7 +126,7 @@ void AMOP::publish(
     auto sendMsg = m_messageFactory->buildMessage();
     sendMsg->setSeq(m_messageFactory->newSeq());
     sendMsg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_REQUEST);
-    sendMsg->setPayload(buffer);
+    sendMsg->setPayload(std::move(*buffer));
 
     auto sendBuffer = std::make_shared<bytes>();
     sendMsg->encode(*sendBuffer);
@@ -140,7 +140,7 @@ void AMOP::publish(
             if (!_error && wsMessage && wsMessage->status() != 0)
             {
                 auto errorNew = BCOS_ERROR_PTR(wsMessage->status(),
-                    std::string(wsMessage->payload()->begin(), wsMessage->payload()->end()));
+                    std::string(wsMessage->payload().begin(), wsMessage->payload().end()));
 
                 AMOP_CLIENT(WARNING) << LOG_BADGE("publish") << LOG_DESC("publish response failed")
                                      << LOG_KV("code", errorNew->errorCode())
@@ -166,7 +166,7 @@ void AMOP::broadcast(const std::string& _topic, bcos::bytesConstRef _data)
     auto sendMsg = m_messageFactory->buildMessage();
     sendMsg->setSeq(m_messageFactory->newSeq());
     sendMsg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_BROADCAST);
-    sendMsg->setPayload(buffer);
+    sendMsg->setPayload(std::move(*buffer));
 
     auto sendBuffer = std::make_shared<bytes>();
     sendMsg->encode(*sendBuffer);
@@ -192,7 +192,7 @@ void AMOP::updateTopicsToRemote(std::shared_ptr<bcos::boostssl::ws::WsSession> _
     auto msg = m_messageFactory->buildMessage();
     msg->setSeq(m_messageFactory->newSeq());
     msg->setPacketType(bcos::cppsdk::amop::MessageType::AMOP_SUBTOPIC);
-    msg->setPayload(std::make_shared<bytes>(request.begin(), request.end()));
+    msg->setPayload(bcos::bytes(request.begin(), request.end()));
 
     _session->asyncSendMessage(msg);
 
@@ -207,7 +207,7 @@ void AMOP::onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
     auto seq = _msg->seq();
     auto request = m_requestFactory->buildRequest();
     auto ret =
-        request->decode(bcos::bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        request->decode(bcos::bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPRequest")
@@ -253,7 +253,7 @@ void AMOP::onRecvAMOPBroadcast(std::shared_ptr<boostssl::MessageFace> _msg,
     auto seq = _msg->seq();
     auto request = m_requestFactory->buildRequest();
     auto ret =
-        request->decode(bcos::bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        request->decode(bcos::bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     if (ret < 0)
     {
         AMOP_CLIENT(WARNING) << LOG_BADGE("onRecvAMOPBroadcast")

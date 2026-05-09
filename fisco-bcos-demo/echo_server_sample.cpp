@@ -67,7 +67,7 @@ int main(int argc, char** argv)
             _msg->setRespPacket();
             _session->session()->asyncSendMessage(_msg);
             BCOS_LOG(INFO) << LOG_DESC("sendResponse") << LOG_KV("timeCost", (utcTime() - startT))
-                           << LOG_KV("msgSize", (_msg->payload()->size()));
+                           << LOG_KV("msgSize", (_msg->payload().size()));
         });
     while (true)
     {

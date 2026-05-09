@@ -690,7 +690,7 @@ void WsService::onRecvMessage(
                              << LOG_DESC("receive message from server")
                              << LOG_KV("type", message->packetType()) << LOG_KV("seq", seq)
                              << LOG_KV("endpoint", session->endPoint())
-                             << LOG_KV("data size", message->payload()->size())
+                             << LOG_KV("data size", message->payload().size())
                              << LOG_KV("use_count", session.use_count());
 
     auto typeHandler = getMsgHandler(message->packetType());
@@ -706,7 +706,7 @@ void WsService::onRecvMessage(
             WEBSOCKET_SERVICE(DEBUG)
                 << LOG_BADGE("onRecvMessage") << LOG_DESC("AMOP is disabled!")
                 << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
-                << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+                << LOG_KV("seq", seq) << LOG_KV("data size", message->payload().size())
                 << LOG_KV("use_count", session.use_count());
             return;
         }
@@ -714,7 +714,7 @@ void WsService::onRecvMessage(
         WEBSOCKET_SERVICE(WARNING)
             << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
             << LOG_KV("type", message->packetType()) << LOG_KV("endpoint", session->endPoint())
-            << LOG_KV("seq", seq) << LOG_KV("data size", message->payload()->size())
+            << LOG_KV("seq", seq) << LOG_KV("data size", message->payload().size())
             << LOG_KV("use_count", session.use_count());
     }
 }

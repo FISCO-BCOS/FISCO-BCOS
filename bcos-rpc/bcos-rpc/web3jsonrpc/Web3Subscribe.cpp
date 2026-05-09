@@ -158,7 +158,7 @@ void Web3Subscribe::onNewBlock(int64_t blockNumber)
 
             auto message = session->messageFactory()->buildMessage();
             auto respBytes = toBytesResponse(resp);
-            message->payload()->swap(respBytes);
+            message->setPayload(std::move(respBytes));
             session->asyncSendMessage(std::move(message));
 
             if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]

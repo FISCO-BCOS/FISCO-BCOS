@@ -47,8 +47,8 @@ public:
     virtual void setSeq(std::string) = 0;
     virtual uint16_t ext() const = 0;
     virtual void setExt(uint16_t) = 0;
-    virtual std::shared_ptr<bytes> payload() const = 0;
-    virtual void setPayload(std::shared_ptr<bcos::bytes>) = 0;
+    virtual bytesConstRef payload() const = 0;
+    virtual void setPayload(bcos::bytes) = 0;
 
     virtual bool encode(bcos::bytes& _buffer) = 0;
     virtual int64_t decode(bytesConstRef _buffer) = 0;

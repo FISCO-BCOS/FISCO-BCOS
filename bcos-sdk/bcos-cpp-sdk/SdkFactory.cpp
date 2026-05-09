@@ -93,7 +93,7 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
     auto weakService = std::weak_ptr<Service>(service);
     service->registerMsgHandler(
         bcos::protocol::MessageType::BLOCK_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
-            auto blkMsg = std::string(_msg->payload()->begin(), _msg->payload()->end());
+            auto blkMsg = std::string(_msg->payload().begin(), _msg->payload().end());
             auto service = weakService.lock();
             service->onRecvBlockNotifier(blkMsg);
 
@@ -103,7 +103,7 @@ Service::Ptr SdkFactory::buildService(std::shared_ptr<bcos::boostssl::ws::WsConf
 
     service->registerMsgHandler(
         bcos::protocol::MessageType::GROUP_NOTIFY, [weakService](auto&& _msg, auto&& _session) {
-            std::string groupInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
+            std::string groupInfo = std::string(_msg->payload().begin(), _msg->payload().end());
             auto service = weakService.lock();
             service->onNotifyGroupInfo(groupInfo, _session->endPoint());
 
@@ -137,20 +137,20 @@ bcos::cppsdk::jsonrpc::JsonRpcImpl::Ptr SdkFactory::buildJsonRpc(
         {
             if (_respFunc)
             {
-                _respFunc(BCOS_ERROR_PTR(-1, "service has been destroyed"), nullptr);
+                _respFunc(BCOS_ERROR_PTR(-1, "service has been destroyed"), {});
             }
             return;
         }
-        auto data = std::make_shared<bytes>(_request.begin(), _request.end());
+        auto data = bcos::bytes(_request.begin(), _request.end());
         auto msg = service->messageFactory()->buildMessage();
         msg->setSeq(service->messageFactory()->newSeq());
         msg->setPacketType(bcos::protocol::MessageType::RPC_REQUEST);
-        msg->setPayload(data);
+        msg->setPayload(std::move(data));
 
         service->asyncSendMessageByGroupAndNode(_group, _node, msg, Options(),
             [_respFunc](Error::Ptr _error, MessageFace::Ptr _msg, auto&& _session) {
                 (void)_session;
-                _respFunc(_error, _msg ? _msg->payload() : nullptr);
+                _respFunc(_error, _msg ? _msg->payload().toBytes() : bcos::bytes{});
             });
     });
 

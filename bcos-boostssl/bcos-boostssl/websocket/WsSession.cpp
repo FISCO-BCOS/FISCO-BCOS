@@ -526,7 +526,7 @@ void WsSession::asyncSendMessage(
     }
 
     // check if message size overflow
-    if ((int64_t)_msg->payload()->size() > (int64_t)maxWriteMsgSize())
+    if ((int64_t)_msg->payload().size() > (int64_t)maxWriteMsgSize())
     {
         if (_respFunc)
         {
@@ -537,7 +537,7 @@ void WsSession::asyncSendMessage(
         WEBSOCKET_SESSION(WARNING)
             << LOG_BADGE("asyncSendMessage") << LOG_DESC("send message size overflow")
             << LOG_KV("endpoint", endPoint()) << LOG_KV("seq", seq)
-            << LOG_KV("msgSize", _msg->payload()->size())
+            << LOG_KV("msgSize", _msg->payload().size())
             << LOG_KV("maxWriteMsgSize", maxWriteMsgSize());
         return;
     }
@@ -556,7 +556,7 @@ void WsSession::asyncSendMessage(
             << LOG_BADGE("asyncSendMessage") << LOG_DESC("message encode failed")
             << LOG_KV("endpoint", endPoint()) << LOG_KV("seq", seq)
             << LOG_KV("packetType", _msg->packetType())
-            << LOG_KV("msgSize", _msg->payload()->size())
+            << LOG_KV("msgSize", _msg->payload().size())
             << LOG_KV("maxWriteMsgSize", maxWriteMsgSize());
         return;
     }

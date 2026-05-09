@@ -275,7 +275,7 @@ void EventSub::onRecvEventSubMessage(
         }
     }
     */
-    auto strResp = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    auto strResp = std::string(_msg->payload().begin(), _msg->payload().end());
 
     EVENT_SUB(TRACE) << LOG_BADGE("onRecvEventSubMessage") << LOG_DESC("receive event sub message")
                      << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("response", strResp);
@@ -363,7 +363,7 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
     auto message = m_messagefactory->buildMessage();
     message->setSeq(m_messagefactory->newSeq());
     message->setPacketType(bcos::cppsdk::event::MessageType::EVENT_SUBSCRIBE);
-    message->setPayload(std::make_shared<bytes>(jsonReq.begin(), jsonReq.end()));
+    message->setPayload(bcos::bytes(jsonReq.begin(), jsonReq.end()));
 
     EVENT_SUB(INFO) << LOG_BADGE("subscribeEvent") << LOG_DESC("subscribe event")
                     << LOG_KV("id", id) << LOG_KV("group", group) << LOG_KV("request", jsonReq);
@@ -382,7 +382,7 @@ void EventSub::subscribeEvent(EventSubTask::Ptr _task, Callback _callback)
                 return;
             }
 
-            auto strResp = std::string(_msg->payload()->begin(), _msg->payload()->end());
+            auto strResp = std::string(_msg->payload().begin(), _msg->payload().end());
             auto resp = std::make_shared<EventSubResponse>();
             if (!resp->fromJson(strResp))
             {
@@ -478,7 +478,7 @@ void EventSub::unsubscribeEvent(const std::string& _id)
     auto message = m_messagefactory->buildMessage();
     message->setSeq(m_messagefactory->newSeq());
     message->setPacketType(bcos::cppsdk::event::MessageType::EVENT_UNSUBSCRIBE);
-    message->setPayload(std::make_shared<bytes>(strReq.begin(), strReq.end()));
+    message->setPayload(bcos::bytes(strReq.begin(), strReq.end()));
 
     session->asyncSendMessage(message, Options(),
         [_id](Error::Ptr _error, std::shared_ptr<boostssl::MessageFace> _msg,
@@ -492,7 +492,7 @@ void EventSub::unsubscribeEvent(const std::string& _id)
                 return;
             }
 
-            auto strResp = std::string(_msg->payload()->begin(), _msg->payload()->end());
+            auto strResp = std::string(_msg->payload().begin(), _msg->payload().end());
             auto resp = std::make_shared<EventSubResponse>();
             if (!resp->fromJson(strResp))
             {

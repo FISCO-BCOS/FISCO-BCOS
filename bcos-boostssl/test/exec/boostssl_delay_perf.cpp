@@ -115,7 +115,7 @@ void workAsClient(
     std::string strMsg(msgSize, 'a');
     auto msg = wsService->messageFactory()->buildMessage();
     msg->setPacketType(DELAY_PERF_MSGTYPE);
-    msg->setPayload(std::make_shared<bytes>(strMsg.begin(), strMsg.end()));
+    msg->setPayload(bytes(strMsg.begin(), strMsg.end()));
     // msg->setSeq(wsService->messageFactory()->newSeq());
 
     uint64_t nSucC = 0;

@@ -82,7 +82,7 @@ void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace>
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg->seq();
-    std::string request = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    std::string request = std::string(_msg->payload().begin(), _msg->payload().end());
 
     EVENT_SUB(INFO) << LOG_BADGE("onRecvSubscribeEvent") << LOG_KV("endpoint", _session->endPoint())
                     << LOG_KV("seq", seq) << LOG_KV("request", request);
@@ -132,7 +132,7 @@ void EventSub::onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFac
     std::shared_ptr<bcos::boostssl::ws::WsSession> _session)
 {
     std::string seq = _msg->seq();
-    std::string request = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    std::string request = std::string(_msg->payload().begin(), _msg->payload().end());
 
     EVENT_SUB(INFO) << LOG_BADGE("onRecvUnsubscribeEvent") << LOG_KV("seq", seq)
                     << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("request", request);
@@ -173,8 +173,8 @@ bool EventSub::sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _sess
     esResp->setStatus(_status);
     auto result = esResp->generateJson();
 
-    auto data = std::make_shared<bcos::bytes>(result.begin(), result.end());
-    _msg->setPayload(data);
+    auto data = bcos::bytes(result.begin(), result.end());
+    _msg->setPayload(std::move(data));
 
     _session->asyncSendMessage(_msg);
     return true;
@@ -224,11 +224,11 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
 
     Json::FastWriter writer;
     std::string strEventInfo = writer.write(jResp);
-    auto data = std::make_shared<bcos::bytes>(strEventInfo.begin(), strEventInfo.end());
+    auto data = bcos::bytes(strEventInfo.begin(), strEventInfo.end());
 
     auto msg = m_messageFactory->buildMessage();
     msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
-    msg->setPayload(data);
+    msg->setPayload(std::move(data));
     _session->asyncSendMessage(msg);
 
     EVENT_SUB(TRACE) << LOG_BADGE("sendEvents") << LOG_DESC("send events to client")

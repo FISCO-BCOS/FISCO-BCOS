@@ -47,7 +47,7 @@ void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<P2PMessage> _m
         auto seq = _service->messageFactory()->newSeq();
         _msg->setSeq(seq);
         auto startT = utcTime();
-        auto msgSize = _msg->payload()->size();
+        auto msgSize = _msg->payload().size();
         _service->asyncSendMessageByEndPoint(_endPoint, _msg,
             [msgSize, startT](NetworkException _e, std::shared_ptr<P2PSession> _session,
                 std::shared_ptr<P2PMessage>) {

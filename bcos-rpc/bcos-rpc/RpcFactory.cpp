@@ -407,12 +407,12 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
         WS_RAW_MESSAGE_TYPE, [web3JsonRpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
                                  std::shared_ptr<bcos::boostssl::ws::WsSession> session) {
             auto payload = msg->payload();
-            std::string_view strRequest((char*)payload->data(), payload->size());
+            std::string_view strRequest((char*)payload.data(), payload.size());
 
             // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
 
             web3JsonRpc->onRPCRequest(strRequest, session, [session, msg](bcos::bytes _respData) {
-                msg->setPayload(std::make_shared<bcos::bytes>(std::move(_respData)));
+                msg->setPayload(bcos::bytes(std::move(_respData)));
                 session->asyncSendMessage(msg);
             });
         });

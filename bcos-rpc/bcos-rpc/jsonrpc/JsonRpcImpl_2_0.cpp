@@ -105,10 +105,8 @@ void JsonRpcImpl_2_0::handleRpcRequest(
         if (session->isConnected())
         {
             // TODO: no need to copy resp
-            auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
-
             auto msg = messageFactory->buildMessage();
-            msg->setPayload(buffer);
+            msg->setPayload(std::move(resp));
             msg->setVersion(version);
             msg->setSeq(seq);
             msg->setExt(ext);

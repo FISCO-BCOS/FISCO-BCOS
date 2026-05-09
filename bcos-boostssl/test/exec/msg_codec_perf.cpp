@@ -60,7 +60,7 @@ int main(int argc, char** argv)
     // construct message
     auto msg = std::dynamic_pointer_cast<WsMessage>(messageFactory->buildMessage());
 
-    msg->setPayload(std::make_shared<bytes>(str.begin(), str.end()));
+    msg->setPayload(bytes(str.begin(), str.end()));
 
     auto startPoint = std::chrono::high_resolution_clock::now();
     auto lastReport = std::chrono::high_resolution_clock::now();

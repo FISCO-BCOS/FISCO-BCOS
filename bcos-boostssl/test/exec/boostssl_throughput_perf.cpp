@@ -120,7 +120,7 @@ void workAsClient(std::string serverIp, uint16_t serverPort, bool disableSsl, ui
     std::string strMsg(msgSize, 'a');
     auto msg = wsService->messageFactory()->buildMessage();
     msg->setPacketType(DELAY_PERF_MSGTYPE);
-    msg->setPayload(std::make_shared<bytes>(strMsg.begin(), strMsg.end()));
+    msg->setPayload(bytes(strMsg.begin(), strMsg.end()));
 
     std::atomic<uint64_t> nSucC = 0;
     std::atomic<uint64_t> nFailedC = 0;
@@ -226,8 +226,8 @@ void workAsServer(std::string listenIp, uint16_t listenPort, bool disableSsl, ui
     wsService->registerMsgHandler(DELAY_PERF_MSGTYPE,
         [&totalRecvDataSize, &lastSecTotalRecvDataSize, &lastRecvDataCount](
             std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session) {
-            totalRecvDataSize += _msg->payload()->size();
-            lastSecTotalRecvDataSize += _msg->payload()->size();
+            totalRecvDataSize += _msg->payload().size();
+            lastSecTotalRecvDataSize += _msg->payload().size();
             lastRecvDataCount++;
             _session->asyncSendMessage(_msg);
         });

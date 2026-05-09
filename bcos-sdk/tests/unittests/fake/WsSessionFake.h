@@ -49,7 +49,7 @@ public:
         (void)_msg;
         (void)_options;
         auto msg = std::make_shared<bcos::boostssl::ws::WsMessage>();
-        msg->setPayload(m_resp);
+        msg->setPayload(*m_resp);
         auto session = shared_from_this();
         _respCallback(m_error, msg, session);
     }

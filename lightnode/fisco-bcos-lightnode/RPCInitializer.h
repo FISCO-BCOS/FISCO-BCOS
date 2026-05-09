@@ -131,7 +131,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             std::string response;
             handshakeResponse.encode(response);
 
-            msg->setPayload(std::make_shared<bcos::bytes>(response.begin(), response.end()));
+            msg->setPayload(bcos::bytes(response.begin(), response.end()));
             session->asyncSendMessage(msg);
             RPC_LOG(INFO) << LOG_DESC("LightNode handshake success")
                           << LOG_KV("version", session->version())
@@ -147,14 +147,13 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
         [jsonrpc](std::shared_ptr<bcos::boostssl::MessageFace> msg,
             std::shared_ptr<bcos::boostssl::ws::WsSession> session) mutable {
             auto buffer = msg->payload();
-            auto req = std::string_view((const char*)buffer->data(), buffer->size());
+            auto req = std::string_view((const char*)buffer.data(), buffer.size());
 
-            jsonrpc->onRPCRequest(req, [m_buffer = std::move(buffer), msg = std::move(msg),
+            jsonrpc->onRPCRequest(req, [m_buffer = buffer, msg = std::move(msg),
                                            session = std::move(session)](bcos::bytes resp) {
                 if (session && session->isConnected())
                 {
-                    auto buffer = std::make_shared<bcos::bytes>(std::move(resp));
-                    msg->setPayload(buffer);
+                    msg->setPayload(std::move(resp));
                     session->asyncSendMessage(msg);
                 }
                 else
@@ -163,7 +162,7 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
                     RPC_LOG(WARNING)
                         << LOG_DESC("Unable to send response for session has been inactive")
                         << LOG_KV("req",
-                               std::string_view((const char*)m_buffer->data(), m_buffer->size()))
+                               std::string_view((const char*)m_buffer.data(), m_buffer.size()))
                         << LOG_KV("resp", std::string_view((const char*)resp.data(), resp.size()))
                         << LOG_KV("seq", msg->seq())
                         << LOG_KV("endpoint", session ? session->endPoint() : std::string(""));

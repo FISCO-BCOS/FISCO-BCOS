@@ -99,8 +99,8 @@ int main(int argc, const char** argv)
                     }
 
                     // std::cerr << "\t[Server] recv request from client: "
-                    //           << std::string(_message->payload()->begin(),
-                    //           _message->payload()->end())
+                    //           << std::string(_message->payload().begin(),
+                    //           _message->payload().end())
                     //           << std::endl;
                     // update rate stat
                     reporter->update(_message->length(), true);
@@ -179,8 +179,8 @@ int main(int argc, const char** argv)
 
                         // std::cerr << "\t[Client] recv response from server: "
                         //           << std::string(
-                        //                  _message->payload()->begin(),
-                        //                  _message->payload()->end())
+                        //                  _message->payload().begin(),
+                        //                  _message->payload().end())
                         //           << std::endl;
                         // auto readPayload = _message->readPayload();
                         // auto refBuffer = readPayload->asRefBuffer();

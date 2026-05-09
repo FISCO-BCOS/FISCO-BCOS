@@ -134,7 +134,7 @@ void Rpc::asyncNotifyBlockNumber(std::string const& _groupID, std::string const&
             auto resp = response.toStyledString();
             auto message = m_wsService->messageFactory()->buildMessage();
             message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-            message->setPayload(std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
+            message->setPayload(bcos::bytes(resp.begin(), resp.end()));
             s->asyncSendMessage(message);
         }
     }
@@ -179,7 +179,7 @@ void Rpc::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
         auto response = groupInfoJson.toStyledString();
         auto message = m_wsService->messageFactory()->buildMessage();
         message->setPacketType(bcos::protocol::MessageType::GROUP_NOTIFY);
-        message->setPayload(std::make_shared<bcos::bytes>(response.begin(), response.end()));
+        message->setPayload(bcos::bytes(response.begin(), response.end()));
         session->asyncSendMessage(message);
     }
 }
@@ -189,7 +189,7 @@ bool Rpc::negotiatedVersion(
 {
     auto seq = _msg->seq();
     HandshakeRequest handshakeRequest;
-    auto ret = handshakeRequest.decode(*(_msg->payload()));
+    auto ret = handshakeRequest.decode(_msg->payload());
     if (!ret)
     {
         RPC_LOG(WARNING) << LOG_DESC(
@@ -258,7 +258,7 @@ void Rpc::onRecvHandshakeRequest(
                 Json::FastWriter writer;
                 auto response = writer.write(handshakeResponse);
 
-                _msg->setPayload(std::make_shared<bcos::bytes>(response.begin(), response.end()));
+                _msg->setPayload(bcos::bytes(response.begin(), response.end()));
                 _session->asyncSendMessage(_msg);
                 RPC_LOG(INFO) << LOG_DESC("onRecvHandshakeRequest success")
                               << LOG_KV("version", _session->version())

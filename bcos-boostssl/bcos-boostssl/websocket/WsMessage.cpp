@@ -40,7 +40,6 @@ constexpr size_t WsMessage::MESSAGE_MIN_LENGTH = 10;
 
 WsMessage::WsMessage()
 {
-    m_payload = std::make_shared<bcos::bytes>();
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {
         WEBSOCKET_MESSAGE(TRACE) << LOG_KV("[NEWOBJ][WsMessage]", this);
@@ -93,12 +92,12 @@ void WsMessage::setSeq(std::string _seq)
     m_seq = std::move(_seq);
 }
 
-std::shared_ptr<bcos::bytes> WsMessage::payload() const
+bcos::bytesConstRef WsMessage::payload() const
 {
-    return m_payload;
+    return bcos::ref(m_payload);
 }
 
-void WsMessage::setPayload(std::shared_ptr<bcos::bytes> _payload)
+void WsMessage::setPayload(bcos::bytes _payload)
 {
     m_payload = std::move(_payload);
 }
@@ -129,7 +128,7 @@ bool WsMessage::encode(bytes& _buffer)
     _buffer.insert(_buffer.end(), (byte*)&seqLength, (byte*)&seqLength + 2);
     _buffer.insert(_buffer.end(), m_seq.begin(), m_seq.end());
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
-    _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
+    _buffer.insert(_buffer.end(), m_payload.begin(), m_payload.end());
 
     m_length = _buffer.size();
     return true;
@@ -144,7 +143,7 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
     }
 
     m_seq.clear();
-    m_payload->clear();
+    m_payload.clear();
 
     auto dataBuffer = _buffer.data();
     auto p = _buffer.data();
@@ -185,7 +184,7 @@ int64_t WsMessage::decode(bytesConstRef _buffer)
     // data field
     if (p)
     {
-        m_payload->insert(m_payload->begin(), p, dataBuffer + length);
+        m_payload.insert(m_payload.begin(), p, dataBuffer + length);
     }
     m_length = length;
     return length;

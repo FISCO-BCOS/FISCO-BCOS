@@ -55,7 +55,7 @@ void sendMessage(std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsService> _
         auto seq = _wsService->messageFactory()->newSeq();
         _msg->setSeq(seq);
         auto startT = utcTime();
-        auto msgSize = _msg->payload()->size();
+        auto msgSize = _msg->payload().size();
         _wsService->asyncSendMessage(_msg, Options(-1),
             [msgSize, startT](Error ::Ptr _error, std::shared_ptr<boostssl::MessageFace>,
                 std::shared_ptr<WsSession> _session) {
@@ -142,7 +142,7 @@ int main(int argc, char** argv)
     auto msg = std::dynamic_pointer_cast<WsMessage>(wsService->messageFactory()->buildMessage());
     msg->setPacketType(999);
     std::string randStr(payLoadSize, 'a');
-    msg->setPayload(std::make_shared<bytes>(randStr.begin(), randStr.end()));
+    msg->setPayload(bytes(randStr.begin(), randStr.end()));
     auto rateLimiter = std::make_shared<RateLimiter>(packetQPS);
     sendMessage(msg, wsService, rateLimiter);
     return EXIT_SUCCESS;

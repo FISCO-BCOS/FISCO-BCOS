@@ -50,8 +50,8 @@ public:
 
     std::string const& seq() const override;
     void setSeq(std::string _seq) override;
-    std::shared_ptr<bcos::bytes> payload() const override;
-    void setPayload(std::shared_ptr<bcos::bytes> _payload) override;
+    bytesConstRef payload() const override;
+    void setPayload(bcos::bytes _payload) override;
     uint16_t ext() const override;
     void setExt(uint16_t /*unused*/) override;
 
@@ -67,7 +67,7 @@ public:
 private:
     uint16_t m_packetType = WS_RAW_MESSAGE_TYPE;
     std::string m_seq;
-    std::shared_ptr<bcos::bytes> m_payload;
+    bcos::bytes m_payload;
 };
 
 class RawWsMessageFactory : public MessageFaceFactory

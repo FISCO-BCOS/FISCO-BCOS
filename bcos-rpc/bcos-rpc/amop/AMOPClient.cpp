@@ -84,7 +84,7 @@ bool AMOPClient::updateTopicInfos(
 void AMOPClient::onRecvSubTopics(
     std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
-    auto topicInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
+    auto topicInfo = std::string(_msg->payload().begin(), _msg->payload().end());
     auto seq = _msg->seq();
 
     if (gatewayInactivated())
@@ -115,7 +115,7 @@ void AMOPClient::onRecvAMOPRequest(
 {
     auto seq = _msg->seq();
     auto amopReq = m_requestFactory->buildRequest(
-        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     AMOP_CLIENT_LOG(DEBUG) << LOG_DESC("onRecvAMOPRequest") << LOG_KV("seq", seq)
                            << LOG_KV("topic", amopReq->topic());
 
@@ -136,7 +136,7 @@ void AMOPClient::onRecvAMOPRequest(
     }
     auto self = std::weak_ptr<AMOPClient>(shared_from_this());
     m_gateway->asyncSendMessageByTopic(amopReq->topic(),
-        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()),
+        bytesConstRef(_msg->payload().data(), _msg->payload().size()),
         [self, seq, _msg, topic, _session](
             bcos::Error::Ptr&& _error, int16_t, bytesConstRef _responseData) {
             try
@@ -167,7 +167,7 @@ void AMOPClient::onRecvAMOPRequest(
                         ->setStatus(errorCode);
                     // constructor the response
                     responseMsg->setPayload(
-                        std::make_shared<bytes>(errorMsg.begin(), errorMsg.end()));
+                        bcos::bytes(errorMsg.begin(), errorMsg.end()));
                     // recover the seq
                     responseMsg->setSeq(orgSeq);
                     AMOP_CLIENT_LOG(ERROR)
@@ -244,12 +244,12 @@ void AMOPClient::onRecvAMOPBroadcast(
 {
     auto seq = _msg->seq();
     auto amopReq = m_requestFactory->buildRequest(
-        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     // broadcast message to the sdks connected to the local node
     broadcastAMOPMessage(amopReq->topic(), _msg);
     // broadcast messsage to sdks connected to other nodes
     m_gateway->asyncSendBroadcastMessageByTopic(
-        amopReq->topic(), bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        amopReq->topic(), bytesConstRef(_msg->payload().data(), _msg->payload().size()));
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("onRecvAMOPBroadcast") << LOG_KV("seq", seq)
                            << LOG_KV("topic", amopReq->topic());
 }
@@ -277,7 +277,7 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
             AMOP_CLIENT_LOG(DEBUG)
                 << LOG_BADGE("asyncNotifyAMOPMessage")
                 << LOG_DESC("asyncSendMessage callback response") << LOG_KV("seq", seq)
-                << LOG_KV("data size", _responseMsg ? _responseMsg->payload()->size() : 0);
+                << LOG_KV("data size", _responseMsg ? _responseMsg->payload().size() : 0);
             auto buffer = std::make_shared<bcos::bytes>();
             if (_responseMsg)
             {
@@ -324,8 +324,8 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
     // manually when need trigger callback after receive response message from the client
     requestMsg->setSeq(m_wsMessageFactory->newSeq());
     requestMsg->setPacketType(AMOPClientMessageType::AMOP_REQUEST);
-    auto requestPayLoad = std::make_shared<bytes>(_amopRequestData.begin(), _amopRequestData.end());
-    requestMsg->setPayload(requestPayLoad);
+    auto requestPayLoad = bcos::bytes(_amopRequestData.begin(), _amopRequestData.end());
+    requestMsg->setPayload(std::move(requestPayLoad));
     sendMessageToClient(_topic, clientSession, requestMsg, _callback);
 }
 
@@ -336,7 +336,7 @@ void AMOPClient::asyncNotifyAMOPBroadcastMessage(std::string const& _topic, byte
                            << LOG_KV("topic", _topic);
     auto requestMsg = m_wsMessageFactory->buildMessage();
     requestMsg->setPacketType(AMOPClientMessageType::AMOP_BROADCAST);
-    requestMsg->setPayload(std::make_shared<bytes>(_data.begin(), _data.end()));
+    requestMsg->setPayload(bcos::bytes(_data.begin(), _data.end()));
     broadcastAMOPMessage(_topic, requestMsg);
     if (_callback)
     {
@@ -523,7 +523,7 @@ bool AMOPClient::onGatewayInactivated(
     std::dynamic_pointer_cast<bcos::boostssl::ws::WsMessage>(responseMsg)->setStatus(-1);
     std::string errorMsg = "error for the gateway is in-activated";
     // set errorMesg
-    responseMsg->setPayload(std::make_shared<bytes>(errorMsg.begin(), errorMsg.end()));
+    responseMsg->setPayload(bcos::bytes(errorMsg.begin(), errorMsg.end()));
     // set seq
     responseMsg->setSeq(seq);
     _session->asyncSendMessage(responseMsg);
