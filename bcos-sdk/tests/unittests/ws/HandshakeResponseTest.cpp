@@ -86,6 +86,6 @@ BOOST_AUTO_TEST_CASE(test_HandshakeRequest)
     HandshakeRequest exceptionRequest;
     std::string invalidData = "invalidTest";
     BOOST_CHECK_EQUAL(
-        exceptionRequest.decode(bcos::bytes(invalidData.begin(), invalidData.end())), false);
+        exceptionRequest.decode(bcos::ref(bcos::bytes(invalidData.begin(), invalidData.end()))), false);
 }
 BOOST_AUTO_TEST_SUITE_END()

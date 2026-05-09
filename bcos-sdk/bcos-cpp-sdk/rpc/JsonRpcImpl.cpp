@@ -544,8 +544,8 @@ void JsonRpcImpl::getGroupInfo(const std::string& _groupID, RespFunc _respFunc)
     }
 
     auto jsonString = jsonResp.toJsonString();
-    auto jsonData = std::make_shared<bytes>(jsonString.begin(), jsonString.end());
-    _respFunc(nullptr, jsonData);
+    bcos::bytes jsonData(jsonString.begin(), jsonString.end());
+    _respFunc(nullptr, std::move(jsonData));
 
     RPCIMPL_LOG(INFO) << LOG_BADGE("getGroupInfo") << LOG_BADGE("get group info from cache")
                       << LOG_KV("hitCache", hitCache) << LOG_KV("response", jsonString);

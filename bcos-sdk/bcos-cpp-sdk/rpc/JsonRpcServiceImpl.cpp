@@ -38,7 +38,7 @@ std::string JsonRpcServiceImpl::sendTransaction(const bcos::crypto::KeyPairInter
         BCOS_LOG(TRACE) << LOG_BADGE("JsonRpcServiceImpl::sendTransaction")
                         << LOG_DESC("group not exist") << LOG_KV("groupID", _groupID);
         auto error = BCOS_ERROR_PTR(-1, "group not exist, groupID: " + _groupID);
-        _respFunc(std::move(error), nullptr);
+        _respFunc(std::move(error), bcos::bytes{});
         return std::string("");
     }
 

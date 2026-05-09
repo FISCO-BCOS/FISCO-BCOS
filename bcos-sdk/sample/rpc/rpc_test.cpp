@@ -116,7 +116,7 @@ void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg)
         sdk->start();
         auto rpc = sdk->jsonRpc();
         rpc->getBlockNumber(
-            "group0", "", [](bcos::Error::Ptr error, std::shared_ptr<bcos::bytes> resp) {});
+            "group0", "", [](bcos::Error::Ptr error, bcos::bytes resp) {});
         usleep(100);
         sdk->stop();
         sdk.reset(nullptr);
