@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(test_HandshakeRequest)
 
     // decode
     HandshakeRequest decodedRequest;
-    decodedRequest.decode(*encodedData);
+    decodedRequest.decode(bcos::ref(encodedData));
     BOOST_CHECK_EQUAL(
         request.protocol().protocolModuleID(), decodedRequest.protocol().protocolModuleID());
     BOOST_CHECK_EQUAL(request.protocol().minVersion(), decodedRequest.protocol().minVersion());

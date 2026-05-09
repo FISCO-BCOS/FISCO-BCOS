@@ -19,13 +19,12 @@
  */
 
 #pragma once
-#include <bcos-framework/Common.h>
-#include <bcos-framework/protocol/ProtocolInfo.h>
+#include "bcos-framework/protocol/ProtocolInfo.h"
+#include "bcos-utilities/Common.h"
 #include <json/json.h>
 #include <memory>
-namespace bcos
-{
-namespace rpc
+
+namespace bcos::rpc
 {
 class HandshakeRequest
 {
@@ -38,7 +37,7 @@ public:
         m_protocol = std::const_pointer_cast<bcos::protocol::ProtocolInfo>(_protocol);
     }
 
-    virtual std::shared_ptr<bcos::bytes> encode() const
+    bcos::bytes encode() const
     {
         Json::Value request;
         request["minVersion"] = m_protocol->minVersion();
@@ -46,20 +45,21 @@ public:
         request["moduleID"] = m_protocol->protocolModuleID();
         Json::FastWriter fastWriter;
         auto requestStr = fastWriter.write(request);
-        return std::make_shared<bcos::bytes>(requestStr.begin(), requestStr.end());
+        return bcos::bytes(requestStr.begin(), requestStr.end());
     }
 
-    virtual bool decode(bcos::bytes const& _data)
+    bool decode(bcos::bytesConstRef _data)
     {
-        std::string dataStr(_data.begin(), _data.end());
+        auto const* begin = (const char*)_data.data();
+        auto const* end = begin + _data.size();
         try
         {
             Json::Reader reader;
             Json::Value request;
-            if (!reader.parse(dataStr, request))
+            if (!reader.parse(begin, end, request))
             {
                 BCOS_LOG(WARNING) << LOG_DESC("HandshakeRequest: invalid json object")
-                                  << LOG_KV("data", dataStr);
+                                  << LOG_KV("data", std::string_view(begin, _data.size()));
                 return false;
             }
             // get the moduleID
@@ -67,7 +67,8 @@ public:
             if (moduleID > (uint32_t)(bcos::protocol::ProtocolModuleID::MAX_PROTOCOL_MODULE))
             {
                 BCOS_LOG(WARNING) << LOG_DESC("HandshakeRequest: invalid moduleID")
-                                  << LOG_KV("moduleID", moduleID) << LOG_KV("data", dataStr);
+                                  << LOG_KV("moduleID", moduleID)
+                                  << LOG_KV("data", std::string_view(begin, _data.size()));
                 return false;
             }
             m_protocol->setProtocolModuleID((bcos::protocol::ProtocolModuleID)(moduleID));
@@ -85,7 +86,7 @@ public:
         {
             BCOS_LOG(WARNING) << LOG_DESC("HandshakeRequest decode exception")
                               << LOG_KV("message", boost::diagnostic_information(e))
-                              << LOG_KV("data", dataStr);
+                              << LOG_KV("data", std::string_view(begin, _data.size()));
         }
         return false;
     }
@@ -94,5 +95,4 @@ public:
 private:
     bcos::protocol::ProtocolInfo::Ptr m_protocol;
 };
-}  // namespace rpc
-}  // namespace bcos
+}  // namespace bcos::rpc
