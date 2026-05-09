@@ -23,11 +23,11 @@
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-utilities/Common.h>
-#include <chrono>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_arena.h>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <chrono>
 #include <random>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
@@ -205,8 +205,8 @@ void FrontService::start()
 
     // try to getNodeIDs from gateway
     auto self = std::weak_ptr<FrontService>(shared_from_this());
-    m_gatewayInterface->asyncGetGroupNodeInfo(
-        m_groupID, [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
+    m_gatewayInterface->asyncGetGroupNodeInfo(m_groupID,
+        [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
             if (_error)
             {
                 FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo failed")
@@ -626,10 +626,10 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
                 bytes buffer(message.payload().begin(), message.payload().end());
 
                 m_taskArena.execute([&]() mutable {
-                    m_asyncGroup.run(
-                        [uuid, callback = std::move(callback), buffer = std::move(buffer), _nodeID] {
-                            callback(_nodeID, uuid, bytesConstRef(buffer.data(), buffer.size()));
-                        });
+                    m_asyncGroup.run([uuid, callback = std::move(callback),
+                                         buffer = std::move(buffer), _nodeID] {
+                        callback(_nodeID, uuid, bytesConstRef(buffer.data(), buffer.size()));
+                    });
                 });
             }
             else
@@ -685,20 +685,19 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
 {
     FrontMessage message;
     message.setModuleID(_moduleID);
-    message.setUuid(bytesConstRef(
-        reinterpret_cast<const bcos::byte*>(_uuid.data()), _uuid.size()));
+    message.setUuid(bytesConstRef(reinterpret_cast<const bcos::byte*>(_uuid.data()), _uuid.size()));
     message.setPayload(_data);
     if (isResponse)
     {
         message.setResponse();
     }
 
-    auto buffer = std::make_shared<bytes>();
-    message.encode(*buffer);
+    bytes buffer;
+    message.encode(buffer);
 
     // call gateway interface to send the message
     m_gatewayInterface->asyncSendMessageByNodeID(m_groupID, _moduleID, m_nodeID, std::move(_nodeID),
-        bytesConstRef(buffer->data(), buffer->size()), [_receiveMsgCallback](Error::Ptr _error) {
+        bytesConstRef(buffer.data(), buffer.size()), [_receiveMsgCallback](Error::Ptr _error) {
             if (_receiveMsgCallback)
             {
                 _receiveMsgCallback(std::move(_error));
