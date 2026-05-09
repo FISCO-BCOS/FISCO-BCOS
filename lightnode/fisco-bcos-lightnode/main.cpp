@@ -102,8 +102,7 @@ static auto startSyncerThread(bcos::concepts::ledger::Ledger auto fromLedger,
 
                         auto message = wsService->messageFactory()->buildMessage();
                         message->setPacketType(bcos::protocol::MessageType::BLOCK_NOTIFY);
-                        message->setPayload(
-                            std::make_shared<bcos::bytes>(resp.begin(), resp.end()));
+                        message->setPayload(bcos::bytes(resp.begin(), resp.end()));
 
                         for (auto& session : sessions)
                         {
