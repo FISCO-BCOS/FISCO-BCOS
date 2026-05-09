@@ -685,7 +685,8 @@ void FrontService::sendMessage(int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
 {
     FrontMessage message;
     message.setModuleID(_moduleID);
-    message.setUuid(bytes(_uuid.begin(), _uuid.end()));
+    message.setUuid(bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(_uuid.data()), _uuid.size()));
     message.setPayload(_data);
     if (isResponse)
     {

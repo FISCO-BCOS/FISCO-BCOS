@@ -57,7 +57,7 @@ public:
     void setExt(uint16_t _ext);
 
     bytesConstRef uuid();
-    void setUuid(bytes _uuid);
+    void setUuid(bytesConstRef _uuid);
 
     bytesConstRef payload();
     void setPayload(bytesConstRef _payload);
@@ -72,7 +72,7 @@ public:
     static uint16_t tryDecodeModuleID(bytesConstRef _buffer);
 
 private:
-    bytes m_uuid;
+    bytesConstRef m_uuid;
     bytesConstRef m_payload;
     uint16_t m_moduleID = 0;
     uint16_t m_ext = 0;

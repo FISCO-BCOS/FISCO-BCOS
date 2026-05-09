@@ -46,12 +46,12 @@ void FrontMessage::setExt(uint16_t _ext)
 
 bytesConstRef FrontMessage::uuid()
 {
-    return bcos::ref(m_uuid);
+    return m_uuid;
 }
 
-void FrontMessage::setUuid(bytes _uuid)
+void FrontMessage::setUuid(bytesConstRef _uuid)
 {
-    m_uuid = std::move(_uuid);
+    m_uuid = _uuid;
 }
 
 bytesConstRef FrontMessage::payload()
@@ -96,7 +96,7 @@ bool bcos::front::FrontMessage::encodeHeader(bytes& buffer)
     buffer.insert(buffer.end(), (byte*)&uuidLength, (byte*)&uuidLength + 1);
     if (uuidLength > 0)
     {
-        buffer.insert(buffer.end(), m_uuid.begin(), m_uuid.end());
+        buffer.insert(buffer.end(), m_uuid.data(), m_uuid.data() + m_uuid.size());
     }
     buffer.insert(buffer.end(), (byte*)&ext, (byte*)&ext + 2);
 
@@ -122,7 +122,7 @@ ssize_t FrontMessage::decode(bytesConstRef _buffer)
         return MessageDecodeStatus::MESSAGE_ERROR;
     }
 
-    m_uuid.clear();
+    m_uuid.reset();
     m_payload.reset();
 
     int32_t offset = 0;
@@ -135,7 +135,7 @@ ssize_t FrontMessage::decode(bytesConstRef _buffer)
 
     if (uuidLength > 0)
     {
-        m_uuid.assign(&_buffer[offset], &_buffer[offset] + uuidLength);
+        m_uuid = bytesConstRef(&_buffer[offset], uuidLength);
         offset += uuidLength;
     }
 

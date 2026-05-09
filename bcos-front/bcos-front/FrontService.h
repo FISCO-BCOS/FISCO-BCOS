@@ -19,7 +19,6 @@
  */
 
 #pragma once
-#include "FrontMessage.h"
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
@@ -28,7 +27,6 @@
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
-#include <utility>
 
 namespace bcos::front
 {

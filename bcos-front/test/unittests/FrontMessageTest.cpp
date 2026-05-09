@@ -53,7 +53,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_1)
 
     message.setModuleID(moduleID);
     message.setExt(ext);
-    message.setUuid(bytes(uuid.begin(), uuid.end()));
+    message.setUuid(bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(uuid.data()), uuid.size()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message.setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -89,7 +90,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_2)
 
     message.setModuleID(moduleID);
     message.setExt(ext);
-    message.setUuid(bytes(uuid.begin(), uuid.end()));
+    message.setUuid(bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(uuid.data()), uuid.size()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message.setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -125,7 +127,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_3)
 
     message.setModuleID(moduleID);
     message.setExt(ext);
-    message.setUuid(bytes(uuid.begin(), uuid.end()));
+    message.setUuid(bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(uuid.data()), uuid.size()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message.setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -182,7 +185,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_4)
 
     message.setModuleID(moduleID);
     message.setExt(ext);
-    message.setUuid(bytes(uuid.begin(), uuid.end()));
+    message.setUuid(bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(uuid.data()), uuid.size()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message.setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
@@ -205,7 +209,8 @@ BOOST_AUTO_TEST_CASE(testFrontMessage_5)
     std::string payload = std::string(1000, 'x');
 
     message.setModuleID(moduleID);
-    message.setUuid(bytes(uuid.begin(), uuid.end()));
+    message.setUuid(bytesConstRef(
+        reinterpret_cast<const bcos::byte*>(uuid.data()), uuid.size()));
     auto payloadPtr = std::make_shared<bytes>(payload.begin(), payload.end());
     message.setPayload(bytesConstRef(payloadPtr->data(), payloadPtr->size()));
 
