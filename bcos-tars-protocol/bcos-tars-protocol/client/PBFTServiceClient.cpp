@@ -218,7 +218,7 @@ void PBFTServiceClient::notifyConnectedNodes(bcos::crypto::NodeIDSet const& _con
         std::function<void(bcos::Error::Ptr _error)> m_callback;
     };
 
-    std::vector<vector<tars::Char>> tarsConnectedNodes;
+    std::vector<std::vector<tars::Char>> tarsConnectedNodes;
     for (auto const& it : _connectedNodes)
     {
         auto nodeID = it->data();
@@ -258,7 +258,7 @@ bcostars::PBFTServiceClient::~PBFTServiceClient() {}
 void bcostars::PBFTServiceClient::start() {}
 void bcostars::PBFTServiceClient::stop() {}
 bcostars::BlockSyncServiceClient::BlockSyncServiceClient(bcostars::PBFTServicePrx _proxy)
-    : PBFTServiceClient(_proxy)
+  : PBFTServiceClient(_proxy)
 {}
 bcostars::BlockSyncServiceClient::~BlockSyncServiceClient() = default;
 void bcostars::PBFTServiceClient::notifyHighestSyncingNumber(bcos::protocol::BlockNumber _number)

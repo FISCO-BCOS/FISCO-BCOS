@@ -357,7 +357,7 @@ void bcostars::TxPoolServiceClient::notifyConnectedNodes(
         std::function<void(bcos::Error::Ptr _error)> m_callback;
     };
 
-    std::vector<vector<tars::Char>> tarsConnectedNodes;
+    std::vector<std::vector<tars::Char>> tarsConnectedNodes;
     for (auto const& it : _connectedNodes)
     {
         auto nodeID = it->data();

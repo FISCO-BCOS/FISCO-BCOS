@@ -313,7 +313,7 @@ void bcostars::GatewayServiceClient::asyncSendMessageByTopic(const std::string& 
     {
         return;
     }
-    vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
+    std::vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
     m_prx->tars_set_timeout(c_amopTimeout)
         ->async_asyncSendMessageByTopic(new Callback(_respFunc), _topic, tarsRequestData);
 }
@@ -327,7 +327,7 @@ void bcostars::GatewayServiceClient::asyncSendBroadcastMessageByTopic(
     {
         return;
     }
-    vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
+    std::vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
     m_prx->async_asyncSendBroadcastMessageByTopic(nullptr, _topic, tarsRequestData);
 }
 void bcostars::GatewayServiceClient::asyncSubscribeTopic(std::string const& _clientID,
