@@ -283,7 +283,7 @@ void bcostars::GatewayServiceClient::asyncSendMessageByTopic(const std::string& 
           : m_callback(callback)
         {}
         void callback_asyncSendMessageByTopic(const bcostars::Error& ret, tars::Int32 _type,
-            const vector<tars::Char>& _responseData) override
+            const std::vector<tars::Char>& _responseData) override
         {
             s_tarsTimeoutCount.store(0);
             auto data = bcos::bytesConstRef(
@@ -293,7 +293,7 @@ void bcostars::GatewayServiceClient::asyncSendMessageByTopic(const std::string& 
         void callback_asyncSendMessageByTopic_exception(tars::Int32 ret) override
         {
             s_tarsTimeoutCount++;
-            return m_callback(toBcosError(ret), 0, {});
+            m_callback(toBcosError(ret), 0, {});
         }
 
     private:
