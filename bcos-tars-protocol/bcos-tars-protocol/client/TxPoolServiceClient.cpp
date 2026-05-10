@@ -142,7 +142,7 @@ std::tuple<std::vector<bcos::protocol::TransactionMetaData::Ptr>,
     std::vector<bcos::protocol::TransactionMetaData::Ptr>>
 bcostars::TxPoolServiceClient::sealTxs(uint64_t _txsLimit)
 {
-    vector<vector<tars::Char>> tarsAvoidTxs;
+    std::vector<std::vector<tars::Char>> tarsAvoidTxs;
     auto txs = std::make_shared<bcostars::protocol::BlockImpl>();
     auto sysTxs = std::make_shared<bcostars::protocol::BlockImpl>();
     m_proxy->asyncSealTxs(_txsLimit, tarsAvoidTxs, txs->inner(), sysTxs->inner());
@@ -187,7 +187,7 @@ void bcostars::TxPoolServiceClient::asyncMarkTxs(const bcos::crypto::HashList& _
         std::function<void(bcos::Error::Ptr)> m_callback;
     };
 
-    vector<vector<tars::Char>> txHashList;
+    std::vector<std::vector<tars::Char>> txHashList;
     for (auto& it : _txsHash)
     {
         txHashList.push_back(std::vector<char>(it.begin(), it.end()));
@@ -240,9 +240,9 @@ void bcostars::TxPoolServiceClient::asyncFillBlock(bcos::crypto::HashListPtr _tx
         {}
 
         void callback_asyncFillBlock(
-            const bcostars::Error& ret, const vector<bcostars::Transaction>& filled) override
+            const bcostars::Error& ret, const std::vector<bcostars::Transaction>& filled) override
         {
-            auto mutableFilled = const_cast<vector<bcostars::Transaction>*>(&filled);
+            auto mutableFilled = const_cast<std::vector<bcostars::Transaction>*>(&filled);
             auto txs = std::make_shared<bcos::protocol::ConstTransactions>();
             for (auto&& it : *mutableFilled)
             {
@@ -263,7 +263,7 @@ void bcostars::TxPoolServiceClient::asyncFillBlock(bcos::crypto::HashListPtr _tx
         bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     };
 
-    vector<vector<tars::Char>> hashList;
+    std::vector<std::vector<tars::Char>> hashList;
     for (auto hashData : *_txsHash)
     {
         hashList.emplace_back(hashData.begin(), hashData.end());
@@ -294,7 +294,7 @@ void bcostars::TxPoolServiceClient::asyncNotifyBlockResult(bcos::protocol::Block
         std::function<void(bcos::Error::Ptr)> m_callback;
     };
 
-    vector<bcostars::TransactionSubmitResult> resultList;
+    std::vector<bcostars::TransactionSubmitResult> resultList;
     for (auto& it : *_txsResult)
     {
         resultList.emplace_back(

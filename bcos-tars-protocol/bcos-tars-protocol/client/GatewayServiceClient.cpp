@@ -104,7 +104,7 @@ void bcostars::GatewayServiceClient::asyncGetPeers(std::function<void(
 
         void callback_asyncGetPeers(const bcostars::Error& ret,
             const bcostars::GatewayInfo& _localInfo,
-            const vector<bcostars::GatewayInfo>& _peers) override
+            const std::vector<bcostars::GatewayInfo>& _peers) override
         {
             s_tarsTimeoutCount.store(0);
             auto localGatewayInfo = fromTarsGatewayInfo(_localInfo);

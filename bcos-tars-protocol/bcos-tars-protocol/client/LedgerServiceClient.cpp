@@ -93,7 +93,7 @@ void LedgerServiceClient::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber 
           : m_callback(_callback)
         {}
         void callback_asyncGetBlockHashByNumber(
-            const bcostars::Error& ret, const vector<tars::Char>& _blockHash) override
+            const bcostars::Error& ret, const std::vector<tars::Char>& _blockHash) override
         {
             if (_blockHash.size() >= bcos::crypto::HashType::SIZE)
             {
@@ -159,8 +159,8 @@ void LedgerServiceClient::asyncGetBatchTxsByHashList(bcos::crypto::HashListPtr _
         {}
 
         void callback_asyncGetBatchTxsByHashList(const bcostars::Error& ret,
-            const vector<bcostars::Transaction>& _txs,
-            const map<std::string, vector<std::string>>& _merkleProofList) override
+            const std::vector<bcostars::Transaction>& _txs,
+            const std::map<std::string, std::vector<std::string>>& _merkleProofList) override
         {
             // decode the txsList
             auto bcosTxsList = std::make_shared<bcos::protocol::Transactions>();

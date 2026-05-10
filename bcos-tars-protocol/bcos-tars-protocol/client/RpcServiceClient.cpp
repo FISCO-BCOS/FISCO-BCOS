@@ -131,7 +131,7 @@ void bcostars::RpcServiceClient::asyncNotifyAMOPMessage(int16_t _type, std::stri
         {}
 
         void callback_asyncNotifyAMOPMessage(
-            const bcostars::Error& ret, const vector<tars::Char>& _responseData) override
+            const bcostars::Error& ret, const std::vector<tars::Char>& _responseData) override
         {
             s_tarsTimeoutCount.store(0);
             auto responseData =
@@ -161,7 +161,7 @@ void bcostars::RpcServiceClient::asyncNotifyAMOPMessage(int16_t _type, std::stri
     {
         return;
     }
-    vector<tars::Char> request(_data.begin(), _data.end());
+    std::vector<tars::Char> request(_data.begin(), _data.end());
     m_prx->tars_set_timeout(c_amopTimeout)
         ->async_asyncNotifyAMOPMessage(new Callback(_callback), _type, _topic, request);
 }

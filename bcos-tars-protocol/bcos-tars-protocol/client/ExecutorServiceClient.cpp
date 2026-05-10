@@ -636,7 +636,7 @@ void ExecutorServiceClient::getABI(
         new Callback(m_callbackPool, std::move(callback)), std::string(contract));
 }
 
-bcos::task::Task<optional<bcos::storage::Entry>> ExecutorServiceClient::getPendingStorageAt(
+bcos::task::Task<std::optional<bcos::storage::Entry>> ExecutorServiceClient::getPendingStorageAt(
     std::string_view address, std::string_view key, bcos::protocol::BlockNumber number)
 {
     co_return std::nullopt;

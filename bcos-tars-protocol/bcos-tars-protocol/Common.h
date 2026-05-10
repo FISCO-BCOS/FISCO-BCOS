@@ -65,11 +65,9 @@ protected:
     SizeType _buf_len;
     std::function<ByteType*(BufferWriter&, size_t)> _reserve;
 
-private:
-    BufferWriter(const BufferWriter&);
-    BufferWriter& operator=(const BufferWriter& buf);
-
 public:
+    BufferWriter(const BufferWriter&) = delete;
+    BufferWriter& operator=(const BufferWriter& buf) = delete;
     BufferWriter() : _buf(NULL), _len(0), _buf_len(0), _reserve({})
     {
 #ifndef GEN_PYTHON_MASK
@@ -111,7 +109,7 @@ public:
         _buf_len = 0;
         _len = 0;
     }
-    void swap(BufferWriter& buf)
+    void swap(BufferWriter& buf) noexcept
     {
         buf._buffer.swap(_buffer);
         std::swap(_buf, buf._buf);
@@ -143,7 +141,7 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
     }
     // recover the nodeProtocolVersion
-    auto& protocolInfo = _tarsNodeInfo.protocolInfo;
+    const auto& protocolInfo = _tarsNodeInfo.protocolInfo;
     auto bcosProtocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
         (bcos::protocol::ProtocolModuleID)protocolInfo.moduleID,
         (bcos::protocol::ProtocolVersion)protocolInfo.minVersion,
@@ -281,7 +279,7 @@ inline std::vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
 {
     // set consensusNodeList
     std::vector<bcostars::ConsensusNode> tarsConsensusNodeList;
-    for (auto node : _nodeList)
+    for (const auto& node : _nodeList)
     {
         bcostars::ConsensusNode consensusNode;
         consensusNode.nodeID.assign(node.nodeID->data().begin(), node.nodeID->data().end());
