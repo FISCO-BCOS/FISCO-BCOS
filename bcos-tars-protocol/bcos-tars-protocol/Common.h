@@ -232,7 +232,7 @@ inline bcostars::GroupInfo toTarsGroupInfo(bcos::group::GroupInfo::Ptr _groupInf
 
 inline bcos::consensus::ConsensusNodeList toConsensusNodeList(
     bcos::crypto::KeyFactory::Ptr _keyFactory, bcos::consensus::Type type,
-    const vector<bcostars::ConsensusNode>& _tarsConsensusNodeList)
+    const std::vector<bcostars::ConsensusNode>& _tarsConsensusNodeList)
 {
     bcos::consensus::ConsensusNodeList consensusNodeList;
     for (auto const& node : _tarsConsensusNodeList)
@@ -276,11 +276,11 @@ inline bcos::ledger::LedgerConfig::Ptr toLedgerConfig(
     return ledgerConfig;
 }
 
-inline vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
+inline std::vector<bcostars::ConsensusNode> toTarsConsensusNodeList(
     bcos::consensus::ConsensusNodeList const& _nodeList)
 {
     // set consensusNodeList
-    vector<bcostars::ConsensusNode> tarsConsensusNodeList;
+    std::vector<bcostars::ConsensusNode> tarsConsensusNodeList;
     for (auto node : _nodeList)
     {
         bcostars::ConsensusNode consensusNode;
