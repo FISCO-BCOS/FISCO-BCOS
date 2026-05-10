@@ -58,11 +58,11 @@ public:
         std::string& _syncInfo, tars::TarsCurrentPtr _current) override;
 
     bcostars::Error asyncNotifyConsensusMessage(std::string const& _uuid,
-        const vector<tars::Char>& _nodeId, const vector<tars::Char>& _data,
+        const std::vector<tars::Char>& _nodeId, const std::vector<tars::Char>& _data,
         tars::TarsCurrentPtr _current) override;
 
     bcostars::Error asyncNotifyBlockSyncMessage(std::string const& _uuid,
-        const vector<tars::Char>& _nodeId, const vector<tars::Char>& _data,
+        const std::vector<tars::Char>& _nodeId, const std::vector<tars::Char>& _data,
         tars::TarsCurrentPtr _current) override;
 
     // Note: since the blockSync module is integrated with the PBFT, this interfaces is useless now
@@ -71,11 +71,11 @@ public:
 
     // Note: since the sealer module is integrated with the PBFT, the interface is useless now
     bcostars::Error asyncSubmitProposal(bool _containSysTxs, const bcostars::Block& _proposalData,
-        tars::Int64 _proposalIndex, const vector<tars::Char>& _proposalHash,
+        tars::Int64 _proposalIndex, const std::vector<tars::Char>& _proposalHash,
         tars::TarsCurrentPtr _current) override;
 
     bcostars::Error asyncNotifyConnectedNodes(
-        const vector<vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current) override
+        const std::vector<std::vector<tars::Char>>& connectedNodes, tars::TarsCurrentPtr current) override
     {
         current->setResponse(false);
 

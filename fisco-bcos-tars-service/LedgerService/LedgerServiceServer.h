@@ -37,28 +37,28 @@ public:
     void initialize() override {}
     void destroy() override {}
 
-    bcostars::Error asyncGetBatchTxsByHashList(const vector<vector<tars::Char> >& _txsHashList,
-        tars::Bool _withProof, vector<bcostars::Transaction>& _transactions,
-        map<std::string, vector<std::string> >& _merkleProofList,
+    bcostars::Error asyncGetBatchTxsByHashList(const std::vector<std::vector<tars::Char> >& _txsHashList,
+        tars::Bool _withProof, std::vector<bcostars::Transaction>& _transactions,
+        std::map<std::string, std::vector<std::string> >& _merkleProofList,
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetBlockDataByNumber(tars::Int64 _blockNumber, tars::Int64 _blockFlag,
         bcostars::Block& _block, tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetBlockHashByNumber(tars::Int64 _blockNumber,
-        vector<tars::Char>& _blockHash, tars::TarsCurrentPtr current) override;
+        std::vector<tars::Char>& _blockHash, tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetBlockNumber(
         tars::Int64& _blockNumber, tars::TarsCurrentPtr current) override;
-    bcostars::Error asyncGetBlockNumberByHash(const vector<tars::Char>& _blockHash,
+    bcostars::Error asyncGetBlockNumberByHash(const std::vector<tars::Char>& _blockHash,
         tars::Int64& _blockNumber, tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetNodeListByType(const std::string& _type,
-        vector<bcostars::ConsensusNode>& _nodeList, tars::TarsCurrentPtr current) override;
+        std::vector<bcostars::ConsensusNode>& _nodeList, tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetSystemConfigByKey(const std::string& _key, std::string& _value,
         tars::Int64& _blockNumber, tars::TarsCurrentPtr current) override;
     bcostars::Error asyncGetTotalTransactionCount(tars::Int64& _totalTxCount,
         tars::Int64& _failedTxCount, tars::Int64& _latestBlockNumber,
         tars::TarsCurrentPtr current) override;
 
-    bcostars::Error asyncGetTransactionReceiptByHash(const vector<tars::Char>& _txHash,
-        tars::Bool _withProof, bcostars::TransactionReceipt& _receipt, vector<std::string>& _proof,
+    bcostars::Error asyncGetTransactionReceiptByHash(const std::vector<tars::Char>& _txHash,
+        tars::Bool _withProof, bcostars::TransactionReceipt& _receipt, std::vector<std::string>& _proof,
         tars::TarsCurrentPtr current) override;
 
 private:

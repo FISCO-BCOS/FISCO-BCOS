@@ -38,14 +38,14 @@ bcostars::Error RpcServiceServer::asyncNotifyGroupInfo(
 }
 
 bcostars::Error RpcServiceServer::asyncNotifyAMOPMessage(tars::Int32 _type,
-    const std::string& _topic, const vector<tars::Char>& _requestData, vector<tars::Char>&,
+    const std::string& _topic, const std::vector<tars::Char>& _requestData, std::vector<tars::Char>&,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_rpcInitializer->rpc()->asyncNotifyAMOPMessage(_type, _topic,
         bcos::bytesConstRef((const bcos::byte*)_requestData.data(), _requestData.size()),
         [current](bcos::Error::Ptr&& _error, bcos::bytesPointer _responseData) {
-            vector<tars::Char> response;
+            std::vector<tars::Char> response;
             if (_responseData)
             {
                 response.assign(_responseData->begin(), _responseData->end());

@@ -16,14 +16,14 @@ bcostars::Error GatewayServiceServer::asyncNotifyGroupInfo(
 }
 
 bcostars::Error GatewayServiceServer::asyncSendMessageByTopic(const std::string& _topic,
-    const vector<tars::Char>& _data, tars::Int32& _type, vector<tars::Char>&,
+    const std::vector<tars::Char>& _data, tars::Int32& _type, std::vector<tars::Char>&,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_gatewayInitializer->gateway()->asyncSendMessageByTopic(_topic,
         bcos::bytesConstRef((const bcos::byte*)_data.data(), _data.size()),
         [current](bcos::Error::Ptr&& _error, int16_t _type, bcos::bytesConstRef _responseData) {
-            vector<tars::Char> response;
+            std::vector<tars::Char> response;
             if (_responseData)
             {
                 response.assign(_responseData.begin(), _responseData.end());
@@ -44,7 +44,7 @@ bcostars::Error GatewayServiceServer::asyncSubscribeTopic(
     return {};
 }
 bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
-    const std::string& _topic, const vector<tars::Char>& _data, tars::TarsCurrentPtr current)
+    const std::string& _topic, const std::vector<tars::Char>& _data, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_gatewayInitializer->gateway()->asyncSendBroadcastMessageByTopic(
@@ -55,7 +55,7 @@ bcostars::Error GatewayServiceServer::asyncSendBroadcastMessageByTopic(
 }
 
 bcostars::Error GatewayServiceServer::asyncRemoveTopic(const std::string& _clientID,
-    const vector<std::string>& _topicList, tars::TarsCurrentPtr current)
+    const std::vector<std::string>& _topicList, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     m_gatewayInitializer->gateway()->asyncRemoveTopic(
@@ -108,8 +108,8 @@ bcostars::Error bcostars::GatewayServiceServer::asyncGetPeers(
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const std::string& groupID,
-    tars::Int32 moduleID, const vector<tars::Char>& srcNodeID, const vector<tars::Char>& dstNodeID,
-    const vector<tars::Char>& payload, tars::TarsCurrentPtr current)
+    tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID, const std::vector<tars::Char>& dstNodeID,
+    const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
     auto keyFactory = m_gatewayInitializer->keyFactory();
@@ -126,8 +126,8 @@ bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeID(const s
     return {};
 }
 bcostars::Error bcostars::GatewayServiceServer::asyncSendMessageByNodeIDs(
-    const std::string& groupID, tars::Int32 moduleID, const vector<tars::Char>& srcNodeID,
-    const vector<vector<tars::Char>>& dstNodeID, const vector<tars::Char>& payload,
+    const std::string& groupID, tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID,
+    const std::vector<std::vector<tars::Char>>& dstNodeID, const std::vector<tars::Char>& payload,
     tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
