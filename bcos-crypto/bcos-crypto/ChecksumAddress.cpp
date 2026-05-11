@@ -20,9 +20,9 @@
 #include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <fmt/format.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-#include <fmt/format.h>
 #include <cctype>
 #include <memory>
 #include <span>
@@ -136,7 +136,7 @@ evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexce
 std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept
 {
     auto address = newLegacyEVMAddress(sender, nonce);
-    auto view = std::span{address.bytes};
+    auto view = std::span<unsigned char, sizeof(address.bytes)>{address.bytes};
     std::string out;
     out.reserve(view.size() * 2);
     boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(out));
@@ -149,11 +149,11 @@ std::string newLegacyEVMAddressString(bytesConstRef sender, std::string const& n
     return newLegacyEVMAddressString(sender, uNonce);
 }
 
-std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl,
-    const std::string_view& _sender, bytesConstRef _init, u256 const& _salt)
+std::string newCreate2EVMAddress(bcos::crypto::Hash::Ptr _hashImpl, const std::string_view& _sender,
+    bytesConstRef _init, u256 const& _salt)
 {
-    auto hash = _hashImpl->hash(bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) +
-                                _hashImpl->hash(_init));
+    auto hash = _hashImpl->hash(
+        bytes{0xff} + fromHex(_sender) + toBigEndian(_salt) + _hashImpl->hash(_init));
 
     std::string hexAddress;
     hexAddress.reserve(40);
