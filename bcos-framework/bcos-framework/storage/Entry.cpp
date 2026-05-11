@@ -34,13 +34,20 @@ const char* Entry::data() const&
 }
 
 crypto::HashType Entry::hash(std::string_view table, std::string_view key,
-    const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
+    const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
+    std::optional<bcos::ledger::Features> features) const
 {
+    const bool enableHashCollisionFix =
+        features.has_value() &&
+        features->get(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
+
     bcos::crypto::HashType entryHash(0);
-    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_17_0_VERSION)
+    if (enableHashCollisionFix)
     {
         // FIB-99: Length-prefixed, status-aware hashing to prevent boundary
         // ambiguity and status ambiguity collisions in state root calculation.
+        // Gated by Features::Flag::bugfix_statestorage_hash_v3_17 (activated at V3_17_0),
+        // not by blockVersion, so the fix follows the bugfix-flag semantic.
         auto hasher = hashImpl.hasher();
         // FIB-99 preimage format (fixed across platforms):
         //   u32(tableLen) || table || u32(keyLen) || key || i8(status) || [data if MODIFIED]
@@ -85,7 +92,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         }
         }
     }
-    else if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    else if (blockVersion >= static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION))
     {
         auto hasher = hashImpl.hasher();
         hasher.update(table);

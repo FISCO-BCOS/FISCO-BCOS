@@ -23,6 +23,7 @@
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include <boost/test/unit_test.hpp>
+#include <optional>
 
 using namespace bcos;
 using namespace bcos::storage;
@@ -33,7 +34,7 @@ BOOST_AUTO_TEST_SUITE(FIB99_FIB105_StateRootTest)
 
 namespace
 {
-ledger::Features featuresWithFix()
+std::optional<ledger::Features> featuresWithFix()
 {
     ledger::Features features;
     features.set(ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
@@ -60,7 +61,8 @@ BOOST_AUTO_TEST_CASE(calculateStateRootRespectsBugfixFlag)
     constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
 
     ledger::Features noFix;
-    auto fix = featuresWithFix();
+    ledger::Features fix;
+    fix.set(ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
 
     auto rootLegacy =
         task::syncWait(scheduler_v1::calculateStateRoot(storage, v31, hashImpl, noFix));
@@ -86,8 +88,8 @@ BOOST_AUTO_TEST_CASE(boundaryAmbiguityFixedByFlag)
     Entry entryB;
     entryB.importFields({"d"});
 
-    ledger::Features noFix;
-    auto fix = featuresWithFix();
+    const std::optional<ledger::Features> noFix{ledger::Features{}};
+    const auto fix = featuresWithFix();
 
     // Legacy: hash("a" || "bc" || "d") == hash("ab" || "c" || "d") => collision.
     BOOST_CHECK_EQUAL(
@@ -112,8 +114,8 @@ BOOST_AUTO_TEST_CASE(statusAmbiguityFixedByFlag)
     Entry emptyModified;
     emptyModified.importFields({""});
 
-    ledger::Features noFix;
-    auto fix = featuresWithFix();
+    const std::optional<ledger::Features> noFix{ledger::Features{}};
+    const auto fix = featuresWithFix();
 
     BOOST_CHECK_EQUAL(deletedEntry.hash("tbl", "k", hashImpl, v31, noFix),
         emptyModified.hash("tbl", "k", hashImpl, v31, noFix));
@@ -123,9 +125,10 @@ BOOST_AUTO_TEST_CASE(statusAmbiguityFixedByFlag)
 }
 
 // ---------------------------------------------------------------------------
-// Backward compatibility: the legacy overload (no Features) and the new
-// overload with no flag set must produce identical hashes for all versions.
-// The new V3_17 fixed format is gated only by the flag, not by blockVersion.
+// Backward compatibility: the 4-arg overload (defaults to no Features) and the
+// 5-arg overload with std::nullopt or an empty-flags Features object must all
+// produce identical hashes. The new V3_17 fixed format is gated only by the
+// flag, never by blockVersion.
 // ---------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(backwardCompatibilityPreserved)
 {
@@ -141,10 +144,15 @@ BOOST_AUTO_TEST_CASE(backwardCompatibilityPreserved)
     constexpr auto v316 = static_cast<uint32_t>(protocol::BlockVersion::V3_16_4_VERSION);
     constexpr auto v317 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
 
-    ledger::Features noFix;
+    const std::optional<ledger::Features> nullopt;  // empty optional
+    const std::optional<ledger::Features> noFix{ledger::Features{}};
 
-    // Legacy overload and new overload without the flag must agree.
+    // 4-arg overload (defaults to nullopt) and 5-arg with nullopt agree.
     BOOST_CHECK_EQUAL(modifiedEntry.hash("t", "k", hashImpl, v31),
+        modifiedEntry.hash("t", "k", hashImpl, v31, nullopt));
+
+    // An empty Features (flag unset) is also equivalent to nullopt for hashing.
+    BOOST_CHECK_EQUAL(modifiedEntry.hash("t", "k", hashImpl, v31, nullopt),
         modifiedEntry.hash("t", "k", hashImpl, v31, noFix));
 
     // V3_0 path: MODIFIED hashes raw data, DELETED returns 0x1.
@@ -159,7 +167,7 @@ BOOST_AUTO_TEST_CASE(backwardCompatibilityPreserved)
     BOOST_CHECK_EQUAL(modOff_v31, modOff_v317);
 
     // Flag ON: produces a different (length-prefixed, status-aware) hash.
-    auto fix = featuresWithFix();
+    const auto fix = featuresWithFix();
     auto modOn_v31 = modifiedEntry.hash("t", "k", hashImpl, v31, fix);
     BOOST_CHECK_NE(modOff_v31, modOn_v31);
 

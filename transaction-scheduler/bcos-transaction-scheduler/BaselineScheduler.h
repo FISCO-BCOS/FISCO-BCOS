@@ -92,6 +92,10 @@ task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
     storage::Entry deletedEntry;
     deletedEntry.setStatus(storage::Entry::DELETED);
 
+    // Wrap once outside the parallel pipeline so the optional copy is paid only once,
+    // not per entry.
+    const std::optional<ledger::Features> featuresOpt(features);
+
     h256 totalHash;
     using KeyValueType = task::AwaitableReturnType<decltype(range.next())>;
     tbb::parallel_pipeline(tbb::this_task_arena::max_concurrency(),
@@ -115,7 +119,7 @@ task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
                     {
                         entry = std::addressof(deletedEntry);
                     }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion, features);
+                    return entry->hash(tableName, keyName, hashImpl, blockVersion, featuresOpt);
                 }) &
             tbb::make_filter<h256, void>(
                 tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
