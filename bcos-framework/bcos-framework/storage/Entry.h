@@ -147,8 +147,8 @@ public:
     }
 
     template <typename T>
-        requires(!EntryBufferInput<std::remove_cvref_t<T>> &&
-                 std::convertible_to<T, std::string_view>)
+        requires(
+            !EntryBufferInput<std::remove_cvref_t<T>> && std::convertible_to<T, std::string_view>)
     void set(T&& value)
     {
         set(std::string_view(std::forward<T>(value)));

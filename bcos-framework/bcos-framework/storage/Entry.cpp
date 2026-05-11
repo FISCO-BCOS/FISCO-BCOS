@@ -37,7 +37,58 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
 {
     bcos::crypto::HashType entryHash(0);
-    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
+    if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_17_0_VERSION)
+    {
+        // FIB-99: Length-prefixed, status-aware hashing to prevent boundary
+        // ambiguity and status ambiguity collisions in state root calculation.
+        auto hasher = hashImpl.hasher();
+        // Length-prefix table name (4 bytes little-endian)
+        uint32_t tableLen = static_cast<uint32_t>(table.size());
+        hasher.update(std::string_view(reinterpret_cast<const char*>(&tableLen), sizeof(tableLen)));
+        hasher.update(table);
+        // Length-prefix key (4 bytes little-endian)
+        uint32_t keyLen = static_cast<uint32_t>(key.size());
+        hasher.update(std::string_view(reinterpret_cast<const char*>(&keyLen), sizeof(keyLen)));
+        hasher.update(key);
+        // Include entry status as a byte to distinguish DELETED from empty MODIFIED
+        uint8_t statusByte = static_cast<uint8_t>(m_status);
+        hasher.update(
+            std::string_view(reinterpret_cast<const char*>(&statusByte), sizeof(statusByte)));
+
+        switch (m_status)
+        {
+        case MODIFIED:
+        {
+            auto data = get();
+            hasher.update(data);
+            hasher.final(entryHash);
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                STORAGE_LOG(TRACE)
+                    << "Entry hash v3.17+, dirty entry: " << table << " | " << toHex(key) << " | "
+                    << toHex(data) << LOG_KV("hash", entryHash.abridged());
+            }
+            break;
+        }
+        case DELETED:
+        {
+            hasher.final(entryHash);
+            if (c_fileLogLevel == TRACE) [[unlikely]]
+            {
+                STORAGE_LOG(TRACE) << "Entry hash v3.17+, deleted entry: " << table << " | "
+                                   << toHex(key) << LOG_KV("hash", entryHash.abridged());
+            }
+            break;
+        }
+        default:
+        {
+            STORAGE_LOG(DEBUG) << "Entry hash v3.17+, clean entry: " << table << " | " << toHex(key)
+                               << " | " << (int)m_status;
+            break;
+        }
+        }
+    }
+    else if (blockVersion >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
     {
         auto hasher = hashImpl.hasher();
         hasher.update(table);
@@ -63,16 +114,15 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
             hasher.final(entryHash);
             if (c_fileLogLevel == TRACE) [[unlikely]]
             {
-                STORAGE_LOG(TRACE) << "Entry hash, deleted entry: " << table << " | "
-                                   << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                STORAGE_LOG(TRACE) << "Entry hash, deleted entry: " << table << " | " << toHex(key)
+                                   << LOG_KV("hash", entryHash.abridged());
             }
             break;
         }
         default:
         {
-            STORAGE_LOG(DEBUG)
-                << "Entry hash, clean entry: " << table << " | " << toHex(key) << " | "
-                << (int)m_status;
+            STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
+                               << " | " << (int)m_status;
             break;
         }
         }

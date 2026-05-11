@@ -159,7 +159,7 @@ enum class BlockVersion : uint32_t
     V3_0_VERSION = 0x03000000,
     RC4_VERSION = 4,
     MIN_VERSION = RC4_VERSION,
-    MAX_VERSION = V3_16_5_VERSION,
+    MAX_VERSION = V3_17_0_VERSION,
 };
 
 enum class TransactionVersion : uint32_t

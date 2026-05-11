@@ -115,8 +115,7 @@ task::Task<h256> calculateStateRoot(
                     {
                         entry = std::addressof(deletedEntry);
                     }
-                    return entry->hash(tableName, keyName, hashImpl,
-                        static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION));
+                    return entry->hash(tableName, keyName, hashImpl, blockVersion);
                 }) &
             tbb::make_filter<h256, void>(
                 tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
