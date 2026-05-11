@@ -54,6 +54,7 @@
 #include "../precompiled/extension/ZkpPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "bcos-framework/ledger/EVMAccount.h"
+#include "bcos-framework/ledger/FeaturesStorage.h"
 
 #include <array>
 #include <cstring>
@@ -1696,8 +1697,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("ABI loaded") << LOG_KV("address", to)
-                                    << LOG_KV("selector", toHex(selector))
-                                    << LOG_KV("ABI", abiStr);
+                                    << LOG_KV("selector", toHex(selector)) << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)

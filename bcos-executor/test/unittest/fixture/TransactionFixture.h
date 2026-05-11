@@ -26,6 +26,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
@@ -116,15 +117,11 @@ public:
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto secretKeyBytes =
             fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
-        memcpy(keyPair->secretKey()->mutableData(),
-            secretKeyBytes.data(),
-            32);
+        memcpy(keyPair->secretKey()->mutableData(), secretKeyBytes.data(), 32);
         auto publicKeyBytes = fromHex(
             "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
             "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae");
-        memcpy(keyPair->publicKey()->mutableData(),
-            publicKeyBytes.data(),
-            64);
+        memcpy(keyPair->publicKey()->mutableData(), publicKeyBytes.data(), 64);
         boost::log::core::get()->set_logging_enabled(false);
         createSysTable(version);
         boost::log::core::get()->set_logging_enabled(true);

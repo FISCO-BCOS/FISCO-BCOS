@@ -184,6 +184,12 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_auth_table_squatting",
         "bugfix_v1_exec_error_gas_used",
         "bugfix_v1_precompiled_error_gas",
+        "bugfix_gas_payment_balance_precheck",
+        "bugfix_clamp_gas_left_on_error",
+        "bugfix_precompiled_feature_gate",
+        "bugfix_v1_executive_wrapper",
+        "bugfix_evm_storage_status",
+        "bugfix_statestorage_hash_v3_17",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -372,6 +378,20 @@ BOOST_AUTO_TEST_CASE(upgrade)
     for (auto feature : expect11)
     {
         BOOST_CHECK(features14.get(feature));
+    }
+
+    // 3.16.5 to 3.17.0: expect the six FIB-75/78/84/85-87/94/99-105 flags only
+    Features features15;
+    features15.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION,
+        bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    auto expect12 = std::to_array<std::string_view>(
+        {"bugfix_gas_payment_balance_precheck", "bugfix_clamp_gas_left_on_error",
+            "bugfix_precompiled_feature_gate", "bugfix_v1_executive_wrapper",
+            "bugfix_evm_storage_status", "bugfix_statestorage_hash_v3_17"});
+    BOOST_CHECK_EQUAL(validFlags(features15).size(), expect12.size());
+    for (auto feature : expect12)
+    {
+        BOOST_CHECK(features15.get(feature));
     }
 }
 
