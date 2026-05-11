@@ -319,34 +319,12 @@ private:
 
             // FIB-102: TOCTOU re-check of the discontinuity condition under
             // m_executeMutex. Reads of m_lastExecutedBlockNumber happen here only.
+            // Cache hits are already handled by the no-lock fast path above; this
+            // branch only logs the cache window for diagnostics before returning
+            // the discontinuity error.
             if (m_lastExecutedBlockNumber != -1 &&
                 blockHeader->number() - m_lastExecutedBlockNumber != 1)
             {
-                // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
-                // If the block has been executed, the result will be returned directly without
-                // error, which is used for the scenario of consensus and synchronous execution
-                // of a block at the same time.
-                {
-                    std::unique_lock resultsLock(m_resultsMutex);
-                    if (!m_results.empty())
-                    {
-                        auto number = blockHeader->number();
-                        auto frontNumber = m_results.front()->m_executedBlockHeader->number();
-                        auto backNumber = m_results.back()->m_executedBlockHeader->number();
-                        if (number <= frontNumber && number >= backNumber)
-                        {
-                            BASELINE_SCHEDULER_LOG(INFO)
-                                << "Block has been executed, return result directly";
-                            auto& result = m_results.at(frontNumber - number);
-                            co_return {nullptr, result->m_executedBlockHeader, result->m_sysBlock};
-                        }
-
-                        BASELINE_SCHEDULER_LOG(INFO)
-                            << "Block number out of cache range! front: " << frontNumber
-                            << " back: " << backNumber << " input: " << blockHeader->number();
-                    }
-                }
-
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         m_lastExecutedBlockNumber + 1, blockHeader->number());
@@ -431,22 +409,17 @@ private:
                     .m_block = std::move(block),
                     .m_sysBlock = sysBlock});
 
-            // FIB-103 / FIB-104: Re-check capacity under lock (TOCTOU), then commit
-            // the execution result in a strict order: push the view first (so we
-            // have a rollback target), then push the result; if push_front throws
-            // pop the view back. The view stack and m_results both belong to
-            // m_resultsMutex's invariant, so they share this critical section.
+            // FIB-103 / FIB-104: Commit the execution result in a strict order:
+            // push the view first (so we have a rollback target), then push the
+            // result; if push_front throws pop the view back. The view stack and
+            // m_results both belong to m_resultsMutex's invariant, so they share
+            // this critical section. The earlier backpressure check under
+            // m_resultsMutex is sufficient — m_executeMutex prevents any other
+            // execute from pushing in between, and commit can only shrink the
+            // queue, so the size cannot exceed MAX_PENDING_RESULTS here.
             {
                 std::unique_lock resultsLock(m_resultsMutex);
-                if (m_results.size() >= MAX_PENDING_RESULTS)
-                {
-                    auto message =
-                        fmt::format("Too many pending execution results: {}", m_results.size());
-                    BASELINE_SCHEDULER_LOG(WARNING) << message;
-                    co_return {
-                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                        nullptr, false};
-                }
+                assert(m_results.size() < MAX_PENDING_RESULTS);
 
                 m_multiLayerStorage.get().pushView(std::move(view));
                 try
@@ -597,17 +570,27 @@ private:
                     m_ledger.get(), result->m_transactions, result->m_block, prewriteStorage);
             }
 
-            // FIB-104: mergeBackStorage and the matching m_results.pop_back happen
-            // inside one m_resultsMutex critical section so the view stack and the
-            // result queue stay consistent w.r.t. any concurrent execute that's
-            // looking at them. mergeBackStorage internally pops the back of the
-            // view stack; we then pop m_results to match.
+            // FIB-104: mergeBackStorage is a heavy IO step (RocksDB / cache
+            // write). Holding m_resultsMutex across it would needlessly serialize
+            // coExecuteBlock against commit IO. The pop_back must follow a
+            // successful merge so that on failure the pending entry is retained
+            // for retry, but it does not have to share the same critical section.
+            //
+            // During the brief gap between mergeBackStorage's internal
+            // m_storages.pop_back and our m_results.pop_back, coExecuteBlock may
+            // see m_results.size() one larger than m_storages.size(); this is
+            // harmless because (a) fork() snapshots m_storages directly under its
+            // own mutex, (b) backpressure is only over-conservative by one, and
+            // (c) m_results.back() cannot change here — m_commitMutex guarantees
+            // a single committer.
             {
                 ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                std::unique_lock resultsLock(m_resultsMutex);
                 co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
+            }
 
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
                 if (m_results.empty() ||
                     m_results.back()->m_executedBlockHeader->number() != header->number())
                 {
