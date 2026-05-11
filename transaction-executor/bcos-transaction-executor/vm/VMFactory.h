@@ -40,7 +40,7 @@ DERIVE_BCOS_EXCEPTION(UnknownVMError);
 class VMFactory
 {
 public:
-    static VMInstance create(VMKind kind, bytesConstRef code, evmc_revision mode)
+    static VMInstance create(VMKind kind, bytesConstRef code)
     {
         switch (kind)
         {
@@ -51,7 +51,7 @@ public:
             {
                 return VMInstance{
                     std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
-                        mode, evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
+                        evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
             }
             catch (const std::exception& e)
             {

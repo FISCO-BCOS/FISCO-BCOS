@@ -25,10 +25,8 @@
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <evmc/instructions.h>
 #include <memory>
 
 namespace bcos

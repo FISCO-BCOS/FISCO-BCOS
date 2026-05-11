@@ -19,16 +19,18 @@ evmc_message bcos::executor_v1::newEVMCMessage(protocol::BlockNumber blockNumber
         .depth = 0,
         .gas = gasLimit,
         .recipient = recipientAddress,
-        .destination_ptr = nullptr,
-        .destination_len = 0,
         .sender = origin,
-        .sender_ptr = nullptr,
-        .sender_len = 0,
         .input_data = transaction.input().data(),
         .input_size = transaction.input().size(),
         .value = toEvmC(u256(transaction.value())),
         .create2_salt = {},
-        .code_address = recipientAddress};
+        .code_address = recipientAddress,
+        .code = nullptr,
+        .code_size = 0,
+        .destination_ptr = nullptr,
+        .destination_len = 0,
+        .sender_ptr = nullptr,
+        .sender_len = 0};
 
     if (blockNumber == 0 && transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
     {

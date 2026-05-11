@@ -23,9 +23,7 @@
 #include "../Common.h"
 #include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
-#include <evmone/advanced_analysis.hpp>
 #include <evmone/baseline.hpp>
-#include <evmone/vm.hpp>
 
 namespace bcos
 {
@@ -70,7 +68,6 @@ public:
     VMInstance& operator=(VMInstance) = delete;
 
     Result execute(HostContext& _hostContext, evmc_message* _msg);
-    Result execute(evmone::VM* vm, HostContext& _hostContext, evmc_message* _msg);
 
 private:
     /// The VM instance created with VMInstance-C <prefix>_create() function.

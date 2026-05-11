@@ -83,16 +83,18 @@ public:
             .depth = 0,
             .gas = 300 * 10000,
             .recipient = {},
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = {}};
+            .code_address = {},
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -136,16 +138,18 @@ BOOST_AUTO_TEST_CASE(FIB88_InsufficientBalanceConsumesAllGas)
             .depth = 0,
             .gas = GAS_LIMIT,
             .recipient = recipient,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = sender,
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = nullptr,
             .input_size = 0,
             .value = bcos::toEvmC(bcos::u256(1000)),  // value > balance
             .create2_salt = {},
-            .code_address = recipient};
+            .code_address = recipient,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -181,16 +185,18 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeRevertPreservesGas)
             .depth = 0,
             .gas = GAS_LIMIT,
             .recipient = nonExistentAddr,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = dummyInput.data(),
             .input_size = dummyInput.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = nonExistentAddr};
+            .code_address = nonExistentAddr,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -223,16 +229,18 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeStaticCallReturnsSuccess)
             .depth = 0,
             .gas = GAS_LIMIT,
             .recipient = nonExistentAddr,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = dummyInput.data(),
             .input_size = dummyInput.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = nonExistentAddr};
+            .code_address = nonExistentAddr,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -290,16 +298,18 @@ BOOST_AUTO_TEST_CASE(FIB91_AuthCheckInsideTryBlock)
             .depth = 0,
             .gas = 1000000,
             .recipient = helloworldAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = helloworldAddress};
+            .code_address = helloworldAddress,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -384,16 +394,18 @@ BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
             .depth = 0,
             .gas = GAS_LIMIT,
             .recipient = recipient,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = sender,
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = nullptr,
             .input_size = 0,
             .value = bcos::toEvmC(bcos::u256(1000)),
             .create2_salt = {},
-            .code_address = recipient};
+            .code_address = recipient,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>

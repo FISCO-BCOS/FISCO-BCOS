@@ -26,10 +26,10 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
-#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
@@ -55,7 +55,7 @@ namespace bcos::executor
 namespace
 {
 
-evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
+evmc_bytes32 evm_hash_fn(evmc_host_context* /*context*/, const uint8_t* data, size_t size)
 {
     return toEvmC(HostContext::hashImpl()->hash(bytesConstRef(data, size)));
 }
@@ -169,6 +169,24 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
 
     switch (_msg->kind)
     {
+    // Phase 1: EVMC_EOFCREATE is rejected as a defensive guard.
+    // This branch is unreachable in practice: EOF contracts can only exist on-chain if they were
+    // deployed via EOFCREATE, which this guard prevents. Therefore no EOF bytecode will ever
+    // generate this callback.
+    // gas_left=0 is intentional and matches standard EVM semantics for an invalid/unsupported
+    // opcode (all remaining gas is consumed). EVMC_REJECTED must NOT be used here — it is a
+    // VM-selection signal (negative status), not an EVM execution error.
+    case EVMC_EOFCREATE:
+    {
+        return evmc_result{.status_code = evmc_status_code(EVMC_INVALID_INSTRUCTION),
+            .gas_left = 0,
+            .gas_refund = 0,
+            .output_data = nullptr,
+            .output_size = 0,
+            .release = nullptr,
+            .create_address = {},
+            .padding = {}};
+    }
     case EVMC_CREATE2:
         request->createSalt = fromEvmC(_msg->create2_salt);
         if (features().get(

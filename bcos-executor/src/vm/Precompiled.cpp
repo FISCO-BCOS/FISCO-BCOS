@@ -22,10 +22,18 @@
 #include "../vm/Precompiled.h"
 #include "../Common.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "kzgPrecompiled.h"
-#include "wedpr-crypto/WedprBn128.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstring>
+#include <evmone_precompiles/blake2b.hpp>
+#include <evmone_precompiles/bn254.hpp>
+#include <evmone_precompiles/kzg.hpp>
+#include <evmone_precompiles/ripemd160.hpp>
+#include <evmone_precompiles/sha256.hpp>
+#include <intx/intx.hpp>
+#include <span>
 
 using namespace std;
 using namespace bcos;
@@ -66,8 +74,8 @@ void PrecompiledRegistrar::unregisterPricer(std::string const& _name)
     get()->m_pricers.erase(_name);
 }
 
-PrecompiledContract::PrecompiledContract(PrecompiledPricer const& _cost,
-    PrecompiledExecutor const& _exec, u256 const& _startingBlock)
+PrecompiledContract::PrecompiledContract(
+    PrecompiledPricer const& _cost, PrecompiledExecutor const& _exec, u256 const& _startingBlock)
   : m_cost(_cost), m_execute(_exec), m_startingBlock(_startingBlock)
 {}
 
@@ -147,8 +155,7 @@ PrecompiledPricer const& PrecompiledRegistrar::pricer(std::string const& _name)
 namespace bcos::precompiled
 {
 
-Precompiled::Precompiled(crypto::Hash::Ptr _hashImpl)
-  : m_hashImpl(std::move(_hashImpl))
+Precompiled::Precompiled(crypto::Hash::Ptr _hashImpl) : m_hashImpl(std::move(_hashImpl))
 {
     assert(m_hashImpl);
     m_precompiledGasFactory = std::make_shared<PrecompiledGasFactory>();
@@ -177,12 +184,18 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
 
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
-    return {true, bcos::crypto::sha256(_in).asBytes()};
+    bytes output(evmone::crypto::SHA256_HASH_SIZE, 0);
+    evmone::crypto::sha256(reinterpret_cast<std::byte*>(output.data()),
+        reinterpret_cast<const std::byte*>(_in.data()), _in.size());
+    return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in)
 {
-    return {true, h256(bcos::crypto::ripemd160(_in), h256::AlignRight).asBytes()};
+    bytes output(32, 0);
+    evmone::crypto::ripemd160(reinterpret_cast<std::byte*>(output.data() + 12),
+        reinterpret_cast<const std::byte*>(_in.data()), _in.size());
+    return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED(identity)(bytesConstRef _in)
@@ -284,51 +297,67 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 {
-    pair<bool, bytes> ret{false, bytes(64, 0)};
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.second.data(), 64};
-    if (wedpr_fb_alt_bn128_g1_add(&in, &result) != 0)
-    {
-        return ret;
-    }
-    ret.first = true;
-    return ret;
+    using namespace evmmax::bn254;
+
+    uint8_t buf[128]{};
+    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+
+    const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
+    const auto q = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf + 64, 64});
+    if (!p.has_value() || !q.has_value() || !validate(*p) || !validate(*q))
+        return {false, bytes(64, 0)};
+
+    bytes output(64, 0);
+    evmmax::ecc::add_affine(*p, *q).to_bytes(std::span<uint8_t, 64>{output.data(), 64});
+    return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
 {
-    pair<bool, bytes> ret{false, bytes(64, 0)};
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.second.data(), 64};
-    if (wedpr_fb_alt_bn128_g1_mul(&in, &result) != 0)
-    {
-        return ret;
-    }
-    ret.first = true;
-    return ret;
+    using namespace evmmax::bn254;
+
+    uint8_t buf[96]{};
+    std::memcpy(buf, _in.data(), std::min(_in.size(), sizeof(buf)));
+
+    const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{buf, 64});
+    if (!p.has_value() || !validate(*p))
+        return {false, bytes(64, 0)};
+
+    const auto c = intx::be::unsafe::load<intx::uint256>(buf + 64);
+    bytes output(64, 0);
+    mul(*p, c).to_bytes(std::span<uint8_t, 64>{output.data(), 64});
+    return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
 {
-    // Input: list of pairs of G1 and G2 points
-    // Output: 1 if pairing evaluates to 1, 0 otherwise (left-padded to 32 bytes)
-    pair<bool, bytes> ret{false, bytes(32, 0)};
-    size_t constexpr pairSize = 2 * 32 + 2 * 64;
-    size_t const pairs = _in.size() / pairSize;
-    if (pairs * pairSize != _in.size())
+    static constexpr size_t PAIR_SIZE = 192;
+    if (_in.size() % PAIR_SIZE != 0)
+        return {false, bytes(32, 0)};
+
+    using namespace evmmax::bn254;
+    using intx::be::unsafe::load;
+
+    std::vector<std::pair<Point, ExtPoint>> pairs;
+    pairs.reserve(_in.size() / PAIR_SIZE);
+    for (const uint8_t* ptr = _in.data(); ptr != _in.data() + _in.size(); ptr += PAIR_SIZE)
     {
-        // Invalid length.
-        return ret;
+        const auto g1 = AffinePoint::from_bytes(std::span<const uint8_t, 64>{ptr, 64});
+        if (!g1.has_value() || !validate(*g1))
+            return {false, bytes(32, 0)};
+
+        const ExtPoint g2{{load<intx::uint256>(ptr + 96), load<intx::uint256>(ptr + 64)},
+            {load<intx::uint256>(ptr + 160), load<intx::uint256>(ptr + 128)}};
+        pairs.emplace_back(Point{g1->x.value(), g1->y.value()}, g2);
     }
 
-    CInputBuffer in{(const char*)_in.data(), _in.size()};
-    COutputBuffer result{(char*)ret.second.data(), 32};
-    if (wedpr_fb_alt_bn128_pairing_product(&in, &result) != 0)
-    {
-        return ret;
-    }
-    ret.first = true;
-    return ret;
+    bytes output(32, 0);
+    auto const result = pairing_check(pairs);
+    if (!result.has_value())
+        return {false, bytes(32, 0)};
+    if (*result)
+        output[31] = 1;
+    return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED_PRICER(alt_bn128_pairing_product)
@@ -340,33 +369,44 @@ ETH_REGISTER_PRECOMPILED_PRICER(alt_bn128_pairing_product)
 
 ETH_REGISTER_PRECOMPILED(blake2_compression)(bytesConstRef _in)
 {
-    static constexpr size_t roundsSize = 4;
-    static constexpr size_t stateVectorSize = 8 * 8;
-    static constexpr size_t messageBlockSize = 16 * 8;
-    static constexpr size_t offsetCounterSize = 8;
-    static constexpr size_t finalBlockIndicatorSize = 1;
-    static constexpr size_t totalInputSize = roundsSize + stateVectorSize + messageBlockSize +
-                                             2 * offsetCounterSize + finalBlockIndicatorSize;
-
+    static constexpr size_t totalInputSize = 213;
     if (_in.size() != totalInputSize)
         return {false, {}};
 
-    auto const rounds = fromBigEndian<uint32_t>(_in.getCroppedData(0, roundsSize));
-    auto const stateVector = _in.getCroppedData(roundsSize, stateVectorSize);
-    auto const messageBlockVector =
-        _in.getCroppedData(roundsSize + stateVectorSize, messageBlockSize);
-    auto const offsetCounter0 =
-        _in.getCroppedData(roundsSize + stateVectorSize + messageBlockSize, offsetCounterSize);
-    auto const offsetCounter1 = _in.getCroppedData(
-        roundsSize + stateVectorSize + messageBlockSize + offsetCounterSize, offsetCounterSize);
-    uint8_t const finalBlockIndicator =
-        _in[roundsSize + stateVectorSize + messageBlockSize + 2 * offsetCounterSize];
+    // EIP-152 §spec:
+    //   rounds — 32-bit unsigned big-endian word
+    //   h      — 8  unsigned 64-bit little-endian words (64 bytes)
+    //   m      — 16 unsigned 64-bit little-endian words (128 bytes)
+    //   t0, t1 — 2  unsigned 64-bit little-endian words (8 bytes each)
+    //   f      — final block indicator flag (1 byte)
+    //   Output: return the updated state vector h with unchanged encoding (little-endian)
+    auto const rounds = fromBigEndian<uint32_t>(_in.getCroppedData(0, 4));
+    uint64_t h[8]{};
+    uint64_t m[16]{};
+    uint64_t t[2]{};
 
+    // Use std::memcpy to load little-endian words.  On all supported platforms
+    // (x86-64, AArch64) native byte order is little-endian, so a direct memory
+    // copy produces the correct integer value without any byte swapping.
+    for (size_t i = 0; i < 8; ++i)
+        std::memcpy(&h[i], _in.data() + 4 + i * 8, 8);
+    for (size_t i = 0; i < 16; ++i)
+        std::memcpy(&m[i], _in.data() + 68 + i * 8, 8);
+    std::memcpy(&t[0], _in.data() + 196, 8);
+    std::memcpy(&t[1], _in.data() + 204, 8);
+
+    auto const finalBlockIndicator = _in[212];
     if (finalBlockIndicator != 0 && finalBlockIndicator != 1)
         return {false, {}};
+    auto const last = finalBlockIndicator != 0;
 
-    return {true, bcos::crypto::blake2FCompression(rounds, stateVector, offsetCounter0,
-                      offsetCounter1, finalBlockIndicator, messageBlockVector)};
+    evmone::crypto::blake2b_compress(rounds, h, m, t, last);
+
+    // Output h[] back as little-endian bytes (unchanged encoding per EIP-152).
+    bytes output(64, 0);
+    for (size_t i = 0; i < 8; ++i)
+        std::memcpy(output.data() + i * 8, &h[i], 8);
+    return {true, std::move(output)};
 }
 
 ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
@@ -389,34 +429,30 @@ ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
     if (_in.size() != 192)
         return {false, {}};
 
-    auto const versioned_hash = _in.getCroppedData(0, versioned_hash_size);
-    auto const z = _in.getCroppedData(versioned_hash_size, z_end_bound - versioned_hash_size);
-    auto const y = _in.getCroppedData(z_end_bound, y_end_bound - z_end_bound);
-    auto const commitment = _in.getCroppedData(y_end_bound, commitment_end_bound - y_end_bound);
-    auto const proof =
-        _in.getCroppedData(commitment_end_bound, proof_end_bound - commitment_end_bound);
-
-    auto kzg = make_shared<bcos::executor::crypto::kzgPrecompiled>();
-
-    if (kzg->kzg2VersionedHash(commitment) != h256(versioned_hash))
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("versioned_hash not equal");
+    std::array<std::byte, evmone::crypto::SHA256_HASH_SIZE> expectedVersionedHash{};
+    evmone::crypto::sha256(expectedVersionedHash.data(),
+        reinterpret_cast<const std::byte*>(_in.data() + y_end_bound),
+        commitment_end_bound - y_end_bound);
+    expectedVersionedHash[0] = evmone::crypto::VERSIONED_HASH_VERSION_KZG;
+    if (!std::equal(expectedVersionedHash.begin(), expectedVersionedHash.end(),
+            reinterpret_cast<const std::byte*>(_in.data())))
         return {false, {}};
-    }
 
-    if (!kzg->verifyKZGProof(commitment, z, y, proof))
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("verifyKZGProof failed");
+    bool ok = evmone::crypto::kzg_verify_proof(reinterpret_cast<const std::byte*>(_in.data()),
+        reinterpret_cast<const std::byte*>(_in.data() + versioned_hash_size),
+        reinterpret_cast<const std::byte*>(_in.data() + z_end_bound),
+        reinterpret_cast<const std::byte*>(_in.data() + y_end_bound),
+        reinterpret_cast<const std::byte*>(_in.data() + commitment_end_bound));
+    if (!ok)
         return {false, {}};
-    }
 
     // Return FIELD_ELEMENTS_PER_BLOB and BLS_MODULUS as padded 32 byte big endian values
     // return turn and Bytes(U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes32() +
     // U256(BLS_MODULUS).to_be_bytes32()) refer to
     // https://github.com/erigontech/silkworm/blob/85ba5171e88855a6702602d38f102aae9b896f9c/silkworm/core/execution/precompile.cpp#L502-L524
-    return {true,
-        bcos::fromHex("000000000000000000000000000000000000000000000000000000000000100073eda"
-                             "753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")};
+    return {
+        true, bcos::fromHex("000000000000000000000000000000000000000000000000000000000000100073eda"
+                            "753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001")};
 }
 
 ETH_REGISTER_PRECOMPILED_PRICER(point_evaluation)(bytesConstRef _in)

@@ -1,12 +1,26 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-find_program(BASH_COMMAND NAMES bash REQUIRED PATHS "/bin")
-set(BLST_BUILD_COMMAND "${BASH_COMMAND}" build.sh)
+find_program(BASH_COMMAND NAMES bash REQUIRED PATHS "/bin" "/opt/homebrew/bin")
 
 if (NOT BASH_COMMAND)
     message(FATAL_ERROR "bash not found")
 endif ()
+
+set(BLST_CC "${CMAKE_C_COMPILER}")
+if(CMAKE_OSX_SYSROOT)
+    set(BLST_CC "${BLST_CC} ${CMAKE_C_SYSROOT_FLAG} ${CMAKE_OSX_SYSROOT}")
+endif()
+if(CMAKE_C_OSX_DEPLOYMENT_TARGET_FLAG AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    set(BLST_CC "${BLST_CC} ${CMAKE_C_OSX_DEPLOYMENT_TARGET_FLAG}${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
+if(CMAKE_C_FLAGS)
+    set(BLST_CC "${BLST_CC} ${CMAKE_C_FLAGS}")
+endif()
+
+set(BLST_BUILD_COMMAND
+    "${BASH_COMMAND}" "-lc"
+    "CC='${BLST_CC}' AR='${CMAKE_AR}' RANLIB='${CMAKE_RANLIB}' ./build.sh")
 
 ExternalProject_Add(blst_project
         PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -37,7 +51,6 @@ set_property(TARGET blst PROPERTY IMPORTED_LOCATION ${BLST_LIBRARY})
 set_property(TARGET blst PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BLST_INCLUDE_DIR})
 add_dependencies(blst blst_project)
 unset(INSTALL_DIR)
-
 
 
 

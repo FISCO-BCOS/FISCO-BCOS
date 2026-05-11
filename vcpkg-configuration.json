@@ -5,10 +5,7 @@
       "repository": "https://github.com/FISCO-BCOS/registry",
       "baseline": "44b3bf4c1d9f56fa1888fd24e7763051dd070848",
       "packages": [
-        "evmone",
-        "evmc",
         "ethash",
-        "intx",
         "fiscobcos",
         "wedprcrypto",
         "hsm-crypto"
@@ -19,6 +16,8 @@
     "./ports/boost-context",
     "./ports/tarscpp",
     "./ports/rapidhash",
-    "./ports/openssl"
+    "./ports/openssl",
+    "./ports/evmone",
+    "./ports/intx"
   ]
 }

@@ -48,7 +48,6 @@
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <evmc/instructions.h>
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
@@ -73,7 +72,7 @@ namespace bcos::executor_v1::hostcontext
 struct NotFoundCodeError : public bcos::Error {};
 // clang-format on
 
-evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size);
+evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
 
 evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
     protocol::BlockNumber blockNumber, int64_t contextID, int64_t seq, const u256& nonce,
@@ -81,8 +80,8 @@ evmc_message getMessage(bool web3Tx, const evmc_message& inputMessage,
 
 struct Executable
 {
-    Executable(storage::Entry code, evmc_revision revision);
-    Executable(bytesConstRef code, evmc_revision revision);
+    Executable(storage::Entry code);
+    Executable(bytesConstRef code);
 
     std::optional<storage::Entry> m_code;
     VMInstance m_vmInstance;
@@ -109,7 +108,7 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await account.code())
     {
-        auto executable = std::make_shared<Executable>(std::move(*codeEntry), revision);
+        auto executable = std::make_shared<Executable>(std::move(*codeEntry));
         co_await storage2::writeOne(getCacheExecutables(), address, executable);
         co_return executable;
     }
@@ -551,7 +550,7 @@ private:
     {
         auto& ref = message();
         bytesConstRef createCode(ref.input_data, ref.input_size);
-        m_executable = std::make_shared<Executable>(createCode, m_revision);
+        m_executable = std::make_shared<Executable>(createCode);
     }
 
     task::Task<EVMCResult> executeCreate()
@@ -594,7 +593,7 @@ private:
         }
         auto result = m_executable->m_vmInstance.execute(
             interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
-        if (result.status_code == 0)
+        if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
             auto codeHash = m_hashImpl.get().hash(code);

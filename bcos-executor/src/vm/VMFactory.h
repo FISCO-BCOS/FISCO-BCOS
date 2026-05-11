@@ -23,7 +23,6 @@
 #include "../Common.h"
 #include "VMInstance.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
-#include <evmc/loader.h>
 #include <evmone/evmone.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <memory>

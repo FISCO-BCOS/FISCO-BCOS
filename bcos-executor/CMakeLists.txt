@@ -7,10 +7,8 @@ find_package(wedprcrypto REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-find_package(evmc REQUIRED)
 find_package(evmone REQUIRED)
 find_package(intx REQUIRED)
-find_package(ethash REQUIRED)
 find_package(Boost REQUIRED serialization program_options context)
 find_package(jsoncpp REQUIRED)
 
@@ -18,14 +16,13 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(executor ${SRCS})
 if(WITH_WASM)
     target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
-            Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig Paillier blst)
+            Boost::context evmone::evmone fbwasm wabt GroupSig Paillier blst)
 else()
     target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
-            Boost::context evmone evmc::loader evmc::instructions GroupSig Paillier blst)
+            Boost::context evmone::evmone GroupSig Paillier blst)
 endif()
 
 set_source_files_properties(
-    "src/vm/kzgPrecompiled.cpp"
     "src/vm/VMFactory.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(executor PROPERTIES UNITY_BUILD "ON")

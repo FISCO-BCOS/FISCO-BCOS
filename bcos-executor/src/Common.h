@@ -29,14 +29,14 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/LogEntry.h"
-#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
+#include "vm/EVMCWasm.h"
 #include <evmc/evmc.h>
-#include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
 #include <memory>

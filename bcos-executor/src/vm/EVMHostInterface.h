@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "EVMCWasm.h"
 #include "evmc/evmc.h"
 #include <boost/optional.hpp>
 
