@@ -62,8 +62,14 @@ public:
         bugfix_auth_table_raw_address,
         bugfix_auth_table_squatting,
         bugfix_v1_exec_error_gas_used,
-        bugfix_v1_precompiled_error_gas,  // FIB-76/79/80: precompiled gas overflow check,
-                                          // exception safety, and use remaining gas on revert
+        bugfix_v1_precompiled_error_gas,      // FIB-76/79/80: precompiled gas overflow check,
+                                              // exception safety, and use remaining gas on revert
+        bugfix_gas_payment_balance_precheck,  // FIB-75
+        bugfix_clamp_gas_left_on_error,       // FIB-78
+        bugfix_precompiled_feature_gate,      // FIB-84
+        bugfix_v1_executive_wrapper,          // FIB-85/86/87
+        bugfix_evm_storage_status,            // FIB-94
+        bugfix_statestorage_hash_v3_17,       // FIB-99/105
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
