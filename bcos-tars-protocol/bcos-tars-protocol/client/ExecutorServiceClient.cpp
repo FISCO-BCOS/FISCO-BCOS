@@ -17,6 +17,11 @@
  * @author: yujiechen
  * @date 2022-5-9
  */
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/subrange.hpp>
+#include <range/v3/algorithm/copy.hpp>
 #include "ExecutorServiceClient.h"
 #include "../Common.h"
 #include "../ErrorConverter.h"

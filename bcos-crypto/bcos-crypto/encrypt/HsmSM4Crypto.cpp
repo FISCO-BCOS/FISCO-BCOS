@@ -29,6 +29,8 @@ using namespace hsm;
 using namespace bcos;
 using namespace bcos::crypto;
 
+HsmSM4Crypto::HsmSM4Crypto(std::string _libPath) : m_hsmLibPath(std::move(_libPath)) {}
+
 bcos::bytesPointer HsmSM4Crypto::HsmSM4Encrypt(const unsigned char* _plainData,
     size_t _plainDataSize, const unsigned char* _key, size_t, const unsigned char* _ivData,
     size_t _ivDataSize)

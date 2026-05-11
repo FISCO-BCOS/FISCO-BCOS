@@ -31,14 +31,9 @@ public:
     using Ptr = std::shared_ptr<HttpServer>;
 
     HttpServer(std::string _listenIP, uint16_t _listenPort, uint32_t _httpBodySizeLimit,
-        CorsConfig _corsConfig)
-      : m_listenIP(std::move(_listenIP)),
-        m_listenPort(_listenPort),
-        m_httpBodySizeLimit(_httpBodySizeLimit),
-        m_corsConfig(std::move(_corsConfig))
-    {}
+        CorsConfig _corsConfig);
 
-    ~HttpServer() { stop(); }
+    ~HttpServer();
 
     // start http server
     void start();
@@ -52,49 +47,31 @@ public:
     HttpSession::Ptr buildHttpSession(
         HttpStream::Ptr _stream, std::shared_ptr<std::string> _nodeId);
 
-    HttpReqHandler httpReqHandler() const { return m_httpReqHandler; }
-    void setHttpReqHandler(HttpReqHandler _httpReqHandler)
-    {
-        m_httpReqHandler = std::move(_httpReqHandler);
-    }
+    HttpReqHandler httpReqHandler() const;
+    void setHttpReqHandler(HttpReqHandler _httpReqHandler);
 
-    std::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor() const { return m_acceptor; }
-    void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor)
-    {
-        m_acceptor = std::move(_acceptor);
-    }
+    std::shared_ptr<boost::asio::ip::tcp::acceptor> acceptor() const;
+    void setAcceptor(std::shared_ptr<boost::asio::ip::tcp::acceptor> _acceptor);
 
-    std::shared_ptr<boost::asio::ssl::context> ctx() const { return m_ctx; }
-    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx) { m_ctx = std::move(_ctx); }
+    std::shared_ptr<boost::asio::ssl::context> ctx() const;
+    void setCtx(std::shared_ptr<boost::asio::ssl::context> _ctx);
 
-    WsUpgradeHandler wsUpgradeHandler() const { return m_wsUpgradeHandler; }
-    void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler)
-    {
-        m_wsUpgradeHandler = std::move(_wsUpgradeHandler);
-    }
+    WsUpgradeHandler wsUpgradeHandler() const;
+    void setWsUpgradeHandler(WsUpgradeHandler _wsUpgradeHandler);
 
-    HttpStreamFactory::Ptr httpStreamFactory() const { return m_httpStreamFactory; }
-    void setHttpStreamFactory(HttpStreamFactory::Ptr _httpStreamFactory)
-    {
-        m_httpStreamFactory = std::move(_httpStreamFactory);
-    }
+    HttpStreamFactory::Ptr httpStreamFactory() const;
+    void setHttpStreamFactory(HttpStreamFactory::Ptr _httpStreamFactory);
 
-    bool disableSsl() const { return m_disableSsl; }
-    void setDisableSsl(bool _disableSsl) { m_disableSsl = _disableSsl; }
+    bool disableSsl() const;
+    void setDisableSsl(bool _disableSsl);
 
-    void setIOServicePool(bcos::IOServicePool::Ptr _ioservicePool)
-    {
-        m_ioservicePool = std::move(_ioservicePool);
-    }
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioservicePool);
 
-    uint32_t httpBodySizeLimit() const { return m_httpBodySizeLimit; }
-    void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit)
-    {
-        m_httpBodySizeLimit = _httpBodySizeLimit;
-    }
+    uint32_t httpBodySizeLimit() const;
+    void setHttpBodySizeLimit(uint32_t _httpBodySizeLimit);
 
-    CorsConfig corsConfig() const { return m_corsConfig; }
-    void setCorsConfig(CorsConfig _corsConfig) { m_corsConfig = std::move(_corsConfig); }
+    CorsConfig corsConfig() const;
+    void setCorsConfig(CorsConfig _corsConfig);
 
 private:
     std::string m_listenIP;

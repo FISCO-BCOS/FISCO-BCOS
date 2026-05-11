@@ -88,7 +88,7 @@ bool bcos::crypto::secp256k1Verify(
     {
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                                   "invalid signature: secp256k1Recover failed, msgHash : " +
-                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
+                                  _hash.hex() + ", signData:" + toHex(_signatureData)));
     }
     std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
     size_t serializedPubKeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
@@ -124,7 +124,7 @@ void secp256k1RecoverPrimitive(const HashType& _hash, char* _pubKey, bytesConstR
     {
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                                   "invalid signature: secp256k1Recover failed, msgHash : " +
-                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
+                                  _hash.hex() + ", signData:" + toHex(_signatureData)));
     }
     size_t serializedPubkeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
     std::array<unsigned char, SECP256K1_UNCOMPRESS_PUBLICKEY_LEN> data{};
@@ -194,7 +194,7 @@ std::pair<bool, bytes> Secp256k1Crypto::recoverAddress(
     {
         BOOST_THROW_EXCEPTION(InvalidSignature() << errinfo_comment(
                                   "invalid signature: secp256k1Recover failed, msgHash : " +
-                                  _hash.hex() + ", signData:" + *toHexString(_signatureData)));
+                                  _hash.hex() + ", signData:" + toHex(_signatureData)));
     }
     size_t serializedPubkeySize = SECP256K1_UNCOMPRESS_PUBLICKEY_LEN;
 

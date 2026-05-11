@@ -23,7 +23,6 @@
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
@@ -31,6 +30,8 @@ namespace bcos
 {
 namespace test
 {
+using namespace std;
+
 struct ClockCacheFixture
 {
     ClockCacheFixture()

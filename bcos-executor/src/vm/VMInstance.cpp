@@ -29,6 +29,19 @@ using namespace std;
 namespace bcos::executor
 {
 
+Result::~Result()
+{
+    if (release != nullptr)
+    {
+        release(this);
+    }
+}
+
+Result::Result(Result&& _other) noexcept : evmc_result(_other)
+{
+    _other.release = nullptr;
+}
+
 VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept
   : m_instance(instance), m_revision(revision), m_code(code)
 {
@@ -50,6 +63,14 @@ VMInstance::VMInstance(
   : m_analysis(std::move(analysis)), m_revision(revision), m_code(code)
 {
     assert(m_analysis != nullptr);
+}
+
+VMInstance::~VMInstance()
+{
+    if (m_instance)
+    {
+        m_instance->destroy(m_instance);
+    }
 }
 
 Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)

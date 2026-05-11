@@ -40,26 +40,14 @@ public:
     using Ptr = std::shared_ptr<ChainNodeInfo>;
     using ConstPtr = std::shared_ptr<const ChainNodeInfo>;
     using ServicesInfo = std::map<bcos::protocol::ServiceType, std::string>;
-    ChainNodeInfo() : m_nodeProtocol(std::make_shared<bcos::protocol::ProtocolInfo>()) {}
-    ChainNodeInfo(std::string const& _nodeName, int32_t _type) : ChainNodeInfo()
-    {
-        m_nodeName = _nodeName;
-        m_nodeCryptoType = (NodeCryptoType)_type;
-    }
+    ChainNodeInfo();
+    ChainNodeInfo(std::string const& _nodeName, int32_t _type);
 
     virtual ~ChainNodeInfo() = default;
 
     virtual std::string const& nodeName() const { return m_nodeName; }
     virtual NodeCryptoType const& nodeCryptoType() const { return m_nodeCryptoType; }
-    virtual std::string const& serviceName(bcos::protocol::ServiceType _type) const
-    {
-        auto it = m_servicesInfo.find(_type);
-        if (it == m_servicesInfo.end())
-        {
-            return c_emptyServiceName;
-        }
-        return it->second;
-    }
+    virtual std::string const& serviceName(bcos::protocol::ServiceType _type) const;
 
     virtual void setNodeName(std::string const& _nodeName) { m_nodeName = _nodeName; }
     virtual void setNodeCryptoType(NodeCryptoType const& _nodeType)
@@ -67,14 +55,7 @@ public:
         m_nodeCryptoType = _nodeType;
     }
     virtual void appendServiceInfo(
-        bcos::protocol::ServiceType _type, std::string const& _serviceName)
-    {
-        m_servicesInfo[_type] = _serviceName;
-
-        BCOS_LOG(TRACE) << LOG_BADGE("ChainNodeInfo") << LOG_DESC("appendServiceInfo")
-                        << LOG_KV("type", _type) << LOG_KV("name", getServiceNameByType(_type))
-                        << LOG_KV("serviceName", _serviceName);
-    }
+        bcos::protocol::ServiceType _type, std::string const& _serviceName);
 
     virtual ServicesInfo const& serviceInfo() const { return m_servicesInfo; }
 
@@ -164,22 +145,5 @@ private:
     bool m_wasm{false};
     bool m_smCryptoType{false};
 };
-inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
-{
-    if (!_nodeInfo)
-    {
-        return "";
-    }
-    std::stringstream oss;
-    oss << LOG_KV("name", _nodeInfo->nodeName())
-        << LOG_KV("cryptoType", std::to_string((int32_t)_nodeInfo->nodeCryptoType()))
-        << LOG_KV("nodeType", _nodeInfo->nodeType());
-    auto const& serviceInfos = _nodeInfo->serviceInfo();
-    oss << ", serviceInfos: ";
-    for (auto const& info : serviceInfos)
-    {
-        oss << info.second << ",";
-    }
-    return oss.str();
-}
+std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo);
 }  // namespace bcos::group

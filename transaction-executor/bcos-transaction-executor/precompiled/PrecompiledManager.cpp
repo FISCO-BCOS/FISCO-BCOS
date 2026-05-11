@@ -20,6 +20,7 @@
 #include "bcos-executor/src/precompiled/extension/ZkpPrecompiled.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledImpl.h"
 #include <memory>
+#include <range/v3/algorithm/sort.hpp>
 
 
 bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hashImpl)

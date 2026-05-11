@@ -32,11 +32,7 @@ class HsmSM2Crypto : public SignatureCrypto
 {
 public:
     using Ptr = std::shared_ptr<HsmSM2Crypto>;
-    HsmSM2Crypto(std::string _libPath)
-    {
-        m_hsmLibPath = _libPath;
-        m_keyPairFactory = std::make_shared<HsmSM2KeyPairFactory>(m_hsmLibPath);
-    }
+    HsmSM2Crypto(std::string _libPath);
     ~HsmSM2Crypto() override = default;
 
     std::shared_ptr<bytes> sign(const KeyPairInterface& _keyPair, const HashType& _hash,

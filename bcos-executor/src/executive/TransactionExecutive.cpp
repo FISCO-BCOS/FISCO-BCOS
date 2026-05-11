@@ -36,6 +36,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include "bcos-utilities/Exceptions.h"
+#include <range/v3/view/reverse.hpp>
 
 #ifdef WITH_WASM
 #include "../vm/gas_meter/GasInjector.h"
@@ -72,6 +73,46 @@ using namespace bcos::precompiled;
 
 /// Error info for VMInstance status code.
 using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
+
+storage::StorageWrapper& TransactionExecutive::storage()
+{
+    assert(m_storageWrapper);
+    return *m_storageWrapper;
+}
+
+void TransactionExecutive::setStaticPrecompiled(
+    std::shared_ptr<const std::set<std::string>> _staticPrecompiled)
+{
+    m_staticPrecompiled = std::move(_staticPrecompiled);
+}
+
+bool TransactionExecutive::isStaticPrecompiled(const std::string& _a) const
+{
+    return _a.starts_with(precompiled::SYS_ADDRESS_PREFIX) && m_staticPrecompiled->contains(_a);
+}
+
+bool TransactionExecutive::isEthereumPrecompiled(const std::string& _a) const
+{
+    return m_evmPrecompiled != nullptr && _a.starts_with(precompiled::EVM_PRECOMPILED_PREFIX) &&
+           m_evmPrecompiled->contains(_a);
+}
+
+TransactionExecutive::Ptr TransactionExecutive::buildChildExecutive(
+    const std::string& _contractAddress, int64_t contextID, int64_t seq)
+{
+    auto executiveFactory = std::make_shared<ExecutiveFactory>(
+        m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
+
+    return executiveFactory->build(_contractAddress, contextID, seq, ExecutiveType::common);
+}
+
+void TransactionExecutive::writeErrInfoToOutput(
+    std::string const& errInfo, CallParameters& _callParameters)
+{
+    bcos::codec::abi::ContractABICodec abi(*m_hashImpl);
+    auto codecOutput = abi.abiIn("Error(string)", errInfo);
+    _callParameters.data = std::move(codecOutput);
+}
 
 CallParameters::UniquePtr TransactionExecutive::start(CallParameters::UniquePtr input)
 {
@@ -1532,7 +1573,7 @@ void TransactionExecutive::revert()
     if (m_blockContext.features().get(ledger::Features::Flag::bugfix_revert))
     {
         // revert child beforehand from back to front
-        for (auto& childExecutive : RANGES::views::reverse(m_childExecutives))
+        for (auto& childExecutive : ::ranges::views::reverse(m_childExecutives))
         {
             childExecutive->revert();
         }

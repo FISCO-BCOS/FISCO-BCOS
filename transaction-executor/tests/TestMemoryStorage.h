@@ -9,7 +9,7 @@ using MutableStorage = storage2::memory_storage::MemoryStorage<StateKey, StateVa
     storage2::memory_storage::ORDERED>;
 
 auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, MutableStorage& storage,
-    RANGES::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
+    ::ranges::input_range auto&& keys, storage2::DIRECT_TYPE /*unused*/)
     -> task::Task<task::AwaitableReturnType<decltype(storage2::readSome(storage, keys))>>
 {
     co_return co_await storage2::readSome(storage, std::forward<decltype(keys)>(keys));

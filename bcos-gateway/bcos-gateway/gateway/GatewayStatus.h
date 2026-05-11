@@ -27,10 +27,10 @@ class GatewayStatus
 {
 public:
     using Ptr = std::shared_ptr<GatewayStatus>;
-    GatewayStatus(std::string const& _uuid) : m_uuid(_uuid) {}
-    virtual ~GatewayStatus() {}
+    GatewayStatus(std::string const& _uuid);
+    virtual ~GatewayStatus();
 
-    std::string const& uuid() const { return m_uuid; }
+    std::string const& uuid() const;
 
     // update the gateway info when receive new gatewayNodeStatus
     void update(std::string const& _p2pNodeID, GatewayNodeStatus::ConstPtr _nodeStatus);
@@ -65,11 +65,8 @@ class GatewayStatusFactory
 public:
     using Ptr = std::shared_ptr<GatewayStatusFactory>;
     GatewayStatusFactory() = default;
-    virtual ~GatewayStatusFactory() {}
+    virtual ~GatewayStatusFactory();
 
-    virtual GatewayStatus::Ptr createGatewayInfo(std::string const& _uuid)
-    {
-        return std::make_shared<GatewayStatus>(_uuid);
-    }
+    virtual GatewayStatus::Ptr createGatewayInfo(std::string const& _uuid);
 };
 }  // namespace bcos::gateway

@@ -35,14 +35,14 @@ class PaillierPrecompiled : public bcos::precompiled::Precompiled
 public:
     using Ptr = std::shared_ptr<PaillierPrecompiled>;
     PaillierPrecompiled(const crypto::Hash::Ptr& _hashImpl);
-    ~PaillierPrecompiled() override= default;
+    ~PaillierPrecompiled() override;
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
-     bool isParallelPrecompiled() override { return true; }
+     bool isParallelPrecompiled() override;
 
-     std::vector<std::string> getParallelTag(bytesConstRef, bool) override { return {}; }
+     std::vector<std::string> getParallelTag(bytesConstRef, bool) override;
 private:
     std::shared_ptr<CallPaillier> m_callPaillier;
 };

@@ -20,6 +20,7 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
+#include <range/v3/view/concat.hpp>
 
 using namespace bcos;
 using namespace bcos::sealer;
@@ -44,7 +45,10 @@ void SealingManager::appendTransactions(
     {
         _txsQueue.emplace_back(std::const_pointer_cast<TransactionMetaData>(metaData));
     }
-    m_onReady();
+    if (m_onReady)
+    {
+        m_onReady();
+    }
 }
 
 bool SealingManager::shouldGenerateProposal()
@@ -286,7 +290,10 @@ bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
             notifyResetProposal(_sysTxsList);
         }
 
-        m_onReady();
+        if (m_onReady)
+        {
+            m_onReady();
+        }
         SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                         << LOG_KV("txsSize", _txsHashList.size())
                         << LOG_KV("sysTxsSize", _sysTxsList.size())
@@ -331,7 +338,10 @@ void bcos::sealer::SealingManager::resetSealingInfo(
     }
     m_endSealingNumber = _endSealingNumber;
     m_maxTxsPerBlock = _maxTxsPerBlock;
-    m_onReady();
+    if (m_onReady)
+    {
+        m_onReady();
+    }
     SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo") << LOG_KV("start", m_startSealingNumber)
                    << LOG_KV("end", m_endSealingNumber) << LOG_KV("sealingNumber", m_sealingNumber)
                    << LOG_KV("waitUntil", m_waitUntil);

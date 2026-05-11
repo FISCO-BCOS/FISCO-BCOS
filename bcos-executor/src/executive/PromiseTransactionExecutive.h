@@ -34,28 +34,9 @@ class MessagePromiseSwapper
 {
 public:
     using Ptr = std::shared_ptr<MessagePromiseSwapper>;
-    MessagePromiseSwapper(ThreadPool::Ptr pool) : m_pool(pool) {}
+    MessagePromiseSwapper(ThreadPool::Ptr pool);
     void spawnAndCall(std::function<CallParameters::UniquePtr()> spawnCall,
-        std::function<void(CallParameters::UniquePtr)> waitAndDo)
-    {
-        assert(m_pool);
-
-        auto lastPromise = m_currentPromise;
-
-        m_currentPromise = std::make_shared<std::promise<CallParameters::UniquePtr>>();
-        m_pool->enqueue([this, lastPromise, spawnCall = std::move(spawnCall)]() {
-            auto message = spawnCall();
-
-            auto promise = lastPromise ? lastPromise : m_currentPromise;
-            // std::cout << "resume " << promise.get() << std::endl;
-            promise->set_value(std::move(message));
-        });
-
-        // std::cout << "await " << m_currentPromise.get() << std::endl;
-        auto message = m_currentPromise->get_future().get();
-
-        waitAndDo(std::move(message));
-    }
+        std::function<void(CallParameters::UniquePtr)> waitAndDo);
 
 private:
     std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_lastPromise;
@@ -73,11 +54,7 @@ public:
 
     PromiseTransactionExecutive(ThreadPool::Ptr pool, const BlockContext& blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq,
-        const wasm::GasInjector& gasInjector)
-      : CoroutineTransactionExecutive(
-            blockContext, std::move(contractAddress), contextID, seq, gasInjector),
-        m_messageSwapper(std::make_shared<MessagePromiseSwapper>(pool))
-    {}
+        const wasm::GasInjector& gasInjector);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to
@@ -94,21 +71,10 @@ public:
     void externalAcquireKeyLocks(std::string acquireKeyLock);
 
 
-    virtual CallParameters::UniquePtr resume() override
-    {
-        CallParameters::UniquePtr exchangeMessage;
-        m_messageSwapper->spawnAndCall([this]() { return std::move(m_exchangeMessage); },
-            [&exchangeMessage](
-                CallParameters::UniquePtr message) { exchangeMessage = std::move(message); });
+    virtual CallParameters::UniquePtr resume() override;
 
-        return exchangeMessage;
-    }
-
-    MessagePromiseSwapper::Ptr getPromiseMessageSwapper() { return m_messageSwapper; }
-    void setPromiseMessageSwapper(MessagePromiseSwapper::Ptr swapper)
-    {
-        m_messageSwapper = swapper;
-    }
+    MessagePromiseSwapper::Ptr getPromiseMessageSwapper();
+    void setPromiseMessageSwapper(MessagePromiseSwapper::Ptr swapper);
 
 private:
     MessagePromiseSwapper::Ptr m_messageSwapper;

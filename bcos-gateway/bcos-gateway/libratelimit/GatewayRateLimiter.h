@@ -39,60 +39,18 @@ public:
     using UniquePtr = std::unique_ptr<const GatewayRateLimiter>;
 
     GatewayRateLimiter(ratelimiter::RateLimiterManager::Ptr& _rateLimiterManager,
-        ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat)
-      : m_rateLimiterManager(_rateLimiterManager), m_rateLimiterStat(_rateLimiterStat)
-    {}
+                ratelimiter::RateLimiterStat::Ptr& _rateLimiterStat);
 
     GatewayRateLimiter(GatewayRateLimiter&&) = delete;
     GatewayRateLimiter(const GatewayRateLimiter&) = delete;
     GatewayRateLimiter& operator=(const GatewayRateLimiter&) = delete;
     GatewayRateLimiter& operator=(GatewayRateLimiter&&) = delete;
 
-    ~GatewayRateLimiter() { stop(); }
+    ~GatewayRateLimiter();
 
-    void start()
-    {
-        if (m_running)
-        {
-            GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                              << LOG_DESC("gateway ratelimiter is running");
-            return;
-        }
-        m_running = true;
-        auto enableOutRateLimit = m_rateLimiterManager->rateLimiterConfig().enableOutRateLimit();
-        auto enableInRateLimit = m_rateLimiterManager->rateLimiterConfig().enableInRateLimit();
-        bool bStartStat = false;
-        if ((enableOutRateLimit || enableInRateLimit) && m_rateLimiterStat)
-        {
-            m_rateLimiterStat->start();
-            bStartStat = true;
-        }
+    void start();
 
-        GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                          << LOG_DESC("gateway ratelimiter start end")
-                          << LOG_KV("bStartStat", bStartStat)
-                          << LOG_KV("enableOutRateLimit", enableOutRateLimit)
-                          << LOG_KV("enableInRateLimit", enableInRateLimit);
-    }
-
-    void stop()
-    {
-        if (!m_running)
-        {
-            GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                              << LOG_DESC("gateway ratelimiter has been stopped");
-            return;
-        }
-
-        m_running = false;
-        if (m_rateLimiterStat)
-        {
-            m_rateLimiterStat->stop();
-        }
-
-        GATEWAY_LOG(INFO) << LOG_BADGE("GatewayRateLimiter")
-                          << LOG_DESC("gateway ratelimiter stop end");
-    }
+    void stop();
 
 public:
     std::optional<std::string> checkOutGoing(const std::string& _endpoint, uint16_t _pkgType,

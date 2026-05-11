@@ -21,9 +21,8 @@
 
 #pragma once
 
-#include "bcos-crypto/interfaces/crypto/CommonType.h"
-#include "bcos-utilities/FixedBytes.h"
-
+#include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/view/enumerate.hpp>
 namespace bcos::crypto
 {
 template <class NodeType>

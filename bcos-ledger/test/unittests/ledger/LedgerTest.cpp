@@ -92,15 +92,27 @@ namespace bcos::test
 class MockStorage : public virtual StateStorage
 {
 public:
+    static executor_v1::StateKeyView toStateKeyView(const auto& key)
+    {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(key)>, executor_v1::StateKeyView>)
+        {
+            return key;
+        }
+        else
+        {
+            return executor_v1::StateKeyView{key};
+        }
+    }
+
     MockStorage(std::shared_ptr<StorageInterface> prev)
       : storage::StateStorageInterface(prev), StateStorage(prev, false)
     {}
     bcos::Error::Ptr setRows(std::string_view tableName,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             keys,
-        RANGES::any_view<std::string_view,
-            RANGES::category::random_access | RANGES::category::sized>
+        ::ranges::any_view<std::string_view,
+            ::ranges::category::random_access | ::ranges::category::sized>
             values) override
     {
         for (size_t i = 0; i < keys.size(); ++i)
@@ -110,6 +122,66 @@ public:
             asyncSetRow(tableName, keys[i], e, [](Error::UniquePtr) {});
         }
         return nullptr;
+    }
+
+    task::Task<std::optional<Entry>> readOne(auto key)
+    {
+        auto keyView = toStateKeyView(key);
+        auto [error, entry] = getRow(keyView.m_table, keyView.m_key);
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        co_return entry;
+    }
+
+    task::Task<std::vector<std::optional<Entry>>> readSome(::ranges::input_range auto keys)
+    {
+        std::vector<std::optional<Entry>> entries;
+        for (auto&& key : keys)
+        {
+            auto keyView = toStateKeyView(key);
+            auto [error, entry] = getRow(keyView.m_table, keyView.m_key);
+            if (error)
+            {
+                BOOST_THROW_EXCEPTION(*error);
+            }
+            entries.emplace_back(std::move(entry));
+        }
+        co_return entries;
+    }
+
+    task::Task<void> writeOne(auto key, Entry value)
+    {
+        auto keyView = toStateKeyView(key);
+        std::promise<Error::UniquePtr> setPromise;
+        asyncSetRow(keyView.m_table, keyView.m_key, std::move(value),
+            [&setPromise](Error::UniquePtr error) { setPromise.set_value(std::move(error)); });
+        auto error = setPromise.get_future().get();
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        co_return;
+    }
+
+    task::Task<void> writeSome(::ranges::input_range auto keyValues)
+    {
+        for (auto&& [key, value] : keyValues)
+        {
+            co_await writeOne(key, value);
+        }
+    }
+
+    task::Task<bool> existsOne(auto key)
+    {
+        auto keyView = toStateKeyView(key);
+        auto [error, entry] = getRow(keyView.m_table, keyView.m_key);
+        if (error)
+        {
+            BOOST_THROW_EXCEPTION(*error);
+        }
+        co_return !!entry;
     }
 };
 
@@ -616,7 +688,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBlockNumberByHash(
-        HashType("123"), [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
+        HashType("1234"), [&](Error::Ptr _error, bcos::protocol::BlockNumber _number) {
             BOOST_CHECK_EQUAL(_error->errorCode(), LedgerError::GetStorageError);
             BOOST_CHECK_EQUAL(_number, -1);
             p2.set_value(true);
@@ -1456,8 +1528,8 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
         std::string hexCode;
         boost::algorithm::hex_lower(code, std::back_inserter(hexCode));
 
-        genesisConfig.m_allocs = RANGES::views::iota(0, 10) |
-                                 RANGES::views::transform([&](int index) {
+        genesisConfig.m_allocs = ::ranges::views::iota(0, 10) |
+                                 ::ranges::views::transform([&](int index) {
                                      Alloc alloc{.address = fmt::format("{:0>40}", index),
                                          .balance = bcos::u256(index * 10),
                                          .nonce = {},
@@ -1471,11 +1543,11 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
                                      }
                                      return alloc;
                                  }) |
-                                 RANGES::to<std::vector>();
+                                 ::ranges::to<std::vector>();
 
         co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
 
-        for (auto i : RANGES::views::iota(0, 10))
+        for (auto i : ::ranges::views::iota(0, 10))
         {
             auto tableName = fmt::format("{}{:0>40}", SYS_DIRECTORY::USER_APPS, i);
             auto codeHashEntry = co_await storage2::readOne(

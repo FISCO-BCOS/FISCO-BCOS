@@ -33,8 +33,8 @@ class LocalRouterTable
 public:
     using Ptr = std::shared_ptr<LocalRouterTable>;
     using GroupNodeListType = std::map<std::string, std::map<std::string, FrontServiceInfo::Ptr>>;
-    LocalRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory) : m_keyFactory(_keyFactory) {}
-    virtual ~LocalRouterTable() {}
+    LocalRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory);
+    virtual ~LocalRouterTable();
 
     FrontServiceInfo::Ptr getFrontService(
         const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID) const;
@@ -53,11 +53,7 @@ public:
 
     // Note: copy to ensure thread-safe
     // groupID => nodeID => FrontServiceInfo
-    GroupNodeListType nodeList() const
-    {
-        ReadGuard l(x_nodeList);
-        return m_nodeList;
-    }
+    GroupNodeListType nodeList() const;
 
     bool asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID, uint16_t _moduleID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) const;

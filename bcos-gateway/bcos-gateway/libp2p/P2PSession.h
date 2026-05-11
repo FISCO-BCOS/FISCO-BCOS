@@ -29,40 +29,25 @@ public:
 
     virtual void start();
     virtual void stop(DisconnectReason reason);
-    virtual bool active() { return m_run; }
+    virtual bool active();
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<SessionFace> session)
-    {
-        m_session = std::move(session);
-    }
+    virtual SessionFace::Ptr session();
+    virtual void setSession(std::shared_ptr<SessionFace> session);
 
-    virtual P2pID p2pID() { return m_p2pInfo->rawP2pID; }
-    virtual std::string printP2pID() { return printShortP2pID(m_p2pInfo->rawP2pID); }
+    virtual P2pID p2pID();
+    virtual std::string printP2pID();
     // Note: the p2pInfo must be setted after session setted
-    virtual void setP2PInfo(P2PInfo const& p2pInfo)
-    {
-        *m_p2pInfo = p2pInfo;
-        m_p2pInfo->nodeIPEndpoint = m_session->nodeIPEndpoint();
-    }
+    virtual void setP2PInfo(P2PInfo const& p2pInfo);
     virtual P2PInfo const& p2pInfo() const& { return *m_p2pInfo; }
-    virtual std::shared_ptr<P2PInfo> mutableP2pInfo() { return m_p2pInfo; }
+    virtual std::shared_ptr<P2PInfo> mutableP2pInfo();
 
-    virtual std::weak_ptr<Service> service() { return m_service; }
-    virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
+    virtual std::weak_ptr<Service> service();
+    virtual void setService(std::weak_ptr<Service> service);
 
-    virtual void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
-    {
-        WriteGuard l(x_protocolInfo);
-        *m_protocolInfo = *_protocolInfo;
-    }
+    virtual void setProtocolInfo(bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
     // empty when negotiate failed or negotiate unfinished
-    virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
-    {
-        ReadGuard l(x_protocolInfo);
-        return m_protocolInfo;
-    }
+    virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const;
 
     virtual void asyncSendP2PMessage(P2PMessage::Ptr message, Options options,
         SessionCallbackFunc callback = SessionCallbackFunc());

@@ -23,6 +23,11 @@
 
 using namespace bcos::storage;
 
+bool ContractShardUtils::isInherent(std::optional<bcos::storage::Entry> entry)
+{
+    return entry && entry->getField(0).starts_with(INHERENT_PREFIX);
+}
+
 void ContractShardUtils::setContractShard(bcos::storage::StorageWrapper& storage,
     const std::string_view& contractTableName, const std::string_view& shard)
 {

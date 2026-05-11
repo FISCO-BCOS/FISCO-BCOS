@@ -149,73 +149,44 @@ public:
     void onMessageTimeout(const boost::system::error_code& _error, bcos::crypto::NodeIDPtr _nodeID,
         const std::string& _uuid);
 
-    FrontMessageFactory::Ptr messageFactory() const { return m_messageFactory; }
+    FrontMessageFactory::Ptr messageFactory() const;
 
-    void setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
-    {
-        m_messageFactory = std::move(_messageFactory);
-    }
+    void setMessageFactory(FrontMessageFactory::Ptr _messageFactory);
 
-    bcos::crypto::NodeIDPtr nodeID() const { return m_nodeID; }
-    void setNodeID(bcos::crypto::NodeIDPtr _nodeID) { m_nodeID = std::move(_nodeID); }
-    std::string groupID() const { return m_groupID; }
-    void setGroupID(const std::string& _groupID) { m_groupID = _groupID; }
+    bcos::crypto::NodeIDPtr nodeID() const;
+    void setNodeID(bcos::crypto::NodeIDPtr _nodeID);
+    std::string groupID() const;
+    void setGroupID(const std::string& _groupID);
 
-    std::shared_ptr<gateway::GatewayInterface> gatewayInterface() { return m_gatewayInterface; }
+    std::shared_ptr<gateway::GatewayInterface> gatewayInterface();
 
-    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override
-    {
-        Guard guard(x_groupNodeInfo);
-        return m_groupNodeInfo;
-    }
+    bcos::gateway::GroupNodeInfo::Ptr groupNodeInfo() const override;
 
-    void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
-    {
-        m_gatewayInterface = std::move(_gatewayInterface);
-    }
+    void setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface);
 
-    std::shared_ptr<boost::asio::io_context> ioService() const { return m_ioService; }
-    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
-    {
-        m_ioService = std::move(_ioService);
-    }
+    std::shared_ptr<boost::asio::io_context> ioService() const;
+    void setIoService(std::shared_ptr<boost::asio::io_context> _ioService);
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
-        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)> _dispatcher)
-    {
-        m_moduleID2MessageDispatcher[_moduleID] = std::move(_dispatcher);
-    }
+        std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>
+            _dispatcher);
 
     // only for ut
     std::unordered_map<int,
         std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
-    moduleID2MessageDispatcher() const
-    {
-        return m_moduleID2MessageDispatcher;
-    }
+    moduleID2MessageDispatcher() const;
 
     // only for ut
     std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
-    module2GroupNodeInfoNotifier() const
-    {
-        return m_module2GroupNodeInfoNotifier;
-    }
+    module2GroupNodeInfoNotifier() const;
     // register nodeIDs _dispatcher for module
     void registerGroupNodeInfoNotification(int _moduleID,
         std::function<void(
             bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)>
-            _dispatcher)
-    {
-        m_module2GroupNodeInfoNotifier[_moduleID] = _dispatcher;
-    }
+            _dispatcher);
 
-    bcos::protocol::ProtocolInfo::ConstPtr getLocalProtocolInfo() const
-    {
-        auto ret = std::make_shared<bcos::protocol::ProtocolInfo>(*m_localProtocol);
-        ret->setVersion(m_localProtocolVersion);
-        return ret;
-    }
+    bcos::protocol::ProtocolInfo::ConstPtr getLocalProtocolInfo() const;
 
     struct Callback : public std::enable_shared_from_this<Callback>
     {
@@ -230,30 +201,11 @@ public:
     std::unordered_map<std::string, Callback::Ptr> m_callback;
 
     // only for ut
-    std::unordered_map<std::string, Callback::Ptr> callback() const { return m_callback; }
+    std::unordered_map<std::string, Callback::Ptr> callback() const;
 
-    Callback::Ptr getAndRemoveCallback(const std::string& _uuid)
-    {
-        Callback::Ptr callback = nullptr;
+    Callback::Ptr getAndRemoveCallback(const std::string& _uuid);
 
-        {
-            Guard guard(x_callback);
-            auto it = m_callback.find(_uuid);
-            if (it != m_callback.end())
-            {
-                callback = it->second;
-                m_callback.erase(it);
-            }
-        }
-
-        return callback;
-    }
-
-    void addCallback(const std::string& _uuid, Callback::Ptr callback)
-    {
-        Guard guard(x_callback);
-        m_callback[_uuid] = std::move(callback);
-    }
+    void addCallback(const std::string& _uuid, Callback::Ptr callback);
 
 protected:
     virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,

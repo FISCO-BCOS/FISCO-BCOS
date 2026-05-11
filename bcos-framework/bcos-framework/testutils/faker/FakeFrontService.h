@@ -154,7 +154,7 @@ public:
             auto txpool = m_nodeId2TxPool[_nodeId];
             auto txFactory =
                 std::make_shared<bcostars::protocol::TransactionFactoryImpl>(m_cryptoSuite);
-            auto tx = txFactory->createTransaction(_data);
+            auto tx = txFactory->createTransaction(_data, false, false, false);
             bcos::task::wait([](decltype(txpool) txpool, decltype(_data) _data, decltype(tx) tx,
                                  decltype(_fromNode) fromNode) -> bcos::task::Task<void> {
                 co_await txpool->broadcastTransactionBufferByTree(_data, false, fromNode);
@@ -168,7 +168,7 @@ public:
             auto txpool = m_nodeId2TxPool[_nodeId];
             auto txFactory =
                 std::make_shared<bcostars::protocol::TransactionFactoryImpl>(m_cryptoSuite);
-            auto tx = txFactory->createTransaction(_data);
+            auto tx = txFactory->createTransaction(_data, false, false, false);
             bcos::task::wait(
                 [](decltype(txpool) txpool, decltype(tx) tx) -> bcos::task::Task<void> {
                     auto submit = co_await txpool->submitTransaction(tx, true);

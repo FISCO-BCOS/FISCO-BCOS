@@ -31,6 +31,19 @@ using namespace std;
 using namespace bcos::executor;
 using namespace bcos::protocol;
 
+ShardingTransactionExecutor::ShardingTransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledger,
+        txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cachedStorage,
+        storage::TransactionalStorageInterface::Ptr backendStorage,
+        protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
+        storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
+        bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
+        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name)
+    : TransactionExecutor(std::move(ledger), std::move(txpool), std::move(cachedStorage),
+                std::move(backendStorage), std::move(executionMessageFactory),
+                std::move(stateStorageFactory), std::move(hashImpl), isWasm, isAuthCheck,
+                std::move(vmFactory), std::move(keyPageIgnoreTables), std::move(name))
+{}
+
 void ShardingTransactionExecutor::executeTransactions(std::string contractAddress,
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(

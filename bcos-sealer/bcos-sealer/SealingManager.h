@@ -20,9 +20,9 @@
 #pragma once
 #include "SealerConfig.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
-#include <bcos-utilities/CallbackCollectionHandler.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <atomic>
+#include <functional>
 
 namespace bcos::sealer
 {
@@ -68,11 +68,7 @@ public:
     };
     virtual FetchResult fetchTransactions();
 
-    template <class T>
-    bcos::Handler<> onReady(T callback)
-    {
-        return m_onReady.add(std::move(callback));
-    }
+    void setOnReadyCallback(std::function<void()> callback) { m_onReady = std::move(callback); }
     virtual void notifyResetProposal(
         const std::vector<protocol::TransactionMetaData::Ptr>& metaDatas);
     virtual void notifyResetTxsFlag(
@@ -105,7 +101,7 @@ private:
     // for sys block
     std::atomic<int64_t> m_waitUntil = {0};
 
-    bcos::CallbackCollectionHandler<> m_onReady;
+    std::function<void()> m_onReady;
     std::mutex m_fetchingTxsMutex;
 
     std::atomic<ssize_t> m_latestNumber = {0};

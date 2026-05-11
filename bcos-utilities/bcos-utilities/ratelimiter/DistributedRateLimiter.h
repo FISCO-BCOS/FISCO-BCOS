@@ -22,12 +22,15 @@
 
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ObjectCounter.h"
-#include "bcos-utilities/Timer.h"
 #include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
 #include <sw/redis++/redis++.h>
 #include <mutex>
 #include <utility>
 
+namespace bcos
+{
+class Timer;
+}
 
 namespace bcos::ratelimiter
 {
@@ -46,46 +49,14 @@ public:
 
     DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis, std::string _rateLimiterKey,
         int64_t _maxPermitsSize, bool _allowExceedMaxPermitSize = false, int32_t _intervalSec = 1,
-        bool _enableLocalCache = true, int32_t _localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT)
-      : m_redis(_redis),
-        m_rateLimiterKey(std::move(_rateLimiterKey)),
-        m_maxPermitsSize(_maxPermitsSize),
-        m_allowExceedMaxPermitSize(_allowExceedMaxPermitSize),
-        m_intervalSec(_intervalSec),
-        m_enableLocalCache(_enableLocalCache),
-        m_localCachePercent(_localCachePercent)
-
-    {
-        if (m_enableLocalCache)
-        {
-            m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec), "clearTimer");
-            m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
-            m_clearCacheTimer->start();
-        }
-
-        // TODO: add switch
-        m_statTimer = std::make_shared<Timer>(60000, "statTimer");
-        m_statTimer->registerTimeoutHandler([this]() { stat(); });
-        m_statTimer->start();
-    }
+        bool _enableLocalCache = true, int32_t _localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT);
 
     DistributedRateLimiter(DistributedRateLimiter&&) = delete;
     DistributedRateLimiter(const DistributedRateLimiter&) = delete;
     DistributedRateLimiter& operator=(const DistributedRateLimiter&) = delete;
     DistributedRateLimiter& operator=(DistributedRateLimiter&&) = delete;
 
-    ~DistributedRateLimiter() override
-    {
-        if (m_clearCacheTimer)
-        {
-            m_clearCacheTimer->stop();
-        }
-
-        if (m_statTimer)
-        {
-            m_statTimer->stop();
-        }
-    }
+    ~DistributedRateLimiter() override;
 
 public:
     struct Stat

@@ -99,11 +99,11 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
     // auto encodedDataCache = pbTransaction->encode();
     // BOOST_CHECK(encodedData.toBytes() == encodedDataCache.toBytes());
 #if 0
-    std::cout << "#### encodedData is:" << *toHexString(encodedData) << std::endl;
+    std::cout << "#### encodedData is:" << toHex(encodedData) << std::endl;
     std::cout << "### hash:" << pbTransaction->hash().hex() << std::endl;
-    std::cout << "### sender:" << *toHexString(pbTransaction->sender()) << std::endl;
+    std::cout << "### sender:" << toHex(pbTransaction->sender()) << std::endl;
     std::cout << "### type:" << pbTransaction->type() << std::endl;
-    std::cout << "### to:" << *toHexString(pbTransaction->to()) << std::endl;
+    std::cout << "### to:" << toHex(pbTransaction->to()) << std::endl;
 #endif
     // decode
     auto decodedTransaction = factory->createTransaction(bcos::ref(encodedData), true);
@@ -117,7 +117,7 @@ inline Transaction::Ptr testTransaction(CryptoSuite::Ptr _cryptoSuite,
 inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, bool isCheck = true)
 {
     bcos::crypto::KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
-    auto to = *toHexString(keyPair->address(_cryptoSuite->hashImpl()).asBytes());
+    auto to = toHex(keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
     u256 nonce = 120012323;
@@ -176,7 +176,7 @@ inline TransactionsPtr fakeTransactions(int _size)
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-    auto to = *toHexString(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
+    auto to = toHex(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
 
     TransactionsPtr txs = std::make_shared<Transactions>();
     for (int i = 0; i < _size; ++i)
@@ -199,7 +199,7 @@ inline Transaction::Ptr fakeInvalidateTransacton(std::string inputStr, const uin
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-    auto to = *toHexString(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
+    auto to = toHex(cryptoSuite->calculateAddress(keyPair->publicKey()).asBytes());
     bytes input = asBytes(inputStr);
     u256 nonce = 120012323;
     int64_t blockLimit = 1001;

@@ -1,3 +1,9 @@
+#include <range/v3/range_fwd.hpp>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/algorithm/result_types.hpp>
+#include <range/v3/view/drop.hpp>
+
 #include "BlockExecutive.h"
 #include "Common.h"
 #include "DmcExecutor.h"
@@ -53,6 +59,89 @@ BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* 
     m_hashImpl = m_blockFactory->cryptoSuite()->hashImpl();
     m_blockHeader = m_block->blockHeader();
     start();
+}
+
+BlockExecutive::BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
+    size_t startContextID,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+    bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
+    bool _syncBlock)
+  : BlockExecutive(std::move(block), scheduler, startContextID,
+        std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+        std::move(_txPool))
+{
+    m_syncBlock = _syncBlock;
+    m_gasLimit = _gasLimit;
+    m_gasPrice = _gasPrice;
+}
+
+BlockExecutive::~BlockExecutive()
+{
+    stop();
+}
+
+bcos::protocol::BlockNumber BlockExecutive::number()
+{
+    return m_blockHeader->number();
+}
+
+bcos::protocol::Block::Ptr BlockExecutive::block()
+{
+    return m_block;
+}
+
+bcos::protocol::BlockHeader::ConstPtr BlockExecutive::blockHeader() const noexcept
+{
+    return m_blockHeader;
+}
+
+bcos::protocol::BlockHeader::Ptr BlockExecutive::result()
+{
+    return m_result;
+}
+
+bool BlockExecutive::isCall()
+{
+    return m_staticCall;
+}
+
+bool BlockExecutive::sysBlock() const
+{
+    return m_isSysBlock;
+}
+
+void BlockExecutive::start()
+{
+    m_isRunning = true;
+}
+
+void BlockExecutive::stop()
+{
+    m_isRunning = false;
+}
+
+void BlockExecutive::setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
+{
+    f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+}
+
+void BlockExecutive::triggerSwitch()
+{
+    if (f_onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent();
+    }
+}
+
+bool BlockExecutive::isSysBlock()
+{
+    return m_isSysBlock;
+}
+
+bool BlockExecutive::needPrepareExecutor()
+{
+    return !m_hasDAG;
 }
 
 void BlockExecutive::prepare()

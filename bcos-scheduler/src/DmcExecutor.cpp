@@ -6,6 +6,97 @@
 
 using namespace bcos::scheduler;
 
+DmcExecutor::DmcExecutor(std::string name, std::string contractAddress,
+    bcos::protocol::Block::Ptr block,
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor, GraphKeyLocks::Ptr keyLocks,
+    bcos::crypto::Hash::Ptr hashImpl, DmcStepRecorder::Ptr dmcRecorder, bool isCall)
+  : m_name(std::move(name)),
+    m_contractAddress(std::move(contractAddress)),
+    m_block(std::move(block)),
+    m_executor(std::move(executor)),
+    m_keyLocks(std::move(keyLocks)),
+    m_hashImpl(std::move(hashImpl)),
+    m_dmcRecorder(std::move(dmcRecorder)),
+    m_isCall(isCall)
+{}
+
+DmcExecutor::~DmcExecutor() = default;
+
+bool DmcExecutor::hasFinished()
+{
+    return m_executivePool.empty();
+}
+
+void DmcExecutor::setSchedulerOutHandler(
+    std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
+{
+    f_onSchedulerOut = std::move(onSchedulerOut);
+}
+
+void DmcExecutor::setOnTxFinishedHandler(
+    std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> onTxFinished)
+{
+    f_onTxFinished = std::move(onTxFinished);
+}
+
+void DmcExecutor::setOnNeedSwitchEventHandler(std::function<void()> onNeedSwitchEvent)
+{
+    f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+}
+
+void DmcExecutor::setOnGetCodeHandler(
+    std::function<bcos::bytes(std::string_view)> onGetCodeEvent)
+{
+    f_onGetCodeEvent = std::move(onGetCodeEvent);
+}
+
+void DmcExecutor::setGetAddrHandler(
+    std::function<std::string(const std::string_view&)> getFromFunc)
+{
+    f_getAddr = std::move(getFromFunc);
+}
+
+void DmcExecutor::triggerSwitch()
+{
+    if (f_onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent();
+    }
+}
+
+void DmcExecutor::forEachExecutive(
+    std::function<void(ContextID, ExecutiveState::Ptr)> handler)
+{
+    m_executivePool.forEach(ExecutivePool::MessageHint::ALL,
+        [handler = std::move(handler)](ContextID contextID, ExecutiveState::Ptr executiveState) {
+            handler(contextID, executiveState);
+            return true;
+        });
+}
+
+void DmcExecutor::preExecute()
+{}
+
+bool DmcExecutor::hasContractTableChanged()
+{
+    return m_hasContractTableChanged;
+}
+
+void DmcExecutor::setIsCall(bool isCall)
+{
+    m_isCall = isCall;
+}
+
+void DmcExecutor::setEnablePreFinishType(bool enable)
+{
+    m_enablePreFinishType = enable;
+}
+
+bool DmcExecutor::isCall()
+{
+    return m_isCall;
+}
+
 void DmcExecutor::releaseOutdatedLock()
 {
     m_executivePool.forEach(

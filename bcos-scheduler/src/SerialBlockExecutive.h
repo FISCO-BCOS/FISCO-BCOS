@@ -38,20 +38,15 @@ public:
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::txpool::TxPoolInterface::Ptr _txPool)
-      : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool) {};
+        bcos::txpool::TxPoolInterface::Ptr _txPool);
 
     SerialBlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::txpool::TxPoolInterface::Ptr _txPool, uint64_t _gasLimit, std::string& _gasPrice,
-        bool _syncBlock)
-      : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
-            _blockFactory, _txPool, _gasLimit, _gasPrice, _syncBlock)
-    {}
-    virtual ~SerialBlockExecutive() {};
+        bool _syncBlock);
+    virtual ~SerialBlockExecutive() override;
 
 
     void prepare() override;
@@ -68,9 +63,7 @@ private:
     void onExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback) override;
 
-    void serialPrepareExecutor() override {
-        // do nothing
-    };
+    void serialPrepareExecutor() override;
 
     std::vector<protocol::ExecutionMessage::UniquePtr> m_transactions;
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;

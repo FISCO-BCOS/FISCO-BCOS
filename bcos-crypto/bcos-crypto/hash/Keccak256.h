@@ -20,34 +20,20 @@
  */
 #pragma once
 
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 
 namespace bcos::crypto
 {
-
-inline HashType keccak256Hash(bytesConstRef _data)
-{
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    hasher.update(_data);
-
-    HashType out;
-    hasher.final(out);
-    return out;
-}
+HashType keccak256Hash(bytesConstRef _data);
 
 class Keccak256 : public Hash
 {
 public:
     using Ptr = std::shared_ptr<Keccak256>;
-    Keccak256() { setHashImplType(HashImplType::Keccak256Hash); }
+    Keccak256();
     ~Keccak256() noexcept override = default;
-    HashType hash(bytesConstRef _data) const override { return keccak256Hash(_data); }
-    bcos::crypto::hasher::AnyHasher hasher() const override
-    {
-        return bcos::crypto::hasher::AnyHasher{
-            bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}};
-    }
+    HashType hash(bytesConstRef _data) const override;
+    bcos::crypto::hasher::AnyHasher hasher() const override;
 };
 
 }  // namespace bcos::crypto

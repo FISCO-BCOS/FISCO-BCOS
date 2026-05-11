@@ -183,6 +183,16 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     start();
 }
 
+void TransactionExecutor::start()
+{
+    m_isRunning = true;
+}
+
+void TransactionExecutor::registerNeedSwitchEvent(std::function<void()> event)
+{
+    f_onNeedSwitchEvent = std::move(event);
+}
+
 void TransactionExecutor::setBlockVersion(uint32_t blockVersion)
 {
     if (m_blockVersion == blockVersion)
@@ -1686,7 +1696,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("ABI loaded") << LOG_KV("address", to)
-                                    << LOG_KV("selector", toHexString(selector))
+                                    << LOG_KV("selector", toHex(selector))
                                     << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);

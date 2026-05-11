@@ -45,8 +45,8 @@ public:
     virtual std::string const& dstNode() const = 0;
     virtual std::string const& nextHop() const = 0;
 
-    std::string printDstNode() const { return printShortP2pID(dstNode()); }
-    std::string printNextHop() const { return printShortP2pID(nextHop()); }
+    std::string printDstNode() const;
+    std::string printNextHop() const;
 
     virtual int32_t distance() const = 0;
 

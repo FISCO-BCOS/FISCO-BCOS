@@ -27,6 +27,48 @@ using namespace bcos::protocol;
 using namespace bcos::group;
 using namespace bcos::crypto;
 
+GatewayNodeManager::~GatewayNodeManager() = default;
+
+void GatewayNodeManager::start()
+{
+    m_timer->start();
+}
+
+LocalRouterTable::Ptr GatewayNodeManager::localRouterTable()
+{
+    return m_localRouterTable;
+}
+
+PeersRouterTable::Ptr GatewayNodeManager::peersRouterTable()
+{
+    return m_peersRouterTable;
+}
+
+std::shared_ptr<bcos::crypto::KeyFactory> GatewayNodeManager::keyFactory()
+{
+    return m_keyFactory;
+}
+
+GatewayNodeManager::GatewayNodeManager(std::string const& _uuid,
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+  : m_uuid(_uuid),
+    m_keyFactory(_keyFactory),
+    m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
+    m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface)),
+    m_gatewayNodeStatusFactory(std::make_shared<GatewayNodeStatusFactory>())
+{}
+
+uint32_t GatewayNodeManager::increaseSeq()
+{
+    uint32_t statusSeq = ++m_statusSeq;
+    return statusSeq;
+}
+
+uint32_t GatewayNodeManager::statusSeq()
+{
+    return m_statusSeq;
+}
+
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)

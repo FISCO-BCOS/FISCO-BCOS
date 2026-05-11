@@ -116,6 +116,16 @@ BFSPrecompiled::BFSPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashI
         std::string(FS_TYPE_DIR), std::string(FS_TYPE_CONTRACT), std::string(FS_TYPE_LINK)};
 }
 
+std::string BFSPrecompiled::getThisAddress(bool _isWasm)
+{
+    return std::string(_isWasm ? BFS_NAME : BFS_ADDRESS);
+}
+
+std::string_view BFSPrecompiled::getLinkRootDir()
+{
+    return executor::USER_APPS_PREFIX;
+}
+
 std::shared_ptr<PrecompiledExecResult> BFSPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive,
     PrecompiledExecResult::Ptr _callParameters)
@@ -351,7 +361,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 // max return is 500
                 keyCondition->limit(0, USER_TABLE_MAX_LIMIT_COUNT);
                 auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
-                for (const auto& key : keys | RANGES::views::all)
+                for (const auto& key : keys | ::ranges::views::all)
                 {
                     auto entry = _executive->storage().getRow(absolutePath, key);
                     auto fields = entry->getObject<std::vector<std::string>>();
@@ -488,7 +498,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         keyCondition->limit((size_t)offset, (size_t)count);
         auto keys = _executive->storage().getPrimaryKeys(absolutePath, keyCondition);
 
-        for (const auto& key : keys | RANGES::views::all)
+        for (const auto& key : keys | ::ranges::views::all)
         {
             auto entry = _executive->storage().getRow(absolutePath, key);
             auto fields = entry->getObject<std::vector<std::string>>();
@@ -883,7 +893,7 @@ void BFSPrecompiled::initBfs(const std::shared_ptr<executor::TransactionExecutiv
     // create / dir
     _executive->storage().createTable(std::string(tool::FS_ROOT), std::string(tool::FS_DIR_FIELDS));
     // build root subs metadata
-    for (const auto& subName : tool::FS_ROOT_SUBS | RANGES::views::drop(1))
+    for (const auto& subName : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
     {
         Entry entry;
         // type, status, acl_type, acl_white, acl_black, extra

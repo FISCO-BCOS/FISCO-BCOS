@@ -32,6 +32,31 @@ using namespace bcos;
 using namespace bcos::amop;
 using namespace bcos::gateway;
 
+TopicManager::TopicManager(
+    std::string const& _rpcServiceName, bcos::gateway::P2PInterface::Ptr _network)
+  : m_rpcServiceName(_rpcServiceName), m_network(_network)
+{}
+
+TopicManager::~TopicManager() = default;
+
+void TopicManager::start()
+{
+    notifyRpcToSubscribeTopics();
+}
+
+void TopicManager::stop() {}
+
+uint32_t TopicManager::topicSeq() const
+{
+    return m_topicSeq;
+}
+
+uint32_t TopicManager::incTopicSeq()
+{
+    uint32_t topicSeq = ++m_topicSeq;
+    return topicSeq;
+}
+
 /**
  * @brief: parse client sub topics json
  * @param _topicItems: return value, topics

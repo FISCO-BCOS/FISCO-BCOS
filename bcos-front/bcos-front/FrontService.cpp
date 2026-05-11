@@ -52,6 +52,124 @@ FrontService::~FrontService() noexcept
     FRONT_LOG(INFO) << LOG_DESC("~FrontService") << LOG_KV("this", this);
 }
 
+FrontMessageFactory::Ptr FrontService::messageFactory() const
+{
+    return m_messageFactory;
+}
+
+void FrontService::setMessageFactory(FrontMessageFactory::Ptr _messageFactory)
+{
+    m_messageFactory = std::move(_messageFactory);
+}
+
+bcos::crypto::NodeIDPtr FrontService::nodeID() const
+{
+    return m_nodeID;
+}
+
+void FrontService::setNodeID(bcos::crypto::NodeIDPtr _nodeID)
+{
+    m_nodeID = std::move(_nodeID);
+}
+
+std::string FrontService::groupID() const
+{
+    return m_groupID;
+}
+
+void FrontService::setGroupID(const std::string& _groupID)
+{
+    m_groupID = _groupID;
+}
+
+std::shared_ptr<gateway::GatewayInterface> FrontService::gatewayInterface()
+{
+    return m_gatewayInterface;
+}
+
+bcos::gateway::GroupNodeInfo::Ptr FrontService::groupNodeInfo() const
+{
+    Guard guard(x_groupNodeInfo);
+    return m_groupNodeInfo;
+}
+
+void FrontService::setGatewayInterface(std::shared_ptr<gateway::GatewayInterface> _gatewayInterface)
+{
+    m_gatewayInterface = std::move(_gatewayInterface);
+}
+
+std::shared_ptr<boost::asio::io_context> FrontService::ioService() const
+{
+    return m_ioService;
+}
+
+void FrontService::setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
+{
+    m_ioService = std::move(_ioService);
+}
+
+void FrontService::registerModuleMessageDispatcher(int _moduleID,
+    std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)> _dispatcher)
+{
+    m_moduleID2MessageDispatcher[_moduleID] = std::move(_dispatcher);
+}
+
+std::unordered_map<int,
+    std::function<void(bcos::crypto::NodeIDPtr, const std::string&, bytesConstRef)>>
+FrontService::moduleID2MessageDispatcher() const
+{
+    return m_moduleID2MessageDispatcher;
+}
+
+std::unordered_map<int, std::function<void(bcos::gateway::GroupNodeInfo::Ptr, ReceiveMsgFunc)>>
+FrontService::module2GroupNodeInfoNotifier() const
+{
+    return m_module2GroupNodeInfoNotifier;
+}
+
+void FrontService::registerGroupNodeInfoNotification(int _moduleID,
+    std::function<void(
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)>
+        _dispatcher)
+{
+    m_module2GroupNodeInfoNotifier[_moduleID] = _dispatcher;
+}
+
+bcos::protocol::ProtocolInfo::ConstPtr FrontService::getLocalProtocolInfo() const
+{
+    auto ret = std::make_shared<bcos::protocol::ProtocolInfo>(*m_localProtocol);
+    ret->setVersion(m_localProtocolVersion);
+    return ret;
+}
+
+std::unordered_map<std::string, FrontService::Callback::Ptr> FrontService::callback() const
+{
+    return m_callback;
+}
+
+FrontService::Callback::Ptr FrontService::getAndRemoveCallback(const std::string& _uuid)
+{
+    Callback::Ptr callback = nullptr;
+
+    {
+        Guard guard(x_callback);
+        auto it = m_callback.find(_uuid);
+        if (it != m_callback.end())
+        {
+            callback = it->second;
+            m_callback.erase(it);
+        }
+    }
+
+    return callback;
+}
+
+void FrontService::addCallback(const std::string& _uuid, Callback::Ptr callback)
+{
+    Guard guard(x_callback);
+    m_callback[_uuid] = std::move(callback);
+}
+
 // check the startup parameters, exception will be thrown if the required
 // parameters are not set properly
 void FrontService::checkParams()

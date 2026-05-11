@@ -37,9 +37,9 @@ public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
     GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
-    virtual ~GatewayNodeManager() {}
+    virtual ~GatewayNodeManager();
 
-    virtual void start() { m_timer->start(); }
+    virtual void start();
     virtual void stop();
 
     void onRemoveNodeIDs(const P2pID& _p2pID);
@@ -53,9 +53,9 @@ public:
     // for multi-group support
     virtual bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
-    LocalRouterTable::Ptr localRouterTable() { return m_localRouterTable; }
-    PeersRouterTable::Ptr peersRouterTable() { return m_peersRouterTable; }
-    std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
+    LocalRouterTable::Ptr localRouterTable();
+    PeersRouterTable::Ptr peersRouterTable();
+    std::shared_ptr<bcos::crypto::KeyFactory> keyFactory();
 
     std::map<std::string, std::map<std::string, uint32_t>> peersNodeIDList(
         std::string const& _p2pNodeID);
@@ -63,21 +63,11 @@ public:
 protected:
     // for ut
     GatewayNodeManager(std::string const& _uuid,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : m_uuid(_uuid),
-        m_keyFactory(_keyFactory),
-        m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
-        m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface)),
-        m_gatewayNodeStatusFactory(std::make_shared<GatewayNodeStatusFactory>())
-    {}
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
 
-    uint32_t increaseSeq()
-    {
-        uint32_t statusSeq = ++m_statusSeq;
-        return statusSeq;
-    }
+    uint32_t increaseSeq();
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq);
-    uint32_t statusSeq() { return m_statusSeq; }
+    uint32_t statusSeq();
     // Note: must broadcast the status seq periodically ensure that the seq can be synced to
     // restarted or re-connected nodes
     virtual void broadcastStatusSeq();

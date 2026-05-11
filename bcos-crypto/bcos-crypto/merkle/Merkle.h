@@ -11,6 +11,9 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <iterator>
+#include <range/v3/algorithm/find.hpp>
+#include <range/v3/view/all.hpp>
+#include <range/v3/view/subrange.hpp>
 #include <stdexcept>
 #include <type_traits>
 

@@ -80,6 +80,79 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     }
 }
 
+ExecutorManager::Ptr SchedulerImpl::executorManager()
+{
+    return m_executorManager;
+}
+
+int64_t SchedulerImpl::getSchedulerTermId()
+{
+    return m_schedulerTermId;
+}
+
+void SchedulerImpl::start()
+{
+    m_isRunning = true;
+    for (auto& blockExecutive : *m_blocks)
+    {
+        blockExecutive->start();
+    }
+
+    SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "Start with termId: " << getSchedulerTermId();
+}
+
+void SchedulerImpl::stop()
+{
+    SCHEDULER_LOG(INFO) << "Try to stop SchedulerImpl";
+    m_isRunning = false;
+    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+    for (auto& blockExecutive : *m_blocks)
+    {
+        blockExecutive->stop();
+    }
+}
+
+void SchedulerImpl::setBlockExecutiveFactory(
+    bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory)
+{
+    m_blockExecutiveFactory = std::move(blockExecutiveFactory);
+}
+
+void SchedulerImpl::setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent)
+{
+    f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
+}
+
+void SchedulerImpl::triggerSwitch()
+{
+    if (f_onNeedSwitchEvent)
+    {
+        f_onNeedSwitchEvent(m_schedulerTermId);
+    }
+}
+
+bcos::crypto::Hash::Ptr SchedulerImpl::getHashImpl()
+{
+    return m_hashImpl;
+}
+
+const bcos::ledger::LedgerConfig& SchedulerImpl::ledgerConfig() const
+{
+    return *m_ledgerConfig;
+}
+
+std::string SchedulerImpl::getGasPrice()
+{
+    bcos::ReadGuard lock(x_gasPrice);
+    return m_gasPrice;
+}
+
+void SchedulerImpl::setGasPrice(std::string const& _gasPrice)
+{
+    bcos::WriteGuard lock(x_gasPrice);
+    m_gasPrice = _gasPrice;
+}
+
 void SchedulerImpl::handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
     std::function<void(bcos::protocol::BlockNumber)> whenOlder,  // whenOlder(frontNumber)
     std::function<void(BlockExecutive::Ptr)> whenQueueFront, std::function<void()> afterFront,

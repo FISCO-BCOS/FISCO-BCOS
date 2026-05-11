@@ -28,6 +28,265 @@ GatewayConfig::GatewayConfig()
     m_hashImpl = std::make_shared<crypto::Keccak256>();
 }
 
+bool GatewayConfig::RateLimiterConfig::enableOutRateLimit() const
+{
+    if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
+    {
+        return true;
+    }
+
+    if (!group2BwLimit.empty() || !ip2BwLimit.empty())
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool GatewayConfig::RateLimiterConfig::enableOutGroupRateLimit() const
+{
+    return groupOutgoingBwLimit > 0 || !group2BwLimit.empty();
+}
+
+bool GatewayConfig::RateLimiterConfig::enableOutConnRateLimit() const
+{
+    return connOutgoingBwLimit > 0 || !ip2BwLimit.empty();
+}
+
+bool GatewayConfig::RateLimiterConfig::enableInRateLimit() const
+{
+    if (p2pBasicMsgQPS > 0 || p2pModuleMsgQPS > 0)
+    {
+        return true;
+    }
+
+    if (moduleMsg2QPSSize > 0)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool GatewayConfig::RateLimiterConfig::enableInP2pBasicMsgLimit() const
+{
+    return p2pBasicMsgQPS > 0;
+}
+
+void GatewayConfig::setCertPath(std::string const& _certPath)
+{
+    m_certPath = _certPath;
+}
+
+void GatewayConfig::setNodePath(std::string const& _nodePath)
+{
+    m_nodePath = _nodePath;
+}
+
+void GatewayConfig::setNodeFileName(const std::string& _nodeFileName)
+{
+    m_nodeFileName = _nodeFileName;
+}
+
+void GatewayConfig::setConfigFile(const std::string& _configFile)
+{
+    m_configFile = _configFile;
+}
+
+std::string const& GatewayConfig::certPath() const
+{
+    return m_certPath;
+}
+
+std::string const& GatewayConfig::nodePath() const
+{
+    return m_nodePath;
+}
+
+std::string const& GatewayConfig::nodeFileName() const
+{
+    return m_nodeFileName;
+}
+
+std::string const& GatewayConfig::configFile() const
+{
+    return m_configFile;
+}
+
+std::string GatewayConfig::listenIP() const
+{
+    return m_listenIP;
+}
+
+uint16_t GatewayConfig::listenPort() const
+{
+    return m_listenPort;
+}
+
+uint32_t GatewayConfig::threadPoolSize() const
+{
+    return m_threadPoolSize;
+}
+
+bool GatewayConfig::smSSL() const
+{
+    return m_smSSL;
+}
+
+uint8_t GatewayConfig::sslClientMode() const
+{
+    return m_ssl_client_mode;
+}
+
+uint8_t GatewayConfig::sslServerMode() const
+{
+    return m_ssl_server_mode;
+}
+
+GatewayConfig::CertConfig GatewayConfig::certConfig() const
+{
+    return m_certConfig;
+}
+
+GatewayConfig::SMCertConfig GatewayConfig::smCertConfig() const
+{
+    return m_smCertConfig;
+}
+
+GatewayConfig::RateLimiterConfig GatewayConfig::rateLimiterConfig() const
+{
+    return m_rateLimiterConfig;
+}
+
+GatewayConfig::RedisConfig GatewayConfig::redisConfig() const
+{
+    return m_redisConfig;
+}
+
+const std::set<NodeIPEndpoint>& GatewayConfig::connectedNodes() const
+{
+    return m_connectedNodes;
+}
+
+bool GatewayConfig::enableBlacklist() const
+{
+    bcos::Guard guard(x_certBlacklist);
+    return m_enableBlacklist;
+}
+
+const std::set<std::string>& GatewayConfig::peerBlacklist() const
+{
+    bcos::Guard guard(x_certBlacklist);
+    return m_certBlacklist;
+}
+
+bool GatewayConfig::enableWhitelist() const
+{
+    bcos::Guard guard(x_certWhitelist);
+    return m_enableWhitelist;
+}
+
+const std::set<std::string>& GatewayConfig::peerWhitelist() const
+{
+    bcos::Guard guard(x_certWhitelist);
+    return m_certWhitelist;
+}
+
+std::string const& GatewayConfig::uuid() const
+{
+    return m_uuid;
+}
+
+void GatewayConfig::setUUID(std::string const& _uuid)
+{
+    m_uuid = _uuid;
+}
+
+bool GatewayConfig::readonly() const
+{
+    return m_readonly;
+}
+
+void GatewayConfig::setEnableRIPProtocol(bool _enableRIPProtocol)
+{
+    m_enableRIPProtocol = _enableRIPProtocol;
+}
+
+bool GatewayConfig::enableRIPProtocol() const
+{
+    return m_enableRIPProtocol;
+}
+
+void GatewayConfig::setEnableCompress(bool _enableCompress)
+{
+    m_enableCompress = _enableCompress;
+}
+
+bool GatewayConfig::enableCompress() const
+{
+    return m_enableCompress;
+}
+
+uint32_t GatewayConfig::allowMaxMsgSize() const
+{
+    return m_allowMaxMsgSize;
+}
+
+void GatewayConfig::setAllowMaxMsgSize(uint32_t _allowMaxMsgSize)
+{
+    m_allowMaxMsgSize = _allowMaxMsgSize;
+}
+
+uint32_t GatewayConfig::sessionRecvBufferSize() const
+{
+    return m_sessionRecvBufferSize;
+}
+
+void GatewayConfig::setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize)
+{
+    m_sessionRecvBufferSize = _sessionRecvBufferSize;
+}
+
+uint32_t GatewayConfig::maxReadDataSize() const
+{
+    return m_maxReadDataSize;
+}
+
+void GatewayConfig::setMaxReadDataSize(uint32_t _maxReadDataSize)
+{
+    m_maxReadDataSize = _maxReadDataSize;
+}
+
+uint32_t GatewayConfig::maxSendDataSize() const
+{
+    return m_maxSendDataSize;
+}
+
+void GatewayConfig::setMaxSendDataSize(uint32_t _maxSendDataSize)
+{
+    m_maxSendDataSize = _maxSendDataSize;
+}
+
+uint32_t GatewayConfig::maxMsgCountSendOneTime() const
+{
+    return m_maxSendMsgCount;
+}
+
+void GatewayConfig::setMaxSendMsgCount(uint32_t _maxSendMsgCount)
+{
+    m_maxSendMsgCount = _maxSendMsgCount;
+}
+
+bool GatewayConfig::enableSSLVerify() const
+{
+    return m_enableSSLVerify;
+}
+
+bcos::crypto::Hash::Ptr const& GatewayConfig::hashImpl() const
+{
+    return m_hashImpl;
+}
+
 bool GatewayConfig::isValidPort(int port)
 {
     return port > 1024 && port <= 65535;

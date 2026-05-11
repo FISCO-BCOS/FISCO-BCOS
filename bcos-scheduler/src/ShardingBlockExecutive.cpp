@@ -14,6 +14,19 @@ ShardingBlockExecutive::ShardingBlockExecutive(bcos::protocol::Block::Ptr block,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
     bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::txpool::TxPoolInterface::Ptr _txPool, std::shared_ptr<ShardCache> _contract2ShardCache,
+    size_t _keyPageSize)
+  : BlockExecutive(std::move(block), scheduler, startContextID,
+        std::move(transactionSubmitResultFactory), staticCall, std::move(_blockFactory),
+        std::move(_txPool)),
+    m_contract2ShardCache(std::move(_contract2ShardCache)),
+    m_keyPageSize(_keyPageSize)
+{}
+
+ShardingBlockExecutive::ShardingBlockExecutive(bcos::protocol::Block::Ptr block,
+    SchedulerImpl* scheduler, size_t startContextID,
+    bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
+    bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory,
+    bcos::txpool::TxPoolInterface::Ptr _txPool, std::shared_ptr<ShardCache> _contract2ShardCache,
     uint64_t _gasLimit, std::string& _gasPrice, bool _syncBlock, size_t _keyPageSize)
   : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
         _blockFactory, _txPool, _gasLimit, _gasPrice, _syncBlock),
@@ -27,6 +40,11 @@ ShardingBlockExecutive::ShardingBlockExecutive(bcos::protocol::Block::Ptr block,
             [this](const std::string_view& addr) { return getContractShard(std::string(addr)); });
         m_keyLocks = shardingKeyLocks;
     }
+}
+
+bool ShardingBlockExecutive::needPrepareExecutor()
+{
+    return false;
 }
 
 void ShardingBlockExecutive::prepare()
@@ -304,7 +322,7 @@ std::string ShardingBlockExecutive::getContractShard(const std::string& contract
     }
     else
     {
-        auto tableName = getContractTableName(contractAddress);
+        auto tableName = ::getContractTableName(contractAddress);
         shardName = ContractShardUtils::getContractShard(m_storageWrapper.value(), tableName);
         m_contract2ShardCache->insert(accessor, {contractAddress, shardName});
         DMC_LOG(DEBUG) << LOG_BADGE("Sharding")

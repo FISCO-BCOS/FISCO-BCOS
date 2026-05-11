@@ -7,6 +7,7 @@ if(ONLY_CPP_SDK)
     list(REMOVE_ITEM LIB_LIST wedprcrypto::zkp)
 endif ()
 
+find_package(fmt CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(wedprcrypto REQUIRED)
@@ -14,7 +15,8 @@ find_package(unofficial-secp256k1 REQUIRED)
 find_package(HSM-CRYPTO REQUIRED)
 
 add_library(bcos-crypto STATIC ${ALL_SRCS})
-target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST})
+target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST} fmt::fmt)
+target_link_libraries(bcos-crypto PUBLIC bcos-concepts)
 set_target_properties(bcos-crypto PROPERTIES UNITY_BUILD "ON")
 
 if(NOT WIN32)

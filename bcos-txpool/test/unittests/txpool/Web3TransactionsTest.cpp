@@ -23,93 +23,107 @@ using namespace bcos::executor_v1;
 
 namespace bcos::test
 {
-// A tiny in-memory storage implementing storage2 tag_invoke for StateKeyView/StateValue.
 struct MapStateStorage
 {
     using Value = storage::Entry;
     std::unordered_map<std::string, std::unordered_map<std::string, Value>> data;
-};
-
-// ReadOne
-inline task::Task<std::optional<MapStateStorage::Value>> tag_invoke(
-    bcos::storage2::tag_t<bcos::storage2::readOne>, MapStateStorage& storage,
-    const StateKeyView key)
-{
-    auto [table, field] = key.get();
-    if (auto tIt = storage.data.find(std::string(table)); tIt != storage.data.end())
+    task::Task<std::optional<Value>> readOne(StateKeyView key)
     {
-        if (auto fIt = tIt->second.find(std::string(field)); fIt != tIt->second.end())
-        {
-            co_return std::make_optional(fIt->second);
-        }
-    }
-    co_return std::nullopt;
-}
-
-// WriteOne
-inline task::Task<void> tag_invoke(bcos::storage2::tag_t<bcos::storage2::writeOne>,
-    MapStateStorage& storage, StateKey key, MapStateStorage::Value value)
-{
-    StateKeyView view{key};
-    auto [table, field] = view.get();
-    storage.data[std::string(table)][std::string(field)] = std::move(value);
-    co_return;
-}
-
-// ReadSome: return vector<optional<Entry>> in the same order
-template <class Keys>
-inline task::Task<std::vector<std::optional<MapStateStorage::Value>>> tag_invoke(
-    bcos::storage2::tag_t<bcos::storage2::readSome>, MapStateStorage& storage, Keys keys)
-{
-    std::vector<std::optional<MapStateStorage::Value>> results;
-    results.reserve(::ranges::distance(keys));
-    for (auto&& k : keys)
-    {
-        StateKeyView key{k};
         auto [table, field] = key.get();
-        if (auto tIt = storage.data.find(std::string(table)); tIt != storage.data.end())
+        if (auto tIt = data.find(std::string(table)); tIt != data.end())
         {
             if (auto fIt = tIt->second.find(std::string(field)); fIt != tIt->second.end())
             {
-                results.emplace_back(fIt->second);
-                continue;
+                co_return std::make_optional(fIt->second);
             }
         }
-        results.emplace_back(std::nullopt);
+        co_return std::nullopt;
     }
-    co_return results;
-}
 
-// WriteSome: accept range of pair(StateKey, Entry)
-template <class KVs>
-inline task::Task<void> tag_invoke(
-    bcos::storage2::tag_t<bcos::storage2::writeSome>, MapStateStorage& storage, KVs keyValues)
-{
-    for (auto&& kv : keyValues)
+    task::Task<std::optional<Value>> readOne(StateKey key)
     {
-        StateKey key{std::get<0>(kv)};
-        auto& value = std::get<1>(kv);
+        co_return co_await readOne(StateKeyView{key});
+    }
+
+    template <class Keys>
+    task::Task<std::vector<std::optional<Value>>> readSome(Keys keys)
+    {
+        std::vector<std::optional<Value>> results;
+        if constexpr (::ranges::sized_range<Keys>)
+        {
+            results.reserve(::ranges::size(keys));
+        }
+        else
+        {
+            results.reserve(::ranges::distance(keys));
+        }
+
+        for (auto&& k : keys)
+        {
+            results.emplace_back(co_await readOne(StateKeyView{k}));
+        }
+        co_return results;
+    }
+
+    task::Task<void> writeOne(StateKey key, Value value)
+    {
         StateKeyView view{key};
         auto [table, field] = view.get();
-        storage.data[std::string(table)][std::string(field)] = value;
+        data[std::string(table)][std::string(field)] = std::move(value);
+        co_return;
     }
-    co_return;
-}
+
+    task::Task<void> writeOne(StateKeyView key, Value value)
+    {
+        auto [table, field] = key.get();
+        data[std::string(table)][std::string(field)] = std::move(value);
+        co_return;
+    }
+
+    template <class KVs>
+    task::Task<void> writeSome(KVs keyValues)
+    {
+        for (auto&& kv : keyValues)
+        {
+            StateKey key{std::get<0>(kv)};
+            auto& value = std::get<1>(kv);
+            StateKeyView view{key};
+            auto [table, field] = view.get();
+            data[std::string(table)][std::string(field)] = value;
+        }
+        co_return;
+    }
+
+    task::Task<bool> existsOne(StateKeyView key)
+    {
+        auto value = co_await readOne(key);
+        co_return value.has_value();
+    }
+
+    task::Task<bool> existsOne(StateKey key) { co_return co_await existsOne(StateKeyView{key}); }
+};
 
 static bytes toBytes(std::string_view s)
 {
-    return bytes(reinterpret_cast<const byte*>(s.data()),
-        reinterpret_cast<const byte*>(s.data()) + s.size());
+    return {reinterpret_cast<const byte*>(s.data()),
+        reinterpret_cast<const byte*>(s.data()) + s.size()};
 }
+
+class TestTransactionImpl : public bcostars::protocol::TransactionImpl
+{
+public:
+    void markClean() { setTainted(false); }
+};
 
 static protocol::Transaction::Ptr makeTx(std::string_view senderBytes, int64_t nonce)
 {
-    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    auto tx = std::make_shared<TestTransactionImpl>();
     tx->mutableInner().data.to.assign(senderBytes.begin(), senderBytes.end());
     tx->setNonce(std::to_string(nonce));
     tx->forceSender(toBytes(senderBytes));
     Keccak256 hasher;
     tx->calculateHash(hasher);
+    tx->markClean();
     // give it a stable importTime ordering same as nonce
     tx->setImportTime(nonce);
     return tx;
@@ -514,10 +528,11 @@ BOOST_AUTO_TEST_CASE(testAddNullTransaction)
 BOOST_AUTO_TEST_CASE(testAddEmptyHashTransaction)
 {
     Web3Transactions pool;
-    // Create a transaction without calling calculateHash() — hash() will throw EmptyTransactionHash
-    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    // Create a clean transaction without calculateHash() so hash() throws EmptyTransactionHash
+    auto tx = std::make_shared<TestTransactionImpl>();
     tx->setNonce("0");
     tx->forceSender(toBytes("aaaaaaaaaaaaaaaaaaaa"));
+    tx->markClean();
     // Do NOT call tx->calculateHash() so that hash() throws
     std::vector<protocol::Transaction::Ptr> txs{tx};
     BOOST_CHECK_NO_THROW(pool.add(txs));
@@ -526,14 +541,32 @@ BOOST_AUTO_TEST_CASE(testAddEmptyHashTransaction)
 BOOST_AUTO_TEST_CASE(testAddInvalidNonceTransaction)
 {
     Web3Transactions pool;
-    // Create a transaction with a non-numeric nonce — TransactionData ctor will throw InvalidNonce
-    auto tx = std::make_shared<bcostars::protocol::TransactionImpl>();
+    // Create a clean transaction with a non-numeric nonce — TransactionData ctor throws InvalidNonce
+    auto tx = std::make_shared<TestTransactionImpl>();
     tx->setNonce("not_a_number");
     tx->forceSender(toBytes("bbbbbbbbbbbbbbbbbbbb"));
     Keccak256 hasher;
     tx->calculateHash(hasher);
+    tx->markClean();
     std::vector<protocol::Transaction::Ptr> txs{tx};
     BOOST_CHECK_NO_THROW(pool.add(txs));
+}
+
+BOOST_AUTO_TEST_CASE(testAddTaintedTransaction)
+{
+    Web3Transactions pool;
+    auto taintedTx = std::make_shared<TestTransactionImpl>();
+    taintedTx->setNonce("0");
+    taintedTx->forceSender(toBytes("cccccccccccccccccccc"));
+    Keccak256 hasher;
+    taintedTx->calculateHash(hasher);
+
+    auto taintedHash = taintedTx->hash();
+    BOOST_CHECK_THROW(pool.add(std::vector<protocol::Transaction::Ptr>{taintedTx}), bcos::Exception);
+
+    auto result = pool.get(std::vector<bcos::crypto::HashType>{taintedHash});
+    BOOST_CHECK_EQUAL(result.size(), 1);
+    BOOST_CHECK(!result[0]);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

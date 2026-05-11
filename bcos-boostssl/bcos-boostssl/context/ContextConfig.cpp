@@ -126,3 +126,43 @@ void ContextConfig::checkFileExist(const std::string& _path)
         BOOST_THROW_EXCEPTION(std::runtime_error("file not exist: " + _path));
     }
 }
+
+bool ContextConfig::isCertPath() const
+{
+    return m_isCertPath;
+}
+
+void ContextConfig::setIsCertPath(bool _isCertPath)
+{
+    m_isCertPath = _isCertPath;
+}
+
+std::string ContextConfig::sslType() const
+{
+    return m_sslType;
+}
+
+void ContextConfig::setSslType(std::string _sslType)
+{
+    m_sslType = std::move(_sslType);
+}
+
+const ContextConfig::CertConfig& ContextConfig::certConfig() const
+{
+    return m_certConfig;
+}
+
+void ContextConfig::setCertConfig(const CertConfig& _certConfig)
+{
+    m_certConfig = _certConfig;
+}
+
+const ContextConfig::SMCertConfig& ContextConfig::smCertConfig() const
+{
+    return m_smCertConfig;
+}
+
+void ContextConfig::setSmCertConfig(const SMCertConfig& _smCertConfig)
+{
+    m_smCertConfig = _smCertConfig;
+}

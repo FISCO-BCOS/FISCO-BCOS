@@ -16,6 +16,8 @@
 #include "bcos-utilities/Common.h"
 #include <boost/random.hpp>
 #include <boost/throw_exception.hpp>
+#include <range/v3/view/map.hpp>
+#include <range/v3/view/transform.hpp>
 #include <shared_mutex>
 #include <utility>
 
@@ -51,6 +53,11 @@ Service::Service(P2PInfo const& _p2pInfo) : m_selfInfo(_p2pInfo), m_nodeID(m_sel
             P2PMessage::Ptr message) {
             onReceiveHeartbeat(std::move(exception), std::move(session), std::move(message));
         });
+}
+
+Service::~Service()
+{
+    stop();
 }
 
 void Service::start()

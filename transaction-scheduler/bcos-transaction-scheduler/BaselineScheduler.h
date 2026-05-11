@@ -40,6 +40,7 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/iterator/operations.hpp>
 #include <range/v3/view/enumerate.hpp>
 #include <type_traits>

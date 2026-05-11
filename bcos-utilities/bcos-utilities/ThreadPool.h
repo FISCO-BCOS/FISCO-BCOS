@@ -40,27 +40,10 @@ public:
     ThreadPool& operator=(const ThreadPool&) = delete;
     ThreadPool& operator=(ThreadPool&&) = delete;
 
-    explicit ThreadPool(std::string threadName, size_t size, bool dispatch = true)
-      : m_threadName(std::move(threadName)), m_workGuard(boost::asio::make_work_guard(m_ioService))
-    {
-        for (size_t i = 0; i < size; ++i)
-        {
-            m_workers.create_thread([this] {
-                bcos::pthread_setThreadName(m_threadName);
-                m_ioService.run();
-            });
-        }
-    }
-    void stop()
-    {
-        m_ioService.stop();
-        if (!m_workers.is_this_thread_in())
-        {
-            m_workers.join_all();
-        }
-    }
+    explicit ThreadPool(std::string threadName, size_t size, bool dispatch = true);
+    void stop();
 
-    ~ThreadPool() { stop(); }
+    ~ThreadPool();
 
     // Add new work item to the pool.
     template <class F>
@@ -69,7 +52,7 @@ public:
         boost::asio::post(m_ioService, std::forward<F>(f));
     }
 
-    bool hasStopped() { return m_ioService.stopped(); }
+    bool hasStopped();
 
 private:
     std::string m_threadName;

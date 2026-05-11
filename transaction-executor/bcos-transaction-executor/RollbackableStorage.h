@@ -2,6 +2,7 @@
 
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Trait.h"
+#include "bcos-utilities/Overloaded.h"
 #include <range/v3/view/map.hpp>
 #include <type_traits>
 
@@ -9,17 +10,13 @@ namespace bcos::executor_v1
 {
 
 template <class Storage>
-concept HasReadOneDirect = requires(Storage& storage) {
-    {
-        storage2::readOne(storage, std::declval<typename Storage::Key>(), storage2::DIRECT)
-    } -> task::IsAwaitable;
+concept HasReadOneRaw = requires(Storage& storage) {
+    storage.readOneRaw(std::declval<typename Storage::Key>(), storage2::DIRECT);
 };
+
 template <class Storage>
-concept HasReadSomeDirect = requires(Storage& storage) {
-    {
-        storage2::readSome(
-            storage, std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT)
-    } -> task::IsAwaitable;
+concept HasReadSomeRaw = requires(Storage& storage) {
+    storage.readSomeRaw(std::declval<std::vector<typename Storage::Key>>(), storage2::DIRECT);
 };
 
 template <class Storage>
@@ -40,20 +37,26 @@ public:
         {
             co_return;
         }
-        for (auto index = static_cast<int64_t>(m_records.size()); index > savepoint; --index)
+
+        while (static_cast<int64_t>(m_records.size()) > savepoint)
         {
-            assert(index > 0);
-            auto& record = m_records[index - 1];
-            if (record.oldValue)
-            {
-                co_await storage2::writeOne(
-                    m_storage.get(), std::move(record.key), std::move(*record.oldValue));
-            }
-            else
-            {
-                co_await storage2::removeOne(
-                    m_storage.get(), std::move(record.key), storage2::DIRECT);
-            }
+            auto& record = m_records.back();
+
+            co_await std::visit(
+                bcos::overloaded{[&](storage2::NOT_EXISTS_TYPE) -> task::Task<void> {
+                                     co_await storage2::removeOne(
+                                         m_storage.get(), std::move(record.key), storage2::DIRECT);
+                                 },
+                    [&](storage2::DELETED_TYPE) -> task::Task<void> {
+                        co_await storage2::writeOne(
+                            m_storage.get(), std::move(record.key), storage2::deleteItem);
+                    },
+                    [&](Value& value) -> task::Task<void> {
+                        co_await storage2::writeOne(
+                            m_storage.get(), std::move(record.key), std::move(value));
+                    }},
+                record.oldValue);
+
             m_records.pop_back();
         }
     }
@@ -62,9 +65,7 @@ private:
     struct Record
     {
         Key key;
-        task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, Storage&, Key, storage2::DIRECT_TYPE>>
-            oldValue;
+        storage2::StorageValueType<Value> oldValue;
     };
     std::vector<Record> m_records;
     std::reference_wrapper<Storage> m_storage;
@@ -73,93 +74,103 @@ private:
         requires ::ranges::sized_range<Keys> && ::ranges::input_range<Keys>
     task::Task<void> storeOldValues(Keys keys, bool withEmpty)
     {
-        auto oldValues = co_await storage2::readSome(m_storage.get(), keys, storage2::DIRECT);
-        m_records.reserve(m_records.size() + ::ranges::size(keys));
-        for (auto&& [key, oldValue] : ranges::views::zip(keys, oldValues))
-        {
-            if (oldValue || withEmpty)
+        auto& storage = m_storage.get();
+        auto keyList = [&]() {
+            if constexpr (std::is_same_v<::ranges::range_value_t<std::decay_t<Keys>>, Key>)
             {
-                m_records.emplace_back(typename Rollbackable::Record{
-                    .key = Key(key), .oldValue = std::forward<decltype(oldValue)>(oldValue)});
+                return ::ranges::views::all(keys);
             }
+            else
+            {
+                return keys | ::ranges::views::transform([](auto&& key) { return Key(key); }) |
+                       ::ranges::to<std::vector<Key>>;
+            }
+        }();
+        auto oldValues = co_await storage.readSomeRaw(keyList, storage2::DIRECT);
+
+        m_records.reserve(m_records.size() + keyList.size());
+        for (auto&& [key, oldValue] : ::ranges::views::zip(keyList, oldValues))
+        {
+            if (!withEmpty && std::holds_alternative<storage2::NOT_EXISTS_TYPE>(oldValue))
+            {
+                continue;
+            }
+            m_records.emplace_back(
+                typename Rollbackable::Record{.key = Key(key), .oldValue = std::move(oldValue)});
         }
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::writeSome> /*unused*/, Rollbackable& storage,
-        ::ranges::input_range auto keyValues)
+public:
+    auto writeSome(::ranges::input_range auto keyValues)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::WriteSome,
             std::add_lvalue_reference_t<Storage>, decltype(keyValues)>>>
-        requires HasReadSomeDirect<Storage>
+        requires HasReadSomeRaw<Storage>
     {
         if constexpr (::ranges::borrowed_range<decltype(keyValues)>)
         {
-            co_await storage.storeOldValues(::ranges::views::keys(keyValues), true);
+            co_await storeOldValues(::ranges::views::keys(keyValues), true);
             co_return co_await storage2::writeSome(
-                storage.m_storage.get(), std::forward<decltype(keyValues)>(keyValues));
+                m_storage.get(), std::forward<decltype(keyValues)>(keyValues));
         }
         else
         {
             auto newKeyValues = ::ranges::to<std::vector>(keyValues);
-            co_await storage.storeOldValues(::ranges::views::keys(newKeyValues), true);
-            co_return co_await storage2::writeSome(
-                storage.m_storage.get(), std::move(newKeyValues));
+            co_await storeOldValues(::ranges::views::keys(newKeyValues), true);
+            co_return co_await storage2::writeSome(m_storage.get(), std::move(newKeyValues));
         }
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::readSome> /*unused*/, Rollbackable& storage,
-        ::ranges::input_range auto keys)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
+    auto readSome(::ranges::input_range auto keys) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys)>>>
     {
-        co_return co_await storage2::readSome(storage.m_storage.get(), std::move(keys));
+        co_return co_await storage2::readSome(m_storage.get(), std::move(keys));
     }
 
-    friend auto tag_invoke(
-        storage2::tag_t<storage2::readOne> /*unused*/, Rollbackable& storage, auto key)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
+    auto readOne(auto key) -> task::Task<
+        task::AwaitableReturnType<std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key)>>>
     {
-        co_return co_await storage2::readOne(storage.m_storage.get(), std::move(key));
+        co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
-    friend auto tag_invoke(
-        storage2::tag_t<storage2::writeOne> /*unused*/, Rollbackable& storage, auto key, auto value)
-        -> task::Task<task::AwaitableReturnType<
-            std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
-        requires HasReadOneDirect<Storage>
+    auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::ExistsOne, Storage&, decltype(key)>>>
     {
-        auto& record = storage.m_records.emplace_back();
+        co_return co_await storage2::existsOne(m_storage.get(), std::move(key));
+    }
+
+    auto writeOne(auto key, auto value) -> task::Task<task::AwaitableReturnType<
+        std::invoke_result_t<storage2::WriteOne, Storage&, decltype(key), decltype(value)>>>
+        requires HasReadOneRaw<Storage>
+    {
+        auto& record = m_records.emplace_back();
         record.key = key;
-        record.oldValue =
-            co_await storage2::readOne(storage.m_storage.get(), key, storage2::DIRECT);
-        co_await storage2::writeOne(storage.m_storage.get(), std::move(key), std::move(value));
+        auto& storage = m_storage.get();
+        record.oldValue = co_await storage.readOneRaw(key, storage2::DIRECT);
+        co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::removeOne> /*unused*/, Rollbackable& storage,
-        auto key, auto&&... args)
+    auto removeOne(auto key, auto&&... args)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveOne,
             std::add_lvalue_reference_t<Storage>, decltype(key), decltype(args)...>>>
     {
-        co_await storage.storeOldValues(::ranges::views::single(key), false);
+        co_await storeOldValues(::ranges::views::single(key), false);
         co_return co_await storage2::removeOne(
-            storage.m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
+            m_storage.get(), std::move(key), std::forward<decltype(args)>(args)...);
     }
 
-    friend auto tag_invoke(storage2::tag_t<storage2::removeSome> /*unused*/, Rollbackable& storage,
-        ::ranges::input_range auto keys)
+    auto removeSome(::ranges::input_range auto keys)
         -> task::Task<task::AwaitableReturnType<std::invoke_result_t<storage2::RemoveSome,
             std::add_lvalue_reference_t<Storage>, decltype(keys)>>>
     {
-        co_await storage.storeOldValues(keys, false);
-        co_return co_await storage2::removeSome(storage.m_storage.get(), std::move(keys));
+        co_await storeOldValues(keys, false);
+        co_return co_await storage2::removeSome(m_storage.get(), std::move(keys));
     }
 
-    friend auto tag_invoke(bcos::storage2::tag_t<storage2::range> /*unused*/, Rollbackable& storage,
-        auto&&... args) -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
-        std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
+    auto range(auto&&... args)
+        -> task::Task<storage2::ReturnType<std::invoke_result_t<storage2::Range,
+            std::add_lvalue_reference_t<Storage>, decltype(args)...>>>
     {
-        co_return co_await storage2::range(
-            storage.m_storage.get(), std::forward<decltype(args)>(args)...);
+        co_return co_await storage2::range(m_storage.get(), std::forward<decltype(args)>(args)...);
     }
 };
 

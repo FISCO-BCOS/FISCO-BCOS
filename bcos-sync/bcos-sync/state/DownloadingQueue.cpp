@@ -279,13 +279,13 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) 
         sealerListStr << ", sealer list: ";
         for (auto const& sealer : sealerList)
         {
-            sealerListStr << *toHexString(sealer) << ", ";
+            sealerListStr << toHex(sealer) << ", ";
         }
         auto signatureList = _header->signatureList();
         signatureListStr << ", sign list: ";
         for (auto const& signatureData : signatureList)
         {
-            signatureListStr << (*toHexString(signatureData.signature)) << ":"
+            signatureListStr << (toHex(signatureData.signature)) << ":"
                              << signatureData.index << ", ";
         }
     }
@@ -308,7 +308,7 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) 
         << LOG_KV("sealer", _header->sealer()) << LOG_KV("sealerList", sealerListStr.str())
         << LOG_KV("signatureList", signatureListStr.str())
         << LOG_KV("consensusWeights", weightsStr.str()) << LOG_KV("parents", parentInfoStr.str())
-        << LOG_KV("extraData", *toHexString(_header->extraData()));
+        << LOG_KV("extraData", toHex(_header->extraData()));
     return oss.str();
 }
 

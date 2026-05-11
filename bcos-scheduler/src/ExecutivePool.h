@@ -52,42 +52,12 @@ public:
     ExecutiveState::Ptr get(ContextID contextID);
     void markAs(ContextID contextID, MessageHint type);
     void refresh();
-    bool empty() { return m_pendingExecutives.empty() && m_hasLocked->empty(); }
+    bool empty();
     bool empty(MessageHint type);
     void forEach(MessageHint type, ExecutiveStateHandler handler, bool needClear = false);
     void forEachAndClear(MessageHint type, ExecutiveStateHandler handler);
 
-    static std::string toString(MessageHint type)
-    {
-        switch (type)
-        {
-        case NEED_PREPARE:
-        {
-            return "NEED_PREPARE";
-        }
-        case LOCKED:
-        {
-            return "LOCKED";
-        }
-        case NEED_SEND:
-        {
-            return "NEED_SEND";
-        }
-        case NEED_SCHEDULE_OUT:
-        {
-            return "NEED_SCHEDULE_OUT";
-        }
-        case END:
-        {
-            return "END";
-        }
-        case ALL:
-        {
-            return "ALL";
-        }
-        }
-        return "Unknown";
-    }
+    static std::string toString(MessageHint type);
 
 private:
     tbb::concurrent_unordered_map<ContextID, ExecutiveState::Ptr> m_pendingExecutives;

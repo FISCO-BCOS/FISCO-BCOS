@@ -17,6 +17,9 @@
  * @author: octopus
  * @date 2021-10-26
  */
+#include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view/concat.hpp>
+#include <range/v3/view/single.hpp>
 #include "AMOPImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-framework/protocol/CommonError.h"
@@ -27,6 +30,13 @@ using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
+
+AMOPImpl::~AMOPImpl() = default;
+
+TopicManager::Ptr AMOPImpl::topicManager()
+{
+    return m_topicManager;
+}
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,

@@ -47,7 +47,7 @@ public:
 
     friend class TransactionFactoryImpl;
 
-    bool operator==(const Transaction& rhs) const { return this->hash() == rhs.hash(); }
+    bool operator==(const Transaction& rhs) const;
 
     void decode(bcos::bytesConstRef _txData) override;
     void encode(bcos::bytes& txData) const override;

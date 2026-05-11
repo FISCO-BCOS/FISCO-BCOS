@@ -57,10 +57,7 @@ public:
 public:
     explicit WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
 
-    virtual ~WsSession() noexcept
-    {
-        WEBSOCKET_SESSION(INFO) << LOG_KV("[DELOBJ][WSSESSION]", this);
-    }
+    virtual ~WsSession() noexcept;
 
     void drop(boostssl::ws::WsError _reason);
 
@@ -72,10 +69,7 @@ public:
 
     virtual void onMessage(bcos::boostssl::MessageFace::Ptr _message);
 
-    virtual bool isConnected()
-    {
-        return !m_isDrop && m_wsStreamDelegate && m_wsStreamDelegate->open();
-    }
+    virtual bool isConnected();
     /**
      * @brief: async send message
      * @param _msg: message
@@ -87,71 +81,45 @@ public:
         Options _options = Options(), RespCallBack _respCallback = RespCallBack());
 
 
-    std::string endPoint() const { return m_endPoint; }
-    void setEndPoint(const std::string& _endPoint) { m_endPoint = _endPoint; }
+    std::string endPoint() const;
+    void setEndPoint(const std::string& _endPoint);
 
-    void setConnectHandler(WsConnectHandler _connectHandler)
-    {
-        m_connectHandler = std::move(_connectHandler);
-    }
-    WsConnectHandler connectHandler() { return m_connectHandler; }
+    void setConnectHandler(WsConnectHandler _connectHandler);
+    WsConnectHandler connectHandler();
 
-    void setDisconnectHandler(WsDisconnectHandler _disconnectHandler)
-    {
-        m_disconnectHandler = std::move(_disconnectHandler);
-    }
-    WsDisconnectHandler disconnectHandler() { return m_disconnectHandler; }
+    void setDisconnectHandler(WsDisconnectHandler _disconnectHandler);
+    WsDisconnectHandler disconnectHandler();
 
-    void setRecvMessageHandler(WsRecvMessageHandler _recvMessageHandler)
-    {
-        m_recvMessageHandler = std::move(_recvMessageHandler);
-    }
-    const WsRecvMessageHandler& recvMessageHandler() { return m_recvMessageHandler; }
+    void setRecvMessageHandler(WsRecvMessageHandler _recvMessageHandler);
+    const WsRecvMessageHandler& recvMessageHandler();
 
-    std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
-    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
-    {
-        m_messageFactory = std::move(_messageFactory);
-    }
+    std::shared_ptr<MessageFaceFactory> messageFactory();
+    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory);
 
-    std::shared_ptr<boost::asio::io_context> ioc() const { return m_ioc; }
-    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc) { m_ioc = std::move(_ioc); }
+    std::shared_ptr<boost::asio::io_context> ioc() const;
+    void setIoc(std::shared_ptr<boost::asio::io_context> _ioc);
 
-    void setVersion(uint16_t _version) { m_version.store(_version); }
-    uint16_t version() const { return m_version.load(); }
+    void setVersion(uint16_t _version);
+    uint16_t version() const;
 
-    WsStreamDelegate::Ptr wsStreamDelegate() { return m_wsStreamDelegate; }
-    void setWsStreamDelegate(WsStreamDelegate::Ptr _wsStreamDelegate)
-    {
-        m_wsStreamDelegate = std::move(_wsStreamDelegate);
-    }
+    WsStreamDelegate::Ptr wsStreamDelegate();
+    void setWsStreamDelegate(WsStreamDelegate::Ptr _wsStreamDelegate);
 
-    int32_t sendMsgTimeout() const { return m_sendMsgTimeout; }
-    void setSendMsgTimeout(int32_t _sendMsgTimeout) { m_sendMsgTimeout = _sendMsgTimeout; }
+    int32_t sendMsgTimeout() const;
+    void setSendMsgTimeout(int32_t _sendMsgTimeout);
 
-    int32_t maxWriteMsgSize() const { return m_maxWriteMsgSize; }
-    void setMaxWriteMsgSize(int32_t _maxWriteMsgSize) { m_maxWriteMsgSize = _maxWriteMsgSize; }
+    int32_t maxWriteMsgSize() const;
+    void setMaxWriteMsgSize(int32_t _maxWriteMsgSize);
 
-    std::size_t writeQueueSize()
-    {
-        bcos::Guard lockGuard(x_writeQueue);
-        return m_writeQueue.size();
-    }
+    std::size_t writeQueueSize();
 
-    std::size_t callbackQueueSize()
-    {
-        bcos::Guard lockGuard(x_callback);
-        return m_callbacks.size();
-    }
+    std::size_t callbackQueueSize();
 
-    std::string nodeId() { return m_nodeId; }
-    void setNodeId(std::string _nodeId) { m_nodeId = std::move(_nodeId); }
+    std::string nodeId();
+    void setNodeId(std::string _nodeId);
 
-    bool needCheckRspPacket() const { return m_needCheckRspPacket; }
-    void setNeedCheckRspPacket(bool _needCheckRespPacket)
-    {
-        m_needCheckRspPacket = _needCheckRespPacket;
-    }
+    bool needCheckRspPacket() const;
+    void setNeedCheckRspPacket(bool _needCheckRespPacket);
 
 public:
     struct CallBack : public bcos::ObjectCounter<CallBack>
@@ -233,11 +201,7 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
-    {
-        auto session = std::make_shared<WsSession>(taskArena, taskGroup);
-        return session;
-    }
+    virtual WsSession::Ptr createSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
 };
 
 }  // namespace bcos::boostssl::ws

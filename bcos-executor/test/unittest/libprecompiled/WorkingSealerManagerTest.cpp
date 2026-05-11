@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
         auto blockHeader = std::make_unique<bcostars::protocol::BlockHeaderImpl>(
             [m_header = bcostars::BlockHeader()]() mutable { return std::addressof(m_header); });
         bcos::protocol::ParentInfo parentInfo;
-        blockHeader->setParentInfo(RANGES::views::single(parentInfo));
+        blockHeader->setParentInfo(::ranges::views::single(parentInfo));
         blockHeader->calculateHash(*hashImpl);
 
         auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,

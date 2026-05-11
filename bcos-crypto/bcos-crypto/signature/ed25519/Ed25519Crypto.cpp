@@ -85,7 +85,7 @@ PublicPtr bcos::crypto::ed25519Recover(const HashType& _messageHash, bytesConstR
         BOOST_THROW_EXCEPTION(
             InvalidSignature() << errinfo_comment(
                 "invalid signature: ed25519 recover failed, msgHash : " + _messageHash.hex() +
-                ", signature:" + *toHexString(_signatureData)));
+                ", signature:" + toHex(_signatureData)));
     }
     return ed25519Pub;
 }

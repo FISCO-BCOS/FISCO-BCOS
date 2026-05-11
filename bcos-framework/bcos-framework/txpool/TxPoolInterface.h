@@ -137,7 +137,7 @@ public:
     // called by frontService to dispatch message
     virtual void asyncNotifyTxsSyncMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-        std::function<void(Error::Ptr _error)> _onRecv) = 0;
+        std::function<void(Error::Ptr)> _onRecv) = 0;
     virtual void notifyConsensusNodeList(
         bcos::consensus::ConsensusNodeList const& _consensusNodeList,
         std::function<void(Error::Ptr)> _onRecvResponse) = 0;
@@ -158,8 +158,7 @@ public:
     virtual void registerTxsCleanUpSwitch(std::function<bool()>) {}
 
     virtual void tryToSyncTxsFromPeers() {}
-    virtual void registerTxsNotifier(
-        std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
+    virtual void registerTxsNotifier(std::function<void(size_t, std::function<void(Error::Ptr)>)>)
     {}
 };
 

@@ -43,9 +43,7 @@ public:
 
     struct Change
     {
-        Change(std::string _table, std::string _key, std::optional<Entry> _entry)
-          : table(std::move(_table)), key(std::move(_key)), entry(std::move(_entry))
-        {}
+                Change(std::string _table, std::string _key, std::optional<Entry> _entry);
         Change(const Change&) = delete;
         Change& operator=(const Change&) = delete;
         Change(Change&&) noexcept = default;
@@ -56,10 +54,10 @@ public:
         std::optional<Entry> entry;
     };
 
-    void log(Change&& change) { m_changes.emplace_front(std::move(change)); }
-    auto begin() const { return m_changes.cbegin(); }
-    auto end() const { return m_changes.cend(); }
-    void clear() { m_changes.clear(); }
+    void log(Change&& change);
+    std::list<Change>::const_iterator begin() const;
+    std::list<Change>::const_iterator end() const;
+    void clear();
 
 private:
     std::list<Change> m_changes;
@@ -70,53 +68,19 @@ class StateStorageInterface : public virtual storage::TraverseStorageInterface
 {
 public:
     using Ptr = std::shared_ptr<StateStorageInterface>;
-    StateStorageInterface(std::shared_ptr<StorageInterface> prev)
-      : storage::TraverseStorageInterface(), m_prev(std::move(prev)){};
-    virtual std::optional<Table> openTable(const std::string_view& tableView)
-    {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
-        asyncOpenTable(tableView, [&](auto&& error, auto&& table) {
-            openPromise.set_value({std::move(error), std::move(table)});
-        });
+    explicit StateStorageInterface(std::shared_ptr<StorageInterface> prev);
+    virtual std::optional<Table> openTable(const std::string_view& tableView);
 
-        auto [error, table] = openPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
-        return table;
-    }
+    virtual std::optional<Table> createTable(std::string _tableName, std::string _valueFields);
 
-    virtual std::optional<Table> createTable(std::string _tableName, std::string _valueFields)
-    {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
-        asyncCreateTable(
-            _tableName, _valueFields, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-                createPromise.set_value({std::move(error), std::move(table)});
-            });
-        auto [error, table] = createPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
-        return table;
-    }
-
-    virtual std::pair<size_t, Error::Ptr> count(const std::string_view& _table [[maybe_unused]])
-    {
-        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "Called interface count method"));
-    }
+    virtual std::pair<size_t, Error::Ptr> count(const std::string_view& _table [[maybe_unused]]);
 
     virtual crypto::HashType hash(
         const bcos::crypto::Hash::Ptr& hashImpl, const ledger::Features& features) const = 0;
-    virtual void setPrev(std::shared_ptr<StorageInterface> prev)
-    {
-        std::unique_lock<std::shared_mutex> lock(m_prevMutex);
-        m_prev = std::move(prev);
-    }
+    virtual void setPrev(std::shared_ptr<StorageInterface> prev);
     virtual void rollback(const Recoder& recoder) = 0;
-    virtual void setRecoder(typename Recoder::Ptr recoder) { m_recoder.local().swap(recoder); }
-    virtual void setReadOnly(bool readOnly) { m_readOnly = readOnly; }
+    virtual void setRecoder(typename Recoder::Ptr recoder);
+    virtual void setReadOnly(bool readOnly);
 
 protected:
     bool m_readOnly = false;

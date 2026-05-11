@@ -127,6 +127,12 @@ evmc_address unhexAddress(std::string_view view)
     {
         view = view.substr(2);
     }
+    // FIB-73: validate hex string length to prevent buffer overflow
+    // FIB-74: zero-initialize to prevent uninitialized memory
+    if (view.size() != sizeof(evmc_address) * 2) [[unlikely]]
+    {
+        return {};
+    }
     evmc_address address;
     boost::algorithm::unhex(view, address.bytes);
     return address;

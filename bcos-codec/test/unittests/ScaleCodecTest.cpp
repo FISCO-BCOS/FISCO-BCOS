@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(testString)
 
 BOOST_AUTO_TEST_CASE(testBytes1)
 {
-    std::string v = "0x1";
+    std::string v = "0x01";
     FixedBytes<1> fb1(v);
     ScaleEncoderStream s{};
     s << fb1;
@@ -554,9 +554,9 @@ BOOST_AUTO_TEST_CASE(scaleCompactTest)
         makeCompactPair(CompactInteger("224945689727159819140526925384299092943484855915095831"
                                        "655037778630591879033574393515952034305194542857496045"
                                        "531676044756160413302774714984450425759043258192756735"),
-            *fromHexString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-                           "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-                           "FFFF"));
+            fromHex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+                    "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+                    "FFFF"));
     testCompactEncodeAndDecode(compactPair);
 }
 
@@ -632,7 +632,7 @@ void testFixedWidthInteger(std::pair<T, bytes> const& _matchPair, bool _check = 
         s2 >> v;
         BOOST_CHECK(v == value);
     }
-    std::cout << "##### value:" << std::to_string(value) << ", data:" << *toHexString(s.data())
+    std::cout << "##### value:" << std::to_string(value) << ", data:" << toHex(s.data())
               << std::endl;
 }
 
@@ -1040,7 +1040,7 @@ void printData(T const& _data)
     ScaleDecoderStream decoder(gsl::make_span(out));
     decoder >> decodedNumber;
     BOOST_CHECK(_data == decodedNumber);
-    std::cout << "#### value:" << _data << ", encoded:" << *toHexString(encoder.data()) << std::endl;
+    std::cout << "#### value:" << _data << ", encoded:" << toHex(encoder.data()) << std::endl;
 }
 BOOST_AUTO_TEST_CASE(testU256)
 {

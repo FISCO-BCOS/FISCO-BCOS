@@ -106,56 +106,30 @@ public:
     virtual void broadcastMessage(
         const WsSession::Ptrs& _ss, std::shared_ptr<boostssl::MessageFace> _msg);
 
-    std::shared_ptr<MessageFaceFactory> messageFactory() { return m_messageFactory; }
-    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory)
-    {
-        m_messageFactory = std::move(_messageFactory);
-    }
+    std::shared_ptr<MessageFaceFactory> messageFactory();
+    void setMessageFactory(std::shared_ptr<MessageFaceFactory> _messageFactory);
 
-    std::shared_ptr<WsSessionFactory> sessionFactory() { return m_sessionFactory; }
-    void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory)
-    {
-        m_sessionFactory = std::move(_sessionFactory);
-    }
-    int32_t waitConnectFinishTimeout() const { return m_waitConnectFinishTimeout; }
-    void setWaitConnectFinishTimeout(int32_t _timeout) { m_waitConnectFinishTimeout = _timeout; }
+    std::shared_ptr<WsSessionFactory> sessionFactory();
+    void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory);
+    int32_t waitConnectFinishTimeout() const;
+    void setWaitConnectFinishTimeout(int32_t _timeout);
 
-    void setIOServicePool(IOServicePool::Ptr _ioservicePool)
-    {
-        m_ioservicePool = std::move(_ioservicePool);
-        m_timerIoc = m_ioservicePool->getIOService();
-    }
+    void setIOServicePool(IOServicePool::Ptr _ioservicePool);
 
-    std::shared_ptr<WsConnector> connector() const noexcept { return m_connector; }
-    void setConnector(std::shared_ptr<WsConnector> _connector)
-    {
-        m_connector = std::move(_connector);
-    }
+    std::shared_ptr<WsConnector> connector() const noexcept;
+    void setConnector(std::shared_ptr<WsConnector> _connector);
 
-    void setHostPort(std::string host, uint16_t port)
-    {
-        m_listenHost = std::move(host);
-        m_listenPort = port;
-    }
-    std::string listenHost() const noexcept { return m_listenHost; }
-    uint16_t listenPort() const noexcept { return m_listenPort; }
+    void setHostPort(std::string host, uint16_t port);
+    std::string listenHost() const noexcept;
+    uint16_t listenPort() const noexcept;
 
-    WsConfig::Ptr config() const noexcept { return m_config; }
-    void setConfig(WsConfig::Ptr _config) { m_config = std::move(_config); }
+    WsConfig::Ptr config() const noexcept;
+    void setConfig(WsConfig::Ptr _config);
 
-    std::shared_ptr<bcos::boostssl::http::HttpServer> httpServer() const noexcept
-    {
-        return m_httpServer;
-    }
-    void setHttpServer(std::shared_ptr<bcos::boostssl::http::HttpServer> _httpServer)
-    {
-        m_httpServer = std::move(_httpServer);
-    }
-    void setTimerFactory(timer::TimerFactory::Ptr _timerFactory)
-    {
-        m_timerFactory = std::move(_timerFactory);
-    }
-    timer::TimerFactory::Ptr timerFactory() const { return m_timerFactory; }
+    std::shared_ptr<bcos::boostssl::http::HttpServer> httpServer() const noexcept;
+    void setHttpServer(std::shared_ptr<bcos::boostssl::http::HttpServer> _httpServer);
+    void setTimerFactory(timer::TimerFactory::Ptr _timerFactory);
+    timer::TimerFactory::Ptr timerFactory() const;
 
     bool registerMsgHandler(uint16_t _msgType, MsgHandler _msgHandler);
 
@@ -163,37 +137,17 @@ public:
 
     bool eraseMsgHandler(uint16_t _msgType);
 
-    void registerConnectHandler(ConnectHandler _connectHandler)
-    {
-        m_connectHandlers.push_back(std::move(_connectHandler));
-    }
+    void registerConnectHandler(ConnectHandler _connectHandler);
 
-    void registerDisconnectHandler(DisconnectHandler _disconnectHandler)
-    {
-        m_disconnectHandlers.push_back(std::move(_disconnectHandler));
-    }
+    void registerDisconnectHandler(DisconnectHandler _disconnectHandler);
 
-    void registerHandshakeHandler(HandshakeHandler _handshakeHandler)
-    {
-        m_handshakeHandlers.push_back(std::move(_handshakeHandler));
-    }
+    void registerHandshakeHandler(HandshakeHandler _handshakeHandler);
 
-    void setReconnectedPeers(EndPointsPtr _reconnectedPeers)
-    {
-        WriteGuard l(x_peers);
-        m_reconnectedPeers = std::move(_reconnectedPeers);
-    }
-    EndPointsPtr reconnectedPeers() const
-    {
-        ReadGuard l(x_peers);
-        return m_reconnectedPeers;
-    }
+    void setReconnectedPeers(EndPointsPtr _reconnectedPeers);
+    EndPointsPtr reconnectedPeers() const;
 
     // init
-    void initTaskArena(uint32_t _taskArenaPoolSize)
-    {
-        m_taskArena.initialize(_taskArenaPoolSize, 0);
-    }
+    void initTaskArena(uint32_t _taskArenaPoolSize);
 
 private:
     bool m_running{false};

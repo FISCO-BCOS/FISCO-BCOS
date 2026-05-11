@@ -40,15 +40,9 @@ class Result : public evmc_result
 public:
     explicit Result(evmc_result const& _result) : evmc_result(_result) {}
 
-    ~Result()
-    {
-        if (release != nullptr)
-        {
-            release(this);
-        }
-    }
+    ~Result();
 
-    Result(Result&& _other) noexcept : evmc_result(_other) { _other.release = nullptr; }
+    Result(Result&& _other) noexcept;
 
     Result& operator=(Result&&) = delete;
     Result(Result const&) = delete;
@@ -70,13 +64,7 @@ public:
     explicit VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept;
     explicit VMInstance(std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision,
         bytes_view code) noexcept;
-    ~VMInstance()
-    {
-        if (m_instance)
-        {
-            m_instance->destroy(m_instance);
-        }
-    }
+    ~VMInstance();
 
     VMInstance(VMInstance const&) = delete;
     VMInstance& operator=(VMInstance) = delete;

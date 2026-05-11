@@ -27,13 +27,12 @@
 #include <cstddef>
 #include <mutex>
 
-using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 
-CacheItem* CacheShard::insert(size_t hash, void* value, bool holdReference)
+CacheItem* CacheShard::insert(std::size_t hash, void* value, bool holdReference)
 {
-    auto guard = lock_guard<mutex>(m_mutex);
+    auto guard = std::lock_guard<std::mutex>(m_mutex);
     auto success = evictFromCache();
     if (!success)
     {
@@ -71,7 +70,7 @@ CacheItem* CacheShard::insert(size_t hash, void* value, bool holdReference)
     return item;
 }
 
-CacheItem* CacheShard::lookup(size_t hash)
+CacheItem* CacheShard::lookup(std::size_t hash)
 {
     HashTable::const_accessor accessor;
     if (!m_table.find(accessor, hash))
@@ -132,7 +131,7 @@ bool CacheShard::unref(CacheItem* item, bool setUsage)
     {
         if (!inCache(flags))
         {
-            auto guard = lock_guard<mutex>(m_mutex);
+            auto guard = std::lock_guard<std::mutex>(m_mutex);
             recycleItem(item);
             return true;
         }
@@ -159,7 +158,7 @@ bool CacheShard::evictFromCache()
 {
     assert(!m_mutex.try_lock());
     auto usage = m_usage.load(std::memory_order_relaxed);
-    auto capacity = m_capacity.load(memory_order_relaxed);
+    auto capacity = m_capacity.load(std::memory_order_relaxed);
     if (usage == 0)
     {
         return true;
@@ -174,7 +173,7 @@ bool CacheShard::evictFromCache()
         newHead = (newHead + 1 >= m_list.size()) ? 0 : newHead + 1;
         if (evicted)
         {
-            usage = m_usage.load(memory_order_relaxed);
+            usage = m_usage.load(std::memory_order_relaxed);
         }
         else
         {
@@ -210,7 +209,7 @@ bool CacheShard::tryEvict(CacheItem* item)
         recycleItem(item);
         return true;
     }
-    item->flags.fetch_and(~s_usageBit, memory_order_relaxed);
+    item->flags.fetch_and(~s_usageBit, std::memory_order_relaxed);
     return false;
 }
 
@@ -226,10 +225,10 @@ void CacheShard::recycleItem(CacheItem* item)
     m_usage.fetch_sub(1, std::memory_order_relaxed);
 }
 
-void CacheShard::setCapacity(size_t capacity)
+void CacheShard::setCapacity(std::size_t capacity)
 {
     assert(capacity > 0);
-    auto guard = lock_guard<mutex>(m_mutex);
+    auto guard = std::lock_guard<std::mutex>(m_mutex);
     m_capacity.store(capacity, std::memory_order_relaxed);
     evictFromCache();
 }

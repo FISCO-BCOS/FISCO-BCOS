@@ -97,54 +97,23 @@ public:
     void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify,
         std::function<void(Error::Ptr)> callback) override;
 
-    ExecutorManager::Ptr executorManager() { return m_executorManager; }
+    ExecutorManager::Ptr executorManager();
 
     void fetchConfig(protocol::BlockNumber _number = -1);
 
-    int64_t getSchedulerTermId() { return m_schedulerTermId; }
+    int64_t getSchedulerTermId();
 
-    void start()
-    {
-        m_isRunning = true;
-        for (auto& blockExecutive : *m_blocks)
-        {
-            blockExecutive->start();
-        }
+    void start();
+    void stop() override;
 
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch")
-                             << "Start with termId: " << getSchedulerTermId();
-    }
-    void stop() override
-    {
-        SCHEDULER_LOG(INFO) << "Try to stop SchedulerImpl";
-        m_isRunning = false;
-        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-        for (auto& blockExecutive : *m_blocks)
-        {
-            blockExecutive->stop();
-        }
-    }
+    void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory);
 
-    void setBlockExecutiveFactory(bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory)
-    {
-        m_blockExecutiveFactory = blockExecutiveFactory;
-    }
+    void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent);
 
-    void setOnNeedSwitchEventHandler(std::function<void(int64_t)> onNeedSwitchEvent)
-    {
-        f_onNeedSwitchEvent = std::move(onNeedSwitchEvent);
-    }
+    void triggerSwitch();
 
-    void triggerSwitch()
-    {
-        if (f_onNeedSwitchEvent)
-        {
-            f_onNeedSwitchEvent(m_schedulerTermId);
-        }
-    }
-
-    bcos::crypto::Hash::Ptr getHashImpl() { return m_hashImpl; }
-    const ledger::LedgerConfig& ledgerConfig() const { return *m_ledgerConfig; }
+    bcos::crypto::Hash::Ptr getHashImpl();
+    const ledger::LedgerConfig& ledgerConfig() const;
 
 private:
     void handleBlockQueue(bcos::protocol::BlockNumber requestBlockNumber,
@@ -176,17 +145,9 @@ private:
 
     bcos::protocol::BlockNumber getBlockNumberFromStorage();
 
-    std::string getGasPrice()
-    {
-        bcos::ReadGuard lock(x_gasPrice);
-        return m_gasPrice;
-    }
+    std::string getGasPrice();
 
-    void setGasPrice(std::string const& _gasPrice)
-    {
-        bcos::WriteGuard lock(x_gasPrice);
-        m_gasPrice = _gasPrice;
-    }
+    void setGasPrice(std::string const& _gasPrice);
 
     std::shared_ptr<std::list<BlockExecutive::Ptr>> m_blocks =
         std::make_shared<std::list<BlockExecutive::Ptr>>();

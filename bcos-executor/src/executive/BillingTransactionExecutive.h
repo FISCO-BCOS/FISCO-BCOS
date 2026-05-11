@@ -11,9 +11,7 @@ class BillingTransactionExecutive : public TransactionExecutive
 {
 public:
     BillingTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
-    : TransactionExecutive(blockContext, contractAddress, contextID, seq, gasInjector)
-    {}
+        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;
 };

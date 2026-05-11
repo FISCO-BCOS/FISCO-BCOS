@@ -39,12 +39,8 @@ public:
     using Ptr = std::shared_ptr<BlockExecutiveFactory>;
     using ShardCache = bcos::BucketMap<std::string, std::string>;
 
-    BlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize)
-      : m_isSerialExecute(isSerialExecute),
-        m_contract2ShardCache(std::make_shared<ShardCache>(128)),
-        m_keyPageSize(keyPageSize)
-    {}
-    virtual ~BlockExecutiveFactory() {}
+        BlockExecutiveFactory(bool isSerialExecute, size_t keyPageSize);
+        virtual ~BlockExecutiveFactory();
 
     virtual std::shared_ptr<BlockExecutive> build(bcos::protocol::Block::Ptr block,
         SchedulerImpl* scheduler, size_t startContextID,

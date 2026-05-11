@@ -28,16 +28,30 @@ bcos::h256 bcos::scheduler_v1::calculateTransactionRoot(
     }
 
     std::vector<bcos::h256> merkleTrie;
-    if (block.transactionsSize() > 0)
+    try
     {
-        auto hashes =
-            ::ranges::views::transform(block.transactions(), [](auto tx) { return tx->hash(); });
-        merkle.generateMerkle(hashes, merkleTrie);
+        if (block.transactionsSize() > 0)
+        {
+            auto hashes = ::ranges::views::transform(
+                block.transactions(), [](auto tx) { return tx->hash(); });
+            merkle.generateMerkle(hashes, merkleTrie);
+        }
+        else
+        {
+            auto hashes = block.transactionHashes();
+            merkle.generateMerkle(::ranges::views::all(hashes), merkleTrie);
+        }
     }
-    else
+    catch (std::exception const& e)
     {
-        auto hashes = block.transactionHashes();
-        merkle.generateMerkle(::ranges::views::all(hashes), merkleTrie);
+        BASELINE_SCHEDULER_LOG(WARNING)
+            << "calculateTransactionRoot failed: " << boost::diagnostic_information(e);
+        return {};
+    }
+
+    if (merkleTrie.empty())
+    {
+        return {};
     }
 
     return *::ranges::rbegin(merkleTrie);

@@ -138,7 +138,7 @@ task::Task<bool> Web3NonceChecker::insertMemoryNonce(std::string sender, std::st
 task::Task<std::optional<u256>> Web3NonceChecker::getPendingNonce(std::string_view sender)
 {
     const auto bytesSender =
-        fromHex<std::string_view, std::string>(sender, sender.starts_with("0x") ? "0x" : "");
+            fromHex<std::string_view, std::string>(sender);
     if (auto nonce = co_await storage2::readOne(m_maxNonces, bytesSender))
     {
         co_return nonce;

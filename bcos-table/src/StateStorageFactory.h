@@ -57,49 +57,14 @@ class StateStorageFactory
 {
 public:
     using Ptr = std::shared_ptr<StateStorageFactory>;
-    StateStorageFactory(size_t keyPageSize) : m_keyPageSize(keyPageSize) {}
+    explicit StateStorageFactory(size_t keyPageSize);
 
     virtual ~StateStorageFactory() = default;
 
     virtual storage::StateStorageInterface::Ptr createStateStorage(
         bcos::storage::StorageInterface::Ptr storage, uint32_t compatibilityVersion,
         bool setRowWithDirtyFlag, bool ignoreNotExist = false,
-        std::shared_ptr<std::set<std::string, std::less<>>> const& keyPageIgnoreTables = nullptr)
-    {
-        STORAGE_LOG(TRACE) << LOG_KV("compatibilityVersion", compatibilityVersion)
-                           << LOG_KV("protocol::BlockVersion::V3_1_VERSION",
-                                  (uint32_t)protocol::BlockVersion::V3_1_VERSION)
-                           << LOG_KV("keyPageSize", m_keyPageSize)
-                           << LOG_KV("setRowWithDirtyFlag", setRowWithDirtyFlag);
-
-        if (m_keyPageSize > 0)
-        {
-            if (compatibilityVersion >= (uint32_t)protocol::BlockVersion::V3_1_VERSION &&
-                keyPageIgnoreTables != nullptr)
-            {
-                if (keyPageIgnoreTables->contains(tool::FS_ROOT))
-                {
-                    for (const auto& _sub : tool::FS_ROOT_SUBS)
-                    {
-                        std::string sub(_sub);
-                        keyPageIgnoreTables->erase(sub);
-                    }
-                }
-                keyPageIgnoreTables->insert(
-                    {std::string(ledger::SYS_CODE_BINARY), std::string(ledger::SYS_CONTRACT_ABI)});
-            }
-            STORAGE_LOG(TRACE) << LOG_KV("keyPageSize", m_keyPageSize)
-                               << LOG_KV("compatibilityVersion", compatibilityVersion)
-                               << LOG_KV("keyPageIgnoreTables size",
-                                      keyPageIgnoreTables == nullptr ? 0 :
-                                                                       keyPageIgnoreTables->size());
-            return std::make_shared<bcos::storage::KeyPageStorage>(storage, setRowWithDirtyFlag,
-                m_keyPageSize, compatibilityVersion, keyPageIgnoreTables, ignoreNotExist);
-        }
-
-        // Pass useHashV310 flag to hash() insted of compatibilityVersion
-        return std::make_shared<bcos::storage::StateStorage>(storage, setRowWithDirtyFlag);
-    }
+        std::shared_ptr<std::set<std::string, std::less<>>> const& keyPageIgnoreTables = nullptr);
 
 private:
     size_t m_keyPageSize;

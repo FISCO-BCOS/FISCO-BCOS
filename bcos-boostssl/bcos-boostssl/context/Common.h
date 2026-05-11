@@ -29,23 +29,8 @@
 
 namespace bcos::boostssl
 {
-inline X509* toX509(const char* _pemBuffer)
-{
-    BIO* bio_mem = BIO_new(BIO_s_mem());
-    BIO_puts(bio_mem, _pemBuffer);
-    X509* x509 = PEM_read_bio_X509(bio_mem, NULL, NULL, NULL);
-    BIO_free(bio_mem);
-    // X509_free(x509);
-    return x509;
-}
+X509* toX509(const char* _pemBuffer);
 
-inline EVP_PKEY* toEvpPkey(const char* _pemBuffer)
-{
-    BIO* bio_mem = BIO_new_mem_buf(_pemBuffer, -1);
-    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio_mem, NULL, NULL, NULL);
-    BIO_free(bio_mem);
-    // EVP_PKEY_free(pkey);
-    return pkey;
-}
+EVP_PKEY* toEvpPkey(const char* _pemBuffer);
 
 }  // namespace bcos::boostssl

@@ -19,6 +19,8 @@
  * @date 2023-03-22
  */
 #include "bcos-sync/bcos-sync/utilities/SyncTreeTopology.h"
+#include "bcos-utilities/BoostLog.h"
+#include <range/v3/view/enumerate.hpp>
 
 using namespace bcos;
 using namespace bcos::sync;
@@ -151,7 +153,7 @@ bcos::crypto::NodeIDSetPtr SyncTreeTopology::selectParentNodes(
     if (m_consIndex >= 0)
     {
         auto selectedNodeSet = std::make_shared<bcos::crypto::NodeIDSet>();
-        for (auto const& [idx, consNode] : *m_consensusNodes | RANGES::views::enumerate)
+        for (auto const& [idx, consNode] : *m_consensusNodes | ::ranges::views::enumerate)
         {
             if (_peers.contains(consNode) && static_cast<std::uint64_t>(m_consIndex) != idx)
             {

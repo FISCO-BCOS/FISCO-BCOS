@@ -110,48 +110,14 @@ public:
         //-------------- incoming qps ratelimit end-----------------------
 
         // whether any configuration takes effect
-        bool enableOutRateLimit() const
-        {
-            if (totalOutgoingBwLimit > 0 || connOutgoingBwLimit > 0 || groupOutgoingBwLimit > 0)
-            {
-                return true;
-            }
+        bool enableOutRateLimit() const;
 
-            if (!group2BwLimit.empty() || !ip2BwLimit.empty())
-            {
-                return true;
-            }
+        bool enableOutGroupRateLimit() const;
 
-            return false;
-        }
+        bool enableOutConnRateLimit() const;
 
-        bool enableOutGroupRateLimit() const
-        {
-            return groupOutgoingBwLimit > 0 || !group2BwLimit.empty();
-        }
-
-        bool enableOutConnRateLimit() const
-        {
-            return connOutgoingBwLimit > 0 || !ip2BwLimit.empty();
-        }
-
-        bool enableInRateLimit() const
-        {
-            if (p2pBasicMsgQPS > 0 || p2pModuleMsgQPS > 0)
-            {
-                return true;
-            }
-
-            if (moduleMsg2QPSSize > 0)
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-
-        bool enableInP2pBasicMsgLimit() const { return p2pBasicMsgQPS > 0; }
+        bool enableInRateLimit() const;
+    bool enableInP2pBasicMsgLimit() const;
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
@@ -171,15 +137,15 @@ public:
      */
     void initConfig(std::string const& _configPath, bool _uuidRequired = false);
 
-    void setCertPath(std::string const& _certPath) { m_certPath = _certPath; }
-    void setNodePath(std::string const& _nodePath) { m_nodePath = _nodePath; }
-    void setNodeFileName(const std::string& _nodeFileName) { m_nodeFileName = _nodeFileName; }
-    void setConfigFile(const std::string& _configFile) { m_configFile = _configFile; }
+    void setCertPath(std::string const& _certPath);
+    void setNodePath(std::string const& _nodePath);
+    void setNodeFileName(const std::string& _nodeFileName);
+    void setConfigFile(const std::string& _configFile);
 
-    std::string const& certPath() const { return m_certPath; }
-    std::string const& nodePath() const { return m_nodePath; }
-    std::string const& nodeFileName() const { return m_nodeFileName; }
-    std::string const& configFile() const { return m_configFile; }
+    std::string const& certPath() const;
+    std::string const& nodePath() const;
+    std::string const& nodeFileName() const;
+    std::string const& configFile() const;
 
     // check if the port valid
     bool isValidPort(int port);
@@ -212,71 +178,52 @@ public:
     // load p2p connected peers
     void loadP2pConnectedNodes();
 
-    std::string listenIP() const { return m_listenIP; }
-    uint16_t listenPort() const { return m_listenPort; }
-    uint32_t threadPoolSize() const { return m_threadPoolSize; }
-    bool smSSL() const { return m_smSSL; }
-    auto sslClientMode() const { return m_ssl_client_mode; }
-    auto sslServerMode() const { return m_ssl_server_mode; }
+    std::string listenIP() const;
+    uint16_t listenPort() const;
+    uint32_t threadPoolSize() const;
+    bool smSSL() const;
+    uint8_t sslClientMode() const;
+    uint8_t sslServerMode() const;
 
-    CertConfig certConfig() const { return m_certConfig; }
-    SMCertConfig smCertConfig() const { return m_smCertConfig; }
-    RateLimiterConfig rateLimiterConfig() const { return m_rateLimiterConfig; }
-    RedisConfig redisConfig() const { return m_redisConfig; }
+    CertConfig certConfig() const;
+    SMCertConfig smCertConfig() const;
+    RateLimiterConfig rateLimiterConfig() const;
+    RedisConfig redisConfig() const;
 
-    const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
+    const std::set<NodeIPEndpoint>& connectedNodes() const;
 
-    bool enableBlacklist() const
-    {
-        bcos::Guard l(x_certBlacklist);
-        return m_enableBlacklist;
-    }
-    const std::set<std::string>& peerBlacklist() const
-    {
-        bcos::Guard l(x_certBlacklist);
-        return m_certBlacklist;
-    }
-    bool enableWhitelist() const
-    {
-        bcos::Guard l(x_certWhitelist);
-        return m_enableWhitelist;
-    }
-    const std::set<std::string>& peerWhitelist() const
-    {
-        bcos::Guard l(x_certWhitelist);
-        return m_certWhitelist;
-    }
+    bool enableBlacklist() const;
+    const std::set<std::string>& peerBlacklist() const;
+    bool enableWhitelist() const;
+    const std::set<std::string>& peerWhitelist() const;
 
     void loadPeerBlacklist();
     void loadPeerWhitelist();
 
-    std::string const& uuid() const { return m_uuid; }
-    void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
+    std::string const& uuid() const;
+    void setUUID(std::string const& _uuid);
 
-    bool readonly() const { return m_readonly; }
-    void setEnableRIPProtocol(bool _enableRIPProtocol) { m_enableRIPProtocol = _enableRIPProtocol; }
-    bool enableRIPProtocol() const { return m_enableRIPProtocol; }
+    bool readonly() const;
+    void setEnableRIPProtocol(bool _enableRIPProtocol);
+    bool enableRIPProtocol() const;
 
-    void setEnableCompress(bool _enableCompress) { m_enableCompress = _enableCompress; }
-    bool enableCompress() const { return m_enableCompress; }
+    void setEnableCompress(bool _enableCompress);
+    bool enableCompress() const;
 
-    uint32_t allowMaxMsgSize() const { return m_allowMaxMsgSize; }
-    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize) { m_allowMaxMsgSize = _allowMaxMsgSize; }
+    uint32_t allowMaxMsgSize() const;
+    void setAllowMaxMsgSize(uint32_t _allowMaxMsgSize);
 
-    uint32_t sessionRecvBufferSize() const { return m_sessionRecvBufferSize; }
-    void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize)
-    {
-        m_sessionRecvBufferSize = _sessionRecvBufferSize;
-    }
+    uint32_t sessionRecvBufferSize() const;
+    void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize);
 
-    uint32_t maxReadDataSize() const { return m_maxReadDataSize; }
-    void setMaxReadDataSize(uint32_t _maxReadDataSize) { m_maxReadDataSize = _maxReadDataSize; }
+    uint32_t maxReadDataSize() const;
+    void setMaxReadDataSize(uint32_t _maxReadDataSize);
 
-    uint32_t maxSendDataSize() const { return m_maxSendDataSize; }
-    void setMaxSendDataSize(uint32_t _maxSendDataSize) { m_maxSendDataSize = _maxSendDataSize; }
+    uint32_t maxSendDataSize() const;
+    void setMaxSendDataSize(uint32_t _maxSendDataSize);
 
-    uint32_t maxMsgCountSendOneTime() const { return m_maxSendMsgCount; }
-    void setMaxSendMsgCount(uint32_t _maxSendMsgCount) { m_maxSendMsgCount = _maxSendMsgCount; }
+    uint32_t maxMsgCountSendOneTime() const;
+    void setMaxSendMsgCount(uint32_t _maxSendMsgCount);
     // NodeIDType:
     // h512(true == m_smSSL)
     // h2048(false == m_smSSL)
@@ -307,9 +254,9 @@ public:
         }
     }
 
-    bool enableSSLVerify() const { return m_enableSSLVerify; }
+    bool enableSSLVerify() const;
 
-    bcos::crypto::Hash::Ptr const& hashImpl() const { return m_hashImpl; }
+    bcos::crypto::Hash::Ptr const& hashImpl() const;
     std::string calculateShortNodeID(std::string const& rawNodeID) const
     {
         bcos::crypto::HashType p2pIDHash = m_hashImpl->hash(

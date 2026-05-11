@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <range/v3/view/any_view.hpp>
 
 #define CRYPTO_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CRYPTO")
 namespace bcos::crypto

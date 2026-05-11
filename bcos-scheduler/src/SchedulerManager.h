@@ -9,21 +9,7 @@ class SchedulerManager : public SchedulerInterface
 {
 public:
     SchedulerManager(
-        int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager)
-      : m_factory(factory),
-        m_schedulerTerm(schedulerSeq),
-        m_executorManager(executorManager),
-        m_pool("SchedulerManager", 1),  // Must set to 1 for serial execution
-        m_status(INITIALING)
-    {
-        executorManager->setExecutorChangeHandler([this]() {
-            // trigger switch
-            asyncSelfSwitchTerm();
-        });
-
-        // Notice: Not to initSchedulerIfNotExist here, because factory need to bind notifier after
-        // this constructor
-    }
+        int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager);
 
     // by pbft & sync
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
@@ -58,32 +44,15 @@ public:
 
     void testTriggerSwitch();
 
-    SchedulerFactory::Ptr getFactory() { return m_factory; }
+    SchedulerFactory::Ptr getFactory();
 
     class SchedulerTerm
     {
     public:
-        SchedulerTerm(int64_t schedulerSeq)
-          : m_schedulerSeq(schedulerSeq), m_executorSeq(utcTime() / 1000)
-        {}
+        SchedulerTerm(int64_t schedulerSeq);
 
-        SchedulerTerm next() { return SchedulerTerm(m_schedulerSeq); }
-        int64_t getSchedulerTermID()
-        {
-            int64_t id = (m_schedulerSeq << 32) + m_executorSeq;
-            if (id <= 0)
-            {
-                BCOS_LOG(FATAL) << "SchedulerTermID overflow!"
-                                << LOG_KV("m_schedulerSeq", m_schedulerSeq)
-                                << LOG_KV("m_executorSeq", m_executorSeq)
-                                << LOG_KV("SchedulerTermID", id);
-            }
-            BCOS_LOG(DEBUG) << "Build SchedulerTermID" << LOG_KV("m_schedulerSeq", m_schedulerSeq)
-                            << LOG_KV("m_executorSeq", m_executorSeq)
-                            << LOG_KV("SchedulerTermID", id);
-
-            return id;
-        }
+        SchedulerTerm next();
+        int64_t getSchedulerTermID();
 
 
     private:
@@ -100,43 +69,9 @@ public:
     };
 
     std::pair<bool, std::string> checkAndInit();
-    void stop() override
-    {
-        if (m_status == STOPPED)
-        {
-            SCHEDULER_LOG(INFO) << "scheduler has just stopped." << std::endl;
-            return;
-        }
+    void stop() override;
 
-        SCHEDULER_LOG(INFO) << "Try to stop SchedulerManager";
-
-        m_status.store(STOPPED);
-
-        if (m_scheduler)
-        {
-            m_scheduler->stop();
-        }
-
-        if (m_executorManager)
-        {
-            m_executorManager->stop();
-        }
-
-        // waiting for stopped
-        int32_t waitCount = 20;
-        while (m_scheduler.use_count() > 1 && waitCount-- > 0)
-        {
-            SCHEDULER_LOG(DEBUG) << "Scheduler is stopping.. "
-                                 << LOG_KV("unfinishedTaskNum", m_scheduler.use_count() - 1);
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
-
-        m_factory->stop();
-        SCHEDULER_LOG(INFO) << "scheduler has stopped.";
-        m_scheduler = nullptr;
-    }
-
-    void triggerSwitch() { asyncSelfSwitchTerm(); };
+    void triggerSwitch();
 
 private:
     void updateScheduler(int64_t schedulerTermId);

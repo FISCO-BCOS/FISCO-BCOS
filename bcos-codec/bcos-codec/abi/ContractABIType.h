@@ -53,14 +53,14 @@ public:
 
 public:
     // the number of dimensions of T or zero
-    std::size_t rank() { return extents.size(); }
+    std::size_t rank();
     // obtains the size of an array type along a specified dimension
-    std::size_t extent(std::size_t index) { return index > rank() ? 0 : extents[index - 1]; }
+    std::size_t extent(std::size_t index);
     bool removeExtent();
     bool dynamic();
-    bool valid() { return aet != ABI_ELEMENTARY_TYPE::INVALID; }
-    std::string getType() const { return strType; }
-    std::string getEleType() const { return strEleType; }
+    bool valid();
+    std::string getType() const;
+    std::string getEleType() const;
 
     // get abi elementary type by string
     ABI_ELEMENTARY_TYPE getEnumType(const std::string& _strType);
@@ -87,8 +87,8 @@ public:
 
 public:
     std::vector<std::string> getParamsType() const;
-    inline std::string getSignature() const { return strFuncSignature; }
-    inline std::string getFuncName() const { return strFuncName; }
+    std::string getSignature() const;
+    std::string getFuncName() const;
 };
 
 }  // namespace abi

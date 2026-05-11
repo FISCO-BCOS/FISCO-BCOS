@@ -28,6 +28,93 @@ using namespace bcos::gateway::ratelimiter;
 
 const std::string RateLimiterManager::TOTAL_OUTGOING_KEY = "total-outgoing-key";
 
+RateLimiterManager::RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
+  : m_rateLimiterConfig(_rateLimiterConfig)
+{
+    initP2pBasicMsgTypes();
+}
+
+bcos::gateway::ratelimiter::RateLimiterFactory::Ptr RateLimiterManager::rateLimiterFactory() const
+{
+    return m_rateLimiterFactory;
+}
+
+void RateLimiterManager::setRateLimiterFactory(
+    ratelimiter::RateLimiterFactory::Ptr& _rateLimiterFactory)
+{
+    m_rateLimiterFactory = _rateLimiterFactory;
+}
+
+const std::array<bool, std::numeric_limits<uint16_t>::max()>&
+RateLimiterManager::modulesWithoutLimit() const
+{
+    return m_modulesWithoutLimit;
+}
+
+void RateLimiterManager::setRateLimiterConfig(
+    const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
+{
+    m_rateLimiterConfig = _rateLimiterConfig;
+}
+
+const GatewayConfig::RateLimiterConfig& RateLimiterManager::rateLimiterConfig() const
+{
+    return m_rateLimiterConfig;
+}
+
+void RateLimiterManager::resetModulesWithoutLimit(const std::set<uint16_t>& _modulesWithoutLimit)
+{
+    m_modulesWithoutLimit.fill(false);
+    for (const auto& moduleID : _modulesWithoutLimit)
+    {
+        m_modulesWithoutLimit.at(moduleID) = true;
+    }
+}
+
+void RateLimiterManager::resetP2pBasicMsgTypes(const std::set<uint16_t>& _p2pBasicMsgTypes)
+{
+    m_p2pBasicMsgTypes.fill(false);
+    for (const auto& msgType : _p2pBasicMsgTypes)
+    {
+        m_p2pBasicMsgTypes.at(msgType) = true;
+    }
+}
+
+bool RateLimiterManager::enableOutGroupRateLimit() const
+{
+    return m_enableOutGroupRateLimit;
+}
+
+bool RateLimiterManager::enableOutConRateLimit() const
+{
+    return m_enableOutConRateLimit;
+}
+
+bool RateLimiterManager::enableInRateLimit() const
+{
+    return m_enableInRateLimit;
+}
+
+void RateLimiterManager::setEnableOutGroupRateLimit(bool _enableOutGroupRateLimit)
+{
+    m_enableOutGroupRateLimit = _enableOutGroupRateLimit;
+}
+
+void RateLimiterManager::setEnableOutConRateLimit(bool _enableOutConRateLimit)
+{
+    m_enableOutConRateLimit = _enableOutConRateLimit;
+}
+
+void RateLimiterManager::setEnableInRateLimit(bool _enableInRateLimit)
+{
+    m_enableInRateLimit = _enableInRateLimit;
+}
+
+bool RateLimiterManager::isP2pBasicMsgType(uint16_t _type)
+{
+    return m_p2pBasicMsgTypes.at(_type);
+}
+
 void RateLimiterManager::initP2pBasicMsgTypes()
 {
     /** ref: enum GatewayMessageType */

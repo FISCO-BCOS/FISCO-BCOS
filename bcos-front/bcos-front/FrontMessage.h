@@ -55,20 +55,20 @@ public:
     FrontMessage() = default;
     virtual ~FrontMessage() = default;
 
-    virtual uint16_t moduleID() { return m_moduleID; }
-    virtual void setModuleID(uint16_t _moduleID) { m_moduleID = _moduleID; }
+    virtual uint16_t moduleID();
+    virtual void setModuleID(uint16_t _moduleID);
 
-    virtual uint16_t ext() { return m_ext; }
-    virtual void setExt(uint16_t _ext) { m_ext = _ext; }
+    virtual uint16_t ext();
+    virtual void setExt(uint16_t _ext);
 
-    virtual bytesConstRef uuid() { return bcos::ref(m_uuid); }
-    virtual void setUuid(bytes _uuid) { m_uuid = std::move(_uuid); }
+    virtual bytesConstRef uuid();
+    virtual void setUuid(bytes _uuid);
 
-    virtual bytesConstRef payload() { return m_payload; }
-    virtual void setPayload(bytesConstRef _payload) { m_payload = _payload; }
+    virtual bytesConstRef payload();
+    virtual void setPayload(bytesConstRef _payload);
 
-    virtual void setResponse() { m_ext |= ExtFlag::Response; }
-    virtual bool isResponse() { return m_ext & ExtFlag::Response; }
+    virtual void setResponse();
+    virtual bool isResponse();
 
     bool encodeHeader(bytes& buffer);
     virtual bool encode(bytes& _buffer);
@@ -88,13 +88,9 @@ class FrontMessageFactory
 public:
     using Ptr = std::shared_ptr<FrontMessageFactory>;
 
-    virtual ~FrontMessageFactory() {}
+    virtual ~FrontMessageFactory();
 
-    virtual FrontMessage::Ptr buildMessage()
-    {
-        auto message = std::make_shared<FrontMessage>();
-        return message;
-    }
+    virtual FrontMessage::Ptr buildMessage();
 };
 
 }  // namespace bcos::front
