@@ -5,8 +5,12 @@
 #include "bcos-framework/protocol/TransactionSubmitResultFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-tool/NodeConfig.h"
-#include <rocksdb/db.h>
 #include <memory>
+
+namespace bcos::initializer
+{
+class BaselineStorageInitializer;
+}
 
 namespace bcos::scheduler_v1
 {
@@ -15,7 +19,8 @@ class BaselineSchedulerInitializer
 public:
     static std::tuple<std::function<std::shared_ptr<scheduler::SchedulerInterface>()>,
         std::function<void(std::function<void(protocol::BlockNumber)>)>>
-    build(::rocksdb::DB& rocksDB, std::shared_ptr<protocol::BlockFactory> blockFactory,
+    build(std::shared_ptr<initializer::BaselineStorageInitializer> storageInitializer,
+        std::shared_ptr<protocol::BlockFactory> blockFactory,
         std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
         std::shared_ptr<ledger::LedgerInterface> ledger,

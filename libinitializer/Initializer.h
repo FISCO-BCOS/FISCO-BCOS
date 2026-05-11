@@ -52,6 +52,8 @@ class SchedulerInterface;
 }
 namespace initializer
 {
+class BaselineStorageInitializer;
+
 class Initializer
 {
 public:
@@ -123,6 +125,7 @@ private:
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
+    std::shared_ptr<BaselineStorageInitializer> m_baselineStorageInitializer;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
