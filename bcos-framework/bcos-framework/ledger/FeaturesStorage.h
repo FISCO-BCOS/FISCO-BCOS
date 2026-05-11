@@ -31,7 +31,7 @@ inline task::Task<void> Features::readFromStorage(
 }
 
 inline task::Task<void> Features::writeToStorage(
-    storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+    storage2::WritableStorage<executor_v1::StateKey, storage::Entry> auto& storage,
     long blockNumber, bool ignoreDuplicate) const
 {
     for (auto [flag, name, value] : flags())

@@ -35,7 +35,7 @@ const char* Entry::data() const&
 
 crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
-    std::optional<bcos::ledger::Features> features) const
+    std::optional<bcos::ledger::Features> const& features) const
 {
     const bool enableHashCollisionFix =
         features.has_value() &&

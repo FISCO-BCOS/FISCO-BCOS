@@ -1,9 +1,6 @@
 #pragma once
-#include "../ledger/LedgerTypeDef.h"
 #include "../protocol/Protocol.h"
-#include "../storage/Entry.h"
 #include "../storage2/Storage.h"
-#include "../transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Exceptions.h>
 #include <array>
@@ -16,6 +13,24 @@
 #include <range/v3/view/zip.hpp>
 #include <set>
 #include <string_view>
+
+// Forward declarations only — the storage-I/O member templates below take these
+// types as concept arguments / parameter types, which need name visibility but
+// not full definitions at declaration time. Full definitions are pulled in by
+// FeaturesStorage.h, where the implementations and concrete call sites live.
+// Breaking the include of storage/Entry.h / StateKey.h here is what lets
+// storage/Entry.h include Features.h without forming a cycle through
+// StateKey.h's `using StateValue = storage::Entry`.
+namespace bcos::storage
+{
+class Entry;
+}
+namespace bcos::executor_v1
+{
+class StateKey;
+class StateKeyView;
+}  // namespace bcos::executor_v1
+
 namespace bcos::ledger
 {
 DERIVE_BCOS_EXCEPTION(NoSuchFeatureError);
@@ -87,7 +102,6 @@ public:
         feature_raw_address,
         feature_rpbft_vrf_type_secp256k1,
         feature_balance_policy2,  // 转账白名单 Transfer whitelist
-        bugfix_gas_payment_balance_precheck,
     };
 
 private:
@@ -115,138 +129,7 @@ public:
 
     void setToShardingDefault(protocol::BlockVersion version);
 
-<<<<<<< HEAD
     void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion);
-=======
-    void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion)
-    {
-        struct UpgradeFeatures
-        {
-            protocol::BlockVersion to;
-            std::vector<Flag> flags;
-        };
-        const static auto upgradeRoadmap =
-            std::to_array<UpgradeFeatures>({{.to = protocol::BlockVersion::V3_2_3_VERSION,
-                                                .flags =
-                                                    {
-                                                        Flag::bugfix_revert,
-                                                    }},
-                {.to = protocol::BlockVersion::V3_2_4_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_statestorage_hash,
-                            Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                        }},
-                {.to = protocol::BlockVersion::V3_2_7_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_event_log_order,
-                            Flag::bugfix_call_noaddr_return,
-                            Flag::bugfix_precompiled_codehash,
-                            Flag::bugfix_dmc_revert,
-                        }},
-                {.to = protocol::BlockVersion::V3_5_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_revert,
-                            Flag::bugfix_statestorage_hash,
-                        }},
-                {.to = protocol::BlockVersion::V3_6_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_statestorage_hash,
-                            Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy,
-                            Flag::bugfix_event_log_order,
-                            Flag::bugfix_call_noaddr_return,
-                            Flag::bugfix_precompiled_codehash,
-                            Flag::bugfix_dmc_revert,
-                        }},
-                {.to = protocol::BlockVersion::V3_6_1_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_keypage_system_entry_hash,
-                            Flag::bugfix_internal_create_redundant_storage,
-                        }},
-                {.to = protocol::BlockVersion::V3_7_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_empty_abi_reset,
-                            Flag::bugfix_eip55_addr,
-                            Flag::bugfix_sharding_call_in_child_executive,
-                            Flag::bugfix_internal_create_permission_denied,
-                        }},
-                {.to = protocol::BlockVersion::V3_8_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_eoa_as_contract,
-                            Flag::bugfix_dmc_deploy_gas_used,
-                            Flag::bugfix_evm_exception_gas_used,
-                            Flag::bugfix_set_row_with_dirty_flag,
-                        }},
-                {.to = protocol::BlockVersion::V3_9_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_staticcall_noaddr_return,
-                            Flag::bugfix_support_transfer_receive_fallback,
-                            Flag::bugfix_eoa_match_failed,
-                        }},
-                {.to = protocol::BlockVersion::V3_12_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_rpbft_vrf_blocknumber_input,
-                        }},
-                {.to = protocol::BlockVersion::V3_13_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_delete_account_code,
-                            Flag::bugfix_policy1_empty_code_address,
-                            Flag::bugfix_precompiled_gasused,
-                        }},
-                {.to = protocol::BlockVersion::V3_14_0_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_nonce_not_increase_when_revert,
-                            Flag::bugfix_set_contract_nonce_when_create,
-                        }},
-                {.to = protocol::BlockVersion::V3_15_1_VERSION,
-                    .flags = {Flag::bugfix_precompiled_gascalc}},
-                {.to = protocol::BlockVersion::V3_15_2_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_method_auth_sender,
-                            Flag::bugfix_precompiled_evm_status,
-                        }},
-                {.to = protocol::BlockVersion::V3_16_0_VERSION,
-                    .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize,
-                        Flag::bugfix_v1_timestamp}},
-                {.to = protocol::BlockVersion::V3_16_4_VERSION,
-                    .flags = {Flag::bugfix_revert_logs}},
-                {.to = protocol::BlockVersion::V3_16_5_VERSION,
-                    .flags =
-                        {
-                            Flag::bugfix_auth_check_create2,
-                            Flag::bugfix_auth_check_revert_status,
-                            Flag::bugfix_auth_table_raw_address,
-                            Flag::bugfix_auth_table_squatting,
-                        }},
-                {.to = protocol::BlockVersion::V3_17_0_VERSION,
-                    .flags = {
-                        Flag::bugfix_statestorage_hash_v3_17,
-                    }}});
-        for (const auto& upgradeFeatures : upgradeRoadmap)
-        {
-            if (((toVersion < protocol::BlockVersion::V3_2_7_VERSION) &&
-                    (toVersion >= upgradeFeatures.to)) ||
-                (fromVersion < upgradeFeatures.to && toVersion >= upgradeFeatures.to))
-            {
-                for (auto flag : upgradeFeatures.flags)
-                {
-                    set(flag);
-                }
-            }
-        }
-    }
->>>>>>> 438c82d82 (refactor(storage): gate FIB-99 hash via Features flag, not block version)
 
     void setGenesisFeatures(protocol::BlockVersion toVersion);
 
@@ -274,8 +157,11 @@ public:
     task::Task<void> readFromStorage(
         storage2::ReadableStorage<executor_v1::StateKeyView> auto& storage, long blockNumber);
 
+    // NOTE: second concept arg used to be executor_v1::StateValue (alias of storage::Entry).
+    // Aliases cannot be forward-declared, so we use storage::Entry directly here so the
+    // declaration parses with just a forward declaration of storage::Entry.
     task::Task<void> writeToStorage(
-        storage2::WritableStorage<executor_v1::StateKey, executor_v1::StateValue> auto& storage,
+        storage2::WritableStorage<executor_v1::StateKey, storage::Entry> auto& storage,
         long blockNumber, bool ignoreDuplicate = true) const;
 };
 

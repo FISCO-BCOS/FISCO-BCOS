@@ -2,8 +2,8 @@
 
 #include "Common.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
-#include "protocol/Protocol.h"
 #include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/archive/basic_archive.hpp>
@@ -18,10 +18,6 @@
 #include <type_traits>
 #include <variant>
 
-namespace bcos::ledger
-{
-class Features;
-}
 namespace bcos::storage
 {
 
@@ -207,20 +203,20 @@ public:
 
     // Convenience overload for callers without Features. Forwards to the 5-arg overload
     // with std::nullopt so all bugfix-flag lookups are skipped (legacy path).
-    // Templated (with a default) so that `std::optional<Features>` instantiation is
-    // deferred to the call site, where Features.h is in scope.
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
     {
         return hash(table, key, hashImpl, blockVersion, std::nullopt);
     }
 
-private:
-    [[nodiscard]] auto outputValueView(const ValueType& value) const& -> std::string_view;
-
+    // 5-arg overload. When features carries bugfix_statestorage_hash_v3_17, uses the
+    // length-prefixed, status-aware preimage that fixes FIB-99 boundary/status ambiguity.
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
-        std::optional<bcos::ledger::Features> features) const;
+        std::optional<bcos::ledger::Features> const& features) const;
+
+private:
+    [[nodiscard]] auto outputValueView(const ValueType& value) const& -> std::string_view;
 
     template <typename T>
     [[nodiscard]] auto inputValueView(const T& value) const -> std::string_view
