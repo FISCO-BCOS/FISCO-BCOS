@@ -42,24 +42,21 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         // FIB-99: Length-prefixed, status-aware hashing to prevent boundary
         // ambiguity and status ambiguity collisions in state root calculation.
         auto hasher = hashImpl.hasher();
-        // Length-prefix table name (4 bytes little-endian)
-        uint32_t tableLen = static_cast<uint32_t>(table.size());
-        hasher.update(std::string_view(reinterpret_cast<const char*>(&tableLen), sizeof(tableLen)));
+        // FIB-99 preimage format (fixed across platforms):
+        //   u32(tableLen) || table || u32(keyLen) || key || i8(status) || [data if MODIFIED]
+        // Use explicit fixed-width types so the hash is independent of sizeof(size_t).
+        hasher.update(static_cast<uint32_t>(table.size()));
         hasher.update(table);
-        // Length-prefix key (4 bytes little-endian)
-        uint32_t keyLen = static_cast<uint32_t>(key.size());
-        hasher.update(std::string_view(reinterpret_cast<const char*>(&keyLen), sizeof(keyLen)));
+        hasher.update(static_cast<uint32_t>(key.size()));
         hasher.update(key);
-        // Include entry status as a byte to distinguish DELETED from empty MODIFIED
-        uint8_t statusByte = static_cast<uint8_t>(m_status);
-        hasher.update(
-            std::string_view(reinterpret_cast<const char*>(&statusByte), sizeof(statusByte)));
+        // Entry status (1 byte) distinguishes DELETED from MODIFIED-with-empty-value.
+        hasher.update(m_status);
 
         switch (m_status)
         {
         case MODIFIED:
         {
-            auto data = get();
+            const auto data = get();
             hasher.update(data);
             hasher.final(entryHash);
             if (c_fileLogLevel == TRACE) [[unlikely]]
@@ -83,7 +80,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         default:
         {
             STORAGE_LOG(DEBUG) << "Entry hash v3.17+, clean entry: " << table << " | " << toHex(key)
-                               << " | " << (int)m_status;
+                               << " | " << static_cast<int>(m_status);
             break;
         }
         }
