@@ -5,45 +5,45 @@
 #include "bcos-storage/RocksDBStorage2.h"
 #include "bcos-storage/StateKVResolver.h"
 #include <bcos-framework/transaction-executor/StateKey.h>
-#include <rocksdb/db.h>
 #include <memory>
+#include <rocksdb/db.h>
 
 namespace bcos::initializer
 {
-using BaselineSchedulerMutableStorage =
+using GlobalStateMutableStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
         bcos::executor_v1::StateValue,
         bcos::storage2::memory_storage::ORDERED |
             bcos::storage2::memory_storage::LOGICAL_DELETION>;
 
-using BaselineSchedulerCacheStorage =
+using GlobalStateCacheStorage =
     bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
         bcos::executor_v1::StateValue,
         bcos::storage2::memory_storage::CONCURRENT | bcos::storage2::memory_storage::LRU>;
 
-using BaselineSchedulerBackendStorage = bcos::storage2::rocksdb::RocksDBStorage2<
+using GlobalStateBackendStorage = bcos::storage2::rocksdb::RocksDBStorage2<
     bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
     bcos::storage2::rocksdb::StateKeyResolver, bcos::storage2::rocksdb::StateValueResolver>;
 
-using BaselineSchedulerMultiLayerStorage =
-    bcos::storage2::MultiLayerStorage<BaselineSchedulerMutableStorage,
-        BaselineSchedulerCacheStorage, BaselineSchedulerBackendStorage>;
+using GlobalStateStorage =
+    bcos::storage2::MultiLayerStorage<GlobalStateMutableStorage, GlobalStateCacheStorage,
+        GlobalStateBackendStorage>;
 
-class BaselineStorageInitializer
+class GlobalStateStorageInitializer
 {
 public:
-    using Ptr = std::shared_ptr<BaselineStorageInitializer>;
+    using Ptr = std::shared_ptr<GlobalStateStorageInitializer>;
 
-    explicit BaselineStorageInitializer(::rocksdb::DB& rocksDB);
+    explicit GlobalStateStorageInitializer(::rocksdb::DB& rocksDB);
 
     static Ptr build(::rocksdb::DB& rocksDB);
 
-    BaselineSchedulerMultiLayerStorage& storage() { return m_multiLayerStorage; }
-    BaselineSchedulerMultiLayerStorage const& storage() const { return m_multiLayerStorage; }
+    GlobalStateStorage& storage() { return m_storage; }
+    GlobalStateStorage const& storage() const { return m_storage; }
 
 private:
-    BaselineSchedulerCacheStorage m_cacheStorage;
-    BaselineSchedulerBackendStorage m_rocksDBStorage;
-    BaselineSchedulerMultiLayerStorage m_multiLayerStorage;
+    GlobalStateCacheStorage m_cacheStorage;
+    GlobalStateBackendStorage m_rocksDBStorage;
+    GlobalStateStorage m_storage;
 };
 }  // namespace bcos::initializer

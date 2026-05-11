@@ -27,10 +27,10 @@
 #include "Initializer.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
-#include "BaselineStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
+#include "GlobalStateStorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -260,12 +260,11 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
     auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
-    m_baselineStorageInitializer =
-        BaselineStorageInitializer::build(existsRocksDB->rocksDB());
+    m_globalStateStorageInitializer = GlobalStateStorageInitializer::build(existsRocksDB->rocksDB());
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
     std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
-        scheduler_v1::BaselineSchedulerInitializer::build(m_baselineStorageInitializer,
+        scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
             m_protocolInitializer->blockFactory(), m_txpoolInitializer->txpool(),
             transactionSubmitResultFactory, ledger, baselineSchedulerConfig);
 

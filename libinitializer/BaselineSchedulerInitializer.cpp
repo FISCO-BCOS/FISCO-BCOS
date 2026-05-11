@@ -1,5 +1,5 @@
 #include "BaselineSchedulerInitializer.h"
-#include "libinitializer/BaselineStorageInitializer.h"
+#include "libinitializer/GlobalStateStorageInitializer.h"
 #include "bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "bcos-transaction-scheduler/BaselineScheduler.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
@@ -10,7 +10,7 @@
 std::tuple<std::function<std::shared_ptr<bcos::scheduler::SchedulerInterface>()>,
     std::function<void(std::function<void(bcos::protocol::BlockNumber)>)>>
 bcos::scheduler_v1::BaselineSchedulerInitializer::build(
-    std::shared_ptr<initializer::BaselineStorageInitializer> storageInitializer,
+    std::shared_ptr<initializer::GlobalStateStorageInitializer> storageInitializer,
     std::shared_ptr<protocol::BlockFactory> blockFactory,
     std::shared_ptr<txpool::TxPoolInterface> txpool,
     std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
@@ -19,11 +19,11 @@ bcos::scheduler_v1::BaselineSchedulerInitializer::build(
 {
     struct Data
     {
-        initializer::BaselineStorageInitializer::Ptr m_storageInitializer;
+        initializer::GlobalStateStorageInitializer::Ptr m_storageInitializer;
         executor_v1::PrecompiledManager m_precompiledManager;
         executor_v1::TransactionExecutorImpl m_transactionExecutor;
 
-        Data(initializer::BaselineStorageInitializer::Ptr storageInitializer,
+        Data(initializer::GlobalStateStorageInitializer::Ptr storageInitializer,
             protocol::BlockFactory& blockFactory)
           : m_storageInitializer(std::move(storageInitializer)),
             m_precompiledManager(blockFactory.cryptoSuite()->hashImpl()),
@@ -35,7 +35,7 @@ bcos::scheduler_v1::BaselineSchedulerInitializer::build(
 
     auto buildBaselineHolder = [&](auto scheduler) {
         auto baselineScheduler =
-            std::make_shared<BaselineScheduler<initializer::BaselineSchedulerMultiLayerStorage,
+            std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
                 decltype(data->m_transactionExecutor), decltype(*scheduler),
                 ledger::LedgerInterface>>(data->m_storageInitializer->storage(), *scheduler,
                 data->m_transactionExecutor, *blockFactory, *ledger, *txpool,
@@ -66,7 +66,7 @@ bcos::scheduler_v1::BaselineSchedulerInitializer::build(
     if (config.parallel)
     {
         auto scheduler =
-            std::make_shared<SchedulerParallelImpl<initializer::BaselineSchedulerMutableStorage>>();
+            std::make_shared<SchedulerParallelImpl<initializer::GlobalStateMutableStorage>>();
         scheduler->m_grainSize = config.grainSize;
         scheduler->m_maxConcurrency = config.maxThread;
         return buildBaselineHolder(std::move(scheduler));

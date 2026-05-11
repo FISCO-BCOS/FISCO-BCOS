@@ -9,7 +9,7 @@
 
 namespace bcos::initializer
 {
-class BaselineStorageInitializer;
+class GlobalStateStorageInitializer;
 }
 
 namespace bcos::scheduler_v1
@@ -19,7 +19,7 @@ class BaselineSchedulerInitializer
 public:
     static std::tuple<std::function<std::shared_ptr<scheduler::SchedulerInterface>()>,
         std::function<void(std::function<void(protocol::BlockNumber)>)>>
-    build(std::shared_ptr<initializer::BaselineStorageInitializer> storageInitializer,
+    build(std::shared_ptr<initializer::GlobalStateStorageInitializer> storageInitializer,
         std::shared_ptr<protocol::BlockFactory> blockFactory,
         std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
