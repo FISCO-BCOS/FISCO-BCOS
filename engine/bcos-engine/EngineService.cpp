@@ -19,9 +19,7 @@
 #include "EngineService.h"
 
 #include <algorithm>
-#include <charconv>
 #include <iomanip>
-#include <limits>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -34,59 +32,8 @@ using namespace bcos::engine;
 namespace
 {
 constexpr std::size_t c_hashBytes = 32;
-constexpr std::size_t c_addressBytes = 20;
-constexpr std::size_t c_logsBloomBytes = 256;
 constexpr std::size_t c_payloadIdBytes = 8;
-
-bool isHexString(std::string_view value)
-{
-    if (value.size() < 3 || value[0] != '0' || value[1] != 'x')
-    {
-        return false;
-    }
-    return std::all_of(value.begin() + 2, value.end(), [](char ch) {
-        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
-    });
-}
-
-bool isFixedHex(std::string_view value, std::size_t bytes)
-{
-    return isHexString(value) && value.size() == (bytes * 2 + 2);
-}
-
-bool isQuantity(std::string_view value)
-{
-    return isHexString(value);
-}
-
-std::optional<std::int64_t> parseQuantity(std::string_view value)
-{
-    if (!isQuantity(value))
-    {
-        return std::nullopt;
-    }
-
-    std::uint64_t parsed = 0;
-    auto begin = value.data() + 2;
-    auto end = value.data() + value.size();
-    auto result = std::from_chars(begin, end, parsed, 16);
-    if (result.ec != std::errc{} || result.ptr != end)
-    {
-        return std::nullopt;
-    }
-    if (parsed > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
-    {
-        return std::nullopt;
-    }
-    return static_cast<std::int64_t>(parsed);
-}
-
-std::string hexQuantity(std::uint64_t value)
-{
-    std::ostringstream out;
-    out << "0x" << std::hex << value;
-    return out.str();
-}
+constexpr int c_hexBase = 16;
 
 std::string encodePayloadSequence(std::uint64_t value)
 {
@@ -96,40 +43,40 @@ std::string encodePayloadSequence(std::uint64_t value)
     return out.str();
 }
 
-std::string syntheticHash(std::string_view seed)
+bcos::h256 syntheticHash(std::string_view seed)
 {
     std::string hex = "0x";
-    hex.reserve(c_hashBytes * 2 + 2);
+    hex.reserve((c_hashBytes * 2) + 2);
     auto payload = seed.substr(seed.rfind('x') + 1);
-    while (hex.size() < c_hashBytes * 2 + 2)
+    while (hex.size() < ((c_hashBytes * 2) + 2))
     {
         hex.append(payload.begin(), payload.end());
     }
-    hex.resize(c_hashBytes * 2 + 2);
-    return hex;
+    hex.resize((c_hashBytes * 2) + 2);
+    return bcos::h256(hex.substr(2));
 }
 
 std::vector<std::string> supportedCapabilities()
 {
     return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
         "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_newPayloadV1",
-        "engine_newPayloadV2", "engine_newPayloadV3"};
+        "engine_getPayloadV2", "engine_getPayloadV3", "engine_newPayloadV1", "engine_newPayloadV2",
+        "engine_newPayloadV3"};
 }
 
-bool isGetPayloadVersionCompatible(std::uint32_t requestedVersion, std::uint32_t storedVersion)
+bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion)
 {
-    if (requestedVersion == 1)
+    if (requestVersion == EngineApiVersion::V1)
     {
-        return storedVersion == 1;
+        return payloadVersion == 1;
     }
-    if (requestedVersion == 2)
+    if (requestVersion == EngineApiVersion::V2)
     {
-        return storedVersion <= 2;
+        return payloadVersion <= 2;
     }
-    if (requestedVersion == 3)
+    if (requestVersion == EngineApiVersion::V3)
     {
-        return storedVersion <= 3;
+        return payloadVersion <= 3;
     }
     return false;
 }
@@ -137,18 +84,6 @@ bool isGetPayloadVersionCompatible(std::uint32_t requestedVersion, std::uint32_t
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version)
 {
-    if (!isQuantity(payloadAttributes.timestamp))
-    {
-        return std::string("payloadAttributes.timestamp must be a hex quantity");
-    }
-    if (!isFixedHex(payloadAttributes.prevRandao, c_hashBytes))
-    {
-        return std::string("payloadAttributes.prevRandao must be a 32-byte hash");
-    }
-    if (!isFixedHex(payloadAttributes.suggestedFeeRecipient, c_addressBytes))
-    {
-        return std::string("payloadAttributes.suggestedFeeRecipient must be a 20-byte address");
-    }
     if (version == 1 && payloadAttributes.withdrawals.has_value())
     {
         return std::string("withdrawals are not part of PayloadAttributesV1");
@@ -163,8 +98,7 @@ std::optional<std::string> validatePayloadAttributes(
     }
     if (version == 3)
     {
-        if (!payloadAttributes.parentBeaconBlockRoot.has_value() ||
-            !isFixedHex(*payloadAttributes.parentBeaconBlockRoot, c_hashBytes))
+        if (!payloadAttributes.parentBeaconBlockRoot.has_value())
         {
             return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
         }
@@ -175,40 +109,11 @@ std::optional<std::string> validatePayloadAttributes(
 std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version)
 {
-    if (!isFixedHex(executionPayload.parentHash, c_hashBytes))
-    {
-        return std::string("executionPayload.parentHash must be a 32-byte hash");
-    }
-    if (!isFixedHex(executionPayload.feeRecipient, c_addressBytes))
-    {
-        return std::string("executionPayload.feeRecipient must be a 20-byte address");
-    }
-    if (!isFixedHex(executionPayload.stateRoot, c_hashBytes) ||
-        !isFixedHex(executionPayload.receiptsRoot, c_hashBytes) ||
-        !isFixedHex(executionPayload.prevRandao, c_hashBytes) ||
-        !isFixedHex(executionPayload.blockHash, c_hashBytes))
-    {
-        return std::string("executionPayload contains an invalid 32-byte field");
-    }
-    if (!isFixedHex(executionPayload.logsBloom, c_logsBloomBytes))
-    {
-        return std::string("executionPayload.logsBloom must be 256 bytes");
-    }
-    if (!isQuantity(executionPayload.blockNumber) || !isQuantity(executionPayload.gasLimit) ||
-        !isQuantity(executionPayload.gasUsed) || !isQuantity(executionPayload.timestamp) ||
-        !isQuantity(executionPayload.baseFeePerGas))
-    {
-        return std::string("executionPayload quantities must be hex encoded");
-    }
-    if (!isHexString(executionPayload.extraData))
-    {
-        return std::string("executionPayload.extraData must be hex encoded");
-    }
     for (auto const& transaction : executionPayload.transactions)
     {
-        if (!isHexString(transaction) || transaction.size() <= 2)
+        if (!transaction)
         {
-            return std::string("executionPayload.transactions entries must be non-empty hex bytes");
+            return std::string("executionPayload.transactions entries must not be null");
         }
     }
     if (version == 1 && executionPayload.withdrawals.has_value())
@@ -227,9 +132,7 @@ std::optional<std::string> validateExecutionPayload(
     if (version == 3)
     {
         if (!executionPayload.blobGasUsed.has_value() ||
-            !executionPayload.excessBlobGas.has_value() ||
-            !isQuantity(*executionPayload.blobGasUsed) ||
-            !isQuantity(*executionPayload.excessBlobGas))
+            !executionPayload.excessBlobGas.has_value())
         {
             return std::string("blob gas fields are required for ExecutionPayloadV3");
         }
@@ -237,10 +140,6 @@ std::optional<std::string> validateExecutionPayload(
     return std::nullopt;
 }
 }  // namespace
-
-EngineService::EngineService(bcos::rpc::NodeService::Ptr nodeService)
-  : m_nodeService(std::move(nodeService))
-{}
 
 bcos::task::Task<std::vector<std::string>> EngineService::exchangeCapabilities(
     std::vector<std::string> remoteCapabilities)
@@ -268,13 +167,13 @@ bcos::task::Task<PayloadStatus> EngineService::newPayload(
     co_return handleNewPayload(request, version);
 }
 
-std::optional<std::int64_t> EngineService::getSafeBlockNumber() const
+std::optional<bcos::protocol::BlockNumber> EngineService::getSafeBlockNumber() const
 {
     std::shared_lock lock(x_state);
     return m_safeBlockNumber;
 }
 
-std::optional<std::int64_t> EngineService::getFinalizedBlockNumber() const
+std::optional<bcos::protocol::BlockNumber> EngineService::getFinalizedBlockNumber() const
 {
     std::shared_lock lock(x_state);
     return m_finalizedBlockNumber;
@@ -287,11 +186,11 @@ bool EngineService::isVersionSupported(std::uint32_t version)
 }
 
 PayloadStatus EngineService::makeStatus(PayloadValidationStatus status,
-    std::optional<std::string> latestValidHash, std::optional<std::string> validationError)
+    std::optional<h256> latestValidHash, std::optional<std::string> validationError)
 {
     PayloadStatus statusObject;
     statusObject.status = status;
-    statusObject.latestValidHash = std::move(latestValidHash);
+    statusObject.latestValidHash = latestValidHash;
     statusObject.validationError = std::move(validationError);
     return statusObject;
 }
@@ -303,15 +202,6 @@ ForkchoiceUpdatedResult EngineService::handleForkchoiceUpdate(
     if (!isVersionSupported(version))
     {
         throw std::invalid_argument("Unsupported Engine API version");
-    }
-    if (!isFixedHex(forkchoiceState.headBlockHash, c_hashBytes) ||
-        !isFixedHex(forkchoiceState.safeBlockHash, c_hashBytes) ||
-        !isFixedHex(forkchoiceState.finalizedBlockHash, c_hashBytes))
-    {
-        ForkchoiceUpdatedResult result;
-        result.payloadStatus = makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
-            std::string("forkchoice hashes must be 32-byte hex values"));
-        return result;
     }
     if (payloadAttributes)
     {
@@ -342,7 +232,7 @@ ForkchoiceUpdatedResult EngineService::handleForkchoiceUpdate(
     PayloadEntry entry;
     entry.version = version;
     entry.executionPayload = std::move(payload);
-    entry.blockValue = "0x0";
+    entry.blockValue = 0;
     if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
     {
         entry.blobsBundle = BlobsBundleV1{};
@@ -368,9 +258,10 @@ GetPayloadResult EngineService::handleGetPayload(
     {
         throw std::out_of_range("Unknown payload");
     }
-    if (!isGetPayloadVersionCompatible(version, it->second.version))
+    if (!isGetPayloadVersionCompatible(static_cast<EngineApiVersion>(version), it->second.version))
     {
-        throw std::invalid_argument("Payload version is incompatible with requested method version");
+        throw std::invalid_argument(
+            "Payload version is incompatible with requested method version");
     }
 
     GetPayloadResult result;
@@ -404,8 +295,7 @@ PayloadStatus EngineService::handleNewPayload(
     }
     if (version == 3)
     {
-        if (!request.parentBeaconBlockRoot.has_value() ||
-            !isFixedHex(*request.parentBeaconBlockRoot, c_hashBytes))
+        if (!request.parentBeaconBlockRoot.has_value())
         {
             return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3"));
@@ -440,14 +330,15 @@ PayloadStatus EngineService::handleNewPayload(
     PayloadEntry entry;
     entry.version = version;
     entry.executionPayload = request.executionPayload;
-    entry.blockValue = "0x0";
+    entry.blockValue = 0;
     if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
     {
         entry.blobsBundle = BlobsBundleV1{};
     }
     m_payloadCache[payloadId] = std::move(entry);
 
-    return makeStatus(PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
+    return makeStatus(
+        PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
 }
 
 PayloadID EngineService::nextPayloadID()
@@ -459,11 +350,11 @@ ExecutionPayload EngineService::buildPayloadSkeleton(const ForkchoiceState& fork
     const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
     std::uint32_t version) const
 {
-    auto nextBlockNumber = std::uint64_t{0};
+    auto nextBlockNumber = bcos::protocol::BlockNumber{0};
     if (auto currentBlockNumber = lookupBlockNumberByHash(forkchoiceState.headBlockHash);
         currentBlockNumber.has_value())
     {
-        nextBlockNumber = static_cast<std::uint64_t>(*currentBlockNumber + 1);
+        nextBlockNumber = *currentBlockNumber + 1;
     }
 
     ExecutionPayload executionPayload;
@@ -471,14 +362,14 @@ ExecutionPayload EngineService::buildPayloadSkeleton(const ForkchoiceState& fork
     executionPayload.feeRecipient = payloadAttributes.suggestedFeeRecipient;
     executionPayload.stateRoot = syntheticHash(std::string("state") + payloadId);
     executionPayload.receiptsRoot = syntheticHash(std::string("receipts") + payloadId);
-    executionPayload.logsBloom = std::string("0x") + std::string(c_logsBloomBytes * 2, '0');
+    executionPayload.logsBloom = Bloom{};
     executionPayload.prevRandao = payloadAttributes.prevRandao;
-    executionPayload.blockNumber = hexQuantity(nextBlockNumber);
-    executionPayload.gasLimit = "0x0";
-    executionPayload.gasUsed = "0x0";
+    executionPayload.blockNumber = nextBlockNumber;
+    executionPayload.gasLimit = 0;
+    executionPayload.gasUsed = 0;
     executionPayload.timestamp = payloadAttributes.timestamp;
-    executionPayload.extraData = "0x";
-    executionPayload.baseFeePerGas = "0x0";
+    executionPayload.extraData = {};
+    executionPayload.baseFeePerGas = 0;
     executionPayload.blockHash = syntheticHash(payloadId);
 
     if (version >= static_cast<std::uint32_t>(EngineApiVersion::V2))
@@ -488,13 +379,14 @@ ExecutionPayload EngineService::buildPayloadSkeleton(const ForkchoiceState& fork
     }
     if (version >= static_cast<std::uint32_t>(EngineApiVersion::V3))
     {
-        executionPayload.blobGasUsed = "0x0";
-        executionPayload.excessBlobGas = "0x0";
+        executionPayload.blobGasUsed = u256(0);
+        executionPayload.excessBlobGas = u256(0);
     }
     return executionPayload;
 }
 
-std::optional<std::int64_t> EngineService::lookupBlockNumberByHash(const std::string& blockHash) const
+std::optional<bcos::protocol::BlockNumber> EngineService::lookupBlockNumberByHash(
+    const h256& blockHash) const
 {
     auto it = m_blockHashToPayloadId.find(blockHash);
     if (it == m_blockHashToPayloadId.end())
@@ -507,7 +399,7 @@ std::optional<std::int64_t> EngineService::lookupBlockNumberByHash(const std::st
     {
         return std::nullopt;
     }
-    return parseQuantity(payloadIt->second.executionPayload.blockNumber);
+    return payloadIt->second.executionPayload.blockNumber;
 }
 
 void EngineService::updateTrackedBlockNumbers(const ForkchoiceState& forkchoiceState)

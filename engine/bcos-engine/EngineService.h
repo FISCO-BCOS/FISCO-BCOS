@@ -19,9 +19,12 @@
 
 #pragma once
 
-#include "bcos-rpc/groupmgr/NodeService.h"
+#include "bcos-framework/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-task/Task.h"
-
+#include "bcos-utilities/Bloom.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -43,61 +46,61 @@ using PayloadID = std::string;
 
 struct WithdrawalV1
 {
-    std::string index;
-    std::string validatorIndex;
-    std::string address;
-    std::string amount;
+    u256 index = 0;
+    u256 validatorIndex = 0;
+    Address address;
+    u256 amount = 0;
 };
 
 struct BlobsBundleV1
 {
-    std::vector<std::string> commitments;
-    std::vector<std::string> proofs;
-    std::vector<std::string> blobs;
+    std::vector<bytes> commitments;
+    std::vector<bytes> proofs;
+    std::vector<bytes> blobs;
 };
 
 struct ForkchoiceState
 {
-    std::string headBlockHash;
-    std::string safeBlockHash;
-    std::string finalizedBlockHash;
+    h256 headBlockHash;
+    h256 safeBlockHash;
+    h256 finalizedBlockHash;
 };
 
 struct PayloadAttributes
 {
-    std::string timestamp;
-    std::string prevRandao;
-    std::string suggestedFeeRecipient;
+    std::uint64_t timestamp = 0;
+    h256 prevRandao;
+    Address suggestedFeeRecipient;
     std::optional<std::vector<WithdrawalV1>> withdrawals;
-    std::optional<std::string> parentBeaconBlockRoot;
+    std::optional<h256> parentBeaconBlockRoot;
 };
 
 struct ExecutionPayload
 {
-    std::string parentHash;
-    std::string feeRecipient;
-    std::string stateRoot;
-    std::string receiptsRoot;
-    std::string logsBloom;
-    std::string prevRandao;
-    std::string blockNumber;
-    std::string gasLimit;
-    std::string gasUsed;
-    std::string timestamp;
-    std::string extraData;
-    std::string baseFeePerGas;
-    std::string blockHash;
-    std::vector<std::string> transactions;
+    h256 parentHash;
+    Address feeRecipient;
+    h256 stateRoot;
+    h256 receiptsRoot;
+    Bloom logsBloom{};
+    h256 prevRandao;
+    bcos::protocol::BlockNumber blockNumber = 0;
+    u256 gasLimit = 0;
+    u256 gasUsed = 0;
+    std::uint64_t timestamp = 0;
+    bytes extraData;
+    u256 baseFeePerGas = 0;
+    h256 blockHash;
+    bcos::protocol::Transactions transactions;
     std::optional<std::vector<WithdrawalV1>> withdrawals;
-    std::optional<std::string> blobGasUsed;
-    std::optional<std::string> excessBlobGas;
+    std::optional<u256> blobGasUsed;
+    std::optional<u256> excessBlobGas;
 };
 
 struct NewPayloadRequest
 {
     ExecutionPayload executionPayload;
-    std::vector<std::string> expectedBlobVersionedHashes;
-    std::optional<std::string> parentBeaconBlockRoot;
+    std::vector<h256> expectedBlobVersionedHashes;
+    std::optional<h256> parentBeaconBlockRoot;
 };
 
 enum class PayloadValidationStatus : std::uint8_t
@@ -112,7 +115,7 @@ enum class PayloadValidationStatus : std::uint8_t
 struct PayloadStatus
 {
     PayloadValidationStatus status = PayloadValidationStatus::Syncing;
-    std::optional<std::string> latestValidHash;
+    std::optional<h256> latestValidHash;
     std::optional<std::string> validationError;
 };
 
@@ -125,77 +128,51 @@ struct ForkchoiceUpdatedResult
 struct GetPayloadResult
 {
     ExecutionPayload executionPayload;
-    std::string blockValue{"0x0"};
+    u256 blockValue = 0;
     std::optional<BlobsBundleV1> blobsBundle;
     bool shouldOverrideBuilder = false;
 };
 
-class EngineServiceInterface
-{
-public:
-    using Ptr = std::shared_ptr<EngineServiceInterface>;
-
-    EngineServiceInterface() = default;
-    virtual ~EngineServiceInterface() = default;
-    EngineServiceInterface(const EngineServiceInterface&) = delete;
-    EngineServiceInterface(EngineServiceInterface&&) = delete;
-    EngineServiceInterface& operator=(const EngineServiceInterface&) = delete;
-    EngineServiceInterface& operator=(EngineServiceInterface&&) = delete;
-
-    virtual bcos::task::Task<std::vector<std::string>> exchangeCapabilities(
-        std::vector<std::string> remoteCapabilities) = 0;
-    virtual bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
-        const ForkchoiceState& forkchoiceState,
-        const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version) = 0;
-    virtual bcos::task::Task<GetPayloadResult> getPayload(
-        const PayloadID& payloadId, std::uint32_t version) = 0;
-    virtual bcos::task::Task<PayloadStatus> newPayload(
-        const NewPayloadRequest& request, std::uint32_t version) = 0;
-    virtual std::optional<std::int64_t> getSafeBlockNumber() const = 0;
-    virtual std::optional<std::int64_t> getFinalizedBlockNumber() const = 0;
-};
-
-class EngineService final : public EngineServiceInterface
+class EngineService
 {
 public:
     using Ptr = std::shared_ptr<EngineService>;
 
-    explicit EngineService(bcos::rpc::NodeService::Ptr nodeService);
-    ~EngineService() override = default;
+    explicit EngineService() = default;
+    ~EngineService() = default;
     EngineService(const EngineService&) = delete;
     EngineService(EngineService&&) = delete;
     EngineService& operator=(const EngineService&) = delete;
     EngineService& operator=(EngineService&&) = delete;
 
     bcos::task::Task<std::vector<std::string>> exchangeCapabilities(
-        std::vector<std::string> remoteCapabilities) override;
+        std::vector<std::string> remoteCapabilities);
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
         const ForkchoiceState& forkchoiceState,
-        const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version) override;
+        const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version);
     bcos::task::Task<GetPayloadResult> getPayload(
-        const PayloadID& payloadId, std::uint32_t version) override;
+        const PayloadID& payloadId, std::uint32_t version);
     bcos::task::Task<PayloadStatus> newPayload(
-        const NewPayloadRequest& request, std::uint32_t version) override;
-    std::optional<std::int64_t> getSafeBlockNumber() const override;
-    std::optional<std::int64_t> getFinalizedBlockNumber() const override;
+        const NewPayloadRequest& request, std::uint32_t version);
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const;
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const;
 
 private:
     struct PayloadEntry
     {
         std::uint32_t version = 0;
         ExecutionPayload executionPayload;
-        std::string blockValue{"0x0"};
+        u256 blockValue = 0;
         std::optional<BlobsBundleV1> blobsBundle;
         bool shouldOverrideBuilder = false;
     };
 
     static bool isVersionSupported(std::uint32_t version);
     static PayloadStatus makeStatus(PayloadValidationStatus status,
-        std::optional<std::string> latestValidHash = std::nullopt,
+        std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt);
 
-    ForkchoiceUpdatedResult handleForkchoiceUpdate(
-        const ForkchoiceState& forkchoiceState,
+    ForkchoiceUpdatedResult handleForkchoiceUpdate(const ForkchoiceState& forkchoiceState,
         const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version);
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const;
     PayloadStatus handleNewPayload(const NewPayloadRequest& request, std::uint32_t version);
@@ -204,17 +181,15 @@ private:
     ExecutionPayload buildPayloadSkeleton(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
         std::uint32_t version) const;
-    std::optional<std::int64_t> lookupBlockNumberByHash(const std::string& blockHash) const;
+    std::optional<bcos::protocol::BlockNumber> lookupBlockNumberByHash(const h256& blockHash) const;
     void updateTrackedBlockNumbers(const ForkchoiceState& forkchoiceState);
-
-    bcos::rpc::NodeService::Ptr m_nodeService;
 
     mutable std::shared_mutex x_state;
     ForkchoiceState m_forkchoiceState;
-    std::optional<std::int64_t> m_safeBlockNumber;
-    std::optional<std::int64_t> m_finalizedBlockNumber;
+    std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
+    std::optional<bcos::protocol::BlockNumber> m_finalizedBlockNumber;
     std::unordered_map<PayloadID, PayloadEntry> m_payloadCache;
-    std::unordered_map<std::string, PayloadID> m_blockHashToPayloadId;
+    std::unordered_map<h256, PayloadID> m_blockHashToPayloadId;
     std::uint64_t m_nextPayloadSequence = 1;
 };
 }  // namespace bcos::engine
