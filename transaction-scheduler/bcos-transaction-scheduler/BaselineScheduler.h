@@ -85,8 +85,8 @@ std::chrono::milliseconds::rep current();
  * @param hashImpl The hash implementation to use for the calculation.
  * @return A task that will eventually resolve to the calculated state root.
  */
-task::Task<h256> calculateStateRoot(
-    auto& storage, uint32_t blockVersion, crypto::Hash const& hashImpl)
+task::Task<h256> calculateStateRoot(auto& storage, uint32_t blockVersion,
+    crypto::Hash const& hashImpl, ledger::Features const& features)
 {
     auto range = co_await storage2::range(storage);
     storage::Entry deletedEntry;
@@ -115,7 +115,7 @@ task::Task<h256> calculateStateRoot(
                     {
                         entry = std::addressof(deletedEntry);
                     }
-                    return entry->hash(tableName, keyName, hashImpl, blockVersion);
+                    return entry->hash(tableName, keyName, hashImpl, blockVersion, features);
                 }) &
             tbb::make_filter<h256, void>(
                 tbb::filter_mode::serial_out_of_order, [&](h256 hash) { totalHash ^= hash; }));
@@ -153,7 +153,8 @@ h256 calculateReceiptRoot(
  */
 task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     protocol::BlockHeader& newBlockHeader, protocol::Block& block,
-    ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl)
+    ::ranges::input_range auto transactions, bool& sysBlock, crypto::Hash const& hashImpl,
+    ledger::Features const& features)
 {
     ittapi::Report finishReport(ittapi::ITT_DOMAINS::instance().BASELINE_SCHEDULER,
         ittapi::ITT_DOMAINS::instance().FINISH_EXECUTE);
@@ -165,7 +166,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     tbb::parallel_invoke([&]() { transactionRoot = calculateTransactionRoot(block, hashImpl); },
         [&]() {
             stateRoot = task::tbb::syncWait(
-                calculateStateRoot(storage, block.blockHeader()->version(), hashImpl));
+                calculateStateRoot(storage, block.blockHeader()->version(), hashImpl, features));
         },
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
@@ -350,7 +351,7 @@ private:
             bool sysBlock = false;
             co_await finishExecute(mutableStorage(view), ::ranges::views::all(receipts),
                 *executedBlockHeader, *block, ::ranges::views::all(transactions), sysBlock,
-                m_hashImpl.get());
+                m_hashImpl.get(), ledgerConfig->features());
 
             if (verify && (executedBlockHeader->hash() != blockHeader->hash()))
             {

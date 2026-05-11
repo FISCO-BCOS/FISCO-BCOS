@@ -2,6 +2,8 @@
 
 #include "Common.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "protocol/Protocol.h"
+
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/archive/basic_archive.hpp>
@@ -197,11 +199,149 @@ public:
     int32_t size() const { return m_size; }
 
     bool valid() const { return m_status == Status::NORMAL; }
+    // Legacy overload kept for callers that don't have Features available
+    // (test code, KeyPageStorage / StateStorage in the legacy DMC scheduler path).
+    // The V3_17 length-prefixed format is NOT applied here.
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const;
 
 private:
     [[nodiscard]] auto outputValueView(const ValueType& value) const& -> std::string_view;
+
+    // Future-proof overload: accepts the full Features set so new bugfix flags can
+    // be plumbed into the hash function without changing its signature again.
+    // Templated on Features to avoid an include cycle (Features.h includes Entry.h).
+    // The Features type only needs `bool get(std::string_view) const`.
+    template <class Features>
+    crypto::HashType hash(std::string_view table, std::string_view key,
+        const bcos::crypto::Hash& hashImpl, uint32_t blockVersion, Features const& features) const
+    {
+        const bool enableHashCollisionFix =
+            features.get(std::string_view{"bugfix_statestorage_hash_v3_17"});
+        return hashImpl_(table, key, hashImpl, blockVersion, enableHashCollisionFix);
+    }
+
+private:
+    crypto::HashType hashImpl_(std::string_view table, std::string_view key,
+        const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
+        bool enableHashCollisionFix) const
+    {
+        bcos::crypto::HashType entryHash(0);
+        if (enableHashCollisionFix)
+        {
+            // FIB-99: Length-prefixed, status-aware hashing to prevent boundary
+            // ambiguity and status ambiguity collisions in state root calculation.
+            // Gated by Features::Flag::bugfix_statestorage_hash_v3_17 (activated at V3_17_0),
+            // not by blockVersion, so the fix follows the bugfix-flag semantic.
+            auto hasher = hashImpl.hasher();
+            // FIB-99 preimage format (fixed across platforms):
+            //   u32(tableLen) || table || u32(keyLen) || key || i8(status) || [data if MODIFIED]
+            // Use explicit fixed-width types so the hash is independent of sizeof(size_t).
+            hasher.update(static_cast<uint32_t>(table.size()));
+            hasher.update(table);
+            hasher.update(static_cast<uint32_t>(key.size()));
+            hasher.update(key);
+            // Entry status (1 byte) distinguishes DELETED from MODIFIED-with-empty-value.
+            hasher.update(m_status);
+
+            switch (m_status)
+            {
+            case MODIFIED:
+            {
+                const auto data = get();
+                hasher.update(data);
+                hasher.final(entryHash);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE)
+                        << "Entry hash v3.17+, dirty entry: " << table << " | " << toHex(key)
+                        << " | " << toHex(data) << LOG_KV("hash", entryHash.abridged());
+                }
+                break;
+            }
+            case DELETED:
+            {
+                hasher.final(entryHash);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE) << "Entry hash v3.17+, deleted entry: " << table << " | "
+                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                }
+                break;
+            }
+            default:
+            {
+                STORAGE_LOG(DEBUG) << "Entry hash v3.17+, clean entry: " << table << " | "
+                                   << toHex(key) << " | " << static_cast<int>(m_status);
+                break;
+            }
+            }
+        }
+        else if (blockVersion >= static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION))
+        {
+            auto hasher = hashImpl.hasher();
+            hasher.update(table);
+            hasher.update(key);
+
+            switch (m_status)
+            {
+            case MODIFIED:
+            {
+                const auto data = get();
+                hasher.update(data);
+                hasher.final(entryHash);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE)
+                        << "Entry hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(data) << LOG_KV("hash", entryHash.abridged());
+                }
+                break;
+            }
+            case DELETED:
+            {
+                hasher.final(entryHash);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE) << "Entry hash, deleted entry: " << table << " | "
+                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                }
+                break;
+            }
+            default:
+            {
+                STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
+                                   << " | " << static_cast<int>(m_status);
+                break;
+            }
+            }
+        }
+        else
+        {  // 3.0.0
+            if (m_status == Entry::MODIFIED)
+            {
+                auto value = get();
+                bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
+                entryHash = hashImpl.hash(ref);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE)
+                        << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                        << toHex(value) << LOG_KV("hash", entryHash.abridged());
+                }
+            }
+            else if (m_status == Entry::DELETED)
+            {
+                entryHash = bcos::crypto::HashType(0x1);
+                if (c_fileLogLevel == TRACE) [[unlikely]]
+                {
+                    STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                                       << toHex(key) << LOG_KV("hash", entryHash.abridged());
+                }
+            }
+        }
+        return entryHash;
+    }
 
     template <typename T>
     [[nodiscard]] auto inputValueView(const T& value) const -> std::string_view

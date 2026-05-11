@@ -15,6 +15,7 @@
  */
 
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
@@ -30,13 +31,22 @@ using namespace bcos::executor_v1;
 
 BOOST_AUTO_TEST_SUITE(FIB99_FIB105_StateRootTest)
 
-// ---------------------------------------------------------------------------
-// FIB-105: Verify calculateStateRoot uses the passed blockVersion, not a
-// hardcoded V3_1_VERSION.
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(calculateStateRootUsesPassedVersion)
+namespace
 {
-    // Build a small storage with one modified entry
+ledger::Features featuresWithFix()
+{
+    ledger::Features features;
+    features.set(ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
+    return features;
+}
+}  // namespace
+
+// ---------------------------------------------------------------------------
+// FIB-105 / FIB-99: calculateStateRoot must select the V3_17 hashing path
+// based on the bugfix flag set in Features, not the block version.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(calculateStateRootRespectsBugfixFlag)
+{
     using Storage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     Storage storage;
@@ -47,82 +57,75 @@ BOOST_AUTO_TEST_CASE(calculateStateRootUsesPassedVersion)
         storage2::writeOne(storage, StateKey{"test_table", "test_key"}, std::move(entry)));
 
     crypto::Keccak256 hashImpl;
+    constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
 
-    // Compute state root with V3_1_VERSION
-    auto rootV31 = task::syncWait(scheduler_v1::calculateStateRoot(
-        storage, static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION), hashImpl));
+    ledger::Features noFix;
+    auto fix = featuresWithFix();
 
-    // Compute state root with V3_17_0_VERSION (new unambiguous hashing)
-    auto rootV317 = task::syncWait(scheduler_v1::calculateStateRoot(
-        storage, static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION), hashImpl));
+    auto rootLegacy =
+        task::syncWait(scheduler_v1::calculateStateRoot(storage, v31, hashImpl, noFix));
+    auto rootFixed = task::syncWait(scheduler_v1::calculateStateRoot(storage, v31, hashImpl, fix));
 
-    // The two roots must differ because the hashing algorithm changed.
-    // If calculateStateRoot still hardcoded V3_1, they would be identical.
-    BOOST_CHECK_NE(rootV31, rootV317);
-
-    // Each should be non-zero (the entry is MODIFIED)
-    BOOST_CHECK_NE(rootV31, h256{});
-    BOOST_CHECK_NE(rootV317, h256{});
+    // The flag must change the hashing scheme even when blockVersion is identical.
+    BOOST_CHECK_NE(rootLegacy, rootFixed);
+    BOOST_CHECK_NE(rootLegacy, h256{});
+    BOOST_CHECK_NE(rootFixed, h256{});
 }
 
 // ---------------------------------------------------------------------------
 // FIB-99 boundary collision: (table="a", key="bc") vs (table="ab", key="c")
-// should produce different hashes under V3_17_0 but the same under V3_1.
+// collide under the legacy path, are distinct once the bugfix flag is set.
 // ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(boundaryAmbiguityFixedInV317)
+BOOST_AUTO_TEST_CASE(boundaryAmbiguityFixedByFlag)
 {
     crypto::Keccak256 hashImpl;
+    constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
 
     Entry entryA;
-    entryA.importFields({"d"});  // MODIFIED with data "d"
-
+    entryA.importFields({"d"});
     Entry entryB;
-    entryB.importFields({"d"});  // MODIFIED with data "d"
+    entryB.importFields({"d"});
 
-    constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
-    constexpr auto v317 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
+    ledger::Features noFix;
+    auto fix = featuresWithFix();
 
-    // Under V3_1: hash("a" || "bc" || "d") == hash("ab" || "c" || "d") => collision
-    auto hashA_v31 = entryA.hash("a", "bc", hashImpl, v31);
-    auto hashB_v31 = entryB.hash("ab", "c", hashImpl, v31);
-    BOOST_CHECK_EQUAL(hashA_v31, hashB_v31);  // Known collision in old scheme
+    // Legacy: hash("a" || "bc" || "d") == hash("ab" || "c" || "d") => collision.
+    BOOST_CHECK_EQUAL(
+        entryA.hash("a", "bc", hashImpl, v31, noFix), entryB.hash("ab", "c", hashImpl, v31, noFix));
 
-    // Under V3_17_0: length-prefixed => no collision
-    auto hashA_v317 = entryA.hash("a", "bc", hashImpl, v317);
-    auto hashB_v317 = entryB.hash("ab", "c", hashImpl, v317);
-    BOOST_CHECK_NE(hashA_v317, hashB_v317);  // Fixed!
+    // With bugfix flag: length-prefixed => no collision.
+    BOOST_CHECK_NE(
+        entryA.hash("a", "bc", hashImpl, v31, fix), entryB.hash("ab", "c", hashImpl, v31, fix));
 }
 
 // ---------------------------------------------------------------------------
-// FIB-99 status collision: DELETED entry vs MODIFIED with empty data should
-// produce different hashes under V3_17_0 but the same under V3_1.
+// FIB-99 status collision: DELETED vs MODIFIED-with-empty-data must be
+// distinguishable once the bugfix flag is set.
 // ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(statusAmbiguityFixedInV317)
+BOOST_AUTO_TEST_CASE(statusAmbiguityFixedByFlag)
 {
     crypto::Keccak256 hashImpl;
+    constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
 
     Entry deletedEntry;
     deletedEntry.setStatus(Entry::DELETED);
-
     Entry emptyModified;
-    emptyModified.importFields({""});  // MODIFIED with empty data
+    emptyModified.importFields({""});
 
-    constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
-    constexpr auto v317 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
+    ledger::Features noFix;
+    auto fix = featuresWithFix();
 
-    // Under V3_1: hash(table || key) vs hash(table || key || "") => same
-    auto hashDel_v31 = deletedEntry.hash("tbl", "k", hashImpl, v31);
-    auto hashMod_v31 = emptyModified.hash("tbl", "k", hashImpl, v31);
-    BOOST_CHECK_EQUAL(hashDel_v31, hashMod_v31);  // Known collision in old scheme
+    BOOST_CHECK_EQUAL(deletedEntry.hash("tbl", "k", hashImpl, v31, noFix),
+        emptyModified.hash("tbl", "k", hashImpl, v31, noFix));
 
-    // Under V3_17_0: status byte distinguishes them
-    auto hashDel_v317 = deletedEntry.hash("tbl", "k", hashImpl, v317);
-    auto hashMod_v317 = emptyModified.hash("tbl", "k", hashImpl, v317);
-    BOOST_CHECK_NE(hashDel_v317, hashMod_v317);  // Fixed!
+    BOOST_CHECK_NE(deletedEntry.hash("tbl", "k", hashImpl, v31, fix),
+        emptyModified.hash("tbl", "k", hashImpl, v31, fix));
 }
 
 // ---------------------------------------------------------------------------
-// Backward compatibility: V3_1 and V3_0 hashes remain unchanged.
+// Backward compatibility: the legacy overload (no Features) and the new
+// overload with no flag set must produce identical hashes for all versions.
+// The new V3_17 fixed format is gated only by the flag, not by blockVersion.
 // ---------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(backwardCompatibilityPreserved)
 {
@@ -130,31 +133,53 @@ BOOST_AUTO_TEST_CASE(backwardCompatibilityPreserved)
 
     Entry modifiedEntry;
     modifiedEntry.importFields({"value123"});
-
     Entry deletedEntry;
     deletedEntry.setStatus(Entry::DELETED);
 
     constexpr auto v30 = static_cast<uint32_t>(protocol::BlockVersion::V3_0_VERSION);
     constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
     constexpr auto v316 = static_cast<uint32_t>(protocol::BlockVersion::V3_16_4_VERSION);
+    constexpr auto v317 = static_cast<uint32_t>(protocol::BlockVersion::V3_17_0_VERSION);
 
-    // V3_0 hashing: MODIFIED => hash(data), DELETED => 0x1
-    auto hashMod_v30 = modifiedEntry.hash("t", "k", hashImpl, v30);
-    auto hashDel_v30 = deletedEntry.hash("t", "k", hashImpl, v30);
-    BOOST_CHECK_NE(hashMod_v30, h256{});
-    BOOST_CHECK_EQUAL(hashDel_v30, crypto::HashType(0x1));
+    ledger::Features noFix;
 
-    // V3_1 hashing: uses hasher with table+key+data, no length prefix
-    auto hashMod_v31 = modifiedEntry.hash("t", "k", hashImpl, v31);
-    auto hashDel_v31 = deletedEntry.hash("t", "k", hashImpl, v31);
-    BOOST_CHECK_NE(hashMod_v31, h256{});
-    BOOST_CHECK_NE(hashDel_v31, h256{});
+    // Legacy overload and new overload without the flag must agree.
+    BOOST_CHECK_EQUAL(modifiedEntry.hash("t", "k", hashImpl, v31),
+        modifiedEntry.hash("t", "k", hashImpl, v31, noFix));
 
-    // V3_16_4 should still use V3_1 logic (< V3_17_0)
-    auto hashMod_v316 = modifiedEntry.hash("t", "k", hashImpl, v316);
-    auto hashDel_v316 = deletedEntry.hash("t", "k", hashImpl, v316);
-    BOOST_CHECK_EQUAL(hashMod_v31, hashMod_v316);
-    BOOST_CHECK_EQUAL(hashDel_v31, hashDel_v316);
+    // V3_0 path: MODIFIED hashes raw data, DELETED returns 0x1.
+    BOOST_CHECK_NE(modifiedEntry.hash("t", "k", hashImpl, v30, noFix), h256{});
+    BOOST_CHECK_EQUAL(deletedEntry.hash("t", "k", hashImpl, v30, noFix), crypto::HashType(0x1));
+
+    // V3_1+ path is identical regardless of how high blockVersion goes when flag is off.
+    auto modOff_v31 = modifiedEntry.hash("t", "k", hashImpl, v31, noFix);
+    auto modOff_v316 = modifiedEntry.hash("t", "k", hashImpl, v316, noFix);
+    auto modOff_v317 = modifiedEntry.hash("t", "k", hashImpl, v317, noFix);
+    BOOST_CHECK_EQUAL(modOff_v31, modOff_v316);
+    BOOST_CHECK_EQUAL(modOff_v31, modOff_v317);
+
+    // Flag ON: produces a different (length-prefixed, status-aware) hash.
+    auto fix = featuresWithFix();
+    auto modOn_v31 = modifiedEntry.hash("t", "k", hashImpl, v31, fix);
+    BOOST_CHECK_NE(modOff_v31, modOn_v31);
+
+    // Flag ON: result is independent of blockVersion (only the flag matters).
+    auto modOn_v317 = modifiedEntry.hash("t", "k", hashImpl, v317, fix);
+    BOOST_CHECK_EQUAL(modOn_v31, modOn_v317);
+}
+
+// ---------------------------------------------------------------------------
+// Features integration: the bugfix flag is wired into the upgrade roadmap so
+// nodes upgrading to V3_17_0 automatically activate it.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(bugfixFlagActivatedAtV3_17_0)
+{
+    ledger::Features features;
+    BOOST_CHECK(!features.get(ledger::Features::Flag::bugfix_statestorage_hash_v3_17));
+
+    features.setUpgradeFeatures(
+        protocol::BlockVersion::V3_16_5_VERSION, protocol::BlockVersion::V3_17_0_VERSION);
+    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_statestorage_hash_v3_17));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
