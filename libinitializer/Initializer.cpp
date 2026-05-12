@@ -27,10 +27,10 @@
 #include "Initializer.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
+#include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "GlobalStateStorageInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -260,7 +260,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
     auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
-    m_globalStateStorageInitializer = GlobalStateStorageInitializer::build(existsRocksDB->rocksDB());
+    m_globalStateStorageInitializer =
+        GlobalStateStorageInitializer::build(existsRocksDB->rocksDB());
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
     std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
@@ -424,12 +425,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_frontServiceInitializer->init(
         m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(), m_txpoolInitializer->txpool());
 
+#ifdef TOOLS
     if (m_nodeConfig->enableArchive())
     {
         INITIALIZER_LOG(INFO) << LOG_BADGE("create archive service");
         m_archiveService = std::make_shared<bcos::archive::ArchiveService>(m_storage, ledger,
             m_blockStorage, m_nodeConfig->archiveListenIP(), m_nodeConfig->archiveListenPort());
     }
+#endif
 
 #ifdef WITH_LIGHTNODE
     bcos::storage::StorageImpl<bcos::storage::StorageInterface::Ptr> storageWrapper(m_storage);
