@@ -308,7 +308,6 @@ BOOST_AUTO_TEST_CASE(operationsAfterRollback)
         // Continue operations after rollback
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key2"sv}, storage::Entry{"NewValue"});
-        auto newSavepoint = rollbackableStorage.current();
 
         // Verify that the new operation succeeded
         auto newValue =
