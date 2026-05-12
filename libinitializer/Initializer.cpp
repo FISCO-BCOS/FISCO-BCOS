@@ -598,10 +598,12 @@ void Initializer::start()
     {
         m_frontServiceInitializer->start();
     }
+#ifdef TOOLS
     if (m_archiveService)
     {
         m_archiveService->start();
     }
+#endif
 }
 
 void Initializer::stop()
@@ -624,10 +626,12 @@ void Initializer::stop()
         {
             m_scheduler->stop();
         }
+#ifdef TOOLS
         if (m_archiveService)
         {
             m_archiveService->stop();
         }
+#endif
     }
     catch (std::exception const& e)
     {
