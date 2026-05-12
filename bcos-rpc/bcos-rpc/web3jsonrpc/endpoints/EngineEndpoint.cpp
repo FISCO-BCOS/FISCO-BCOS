@@ -95,6 +95,11 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
     co_await handleForkchoiceRequest(m_nodeService, 3, request, response);
 }
 
+task::Task<void> EngineEndpoint::getPayloadV1(const Json::Value& request, Json::Value& response)
+{
+    co_await handleGetPayloadRequest(m_nodeService, 1, request, response);
+}
+
 task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value& request, Json::Value& response)
 {
     co_await handleGetPayloadRequest(m_nodeService, 2, request, response);
@@ -103,6 +108,11 @@ task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value& request, Json::
 task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::Value& response)
 {
     co_await handleGetPayloadRequest(m_nodeService, 3, request, response);
+}
+
+task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value& request, Json::Value& response)
+{
+    co_await handleNewPayloadRequest(m_nodeService, 1, request, response);
 }
 
 task::Task<void> EngineEndpoint::newPayloadV2(const Json::Value& request, Json::Value& response)
