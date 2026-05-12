@@ -19,7 +19,13 @@
 
 find_package(Boost REQUIRED serialization)
 
-add_library(ledger bcos-ledger/Ledger.cpp bcos-ledger/LedgerMethods.cpp bcos-ledger/ConsensusNode.cpp)
+add_library(ledger
+    bcos-ledger/Ledger.cpp
+    bcos-ledger/LedgerMethods.cpp
+    bcos-ledger/ConsensusNode.cpp
+    bcos-ledger/mpt/Nibble.cpp
+    bcos-ledger/mpt/HexPrefix.cpp
+    bcos-ledger/mpt/Constants.cpp)
 target_include_directories(ledger PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-ledger>)
