@@ -25,7 +25,7 @@ target_link_libraries(txpool_init PUBLIC protocol_init tool txpool)
 add_library(ledger_init LedgerInitializer.cpp)
 target_link_libraries(ledger_init PRIVATE ledger)
 
-add_library(baseline_init BaselineSchedulerInitializer.cpp MultiVersionScheduler.cpp)
+add_library(baseline_init BaselineSchedulerInitializer.cpp GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp)
 target_link_libraries(baseline_init transaction-scheduler transaction-executor storage)
 
 add_library(init Initializer.cpp)

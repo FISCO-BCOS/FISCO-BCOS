@@ -26,7 +26,9 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "libinitializer/MultiVersionScheduler.h"
+#ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
+#endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -52,6 +54,8 @@ class SchedulerInterface;
 }
 namespace initializer
 {
+class GlobalStateStorageInitializer;
+
 class Initializer
 {
 public:
@@ -119,10 +123,13 @@ private:
     std::weak_ptr<bcos::executor::SwitchExecutorManager> m_switchExecutorManager;
     std::string c_consensusStorageDBName = "consensus_log";
     std::string c_fileSeparator = "/";
+#ifdef TOOLS
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
+#endif
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
+    std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
