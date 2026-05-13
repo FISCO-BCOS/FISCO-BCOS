@@ -25,7 +25,6 @@
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/FixedBytes.h"
-#include "mempool/bcos-mempool/MemPoolImpl.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -159,22 +158,19 @@ std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 }  // namespace detail
 
-template <class MemPoolType = bcos::txpool::MemPoolImpl, class GlobalStateStorageType =
-                                                             NoGlobalStateStorage>
-class BasicEngineService
+template <class MemPoolType, class GlobalStateStorageType>
+class EngineService
 {
 public:
-    using Ptr = std::shared_ptr<BasicEngineService<MemPoolType, GlobalStateStorageType>>;
-
-    BasicEngineService() = default;
-    BasicEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
+    EngineService() = default;
+    EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
       : m_memPool(&memPool), m_globalStateStorage(&globalStateStorage)
     {}
-    ~BasicEngineService() = default;
-    BasicEngineService(const BasicEngineService&) = delete;
-    BasicEngineService(BasicEngineService&&) = delete;
-    BasicEngineService& operator=(const BasicEngineService&) = delete;
-    BasicEngineService& operator=(BasicEngineService&&) = delete;
+    ~EngineService() = default;
+    EngineService(const EngineService&) = delete;
+    EngineService(EngineService&&) = delete;
+    EngineService& operator=(const EngineService&) = delete;
+    EngineService& operator=(EngineService&&) = delete;
 
     MemPoolType* memPool() noexcept { return m_memPool; }
     MemPoolType const* memPool() const noexcept { return m_memPool; }
@@ -469,5 +465,4 @@ private:
     std::uint64_t m_nextPayloadSequence = 1;
 };
 
-using EngineService = BasicEngineService<>;
 }  // namespace bcos::engine

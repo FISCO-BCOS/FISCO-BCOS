@@ -22,6 +22,8 @@ struct FakeMemPool
 struct FakeGlobalStateStorage
 {};
 
+using TestEngineService = EngineService<FakeMemPool, NoGlobalStateStorage>;
+
 ForkchoiceState makeForkchoiceState()
 {
     return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
@@ -70,7 +72,7 @@ BOOST_AUTO_TEST_SUITE(EngineServiceTest)
 
 BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
 {
-    EngineService engineService;
+    TestEngineService engineService;
 
     auto capabilities = task::syncWait(
         engineService.exchangeCapabilities({"engine_forkchoiceUpdatedV1", "unknown_method"}));
@@ -85,7 +87,7 @@ BOOST_AUTO_TEST_CASE(custom_dependency_types_can_be_injected)
 {
     FakeMemPool memPool;
     FakeGlobalStateStorage globalStateStorage;
-    BasicEngineService<FakeMemPool, FakeGlobalStateStorage> engineService(
+    EngineService<FakeMemPool, FakeGlobalStateStorage> engineService(
         memPool, globalStateStorage);
 
     BOOST_CHECK(engineService.memPool() == &memPool);
@@ -94,7 +96,7 @@ BOOST_AUTO_TEST_CASE(custom_dependency_types_can_be_injected)
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)
 {
-    EngineService engineService;
+    TestEngineService engineService;
 
     auto forkchoiceState = makeForkchoiceState();
     auto result = task::syncWait(
@@ -114,7 +116,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 {
-    EngineService engineService;
+    TestEngineService engineService;
 
     auto initialForkchoice = makeForkchoiceState();
     auto initialResult =
@@ -143,7 +145,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 
 BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
 {
-    EngineService engineService;
+    TestEngineService engineService;
 
     auto result = task::syncWait(
         engineService.updateForkchoice(makeForkchoiceState(), makePayloadAttributesV3(), 3));

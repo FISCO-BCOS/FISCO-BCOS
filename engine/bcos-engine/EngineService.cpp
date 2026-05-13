@@ -121,6 +121,3 @@ std::optional<std::string> bcos::engine::detail::validateExecutionPayload(
     }
     return std::nullopt;
 }
-
-template class bcos::engine::BasicEngineService<bcos::txpool::MemPoolImpl,
-    bcos::engine::NoGlobalStateStorage>;
