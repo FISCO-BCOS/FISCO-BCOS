@@ -159,25 +159,33 @@ public:
     {
         std::unique_lock lock(m_mutex);
         auto& senderIndex = m_transactions.get<2>();
+        auto& senderNonceIndex = m_transactions.get<0>();
 
-        auto senderNonces = ::ranges::views::transform(senderIndex, [](auto& data) {
-            return std::make_tuple(data.sender(), 0L);
-        }) | ::ranges::to<std::vector>();
-
-        for (auto& [sender, nonce] : senderNonces)
+        for (auto it = senderIndex.begin(); it != senderIndex.end();)
         {
+            auto sender = it->sender();
+            auto nextIt = senderIndex.equal_range(sender).second;
             ledger::account::EVMAccount account(state, sender, m_rawAddress);
             if (auto nonceStr = task::syncWait(account.nonce()))
             {
+                int64_t nonce = 0;
                 if (auto result = std::from_chars(
                         nonceStr->data(), nonceStr->data() + nonceStr->size(), nonce);
                     result.ec != std::errc{})
                 {
                     bcos::throwTrace(InvalidNonce{} << bcos::errinfo_comment(*nonceStr));
                 }
+
+                if (nonce > 0)
+                {
+                    auto start = senderNonceIndex.lower_bound(std::make_tuple(sender, 0));
+                    auto end = senderNonceIndex.upper_bound(std::make_tuple(sender, nonce - 1));
+                    senderNonceIndex.erase(start, end);
+                }
             }
+
+            it = nextIt;
         }
-        removeBySenderNonces(::ranges::views::all(senderNonces));
     }
 
     void remove(InputHashes auto hashes)
