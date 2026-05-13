@@ -1,12 +1,10 @@
-#include "Web3Transactions.h"
+#include "MemPoolImpl.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <charconv>
 
 #define MEMPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("MEMPOOL")
-
-DERIVE_BCOS_EXCEPTION(InvalidTaintedTransaction);
 
 int64_t bcos::txpool::TransactionData::importTime() const
 {
@@ -36,7 +34,7 @@ bcos::txpool::TransactionData::TransactionData(protocol::Transaction::Ptr transa
         return nonce;
     }())
 {}
-void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
+void bcos::txpool::MemPoolImpl::add(protocol::Transaction::Ptr transaction)
 {
     if (!transaction) [[unlikely]]
     {
@@ -58,7 +56,7 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     }
     catch (std::exception const& e)
     {
-        MEMPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: get hash failed, skip")
+        MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl::add: get hash failed, skip")
                              << LOG_KV("reason", boost::diagnostic_information(e));
         return;
     }
@@ -85,7 +83,7 @@ void bcos::txpool::Web3Transactions::add(protocol::Transaction::Ptr transaction)
     }
     catch (InvalidNonce const& e)
     {
-        MEMPOOL_LOG(WARNING) << LOG_DESC("Web3Transactions::add: invalid nonce, skip")
+        MEMPOOL_LOG(WARNING) << LOG_DESC("MemPoolImpl::add: invalid nonce, skip")
                              << LOG_KV("reason", boost::diagnostic_information(e));
     }
 }

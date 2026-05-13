@@ -55,6 +55,7 @@ class SchedulerInterface;
 namespace initializer
 {
 class GlobalStateStorageInitializer;
+class MemPoolInitializer;
 
 class Initializer
 {
@@ -71,6 +72,10 @@ public:
     ProtocolInitializer::Ptr protocolInitializer() { return m_protocolInitializer; }
     PBFTInitializer::Ptr pbftInitializer() { return m_pbftInitializer; }
     TxPoolInitializer::Ptr txPoolInitializer() { return m_txpoolInitializer; }
+    std::shared_ptr<MemPoolInitializer> memPoolInitializer()
+    {
+        return m_memPoolInitializer;
+    }
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
@@ -130,6 +135,7 @@ private:
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    std::shared_ptr<MemPoolInitializer> m_memPoolInitializer;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>

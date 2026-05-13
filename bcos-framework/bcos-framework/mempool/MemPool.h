@@ -30,8 +30,8 @@ template <class SenderNoncesType>
 concept SenderNonces = ::ranges::input_range<SenderNoncesType> &&
                        SenderNonce<::ranges::range_value_t<SenderNoncesType>>;
 
-template <class Web3TransactionsType, class StateStorage>
-concept MemPool = requires(Web3TransactionsType& transactions,
+template <class MemPoolType, class StateStorage>
+concept MemPool = requires(MemPoolType& transactions,
     std::vector<protocol::Transaction::Ptr> inputTransactions,
     std::vector<bcos::crypto::HashType> hashes, StateStorage& state,
     std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out, int64_t limit) {

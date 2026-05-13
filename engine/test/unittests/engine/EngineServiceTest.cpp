@@ -16,6 +16,12 @@ namespace
 {
 constexpr std::uint64_t c_timestamp = 123456;
 
+struct FakeMemPool
+{};
+
+struct FakeGlobalStateStorage
+{};
+
 ForkchoiceState makeForkchoiceState()
 {
     return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
@@ -73,6 +79,17 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
     BOOST_CHECK(
         std::find(capabilities.begin(), capabilities.end(), "engine_getPayloadV3") !=
         capabilities.end());
+}
+
+BOOST_AUTO_TEST_CASE(custom_dependency_types_can_be_injected)
+{
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    BasicEngineService<FakeMemPool, FakeGlobalStateStorage> engineService(
+        memPool, globalStateStorage);
+
+    BOOST_CHECK(engineService.memPool() == &memPool);
+    BOOST_CHECK(engineService.globalStateStorage() == &globalStateStorage);
 }
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)
