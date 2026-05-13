@@ -101,10 +101,7 @@ struct MapStateStorage
         co_return value.has_value();
     }
 
-    task::Task<bool> existsOne(StateKey key)
-    {
-        co_return co_await existsOne(StateKeyView{key});
-    }
+    task::Task<bool> existsOne(StateKey key) { co_return co_await existsOne(StateKeyView{key}); }
 };
 
 static_assert(mempool::MemPool<MemPoolImpl, MapStateStorage>);
@@ -324,8 +321,7 @@ BOOST_AUTO_TEST_CASE(remove_by_state_drops_confirmed)
 
     pool.remove(state);
 
-    auto fetched =
-        pool.get(std::vector{a0->hash(), a1->hash(), a2->hash(), b0->hash()});
+    auto fetched = pool.get(std::vector{a0->hash(), a1->hash(), a2->hash(), b0->hash()});
     BOOST_CHECK(!fetched[0]);
     BOOST_CHECK(!fetched[1]);
     BOOST_CHECK(fetched[2]);
@@ -439,8 +435,8 @@ BOOST_AUTO_TEST_CASE(testAddTaintedTransaction)
     tx->forceSender(bytes(20, byte{'a'}));
     Keccak256 hasher;
     tx->calculateHash(hasher);
-    BOOST_CHECK_THROW(pool.add(std::vector<protocol::Transaction::Ptr>{tx}),
-        InvalidTaintedTransaction);
+    BOOST_CHECK_THROW(
+        pool.add(std::vector<protocol::Transaction::Ptr>{tx}), InvalidTaintedTransaction);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

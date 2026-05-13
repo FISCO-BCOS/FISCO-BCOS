@@ -27,12 +27,10 @@
 #include "bcos-utilities/FixedBytes.h"
 #include "mempool/bcos-mempool/MemPoolImpl.h"
 #include <cstdint>
-#include <iomanip>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -141,124 +139,36 @@ struct GetPayloadResult
 };
 
 struct NoGlobalStateStorage
-{};
+{
+};
 
 namespace detail
 {
-inline constexpr std::size_t c_hashBytes = 32;
-inline constexpr std::size_t c_payloadIdBytes = 8;
+std::string encodePayloadSequence(std::uint64_t value);
 
-inline std::string encodePayloadSequence(std::uint64_t value)
-{
-    std::ostringstream out;
-    out << "0x" << std::hex << std::setw(static_cast<int>(c_payloadIdBytes * 2))
-        << std::setfill('0') << value;
-    return out.str();
-}
+bcos::h256 syntheticHash(std::string_view seed);
 
-inline bcos::h256 syntheticHash(std::string_view seed)
-{
-    std::string hex = "0x";
-    hex.reserve((c_hashBytes * 2) + 2);
-    auto payload = seed.substr(seed.rfind('x') + 1);
-    while (hex.size() < ((c_hashBytes * 2) + 2))
-    {
-        hex.append(payload.begin(), payload.end());
-    }
-    hex.resize((c_hashBytes * 2) + 2);
-    return bcos::h256(hex.substr(2));
-}
+std::vector<std::string> supportedCapabilities();
 
-inline std::vector<std::string> supportedCapabilities()
-{
-    return {"engine_exchangeCapabilities", "engine_forkchoiceUpdatedV1",
-        "engine_forkchoiceUpdatedV2", "engine_forkchoiceUpdatedV3", "engine_getPayloadV1",
-        "engine_getPayloadV2", "engine_getPayloadV3", "engine_newPayloadV1",
-        "engine_newPayloadV2", "engine_newPayloadV3"};
-}
+bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion);
 
-inline bool isGetPayloadVersionCompatible(
-    EngineApiVersion requestVersion, std::uint32_t payloadVersion)
-{
-    if (requestVersion == EngineApiVersion::V1)
-    {
-        return payloadVersion == 1;
-    }
-    if (requestVersion == EngineApiVersion::V2)
-    {
-        return payloadVersion <= 2;
-    }
-    if (requestVersion == EngineApiVersion::V3)
-    {
-        return payloadVersion <= 3;
-    }
-    return false;
-}
+std::optional<std::string> validatePayloadAttributes(
+    const PayloadAttributes& payloadAttributes, std::uint32_t version);
 
-inline std::optional<std::string> validatePayloadAttributes(
-    const PayloadAttributes& payloadAttributes, std::uint32_t version)
-{
-    if (version == 1 && payloadAttributes.withdrawals.has_value())
-    {
-        return std::string("withdrawals are not part of PayloadAttributesV1");
-    }
-    if (version <= 2 && payloadAttributes.parentBeaconBlockRoot.has_value())
-    {
-        return std::string("parentBeaconBlockRoot is only valid for PayloadAttributesV3");
-    }
-    if (version >= 2 && !payloadAttributes.withdrawals.has_value())
-    {
-        return std::string("withdrawals are required for PayloadAttributesV2 and V3");
-    }
-    if (version == 3 && !payloadAttributes.parentBeaconBlockRoot.has_value())
-    {
-        return std::string("parentBeaconBlockRoot must be a 32-byte hash for V3");
-    }
-    return std::nullopt;
-}
-
-inline std::optional<std::string> validateExecutionPayload(
-    const ExecutionPayload& executionPayload, std::uint32_t version)
-{
-    for (auto const& transaction : executionPayload.transactions)
-    {
-        if (!transaction)
-        {
-            return std::string("executionPayload.transactions entries must not be null");
-        }
-    }
-    if (version == 1 && executionPayload.withdrawals.has_value())
-    {
-        return std::string("withdrawals are not part of ExecutionPayloadV1");
-    }
-    if (version >= 2 && !executionPayload.withdrawals.has_value())
-    {
-        return std::string("withdrawals are required for ExecutionPayloadV2 and V3");
-    }
-    if (version <= 2 &&
-        (executionPayload.blobGasUsed.has_value() || executionPayload.excessBlobGas.has_value()))
-    {
-        return std::string("blob gas fields are only valid for ExecutionPayloadV3");
-    }
-    if (version == 3 &&
-        (!executionPayload.blobGasUsed.has_value() || !executionPayload.excessBlobGas.has_value()))
-    {
-        return std::string("blob gas fields are required for ExecutionPayloadV3");
-    }
-    return std::nullopt;
-}
+std::optional<std::string> validateExecutionPayload(
+    const ExecutionPayload& executionPayload, std::uint32_t version);
 }  // namespace detail
 
-template <class MemPoolType = bcos::txpool::MemPoolImpl,
-    class GlobalStateStorageType = NoGlobalStateStorage>
+template <class MemPoolType = bcos::txpool::MemPoolImpl, class GlobalStateStorageType =
+                                                             NoGlobalStateStorage>
 class BasicEngineService
 {
 public:
-        using Ptr = std::shared_ptr<BasicEngineService<MemPoolType, GlobalStateStorageType>>;
+    using Ptr = std::shared_ptr<BasicEngineService<MemPoolType, GlobalStateStorageType>>;
 
     BasicEngineService() = default;
-        BasicEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
-            : m_memPool(&memPool), m_globalStateStorage(&globalStateStorage)
+    BasicEngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
+      : m_memPool(&memPool), m_globalStateStorage(&globalStateStorage)
     {}
     ~BasicEngineService() = default;
     BasicEngineService(const BasicEngineService&) = delete;
@@ -288,8 +198,7 @@ public:
         co_return handleForkchoiceUpdate(forkchoiceState, payloadAttributes, version);
     }
 
-    bcos::task::Task<GetPayloadResult> getPayload(
-        const PayloadID& payloadId, std::uint32_t version)
+    bcos::task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version)
     {
         co_return handleGetPayload(payloadId, version);
     }
@@ -348,7 +257,8 @@ private:
         }
         if (payloadAttributes)
         {
-            if (auto validationError = detail::validatePayloadAttributes(*payloadAttributes, version);
+            if (auto validationError =
+                    detail::validatePayloadAttributes(*payloadAttributes, version);
                 validationError.has_value())
             {
                 ForkchoiceUpdatedResult result;
@@ -363,15 +273,16 @@ private:
         updateTrackedBlockNumbers(forkchoiceState);
 
         ForkchoiceUpdatedResult result;
-        result.payloadStatus = makeStatus(
-            PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt);
+        result.payloadStatus =
+            makeStatus(PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt);
         if (!payloadAttributes)
         {
             return result;
         }
 
         auto payloadId = nextPayloadID();
-        auto payload = buildPayloadSkeleton(forkchoiceState, *payloadAttributes, payloadId, version);
+        auto payload =
+            buildPayloadSkeleton(forkchoiceState, *payloadAttributes, payloadId, version);
         PayloadEntry entry;
         entry.version = version;
         entry.executionPayload = std::move(payload);
@@ -422,7 +333,8 @@ private:
             throw std::invalid_argument("Unsupported Engine API version");
         }
 
-        if (auto validationError = detail::validateExecutionPayload(request.executionPayload, version);
+        if (auto validationError =
+                detail::validateExecutionPayload(request.executionPayload, version);
             validationError.has_value())
         {
             auto status = validationError->find("blockHash") != std::string::npos ?
