@@ -19,7 +19,6 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
-#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>

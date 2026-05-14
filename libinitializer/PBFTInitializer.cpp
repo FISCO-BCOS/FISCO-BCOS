@@ -23,6 +23,7 @@
 #include <bcos-framework/election/FailOverTypeDef.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
+#include <bcos-ledger/Ledger.h>
 #ifdef WITH_LEDGER_ELECTION
 #include <bcos-leader-election/src/LeaderElectionFactory.h>
 #endif
