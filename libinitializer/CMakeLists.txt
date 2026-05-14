@@ -5,7 +5,7 @@ find_package(tomlplusplus CONFIG REQUIRED)
 add_library(command CommandHelper.cpp)
 target_link_libraries(command PUBLIC bcos-framework Boost::program_options)
 
-add_library(protocol_init ProtocolInitializer.cpp)
+add_library(protocol_init ProtocolInitializer.cpp Common.cpp)
 target_link_libraries(protocol_init PUBLIC
                      bcos-crypto tool protocol-tars security)
 

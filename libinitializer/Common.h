@@ -19,75 +19,18 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/Common.h>
-#include <bcos-framework/security/KeyEncryptInterface.h>
-#include <bcos-tool/Exceptions.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/FileUtility.h>
-#include <openssl/engine.h>
-#include <openssl/rsa.h>
-#include <boost/filesystem.hpp>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Common.h>
 #include <memory>
 
 #define INITIALIZER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[INITIALIZER]"
+namespace bcos::security
+{
+class KeyEncryptInterface;
+}
+
 namespace bcos::initializer
 {
-inline std::shared_ptr<bytes> loadPrivateKey(std::string const& _keyPath,
-    unsigned _hexedPrivateKeySize, bcos::security::KeyEncryptInterface::Ptr _certEncryptionHandler)
-{
-    std::shared_ptr<EC_KEY> ecKey;
-    try
-    {
-        auto content = readContents(boost::filesystem::path(_keyPath));
-        auto keyContent = content;
-        if (_certEncryptionHandler)
-        {
-            keyContent = _certEncryptionHandler->decryptContents(content);
-        }
-
-        // key center
-
-        if (keyContent->empty())
-        {
-            return nullptr;
-        }
-        // kms type
-
-        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
-        std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
-        BIO_write(bioMem.get(), keyContent->data(), keyContent->size());
-
-        std::shared_ptr<EVP_PKEY> evpPKey(PEM_read_bio_PrivateKey(bioMem.get(), NULL, NULL, NULL),
-            [](EVP_PKEY* p) { EVP_PKEY_free(p); });
-        if (!evpPKey)
-        {
-            return nullptr;
-        }
-        ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
-    }
-    catch (bcos::Exception& e)
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
-                               << LOG_DESC("parse privateKey failed") << LOG_KV("file", _keyPath)
-                               << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(bcos::tool::InvalidConfig() << errinfo_comment(
-                                  "SecureInitializer: parse privateKey failed:" + _keyPath));
-    }
-    std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
-
-    std::shared_ptr<char> privateKeyData(
-        BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
-    std::string keyHex(privateKeyData.get());
-    if (keyHex.size() >= _hexedPrivateKeySize)
-    {
-        return std::make_shared<bytes>(fromHex(keyHex));
-    }
-    for (size_t i = keyHex.size(); i < _hexedPrivateKeySize; i++)
-    {
-        keyHex = '0' + keyHex;
-    }
-    return std::make_shared<bytes>(fromHex(keyHex));
-}
+bcos::bytes loadPrivateKey(std::string const& _keyPath, unsigned _hexedPrivateKeySize,
+    std::shared_ptr<bcos::security::KeyEncryptInterface> const& _certEncryptionHandler);
 }  // namespace bcos::initializer
