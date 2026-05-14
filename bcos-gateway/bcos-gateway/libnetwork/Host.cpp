@@ -385,22 +385,20 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     std::shared_ptr<SessionFace> session =
         m_sessionFactory->createSession(*this, socket, m_messageFactory, m_sessionCallbackManager);
 
-    m_taskArena.execute([&]() {
-        m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {
-            auto host = weakHost.lock();
-            if (!host)
-            {
-                return;
-            }
-            if (host->m_connectionHandler)
-            {
-                host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
-            }
-            else
-            {
-                HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
-            }
-        });
+    boost::asio::post(socket->ioService(), [weakHost, session = std::move(session), p2pInfo]() {
+        auto host = weakHost.lock();
+        if (!host)
+        {
+            return;
+        }
+        if (host->m_connectionHandler)
+        {
+            host->m_connectionHandler(NetworkException(0, ""), p2pInfo, session);
+        }
+        else
+        {
+            HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
+        }
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
@@ -489,10 +487,8 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
                                 << LOG_KV("message", ec.message());
                 socket->close();
 
-                m_taskArena.execute([&]() {
-                    m_asyncGroup.run([callback = std::move(callback)]() {
-                        callback(NetworkException(ConnectError, "Connect failed"), {}, {});
-                    });
+                boost::asio::post(socket->ioService(), [callback = std::move(callback)]() mutable {
+                    callback(NetworkException(ConnectError, "Connect failed"), {}, {});
                 });
                 return;
             }
@@ -572,7 +568,6 @@ void Host::stop()
     {
         m_asioInterface->stop();
     }
-    m_asyncGroup.wait();
 }
 bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,
