@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mempool/bcos-mempool/MemPoolImpl.h"
+#include "bcos-mempool/MemPoolImpl.h"
 #include <memory>
 
 namespace bcos::initializer
