@@ -103,9 +103,10 @@ std::shared_ptr<ba::io_context> ASIOInterface::ioService()
     return m_ioServicePool->getIOService();
 }
 
-void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool)
+void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool, bool _manageLifecycle)
 {
     m_ioServicePool = std::move(_ioServicePool);
+    m_manageIOServicePool = _manageLifecycle;
     m_timerIOService = m_ioServicePool->getIOService();
 }
 
@@ -158,12 +159,18 @@ void ASIOInterface::init(std::string listenHost, uint16_t listenPort)
 
 void ASIOInterface::start()
 {
-    m_ioServicePool->start();
+    if (m_manageIOServicePool)
+    {
+        m_ioServicePool->start();
+    }
 }
 
 void ASIOInterface::stop()
 {
-    m_ioServicePool->stop();
+    if (m_manageIOServicePool)
+    {
+        m_ioServicePool->stop();
+    }
 }
 
 void ASIOInterface::asyncAccept(const std::shared_ptr<SocketFace>& socket, Handler_Type handler,

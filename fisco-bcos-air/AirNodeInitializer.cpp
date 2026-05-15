@@ -30,6 +30,7 @@
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <rocksdb/env.h>
 
 using namespace bcos::node;
@@ -60,12 +61,17 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>();
+    ioServicePool->start();
+    m_nodeInitializer->setIOServicePool(ioServicePool);
+
     // create gateway
     // DataEncryption will be inited in ProtocolInitializer when storage_security.enable = true,
     // otherwise keyEncryption() will return nullptr
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc",
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
             nodeConfig->keyEncryptionType()));
+    gatewayFactory.setIOServicePool(ioServicePool);
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr, "localGateway");
     m_gateway = gateway;
 

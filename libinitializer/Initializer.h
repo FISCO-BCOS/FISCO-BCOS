@@ -32,6 +32,7 @@
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <memory>
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"
@@ -77,6 +78,11 @@ public:
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
+    }
+
     void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, const std::string& _logPath);
     void initMicroServiceNode(bcos::protocol::NodeArchitectureType _nodeArchType,
@@ -111,6 +117,7 @@ private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     TxPoolInitializer::Ptr m_txpoolInitializer;
     PBFTInitializer::Ptr m_pbftInitializer;
 #ifdef WITH_LIGHTNODE

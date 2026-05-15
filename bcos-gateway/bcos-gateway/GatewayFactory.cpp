@@ -613,8 +613,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
-    auto ioServicePool = std::make_shared<IOServicePool>();
-    asioInterface->setIOServicePool(ioServicePool);
+    auto ioServicePool = m_ioServicePool ? m_ioServicePool : std::make_shared<IOServicePool>();
+    asioInterface->setIOServicePool(ioServicePool, !m_ioServicePool);
     asioInterface->setSrvContext(srvCtx);
     asioInterface->setClientContext(clientCtx);
     asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);

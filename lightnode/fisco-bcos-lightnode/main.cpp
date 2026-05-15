@@ -36,6 +36,7 @@
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -210,6 +211,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     protocolInitializer.init(nodeConfig);
     protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
     auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>();
+    ioServicePool->start();
 
     auto front = std::make_shared<bcos::front::FrontService>();
     // gateway
@@ -217,6 +220,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     try
     {
         bcos::gateway::GatewayFactory gatewayFactory(nodeConfig->chainId(), "local", nullptr);
+        gatewayFactory.setIOServicePool(ioServicePool);
         gateway = gatewayFactory.buildGateway(configFile, true, nullptr, "localGateway");
         auto protocolInfo = bcos::protocol::g_BCOSConfig.protocolInfo(
             bcos::protocol::ProtocolModuleID::GatewayService);
@@ -238,7 +242,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     // front
     front->setGroupID(nodeConfig->groupId());
     front->setNodeID(protocolInitializer.keyPair()->publicKey());
-    front->setIoService(std::make_shared<boost::asio::io_context>());
+    front->setIOServicePool(ioServicePool);
+    front->setIoService(ioServicePool->getIOService());
     front->setGatewayInterface(gateway);
     front->registerModuleMessageDispatcher(bcos::protocol::BlockSync,
         [](const bcos::crypto::NodeIDPtr&, const std::string&, bcos::bytesConstRef) {});

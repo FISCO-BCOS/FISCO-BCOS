@@ -42,7 +42,10 @@ void FakeGateway::asyncSendMessageByNodeID(const std::string& _groupID, int,
     bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload,
     bcos::gateway::ErrorRespFunc _errorRespFunc)
 {
-    m_frontService->onReceiveMessage(_groupID, _dstNodeID, _payload, _errorRespFunc);
+    if (auto frontService = m_frontService.lock())
+    {
+        frontService->onReceiveMessage(_groupID, _dstNodeID, _payload, _errorRespFunc);
+    }
 
     FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeID" << LOG_KV("groupID", _groupID)
                      << LOG_KV("nodeID", _srcNodeID->hex()) << LOG_KV("nodeID", _dstNodeID->hex());
@@ -62,8 +65,11 @@ void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID, int,
 {
     if (!_dstNodeIDs.empty())
     {
-        m_frontService->onReceiveMessage(
-            _groupID, _srcNodeID, _payload, bcos::gateway::ErrorRespFunc());
+        if (auto frontService = m_frontService.lock())
+        {
+            frontService->onReceiveMessage(
+                _groupID, _srcNodeID, _payload, bcos::gateway::ErrorRespFunc());
+        }
     }
 
     FRONT_LOG(DEBUG) << "[FakeGateway] asyncSendMessageByNodeIDs" << LOG_KV("groupID", _groupID);
@@ -75,8 +81,11 @@ bcos::task::Task<void> bcos::front::test::FakeGateway::broadcastMessage(uint16_t
     auto data = ::ranges::views::join(payloads) | ::ranges::to<bcos::bytes>();
     auto nodeIDPtr = std::shared_ptr<bcos::crypto::NodeID>(
         const_cast<bcos::crypto::NodeID*>(std::addressof(srcNodeID)), [](auto* ptr) {});
-    m_frontService->onReceiveBroadcastMessage(
-        std::string{groupID}, nodeIDPtr, ref(data), ErrorRespFunc());
+    if (auto frontService = m_frontService.lock())
+    {
+        frontService->onReceiveBroadcastMessage(
+            std::string{groupID}, nodeIDPtr, ref(data), ErrorRespFunc());
+    }
     FRONT_LOG(DEBUG) << "asyncSendBroadcastMessage" << LOG_KV("groupID", groupID);
     co_return;
 };

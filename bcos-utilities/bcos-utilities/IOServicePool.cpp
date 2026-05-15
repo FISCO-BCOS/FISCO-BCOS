@@ -4,6 +4,7 @@
  */
 
 #include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/Common.h"
 
 using namespace bcos;
 
@@ -46,7 +47,7 @@ void IOServicePool::start()
     }
 }
 
-std::shared_ptr<IOServicePool::IOService> IOServicePool::getIOService()
+std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
 {
     auto selectedIoService = (m_nextIOService.fetch_add(1) % m_ioServices.size());
     return m_ioServices.at(selectedIoService);

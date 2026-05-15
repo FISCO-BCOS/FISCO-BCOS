@@ -11,6 +11,7 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
 
@@ -72,6 +73,11 @@ public:
 
     // build Service
     std::shared_ptr<Service> buildService(const GatewayConfig::Ptr& _config);
+
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
+    }
 
     /**
      * @brief construct Gateway for air
@@ -141,5 +147,6 @@ private:
     std::string m_rpcServiceName;
 
     bcos::security::KeyEncryptInterface::Ptr m_dataEncrypt{nullptr};
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace bcos::gateway

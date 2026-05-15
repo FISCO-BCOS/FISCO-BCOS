@@ -18,7 +18,6 @@
  */
 
 #pragma once
-#include "bcos-utilities/Common.h"
 #include <boost/asio.hpp>
 #include <memory>
 namespace bcos
@@ -39,9 +38,7 @@ public:
     virtual ~IOServicePool();
 
     void start();
-
-    std::shared_ptr<IOService> getIOService();
-
+    std::shared_ptr<IOService>& getIOService();
     void stop();
 
 private:
