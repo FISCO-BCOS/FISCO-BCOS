@@ -37,6 +37,11 @@ DistributedRateLimiter::DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>
     m_enableLocalCache(_enableLocalCache),
     m_localCachePercent(_localCachePercent)
 {
+    if (!m_redis)
+    {
+        return;
+    }
+
     if (m_enableLocalCache)
     {
         m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec), "clearTimer");
@@ -239,6 +244,11 @@ bool DistributedRateLimiter::tryAcquireLocalCache(int64_t _requiredPermits, bool
  */
 int64_t DistributedRateLimiter::requestRedis(int64_t _requiredPermits)
 {
+    if (!m_redis)
+    {
+        return _requiredPermits;
+    }
+
     try
     {
         auto start = utcTimeUs();

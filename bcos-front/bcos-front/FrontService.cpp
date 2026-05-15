@@ -39,8 +39,7 @@ void dispatchToIOServicePool(bcos::IOServicePool& ioServicePool, Task&& task)
 {
     auto& ioService = ioServicePool.getIOService();
     auto executor = ioService->get_executor();
-    boost::asio::post(executor,
-        [ioService = std::move(ioService), task = std::forward<Task>(task)]() mutable { task(); });
+    boost::asio::post(executor, [task = std::forward<Task>(task)]() mutable { task(); });
 }
 }  // namespace
 
