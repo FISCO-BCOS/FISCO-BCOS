@@ -24,6 +24,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-executor/src/precompiled/extension/CommitteeBin.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
