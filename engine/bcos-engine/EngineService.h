@@ -145,10 +145,6 @@ struct GetPayloadResult
     bool shouldOverrideBuilder = false;
 };
 
-struct NoGlobalStateStorage
-{
-};
-
 namespace detail
 {
 std::string encodePayloadSequence(std::uint64_t value);
@@ -196,15 +192,15 @@ public:
     }
 
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
-        const ForkchoiceState& forkchoiceState,
-        const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version)
+        const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
+        std::uint32_t version)
     {
         if (!isVersionSupported(version))
         {
             BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
                                   << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
-        if (payloadAttributes)
+        if (payloadAttributes != nullptr)
         {
             if (auto validationError =
                     detail::validatePayloadAttributes(*payloadAttributes, version);
@@ -225,25 +221,27 @@ public:
         auto finalizedBlockNumber = co_await bcos::ledger::getBlockNumber(
             view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage);
 
-        if (!headBlockNumber.has_value())
+        if (!headBlockNumber.has_value() || !safeBlockNumber.has_value() ||
+            !finalizedBlockNumber.has_value())
         {
-            BOOST_THROW_EXCEPTION(UnknownForkchoiceHeadBlock{}
-                                  << bcos::errinfo_comment{"Unknown forkchoice head block hash"});
+            ForkchoiceUpdatedResult result;
+            result.payloadStatus =
+                makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            co_return result;
         }
-        if (safeBlockNumber.has_value() && *safeBlockNumber > *headBlockNumber)
+        if (*safeBlockNumber > *headBlockNumber)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidForkchoiceState{} << bcos::errinfo_comment{
                     "Forkchoice safe block number must not exceed head block number"});
         }
-        if (finalizedBlockNumber.has_value() && *finalizedBlockNumber > *headBlockNumber)
+        if (*finalizedBlockNumber > *headBlockNumber)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidForkchoiceState{} << bcos::errinfo_comment{
                     "Forkchoice finalized block number must not exceed head block number"});
         }
-        if (safeBlockNumber.has_value() && finalizedBlockNumber.has_value() &&
-            *finalizedBlockNumber > *safeBlockNumber)
+        if (*finalizedBlockNumber > *safeBlockNumber)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidForkchoiceState{} << bcos::errinfo_comment{
@@ -285,7 +283,7 @@ public:
         ForkchoiceUpdatedResult result;
         result.payloadStatus =
             makeStatus(PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt);
-        if (!payloadAttributes)
+        if (payloadAttributes == nullptr)
         {
             co_return result;
         }
