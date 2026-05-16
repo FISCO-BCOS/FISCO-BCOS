@@ -6,8 +6,14 @@
 #include "engine/bcos-engine/EngineService.h"
 
 #include <algorithm>
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
+#include <unordered_map>
 
 using namespace bcos;
 using namespace bcos::engine;
@@ -15,15 +21,78 @@ using namespace bcos::engine;
 namespace
 {
 constexpr std::uint64_t c_timestamp = 123456;
+constexpr bcos::protocol::BlockNumber c_initialBlockNumber = 5;
+constexpr bcos::protocol::BlockNumber c_trackedInitialBlockNumber = 10;
+constexpr bcos::protocol::BlockNumber c_trackedNextBlockNumber = 11;
+constexpr bcos::protocol::BlockNumber c_validationBlockNumber = 20;
+constexpr bcos::protocol::BlockNumber c_reorgStartBlockNumber = 30;
+constexpr bcos::protocol::BlockNumber c_reorgTargetBlockNumber = 32;
+constexpr bcos::protocol::BlockNumber c_headOrderingBlockNumber = 40;
+constexpr bcos::protocol::BlockNumber c_safeOrderingBlockNumber = 41;
+constexpr bcos::protocol::BlockNumber c_finalizedOrderingBlockNumber = 42;
+constexpr bcos::protocol::BlockNumber c_staleInitialBlockNumber = 50;
+constexpr bcos::protocol::BlockNumber c_staleNextBlockNumber = 51;
+constexpr bcos::protocol::BlockNumber c_staleThirdBlockNumber = 52;
 
 struct FakeMemPool
 {};
 
 struct FakeGlobalStateStorage
-{};
+{
+    using Value = storage::Entry;
 
-using TestEngineService = EngineService<FakeMemPool, NoGlobalStateStorage>;
+    std::unordered_map<std::string, std::unordered_map<std::string, Value>> data;
 
+    void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
+    {
+        storage::Entry entry;
+        entry.setField(0, boost::lexical_cast<std::string>(blockNumber));
+        data[std::string(ledger::SYS_HASH_2_NUMBER)]
+            [std::string(bcos::concepts::bytebuffer::toView(blockHash))] = std::move(entry);
+    }
+
+    task::Task<std::optional<Value>> readOne(executor_v1::StateKeyView key)
+    {
+        auto [table, field] = key.get();
+        if (auto tableIt = data.find(std::string(table)); tableIt != data.end())
+        {
+            if (auto fieldIt = tableIt->second.find(std::string(field)); fieldIt != tableIt->second.end())
+            {
+                co_return std::make_optional(fieldIt->second);
+            }
+        }
+        co_return std::nullopt;
+    }
+
+    task::Task<std::optional<Value>> readOne(executor_v1::StateKey key)
+    {
+        co_return co_await readOne(executor_v1::StateKeyView{key});
+    }
+
+    template <class Keys>
+    task::Task<std::vector<std::optional<Value>>> readSome(Keys keys)
+    {
+        std::vector<std::optional<Value>> results;
+        if constexpr (::ranges::sized_range<Keys>)
+        {
+            results.reserve(::ranges::size(keys));
+        }
+        else
+        {
+            results.reserve(::ranges::distance(keys));
+        }
+
+        for (auto&& key : keys)
+        {
+            results.emplace_back(co_await readOne(executor_v1::StateKeyView{key}));
+        }
+        co_return results;
+    }
+
+    FakeGlobalStateStorage fork() { return *this; }
+};
+
+using TestEngineService = EngineService<FakeMemPool, FakeGlobalStateStorage>;
 ForkchoiceState makeForkchoiceState()
 {
     return {h256("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
@@ -96,9 +165,13 @@ BOOST_AUTO_TEST_CASE(custom_dependency_types_can_be_injected)
 
 BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_payload)
 {
-    TestEngineService engineService;
-
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
     auto forkchoiceState = makeForkchoiceState();
+    globalStateStorage.setBlockNumber(forkchoiceState.headBlockHash, c_initialBlockNumber);
+
+    TestEngineService engineService(memPool, globalStateStorage);
+
     auto result = task::syncWait(
         engineService.updateForkchoice(forkchoiceState, makePayloadAttributesV2(), 2));
 
@@ -116,13 +189,19 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
 
 BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 {
-    TestEngineService engineService;
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    TestEngineService engineService(memPool, globalStateStorage);
 
     auto initialForkchoice = makeForkchoiceState();
+    globalStateStorage.setBlockNumber(
+        initialForkchoice.headBlockHash, c_trackedInitialBlockNumber);
     auto initialResult =
         task::syncWait(engineService.updateForkchoice(initialForkchoice, makePayloadAttributesV3(), 3));
     BOOST_REQUIRE(initialResult.payloadId.has_value());
     auto builtPayload = task::syncWait(engineService.getPayload(*initialResult.payloadId, 3));
+    globalStateStorage.setBlockNumber(
+        builtPayload.executionPayload.blockHash, c_trackedNextBlockNumber);
 
     auto request = makeNewPayloadRequestV3(builtPayload.executionPayload);
     auto newPayloadStatus = task::syncWait(engineService.newPayload(request, 3));
@@ -139,16 +218,20 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
     auto finalizedBlockNumber = engineService.getFinalizedBlockNumber();
     BOOST_REQUIRE(safeBlockNumber.has_value());
     BOOST_REQUIRE(finalizedBlockNumber.has_value());
-    BOOST_CHECK_EQUAL(*safeBlockNumber, builtPayload.executionPayload.blockNumber);
-    BOOST_CHECK_EQUAL(*finalizedBlockNumber, builtPayload.executionPayload.blockNumber);
+    BOOST_CHECK_EQUAL(*safeBlockNumber, c_trackedNextBlockNumber);
+    BOOST_CHECK_EQUAL(*finalizedBlockNumber, c_trackedNextBlockNumber);
 }
 
 BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
 {
-    TestEngineService engineService;
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    auto forkchoiceState = makeForkchoiceState();
+    globalStateStorage.setBlockNumber(forkchoiceState.headBlockHash, c_validationBlockNumber);
+    TestEngineService engineService(memPool, globalStateStorage);
 
     auto result = task::syncWait(
-        engineService.updateForkchoice(makeForkchoiceState(), makePayloadAttributesV3(), 3));
+        engineService.updateForkchoice(forkchoiceState, makePayloadAttributesV3(), 3));
     BOOST_REQUIRE(result.payloadId.has_value());
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
@@ -161,6 +244,118 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
         static_cast<int>(PayloadValidationStatus::Invalid));
     BOOST_REQUIRE(status.validationError.has_value());
     BOOST_CHECK_NE(status.validationError->find("parentBeaconBlockRoot"), std::string::npos);
+}
+
+BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
+{
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    TestEngineService engineService(memPool, globalStateStorage);
+
+    auto initialForkchoice = makeForkchoiceState();
+    globalStateStorage.setBlockNumber(
+        initialForkchoice.headBlockHash, c_reorgStartBlockNumber);
+    auto initialResult =
+        task::syncWait(engineService.updateForkchoice(initialForkchoice, std::nullopt, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(initialResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+
+    ForkchoiceState reorgForkchoice{
+        h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
+        h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"),
+        h256("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")};
+    globalStateStorage.setBlockNumber(
+        reorgForkchoice.headBlockHash, c_reorgTargetBlockNumber);
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.updateForkchoice(reorgForkchoice, std::nullopt, 3)),
+        bcos::engine::InvalidForkchoiceState);
+}
+
+BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
+{
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    TestEngineService engineService(memPool, globalStateStorage);
+
+    ForkchoiceState forkchoiceState{
+        h256("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+        h256("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+        h256("0000000000000000000000000000000000000000000000000000000000000011")};
+    globalStateStorage.setBlockNumber(forkchoiceState.headBlockHash, c_headOrderingBlockNumber);
+    globalStateStorage.setBlockNumber(forkchoiceState.safeBlockHash, c_safeOrderingBlockNumber);
+    globalStateStorage.setBlockNumber(forkchoiceState.finalizedBlockHash, c_headOrderingBlockNumber);
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, std::nullopt, 3)),
+        bcos::engine::InvalidForkchoiceState);
+}
+
+BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
+{
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    TestEngineService engineService(memPool, globalStateStorage);
+
+    ForkchoiceState forkchoiceState{
+        h256("1212121212121212121212121212121212121212121212121212121212121212"),
+        h256("1313131313131313131313131313131313131313131313131313131313131313"),
+        h256("1414141414141414141414141414141414141414141414141414141414141414")};
+    globalStateStorage.setBlockNumber(forkchoiceState.headBlockHash, c_finalizedOrderingBlockNumber);
+    globalStateStorage.setBlockNumber(forkchoiceState.safeBlockHash, c_headOrderingBlockNumber);
+    globalStateStorage.setBlockNumber(
+        forkchoiceState.finalizedBlockHash, c_safeOrderingBlockNumber);
+
+    BOOST_CHECK_THROW(
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, std::nullopt, 3)),
+        bcos::engine::InvalidForkchoiceState);
+}
+
+BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
+{
+    FakeMemPool memPool;
+    FakeGlobalStateStorage globalStateStorage;
+    TestEngineService engineService(memPool, globalStateStorage);
+
+    ForkchoiceState firstForkchoice{
+        h256("1515151515151515151515151515151515151515151515151515151515151515"),
+        h256("1515151515151515151515151515151515151515151515151515151515151515"),
+        h256("1515151515151515151515151515151515151515151515151515151515151515")};
+    ForkchoiceState secondForkchoice{
+        h256("1616161616161616161616161616161616161616161616161616161616161616"),
+        h256("1616161616161616161616161616161616161616161616161616161616161616"),
+        h256("1616161616161616161616161616161616161616161616161616161616161616")};
+    ForkchoiceState thirdForkchoice{
+        h256("1717171717171717171717171717171717171717171717171717171717171717"),
+        h256("1717171717171717171717171717171717171717171717171717171717171717"),
+        h256("1717171717171717171717171717171717171717171717171717171717171717")};
+
+    globalStateStorage.setBlockNumber(
+        firstForkchoice.headBlockHash, c_staleInitialBlockNumber);
+    globalStateStorage.setBlockNumber(
+        secondForkchoice.headBlockHash, c_staleNextBlockNumber);
+    globalStateStorage.setBlockNumber(
+        thirdForkchoice.headBlockHash, c_staleThirdBlockNumber);
+
+    auto firstResult =
+        task::syncWait(engineService.updateForkchoice(firstForkchoice, std::nullopt, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(firstResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto secondResult =
+        task::syncWait(engineService.updateForkchoice(secondForkchoice, std::nullopt, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(secondResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto staleResult =
+        task::syncWait(engineService.updateForkchoice(firstForkchoice, std::nullopt, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(staleResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+
+    auto thirdResult =
+        task::syncWait(engineService.updateForkchoice(thirdForkchoice, std::nullopt, 3));
+    BOOST_CHECK_EQUAL(static_cast<int>(thirdResult.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
