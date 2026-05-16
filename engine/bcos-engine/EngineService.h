@@ -29,6 +29,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -166,23 +167,14 @@ template <class MemPoolType, class GlobalStateStorageType>
 class EngineService
 {
 public:
-    EngineService() = default;
     EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
-      : m_memPool(&memPool), m_globalStateStorage(&globalStateStorage)
+      : m_memPool(std::ref(memPool)), m_globalStateStorage(std::ref(globalStateStorage))
     {}
     ~EngineService() = default;
     EngineService(const EngineService&) = delete;
     EngineService(EngineService&&) = delete;
     EngineService& operator=(const EngineService&) = delete;
     EngineService& operator=(EngineService&&) = delete;
-
-    MemPoolType* memPool() noexcept { return m_memPool; }
-    MemPoolType const* memPool() const noexcept { return m_memPool; }
-    GlobalStateStorageType* globalStateStorage() noexcept { return m_globalStateStorage; }
-    GlobalStateStorageType const* globalStateStorage() const noexcept
-    {
-        return m_globalStateStorage;
-    }
 
     bcos::task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
@@ -206,14 +198,16 @@ public:
                     detail::validatePayloadAttributes(*payloadAttributes, version);
                 validationError.has_value())
             {
-                ForkchoiceUpdatedResult result;
-                result.payloadStatus =
-                    makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
+                ForkchoiceUpdatedResult result{
+                    .payloadStatus =
+                        makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError),
+                    .payloadId = std::nullopt,
+                };
                 co_return result;
             }
         }
 
-        auto view = m_globalStateStorage->fork();
+        auto view = m_globalStateStorage.get().fork();
         auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
             view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
         auto safeBlockNumber = co_await bcos::ledger::getBlockNumber(
@@ -224,9 +218,11 @@ public:
         if (!headBlockNumber.has_value() || !safeBlockNumber.has_value() ||
             !finalizedBlockNumber.has_value())
         {
-            ForkchoiceUpdatedResult result;
-            result.payloadStatus =
-                makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            ForkchoiceUpdatedResult result{
+                .payloadStatus =
+                    makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+                .payloadId = std::nullopt,
+            };
             co_return result;
         }
         if (*safeBlockNumber > *headBlockNumber)
@@ -254,9 +250,11 @@ public:
             auto const& trackedHeadBlock = *m_trackedHeadBlock;
             if (*headBlockNumber < trackedHeadBlock.blockNumber)
             {
-                ForkchoiceUpdatedResult result;
-                result.payloadStatus = makeStatus(
-                    PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt);
+                ForkchoiceUpdatedResult result{
+                    .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
+                        forkchoiceState.headBlockHash, std::nullopt),
+                    .payloadId = std::nullopt,
+                };
                 co_return result;
             }
             if (*headBlockNumber == trackedHeadBlock.blockNumber)
@@ -277,12 +275,18 @@ public:
         }
 
         m_forkchoiceState = forkchoiceState;
-        m_trackedHeadBlock = TrackedHeadBlock{forkchoiceState.headBlockHash, *headBlockNumber};
+        m_trackedHeadBlock = TrackedHeadBlock{
+            .hash = forkchoiceState.headBlockHash,
+            .blockNumber = *headBlockNumber,
+        };
         updateTrackedBlockNumbers(safeBlockNumber, finalizedBlockNumber);
+        m_memPool.get().remove(view);
 
-        ForkchoiceUpdatedResult result;
-        result.payloadStatus =
-            makeStatus(PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt);
+        ForkchoiceUpdatedResult result{
+            .payloadStatus = makeStatus(
+                PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
+            .payloadId = std::nullopt,
+        };
         if (payloadAttributes == nullptr)
         {
             co_return result;
@@ -291,10 +295,13 @@ public:
         auto payloadId = nextPayloadID();
         auto payload =
             buildPayloadSkeleton(forkchoiceState, *payloadAttributes, payloadId, version);
-        PayloadEntry entry;
-        entry.version = version;
-        entry.executionPayload = std::move(payload);
-        entry.blockValue = 0;
+        PayloadEntry entry{
+            .version = version,
+            .executionPayload = std::move(payload),
+            .blockValue = 0,
+            .blobsBundle = std::nullopt,
+            .shouldOverrideBuilder = false,
+        };
         if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
@@ -355,11 +362,11 @@ private:
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
     {
-        PayloadStatus statusObject;
-        statusObject.status = status;
-        statusObject.latestValidHash = latestValidHash;
-        statusObject.validationError = std::move(validationError);
-        return statusObject;
+        return PayloadStatus{
+            .status = status,
+            .latestValidHash = latestValidHash,
+            .validationError = std::move(validationError),
+        };
     }
 
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
@@ -384,12 +391,12 @@ private:
                     "Payload version is incompatible with requested method version"});
         }
 
-        GetPayloadResult result;
-        result.executionPayload = it->second.executionPayload;
-        result.blockValue = it->second.blockValue;
-        result.blobsBundle = it->second.blobsBundle;
-        result.shouldOverrideBuilder = it->second.shouldOverrideBuilder;
-        return result;
+        return GetPayloadResult{
+            .executionPayload = it->second.executionPayload,
+            .blockValue = it->second.blockValue,
+            .blobsBundle = it->second.blobsBundle,
+            .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
+        };
     }
 
     PayloadStatus handleNewPayload(const NewPayloadRequest& request, std::uint32_t version)
@@ -448,10 +455,13 @@ private:
             payloadId = payloadIdIt->second;
         }
 
-        PayloadEntry entry;
-        entry.version = version;
-        entry.executionPayload = request.executionPayload;
-        entry.blockValue = 0;
+        PayloadEntry entry{
+            .version = version,
+            .executionPayload = request.executionPayload,
+            .blockValue = 0,
+            .blobsBundle = std::nullopt,
+            .shouldOverrideBuilder = false,
+        };
         if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
@@ -475,20 +485,25 @@ private:
             nextBlockNumber = *currentBlockNumber + 1;
         }
 
-        ExecutionPayload executionPayload;
-        executionPayload.parentHash = forkchoiceState.headBlockHash;
-        executionPayload.feeRecipient = payloadAttributes.suggestedFeeRecipient;
-        executionPayload.stateRoot = detail::syntheticHash(std::string("state") + payloadId);
-        executionPayload.receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId);
-        executionPayload.logsBloom = Bloom{};
-        executionPayload.prevRandao = payloadAttributes.prevRandao;
-        executionPayload.blockNumber = nextBlockNumber;
-        executionPayload.gasLimit = 0;
-        executionPayload.gasUsed = 0;
-        executionPayload.timestamp = payloadAttributes.timestamp;
-        executionPayload.extraData = {};
-        executionPayload.baseFeePerGas = 0;
-        executionPayload.blockHash = detail::syntheticHash(payloadId);
+        ExecutionPayload executionPayload{
+            .parentHash = forkchoiceState.headBlockHash,
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .stateRoot = detail::syntheticHash(std::string("state") + payloadId),
+            .receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId),
+            .logsBloom = Bloom{},
+            .prevRandao = payloadAttributes.prevRandao,
+            .blockNumber = nextBlockNumber,
+            .gasLimit = 0,
+            .gasUsed = 0,
+            .timestamp = payloadAttributes.timestamp,
+            .extraData = {},
+            .baseFeePerGas = 0,
+            .blockHash = detail::syntheticHash(payloadId),
+            .transactions = {},
+            .withdrawals = std::nullopt,
+            .blobGasUsed = std::nullopt,
+            .excessBlobGas = std::nullopt,
+        };
 
         if (version >= static_cast<std::uint32_t>(EngineApiVersion::V2))
         {
@@ -527,8 +542,8 @@ private:
     }
 
     mutable std::shared_mutex x_state;
-    MemPoolType* m_memPool = nullptr;
-    GlobalStateStorageType* m_globalStateStorage = nullptr;
+    std::reference_wrapper<MemPoolType> m_memPool;
+    std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
