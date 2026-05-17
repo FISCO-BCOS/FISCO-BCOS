@@ -84,9 +84,9 @@ public:
 
         auto encodedKey = m_keyResolver.encode(std::move(key));
         ::rocksdb::PinnableSlice result;
-        auto status = m_rocksDB.get().Get(::rocksdb::ReadOptions(),
-            m_rocksDB.get().DefaultColumnFamily(),
-            ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)), &result);
+        auto status =
+            m_rocksDB.get().Get(::rocksdb::ReadOptions(), m_rocksDB.get().DefaultColumnFamily(),
+                ::rocksdb::Slice(::ranges::data(encodedKey), ::ranges::size(encodedKey)), &result);
 
         if (!status.ok())
         {
@@ -94,7 +94,8 @@ public:
             {
                 co_return StorageValueType<ValueType>{};
             }
-            BOOST_THROW_EXCEPTION(RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
+            BOOST_THROW_EXCEPTION(
+                RocksDBException{} << bcos::Error::ErrorMessage(status.ToString()));
         }
 
         co_return StorageValueType<ValueType>{m_valueResolver.decode(result.ToStringView())};
@@ -103,8 +104,7 @@ public:
     auto readSome(::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<ValueType>>>
     {
-        auto values =
-            co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
+        auto values = co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
         co_return ::ranges::views::transform(values, [](auto&& value) -> std::optional<ValueType> {
             if (auto* entry = std::get_if<ValueType>(std::addressof(value)))
             {
@@ -136,8 +136,7 @@ public:
         }
 
         ::rocksdb::WriteOptions options;
-        auto status = m_rocksDB.get().Write(options, std::addressof(writeBatch));
-        if (!status.ok())
+        if (auto status = m_rocksDB.get().Write(options, std::addressof(writeBatch)); !status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
@@ -150,11 +149,10 @@ public:
         auto rocksDBValue = m_valueResolver.encode(value);
 
         ::rocksdb::WriteOptions options;
-        auto status = m_rocksDB.get().Put(options,
-            ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
-            ::rocksdb::Slice(::ranges::data(rocksDBValue), ::ranges::size(rocksDBValue)));
-
-        if (!status.ok())
+        if (auto status = m_rocksDB.get().Put(options,
+                ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
+                ::rocksdb::Slice(::ranges::data(rocksDBValue), ::ranges::size(rocksDBValue)));
+            !status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
@@ -173,8 +171,7 @@ public:
         }
 
         ::rocksdb::WriteOptions options;
-        auto status = m_rocksDB.get().Write(options, &writeBatch);
-        if (!status.ok())
+        if (auto status = m_rocksDB.get().Write(options, &writeBatch); !status.ok())
         {
             BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
         }
