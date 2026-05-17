@@ -16,7 +16,6 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 aux_source_directory(bcos-front SRCS)
 

@@ -16,7 +16,6 @@
 # limitations under the License.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
 
 if(WITH_LEDGER_ELECTION)
     project(bcos-leader-election VERSION ${VERSION})
