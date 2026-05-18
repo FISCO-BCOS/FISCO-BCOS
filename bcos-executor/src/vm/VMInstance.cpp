@@ -80,9 +80,8 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
             m_revision, _msg, m_code.data(), m_code.size()));
     }
 
-    // TODO: Cache the evmone::VM instance by code hash instead of creating one per execution.
-    evmc::VM evm{evmc_create_evmone()};
-    return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(evm.get_raw_pointer()),
+    thread_local static evmc::VM s_vm{evmc_create_evmone()};
+    return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(s_vm.get_raw_pointer()),
         *_hostContext.interface, &_hostContext, m_revision, *_msg, *m_analysis));
 }
 
