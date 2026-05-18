@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.10)
 
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/generated/bcos-tars-protocol/tars)
