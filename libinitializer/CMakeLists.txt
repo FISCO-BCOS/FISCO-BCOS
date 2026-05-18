@@ -22,14 +22,22 @@ endif()
 add_library(txpool_init TxPoolInitializer.cpp)
 target_link_libraries(txpool_init PUBLIC protocol_init tool txpool)
 
+add_library(mempool_init MemPoolInitializer.cpp)
+target_link_libraries(mempool_init PUBLIC mempool)
+
 add_library(ledger_init LedgerInitializer.cpp)
 target_link_libraries(ledger_init PRIVATE ledger)
 
 add_library(baseline_init BaselineSchedulerInitializer.cpp GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp)
 target_link_libraries(baseline_init transaction-scheduler transaction-executor storage)
 
+<<<<<<< HEAD
 add_library(init Initializer.cpp AuthInitializer.cpp)
 list(APPEND INIT_LIB_DEPENDS protocol_init baseline_init front_init txpool_init scheduler ledger_init storage executor rpc bcos-boostssl tomlplusplus::tomlplusplus)
+=======
+add_library(init Initializer.cpp)
+list(APPEND INIT_LIB_DEPENDS protocol_init baseline_init front_init txpool_init mempool_init scheduler ledger_init storage executor rpc bcos-boostssl tomlplusplus::tomlplusplus)
+>>>>>>> upstream/release-3.18.0
 if(WITH_LEDGER_ELECTION)
     list(APPEND INIT_LIB_DEPENDS leader_election)
 endif()

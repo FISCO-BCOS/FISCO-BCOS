@@ -31,6 +31,7 @@
 #include "LedgerInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
+#include "MemPoolInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -255,6 +256,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+    m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
