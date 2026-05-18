@@ -32,7 +32,6 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-ledger/Ledger.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 
 namespace bcos
@@ -50,6 +49,10 @@ namespace consensus
 class PBFTImpl;
 }
 
+namespace ledger
+{
+class Ledger;
+}
 namespace initializer
 {
 class PBFTInitializer : public std::enable_shared_from_this<PBFTInitializer>

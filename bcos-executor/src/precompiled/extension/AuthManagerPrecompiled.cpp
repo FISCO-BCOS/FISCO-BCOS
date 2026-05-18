@@ -20,9 +20,9 @@
 
 #include "AuthManagerPrecompiled.h"
 #include "../../vm/HostContext.h"
+#include "CommitteeBin.h"
 #include "ContractAuthMgrPrecompiled.h"
 #include "bcos-codec/scale/Scale.h"
-#include "libinitializer/AuthInitializer.h"
 #include "bcos-tool/BfsFileFactory.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -196,8 +196,8 @@ std::shared_ptr<PrecompiledExecResult> AuthManagerPrecompiled::call(
     }
     PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                           << LOG_DESC("call undefined function") << LOG_KV("func", func);
-    BOOST_THROW_EXCEPTION(
-        bcos::protocol::PrecompiledError{} << errinfo_comment("AuthManagerPrecompiled call undefined function!"));
+    BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{}
+                          << errinfo_comment("AuthManagerPrecompiled call undefined function!"));
 }
 
 void AuthManagerPrecompiled::getAdmin(
@@ -525,8 +525,8 @@ std::string AuthManagerPrecompiled::getContractAdmin(
     {
         PRECOMPILED_LOG(DEBUG) << "Can't get contract admin, check the contract existence."
                                << LOG_KV("address", _to);
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError{} << errinfo_comment("Please check the existence of contract."));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{}
+                              << errinfo_comment("Please check the existence of contract."));
     }
     std::string admin;
 
@@ -835,7 +835,8 @@ void AuthManagerPrecompiled::initAuth(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                               << LOG_DESC("Committee exists.");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Committee contract already exist."));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError{} << errinfo_comment("Committee contract already exist."));
     }
 
     std::string authMgrAddress(blockContext.isWasm() ? AUTH_MANAGER_NAME : AUTH_MANAGER_ADDRESS);
@@ -844,8 +845,8 @@ void AuthManagerPrecompiled::initAuth(
     std::vector<string32> weights({bcos::codec::toString32(h256(1))});
     bytes code;
     std::string_view bin = blockContext.hashHandler()->getHashImplType() == crypto::Sm3Hash ?
-                               bcos::initializer::committeeSmBin :
-                               bcos::initializer::committeeBin;
+                               bcos::committeeSmBin :
+                               bcos::committeeBin;
     code.reserve(bin.size() / 2);
     boost::algorithm::unhex(bin, std::back_inserter(code));
     bytes input = code + codec.encode(initGovernors, weights, codec::toString32(h256(0)),
@@ -858,7 +859,8 @@ void AuthManagerPrecompiled::initAuth(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AuthManagerPrecompiled")
                               << LOG_DESC("init auth error.");
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Create auth contract error."));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError{} << errinfo_comment("Create auth contract error."));
     }
 
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));

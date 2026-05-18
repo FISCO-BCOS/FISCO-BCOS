@@ -19,6 +19,7 @@
  */
 #include "CommandHelper.h"
 #include "Common.h"
+#include "bcos-framework/Common.h"
 #include <include/BuildInfo.h>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
