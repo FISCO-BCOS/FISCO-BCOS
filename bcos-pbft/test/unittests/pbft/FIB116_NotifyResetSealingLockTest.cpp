@@ -114,6 +114,104 @@ BOOST_AUTO_TEST_CASE(ReNotifySealerNoNullDeref)
     BOOST_CHECK_NO_THROW(pbftConfig->reNotifySealer(pbftConfig->committedProposal()->index() + 1));
 }
 
+// Test: canHandleNewProposal(msg) reads m_committedProposal->index() — must hold the lock
+// AND null-check before deref.  Exercise concurrent setCommittedProposal to validate.
+BOOST_AUTO_TEST_CASE(CanHandleNewProposalConcurrentReadSafe)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
+
+    auto faker = createPBFTFixture(cryptoSuite);
+    faker->appendConsensusNode(faker->nodeID());
+    faker->init();
+
+    auto pbftConfig = faker->pbftConfig();
+    // Force the canHandleNewProposal() (no-arg) branch to return false so the message
+    // variant actually reads m_committedProposal->index() on line 257.
+    pbftConfig->setWaitSealUntil(pbftConfig->committedProposal()->index() + 100);
+
+    auto msg = pbftConfig->pbftMessageFactory()->createPBFTMsg();
+    msg->setIndex(pbftConfig->committedProposal()->index() + 1);
+
+    constexpr int kIter = 200;
+    std::atomic<bool> startFlag{false};
+
+    auto writerThread = std::thread([&]() {
+        while (!startFlag.load())
+        {
+        }
+        for (int i = 1; i <= kIter; ++i)
+        {
+            auto proposal = pbftConfig->pbftMessageFactory()->createPBFTProposal();
+            proposal->setIndex(i);
+            pbftConfig->setCommittedProposal(proposal);
+        }
+    });
+
+    auto readerThread = std::thread([&]() {
+        while (!startFlag.load())
+        {
+        }
+        for (int i = 0; i < kIter; ++i)
+        {
+            BOOST_CHECK_NO_THROW((void)pbftConfig->canHandleNewProposal(msg));
+        }
+    });
+
+    startFlag.store(true);
+    writerThread.join();
+    readerThread.join();
+}
+
+// Test: resetConfig reads m_committedProposal->index() — must hold the lock so that
+// the read does not race with concurrent setCommittedProposal.  Kept lightweight (one
+// resetConfig call) because resetConfig also drives several unrelated subsystems
+// (state-notifier / new-block-notifier / sync state) we do not need to exercise here.
+BOOST_AUTO_TEST_CASE(ResetConfigReadsCommittedUnderLock)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
+
+    auto faker = createPBFTFixture(cryptoSuite);
+    faker->appendConsensusNode(faker->nodeID());
+    faker->init();
+
+    auto pbftConfig = faker->pbftConfig();
+    // Seed committedProposal at a positive index so the resetConfig early-return guard
+    // (`committedIndex > 0`) is guaranteed to fire and we exercise only the locked read.
+    auto seed = pbftConfig->pbftMessageFactory()->createPBFTProposal();
+    seed->setIndex(10);
+    pbftConfig->setCommittedProposal(seed);
+
+    constexpr int kWriterIter = 200;
+    std::atomic<bool> startFlag{false};
+    std::atomic<bool> stopWriter{false};
+
+    auto writerThread = std::thread([&]() {
+        while (!startFlag.load())
+        {
+        }
+        for (int i = 11; i <= kWriterIter + 10 && !stopWriter.load(); ++i)
+        {
+            auto proposal = pbftConfig->pbftMessageFactory()->createPBFTProposal();
+            proposal->setIndex(i);
+            pbftConfig->setCommittedProposal(proposal);
+        }
+    });
+
+    startFlag.store(true);
+    // resetConfig with blockNumber == 0 hits the early-return path (committedIndex > 0),
+    // so we exercise the (now-locked) committedIndex read without driving the heavy
+    // subsystem work that follows.
+    auto ledgerConfig = std::make_shared<bcos::ledger::LedgerConfig>();
+    ledgerConfig->setBlockNumber(0);
+    BOOST_CHECK_NO_THROW(pbftConfig->resetConfig(ledgerConfig, false));
+    stopWriter.store(true);
+    writerThread.join();
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::test

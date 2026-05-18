@@ -28,10 +28,15 @@ using namespace std::chrono_literals;
 
 void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
+    // FIB-116: hold x_committedProposal while reading m_committedProposal so that
+    // all accesses to m_committedProposal are consistently protected by the mutex.
     bcos::protocol::BlockNumber committedIndex = 0;
-    if (m_committedProposal)
     {
-        committedIndex = m_committedProposal->index();
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIndex = m_committedProposal->index();
+        }
     }
     if (_ledgerConfig->blockNumber() <= committedIndex && committedIndex > 0)
     {
@@ -241,7 +246,14 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     {
         return true;
     }
+    // FIB-116: hold x_committedProposal AND null-check m_committedProposal before deref.
+    // The lock guards against concurrent setCommittedProposal(), the null-check covers the
+    // early-startup window where m_committedProposal has not been initialised yet.
     ReadGuard lock(x_committedProposal);
+    if (!m_committedProposal)
+    {
+        return false;
+    }
     auto committedIndex = m_committedProposal->index();
     return _msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
            _msg->index() <= m_waitResealUntil;
