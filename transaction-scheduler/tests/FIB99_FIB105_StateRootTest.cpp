@@ -190,4 +190,34 @@ BOOST_AUTO_TEST_CASE(bugfixFlagActivatedAtV3_17_0)
     BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_statestorage_hash_v3_17));
 }
 
+// ---------------------------------------------------------------------------
+// FIB-99 cross-platform stability: pin the V3_17 preimage byte order so that
+// heterogeneous (little-endian and big-endian) nodes compute byte-identical
+// state roots.  The relational tests above (boundary / status collision) only
+// prove that length prefixes exist; they cannot detect a regression where the
+// prefixes are written in native order.  This test pins the canonical digest
+// for a known preimage, computed independently using keccak256 over:
+//   u32be(tableLen) || table || u32be(keyLen) || key || i8(status) || [data]
+// Any change to length-prefix endianness, field ordering, or status byte width
+// will flip these digests.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(crossPlatformHashStable_FIB99_V3_17_BE)
+{
+    crypto::Keccak256 hashImpl;
+    constexpr auto v31 = static_cast<uint32_t>(protocol::BlockVersion::V3_1_VERSION);
+    const auto fix = featuresWithFix();
+
+    // MODIFIED entry: preimage = 00 00 00 03 'tbl' 00 00 00 03 'key' 03 'value'
+    Entry modified;
+    modified.importFields({"value"});
+    BOOST_CHECK_EQUAL(modified.hash("tbl", "key", hashImpl, v31, fix),
+        crypto::HashType("0x8079da3138e857fbdb6c43b1209696220bb398fb4ceb6fdf136bf010b3c5fbad"));
+
+    // DELETED entry: preimage = 00 00 00 03 'tbl' 00 00 00 03 'key' 01  (no data)
+    Entry deleted;
+    deleted.setStatus(Entry::DELETED);
+    BOOST_CHECK_EQUAL(deleted.hash("tbl", "key", hashImpl, v31, fix),
+        crypto::HashType("0x785a147df3f07ff4daf914a8b0f39cd1d67c9ab7da043734f873c4f581cea221"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
