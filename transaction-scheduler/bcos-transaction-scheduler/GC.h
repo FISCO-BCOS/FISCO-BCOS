@@ -20,19 +20,15 @@ public:
     {
         static tbb::task_arena arena(1, 1, tbb::task_arena::priority::low);
 
-        // Atomically reserve a slot iff we are strictly under the cap. Using
-        // compare_exchange_weak as the loop condition avoids the TOCTOU window
-        // of a separate load+fetch_add; on CAS failure cur is updated with the
-        // observed value, so a concurrent fill correctly drops us into the
-        // synchronous-destruction fallback below.
-        size_t cur = s_pendingCount.load(std::memory_order_relaxed);
-        while (cur < MAX_PENDING_GC && !s_pendingCount.compare_exchange_weak(cur, cur + 1,
-                                           std::memory_order_relaxed, std::memory_order_relaxed))
+        // Optimistically reserve a slot. fetch_add is a single RMW that never
+        // retries; if we observe the pre-increment value already at or above
+        // the cap, roll back and fall through to synchronous destruction. The
+        // queue itself never exceeds the cap because over-reservers never
+        // enqueue; only the counter can briefly overshoot before the matching
+        // fetch_sub, and that transient is not observable outside this class.
+        if (s_pendingCount.fetch_add(1, std::memory_order_relaxed) >= MAX_PENDING_GC)
         {
-        }
-
-        if (cur >= MAX_PENDING_GC)
-        {
+            s_pendingCount.fetch_sub(1, std::memory_order_relaxed);
             // Backpressure: destroy synchronously in the caller's scope.
             [[maybe_unused]] auto tuple =
                 std::make_tuple(std::forward<decltype(resources)>(resources)...);
