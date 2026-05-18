@@ -1117,7 +1117,9 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         {
             int64_t proposedTs = blockHeader->timestamp();
             int64_t parentTs = m_ledgerConfig->timestamp();
-            int64_t nowTs = utcTime();
+            // utcTime() returns uint64_t; make the narrowing to int64_t explicit so
+            // -Wconversion stays quiet and the signed arithmetic below is unambiguous.
+            int64_t nowTs = static_cast<int64_t>(utcTime());
 
             // Only enforce monotonicity when parentTs is non-zero (i.e., a real committed
             // block exists with a known timestamp).  When parentTs==0 the ledger is at
@@ -1847,6 +1849,11 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
 void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
     RecursiveGuard lock(m_mutex);
+    // Keep m_ledgerConfig in sync with the freshly-committed block.  Without this,
+    // m_ledgerConfig stays at the value loaded by fetchAndUpdateLedgerConfig() at init
+    // and is only refreshed on exception paths, leaving readers (e.g. FIB-126 timestamp
+    // validation in handlePrePrepareMsg) anchored to a stale parent timestamp.
+    *m_ledgerConfig = *_ledgerConfig;
     // try to switch rpbft
     switchToRPBFT(_ledgerConfig);
     // resetConfig after submit the block to ledger
