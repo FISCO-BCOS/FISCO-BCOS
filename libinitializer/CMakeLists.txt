@@ -31,7 +31,7 @@ target_link_libraries(ledger_init PRIVATE ledger)
 add_library(baseline_init BaselineSchedulerInitializer.cpp GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp)
 target_link_libraries(baseline_init transaction-scheduler transaction-executor storage)
 
-add_library(init Initializer.cpp)
+add_library(init Initializer.cpp AuthInitializer.cpp)
 list(APPEND INIT_LIB_DEPENDS protocol_init baseline_init front_init txpool_init mempool_init scheduler ledger_init storage executor rpc bcos-boostssl tomlplusplus::tomlplusplus)
 if(WITH_LEDGER_ELECTION)
     list(APPEND INIT_LIB_DEPENDS leader_election)
