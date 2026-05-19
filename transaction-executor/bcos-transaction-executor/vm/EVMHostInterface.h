@@ -25,7 +25,6 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/protocol/Exceptions.h"
 #include <evmc/evmc.h>
-#include <evmc/instructions.h>
 
 namespace bcos::executor_v1
 {
@@ -169,6 +168,8 @@ struct EVMHostInterface
             .blob_base_fee = {},
             .blob_hashes = {},
             .blob_hashes_count = 0,
+            .initcodes = {},
+            .initcodes_count = 0,
         };
         return result;
     }

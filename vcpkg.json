@@ -63,7 +63,6 @@
       "description": "Full node dependencies",
       "dependencies": [
         "evmone",
-        "evmc",
         "boost-coroutine2",
         {
           "name": "rocksdb",

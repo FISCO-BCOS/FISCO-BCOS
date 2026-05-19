@@ -207,7 +207,7 @@ public:
                     std::back_inserter(newContractAddress));
             }
 
-            if (evmcResult.status_code != 0)
+            if (evmcResult.status_code != EVMC_SUCCESS)
             {
                 TRANSACTION_EXECUTOR_LOG(DEBUG) << "Transaction revert: " << evmcResult.status_code;
 

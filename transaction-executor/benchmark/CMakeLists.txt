@@ -4,4 +4,4 @@ add_executable(benchmark-transaction-executor ${SOURCES})
 
 find_package(benchmark REQUIRED)
 target_link_libraries(benchmark-transaction-executor transaction-executor executor
-    protocol-tars ledger bcos-framework evmone benchmark::benchmark benchmark::benchmark_main)
+    protocol-tars ledger bcos-framework evmone::evmone benchmark::benchmark benchmark::benchmark_main)

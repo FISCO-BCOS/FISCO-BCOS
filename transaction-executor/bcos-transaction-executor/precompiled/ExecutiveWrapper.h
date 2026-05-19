@@ -97,16 +97,18 @@ public:
             .depth = 0,
             .gas = input->gas,
             .recipient = unhexAddress(input->receiveAddress),
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = unhexAddress(input->senderAddress),
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input->data.data(),
             .input_size = input->data.size(),
             .value = toEvmC(0x0_cppui256),
             .create2_salt = toEvmC(0x0_cppui256),
-            .code_address = unhexAddress(input->codeAddress)};
+            .code_address = unhexAddress(input->codeAddress),
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
 
         struct InternalCallParams
         {

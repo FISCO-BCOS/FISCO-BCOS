@@ -33,6 +33,8 @@ project(FISCO-BCOS VERSION ${VERSION})
 
 include(CompilerSettings)
 include(BuildInfoGenerator)
+include(FixFmtAppleConsteval)
+fisco_patch_fmt_apple_consteval()
 
 include(IncludeDirectories)
 

@@ -1,7 +1,7 @@
-#include <range/v3/algorithm/copy.hpp>
-#include <range/v3/algorithm/partition_point.hpp>
-#include <range/v3/algorithm/lower_bound.hpp>
 #include <range/v3/algorithm/binary_search.hpp>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/algorithm/lower_bound.hpp>
+#include <range/v3/algorithm/partition_point.hpp>
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
@@ -162,7 +162,7 @@ bcos::executor_v1::evmcStatusToErrorMessage(
     case EVMC_INTERNAL_ERROR:
     default:
         return {bcos::protocol::TransactionStatus::Unknown, {}};
-    };
+    }
 }
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Hash const& hashImpl,

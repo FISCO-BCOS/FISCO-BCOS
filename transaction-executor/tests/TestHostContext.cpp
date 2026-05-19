@@ -76,16 +76,18 @@ public:
             .depth = 0,
             .gas = 300 * 10000,
             .recipient = {},
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = (const uint8_t*)helloworldBytecodeBinary.data(),
             .input_size = helloworldBytecodeBinary.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = {}};
+            .code_address = {},
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -115,16 +117,18 @@ public:
             .depth = 0,
             .gas = 1000000,
             .recipient = address,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = sender,
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = address};
+            .code_address = address,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -165,16 +169,18 @@ public:
             .depth = 0,
             .gas = 1000000,
             .recipient = callAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = callAddress};
+            .code_address = callAddress,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -275,16 +281,18 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
             .depth = 0,
             .gas = CREATE_GAS,
             .recipient = {},
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = nullptr,
             .input_size = 0,
             .value = {},  // zero value
             .create2_salt = {},
-            .code_address = {}};
+            .code_address = {},
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
 
         evmc_address origin{};
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -390,16 +398,18 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .depth = 0,
             .gas = 1000000,
             .recipient = callAddress,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
             .sender = {},
-            .sender_ptr = nullptr,
-            .sender_len = 0,
             .input_data = input.data(),
             .input_size = input.size(),
             .value = {},
             .create2_salt = {},
-            .code_address = callAddress};
+            .code_address = callAddress,
+            .code = nullptr,
+            .code_size = 0,
+            .destination_ptr = nullptr,
+            .destination_len = 0,
+            .sender_ptr = nullptr,
+            .sender_len = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>

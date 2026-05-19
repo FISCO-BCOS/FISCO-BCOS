@@ -81,4 +81,4 @@ file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
 add_library(fbwasm STATIC IMPORTED)
 set_property(TARGET fbwasm PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/target/${BCOS_WASM_BUILD_MODE}/libbcos_wasm.a)
 set_property(TARGET fbwasm PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SOURCE_DIR}/include)
-add_dependencies(fbwasm bcos_wasm_project evmc::instructions)
+add_dependencies(fbwasm bcos_wasm_project)

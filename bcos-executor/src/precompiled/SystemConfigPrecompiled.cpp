@@ -22,15 +22,15 @@
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-framework/ledger/SystemConfigs.h"
-#include "bcos-task/Wait.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
-#include <algorithm>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <algorithm>
 #include <range/v3/algorithm/find.hpp>
 
 using namespace bcos;
@@ -331,6 +331,16 @@ int64_t SystemConfigPrecompiled::validate(
                               << LOG_KV("info", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(PrecompiledError{}
                               << errinfo_comment(*boost::get_error_info<bcos::errinfo_comment>(e)));
+    }
+
+    catch (boost::exception const& e)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                              << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
+                              << LOG_KV("value", value)
+                              << LOG_KV("info", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
+                                  "The value for " + key + " must be a valid number."));
     }
     catch (std::exception const& e)
     {
