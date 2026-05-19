@@ -24,6 +24,8 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/protocol/Block.h>
+#include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -43,12 +45,15 @@ namespace test
 // relative to the last applied proposal would reach applyStateMachine() — which then hits
 // a FATAL log — instead of being rejected at the admission stage.
 //
-// The fix adds an explicit early-reject guard:
-//   if (proposal->index() != lastAppliedProposal->index() + 1) → return false.
+// The fix adds two early-reject guards before applyStateMachine():
+//   (1) proposal->index() == lastAppliedProposal->index() + 1, and
+//   (2) proposalHeader.timestamp >= parentHeader.timestamp (when both encoded headers are
+//       available locally).
 //
 // Test cases:
-//   A. Consecutive proposal (index == last+1): accepted — normal path unaffected.
-//   B. Stale lastApplied (via injected override) causes a parent-index mismatch → rejected.
+//   A. Consecutive proposal (index == last+1, timestamp monotonic, empty data): accepted.
+//   B. Non-monotonic timestamp: rejected by clause (2).
+//   C. Stale lastApplied with non-consecutive index: rejected by clause (1).
 
 BOOST_FIXTURE_TEST_SUITE(FIB128CommitParentHashCheckTest, TestPromptFixture)
 
@@ -100,6 +105,47 @@ BOOST_AUTO_TEST_CASE(testConsecutiveProposalAccepted)
     // The admission check passes → tryToApplyCommitQueue returns true.
     bool result = cacheProcessor->tryToApplyCommitQueue();
     BOOST_CHECK_EQUAL(result, true);
+}
+
+// Case C: proposal header timestamp < parent timestamp.  StateMachine::apply() does not
+// rewrite the proposal's timestamp before execution, so a byzantine leader can otherwise
+// inject a non-monotonic timestamp into the chain.  The FIB-128 timestamp clause must reject
+// the proposal at the admission stage.
+BOOST_AUTO_TEST_CASE(testProposalWithNonMonotonicTimestampRejected)
+{
+    auto [cacheProcessor, pbftConfig, faker] = makeFixture();
+    BlockNumber committedIdx = pbftConfig->committedProposal()->index();
+    BlockNumber expectedCP = pbftConfig->expectedCheckPoint();
+
+    // Build a "parent" block at index=10 with timestamp = 1000.  Encode just the header —
+    // this matches how StateMachine produces _executedProposal->data() in production.
+    int64_t parentTimestamp = 1000;
+    auto parentBlock = faker->ledger()->init(nullptr, true, committedIdx, 0, parentTimestamp);
+    bytes parentHeaderBuf;
+    parentBlock->blockHeader()->encode(parentHeaderBuf);
+
+    auto pbftMsgFactory = pbftConfig->pbftMessageFactory();
+    auto knownParent = pbftMsgFactory->createPBFTProposal();
+    knownParent->setIndex(committedIdx);
+    knownParent->setHash(parentBlock->blockHeader()->hash());
+    knownParent->setData(parentHeaderBuf);
+    cacheProcessor->injectStaleLastAppliedForTest(knownParent);
+
+    // Proposal at expectedCP with timestamp = parentTimestamp - 500 (non-monotonic).
+    int64_t proposalTimestamp = parentTimestamp - 500;
+    auto proposalBlock =
+        faker->ledger()->init(parentBlock->blockHeader(), true, expectedCP, 0, proposalTimestamp);
+    bytes proposalData;
+    proposalBlock->encode(proposalData);
+
+    auto proposal = pbftMsgFactory->createPBFTProposal();
+    proposal->setIndex(expectedCP);
+    proposal->setHash(g_hashImpl->hash(proposalData));
+    proposal->setData(proposalData);
+    cacheProcessor->pushToCommittedQueueForTest(proposal);
+
+    // proposalHeader.timestamp (500) < parentHeader.timestamp (1000) → reject.
+    BOOST_CHECK_EQUAL(cacheProcessor->tryToApplyCommitQueue(), false);
 }
 
 // Case B: injected stale lastApplied causes proposal->index() != lastApplied->index()+1.

@@ -227,6 +227,14 @@ protected:
     virtual ProposalInterface::ConstPtr getAppliedCheckPointProposal(
         bcos::protocol::BlockNumber _index);
 
+    // FIB-128: verify the proposal's timestamp monotonicity against _lastAppliedProposal.
+    // Returns false (and logs) if proposalHeader.timestamp < parentHeader.timestamp; returns
+    // true when consistent or when either side lacks an encoded block header (e.g. bootstrap
+    // committedProposal with empty data() — short-circuits, leaving the index +1 admission
+    // check above as the protocol-level minimum).
+    virtual bool verifyProposalParentConsistency(PBFTProposalInterface::Ptr const& _proposal,
+        ProposalInterface::ConstPtr const& _lastAppliedProposal);
+
     virtual void notifyToSealNextBlock();
 
 protected:
