@@ -25,8 +25,8 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <chrono>
 #include <bcos-utilities/ThreadPool.h>
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <boost/asio/post.hpp>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/core/ignore_unused.hpp>
@@ -44,8 +44,8 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-WsSession::WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
-  : m_taskArena(taskArena), m_taskGroup(taskGroup)
+WsSession::WsSession(IOServicePool::Ptr ioServicePool)
+  : m_ioServicePool(std::move(ioServicePool))
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 
@@ -228,11 +228,9 @@ void WsSession::drop(WsError _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_taskArena.execute(
-                [&, callback = std::move(callback), error = std::move(error)]() mutable {
-                    m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
-                        callback->respCallBack(error, nullptr, nullptr);
-                    });
+            boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
+                [callback = std::move(callback), error = std::move(error)]() mutable {
+                    callback->respCallBack(error, nullptr, nullptr);
                 });
         }
     }
@@ -248,21 +246,19 @@ void WsSession::drop(WsError _reason)
         m_wsStreamDelegate->close();
     }
 
-    m_taskArena.execute([&, self]() {
-        m_taskGroup.run([self]() {
-            auto session = self.lock();
-            if (session)
-            {
-                session->disconnectHandler()(nullptr, session);
-            }
-        });
+    boost::asio::post(m_ioServicePool->getIOService()->get_executor(), [self]() {
+        auto session = self.lock();
+        if (session)
+        {
+            session->disconnectHandler()(nullptr, session);
+        }
     });
 }
 
 WsSession::Ptr WsSessionFactory::createSession(
-    tbb::task_arena& taskArena, tbb::task_group& taskGroup)
+    IOServicePool::Ptr ioServicePool)
 {
-    return std::make_shared<WsSession>(taskArena, taskGroup);
+    return std::make_shared<WsSession>(std::move(ioServicePool));
 }
 
 // start WsSession as client
@@ -334,8 +330,8 @@ void WsSession::onReadPacket()
         m_buffer->consume(m_buffer->size());
 
         auto self = weak_from_this();
-        m_taskArena.execute([&, self, message = std::move(message)]() mutable {
-            m_taskGroup.run([self, message = std::move(message)]() {
+        boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
+            [self, message = std::move(message)]() {
                 auto session = self.lock();
                 if (!session)
                 {
@@ -343,7 +339,6 @@ void WsSession::onReadPacket()
                 }
                 session->onMessage(message);
             });
-        });
     }
     catch (std::exception const& e)
     {
@@ -640,9 +635,8 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
 
     auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
 
-    m_taskArena.execute([&, callback = std::move(callback), error = std::move(error)]() mutable {
-        m_taskGroup.run([callback = std::move(callback), error = std::move(error)]() {
+    boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
+        [callback = std::move(callback), error = std::move(error)]() mutable {
             callback->respCallBack(error, nullptr, nullptr);
         });
-    });
 }

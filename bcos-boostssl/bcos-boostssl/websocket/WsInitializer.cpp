@@ -195,11 +195,8 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
         }
     }
 
-    auto threadPoolSize = _config->threadPoolSize();
-    if (threadPoolSize > 0)
-    {
-        _wsService->initTaskArena(threadPoolSize);
-    }
+    // Note: IOServicePool must be set before starting wsService.
+    // The threadPoolSize was previously used for tbb::task_arena, now IOServicePool handles it.
 
     connector->setCtx(clientCtx);
     connector->setBuilder(builder);

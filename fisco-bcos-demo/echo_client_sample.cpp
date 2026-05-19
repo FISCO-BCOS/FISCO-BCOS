@@ -104,7 +104,7 @@ int main(int argc, char** argv)
     auto msg = std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
     msg->setPacketType(999);
     std::string randStr(payLoadSize, 'a');
-    msg->setPayload(std::make_shared<bytes>(randStr.begin(), randStr.end()));
+    msg->setPayload(bcos::bytes(randStr.begin(), randStr.end()));
     auto rateLimiter = std::make_shared<RateLimiter>(packetQPS);
     sendMessage(serverEndPoint, msg, service, rateLimiter);
     return EXIT_SUCCESS;
