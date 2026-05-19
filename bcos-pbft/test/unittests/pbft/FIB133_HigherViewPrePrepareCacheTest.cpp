@@ -70,15 +70,30 @@ static std::map<IndexType, PBFTFixture::Ptr> makeCluster()
     return createFakers(cryptoSuite, consensusNodeSize, currentBlock, connectedNodes);
 }
 
-// Build a minimal block body so the proposal data is non-empty.
-static bytes fakeBlockData(PBFTFixture::Ptr faker, BlockNumber proposalIndex)
+// Build a self-consistent proposal block and return (encodedBlock, headerHash).
+//
+// handlePrePrepareMsg runs several block-integrity checks before caching a pre-prepare
+// (added upstream alongside the FIB-133 view check):
+//   - FIB-130: the decoded block-header hash, recomputed via calculateHash(), must equal
+//     the carried proposal hash;
+//   - FIB-142: the body's transaction root must equal header.txsRoot.
+// So the proposal hash must be the block-header hash (NOT hash(encodedBlock)), and the
+// header must carry the body's real txsRoot.  Mirror the honest-sealer flow that
+// PBFTEngineTest/testHandlePrePrepareMsg uses for its success-path case.
+static std::pair<bytes, bcos::crypto::HashType> fakeSelfConsistentProposal(
+    PBFTFixture::Ptr faker, BlockNumber proposalIndex)
 {
     auto ledgerConfig = faker->ledger()->ledgerConfig();
     auto parent = faker->ledger()->ledgerData()[ledgerConfig->blockNumber()];
     auto block = faker->ledger()->init(parent->blockHeader(), true, proposalIndex, 0, 0);
-    auto blockData = std::make_shared<bytes>();
-    block->encode(*blockData);
-    return *blockData;
+    auto hashImpl = faker->pbftConfig()->cryptoSuite()->hashImpl();
+    // FIB-142: bind the body's real txs root into the header before hashing.
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*hashImpl));
+    // FIB-130: the receiver recomputes the header hash, so derive ours the same way.
+    block->blockHeader()->calculateHash(*hashImpl);
+    bytes blockData;
+    block->encode(blockData);
+    return {blockData, block->blockHeader()->hash()};
 }
 
 // Case A: same-view PrePrepare from the correct leader is accepted.
@@ -122,10 +137,10 @@ BOOST_AUTO_TEST_CASE(testSameViewPrePrepareAccepted)
     prePrepare->setVersion(followerConfig->pbftMsgDefaultVersion());
     prePrepare->setTimestamp(utcTime());
 
-    auto blockData = fakeBlockData(leaderFaker, proposalIndex);
+    auto [blockData, validHash] = fakeSelfConsistentProposal(leaderFaker, proposalIndex);
     auto proposal = pbftMsgFactory->createPBFTProposal();
     proposal->setIndex(proposalIndex);
-    proposal->setHash(followerConfig->cryptoSuite()->hashImpl()->hash(blockData));
+    proposal->setHash(validHash);
     proposal->setData(blockData);
     prePrepare->setConsensusProposal(proposal);
     prePrepare->setHash(proposal->hash());
@@ -167,10 +182,10 @@ BOOST_AUTO_TEST_CASE(testHigherViewPrePrepareRejected)
 
     // Use the leader's faker to build valid block data.
     PBFTFixture::Ptr leaderFaker = fakerMap.count(leaderIdx) ? fakerMap[leaderIdx] : fakerMap[0];
-    auto blockData = fakeBlockData(leaderFaker, proposalIndex);
+    auto [blockData, validHash] = fakeSelfConsistentProposal(leaderFaker, proposalIndex);
     auto proposal = pbftMsgFactory->createPBFTProposal();
     proposal->setIndex(proposalIndex);
-    proposal->setHash(followerConfig->cryptoSuite()->hashImpl()->hash(blockData));
+    proposal->setHash(validHash);
     proposal->setData(blockData);
     prePrepare->setConsensusProposal(proposal);
     prePrepare->setHash(proposal->hash());
@@ -179,6 +194,47 @@ BOOST_AUTO_TEST_CASE(testHigherViewPrePrepareRejected)
     // Without fix: leader check uses localView, may accept this higher-view message.
     bool result = followerEngine->handlePrePrepareMsg(prePrepare, false, false, false);
     BOOST_CHECK_EQUAL(result, false);
+}
+
+// Case D: when _generatedFromNewView==true (view-change recovery path), a higher-view
+// PrePrepare must still be accepted — the FIB-133 guard intentionally only narrows the
+// normal path so view-change recovery is not broken.  This UT pins that contract: future
+// refactors that accidentally apply the strict view check to the new-view branch will
+// flip this test.
+BOOST_AUTO_TEST_CASE(testHigherViewPrePrepareAcceptedInNewViewPath)
+{
+    auto fakerMap = makeCluster();
+
+    PBFTFixture::Ptr followerFaker = fakerMap[0];
+    auto followerConfig = followerFaker->pbftConfig();
+    auto followerEngine = followerFaker->pbftEngine();
+
+    ViewType localView = followerConfig->view();
+    ViewType higherView = localView + 1;
+    BlockNumber proposalIndex = followerConfig->expectedCheckPoint();
+    IndexType leaderIdx = followerConfig->leaderIndex(proposalIndex);
+
+    auto pbftMsgFactory = followerConfig->pbftMessageFactory();
+    auto prePrepare = pbftMsgFactory->createPBFTMsg();
+    prePrepare->setIndex(proposalIndex);
+    prePrepare->setView(higherView);
+    prePrepare->setGeneratedFrom(leaderIdx);
+    prePrepare->setPacketType(PacketType::PrePreparePacket);
+    prePrepare->setVersion(followerConfig->pbftMsgDefaultVersion());
+    prePrepare->setTimestamp(utcTime());
+
+    PBFTFixture::Ptr leaderFaker = fakerMap.count(leaderIdx) ? fakerMap[leaderIdx] : fakerMap[0];
+    auto [blockData, validHash] = fakeSelfConsistentProposal(leaderFaker, proposalIndex);
+    auto proposal = pbftMsgFactory->createPBFTProposal();
+    proposal->setIndex(proposalIndex);
+    proposal->setHash(validHash);
+    proposal->setData(blockData);
+    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setHash(proposal->hash());
+
+    // _generatedFromNewView=true — FIB-133 guard is intentionally bypassed.
+    bool result = followerEngine->handlePrePrepareMsg(prePrepare, false, true, false);
+    BOOST_CHECK_EQUAL(result, true);
 }
 
 // Case C: lower-view PrePrepare is rejected by existing checkPBFTMsgState() — unchanged.
@@ -208,10 +264,10 @@ BOOST_AUTO_TEST_CASE(testLowerViewPrePrepareAlreadyRejected)
     prePrepare->setTimestamp(utcTime());
 
     PBFTFixture::Ptr leaderFaker = fakerMap.count(leaderIdx) ? fakerMap[leaderIdx] : fakerMap[0];
-    auto blockData = fakeBlockData(leaderFaker, proposalIndex);
+    auto [blockData, validHash] = fakeSelfConsistentProposal(leaderFaker, proposalIndex);
     auto proposal = pbftMsgFactory->createPBFTProposal();
     proposal->setIndex(proposalIndex);
-    proposal->setHash(followerConfig->cryptoSuite()->hashImpl()->hash(blockData));
+    proposal->setHash(validHash);
     proposal->setData(blockData);
     prePrepare->setConsensusProposal(proposal);
     prePrepare->setHash(proposal->hash());

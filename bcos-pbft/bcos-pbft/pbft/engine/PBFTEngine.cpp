@@ -760,13 +760,16 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
                         << LOG_KV("proposalCommitted", proposalCommitted);
         return CheckResult::INVALID;
     }
-    // Note: Accept pbft message with larger view then local view, for other nodes may viewchange to
-    // a larger view, and the node-self is not aware of the viewchange.
-    // In normal case, it will not happen, node-self will recover the view from the viewchange, and
-    // soon will reach to new view.
-    // BUT in the Byzantium case, malicious node will send the pre-prepare message with a larger
-    // view, to lay down some specific txs.
-    // FIXME: to check this logic.
+    // Note: Accept pbft message with larger view than local view, for other nodes may viewchange
+    // to a larger view, and the node-self is not aware of the viewchange.
+    // In normal case, it will not happen — node-self will recover the view from the viewchange
+    // and soon reach the new view.
+    // BUT in the Byzantium case, a malicious node may send a higher-view message to nudge state.
+    //
+    // FIB-133: the PrePrepare normal path (handlePrePrepareMsg, _generatedFromNewView==false)
+    // additionally enforces strict view equality, so cross-view PrePrepare caching is no longer
+    // possible.  The Prepare/Commit paths still rely on this broader acceptance window —
+    // tightening them would require a separate audit pass.
     if (_pbftReq->view() < m_config->view())
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid view")

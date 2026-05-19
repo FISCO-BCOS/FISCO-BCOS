@@ -153,8 +153,9 @@ BOOST_AUTO_TEST_CASE(testPartialFaultyStopsAtFirstHealthyLeader)
     IndexType firstLeader = (nodeIdx + 1) % pbftConfig->consensusNodesNum();
 
     // Collect the NodeID of firstLeader for comparison.
+    // FIB-125: getConsensusNodeByIndex() returns std::optional<ConsensusNode>.
     auto firstLeaderInfo = pbftConfig->getConsensusNodeByIndex(firstLeader);
-    BOOST_REQUIRE(firstLeaderInfo != nullptr);
+    BOOST_REQUIRE(firstLeaderInfo.has_value());
     auto faultyNodeID = firstLeaderInfo->nodeID;
 
     pbftConfig->registerFaultyDiscriminator([faultyNodeID](bcos::crypto::NodeIDPtr nodeID) {
