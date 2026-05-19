@@ -36,7 +36,7 @@ class FakeGateway : public gateway::GatewayInterface,
 public:
     virtual ~FakeGateway() {}
 
-    std::shared_ptr<FrontServiceInterface> m_frontService;
+    std::weak_ptr<FrontServiceInterface> m_frontService;
     void setFrontService(std::shared_ptr<FrontServiceInterface> _frontService)
     {
         m_frontService = _frontService;

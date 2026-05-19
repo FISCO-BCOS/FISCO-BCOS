@@ -39,7 +39,8 @@ public:
     virtual void setType(int type);
 
     virtual std::shared_ptr<ba::io_context> ioService();
-    virtual void setIOServicePool(IOServicePool::Ptr _ioServicePool);
+    virtual void setIOServicePool(
+        IOServicePool::Ptr _ioServicePool, bool _manageLifecycle = true);
 
     virtual std::shared_ptr<ba::ssl::context> srvContext();
     virtual std::shared_ptr<ba::ssl::context> clientContext();
@@ -108,6 +109,7 @@ protected:
     IOServicePool::Ptr m_ioServicePool;
     std::shared_ptr<ba::io_context> m_timerIOService;
     std::shared_ptr<ba::io_context::strand> m_strand;
+    bool m_manageIOServicePool = true;
     std::shared_ptr<bi::tcp::acceptor> m_acceptor;
     std::shared_ptr<bi::tcp::resolver> m_resolver;
 

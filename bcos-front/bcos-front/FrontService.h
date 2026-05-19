@@ -23,9 +23,8 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
 
 namespace bcos::front
@@ -160,6 +159,7 @@ public:
 
     std::shared_ptr<boost::asio::io_context> ioService() const;
     void setIoService(std::shared_ptr<boost::asio::io_context> _ioService);
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool);
 
     // register message _dispatcher for module
     void registerModuleMessageDispatcher(int _moduleID,
@@ -210,8 +210,7 @@ protected:
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
 private:
-    tbb::task_arena m_taskArena;
-    tbb::task_group m_asyncGroup;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
@@ -226,8 +225,6 @@ private:
 
     // service is running or not
     bool m_run = false;
-    //
-    std::shared_ptr<std::thread> m_frontServiceThread;
     // NodeID
     bcos::crypto::NodeIDPtr m_nodeID;
     // GroupID

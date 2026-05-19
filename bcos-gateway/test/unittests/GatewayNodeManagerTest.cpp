@@ -121,7 +121,10 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
         keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
+    ioServicePool->start();
     frontServiceFactory->setGatewayInterface(std::make_shared<FakeGateway>());
+    frontServiceFactory->setIOServicePool(ioServicePool);
 
     auto frontService = frontServiceFactory->buildFrontService(groupID, nodeID);
 

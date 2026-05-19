@@ -24,15 +24,24 @@
 #include <bcos-front/FrontService.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
-#include <oneapi/tbb/task_arena.h>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
 #include <random>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
-#include <thread>
 #include <utility>
+
+namespace
+{
+template <class Task>
+void dispatchToIOServicePool(bcos::IOServicePool& ioServicePool, Task&& task)
+{
+    auto& ioService = ioServicePool.getIOService();
+    auto executor = ioService->get_executor();
+    boost::asio::post(executor, [task = std::forward<Task>(task)]() mutable { task(); });
+}
+}  // namespace
 
 using namespace bcos;
 using namespace front;
@@ -49,7 +58,6 @@ FrontService::FrontService()
 FrontService::~FrontService() noexcept
 {
     stop();
-    m_asyncGroup.wait();
     FRONT_LOG(INFO) << LOG_DESC("~FrontService") << LOG_KV("this", this);
 }
 
@@ -97,6 +105,11 @@ std::shared_ptr<boost::asio::io_context> FrontService::ioService() const
 void FrontService::setIoService(std::shared_ptr<boost::asio::io_context> _ioService)
 {
     m_ioService = std::move(_ioService);
+}
+
+void FrontService::setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+{
+    m_ioServicePool = std::move(_ioServicePool);
 }
 
 void FrontService::registerModuleMessageDispatcher(int _moduleID,
@@ -188,6 +201,12 @@ void FrontService::checkParams()
         BOOST_THROW_EXCEPTION(
             InvalidParameter() << errinfo_comment(" FrontService ioService is uninitialized"));
     }
+
+    if (!m_ioServicePool)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(" FrontService ioServicePool is uninitialized"));
+    }
 }
 
 void FrontService::start()
@@ -225,27 +244,6 @@ void FrontService::start()
             }
         });
 
-    m_frontServiceThread = std::make_shared<std::thread>([this]() {
-        while (m_run)
-        {
-            try
-            {
-                auto work = boost::asio::make_work_guard(*m_ioService);
-                m_ioService->run();
-            }
-            catch (std::exception& e)
-            {
-                FRONT_LOG(WARNING)
-                    << LOG_DESC("IOService") << LOG_KV("failed", boost::diagnostic_information(e));
-            }
-
-            if (m_run && m_ioService->stopped())
-            {
-                m_ioService->restart();
-            }
-        }
-    });
-
     FRONT_LOG(INFO) << LOG_DESC("start") << LOG_KV("nodeID", m_nodeID->hex())
                     << LOG_KV("groupID", m_groupID);
 
@@ -282,16 +280,6 @@ void FrontService::stop()
             // clear the callback
             m_callback.clear();
         }
-
-        if (m_ioService)
-        {
-            m_ioService->stop();
-        }
-
-        if (m_frontServiceThread && m_frontServiceThread->joinable())
-        {
-            m_frontServiceThread->join();
-        }
     }
     catch (const std::exception& e)
     {
@@ -322,12 +310,11 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
                             (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
     if (_onGetGroupNodeInfo)
     {
-        m_taskArena.execute([&]() {
-            m_asyncGroup.run([_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
-                                 groupNodeInfo = std::move(groupNodeInfo)]() {
+        dispatchToIOServicePool(
+            *m_ioServicePool, [_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
+                                  groupNodeInfo = std::move(groupNodeInfo)]() mutable {
                 _onGetGroupNodeInfo(nullptr, groupNodeInfo);
             });
-        });
     }
 }
 
@@ -468,13 +455,14 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
                     << LOG_KV("nodeIDs.size()",
                            (_groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0));
 
-    auto self = std::weak_ptr<FrontService>(shared_from_this());
-
-    m_taskArena.execute([&]() {
-        m_asyncGroup.run([this, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() {
-            notifyGroupNodeInfo(_groupID, _groupNodeInfo);
+    auto self = weak_from_this();
+    dispatchToIOServicePool(
+        *m_ioServicePool, [self, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() mutable {
+            if (auto frontService = self.lock())
+            {
+                frontService->notifyGroupNodeInfo(_groupID, _groupNodeInfo);
+            }
         });
-    });
 
     if (_receiveMsgCallback)
     {
@@ -572,14 +560,13 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
 
     // Copy the payload before dispatching asynchronously.
     auto buffer = bytes(_payLoad.begin(), _payLoad.end());
-    m_taskArena.execute([&]() {
-        m_asyncGroup.run([_uuid, _error = std::move(_error), callback = std::move(callback),
-                             buffer = std::move(buffer), _nodeID = std::move(_nodeID),
-                             respFunc = std::move(respFunc)] {
+    dispatchToIOServicePool(
+        *m_ioServicePool, [_uuid, _error = std::move(_error), callback = std::move(callback),
+                              buffer = std::move(buffer), _nodeID = std::move(_nodeID),
+                              respFunc = std::move(respFunc)]() mutable {
             callback->callbackFunc(
                 _error, _nodeID, bytesConstRef(buffer.data(), buffer.size()), _uuid, respFunc);
         });
-    });
 }
 /**
  * @brief: receive message from gateway
@@ -625,12 +612,11 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
                 // Copy the payload before dispatching asynchronously.
                 bytes buffer(message.payload().begin(), message.payload().end());
 
-                m_taskArena.execute([&]() mutable {
-                    m_asyncGroup.run([uuid, callback = std::move(callback),
-                                         buffer = std::move(buffer), _nodeID] {
+                dispatchToIOServicePool(
+                    *m_ioServicePool, [uuid, callback = std::move(callback),
+                                          buffer = std::move(buffer), _nodeID]() mutable {
                         callback(_nodeID, uuid, bytesConstRef(buffer.data(), buffer.size()));
                     });
-                });
             }
             else
             {
@@ -647,11 +633,10 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
 
     if (_receiveMsgCallback)
     {
-        m_taskArena.execute([&]() mutable {
-            m_asyncGroup.run([_receiveMsgCallback = std::move(_receiveMsgCallback)]() {
+        dispatchToIOServicePool(
+            *m_ioServicePool, [_receiveMsgCallback = std::move(_receiveMsgCallback)]() mutable {
                 _receiveMsgCallback(nullptr);
             });
-        });
     }
 }
 
@@ -725,13 +710,11 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
         if (callback)
         {
             auto errorPtr = BCOS_ERROR_PTR(CommonError::TIMEOUT, "timeout");
-            m_taskArena.execute([&]() {
-                m_asyncGroup.run(
-                    [_uuid, _nodeID = std::move(_nodeID), callback = std::move(callback),
-                        errorPtr = std::move(errorPtr)]() {
-                        callback->callbackFunc(errorPtr, _nodeID, {}, _uuid, {});
-                    });
-            });
+            dispatchToIOServicePool(*m_ioServicePool,
+                [_uuid, _nodeID = std::move(_nodeID), callback = std::move(callback),
+                    errorPtr = std::move(errorPtr)]() mutable {
+                    callback->callbackFunc(errorPtr, _nodeID, {}, _uuid, {});
+                });
         }
 
         FRONT_LOG(WARNING) << LOG_BADGE("onMessageTimeout") << LOG_KV("uuid", _uuid);

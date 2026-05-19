@@ -35,13 +35,20 @@ FrontService::Ptr FrontServiceFactory::buildFrontService(
                                   "FrontServiceFactory::init gateway is uninitialized"));
     }
 
+    if (!m_ioServicePool)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "FrontServiceFactory::init ioServicePool is uninitialized"));
+    }
+
     FRONT_LOG(INFO) << LOG_DESC("FrontServiceFactory::buildFrontService")
                     << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID->hex());
 
     auto frontService = std::make_shared<FrontService>();
     frontService->setGroupID(_groupID);
     frontService->setNodeID(std::move(_nodeID));
-    frontService->setIoService(std::make_shared<boost::asio::io_context>());
+    frontService->setIOServicePool(m_ioServicePool);
+    frontService->setIoService(m_ioServicePool->getIOService());
     frontService->setGatewayInterface(m_gatewayInterface);
 
     return frontService;

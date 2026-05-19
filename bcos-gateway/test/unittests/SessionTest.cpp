@@ -247,8 +247,19 @@ public:
 class FakeSocket : public SocketFace
 {
 public:
-    FakeSocket() : SocketFace() {};
-    ~FakeSocket() override = default;
+    FakeSocket() : SocketFace(), m_workGuard(boost::asio::make_work_guard(m_ioService))
+    {
+        m_worker = std::thread([this]() { m_ioService.run(); });
+    };
+    ~FakeSocket() override
+    {
+        m_workGuard.reset();
+        m_ioService.stop();
+        if (m_worker.joinable())
+        {
+            m_worker.join();
+        }
+    }
     bool isConnected() const override { return true; }
     void close() override {}
     boost::asio::ip::tcp::endpoint remoteEndpoint(boost::system::error_code ec) override
@@ -268,6 +279,8 @@ public:
 private:
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
     ba::io_context m_ioService;
+    boost::asio::executor_work_guard<ba::io_context::executor_type> m_workGuard;
+    std::thread m_worker;
     NodeIPEndpoint m_nodeIPEndpoint;
 };
 

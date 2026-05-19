@@ -11,13 +11,11 @@
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-utilities/Common.h"
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
-#include <openssl/x509.h>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/ssl/stream_base.hpp>
 #include <boost/system/error_code.hpp>
 #include <memory>
+#include <openssl/x509.h>
 #include <string>
 #include <utility>
 
@@ -96,12 +94,6 @@ public:
     virtual void setPeerWhitelist(PeerBlackWhitelistInterface::Ptr _peerWhitelist);
     virtual PeerBlackWhitelistInterface::Ptr peerWhitelist();
 
-    template <class F>
-    void asyncTo(F f)
-    {
-        m_asyncGroup.run(std::move(f));
-    }
-
     void setEnableSslVerify(bool _enableSSLVerify);
 
 protected:
@@ -140,8 +132,6 @@ protected:
 
     void insertPendingConns(NodeIPEndpoint const& nodeIPEndpoint);
 
-    tbb::task_arena m_taskArena;
-    tbb::task_group m_asyncGroup;
     std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 
     bcos::crypto::Hash::Ptr m_hashImpl;
