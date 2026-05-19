@@ -2,12 +2,14 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
+#include <bcos-storage/CheckpointRocksDBStorage.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <fmt/format.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
+#include <filesystem>
 #include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/iota.hpp>
 #include <range/v3/view/repeat.hpp>
@@ -37,6 +39,25 @@ struct TestRocksDBStorage2Fixture
 
     ~TestRocksDBStorage2Fixture() { boost::filesystem::remove_all(path); }
     std::unique_ptr<rocksdb::DB> originRocksDB;
+
+    static void populate(const std::string& dbPath, std::string_view table, std::string_view key,
+        std::string_view value)
+    {
+        boost::filesystem::create_directories(dbPath);
+
+        ::rocksdb::Options options;
+        options.create_if_missing = true;
+
+        rocksdb::DB* db = nullptr;
+        auto status = rocksdb::DB::Open(options, dbPath, &db);
+        BOOST_REQUIRE(status.ok());
+        std::unique_ptr<rocksdb::DB> guard(db);
+
+        RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver> storage(
+            *guard, StateKeyResolver{}, StateValueResolver{});
+        task::syncWait(storage2::writeOne(
+            storage, StateKey{table, key}, storage::Entry(std::string(value))));
+    }
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestRocksDBStorage2, TestRocksDBStorage2Fixture)
@@ -210,6 +231,53 @@ BOOST_AUTO_TEST_CASE(merge)
 
         co_return;
     }());
+}
+
+BOOST_AUTO_TEST_CASE(openLatestOrCheckpointByDirectory)
+{
+    auto root = path + "_checkpoint_root";
+    CheckpointRocksDBStorage checkpointRocksDBStorage(root);
+    auto latestPath = checkpointRocksDBStorage.latestPath();
+    auto checkpointName = std::string("blockHash123");
+    auto checkpointPath = checkpointRocksDBStorage.checkpointPath(checkpointName);
+
+    populate(latestPath, "sys"sv, "key"sv, "latest-value"sv);
+    populate(checkpointPath, "sys"sv, "key"sv, "checkpoint-value"sv);
+
+    task::syncWait([&]() -> task::Task<void> {
+        auto latestDB = checkpointRocksDBStorage.open(latestCheckpointStorage);
+        RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver> latestStorage(
+            *latestDB, StateKeyResolver{}, StateValueResolver{});
+        auto latestValue =
+            co_await storage2::readOne(latestStorage, StateKey{"sys"sv, "key"sv});
+        BOOST_REQUIRE(latestValue);
+        BOOST_CHECK_EQUAL(latestValue->get(), "latest-value");
+        BOOST_CHECK_EQUAL(checkpointRocksDBStorage.latestPath(), latestPath);
+
+        {
+            auto checkpointDB = checkpointRocksDBStorage.open(checkpointName);
+            RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver>
+                checkpointStorage(*checkpointDB, StateKeyResolver{}, StateValueResolver{});
+            auto checkpointValue = co_await storage2::readOne(
+                checkpointStorage, StateKey{"sys"sv, "key"sv});
+            BOOST_REQUIRE(checkpointValue);
+            BOOST_CHECK_EQUAL(checkpointValue->get(), "checkpoint-value");
+            BOOST_CHECK_EQUAL(checkpointRocksDBStorage.checkpointPath(checkpointName), checkpointPath);
+        }
+
+        auto checkpointDBByBlock = checkpointRocksDBStorage.open("blockHash123"sv);
+        RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver>
+            checkpointStorageByBlock(*checkpointDBByBlock, StateKeyResolver{}, StateValueResolver{});
+        auto checkpointValueByBlock = co_await storage2::readOne(
+            checkpointStorageByBlock, StateKey{"sys"sv, "key"sv});
+        BOOST_REQUIRE(checkpointValueByBlock);
+        BOOST_CHECK_EQUAL(checkpointValueByBlock->get(), "checkpoint-value");
+        BOOST_CHECK_EQUAL(checkpointRocksDBStorage.checkpointPath("blockHash123"sv), checkpointPath);
+
+        co_return;
+    }());
+
+    boost::filesystem::remove_all(root);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

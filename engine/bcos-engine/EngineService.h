@@ -19,18 +19,20 @@
 
 #pragma once
 
+#include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <cstdint>
-#include <memory>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -39,6 +41,13 @@
 
 namespace bcos::engine
 {
+DERIVE_BCOS_EXCEPTION(UnsupportedEngineApiVersion);
+DERIVE_BCOS_EXCEPTION(GlobalStateStorageNotConfigured);
+DERIVE_BCOS_EXCEPTION(UnknownForkchoiceHeadBlock);
+DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
+DERIVE_BCOS_EXCEPTION(UnknownPayload);
+DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
+
 enum class EngineApiVersion : std::uint8_t
 {
     V1 = 1,
@@ -137,10 +146,6 @@ struct GetPayloadResult
     bool shouldOverrideBuilder = false;
 };
 
-struct NoGlobalStateStorage
-{
-};
-
 namespace detail
 {
 std::string encodePayloadSequence(std::uint64_t value);
@@ -162,23 +167,14 @@ template <class MemPoolType, class GlobalStateStorageType>
 class EngineService
 {
 public:
-    EngineService() = default;
     EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
-      : m_memPool(&memPool), m_globalStateStorage(&globalStateStorage)
+      : m_memPool(std::ref(memPool)), m_globalStateStorage(std::ref(globalStateStorage))
     {}
     ~EngineService() = default;
     EngineService(const EngineService&) = delete;
     EngineService(EngineService&&) = delete;
     EngineService& operator=(const EngineService&) = delete;
     EngineService& operator=(EngineService&&) = delete;
-
-    MemPoolType* memPool() noexcept { return m_memPool; }
-    MemPoolType const* memPool() const noexcept { return m_memPool; }
-    GlobalStateStorageType* globalStateStorage() noexcept { return m_globalStateStorage; }
-    GlobalStateStorageType const* globalStateStorage() const noexcept
-    {
-        return m_globalStateStorage;
-    }
 
     bcos::task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
@@ -188,10 +184,133 @@ public:
     }
 
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
-        const ForkchoiceState& forkchoiceState,
-        const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version)
+        const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
+        std::uint32_t version)
     {
-        co_return handleForkchoiceUpdate(forkchoiceState, payloadAttributes, version);
+        if (!isVersionSupported(version))
+        {
+            BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
+                                  << bcos::errinfo_comment{"Unsupported Engine API version"});
+        }
+        if (payloadAttributes != nullptr)
+        {
+            if (auto validationError =
+                    detail::validatePayloadAttributes(*payloadAttributes, version);
+                validationError.has_value())
+            {
+                ForkchoiceUpdatedResult result{
+                    .payloadStatus =
+                        makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError),
+                    .payloadId = std::nullopt,
+                };
+                co_return result;
+            }
+        }
+
+        auto view = m_globalStateStorage.get().fork();
+        auto headBlockNumber = co_await bcos::ledger::getBlockNumber(
+            view, forkchoiceState.headBlockHash, bcos::ledger::fromStorage);
+        auto safeBlockNumber = co_await bcos::ledger::getBlockNumber(
+            view, forkchoiceState.safeBlockHash, bcos::ledger::fromStorage);
+        auto finalizedBlockNumber = co_await bcos::ledger::getBlockNumber(
+            view, forkchoiceState.finalizedBlockHash, bcos::ledger::fromStorage);
+
+        if (!headBlockNumber.has_value() || !safeBlockNumber.has_value() ||
+            !finalizedBlockNumber.has_value())
+        {
+            ForkchoiceUpdatedResult result{
+                .payloadStatus =
+                    makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt),
+                .payloadId = std::nullopt,
+            };
+            co_return result;
+        }
+        if (*safeBlockNumber > *headBlockNumber)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidForkchoiceState{} << bcos::errinfo_comment{
+                    "Forkchoice safe block number must not exceed head block number"});
+        }
+        if (*finalizedBlockNumber > *headBlockNumber)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidForkchoiceState{} << bcos::errinfo_comment{
+                    "Forkchoice finalized block number must not exceed head block number"});
+        }
+        if (*finalizedBlockNumber > *safeBlockNumber)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidForkchoiceState{} << bcos::errinfo_comment{
+                    "Forkchoice finalized block number must not exceed safe block number"});
+        }
+
+        std::unique_lock lock(x_state);
+        if (m_trackedHeadBlock.has_value())
+        {
+            auto const& trackedHeadBlock = *m_trackedHeadBlock;
+            if (*headBlockNumber < trackedHeadBlock.blockNumber)
+            {
+                ForkchoiceUpdatedResult result{
+                    .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
+                        forkchoiceState.headBlockHash, std::nullopt),
+                    .payloadId = std::nullopt,
+                };
+                co_return result;
+            }
+            if (*headBlockNumber == trackedHeadBlock.blockNumber)
+            {
+                if (forkchoiceState.headBlockHash != trackedHeadBlock.hash)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        InvalidForkchoiceState{} << bcos::errinfo_comment{
+                            "Forkchoice head block hash conflicts with tracked block number"});
+                }
+            }
+            else if (*headBlockNumber != trackedHeadBlock.blockNumber + 1)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidForkchoiceState{} << bcos::errinfo_comment{
+                        "Forkchoice head block number must increase by exactly 1"});
+            }
+        }
+
+        m_forkchoiceState = forkchoiceState;
+        m_trackedHeadBlock = TrackedHeadBlock{
+            .hash = forkchoiceState.headBlockHash,
+            .blockNumber = *headBlockNumber,
+        };
+        updateTrackedBlockNumbers(safeBlockNumber, finalizedBlockNumber);
+        m_memPool.get().remove(view);
+
+        ForkchoiceUpdatedResult result{
+            .payloadStatus = makeStatus(
+                PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt),
+            .payloadId = std::nullopt,
+        };
+        if (payloadAttributes == nullptr)
+        {
+            co_return result;
+        }
+
+        auto payloadId = nextPayloadID();
+        auto payload =
+            buildPayloadSkeleton(forkchoiceState, *payloadAttributes, payloadId, version);
+        PayloadEntry entry{
+            .version = version,
+            .executionPayload = std::move(payload),
+            .blockValue = 0,
+            .blobsBundle = std::nullopt,
+            .shouldOverrideBuilder = false,
+        };
+        if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+        {
+            entry.blobsBundle = BlobsBundleV1{};
+        }
+
+        m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
+        m_payloadCache[payloadId] = entry;
+        result.payloadId = payloadId;
+        co_return result;
     }
 
     bcos::task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version)
@@ -218,6 +337,12 @@ public:
     }
 
 private:
+    struct TrackedHeadBlock
+    {
+        h256 hash;
+        bcos::protocol::BlockNumber blockNumber = 0;
+    };
+
     struct PayloadEntry
     {
         std::uint32_t version = 0;
@@ -237,96 +362,49 @@ private:
         std::optional<h256> latestValidHash = std::nullopt,
         std::optional<std::string> validationError = std::nullopt)
     {
-        PayloadStatus statusObject;
-        statusObject.status = status;
-        statusObject.latestValidHash = latestValidHash;
-        statusObject.validationError = std::move(validationError);
-        return statusObject;
-    }
-
-    ForkchoiceUpdatedResult handleForkchoiceUpdate(const ForkchoiceState& forkchoiceState,
-        const std::optional<PayloadAttributes>& payloadAttributes, std::uint32_t version)
-    {
-        if (!isVersionSupported(version))
-        {
-            throw std::invalid_argument("Unsupported Engine API version");
-        }
-        if (payloadAttributes)
-        {
-            if (auto validationError =
-                    detail::validatePayloadAttributes(*payloadAttributes, version);
-                validationError.has_value())
-            {
-                ForkchoiceUpdatedResult result;
-                result.payloadStatus =
-                    makeStatus(PayloadValidationStatus::Invalid, std::nullopt, validationError);
-                return result;
-            }
-        }
-
-        std::unique_lock lock(x_state);
-        m_forkchoiceState = forkchoiceState;
-        updateTrackedBlockNumbers(forkchoiceState);
-
-        ForkchoiceUpdatedResult result;
-        result.payloadStatus =
-            makeStatus(PayloadValidationStatus::Valid, forkchoiceState.headBlockHash, std::nullopt);
-        if (!payloadAttributes)
-        {
-            return result;
-        }
-
-        auto payloadId = nextPayloadID();
-        auto payload =
-            buildPayloadSkeleton(forkchoiceState, *payloadAttributes, payloadId, version);
-        PayloadEntry entry;
-        entry.version = version;
-        entry.executionPayload = std::move(payload);
-        entry.blockValue = 0;
-        if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
-        {
-            entry.blobsBundle = BlobsBundleV1{};
-        }
-
-        m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-        m_payloadCache[payloadId] = entry;
-        result.payloadId = payloadId;
-        return result;
+        return PayloadStatus{
+            .status = status,
+            .latestValidHash = latestValidHash,
+            .validationError = std::move(validationError),
+        };
     }
 
     GetPayloadResult handleGetPayload(const PayloadID& payloadId, std::uint32_t version) const
     {
         if (!isVersionSupported(version))
         {
-            throw std::invalid_argument("Unsupported Engine API version");
+            BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
+                                  << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
 
         std::shared_lock lock(x_state);
         auto it = m_payloadCache.find(payloadId);
         if (it == m_payloadCache.end())
         {
-            throw std::out_of_range("Unknown payload");
+            BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
         }
         if (!detail::isGetPayloadVersionCompatible(
                 static_cast<EngineApiVersion>(version), it->second.version))
         {
-            throw std::invalid_argument(
-                "Payload version is incompatible with requested method version");
+            BOOST_THROW_EXCEPTION(
+                IncompatiblePayloadVersion{} << bcos::errinfo_comment{
+                    "Payload version is incompatible with requested method version"});
         }
 
-        GetPayloadResult result;
-        result.executionPayload = it->second.executionPayload;
-        result.blockValue = it->second.blockValue;
-        result.blobsBundle = it->second.blobsBundle;
-        result.shouldOverrideBuilder = it->second.shouldOverrideBuilder;
-        return result;
+        return GetPayloadResult{
+            .executionPayload = it->second.executionPayload,
+            .blockValue = it->second.blockValue,
+            .blobsBundle = it->second.blobsBundle,
+            .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
+        };
     }
 
     PayloadStatus handleNewPayload(const NewPayloadRequest& request, std::uint32_t version)
     {
         if (!isVersionSupported(version))
         {
-            throw std::invalid_argument("Unsupported Engine API version");
+            BOOST_THROW_EXCEPTION(UnsupportedEngineApiVersion{}
+                                  << bcos::errinfo_comment{"Unsupported Engine API version"});
         }
 
         if (auto validationError =
@@ -377,10 +455,13 @@ private:
             payloadId = payloadIdIt->second;
         }
 
-        PayloadEntry entry;
-        entry.version = version;
-        entry.executionPayload = request.executionPayload;
-        entry.blockValue = 0;
+        PayloadEntry entry{
+            .version = version,
+            .executionPayload = request.executionPayload,
+            .blockValue = 0,
+            .blobsBundle = std::nullopt,
+            .shouldOverrideBuilder = false,
+        };
         if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
@@ -404,20 +485,25 @@ private:
             nextBlockNumber = *currentBlockNumber + 1;
         }
 
-        ExecutionPayload executionPayload;
-        executionPayload.parentHash = forkchoiceState.headBlockHash;
-        executionPayload.feeRecipient = payloadAttributes.suggestedFeeRecipient;
-        executionPayload.stateRoot = detail::syntheticHash(std::string("state") + payloadId);
-        executionPayload.receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId);
-        executionPayload.logsBloom = Bloom{};
-        executionPayload.prevRandao = payloadAttributes.prevRandao;
-        executionPayload.blockNumber = nextBlockNumber;
-        executionPayload.gasLimit = 0;
-        executionPayload.gasUsed = 0;
-        executionPayload.timestamp = payloadAttributes.timestamp;
-        executionPayload.extraData = {};
-        executionPayload.baseFeePerGas = 0;
-        executionPayload.blockHash = detail::syntheticHash(payloadId);
+        ExecutionPayload executionPayload{
+            .parentHash = forkchoiceState.headBlockHash,
+            .feeRecipient = payloadAttributes.suggestedFeeRecipient,
+            .stateRoot = detail::syntheticHash(std::string("state") + payloadId),
+            .receiptsRoot = detail::syntheticHash(std::string("receipts") + payloadId),
+            .logsBloom = Bloom{},
+            .prevRandao = payloadAttributes.prevRandao,
+            .blockNumber = nextBlockNumber,
+            .gasLimit = 0,
+            .gasUsed = 0,
+            .timestamp = payloadAttributes.timestamp,
+            .extraData = {},
+            .baseFeePerGas = 0,
+            .blockHash = detail::syntheticHash(payloadId),
+            .transactions = {},
+            .withdrawals = std::nullopt,
+            .blobGasUsed = std::nullopt,
+            .excessBlobGas = std::nullopt,
+        };
 
         if (version >= static_cast<std::uint32_t>(EngineApiVersion::V2))
         {
@@ -448,16 +534,18 @@ private:
         return payloadIt->second.executionPayload.blockNumber;
     }
 
-    void updateTrackedBlockNumbers(const ForkchoiceState& forkchoiceState)
+    void updateTrackedBlockNumbers(std::optional<bcos::protocol::BlockNumber> safeBlockNumber,
+        std::optional<bcos::protocol::BlockNumber> finalizedBlockNumber)
     {
-        m_safeBlockNumber = lookupBlockNumberByHash(forkchoiceState.safeBlockHash);
-        m_finalizedBlockNumber = lookupBlockNumberByHash(forkchoiceState.finalizedBlockHash);
+        m_safeBlockNumber = safeBlockNumber;
+        m_finalizedBlockNumber = finalizedBlockNumber;
     }
 
     mutable std::shared_mutex x_state;
-    MemPoolType* m_memPool = nullptr;
-    GlobalStateStorageType* m_globalStateStorage = nullptr;
+    std::reference_wrapper<MemPoolType> m_memPool;
+    std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
     ForkchoiceState m_forkchoiceState;
+    std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
     std::optional<bcos::protocol::BlockNumber> m_finalizedBlockNumber;
     std::unordered_map<PayloadID, PayloadEntry> m_payloadCache;
