@@ -118,6 +118,28 @@ BOOST_AUTO_TEST_CASE(testNoPeerFaultyReturnsFalse)
     BOOST_CHECK_EQUAL(fastViewChangeCalled, false);
 }
 
+// Case D: passing nodeIndex() itself short-circuits to false without invoking the handler.
+// This guards the "if self is the leader, no view-change is needed" early-out at the top of
+// the loop, which is the most common no-op path.
+BOOST_AUTO_TEST_CASE(testSelfLeaderShortCircuit)
+{
+    auto faker = makeFourNodeFixture();
+    auto pbftConfig = faker->pbftConfig();
+
+    // A non-trivial faulty discriminator that would otherwise classify self as faulty —
+    // the short-circuit must fire BEFORE the discriminator is consulted, so the handler
+    // must remain uncalled and the return value must be false.
+    pbftConfig->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return true; });
+
+    int fastViewChangeCount = 0;
+    pbftConfig->registerFastViewChangeHandler([&fastViewChangeCount]() { fastViewChangeCount++; });
+
+    bool result = pbftConfig->tryTriggerFastViewChange(pbftConfig->nodeIndex());
+
+    BOOST_CHECK_EQUAL(result, false);
+    BOOST_CHECK_EQUAL(fastViewChangeCount, 0);
+}
+
 // Case C: iteration stops as soon as a non-faulty leader is found.
 // With N=4 nodes, mark the first candidate faulty and the second non-faulty.
 // Exactly one view-change should be triggered and the loop must stop.
