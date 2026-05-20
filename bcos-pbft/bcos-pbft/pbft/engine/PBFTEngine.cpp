@@ -1048,20 +1048,55 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     // FIB-131: reset the per-peer failure counter on any successfully-signed pre-prepare.
     m_invalidPrePrepareCount.erase(_prePrepareMsg->generatedFrom());
+    // FIB-130: cross-check the outer PBFT envelope index against the inner proposal index BEFORE
+    // decoding the block body. The outer index drives leaderIndex(), notifySealer() and cache
+    // keys, while the inner index drives verifyProposal() and post-verify routing. A Byzantine
+    // leader could craft a pre-prepare with mismatched outer/inner indices to make the pipeline
+    // track consensus state for one slot while sealing txs for another.
+    if (_prePrepareMsg->index() != _prePrepareMsg->consensusProposal()->index())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("handlePrePrepareMsg: outer/inner index mismatch (FIB-130)")
+                          << LOG_KV("outerIndex", _prePrepareMsg->index())
+                          << LOG_KV("innerIndex", _prePrepareMsg->consensusProposal()->index())
+                          << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+        return false;
+    }
     auto block = m_config->blockFactory().createBlock(
         _prePrepareMsg->consensusProposal()->data(), false, false);
-    // FIB-130: cross-check the outer PBFT message index against the decoded block header number.
-    // A Byzantine leader could forge the index in the outer PBFT envelope to a different value
-    // from the block body, confusing cache-key lookups and watermark checks.
+    // FIB-130: cross-check the decoded block header against the carried proposal metadata.
+    // A Byzantine leader could (a) carry a proposal index whose block-header number differs,
+    // or (b) sign hash(A) while broadcasting body(B) under the same proposal hash, decoupling
+    // the consensus identity from the executed payload. createBlock(data, false, false) leaves
+    // the header hash as whatever bytes were on the wire, so we recompute via calculateHash()
+    // before comparing.
     if (!_prePrepareMsg->consensusProposal()->data().empty())
     {
         auto blockHeader = block->blockHeader();
-        if (blockHeader && blockHeader->number() != _prePrepareMsg->consensusProposal()->index())
+        if (!blockHeader)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: decoded block has no header (FIB-130)")
+                              << printPBFTMsgInfo(_prePrepareMsg);
+            return false;
+        }
+        if (blockHeader->number() != _prePrepareMsg->consensusProposal()->index())
         {
             PBFT_LOG(WARNING) << LOG_DESC(
                                      "handlePrePrepareMsg: block header number mismatch (FIB-130)")
                               << LOG_KV("headerNumber", blockHeader->number())
                               << LOG_KV("msgIndex", _prePrepareMsg->consensusProposal()->index())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+        blockHeader->calculateHash(*m_config->cryptoSuite()->hashImpl());
+        if (blockHeader->hash() != _prePrepareMsg->consensusProposal()->hash())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: decoded block hash != proposal "
+                                     "hash (FIB-130)")
+                              << LOG_KV("expected",
+                                     _prePrepareMsg->consensusProposal()->hash().abridged())
+                              << LOG_KV("decoded", blockHeader->hash().abridged())
                               << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
             return false;
         }

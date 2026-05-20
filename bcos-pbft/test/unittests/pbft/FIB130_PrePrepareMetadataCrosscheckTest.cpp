@@ -13,8 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Regression test for FIB-130: handlePrePrepareMsg must cross-check the outer PBFT
- *        message index against the actual block-header number decoded from the proposal data.
+ * @brief Regression tests for FIB-130: handlePrePrepareMsg must keep three identifiers in lock
+ *        step — the outer PBFT envelope index, the inner consensusProposal index, and the
+ *        decoded block header (number + recomputed hash). Any mismatch is a Byzantine signal
+ *        and must be rejected before the message enters the cache.
  * @file FIB130_PrePrepareMetadataCrosscheckTest.cpp
  */
 #include "bcos-framework/bcos-framework/testutils/faker/FakeBlock.h"
@@ -81,6 +83,96 @@ BOOST_AUTO_TEST_CASE(testRejectPrePrepareWithMismatchedBlockNumber)
     nonLeaderFaker->pbftEngine()->executeWorker();
 
     // The cross-check at handlePrePrepareMsg should reject the message before it enters the cache.
+    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+}
+
+// FIB-130: A pre-prepare whose outer PBFT envelope index differs from the inner proposal index
+// must be rejected by the receiver — the outer index drives leaderIndex/notifySealer/cache keys
+// while the inner index drives verifyProposal, so a mismatch lets a Byzantine leader track
+// consensus state for one slot while sealing for another.
+BOOST_AUTO_TEST_CASE(testRejectPrePrepareWithOuterInnerIndexMismatch)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+
+    size_t consensusNodeSize = 4;
+    size_t currentBlockNumber = 10;
+    auto fakerMap =
+        createFakers(cryptoSuite, consensusNodeSize, currentBlockNumber, consensusNodeSize);
+
+    IndexType expectedIndex = fakerMap[0]->pbftConfig()->progressedIndex();  // = 11
+    IndexType leaderIdx = fakerMap[0]->pbftConfig()->leaderIndex(expectedIndex);
+    auto leaderFaker = fakerMap[leaderIdx];
+    auto nonLeaderFaker = fakerMap[(leaderIdx + 1) % consensusNodeSize];
+
+    // Real block for expectedIndex — its header number IS expectedIndex.
+    auto block = fakeBlock(cryptoSuite, leaderFaker, expectedIndex, 3);
+    auto blockData = std::make_shared<bytes>();
+    block->encode(*blockData);
+    auto blockHeader = block->blockHeader();
+    auto realHash = blockHeader->hash();
+
+    auto leaderMsgFixture =
+        std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
+    // Outer envelope index = expectedIndex, inner proposal index = expectedIndex + 5.
+    auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), leaderIdx,
+        realHash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
+    auto proposal =
+        leaderMsgFixture->fakePBFTProposal(expectedIndex + 5, realHash, *blockData, {}, {});
+    pbftMsg->setConsensusProposal(proposal);
+
+    auto encodedData = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
+    nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
+        nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*encodedData), nullptr);
+    nonLeaderFaker->pbftEngine()->executeWorker();
+
+    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+}
+
+// FIB-130: A pre-prepare whose carried proposal hash does not match the hash recomputed from
+// the decoded block header must be rejected. Without this, a Byzantine leader can sign hash(A)
+// while broadcasting body(B), decoupling consensus identity from the executed payload.
+BOOST_AUTO_TEST_CASE(testRejectPrePrepareWithMismatchedBlockHash)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+
+    size_t consensusNodeSize = 4;
+    size_t currentBlockNumber = 10;
+    auto fakerMap =
+        createFakers(cryptoSuite, consensusNodeSize, currentBlockNumber, consensusNodeSize);
+
+    IndexType expectedIndex = fakerMap[0]->pbftConfig()->progressedIndex();
+    IndexType leaderIdx = fakerMap[0]->pbftConfig()->leaderIndex(expectedIndex);
+    auto leaderFaker = fakerMap[leaderIdx];
+    auto nonLeaderFaker = fakerMap[(leaderIdx + 1) % consensusNodeSize];
+
+    auto block = fakeBlock(cryptoSuite, leaderFaker, expectedIndex, 3);
+    auto blockData = std::make_shared<bytes>();
+    block->encode(*blockData);
+    auto blockHeader = block->blockHeader();
+
+    // Fabricate an attacker-chosen hash that does not bind the block body.
+    HashType bogusHash = hashImpl->hash(bytesConstRef("FIB-130-bogus-hash"));
+    BOOST_REQUIRE(bogusHash != blockHeader->hash());
+
+    auto leaderMsgFixture =
+        std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
+    // Outer envelope and inner proposal both point at expectedIndex (so the number checks pass),
+    // but the carried hash is bogus.
+    auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), leaderIdx,
+        bogusHash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
+    auto proposal =
+        leaderMsgFixture->fakePBFTProposal(expectedIndex, bogusHash, *blockData, {}, {});
+    pbftMsg->setConsensusProposal(proposal);
+
+    auto encodedData = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
+    nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
+        nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*encodedData), nullptr);
+    nonLeaderFaker->pbftEngine()->executeWorker();
+
     BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 }
 
