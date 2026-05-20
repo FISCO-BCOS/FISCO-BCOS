@@ -21,6 +21,7 @@
 
 #include "VMInstance.h"
 #include "HostContext.h"
+#include "bcos-framework/protocol/Protocol.h"
 #include <evmone/vm.hpp>
 #include <utility>
 
@@ -87,14 +88,50 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 
 evmc_revision toRevision(VMSchedule const& _schedule)
 {
-    if (_schedule.enablePairs)
+    if (_schedule.enableOsaka)
     {
-        return EVMC_PARIS;
+        return EVMC_OSAKA;
+    }
+    if (_schedule.enablePrague)
+    {
+        return EVMC_PRAGUE;
     }
     if (_schedule.enableCanCun)
     {
         return EVMC_CANCUN;
     }
+    // FISCO enablePairs (V3.2+ pre-Cancun): Ethereum Shanghai = last fork before Cancun (EIP-3855
+    // PUSH0).
+    if (_schedule.enablePairs)
+    {
+        return EVMC_SHANGHAI;
+    }
     return EVMC_LONDON;
+}
+
+evmc_revision toRevision(ledger::Features const& features, uint32_t blockVersion)
+{
+    VMSchedule schedule;
+    if (features.get(ledger::Features::Flag::feature_evm_osaka))
+    {
+        schedule = FiscoBcosScheduleOsaka;
+    }
+    else if (features.get(ledger::Features::Flag::feature_evm_prague))
+    {
+        schedule = FiscoBcosSchedulePrague;
+    }
+    else if (features.get(ledger::Features::Flag::feature_evm_cancun))
+    {
+        schedule = FiscoBcosScheduleCancun;
+    }
+    else if (blockVersion >= static_cast<uint32_t>(protocol::BlockVersion::V3_2_VERSION))
+    {
+        schedule = FiscoBcosScheduleV320;
+    }
+    else
+    {
+        schedule = FiscoBcosSchedule;
+    }
+    return toRevision(schedule);
 }
 }  // namespace bcos::executor

@@ -126,7 +126,15 @@ void BlockContext::setExecutiveFlow(
 }
 void BlockContext::setVMSchedule()
 {
-    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
+    if (m_features.get(ledger::Features::Flag::feature_evm_osaka))
+    {
+        m_schedule = FiscoBcosScheduleOsaka;
+    }
+    else if (m_features.get(ledger::Features::Flag::feature_evm_prague))
+    {
+        m_schedule = FiscoBcosSchedulePrague;
+    }
+    else if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
     {
         m_schedule = FiscoBcosScheduleCancun;
     }

@@ -182,7 +182,11 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     EXECUTIVE_LOG(DEBUG) << "selfdestruct successful";
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
-    return false;
+    // TODO:
+    // EVMC: true = first selfdestruct registration in this tx (enables evmone gas accounting).
+    // FISCO does not implement EIP-6780 same-tx creation tracking yet; return true for host/evmone
+    // consistency. EIP-6780 full semantics are a known deviation on EVMC_CANCUN+.
+    return true;
 }
 
 
@@ -198,19 +202,16 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
 {
-    std::ignore = _context;
-    std::ignore = _addr;
-    return EVMC_ACCESS_COLD;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return hostContext.accessAccount(*_addr, hostContext.revision());
 }
 
 
 evmc_access_status access_storage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
-    std::ignore = _context;
-    std::ignore = _addr;
-    std::ignore = _key;
-    return EVMC_ACCESS_COLD;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return hostContext.accessStorage(*_addr, *_key, hostContext.revision());
 }
 
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept

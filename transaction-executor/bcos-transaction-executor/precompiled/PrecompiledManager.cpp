@@ -65,6 +65,31 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
                            executor::PrecompiledRegistrar::executor("blake2_compression")),
                0});
 
+    // EIP-2537 BLS12-381 precompiles (Prague, 0x0b–0x11)
+    static const std::pair<int, const char*> blsPrecompiles[] = {
+        {0x0b, "bls12_g1add"},
+        {0x0c, "bls12_g1msm"},
+        {0x0d, "bls12_g2add"},
+        {0x0e, "bls12_g2msm"},
+        {0x0f, "bls12_pairing_check"},
+        {0x10, "bls12_map_fp_to_g1"},
+        {0x11, "bls12_map_fp2_to_g2"},
+    };
+    for (auto const& [addr, name] : blsPrecompiles)
+    {
+        m_address2Precompiled.emplace_back(addr,
+            Precompiled{executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer(name),
+                            executor::PrecompiledRegistrar::executor(name)),
+                ledger::Features::Flag::feature_evm_prague});
+    }
+
+    // EIP-7212 p256verify (Osaka, 0x0100)
+    m_address2Precompiled.emplace_back(0x0100,
+        Precompiled{
+            executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("p256verify"),
+                executor::PrecompiledRegistrar::executor("p256verify")),
+            ledger::Features::Flag::feature_evm_osaka});
+
     m_address2Precompiled.emplace_back(
         0x1000, std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
