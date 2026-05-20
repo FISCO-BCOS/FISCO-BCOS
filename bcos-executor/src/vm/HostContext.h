@@ -157,9 +157,11 @@ public:
     {
         if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
                                      ledger::Features::Flag::feature_evm_eip2929))
+        {
             return EVMC_ACCESS_COLD;
-        auto& warm = m_executive->getEip2929AccessState(m_executive->contextID())->warmAccounts;
-        return warm.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        }
+        auto& accessState = *m_executive->getEip2929AccessState(m_executive->contextID());
+        return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     evmc_access_status accessStorage(
@@ -167,9 +169,11 @@ public:
     {
         if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
                                      ledger::Features::Flag::feature_evm_eip2929))
+        {
             return EVMC_ACCESS_COLD;
-        auto& warm = m_executive->getEip2929AccessState(m_executive->contextID())->warmStorage;
-        return warm.insert({addr, key}).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        }
+        auto& accessState = *m_executive->getEip2929AccessState(m_executive->contextID());
+        return accessState.warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     std::string getContractTableName(const std::string_view& _address);

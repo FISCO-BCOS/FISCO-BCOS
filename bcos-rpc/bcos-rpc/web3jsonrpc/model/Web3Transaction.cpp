@@ -145,6 +145,21 @@ bcostars::Transaction Web3Transaction::takeToTarsTransaction()
         tarsTx.data.gasPrice = "0x" + this->maxPriorityFeePerGas.str(0, std::ios_base::hex);
     }
     tarsTx.type = static_cast<tars::Char>(bcos::protocol::TransactionType::Web3Transaction);
+    tarsTx.web3TypedTxKind = static_cast<tars::Char>(static_cast<uint8_t>(this->type));
+    if (!this->accessList.empty())
+    {
+        tarsTx.data.accessList.reserve(this->accessList.size());
+        for (auto const& entry : this->accessList)
+        {
+            bcostars::Web3AccessListEntry tarsEntry;
+            tarsEntry.account = entry.account.hex();
+            for (auto const& key : entry.storageKeys)
+            {
+                tarsEntry.storageKeys.emplace_back(key.begin(), key.end());
+            }
+            tarsTx.data.accessList.emplace_back(std::move(tarsEntry));
+        }
+    }
 
     // Only call encodeForSign() once, store in extraTransactionBytes for TxValidator::verify()
     auto encodedForSign = this->encodeForSign();

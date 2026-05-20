@@ -22,6 +22,7 @@
 #include <evmc/evmc.h>
 #include <boost/container_hash/hash.hpp>
 #include <cstring>
+#include <optional>
 #include <unordered_set>
 #include <utility>
 
@@ -87,6 +88,72 @@ struct Eip2929AccessState
     bool containsStorage(const evmc_address& address, const evmc_bytes32& key) const
     {
         return warmStorage.contains({address, key});
+    }
+
+    /// Warm all precompiles active at @p revision (EIP-2929: "the set of all precompiles").
+    void warmUpActivePrecompiles(evmc_revision revision)
+    {
+        static constexpr unsigned precompile_hi = sizeof(evmc_address) - 1;
+        for (uint8_t i = 1; i <= 9; ++i)
+        {
+            evmc_address p{};
+            p.bytes[precompile_hi] = i;
+            (void)warmUpAddress(p);
+        }
+        if (revision >= EVMC_CANCUN)
+        {
+            evmc_address p{};
+            p.bytes[precompile_hi] = 0x0a;
+            (void)warmUpAddress(p);
+        }
+        if (revision >= EVMC_PRAGUE)
+        {
+            for (uint8_t i = 0x0b; i <= 0x11; ++i)
+            {
+                evmc_address p{};
+                p.bytes[precompile_hi] = i;
+                (void)warmUpAddress(p);
+            }
+        }
+        if (revision >= EVMC_OSAKA)
+        {
+            evmc_address p{};
+            p.bytes[18] = 0x01;
+            p.bytes[19] = 0x00;
+            (void)warmUpAddress(p);
+        }
+    }
+
+    /// EIP-2929 transaction-entry warm accesses: caller (origin/sender),
+    /// optional recipient (omit for CREATE/CREATE2), and active precompiles at @p revision.
+    void warmUpInitialTxSet(const evmc_address& origin,
+        std::optional<evmc_address> transactionToEVMC, evmc_revision revision)
+    {
+        (void)warmUpAddress(origin);
+        if (transactionToEVMC.has_value())
+        {
+            (void)warmUpAddress(*transactionToEVMC);
+        }
+        warmUpActivePrecompiles(revision);
+    }
+
+    /// EIP-2930: warm all accounts and storage slots from a typed-transaction access list.
+    /// AddrConverter: std::string const& -> evmc_address (e.g. unhexAddress).
+    template <typename AccessList, typename AddrConverter>
+    void warmUpAccessList(AccessList const& list, AddrConverter&& toAddr)
+    {
+        for (auto const& [addrHex, keys] : list)
+        {
+            auto const addr = toAddr(addrHex);
+            (void)warmUpAddress(addr);
+            for (auto const& k : keys)
+            {
+                evmc_bytes32 key{};
+                static_assert(sizeof(key.bytes) == 32);
+                std::memcpy(key.bytes, k.data(), sizeof(key.bytes));
+                (void)warmUpStorage(addr, key);
+            }
+        }
     }
 };
 

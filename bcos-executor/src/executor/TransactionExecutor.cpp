@@ -102,6 +102,7 @@
 #include <utility>
 #include <vector>
 
+
 #ifdef USE_TCMALLOC
 #include "gperftools/malloc_extension.h"
 #endif
@@ -115,6 +116,7 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace tbb::flow;
+
 
 crypto::Hash::Ptr GlobalHashImpl::g_hashImpl;
 
@@ -2864,6 +2866,16 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
     callParameters->transactionType = input.txType();
     callParameters->nonce = hex2u(input.nonce());
+
+    // TODO(C2): EIP-2930 accessList pre-warm is NOT wired in the bcos-executor path.
+    // The transaction-executor path (TransactionExecutorImpl + HostContext) already handles W2
+    // correctly via parseEip2930FromWeb3Transaction() + warmUpAccessList().
+    // This path must be fixed before bcos-executor can support EIP-2930/1559 access lists:
+    //   1. Call parseEip2930FromWeb3Transaction(tx) here to obtain Eip2930AccessList.
+    //   2. Assign parsed.web3TypedTxKind → callParameters->web3TypedTxKind.
+    //   3. Assign parsed.accessList       → callParameters->eip2930AccessList.
+    //   4. In TransactionExecutive::execute(), call warmUpEip2930AccessList(*callParameters)
+    //      right after warmUpEip2929InitialSet(*callParameters) (see ~line 478).
 
     if (!m_isWasm && !callParameters->create)
     {

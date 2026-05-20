@@ -7,7 +7,7 @@
 
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "TestMemoryStorage.h"
-#include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/Features.h"
@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -63,15 +64,22 @@ public:
     }
 
     HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)> makeHost(
-        bcos::ledger::Features const& features)
+        bcos::ledger::Features const& features,
+        uint32_t blockHeaderVersion = static_cast<uint32_t>(
+            bcos::protocol::BlockVersion::MAX_VERSION),
+        evmc_address originIn = {}, evmc_address recipientIn = {},
+        evmc_call_kind kindIn = EVMC_CALL,
+        std::shared_ptr<const bcos::executor::Eip2930AccessList> eip2930AccessList = {},
+        uint8_t web3TypedTxKindForAccessList = 0)
     {
         ledgerConfig.setFeatures(features);
+        blockHeader.setVersion(blockHeaderVersion);
         blockHeader.calculateHash(*hashImpl);
-        evmc_message message = {.kind = EVMC_CALL,
+        evmc_message message = {.kind = kindIn,
             .flags = 0,
             .depth = 0,
             .gas = 1'000'000,
-            .recipient = {},
+            .recipient = recipientIn,
             .sender = {},
             .input_data = nullptr,
             .input_size = 0,
@@ -84,10 +92,10 @@ public:
             .destination_len = 0,
             .sender_ptr = nullptr,
             .sender_len = 0};
-        evmc_address origin = {};
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
-            rollbackableStorage, rollbackableTransientStorage, blockHeader, message, origin, "", 0,
-            seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait);
+            rollbackableStorage, rollbackableTransientStorage, blockHeader, message, originIn, "",
+            0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait,
+            std::move(eip2930AccessList), web3TypedTxKindForAccessList);
     }
 };
 
@@ -190,6 +198,23 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_storage)
     BOOST_CHECK_EQUAL(host.accessStorage(addr, key), EVMC_ACCESS_WARM);
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_A_warmup_api_idempotent)
+{
+    bcos::executor::Eip2929AccessState accessState;
+    evmc_address addr{};
+    std::memset(addr.bytes, 0x51, sizeof(addr.bytes));
+    evmc_bytes32 key{};
+    std::memset(key.bytes, 0x61, sizeof(key.bytes));
+
+    BOOST_CHECK(accessState.warmUpAddress(addr));
+    BOOST_CHECK(!accessState.warmUpAddress(addr));
+    BOOST_CHECK(accessState.containsAddress(addr));
+
+    BOOST_CHECK(accessState.warmUpStorage(addr, key));
+    BOOST_CHECK(!accessState.warmUpStorage(addr, key));
+    BOOST_CHECK(accessState.containsStorage(addr, key));
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_eip2929_access_account)
 {
     bcos::ledger::Features features;
@@ -213,20 +238,315 @@ BOOST_AUTO_TEST_CASE(TE_FC_eip2929_access_account)
     BOOST_CHECK_EQUAL(host2.accessAccount(addr), EVMC_ACCESS_COLD);
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_revision_gate_eip2929_on_below_berlin_always_cold)
+{
+    // toRevision(...) for supported chains is >= London (> Berlin); the rev gate is exercised via
+    // explicit evmc_revision the same way bcos-executor HostContext(access, rev) does.
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+    auto host = makeHost(features);
+    BOOST_CHECK_EQUAL(
+        bcos::executor::toRevision(host.ledgerConfig().features(), host.blockVersion()),
+        EVMC_PRAGUE);
+
+    evmc_address addr{};
+    std::memset(addr.bytes, 0xde, sizeof(addr.bytes));
+    evmc_bytes32 key{};
+    std::memset(key.bytes, 0xed, sizeof(key.bytes));
+
+    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
+
+    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_WARM);
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
 {
-    // externalCall reuses m_eip2929Access; nested HostContext::accessAccount reads the same warm
-    // set.
-    auto access = std::make_shared<bcos::executor::Eip2929AccessState>();
-    evmc_address addr{};
-    std::memset(addr.bytes, 0xaa, sizeof(addr.bytes));
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
-    auto accessAccount = [&access](const evmc_address& a) {
-        return access->warmAccounts.insert(a).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
-    };
+    using HostTy =
+        HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>;
+    HostTy parent = makeHost(features);
+    evmc_address warmed{};
+    std::memset(warmed.bytes, 0xaa, sizeof(warmed.bytes));
+    evmc_address emptyCallee{};
+    std::memset(emptyCallee.bytes, 0xcc, sizeof(emptyCallee.bytes));
 
-    BOOST_CHECK_EQUAL(accessAccount(addr), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(accessAccount(addr), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(parent.accessAccount(warmed), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(parent.accessAccount(warmed), EVMC_ACCESS_WARM);
+
+    // New top-level HostContext gets a fresh Eip2929AccessState (isolation); same instance must
+    // keep warm sets across externalCall (see HostContext::externalCall inner ctor).
+    HostTy unrelatedTopLevel = makeHost(features);
+    BOOST_CHECK_EQUAL(unrelatedTopLevel.accessAccount(warmed), EVMC_ACCESS_COLD);
+
+    evmc_message nested = {.kind = EVMC_CALL,
+        .flags = 0,
+        .depth = parent.message().depth + 1,
+        .gas = 500000,
+        .recipient = emptyCallee,
+        .sender = parent.message().recipient,
+        .input_data = nullptr,
+        .input_size = 0,
+        .value = {},
+        .create2_salt = {},
+        .code_address = emptyCallee,
+        .code = nullptr,
+        .code_size = 0,
+        .destination_ptr = nullptr,
+        .destination_len = 0,
+        .sender_ptr = nullptr,
+        .sender_len = 0};
+
+    auto evmOut = syncWait([&parent, nested]() -> Task<EVMCResult> {
+        co_return co_await parent.externalCall(nested);
+    }());
+    BOOST_CHECK_EQUAL(evmOut.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(parent.accessAccount(warmed), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_origin_consistency)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x11;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x22;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_to_consistency)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x33;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x44;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    BOOST_CHECK_EQUAL(host.accessAccount(recipient), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_precompile_consistency)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x55;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x66;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    for (int i = 1; i <= 9; ++i)
+    {
+        evmc_address pre{};
+        pre.bytes[19] = static_cast<uint8_t>(i);
+        BOOST_CHECK_EQUAL(host.accessAccount(pre), EVMC_ACCESS_WARM);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_initial_prewarm_prague_includes_0x0a_and_bls)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x55;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x66;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address pre0a{};
+    pre0a.bytes[19] = 0x0a;
+    evmc_address bls0b{};
+    bls0b.bytes[19] = 0x0b;
+    BOOST_CHECK_EQUAL(host.accessAccount(pre0a), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessAccount(bls0b), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_create_skips_to)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x77;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x88;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CREATE);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address pre1{};
+    pre1.bytes[19] = 0x01;
+    BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessAccount(pre1), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessAccount(recipient), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(recipient), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_feature_off_prepare_noop)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x99;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0xaa;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address pre1{};
+    pre1.bytes[19] = 0x01;
+    BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(pre1), EVMC_ACCESS_COLD);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_prepare_warms_account_and_storage)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x11;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x22;
+    h256 const storageKey(0x42424242);
+    auto accessList =
+        std::make_shared<const bcos::executor::Eip2930AccessList>(bcos::executor::Eip2930AccessList{
+            {"00000000000000000000000000000000c0ffee01", {storageKey}}});
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, accessList, 1);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address const listAddr = unhexAddress("00000000000000000000000000000000c0ffee01");
+    evmc_bytes32 key{};
+    static_assert(sizeof(key.bytes) == h256::SIZE);
+    std::memcpy(key.bytes, storageKey.data(), h256::SIZE);
+    BOOST_CHECK_EQUAL(host.accessAccount(listAddr), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessStorage(listAddr, key), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_eip1559_access_list_warms)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x33;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x44;
+    h256 const storageKey(0x55);
+    auto accessList =
+        std::make_shared<const bcos::executor::Eip2930AccessList>(bcos::executor::Eip2930AccessList{
+            {"00000000000000000000000000000000c0ffee02", {storageKey}}});
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, accessList, 2);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address const listAddr = unhexAddress("00000000000000000000000000000000c0ffee02");
+    evmc_bytes32 key{};
+    std::memcpy(key.bytes, storageKey.data(), h256::SIZE);
+    BOOST_CHECK_EQUAL(host.accessAccount(listAddr), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessStorage(listAddr, key), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_empty_access_list_no_extra_warm)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x55;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x66;
+    auto emptyList = std::make_shared<const bcos::executor::Eip2930AccessList>();
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, emptyList, 1);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address const extra{};
+    BOOST_CHECK_EQUAL(host.accessAccount(extra), EVMC_ACCESS_COLD);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

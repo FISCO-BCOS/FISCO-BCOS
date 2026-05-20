@@ -28,6 +28,7 @@
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
@@ -57,6 +58,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
+#include <cstring>
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
@@ -126,7 +128,7 @@ private:
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
     std::reference_wrapper<const protocol::BlockHeader> m_blockHeader;
-    std::reference_wrapper<const evmc_address> m_origin;
+    evmc_address m_origin{};
     std::string_view m_abi;
     int m_contextID;
     std::reference_wrapper<int64_t> m_seq;
@@ -147,6 +149,9 @@ private:
 
     /// EIP-2929 warm sets shared across nested externalCall HostContext instances (one tx).
     std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
+    /// Optional EIP-2930 access list (TE path); warmed after W1 for any typed tx (kind != 0).
+    std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
+    uint8_t m_web3TypedTxKindForAccessList = 0;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -194,7 +199,9 @@ private:
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
         const evmc_host_interface* hostInterface,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access)
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access,
+        std::shared_ptr<const executor::Eip2930AccessList> eip2930AccessList,
+        uint8_t web3TypedTxKindForAccessList)
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -217,7 +224,9 @@ private:
         m_revision(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())),
         m_level(seq),
         m_web3Tx(web3Tx),
-        m_eip2929Access(std::move(eip2929Access))
+        m_eip2929Access(std::move(eip2929Access)),
+        m_eip2930AccessList(std::move(eip2930AccessList)),
+        m_web3TypedTxKindForAccessList(web3TypedTxKindForAccessList)
     {}
 
 public:
@@ -225,11 +234,14 @@ public:
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
+        std::shared_ptr<const executor::Eip2930AccessList> eip2930AccessList = {},
+        uint8_t web3TypedTxKindForAccessList = 0)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
-            std::make_shared<executor::Eip2929AccessState>())
+            std::make_shared<executor::Eip2929AccessState>(), std::move(eip2930AccessList),
+            web3TypedTxKindForAccessList)
     {}
 
     ~HostContext() noexcept = default;
@@ -388,6 +400,28 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
+
+        // EIP-2929 (W1): transaction-entry accesses before execution starts.
+        if (m_level == 0 && m_revision >= EVMC_BERLIN &&
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+        {
+            std::optional<evmc_address> callee;
+            if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
+            {
+                callee = ref.recipient;
+            }
+            m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
+
+            // EIP-2929 W2: warm access_list entries for any typed tx (kind != 0).
+            // EIP-2930 (kind=1), EIP-1559 (kind=2), EIP-4844 (kind=3) all support accessList.
+            if (m_web3TypedTxKindForAccessList != 0 && m_eip2930AccessList &&
+                !m_eip2930AccessList->empty())
+            {
+                m_eip2929Access->warmUpAccessList(
+                    *m_eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
+            }
+        }
+
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
@@ -561,7 +595,7 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface, m_eip2929Access);
+            interface, m_eip2929Access, m_eip2930AccessList, m_web3TypedTxKindForAccessList);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -578,20 +612,33 @@ public:
 
     evmc_access_status accessAccount(const evmc_address& addr) noexcept
     {
-        if (m_revision < EVMC_BERLIN ||
+        return accessAccount(addr, m_revision);
+    }
+
+    evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev) noexcept
+    {
+        if (rev < EVMC_BERLIN ||
             !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+        {
             return EVMC_ACCESS_COLD;
-        return m_eip2929Access->warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD :
-                                                                   EVMC_ACCESS_WARM;
+        }
+        return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
     {
-        if (m_revision < EVMC_BERLIN ||
+        return accessStorage(addr, key, m_revision);
+    }
+
+    evmc_access_status accessStorage(
+        const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev) noexcept
+    {
+        if (rev < EVMC_BERLIN ||
             !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+        {
             return EVMC_ACCESS_COLD;
-        return m_eip2929Access->warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD :
-                                                                         EVMC_ACCESS_WARM;
+        }
+        return m_eip2929Access->warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
 private:

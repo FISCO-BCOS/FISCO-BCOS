@@ -156,6 +156,14 @@ public:
 
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
 
+    /// Berlin+ EIP-2929: warm origin, callee (unless contract creation tx), precompiles 0x01..0x09.
+    void warmUpEip2929InitialSet(CallParameters const& params);
+
+    /// Berlin+ EIP-2930 (W2): after W1, warm accounts and storage slots from the tx access list.
+    /// EIP-2929 W2 for compat tests / DAG experiments only; production W2 is TE
+    /// HostContext::prepare.
+    void warmUpEip2930AccessList(CallParameters const& params);
+
 protected:
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> call(
         CallParameters::UniquePtr callParameters);
