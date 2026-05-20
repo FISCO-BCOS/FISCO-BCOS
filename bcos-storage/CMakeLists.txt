@@ -25,8 +25,6 @@ target_include_directories(storage PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-storage>)
 target_link_libraries(storage PUBLIC ${LIB_LIST})
-set_source_files_properties(
-  "bcos-storage/CheckpointRocksDBStorage.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(storage PROPERTIES UNITY_BUILD "ON")
 
 if (APPLE)

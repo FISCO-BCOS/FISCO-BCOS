@@ -21,9 +21,6 @@ else()
             Boost::context evmone::evmone GroupSig Paillier blst)
 endif()
 
-set_source_files_properties(
-    "src/vm/VMFactory.cpp"
-    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(executor PROPERTIES UNITY_BUILD "ON")
 
 if (TOOLS)
