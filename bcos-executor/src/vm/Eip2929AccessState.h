@@ -71,6 +71,23 @@ struct Eip2929AccessState
     std::unordered_set<evmc_address, Eip2929AddrHash, Eip2929AddrEqual> warmAccounts;
     std::unordered_set<std::pair<evmc_address, evmc_bytes32>, Eip2929PairHash, Eip2929PairEqual>
         warmStorage;
+
+    bool warmUpAddress(const evmc_address& address) { return warmAccounts.insert(address).second; }
+
+    bool warmUpStorage(const evmc_address& address, const evmc_bytes32& key)
+    {
+        return warmStorage.insert({address, key}).second;
+    }
+
+    bool containsAddress(const evmc_address& address) const
+    {
+        return warmAccounts.contains(address);
+    }
+
+    bool containsStorage(const evmc_address& address, const evmc_bytes32& key) const
+    {
+        return warmStorage.contains({address, key});
+    }
 };
 
 }  // namespace bcos::executor
