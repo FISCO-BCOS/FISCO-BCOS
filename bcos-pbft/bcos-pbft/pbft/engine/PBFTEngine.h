@@ -166,6 +166,10 @@ protected:
     virtual bool handleNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual void reHandlePrePrepareProposals(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual bool isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
+    // FIB-124: verify every prePrepareList item carried by a NewView is exactly justified
+    // by the bundled viewChange evidence (mirrors PBFTCacheProcessor::generatePrePrepareMsg).
+    // Called from isValidNewViewMsg after viewChange signatures and quorum weight pass.
+    virtual bool isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual void reachNewView(ViewType _view);
 
     // handle the checkpoint message
