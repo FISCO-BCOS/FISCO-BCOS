@@ -208,7 +208,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     auto txsSize =
         std::min(m_maxTxsPerBlock.load(), (m_pendingTxs.size() + m_pendingSysTxs.size()));
     // prioritize seal from the system txs list, cap at 10 per block to prevent DoS
-    const auto systemTxsSize = std::min({txsSize, m_pendingSysTxs.size(), c_maxSysTxsPerBlock});
+    auto systemTxsSize = std::min({txsSize, m_pendingSysTxs.size(), c_maxSysTxsPerBlock});
     if (!m_pendingSysTxs.empty())
     {
         m_waitUntil.store(m_sealingNumber);
@@ -242,6 +242,12 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
                 {
                     m_waitUntil.store(m_sealingNumber);
                 }
+                // FIB-161: keep the invariant systemTxsSize <= txsSize. Without
+                // this collapse, when systemTxsSize was originally equal to
+                // txsSize (e.g. maxTxsPerBlock <= c_maxSysTxsPerBlock and
+                // sysQueue is full), the for-loops below would over-append and
+                // produce a block of size maxTxsPerBlock + 1.
+                systemTxsSize = std::min(systemTxsSize, txsSize);
             }
         }
         else if (handleRet == Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK)

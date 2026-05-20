@@ -24,11 +24,21 @@
 #include <atomic>
 #include <functional>
 
+namespace bcos::test
+{
+struct FIB161Fixture;
+struct FIB162Fixture;
+}  // namespace bcos::test
+
 namespace bcos::sealer
 {
 using TxsMetaDataQueue = std::deque<bcos::protocol::TransactionMetaData::Ptr>;
 class SealingManager : public std::enable_shared_from_this<SealingManager>
 {
+    // Test-only friends; need access to private pending queues and config.
+    friend struct bcos::test::FIB161Fixture;
+    friend struct bcos::test::FIB162Fixture;
+
 public:
     using Ptr = std::shared_ptr<SealingManager>;
     using ConstPtr = std::shared_ptr<SealingManager const>;
