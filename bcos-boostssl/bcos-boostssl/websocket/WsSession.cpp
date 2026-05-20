@@ -23,13 +23,13 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
-#include <chrono>
-#include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <boost/asio/post.hpp>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/core/ignore_unused.hpp>
+#include <chrono>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -44,8 +44,7 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::http;
 
-WsSession::WsSession(IOServicePool::Ptr ioServicePool)
-  : m_ioServicePool(std::move(ioServicePool))
+WsSession::WsSession(IOServicePool::Ptr ioServicePool) : m_ioServicePool(std::move(ioServicePool))
 {
     WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
 
@@ -229,7 +228,7 @@ void WsSession::drop(WsError _reason)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
             boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
-                [callback = std::move(callback), error = std::move(error)]() mutable {
+                [callback = std::move(callback), error]() mutable {
                     callback->respCallBack(error, nullptr, nullptr);
                 });
         }
@@ -255,8 +254,7 @@ void WsSession::drop(WsError _reason)
     });
 }
 
-WsSession::Ptr WsSessionFactory::createSession(
-    IOServicePool::Ptr ioServicePool)
+WsSession::Ptr WsSessionFactory::createSession(IOServicePool::Ptr ioServicePool)
 {
     return std::make_shared<WsSession>(std::move(ioServicePool));
 }
@@ -550,8 +548,7 @@ void WsSession::asyncSendMessage(
         WEBSOCKET_SESSION(WARNING)
             << LOG_BADGE("asyncSendMessage") << LOG_DESC("message encode failed")
             << LOG_KV("endpoint", endPoint()) << LOG_KV("seq", seq)
-            << LOG_KV("packetType", _msg->packetType())
-            << LOG_KV("msgSize", _msg->payload().size())
+            << LOG_KV("packetType", _msg->packetType()) << LOG_KV("msgSize", _msg->payload().size())
             << LOG_KV("maxWriteMsgSize", maxWriteMsgSize());
         return;
     }
