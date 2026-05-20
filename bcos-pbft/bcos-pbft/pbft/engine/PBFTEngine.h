@@ -26,6 +26,7 @@
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -271,6 +272,11 @@ protected:
 
     // FIB-145 / FIB-146: 3-stage admission pipeline applied before m_msgQueue.push().
     PBFTPipeline m_pipeline;
+    // FIB-131: per-peer consecutive invalid-pre-prepare counter used to suppress reseal storms.
+    // Key: node index (IndexType). Protected by m_mutex.
+    // Resets on any successful pre-prepare from the same peer.
+    static constexpr uint32_t c_maxInvalidPrePreparePerPeer = 3;
+    std::unordered_map<IndexType, uint32_t> m_invalidPrePrepareCount;
 };
 }  // namespace consensus
 }  // namespace bcos

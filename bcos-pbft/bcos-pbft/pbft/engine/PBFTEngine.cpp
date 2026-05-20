@@ -1023,13 +1023,49 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
             result = checkSignature(_prePrepareMsg);
             if (result == CheckResult::INVALID)
             {
-                m_config->notifySealer(_prePrepareMsg->index(), true);
+                // FIB-131: rate-limit reseal notifications on consecutive sig failures from the
+                // same peer to prevent a Byzantine leader from triggering an unbounded reseal
+                // storm via repeated invalid pre-prepares.
+                auto peerIdx = _prePrepareMsg->generatedFrom();
+                auto& failCount = m_invalidPrePrepareCount[peerIdx];
+                failCount++;
+                if (failCount <= c_maxInvalidPrePreparePerPeer)
+                {
+                    m_config->notifySealer(_prePrepareMsg->index(), true);
+                }
+                else
+                {
+                    PBFT_LOG(WARNING)
+                        << LOG_DESC(
+                               "handlePrePrepareMsg: suppressing notifySealer due to repeated "
+                               "sig failures from peer (FIB-131)")
+                        << LOG_KV("peer", peerIdx) << LOG_KV("failCount", failCount)
+                        << printPBFTMsgInfo(_prePrepareMsg);
+                }
                 return false;
             }
         }
     }
+    // FIB-131: reset the per-peer failure counter on any successfully-signed pre-prepare.
+    m_invalidPrePrepareCount.erase(_prePrepareMsg->generatedFrom());
     auto block = m_config->blockFactory().createBlock(
         _prePrepareMsg->consensusProposal()->data(), false, false);
+    // FIB-130: cross-check the outer PBFT message index against the decoded block header number.
+    // A Byzantine leader could forge the index in the outer PBFT envelope to a different value
+    // from the block body, confusing cache-key lookups and watermark checks.
+    if (!_prePrepareMsg->consensusProposal()->data().empty())
+    {
+        auto blockHeader = block->blockHeader();
+        if (blockHeader && blockHeader->number() != _prePrepareMsg->consensusProposal()->index())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: block header number mismatch (FIB-130)")
+                              << LOG_KV("headerNumber", blockHeader->number())
+                              << LOG_KV("msgIndex", _prePrepareMsg->consensusProposal()->index())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+    }
     // add the prePrepareReq to the cache
     if (!_needVerifyProposal)
     {
@@ -1097,11 +1133,6 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 {
                     return;
                 }
-                // Note: must reset the txs to be sealed no matter verify success or
-                // failed because some nodes may verify failed for timeout,  while
-                // other nodes may verify success
-                pbftEngine->m_config->validator()->asyncResetTxsFlag(*block, true);
-
                 // verify exceptioned
                 if (_error != nullptr)
                 {
@@ -1126,6 +1157,11 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                     pbftEngine->m_cacheProcessor->addExceptionCache(_prePrepareMsg);
                     return;
                 }
+                // FIB-129: reset tx flags only after the proposal has passed both signature
+                // verification (checked before entering the verify path) and block content
+                // verification (checked above). Moving this call earlier would allow a Byzantine
+                // leader to trigger tx-flag resets with forged/invalid proposals.
+                pbftEngine->m_config->validator()->asyncResetTxsFlag(*block, true);
                 // verify success
                 RecursiveGuard lock(pbftEngine->m_mutex);
                 auto ret = pbftEngine->handlePrePrepareMsg(
@@ -1509,7 +1545,116 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
                           << LOG_KV("minRequiredQuorum", m_config->minRequiredQuorum());
         return false;
     }
-    // TODO: check the prePrepared message
+    // FIB-124: cross-check each prePrepareList item against the bundled viewChange evidence.
+    // Embedded prePrepares are unsigned by design (the new leader constructs them via
+    // populateFrom() which never calls generateAndSetSignatureData()). Security comes from the
+    // outer NewView signature (verified below) + the requirement that every non-empty prePrepare
+    // is exactly derivable from the highest-view preparedProposal across all bundled viewChanges.
+    //
+    // Mirror the evidence-collection logic from PBFTCacheProcessor::generatePrePrepareMsg
+    // (lines 584-624) to reconstruct the set of justified proposals, then verify each
+    // prePrepareList item against it.
+    {
+        auto committedIndex = m_config->committedProposal()->index();
+        auto toView = _newViewMsg->view();
+
+        // Step 1: collect the union of preparedProposals from the bundled viewChanges,
+        //         keeping the highest-view proposal per index (mirrors generatePrePrepareMsg).
+        std::map<BlockNumber, PBFTMessageInterface::Ptr> preparedProposals;
+        for (const auto& viewChangeReq : viewChangeList)
+        {
+            for (const auto& proposal : viewChangeReq->preparedProposals())
+            {
+                if (proposal->index() <= committedIndex)
+                {
+                    continue;
+                }
+                if (preparedProposals.contains(proposal->index()))
+                {
+                    auto existing = preparedProposals[proposal->index()];
+                    // fatal: two proposals for the same index in the same view with different hash
+                    if (existing->view() == proposal->view() &&
+                        existing->hash() != proposal->hash()) [[unlikely]]
+                    {
+                        PBFT_LOG(WARNING)
+                            << LOG_DESC(
+                                   "InvalidNewViewMsg: conflicting prepared proposals for index")
+                            << LOG_KV("index", proposal->index())
+                            << LOG_KV("existingHash", existing->hash().abridged())
+                            << LOG_KV("newHash", proposal->hash().abridged());
+                        return false;
+                    }
+                    // keep the higher-view one
+                    if (existing->view() < proposal->view())
+                    {
+                        preparedProposals[proposal->index()] = proposal;
+                    }
+                }
+                else
+                {
+                    preparedProposals[proposal->index()] = proposal;
+                }
+            }
+        }
+
+        // Step 2: verify each prePrepareList item that has viewChange evidence.
+        // Security invariant: for any index with quorum-backed precommit evidence in the bundled
+        // viewChanges, the new leader must carry exactly that proposal's hash. Indices without
+        // evidence are the leader's fresh proposals for those slots and are validated normally
+        // when they are re-broadcast as prePrepares (signature + content checks apply then).
+        for (const auto& prePrepare : _newViewMsg->prePrepareList())
+        {
+            auto ppIndex = prePrepare->consensusProposal() ?
+                               prePrepare->consensusProposal()->index() :
+                               prePrepare->index();
+            auto ppHash = prePrepare->consensusProposal() ?
+                              prePrepare->consensusProposal()->hash() :
+                              prePrepare->hash();
+
+            if (!preparedProposals.contains(ppIndex))
+            {
+                // No viewChange evidence for this index: the new leader may propose any block
+                // (including an empty-block placeholder from generateEmptyProposal). No hash
+                // binding is required here.
+                continue;
+            }
+            // There is viewChange evidence for this index: the prePrepare must use the
+            // highest-view prepared proposal's consensus-proposal hash.
+            // NOTE: generatePrePrepareMsg builds the new prePrepare from
+            // preparedProposals[i]->consensusProposal() (see PBFTCacheProcessor line ~634),
+            // so the resulting prePrepare's consensus-proposal hash equals
+            // justified->consensusProposal()->hash(), NOT justified->hash() (outer msg hash).
+            auto& justified = preparedProposals[ppIndex];
+            auto justifiedPropHash = justified->consensusProposal() ?
+                                         justified->consensusProposal()->hash() :
+                                         justified->hash();
+            if (ppHash != justifiedPropHash)
+            {
+                PBFT_LOG(WARNING)
+                    << LOG_DESC(
+                           "InvalidNewViewMsg: prePrepare hash does not match viewChange "
+                           "evidence (FIB-124)")
+                    << LOG_KV("ppIndex", ppIndex) << LOG_KV("ppHash", ppHash.abridged())
+                    << LOG_KV("justifiedHash", justifiedPropHash.abridged())
+                    << printPBFTMsgInfo(_newViewMsg) << m_config->printCurrentState();
+                return false;
+            }
+            if (prePrepare->view() != toView)
+            {
+                PBFT_LOG(WARNING)
+                    << LOG_DESC(
+                           "InvalidNewViewMsg: prePrepare view does not match newView target "
+                           "(FIB-124)")
+                    << LOG_KV("ppIndex", ppIndex) << LOG_KV("ppView", prePrepare->view())
+                    << LOG_KV("toView", toView) << printPBFTMsgInfo(_newViewMsg)
+                    << m_config->printCurrentState();
+                return false;
+            }
+        }
+    }
+    // Verify the outer NewView wrapper signature (the embedded prePrepares are unsigned by design;
+    // after FIB-124 cross-check above, the bypass of per-item sig checks in
+    // reHandlePrePrepareProposals is safe).
     auto ret = checkSignature(_newViewMsg);
     return ret != CheckResult::INVALID;
 }
