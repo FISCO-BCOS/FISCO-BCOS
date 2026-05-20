@@ -15,6 +15,9 @@ find_package(unofficial-secp256k1 REQUIRED)
 find_package(HSM-CRYPTO REQUIRED)
 
 add_library(bcos-crypto STATIC ${ALL_SRCS})
+target_include_directories(bcos-crypto PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/bcos-crypto>)
 target_link_libraries(bcos-crypto PUBLIC ${LIB_LIST} fmt::fmt)
 target_link_libraries(bcos-crypto PUBLIC bcos-concepts)
 set_target_properties(bcos-crypto PROPERTIES UNITY_BUILD "ON")

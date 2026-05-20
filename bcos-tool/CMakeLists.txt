@@ -28,9 +28,10 @@ find_package(TBB REQUIRED)
 file(GLOB SRCS bcos-tool/*.cpp)
 add_library(tool ${SRCS})
 target_include_directories(tool PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-protocol>
 )
-target_link_libraries(tool PUBLIC table bcos-utilities bcos-framework jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
+target_link_libraries(tool PUBLIC table bcos-utilities bcos-framework bcos-protocol jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil TBB::tbb)
 set_target_properties(tool PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)

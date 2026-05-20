@@ -21,10 +21,12 @@ project(bcos-sealer VERSION ${VERSION})
 
 aux_source_directory(./bcos-sealer SRC_LIST)
 add_library(sealer ${SRC_LIST})
+target_include_directories(sealer PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 
 find_package(tarscpp REQUIRED)
 
-target_link_libraries(sealer PUBLIC tool bcos-utilities bcos-framework txpool protocol-tars)
+target_link_libraries(sealer PUBLIC tool bcos-utilities bcos-framework txpool pbft protocol-tars)
 set_target_properties(sealer PROPERTIES UNITY_BUILD "ON")
 
 if(TESTS)

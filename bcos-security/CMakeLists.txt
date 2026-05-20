@@ -33,6 +33,8 @@ target_link_libraries(security PRIVATE
     ${AWSSDK_LINK_LIBRARIES}
 )
 
+target_include_directories(security PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_include_directories(security
     PRIVATE
         ./bcos-security
