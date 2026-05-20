@@ -39,6 +39,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
@@ -235,6 +236,16 @@ constexpr static int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;  // EIP-7623 floor cos
 /// EIP-7623 calldata floor: max(standard calldata gas, tokens * 10).
 inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
 {
+    // Defensive overflow guard for theoretical large inputs:
+    // numTokens * TOTAL_COST_FLOOR_PER_TOKEN <= int64_t max.
+    constexpr auto MAX_SAFE_EIP7623_BYTES =
+        static_cast<size_t>(std::numeric_limits<int64_t>::max() /
+                            (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
+    if (data.size() > MAX_SAFE_EIP7623_BYTES)
+    {
+        return std::numeric_limits<int64_t>::max();
+    }
+
     int64_t normalDataCost = 0;
     int64_t numTokens = 0;
     for (auto byte : data)

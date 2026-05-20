@@ -28,6 +28,7 @@ enum class CompatEvmAttach
 {
     None,
     BlsG1Add,
+    BlsAll,
     Identity,
     Modexp,
     P256Verify,
@@ -43,6 +44,11 @@ public:
             *blockContext, std::move(contractAddress), contextID, seq, gasInjector),
         m_blockContextHolder(std::move(blockContext))
     {}
+
+    executor::TransactionExecutive::Ptr buildCompatChild(int64_t seq)
+    {
+        return buildChildExecutive("", contextID(), seq);
+    }
 
 private:
     // TransactionExecutive stores BlockContext by reference; keep the owning shared_ptr alive.
@@ -82,6 +88,22 @@ inline void compatAttachBlsG1AddEvmPrecompile(std::shared_ptr<CompatHostTestExec
         {compatFillZeroAddr(0x0b), std::make_shared<executor::PrecompiledContract>(
                                        executor::PrecompiledRegistrar::pricer("bls12_g1add"),
                                        executor::PrecompiledRegistrar::executor("bls12_g1add"))});
+    exe->setEVMPrecompiled(std::move(m));
+}
+
+inline void compatAttachBlsAllEvmPrecompile(std::shared_ptr<CompatHostTestExecutive> const& exe)
+{
+    auto m =
+        std::make_shared<std::map<std::string, std::shared_ptr<executor::PrecompiledContract>>>();
+    static const char* blsNames[] = {"bls12_g1add", "bls12_g1msm", "bls12_g2add", "bls12_g2msm",
+        "bls12_pairing_check", "bls12_map_fp_to_g1", "bls12_map_fp2_to_g2"};
+    for (int addr = 0x0b; addr <= 0x11; ++addr)
+    {
+        const char* name = blsNames[addr - 0x0b];
+        m->insert({compatFillZeroAddr(addr), std::make_shared<executor::PrecompiledContract>(
+                                                 executor::PrecompiledRegistrar::pricer(name),
+                                                 executor::PrecompiledRegistrar::executor(name))});
+    }
     exe->setEVMPrecompiled(std::move(m));
 }
 
@@ -130,6 +152,10 @@ inline executor::HostContext makeCompatHostContext(CompatHostContextFixture& fix
     if (attach == CompatEvmAttach::BlsG1Add)
     {
         compatAttachBlsG1AddEvmPrecompile(executive);
+    }
+    else if (attach == CompatEvmAttach::BlsAll)
+    {
+        compatAttachBlsAllEvmPrecompile(executive);
     }
     else if (attach == CompatEvmAttach::Identity)
     {

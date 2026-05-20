@@ -23,6 +23,7 @@
 
 #include "../Common.h"
 #include "../executor/TransactionExecutor.h"
+#include "../vm/Eip2929AccessState.h"
 #include "BlockContext.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledResult.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
@@ -149,6 +150,9 @@ public:
         const std::string_view& _address, bool isWasm = false, bool isCreate = false);
 
     std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(int64_t contextID);
+
+    /// EIP-2929 warm sets scoped per transaction (contextID), shared across nested CALL depth.
+    std::shared_ptr<Eip2929AccessState> getEip2929AccessState(int64_t contextID);
 
     std::shared_ptr<storage::Recoder> getRecoder() { return m_recoder; }
 

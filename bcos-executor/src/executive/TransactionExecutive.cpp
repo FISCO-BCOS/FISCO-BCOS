@@ -2216,3 +2216,35 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
     }
     return transientStorage;
 }
+
+std::shared_ptr<Eip2929AccessState> TransactionExecutive::getEip2929AccessState(int64_t contextID)
+{
+    auto accessMap = blockContext().getEip2929AccessMap();
+    std::shared_ptr<Eip2929AccessState> accessState;
+    bool has = false;
+    {
+        BlockContext::Eip2929AccessMap::ReadAccessor readAccessor;
+        has =
+            accessMap->find<BlockContext::Eip2929AccessMap::ReadAccessor>(readAccessor, contextID);
+        if (has)
+        {
+            accessState = readAccessor.value();
+        }
+    }
+    if (!has)
+    {
+        BlockContext::Eip2929AccessMap::WriteAccessor writeAccessor;
+        auto hasWrite = accessMap->find<BlockContext::Eip2929AccessMap::WriteAccessor>(
+            writeAccessor, contextID);
+        if (!hasWrite)
+        {
+            accessState = std::make_shared<Eip2929AccessState>();
+            accessMap->insert(writeAccessor, {contextID, accessState});
+        }
+        else
+        {
+            accessState = writeAccessor.value();
+        }
+    }
+    return accessState;
+}

@@ -8,6 +8,7 @@
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "TestMemoryStorage.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -21,6 +22,7 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -160,6 +162,16 @@ BOOST_AUTO_TEST_CASE(TE_FC_7_calldata_floor)
     BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(mixed)), 2500);
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_7_calldata_floor_overflow_guard_saturates)
+{
+    using namespace bcos::executor;
+    constexpr auto maxSafeBytes =
+        static_cast<size_t>(std::numeric_limits<int64_t>::max() /
+                            (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
+    bcos::bytesConstRef hugeRef(nullptr, maxSafeBytes + 1);
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(hugeRef), std::numeric_limits<int64_t>::max());
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_storage)
 {
     bcos::ledger::Features features;
@@ -199,6 +211,22 @@ BOOST_AUTO_TEST_CASE(TE_FC_eip2929_access_account)
     auto host2 = makeHost(no2929);
     BOOST_CHECK_EQUAL(host2.accessAccount(addr), EVMC_ACCESS_COLD);
     BOOST_CHECK_EQUAL(host2.accessAccount(addr), EVMC_ACCESS_COLD);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
+{
+    // externalCall reuses m_eip2929Access; nested HostContext::accessAccount reads the same warm
+    // set.
+    auto access = std::make_shared<bcos::executor::Eip2929AccessState>();
+    evmc_address addr{};
+    std::memset(addr.bytes, 0xaa, sizeof(addr.bytes));
+
+    auto accessAccount = [&access](const evmc_address& a) {
+        return access->warmAccounts.insert(a).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    };
+
+    BOOST_CHECK_EQUAL(accessAccount(addr), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(accessAccount(addr), EVMC_ACCESS_WARM);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

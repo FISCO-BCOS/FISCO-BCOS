@@ -29,6 +29,7 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -144,30 +145,8 @@ private:
     int64_t m_level;
     bool m_web3Tx;
 
-    // EIP-2929 cold/warm access tracking (revision-gated, see accessAccount/accessStorage)
-    struct EVMCPairHash
-    {
-        size_t operator()(const std::pair<evmc_address, evmc_bytes32>& p) const noexcept
-        {
-            size_t h = 0;
-            boost::hash_combine(h, boost::hash_range(p.first.bytes, p.first.bytes + 20));
-            boost::hash_combine(h, boost::hash_range(p.second.bytes, p.second.bytes + 32));
-            return h;
-        }
-    };
-    struct EVMCPairEqual
-    {
-        bool operator()(const std::pair<evmc_address, evmc_bytes32>& a,
-            const std::pair<evmc_address, evmc_bytes32>& b) const noexcept
-        {
-            return std::memcmp(a.first.bytes, b.first.bytes, 20) == 0 &&
-                   std::memcmp(a.second.bytes, b.second.bytes, 32) == 0;
-        }
-    };
-    std::unordered_set<evmc_address> m_warmAccounts;  // uses std::hash<evmc_address> from
-                                                      // VMInstance.h
-    std::unordered_set<std::pair<evmc_address, evmc_bytes32>, EVMCPairHash, EVMCPairEqual>
-        m_warmStorage;
+    /// EIP-2929 warm sets shared across nested externalCall HostContext instances (one tx).
+    std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -214,7 +193,8 @@ private:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
-        const evmc_host_interface* hostInterface)
+        const evmc_host_interface* hostInterface,
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access)
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -236,7 +216,8 @@ private:
         m_recipientAccount(getAccount(*this, this->message().recipient)),
         m_revision(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())),
         m_level(seq),
-        m_web3Tx(web3Tx)
+        m_web3Tx(web3Tx),
+        m_eip2929Access(std::move(eip2929Access))
     {}
 
 public:
@@ -247,7 +228,8 @@ public:
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
-            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
+            std::make_shared<executor::Eip2929AccessState>())
     {}
 
     ~HostContext() noexcept = default;
@@ -579,7 +561,7 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface);
+            interface, m_eip2929Access);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -599,7 +581,8 @@ public:
         if (m_revision < EVMC_BERLIN ||
             !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
             return EVMC_ACCESS_COLD;
-        return m_warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        return m_eip2929Access->warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD :
+                                                                   EVMC_ACCESS_WARM;
     }
 
     evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
@@ -607,7 +590,8 @@ public:
         if (m_revision < EVMC_BERLIN ||
             !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
             return EVMC_ACCESS_COLD;
-        return m_warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        return m_eip2929Access->warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD :
+                                                                         EVMC_ACCESS_WARM;
     }
 
 private:

@@ -52,6 +52,12 @@ struct CompatFeatureProfile
 namespace compat_addr
 {
 inline constexpr std::string_view BLS_G1ADD = "000000000000000000000000000000000000000b";
+inline constexpr std::string_view BLS_G1MSM = "000000000000000000000000000000000000000c";
+inline constexpr std::string_view BLS_G2ADD = "000000000000000000000000000000000000000d";
+inline constexpr std::string_view BLS_G2MSM = "000000000000000000000000000000000000000e";
+inline constexpr std::string_view BLS_PAIRING_CHECK = "000000000000000000000000000000000000000f";
+inline constexpr std::string_view BLS_MAP_FP_TO_G1 = "0000000000000000000000000000000000000010";
+inline constexpr std::string_view BLS_MAP_FP2_TO_G2 = "0000000000000000000000000000000000000011";
 inline constexpr std::string_view P256VERIFY = "0000000000000000000000000000000000000100";
 inline constexpr std::string_view MODEXP = "0000000000000000000000000000000000000005";
 }  // namespace compat_addr

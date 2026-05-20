@@ -69,11 +69,28 @@ BOOST_AUTO_TEST_CASE(FC_A_revision_london_forces_cold)
     BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_CANCUN), EVMC_ACCESS_COLD);
 }
 
-BOOST_AUTO_TEST_CASE(FC_A_known_limit_single_host_depth)
+BOOST_AUTO_TEST_CASE(FC_A_eip2929_warm_shared_across_call_depth)
 {
-    BOOST_TEST_MESSAGE(
-        "I1: warm sets are per-HostContext depth; cross-internal-call warm not guaranteed");
-    BOOST_CHECK(true);
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(*this, CompatFeatureProfile::pragueEnabled());
+    evmc_address addr{};
+    std::memset(addr.bytes, 0x99, sizeof(addr.bytes));
+
+    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_COLD);
+
+    auto parentExe = host.getTransactionExecutive();
+    auto childExe = std::dynamic_pointer_cast<CompatHostTestExecutive>(parentExe);
+    BOOST_REQUIRE(childExe);
+    auto childExecutive = childExe->buildCompatChild(1);
+    auto childCallParams =
+        std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
+    childCallParams->origin = "0000000000000000000000000000000000000001";
+    childCallParams->senderAddress = childCallParams->origin;
+    childCallParams->receiveAddress = "0000000000000000000000000000000000000002";
+    executor::HostContext childHost(std::move(childCallParams), childExecutive, "");
+
+    BOOST_CHECK_EQUAL(childHost.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_WARM);
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatEip2929

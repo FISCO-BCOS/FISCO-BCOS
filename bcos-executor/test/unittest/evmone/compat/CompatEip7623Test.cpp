@@ -18,6 +18,7 @@
 #include "vm/VMInstance.h"
 #include "vm/gas_meter/GasInjector.h"
 #include <boost/test/unit_test.hpp>
+#include <limits>
 #include <vector>
 
 namespace bcos::test
@@ -51,6 +52,27 @@ BOOST_AUTO_TEST_CASE(FC_7_document_no_21000_base)
     BOOST_TEST_MESSAGE(
         "I2: FISCO-BCOS does not add unconditional Ethereum 21000 base gas to the EIP-7623 "
         "floor; see TransactionExecutive.cpp and transaction-executor HostContext::execute().");
+}
+
+BOOST_AUTO_TEST_CASE(FC_7_calldata_floor_overflow_guard_saturates)
+{
+    using namespace bcos::executor;
+
+    constexpr auto maxSafeBytes =
+        static_cast<size_t>(std::numeric_limits<int64_t>::max() /
+                            (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
+    // Construct a synthetic ref with huge size; guard should saturate before iterating.
+    bcos::bytesConstRef hugeRef(nullptr, maxSafeBytes + 1);
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(hugeRef), std::numeric_limits<int64_t>::max());
+}
+
+BOOST_AUTO_TEST_CASE(FC_7_calldata_floor_small_input_unchanged)
+{
+    using namespace bcos::executor;
+
+    // 2 zero + 3 non-zero => normal=56, tokens=(2*1 + 3*4)=14, floor=140
+    bytes sample{0x00, 0x00, 0x01, 0x02, 0x03};
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(sample)), 140);
 }
 
 BOOST_AUTO_TEST_CASE(FC_7_skipped_internal_call_documented)
