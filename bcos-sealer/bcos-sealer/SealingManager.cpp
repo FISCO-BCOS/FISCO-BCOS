@@ -20,6 +20,7 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
+#include "bcos-framework/protocol/CommonError.h"
 #include <limits>
 #include <range/v3/view/concat.hpp>
 
@@ -107,31 +108,37 @@ void SealingManager::testOnlyDrainPendingTxs()
 
 void SealingManager::clearPendingTxs()
 {
-    UpgradableGuard lock(x_pendingTxs);
-    auto pendingTxsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
-    if (pendingTxsSize == 0)
+    // FIB-162: take WriteGuard in a narrow scope. The previous implementation
+    // held an UpgradableGuard across notifyResetTxsFlag(), which inline-invokes
+    // TxPool::asyncMarkTxs (the callback is synchronous despite the name) and
+    // may recursively retry under the same lock. Snapshot the hashes, drop the
+    // lock, then call out to txpool.
+    bcos::crypto::HashList snapshot;
     {
-        return;
+        bcos::WriteGuard lock(x_pendingTxs);
+        auto pendingTxsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
+        if (pendingTxsSize == 0)
+        {
+            return;
+        }
+        SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
+                       << LOG_KV("size", pendingTxsSize);
+        snapshot =
+            ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
+            ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
+            ::ranges::to<bcos::crypto::HashList>();
+        m_pendingTxs.clear();
+        m_pendingSysTxs.clear();
     }
-    // return the txs back to the txpool
-    SEAL_LOG(INFO) << LOG_DESC("clearPendingTxs: return back the unhandled transactions")
-                   << LOG_KV("size", pendingTxsSize);
-    auto unHandledTxs =
-        ::ranges::views::concat(m_pendingTxs, m_pendingSysTxs) |
-        ::ranges::views::transform([](auto& transaction) { return transaction->hash(); }) |
-        ::ranges::to<std::vector>();
     try
     {
-        notifyResetTxsFlag(unHandledTxs, false);
+        notifyResetTxsFlag(snapshot, false);
     }
     catch (std::exception const& e)
     {
         SEAL_LOG(WARNING) << LOG_DESC("clearPendingTxs: return back the unhandled txs exception")
                           << LOG_KV("message", boost::diagnostic_information(e));
     }
-    UpgradeGuard ul(lock);
-    m_pendingTxs.clear();
-    m_pendingSysTxs.clear();
 }
 
 void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag, size_t _retryTime)
@@ -150,6 +157,15 @@ void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag
             }
             if (_error == nullptr)
             {
+                return;
+            }
+            // FIB-162: TransactionsMissing is deterministic (the txpool simply
+            // has no record of these hashes). Immediate retry cannot change
+            // that, so skip the retry chain to avoid wasted work and noisy logs.
+            if (_error->errorCode() == bcos::protocol::CommonError::TransactionsMissing)
+            {
+                SEAL_LOG(DEBUG) << LOG_DESC("notifyResetTxsFlag: txs missing, skip retry")
+                                << LOG_KV("size", _txsHashList.size());
                 return;
             }
             SEAL_LOG(WARNING) << LOG_DESC("asyncMarkTxs failed, retry now");
