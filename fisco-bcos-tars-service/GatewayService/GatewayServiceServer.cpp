@@ -70,7 +70,7 @@ bcostars::GatewayServiceServer::GatewayServiceServer(GatewayServiceParam const& 
 void bcostars::GatewayServiceServer::initialize() {}
 void bcostars::GatewayServiceServer::destroy() {}
 bcostars::Error bcostars::GatewayServiceServer::asyncSendBroadcastMessage(tars::Int32 _type,
-    const std::string& groupID, tars::Int32 moduleID, const vector<tars::Char>& srcNodeID,
+    const std::string& groupID, tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID,
     const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
