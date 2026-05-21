@@ -161,7 +161,7 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
     for (auto const& sign : signatureList)
     {
         auto nodeIndex = sign.index;
-        auto* nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
+        auto nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
         auto signatureData = ref(sign.signature);
         if (signatureData.data() == nullptr)
         {

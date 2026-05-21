@@ -269,7 +269,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    auto* leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
+    auto leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
     if (!leaderNodeInfo)
     {
         return false;
