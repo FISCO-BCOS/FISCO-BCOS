@@ -29,6 +29,24 @@ using namespace bcos::sealer;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
+std::tuple<size_t, size_t> bcos::sealer::detail::computeAssemblyPlan(size_t maxTxsPerBlock,
+    size_t pendingNormalSize, size_t pendingSysSize, bool hookInsertedTx, size_t maxSysTxsPerBlock)
+{
+    auto txsSize = std::min(maxTxsPerBlock, pendingNormalSize + pendingSysSize);
+    auto systemTxsSize = std::min({txsSize, pendingSysSize, maxSysTxsPerBlock});
+    if (hookInsertedTx && txsSize == maxTxsPerBlock)
+    {
+        --txsSize;
+        // FIB-161: keep the invariant systemTxsSize <= txsSize once the hook
+        // has consumed a slot. Without this collapse, when systemTxsSize was
+        // originally equal to txsSize (e.g. maxTxsPerBlock <= maxSysTxsPerBlock
+        // and the sys queue is full), the drain loops in generateProposal would
+        // over-append and produce a block of size maxTxsPerBlock + 1.
+        systemTxsSize = std::min(systemTxsSize, txsSize);
+    }
+    return {txsSize, systemTxsSize};
+}
+
 void SealingManager::resetSealing()
 {
     SEAL_LOG(INFO) << LOG_DESC("resetSealing") << LOG_KV("startNum", m_startSealingNumber)
@@ -104,6 +122,28 @@ void SealingManager::testOnlyDrainPendingTxs()
     WriteGuard lock(x_pendingTxs);
     m_pendingTxs.clear();
     m_pendingSysTxs.clear();
+}
+
+void SealingManager::testOnlySeedSysPendingTxs(
+    const std::vector<bcos::protocol::TransactionMetaData::Ptr>& _txs)
+{
+    WriteGuard lock(x_pendingTxs);
+    for (const auto& tx : _txs)
+    {
+        m_pendingSysTxs.emplace_back(tx);
+    }
+}
+
+size_t SealingManager::testOnlyPendingTxsSize()
+{
+    ReadGuard lock(x_pendingTxs);
+    return m_pendingTxs.size() + m_pendingSysTxs.size();
+}
+
+bool SealingManager::testOnlyPendingWriteLockFree()
+{
+    WriteGuard tryLock(x_pendingTxs, boost::try_to_lock);
+    return tryLock.owns_lock();
 }
 
 void SealingManager::clearPendingTxs()
@@ -221,10 +261,6 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     blockHeader->setTimestamp(timestamp);
     blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
     block->setBlockHeader(blockHeader);
-    auto txsSize =
-        std::min(m_maxTxsPerBlock.load(), (m_pendingTxs.size() + m_pendingSysTxs.size()));
-    // prioritize seal from the system txs list, cap at 10 per block to prevent DoS
-    auto systemTxsSize = std::min({txsSize, m_pendingSysTxs.size(), c_maxSysTxsPerBlock});
     if (!m_pendingSysTxs.empty())
     {
         m_waitUntil.store(m_sealingNumber);
@@ -233,6 +269,7 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
                        << LOG_KV("curNum", m_latestNumber);
     }
     bool containSysTxs = false;
+    bool hookInsertedTx = false;
     if (_handleBlockHook)
     {
         // put the generated transaction into the 0th position of the block transactions
@@ -245,10 +282,11 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
             if (block->transactionsMetaDataSize() > 0 || block->transactionsSize() > 0)
             {
                 containSysTxs = true;
-                if (txsSize == m_maxTxsPerBlock)
-                {
-                    txsSize--;
-                }
+                // FIB-161 is handled below by computeAssemblyPlan(hookInsertedTx):
+                // the txsSize-- and systemTxsSize collapse moved into that
+                // pure function, so here we only record that the hook consumed
+                // a slot.
+                hookInsertedTx = true;
                 // FIB-153: when the hook synthesises a sys-tx into the block
                 // (e.g. VRF rotation), advance m_waitUntil so the next proposal
                 // waits for this block to commit. Guarded by `<` so this is a
@@ -258,12 +296,6 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
                 {
                     m_waitUntil.store(m_sealingNumber);
                 }
-                // FIB-161: keep the invariant systemTxsSize <= txsSize. Without
-                // this collapse, when systemTxsSize was originally equal to
-                // txsSize (e.g. maxTxsPerBlock <= c_maxSysTxsPerBlock and
-                // sysQueue is full), the for-loops below would over-append and
-                // produce a block of size maxTxsPerBlock + 1.
-                systemTxsSize = std::min(systemTxsSize, txsSize);
             }
         }
         else if (handleRet == Sealer::SealBlockResult::WAIT_FOR_LATEST_BLOCK)
@@ -275,6 +307,11 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
             return {false, nullptr};
         }
     }
+    // Compute drain bounds AFTER the hook so a hook-injected tx collapses both
+    // bounds correctly (FIB-161). The hook is contractually forbidden from
+    // touching the pending queues, so their sizes are identical pre/post hook.
+    auto [txsSize, systemTxsSize] = detail::computeAssemblyPlan(
+        m_maxTxsPerBlock.load(), m_pendingTxs.size(), m_pendingSysTxs.size(), hookInsertedTx);
     for (size_t i = 0; i < systemTxsSize; i++)
     {
         block->appendTransactionMetaData(std::move(m_pendingSysTxs.front()));

@@ -18,6 +18,13 @@
  *        not hold x_pendingTxs across the synchronous-inline asyncMarkTxs
  *        callback path, and notifyResetTxsFlag must skip retry on the
  *        deterministic TransactionsMissing error.
+ *
+ *        Test architecture: drives the production SealingManager through its
+ *        public API — testOnlySeedPendingTxs / testOnlySeedSysPendingTxs to
+ *        stage, resetSealing() to invoke clearPendingTxs(), and
+ *        testOnlyPendingWriteLockFree() (probed from a separate thread) to
+ *        observe lock state. The InlineTxPool stub mirrors the real
+ *        synchronous-inline callback contract of TxPool::asyncMarkTxs.
  */
 
 #include "bcos-crypto/bcos-crypto/hash/Keccak256.h"
@@ -33,15 +40,12 @@
 #include <bcos-utilities/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <thread>
 #include <utility>
 
 namespace bcos::test
 {
-struct FIB162Fixture;
-
 namespace
 {
 // Synchronous-inline txpool stub. The real asyncMarkTxs invokes its
@@ -49,21 +53,21 @@ namespace
 // stub mirrors that behaviour and lets the test:
 //   - count how many times asyncMarkTxs was invoked (retry count)
 //   - script per-call error outcomes (OK / TransactionsMissing / transient)
-//   - observe whether x_pendingTxs is held while the callback runs (by
-//     calling a probe registered by the test fixture)
+//   - run a probe function from inside asyncMarkTxs, before the callback,
+//     to observe lock state at the moment the bug would manifest
 struct InlineTxPool : public txpool::TxPoolInterface
 {
-    enum class Mode
+    enum class Mode : uint8_t
     {
-        OK,                         // callback gets nullptr error
-        AlwaysTransient,            // callback gets a generic transient error
-        AlwaysTransactionsMissing,  // callback gets CommonError::TransactionsMissing
-        Throws,                     // asyncMarkTxs itself throws synchronously
+        OK,
+        AlwaysTransient,
+        AlwaysTransactionsMissing,
+        Throws,
     };
 
     Mode mode = Mode::OK;
     std::atomic<size_t> markCalls{0};
-    std::function<void()> probe;  // invoked from inside asyncMarkTxs, before callback
+    std::function<void()> probe;
     bcos::crypto::HashList lastHashes;
 
     void asyncMarkTxs(const bcos::crypto::HashList& _txsHash, bool /*_sealedFlag*/,
@@ -89,7 +93,6 @@ struct InlineTxPool : public txpool::TxPoolInterface
         {
             err = BCOS_ERROR_PTR(bcos::protocol::CommonError::TransactionsMissing, "missing");
         }
-        // Invoke synchronously — mirrors the real txpool contract.
         _onRecvResponse(std::move(err));
     }
 
@@ -129,7 +132,6 @@ struct InlineTxPool : public txpool::TxPoolInterface
 };
 }  // namespace
 
-// Friend fixture: access SealingManager's private state to stage and probe.
 struct FIB162Fixture
 {
     FIB162Fixture()
@@ -156,37 +158,45 @@ struct FIB162Fixture
 
     void stagePending(size_t normalCount, size_t sysCount)
     {
+        std::vector<bcos::protocol::TransactionMetaData::Ptr> normal;
+        normal.reserve(normalCount);
         for (size_t i = 0; i < normalCount; ++i)
         {
-            sm->m_pendingTxs.push_back(makeMeta(static_cast<uint8_t>(0x10 + i)));
+            normal.push_back(makeMeta(static_cast<uint8_t>(0x10 + i)));
         }
+        sm->testOnlySeedPendingTxs(normal);
+
+        std::vector<bcos::protocol::TransactionMetaData::Ptr> sys;
+        sys.reserve(sysCount);
         for (size_t i = 0; i < sysCount; ++i)
         {
-            sm->m_pendingSysTxs.push_back(makeMeta(static_cast<uint8_t>(0xA0 + i)));
+            sys.push_back(makeMeta(static_cast<uint8_t>(0xA0 + i)));
         }
+        sm->testOnlySeedSysPendingTxs(sys);
     }
 
-    // Probe: try to acquire x_pendingTxs as a writer non-blockingly.
-    // Returns true iff the lock is free at the moment of the probe.
+    // Probe x_pendingTxs from a SEPARATE thread. boost::shared_mutex's
+    // same-thread try_lock is not well-defined, and the pre-fix code path
+    // holds the lock on the thread that runs the txpool callback — so a
+    // same-thread probe there would be UB. A separate thread gives a clean
+    // "is the lock free right now?" answer for both pre- and post-fix code.
     bool canAcquireWriteLockNow() const
     {
-        bcos::WriteGuard tryLock(sm->x_pendingTxs, boost::try_to_lock);
-        return tryLock.owns_lock();
+        std::atomic<bool> gotLock{false};
+        std::thread t([this, &gotLock]() { gotLock.store(sm->testOnlyPendingWriteLockFree()); });
+        t.join();
+        return gotLock.load();
     }
 
-    size_t pendingTotal() const
-    {
-        bcos::ReadGuard lock(sm->x_pendingTxs);
-        return sm->m_pendingTxs.size() + sm->m_pendingSysTxs.size();
-    }
+    size_t pendingTotal() const { return sm->testOnlyPendingTxsSize(); }
 
-    // Direct access through friend.
-    void invokeClear() { sm->clearPendingTxs(); }
+    // resetSealing() is the public entry point that drives clearPendingTxs().
+    void invokeClear() { sm->resetSealing(); }
 
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> blockFactory;
     std::shared_ptr<InlineTxPool> txpool;
     sealer::SealerConfig::Ptr config;
-    sealer::SealingManager::Ptr sm;
+    std::shared_ptr<sealer::SealingManager> sm;
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB162ClearPendingLockFreeTest, FIB162Fixture)
@@ -209,10 +219,11 @@ BOOST_AUTO_TEST_CASE(t2_snapshot_then_clear)
     BOOST_CHECK_EQUAL(pendingTotal(), 0U);
 }
 
-// T3 — lock released before asyncMarkTxs runs. The probe captures
-// whether a writer can acquire x_pendingTxs at the moment of the callback.
-// Pre-fix: lock held (UpgradableGuard) → probe sees can_acquire = false.
-// Post-fix: lock released → probe sees can_acquire = true.
+// T3 — lock released before asyncMarkTxs runs. The probe captures whether
+// a writer can acquire x_pendingTxs at the moment of the callback FROM A
+// DIFFERENT THREAD. Pre-fix: caller holds UpgradableGuard → cross-thread
+// writer try_lock returns false. Post-fix: lock released before notify →
+// try_lock returns true.
 BOOST_AUTO_TEST_CASE(t3_lock_released_before_async_call)
 {
     stagePending(/*normal=*/1, /*sys=*/1);
@@ -238,7 +249,7 @@ BOOST_AUTO_TEST_CASE(t5_transient_error_retries_capped_at_three)
     stagePending(/*normal=*/1, /*sys=*/0);
     txpool->mode = InlineTxPool::Mode::AlwaysTransient;
     invokeClear();
-    BOOST_CHECK_EQUAL(txpool->markCalls.load(), 4U);  // initial + 3 retries
+    BOOST_CHECK_EQUAL(txpool->markCalls.load(), 4U);
 }
 
 // T6 — same retry semantics from a direct notifyResetTxsFlag call too.
@@ -260,30 +271,29 @@ BOOST_AUTO_TEST_CASE(t7_async_throws_still_clears)
     BOOST_CHECK_EQUAL(pendingTotal(), 0U);
 }
 
-// T8 — reader-not-starved: while clearPendingTxs is running (with the
-// AlwaysTransient mode that exercises the synchronous retry path), a
-// concurrent reader probe must still be able to acquire the shared lock.
-BOOST_AUTO_TEST_CASE(t8_reader_not_starved_during_retry)
+// T8 — during the (transient-mode) retry chain, the lock must remain free
+// for every callback invocation. Same probe as T3, but exercised through
+// 4 callbacks (1 initial + 3 retries) — verifies the fix holds across the
+// full recursive retry chain.
+BOOST_AUTO_TEST_CASE(t8_lock_free_for_each_retry_callback)
 {
     stagePending(/*normal=*/3, /*sys=*/2);
     txpool->mode = InlineTxPool::Mode::AlwaysTransient;
 
-    std::atomic<bool> readerObservedFree{false};
-    txpool->probe = [this, &readerObservedFree]() {
-        // Try acquire reader lock from a concurrent thread; in the pre-fix
-        // upgradable-lock path the reader can in fact acquire (upgradable
-        // permits shared reads), so we instead probe the writer lock here
-        // synchronously — same as T3 — to keep the test deterministic.
+    std::atomic<size_t> probeCount{0};
+    std::atomic<size_t> probeSeenFree{0};
+    txpool->probe = [this, &probeCount, &probeSeenFree]() {
+        ++probeCount;
         if (canAcquireWriteLockNow())
         {
-            readerObservedFree.store(true);
+            ++probeSeenFree;
         }
     };
 
     invokeClear();
-    BOOST_CHECK(readerObservedFree.load());
+    BOOST_CHECK_EQUAL(probeCount.load(), 4U);
+    BOOST_CHECK_EQUAL(probeSeenFree.load(), 4U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
 }  // namespace bcos::test
