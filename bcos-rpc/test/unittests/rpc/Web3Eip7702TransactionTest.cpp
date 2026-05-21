@@ -14,7 +14,11 @@
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
+#include <fstream>
+#include <sstream>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -51,6 +55,36 @@ Web3Transaction makeRoundTripEip7702Tx()
     tx.signatureS = bytes(32, 0x22);
     return tx;
 }
+
+boost::filesystem::path eip7702VectorDataDir()
+{
+    boost::filesystem::path const here(__FILE__);
+    return here.parent_path().parent_path().parent_path() / "data" / "eip7702";
+}
+
+std::string readVectorFile(boost::filesystem::path const& path)
+{
+    std::ifstream in(path.string(), std::ios::binary);
+    BOOST_REQUIRE_MESSAGE(in, "missing vector file: " + path.string());
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+std::string extractJsonStringField(std::string const& json, std::string_view field)
+{
+    auto const key = "\"" + std::string(field) + "\"";
+    auto pos = json.find(key);
+    BOOST_REQUIRE_MESSAGE(pos != std::string::npos, "missing json field: " + std::string(field));
+    pos = json.find(':', pos);
+    BOOST_REQUIRE(pos != std::string::npos);
+    pos = json.find('"', pos);
+    BOOST_REQUIRE(pos != std::string::npos);
+    auto end = json.find('"', pos + 1);
+    BOOST_REQUIRE(end != std::string::npos);
+    return json.substr(pos + 1, end - pos - 1);
+}
+
 }  // namespace
 
 BOOST_FIXTURE_TEST_SUITE(testWeb3Eip7702, RPCFixture)
@@ -131,6 +165,62 @@ BOOST_AUTO_TEST_CASE(takeToTarsTransaction_preservesAuthorizationList)
     BOOST_REQUIRE_EQUAL(decoded->web3AuthorizationList().size(), 1U);
     BOOST_CHECK_EQUAL(decoded->web3AuthorizationList()[0].chainIdDec, "1");
     BOOST_CHECK_EQUAL(decoded->web3AuthorizationList()[0].nonceDec, "5");
+}
+
+BOOST_AUTO_TEST_CASE(vector_valid_roundtrip_pinned_file)
+{
+    auto const path = eip7702VectorDataDir() / "tx_valid_roundtrip.json";
+    auto const json = readVectorFile(path);
+    BOOST_CHECK_EQUAL(extractJsonStringField(json, "expect"), "ok");
+
+    auto const fresh = makeRoundTripEip7702Tx();
+    bytes encodedFresh;
+    encode(encodedFresh, fresh);
+
+    auto const pinnedHex = extractJsonStringField(json, "rlp");
+    if (pinnedHex.empty())
+    {
+        BOOST_WARN_MESSAGE(false, "populate tx_valid_roundtrip.json rlp (run pinned_rlp_export)");
+        return;
+    }
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(encodedFresh), pinnedHex);
+}
+
+BOOST_AUTO_TEST_CASE(vector_reject_empty_auth_list_pinned_file)
+{
+    auto const path = eip7702VectorDataDir() / "tx_reject_empty_auth_list.json";
+    auto const json = readVectorFile(path);
+    BOOST_CHECK_EQUAL(extractJsonStringField(json, "expect"), "reject");
+
+    auto rejectTx = makeRoundTripEip7702Tx();
+    rejectTx.authorizationList.clear();
+    bytes encodedReject;
+    encode(encodedReject, rejectTx);
+
+    auto const pinnedHex = extractJsonStringField(json, "rlp");
+    if (pinnedHex.empty())
+    {
+        BOOST_WARN_MESSAGE(
+            false, "populate tx_reject_empty_auth_list.json rlp (run pinned_rlp_export)");
+        return;
+    }
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(encodedReject), pinnedHex);
+}
+
+BOOST_AUTO_TEST_CASE(pinned_rlp_export)
+{
+    bytes validEncoded;
+    encode(validEncoded, makeRoundTripEip7702Tx());
+
+    auto rejectTx = makeRoundTripEip7702Tx();
+    rejectTx.authorizationList.clear();
+    bytes rejectEncoded;
+    encode(rejectEncoded, rejectTx);
+
+    BOOST_TEST_MESSAGE("tx_valid_roundtrip.json rlp: " << toHexStringWithPrefix(validEncoded));
+    BOOST_TEST_MESSAGE(
+        "tx_reject_empty_auth_list.json rlp: " << toHexStringWithPrefix(rejectEncoded));
+    BOOST_TEST_MESSAGE("data dir: " << eip7702VectorDataDir().string());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

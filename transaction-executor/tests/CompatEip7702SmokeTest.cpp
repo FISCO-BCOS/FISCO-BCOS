@@ -6,113 +6,140 @@
  */
 
 #include "../bcos-transaction-executor/TransactionExecutorImpl.h"
+#include "Eip7702TestHelpers.h"
 #include "TestMemoryStorage.h"
+#include "bcos-executor/src/Web3Eip7702Apply.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
-#include <bcos-framework/ledger/EVMAccount.h>
-#include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-framework/transaction-executor/TransactionExecutor.h>
-#include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>
-#include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
-#include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <boost/algorithm/hex.hpp>
+#include <bcos-task/Wait.h>
 #include <boost/test/unit_test.hpp>
-#include <memory>
+#include <cstring>
 
 using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::executor_v1;
-using namespace bcos::rpc;
+using namespace bcos::test::eip7702;
+using bcos::ledger::account::EVMAccount;
 
-namespace
+namespace bcos::test
 {
-Web3Transaction makeEip7702SmokeTx()
-{
-    Web3Transaction w3;
-    w3.type = TransactionType::EIP7702;
-    w3.chainId = 1;
-    w3.nonce = 0;
-    w3.maxPriorityFeePerGas = 1;
-    w3.maxFeePerGas = 2;
-    w3.gasLimit = 500'000;
-    w3.to = Address("0x1111111111111111111111111111111111111111");
-    w3.value = 0;
-    w3.data = bytes{};
-    w3.signatureR = bytes(32, 0x11);
-    w3.signatureS = bytes(32, 0x22);
-    w3.signatureV = 27;
-
-    AuthorizationListEntry auth;
-    auth.chainId = 1;
-    auth.address = Address("0x2222222222222222222222222222222222222222");
-    auth.nonce = 0;
-    auth.yParity = 0;
-    auth.r = h256(fromHex(std::string(64, 'a')));
-    auth.s = h256(fromHex(std::string(64, 'b')));
-    w3.authorizationList.push_back(auth);
-    return w3;
-}
-}  // namespace
 
 class CompatEip7702SmokeFixture
 {
 public:
     MutableStorage storage;
     ledger::LedgerConfig ledgerConfig;
-    std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite =
-        std::make_shared<bcos::crypto::CryptoSuite>(
-            std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr);
-    bcostars::protocol::TransactionFactoryImpl transactionFactory{cryptoSuite};
+    std::shared_ptr<crypto::CryptoSuite> cryptoSuite = std::make_shared<crypto::CryptoSuite>(
+        std::make_shared<crypto::Keccak256>(), nullptr, nullptr);
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
     PrecompiledManager precompiledManager{cryptoSuite->hashImpl()};
     TransactionExecutorImpl executor{receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
+    bcostars::protocol::BlockHeaderImpl blockHeader;
 
     CompatEip7702SmokeFixture()
     {
-        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
-        auto features = ledgerConfig.features();
-        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
-        features.set(ledger::Features::Flag::feature_evm_cancun);
-        features.set(ledger::Features::Flag::feature_evm_prague);
-        features.set(ledger::Features::Flag::feature_evm_eip2929);
-        ledgerConfig.setFeatures(features);
+        executor::GlobalHashImpl::g_hashImpl = cryptoSuite->hashImpl();
+        setPragueFeatures(ledgerConfig);
+        setLedgerChainId(ledgerConfig, 1);
+        ledgerConfig.setGasPrice({"1", 0});
+        blockHeader.setVersion(static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION));
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+    }
+
+    task::Task<void> fundSender(evmc_address const& sender, u256 balance = u256(1) << 96)
+    {
+        EVMAccount<decltype(storage)> account(storage, sender, false);
+        if (!co_await account.exists())
+        {
+            co_await account.create();
+        }
+        co_await account.setBalance(balance);
+        co_await account.setNonce("0");
     }
 };
 
 BOOST_FIXTURE_TEST_SUITE(CompatEip7702Smoke, CompatEip7702SmokeFixture)
 
-BOOST_AUTO_TEST_CASE(type4_executeTransaction_smoke)
+BOOST_AUTO_TEST_CASE(type4_apply_delegation_smoke)
 {
     task::syncWait([this]() -> task::Task<void> {
-        bcostars::protocol::BlockHeaderImpl blockHeader;
-        blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));
-        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+        auto const keyPair = testAuthorityKeyPair();
+        auto const authority = authorityAddressFromKey(cryptoSuite->hashImpl(), keyPair);
+        auto const authorityEvmc = executor::addressToEvmc(authority);
 
-        auto w3 = makeEip7702SmokeTx();
-        auto tarsHolder = std::make_shared<bcostars::Transaction>(w3.takeToTarsTransaction());
-        auto const signBytes = w3.encodeForSign();
-        tarsHolder->extraTransactionBytes.assign(signBytes.begin(), signBytes.end());
-        auto const txHash = w3.hashForSign();
-        tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
+        EVMAccount<decltype(storage)> authorityAccount(storage, authorityEvmc, false);
+        co_await authorityAccount.create();
+        co_await authorityAccount.setNonce("0");
+
+        evmc_address targetEvmc{};
+        targetEvmc.bytes[19] = 0x42;
+        Address target{};
+        std::memcpy(target.data(), targetEvmc.bytes, sizeof(targetEvmc.bytes));
+        auto auth = signAuthorizationTuple(cryptoSuite->hashImpl(), keyPair, 1, target, 0);
 
         evmc_address sender{};
         sender.bytes[19] = 0x99;
-        tarsHolder->sender.assign(sender.bytes, sender.bytes + sizeof(sender.bytes));
+        co_await fundSender(sender);
 
-        bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
+        auto tx = makeWeb3Type4Transaction(*cryptoSuite, {auth}, sender, std::nullopt, bytes{}, 0);
+        auto receipt =
+            co_await executor.executeTransaction(storage, blockHeader, *tx, 0, ledgerConfig, false);
 
-        ledger::account::EVMAccount<decltype(storage)> senderAccount(storage, sender, false);
-        co_await senderAccount.create();
-        co_await senderAccount.setBalance(u256(1) << 96);
-
-        auto receipt = co_await executor.executeTransaction(
-            storage, blockHeader, txImpl, 0, ledgerConfig, false);
+        BOOST_REQUIRE(receipt);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
+
+        auto const expected = makeDelegationIndicatorCode(target);
+        auto const codeEntry = co_await readAccountCode(storage, authorityEvmc, false);
+        BOOST_REQUIRE(codeEntry);
+        auto const view = codeEntry->get();
+        BOOST_CHECK_EQUAL(view.size(), expected.size());
+        BOOST_CHECK(executor::isEip7702DelegationIndicator(
+            bytesConstRef(reinterpret_cast<byte const*>(view.data()), view.size())));
+
+        auto const nonce = co_await authorityAccount.nonce();
+        BOOST_CHECK_EQUAL(nonce.value(), "1");
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(type4_invalid_auth_skipped_smoke)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto const keyPair = testAuthorityKeyPair();
+        auto const authority = authorityAddressFromKey(cryptoSuite->hashImpl(), keyPair);
+        auto const authorityEvmc = executor::addressToEvmc(authority);
+
+        EVMAccount<decltype(storage)> authorityAccount(storage, authorityEvmc, false);
+        co_await authorityAccount.create();
+        co_await authorityAccount.setNonce("5");
+
+        evmc_address targetEvmc{};
+        targetEvmc.bytes[19] = 0x43;
+        Address target{};
+        std::memcpy(target.data(), targetEvmc.bytes, sizeof(targetEvmc.bytes));
+        auto auth = signAuthorizationTuple(cryptoSuite->hashImpl(), keyPair, 1, target, 0);
+
+        evmc_address sender{};
+        sender.bytes[19] = 0x98;
+        co_await fundSender(sender);
+
+        auto tx = makeWeb3Type4Transaction(*cryptoSuite, {auth}, sender, std::nullopt, bytes{}, 0);
+        auto receipt =
+            co_await executor.executeTransaction(storage, blockHeader, *tx, 0, ledgerConfig, false);
+
+        BOOST_REQUIRE(receipt);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+
+        auto const codeEntry = co_await readAccountCode(storage, authorityEvmc, false);
+        BOOST_CHECK(!codeEntry || codeEntry->get().empty());
+        auto const nonce = co_await authorityAccount.nonce();
+        BOOST_CHECK_EQUAL(nonce.value(), "5");
     }());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+}  // namespace bcos::test

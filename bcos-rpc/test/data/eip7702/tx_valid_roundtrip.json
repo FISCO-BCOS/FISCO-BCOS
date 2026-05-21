@@ -1,0 +1,6 @@
+{
+  "name": "tx_valid_roundtrip",
+  "expect": "ok",
+  "description": "Single authorization_list entry; round-trip with makeRoundTripEip7702Tx",
+  "rlp": "0x04f8c20103020382520894aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa8082deadc0f85cf85a0194bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb0501a0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb01a01111111111111111111111111111111111111111111111111111111111111111a02222222222222222222222222222222222222222222222222222222222222222"
+}
