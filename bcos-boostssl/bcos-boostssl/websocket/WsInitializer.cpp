@@ -32,7 +32,6 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/system/detail/error_code.hpp>
-#include <cstddef>
 
 using namespace bcos;
 using namespace bcos::boostssl;
@@ -87,7 +86,12 @@ void WsInitializer::initWsService(WsService::Ptr _wsService)
     }
 
     auto wsServiceWeakPtr = std::weak_ptr<WsService>(_wsService);
-    auto ioServicePool = std::make_shared<IOServicePool>();
+    if (!m_ioServicePool)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("IOServicePool must be set in WsInitializer!"));
+    }
+    auto ioServicePool = m_ioServicePool;
     _wsService->setIOServicePool(ioServicePool);
 
     auto resolver =

@@ -61,16 +61,16 @@ void IOServicePool::stop()
     }
     m_running = false;
 
+    // 1. Reset work to release keep-alive, allowing io_context to exit naturally after all tasks
+    // are finished
     for (auto& work : m_works)
     {
         work.reset();
     }
 
-    for (auto& ioService : m_ioServices)
-    {
-        ioService->stop();
-    }
+    // 2. Do not call stop() on ioService, let run() return automatically when no tasks remain
 
+    // 3. Wait for all threads to exit
     for (auto& thread : m_threads)
     {
         if (thread.joinable())
