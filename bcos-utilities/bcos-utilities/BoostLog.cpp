@@ -783,8 +783,8 @@ void file_collector::store_file(boost::filesystem::path const& src_path)
         info.m_Size = boost::filesystem::file_size(info.m_Path);
     }
 
-    m_Files.push_back(std::move(info));
     m_TotalSize += info.m_Size;
+    m_Files.push_back(std::move(info));
 }
 
 //! The function checks if the specified path refers to an existing file in the storage
