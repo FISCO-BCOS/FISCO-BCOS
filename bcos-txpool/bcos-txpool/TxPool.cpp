@@ -85,10 +85,16 @@ void TxPool::stop()
     if (m_txsPreStore)
     {
         m_txsPreStore->stop();
-        // FIB-154: abandoned lambdas in the stopped thread pool never run their cleanup;
-        // clear stale entries so a restart doesn't see phantom in-flight blocks.
-        std::lock_guard lock(x_preStoreInFlight);
-        m_preStoreInFlight.clear();
+        // Abandoned lambdas in the stopped thread pool never run their cleanup; clear
+        // stale entries so a restart doesn't see phantom in-flight blocks.
+        {
+            std::lock_guard lock(x_preStoreInFlight);
+            m_preStoreInFlight.clear();
+        }
+        {
+            std::lock_guard lock(x_preStoreDropLogLastWarn);
+            m_preStoreDropLogLastWarn.clear();
+        }
     }
     if (m_verifier)
     {
@@ -286,39 +292,11 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                 // m_txsPreStore
                 if (!verifyError && verifyRet && block)
                 {
-                    // FIB-154: dedup by block hash + enforce hard cap on inflight pre-store
-                    // tasks to prevent unbounded queue growth (queue-amplification DoS).
                     auto const& blockHash = block->blockHeader()->hash();
-                    bool shouldEnqueue = false;
-                    {
-                        std::lock_guard lock(txpool->x_preStoreInFlight);
-                        if (txpool->m_preStoreInFlight.count(blockHash))
-                        {
-                            TXPOOL_LOG(DEBUG)
-                                << LOG_DESC("FIB-154: pre-store dedup, skip duplicate")
-                                << LOG_KV("hash", blockHash.abridged());
-                        }
-                        else if (txpool->m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
-                        {
-                            TXPOOL_LOG(WARNING)
-                                << LOG_DESC("FIB-154: pre-store backlog cap reached, dropping")
-                                << LOG_KV("hash", blockHash.abridged())
-                                << LOG_KV("inflight", txpool->m_preStoreInFlight.size());
-                        }
-                        else
-                        {
-                            txpool->m_preStoreInFlight.insert(blockHash);
-                            shouldEnqueue = true;
-                        }
-                    }
-                    if (shouldEnqueue)
+                    auto admission = txpool->tryAcquirePreStoreSlot(blockHash);
+                    if (admission == TxPool::PreStoreAdmission::Accepted)
                     {
                         txpool->m_txsPreStore->enqueue([txpool, block, blockHash]() {
-                            // FIB-154: cleanup runs on every exit path (success, std, non-std).
-                            auto cleanup = [&]() {
-                                std::lock_guard cleanLock(txpool->x_preStoreInFlight);
-                                txpool->m_preStoreInFlight.erase(blockHash);
-                            };
                             try
                             {
                                 txpool->storeVerifiedBlock(block);
@@ -326,25 +304,27 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                             catch (std::exception const& e)
                             {
                                 TXPOOL_LOG(WARNING)
-                                    << LOG_DESC("FIB-154: pre-store storeVerifiedBlock threw")
+                                    << LOG_DESC("pre-store storeVerifiedBlock threw")
                                     << LOG_KV("blockHash", blockHash.abridged())
                                     << LOG_KV("error", boost::diagnostic_information(e));
-                                cleanup();
-                                return;
                             }
                             catch (...)
                             {
-                                TXPOOL_LOG(WARNING)
-                                    << LOG_DESC(
-                                           "FIB-154: pre-store storeVerifiedBlock threw unknown "
-                                           "exception")
-                                    << LOG_KV("blockHash", blockHash.abridged());
-                                cleanup();
-                                return;
+                                TXPOOL_LOG(WARNING) << LOG_DESC(
+                                                           "pre-store storeVerifiedBlock threw "
+                                                           "unknown exception")
+                                                    << LOG_KV("blockHash", blockHash.abridged());
                             }
-                            cleanup();
+                            txpool->releasePreStoreSlot(blockHash);
                         });
                     }
+                    else if (admission == TxPool::PreStoreAdmission::Disabled)
+                    {
+                        // backpressure off: legacy unbounded behavior (operator escape hatch)
+                        txpool->m_txsPreStore->enqueue(
+                            [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    }
+                    // DuplicateSkipped / CapDropped: nothing to do; logged inside the gate.
                 }
             };
 
@@ -782,80 +762,100 @@ void bcos::txpool::TxPool::registerTxsNotifier(
     m_txpoolStorage->registerTxsNotifier(_txsNotifier);
 }
 
-// FIB-154 test-only helpers -------------------------------------------------------
-// These methods exercise the dedup/cap gate synchronously (no thread pool post)
-// so that unit tests can assert counts deterministically.
-
-void bcos::txpool::TxPool::testOnlyEnqueuePreStore(bcos::crypto::HashType const& h)
+void bcos::txpool::TxPool::setPreStoreBackpressureEnabled(bool _enabled)
 {
-    std::lock_guard lock(x_preStoreInFlight);
-    if (m_preStoreInFlight.count(h))
+    m_preStoreBackpressureEnabled = _enabled;
+}
+
+void bcos::txpool::TxPool::setPreStoreMaxInflight(std::size_t _max)
+{
+    if (_max == 0)
     {
-        TXPOOL_LOG(DEBUG) << LOG_DESC("FIB-154 testOnly: dedup, skip duplicate");
+        TXPOOL_LOG(WARNING) << LOG_DESC(
+            "setPreStoreMaxInflight ignored: 0 is invalid (would block all pre-store work)");
         return;
     }
-    if (m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
-    {
-        TXPOOL_LOG(WARNING) << LOG_DESC("FIB-154 testOnly: cap reached, dropping");
-        return;
-    }
-    m_preStoreInFlight.insert(h);
+    m_preStoreMaxInflight = _max;
 }
 
-void bcos::txpool::TxPool::testOnlyEnqueuePreStoreSyncSuccess(bcos::crypto::HashType const& h)
+bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStoreSlot(
+    bcos::crypto::HashType const& _blockHash)
 {
+    if (!m_preStoreBackpressureEnabled)
+    {
+        return PreStoreAdmission::Disabled;
+    }
     {
         std::lock_guard lock(x_preStoreInFlight);
-        if (m_preStoreInFlight.count(h))
+        if (m_preStoreInFlight.count(_blockHash))
         {
-            return;
+            TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: skip duplicate block")
+                              << LOG_KV("hash", _blockHash.abridged());
+            return PreStoreAdmission::DuplicateSkipped;
         }
-        if (m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
+        if (m_preStoreInFlight.size() >= m_preStoreMaxInflight)
         {
-            return;
+            // Drop the slot; outside this critical section, decide whether to log.
+            // We must NOT hold x_preStoreInFlight while taking x_preStoreDropLogLastWarn —
+            // they are independent locks acquired in independent orders elsewhere is fine,
+            // but keeping them strictly ordered (in-flight first, dedup second never together)
+            // makes deadlocks impossible by construction.
         }
-        m_preStoreInFlight.insert(h);
+        else
+        {
+            m_preStoreInFlight.insert(_blockHash);
+            return PreStoreAdmission::Accepted;
+        }
     }
-    // Simulate work completing successfully, then cleanup
+
+    // Cap reached. Decide whether to emit a WARNING — dedup per-hash with 60s TTL to
+    // neutralize log-I/O amplification under sustained DoS.
+    bool shouldWarn = false;
+    std::size_t currentInflight = 0;
     {
         std::lock_guard lock(x_preStoreInFlight);
-        m_preStoreInFlight.erase(h);
+        currentInflight = m_preStoreInFlight.size();
     }
+    auto const now = std::chrono::steady_clock::now();
+    {
+        std::lock_guard logLock(x_preStoreDropLogLastWarn);
+        auto it = m_preStoreDropLogLastWarn.find(_blockHash);
+        if (it == m_preStoreDropLogLastWarn.end() || (now - it->second) >= c_preStoreLogDedupTtl)
+        {
+            if (m_preStoreDropLogLastWarn.size() >= c_preStoreLogDedupCap)
+            {
+                // Bounded-memory sweep: evict every entry older than TTL.
+                for (auto sweep = m_preStoreDropLogLastWarn.begin();
+                    sweep != m_preStoreDropLogLastWarn.end();)
+                {
+                    if ((now - sweep->second) >= c_preStoreLogDedupTtl)
+                    {
+                        sweep = m_preStoreDropLogLastWarn.erase(sweep);
+                    }
+                    else
+                    {
+                        ++sweep;
+                    }
+                }
+            }
+            m_preStoreDropLogLastWarn[_blockHash] = now;
+            shouldWarn = true;
+        }
+    }
+    if (shouldWarn)
+    {
+        TXPOOL_LOG(WARNING)
+            << LOG_DESC(
+                   "pre-store backlog cap reached, dropping (further WARNs for this "
+                   "hash suppressed for 60s)")
+            << LOG_KV("hash", _blockHash.abridged()) << LOG_KV("inflight", currentInflight)
+            << LOG_KV("cap", m_preStoreMaxInflight);
+    }
+    return PreStoreAdmission::CapDropped;
 }
 
-void bcos::txpool::TxPool::testOnlyEnqueuePreStoreSyncThrow(bcos::crypto::HashType const& h)
-{
-    {
-        std::lock_guard lock(x_preStoreInFlight);
-        if (m_preStoreInFlight.count(h))
-        {
-            return;
-        }
-        if (m_preStoreInFlight.size() >= c_maxPreStoreInFlight)
-        {
-            return;
-        }
-        m_preStoreInFlight.insert(h);
-    }
-    try
-    {
-        // Simulate the work throwing
-        throw std::runtime_error("FIB-154 testOnly: simulated exception");
-    }
-    catch (std::exception const& e)
-    {
-        TXPOOL_LOG(WARNING) << LOG_DESC("FIB-154 testOnly: exception path triggered")
-                            << LOG_KV("err", e.what());
-    }
-    // Cleanup on exception path — entry must still be removed
-    {
-        std::lock_guard lock(x_preStoreInFlight);
-        m_preStoreInFlight.erase(h);
-    }
-}
-
-void bcos::txpool::TxPool::testOnlyCleanupPreStore(bcos::crypto::HashType const& h)
+void bcos::txpool::TxPool::releasePreStoreSlot(bcos::crypto::HashType const& _blockHash)
 {
     std::lock_guard lock(x_preStoreInFlight);
-    m_preStoreInFlight.erase(h);
+    m_preStoreInFlight.erase(_blockHash);
 }
