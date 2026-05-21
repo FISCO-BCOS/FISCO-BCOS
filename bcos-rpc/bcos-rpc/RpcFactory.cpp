@@ -359,14 +359,11 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     auto wsService = std::make_shared<bcos::boostssl::ws::WsService>();
     auto initializer = std::make_shared<bcos::boostssl::ws::WsInitializer>();
 
+    // Check threadPoolSize configuration (read before moving _config)
+    size_t threadPoolSize = _config ? _config->threadPoolSize() : 0;
+
     initializer->setConfig(std::move(_config));
 
-    // Check threadPoolSize configuration
-    size_t threadPoolSize = 0;
-    if (_config)
-    {
-        threadPoolSize = _config->threadPoolSize();
-    }
     if (threadPoolSize > 0)
     {
         // Use a dedicated thread pool for RPC
