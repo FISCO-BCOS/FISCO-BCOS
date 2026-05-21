@@ -13,6 +13,11 @@ ExternalProject_Add(GroupSigLib
     LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_IN_SOURCE 1
+    # Fix pbc_sig CMakeLists.txt: original tarball has \\ line continuations
+    # in warnflags that produce invalid ninja build files.
+    # 1) Copy fix script into GroupSigLib cmake/
+    # 2) Modify cmake/ProjectPbcSig.cmake to call it after pbc_sig patch step
+    PATCH_COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/fix_pbc_sig_cmake.py cmake/ && python3 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/inject_pbc_sig_fix.py
 )
 
 ExternalProject_Get_Property(GroupSigLib SOURCE_DIR)
