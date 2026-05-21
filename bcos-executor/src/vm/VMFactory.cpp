@@ -31,7 +31,6 @@ namespace po = boost::program_options;
 
 namespace bcos::executor
 {
-
 VMFactory::VMFactory(size_t cache_size) : m_cache(cache_size) {}
 
 VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::HashType& codeHash,
@@ -48,18 +47,11 @@ VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::
     {
         if (isCreate)
         {
-            // CREATE: init code + code deposit — use EVMC execute(), not baseline analysis.
+            // CREATE: init code + code deposit — EVMC execute(), no baseline analysis or cache.
             return VMInstance{evmc_create_evmone(), revision, code};
         }
 
-        // CALL: baseline::execute(CodeAnalysis) can report EVMC_BAD_JUMP_DESTINATION on valid
-        // factory/wrapper bytecode (precompiledPermissionTest). Use EVMC until parity is proven.
-        constexpr bool useBaselineCall = false;
-        if (!useBaselineCall)
-        {
-            return VMInstance{evmc_create_evmone(), revision, code};
-        }
-
+        // CALL: baseline analyze + LRU cache + baseline::execute (pre-0.21 behavior).
         bool useCache = (codeHash != crypto::HashType{});
         EvmCodeCacheKey cacheKey{codeHash, revision};
         std::shared_ptr<evmoneCodeAnalysis> analysis{useCache ? get(cacheKey) : nullptr};

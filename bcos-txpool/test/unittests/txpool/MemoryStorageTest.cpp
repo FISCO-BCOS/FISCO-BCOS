@@ -31,9 +31,9 @@
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
+#include <fakeit.hpp>
 #include <future>
 #include <thread>
-#include <fakeit.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -943,6 +943,12 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
 
     // validateChainId() always passes
     fakeit::When(Method(localValidator, validateChainId))
+        .AlwaysDo([](const auto&, auto) -> task::Task<TransactionStatus> {
+            co_return TransactionStatus::None;
+        });
+
+    // validateEip7702Admission() mocked for FIB50 nonce experiment; see TxValidatorEip7702Test.
+    fakeit::When(Method(localValidator, validateEip7702Admission))
         .AlwaysDo([](const auto&, auto) -> task::Task<TransactionStatus> {
             co_return TransactionStatus::None;
         });
