@@ -168,11 +168,14 @@ protected:
     PreStoreAdmission tryAcquirePreStoreSlot(bcos::crypto::HashType const& _blockHash);
     void releasePreStoreSlot(bcos::crypto::HashType const& _blockHash);
 
-    // Pre-store backlog control. Runtime-configurable via NodeConfig. Kept
-    // protected so the Inspectable subclass in the FIB-154 UT can re-export
-    // these for direct state inspection via `using` declarations.
-    bool m_preStoreBackpressureEnabled = true;
-    std::size_t m_preStoreMaxInflight = 1024;
+    // Pre-store backlog control. Runtime-configurable via NodeConfig. The two
+    // scalar knobs are atomic because setters may be called concurrently with
+    // tryAcquirePreStoreSlot readers (no shared lock); `relaxed` ordering is
+    // sufficient since they are policy values, not synchronization primitives.
+    // The set+mutex are kept protected so the Inspectable subclass in the UT
+    // can re-export them via `using` declarations.
+    std::atomic<bool> m_preStoreBackpressureEnabled{true};
+    std::atomic<std::size_t> m_preStoreMaxInflight{1024};
     std::unordered_set<bcos::crypto::HashType> m_preStoreInFlight;
     mutable std::mutex x_preStoreInFlight;
 

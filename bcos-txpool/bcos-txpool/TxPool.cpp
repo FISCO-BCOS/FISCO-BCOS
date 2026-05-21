@@ -785,6 +785,10 @@ bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStore
     {
         return PreStoreAdmission::Disabled;
     }
+
+    // Snapshot the in-flight count inside the critical section so the WARN line below
+    // reflects the size that caused the drop, without needing a second lock.
+    std::size_t inflightAtCap = 0;
     {
         std::lock_guard lock(x_preStoreInFlight);
         if (m_preStoreInFlight.count(_blockHash))
@@ -793,29 +797,17 @@ bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStore
                               << LOG_KV("hash", _blockHash.abridged());
             return PreStoreAdmission::DuplicateSkipped;
         }
-        if (m_preStoreInFlight.size() >= m_preStoreMaxInflight)
-        {
-            // Drop the slot; outside this critical section, decide whether to log.
-            // We must NOT hold x_preStoreInFlight while taking x_preStoreDropLogLastWarn —
-            // they are independent locks acquired in independent orders elsewhere is fine,
-            // but keeping them strictly ordered (in-flight first, dedup second never together)
-            // makes deadlocks impossible by construction.
-        }
-        else
+        if (m_preStoreInFlight.size() < m_preStoreMaxInflight)
         {
             m_preStoreInFlight.insert(_blockHash);
             return PreStoreAdmission::Accepted;
         }
+        inflightAtCap = m_preStoreInFlight.size();
     }
 
-    // Cap reached. Decide whether to emit a WARNING — dedup per-hash with 60s TTL to
-    // neutralize log-I/O amplification under sustained DoS.
+    // Cap reached. x_preStoreInFlight and x_preStoreDropLogLastWarn are never held
+    // simultaneously, so the dedup map below cannot deadlock against the gate.
     bool shouldWarn = false;
-    std::size_t currentInflight = 0;
-    {
-        std::lock_guard lock(x_preStoreInFlight);
-        currentInflight = m_preStoreInFlight.size();
-    }
     auto const now = std::chrono::steady_clock::now();
     {
         std::lock_guard logLock(x_preStoreDropLogLastWarn);
@@ -848,8 +840,8 @@ bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStore
             << LOG_DESC(
                    "pre-store backlog cap reached, dropping (further WARNs for this "
                    "hash suppressed for 60s)")
-            << LOG_KV("hash", _blockHash.abridged()) << LOG_KV("inflight", currentInflight)
-            << LOG_KV("cap", m_preStoreMaxInflight);
+            << LOG_KV("hash", _blockHash.abridged()) << LOG_KV("inflight", inflightAtCap)
+            << LOG_KV("cap", m_preStoreMaxInflight.load());
     }
     return PreStoreAdmission::CapDropped;
 }
