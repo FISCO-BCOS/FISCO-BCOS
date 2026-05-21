@@ -638,7 +638,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 
     // enable free node to send transactions or not
     m_enableTxsFromFreeNode = _pt.get<bool>("txpool.enable_txs_from_free_node", false);
-    // FIB-154 pre-store backpressure controls
+    // pre-store backpressure controls
     m_preStoreBackpressureEnabled = _pt.get<bool>("txpool.pre_store_backpressure_enabled", true);
     auto preStoreCap = checkAndGetValue(_pt, "txpool.pre_store_max_inflight", "1024");
     if (preStoreCap <= 0)
@@ -646,7 +646,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.pre_store_max_inflight to positive !"));
     }
-    m_preStoreMaxInflight = static_cast<uint64_t>(preStoreCap);
+    m_preStoreMaxInflight = static_cast<size_t>(preStoreCap);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
                          << LOG_KV("verifierWorkers", m_verifierWorkerNum)
@@ -2019,7 +2019,7 @@ bool NodeConfig::preStoreBackpressureEnabled() const
     return m_preStoreBackpressureEnabled;
 }
 
-uint64_t NodeConfig::preStoreMaxInflight() const
+size_t NodeConfig::preStoreMaxInflight() const
 {
     return m_preStoreMaxInflight;
 }
