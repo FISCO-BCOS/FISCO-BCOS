@@ -476,6 +476,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
     if (callParameters->seq == 0)
     {
         warmUpEip2929InitialSet(*callParameters);
+        warmUpEip2930AccessList(*callParameters);
     }
 
     if (callParameters->create)

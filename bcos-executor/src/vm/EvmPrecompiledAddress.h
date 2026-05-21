@@ -48,6 +48,30 @@ inline std::string_view normalizeHexAddressBody(std::string_view addr)
 }
 }  // namespace
 
+/// @brief True when @p addr is 0x000…000a (EIP-4844 point evaluation precompile).
+inline bool isPointEvaluationPrecompileAddress(std::string_view addr)
+{
+    const auto body = normalizeHexAddressBody(addr);
+    if (body.empty())
+    {
+        return false;
+    }
+    for (size_t i = 0; i < 38; ++i)
+    {
+        if (body[i] != '0')
+        {
+            return false;
+        }
+    }
+    uint8_t hi = 0;
+    uint8_t lo = 0;
+    if (!tryParseHexNibble(body[38], hi) || !tryParseHexNibble(body[39], lo))
+    {
+        return false;
+    }
+    return hi == 0 && lo == 0x0a;
+}
+
 /// @brief True when @p addr is 0x0b..0x11 (EIP-2537 BLS12-381 precompiles).
 /// @details Expects 20-byte address as 40 hex nibbles (optional 0x prefix). Leading 19 bytes
 ///          must be zero; the last byte must be in [0x0b, 0x11]. Parsed without std::stoul.

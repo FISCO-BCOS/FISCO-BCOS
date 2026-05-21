@@ -56,6 +56,16 @@ bytes scalarZero32()
     return bytes(32, 0);
 }
 
+bytes pointEvaluationValidProofInput()
+{
+    return bcos::fromHex(
+        "014edfed8547661f6cb416eba53061a2f6dce872c0497e6dd485a876fe2567f1564c0a11a0f704f4fc3e8acfe0"
+        "f8245f0ad1347b378fbf96e206da11a5d363066d928e13fe443e957d82e3e71d48cb65d51028eb4483e719bf8e"
+        "fcdf12f7c321a421e229565952cfff4ef3517100a97da1d4fe57956fa50a442f92af03b1bf37adacc8ad4ed209"
+        "b31287ea5bb94d9d06a444d6bb5aadc3ceb615b50d6606bd54bfe529f59247987cd1ab848d19de599a9052f183"
+        "5fb0d0d44cf70183e19a68c9");
+}
+
 bytes p256verifyValidSignatureInput()
 {
     bytes input;
@@ -94,9 +104,62 @@ BOOST_AUTO_TEST_CASE(p256verify_accepts_optional_0x_prefix)
     BOOST_CHECK(!isP256verifyPrecompileAddress("0000000000000000000000000000000000000101"));
 }
 
+BOOST_AUTO_TEST_CASE(point_evaluation_address_byte_parse)
+{
+    using bcos::executor::isPointEvaluationPrecompileAddress;
+    BOOST_CHECK(isPointEvaluationPrecompileAddress("000000000000000000000000000000000000000a"));
+    BOOST_CHECK(isPointEvaluationPrecompileAddress("0x000000000000000000000000000000000000000a"));
+    BOOST_CHECK(!isPointEvaluationPrecompileAddress("000000000000000000000000000000000000000b"));
+    BOOST_CHECK(!isPointEvaluationPrecompileAddress("0000000000000000000000000000000000000009"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()  // CompatEvmPrecompiledAddress
 
 BOOST_FIXTURE_TEST_SUITE(CompatPrecompileGating, CompatHostContextFixture)
+
+BOOST_AUTO_TEST_CASE(FC_P_point_evaluation_success_without_cancun)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(
+        *this, CompatFeatureProfile::shanghaiEip2929(), CompatEvmAttach::PointEvaluation);
+    auto r = compatCallBuiltInPrecompiled(
+        host, std::string(addr::POINT_EVALUATION), pointEvaluationValidProofInput());
+    BOOST_CHECK_NE(r.status_code, EVMC_REVERT);
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(r.gas_left, 10'000'000);
+    BOOST_CHECK_EQUAL(r.output_size, 0);
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_point_evaluation_valid_proof_with_cancun)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    auto input = pointEvaluationValidProofInput();
+    BOOST_REQUIRE_EQUAL(input.size(), 192u);
+
+    auto host = makeCompatHostContext(
+        *this, CompatFeatureProfile::cancunOnly(), CompatEvmAttach::PointEvaluation);
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr::POINT_EVALUATION), input);
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.output_size, 64u);
+    BOOST_CHECK_EQUAL(r.output_data[30], 0x10);
+    BOOST_CHECK_EQUAL(r.output_data[31], 0x00);
+    BOOST_CHECK_EQUAL(r.output_data[32], 0x73);
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_point_evaluation_invalid_input_reverts_with_cancun)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(
+        *this, CompatFeatureProfile::cancunOnly(), CompatEvmAttach::PointEvaluation);
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr::POINT_EVALUATION), bytes(192, 0));
+    BOOST_CHECK_NE(r.status_code, EVMC_SUCCESS);
+}
 
 BOOST_AUTO_TEST_CASE(FC_P_bls_success_without_prague)
 {

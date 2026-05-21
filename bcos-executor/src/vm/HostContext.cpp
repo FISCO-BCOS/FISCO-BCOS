@@ -352,6 +352,17 @@ evmc_result HostContext::callBuiltInPrecompiled(
         // message call to an account with no code halts non-exceptionally (z=1, no execution).
         // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
         // and is not applicable for calls to future precompile addresses before fork activation.
+        if (isPointEvaluationPrecompileAddress(_request->receiveAddress) &&
+            !features().get(ledger::Features::Flag::feature_evm_cancun))
+        {
+            callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
+            preResult.status_code = EVMC_SUCCESS;
+            preResult.gas_left = _request->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
+
         if (isBLSPrecompileAddress(_request->receiveAddress) &&
             !features().get(ledger::Features::Flag::feature_evm_prague))
         {

@@ -33,6 +33,7 @@ enum class CompatEvmAttach
     Identity,
     Modexp,
     P256Verify,
+    PointEvaluation,
 };
 
 class CompatHostTestExecutive : public executor::TransactionExecutive
@@ -138,6 +139,18 @@ inline void compatAttachP256VerifyEvmPrecompile(std::shared_ptr<CompatHostTestEx
     exe->setEVMPrecompiled(std::move(m));
 }
 
+inline void compatAttachPointEvaluationEvmPrecompiled(
+    std::shared_ptr<CompatHostTestExecutive> const& exe)
+{
+    auto m =
+        std::make_shared<std::map<std::string, std::shared_ptr<executor::PrecompiledContract>>>();
+    m->insert({compatFillZeroAddr(10),
+        std::make_shared<executor::PrecompiledContract>(
+            executor::PrecompiledRegistrar::pricer("point_evaluation"),
+            executor::PrecompiledRegistrar::executor("point_evaluation"))});
+    exe->setEVMPrecompiled(std::move(m));
+}
+
 /// Default CallParameters matching `makeCompatHostContext` (for W1 warm tests; avoids protected
 /// `getCallParameters()`). `params` must be default-constructed as MESSAGE (CallParameters is
 /// non-copyable / non-movable).
@@ -187,6 +200,10 @@ inline executor::HostContext makeCompatHostContext(CompatHostContextFixture& fix
     else if (attach == CompatEvmAttach::P256Verify)
     {
         compatAttachP256VerifyEvmPrecompile(executive);
+    }
+    else if (attach == CompatEvmAttach::PointEvaluation)
+    {
+        compatAttachPointEvaluationEvmPrecompiled(executive);
     }
     auto callParams = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
     compatFillDefaultCallParametersForWarm(*callParams, createTransaction);
