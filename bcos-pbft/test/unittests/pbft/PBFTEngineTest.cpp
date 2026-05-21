@@ -174,6 +174,12 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     auto ledgerConfig = leaderFaker->ledger()->ledgerConfig();
     auto parent = (leaderFaker->ledger()->ledgerData())[ledgerConfig->blockNumber()];
     auto block = leaderFaker->ledger()->init(parent->blockHeader(), true, expectedIndex, 0, 0);
+    // FIB-142: mimic the honest sealer flow — bind body->txsRoot into the
+    // header before hashing, so case6 (success path) survives the receiver-side
+    // body txsRoot check. Cases 1-5 are expected to reject for unrelated reasons
+    // and are unaffected by the binding.
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*hashImpl));
+    block->blockHeader()->calculateHash(*hashImpl);
     auto blockData = std::make_shared<bytes>();
     block->encode(*blockData);
 

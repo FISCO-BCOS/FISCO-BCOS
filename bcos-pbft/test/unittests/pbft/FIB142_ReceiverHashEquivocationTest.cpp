@@ -118,6 +118,14 @@ BOOST_AUTO_TEST_CASE(receiver_accepts_matched_hash)
     auto ledgerConfig = leaderFaker->ledger()->ledgerConfig();
     auto parent = (leaderFaker->ledger()->ledgerData())[ledgerConfig->blockNumber()];
     auto block = leaderFaker->ledger()->init(parent->blockHeader(), true, expectedIndex, 0, 0);
+
+    // Mimic the honest sealer's FIB-142 sender-side flow: bind the body's
+    // Merkle root into header.txsRoot before hashing, otherwise the receiver's
+    // defence-in-depth check (body txsRoot vs header.txsRoot) will reject this
+    // proposal even though no equivocation occurred.
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*hashImpl));
+    block->blockHeader()->calculateHash(*hashImpl);
+
     auto blockData = std::make_shared<bytes>();
     block->encode(*blockData);
 
@@ -143,6 +151,76 @@ BOOST_AUTO_TEST_CASE(receiver_accepts_matched_hash)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     BOOST_CHECK(nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+
+    for (auto& [_, node] : fakerMap)
+    {
+        node->stop();
+    }
+}
+
+BOOST_AUTO_TEST_CASE(receiver_rejects_decoded_body_txsRoot_mismatch)
+{
+    // FIB-142 defence-in-depth: even when the carried proposal hash matches
+    // the decoded header.calculateHash() (so the basic equivocation check
+    // passes), the receiver must still recompute the body's Merkle root and
+    // reject any (header.txsRoot, body) mismatch. Otherwise a byzantine
+    // leader can sign hash(H_tampered) over a tampered header.txsRoot while
+    // shipping a body whose real root disagrees, and the mismatch is only
+    // caught much later at execution time.
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, nullptr);
+
+    constexpr size_t consensusNodeSize = 2;
+    constexpr size_t currentBlockNumber = 10;
+    auto fakerMap =
+        createFakers(cryptoSuite, consensusNodeSize, currentBlockNumber, consensusNodeSize);
+
+    auto expectedIndex = (fakerMap[0])->pbftConfig()->progressedIndex();
+    auto expectedLeader = (fakerMap[0])->pbftConfig()->leaderIndex(expectedIndex);
+    auto leaderFaker = fakerMap[expectedLeader];
+    auto nonLeaderFaker = fakerMap[(expectedLeader + 1) % consensusNodeSize];
+
+    auto ledgerConfig = leaderFaker->ledger()->ledgerConfig();
+    auto parent = (leaderFaker->ledger()->ledgerData())[ledgerConfig->blockNumber()];
+    auto block = leaderFaker->ledger()->init(parent->blockHeader(), true, expectedIndex, 0, 0);
+
+    // Tamper: overwrite header.txsRoot with a value that does NOT match the
+    // body's actual Merkle root, then recompute the header hash. The carried
+    // proposal hash will line up with header.calculateHash() (first check
+    // passes), but block.calculateTransactionRoot() will disagree with the
+    // tampered header.txsRoot (second check must reject).
+    auto fakeTxsRoot = hashImpl->hash(bytesConstRef("equivocation-fake-txsRoot"));
+    auto realTxsRoot = block->calculateTransactionRoot(*hashImpl);
+    BOOST_CHECK_NE(fakeTxsRoot, realTxsRoot);
+    block->blockHeader()->setTxsRoot(fakeTxsRoot);
+    block->blockHeader()->calculateHash(*hashImpl);
+    auto tamperedHash = block->blockHeader()->hash();
+
+    auto blockData = std::make_shared<bytes>();
+    block->encode(*blockData);
+
+    auto leaderMsgFixture =
+        std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
+    auto fakedProposal = leaderMsgFixture->fakePBFTProposal(
+        expectedIndex, tamperedHash, *blockData, std::vector<int64_t>(), std::vector<bytes>());
+    auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
+        tamperedHash, expectedIndex, bytes(), 0, leaderMsgFixture, PacketType::PrePreparePacket);
+    pbftMsg->setConsensusProposal(fakedProposal);
+
+    auto data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
+    nonLeaderFaker->txpool()->setVerifyResult(true);
+    nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
+        nullptr, nonLeaderFaker->keyPair()->publicKey(), ref(*data), nullptr);
+    nonLeaderFaker->pbftEngine()->executeWorker();
+
+    auto startT = utcTime();
+    while (utcTime() - startT < 500)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    BOOST_CHECK(!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
 
     for (auto& [_, node] : fakerMap)
     {
