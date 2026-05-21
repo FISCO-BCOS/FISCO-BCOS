@@ -30,9 +30,7 @@
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <atomic>
-#include <chrono>
 #include <mutex>
-#include <unordered_map>
 #include <unordered_set>
 namespace bcos::txpool
 {
@@ -194,14 +192,5 @@ private:
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
     bool m_checkBlockLimit = true;
-
-    // Dedup the cap-reached WARNING with a per-hash 60s TTL so a sustained DoS
-    // cannot amplify into a log-I/O storm. Bounded to 256 entries; expired
-    // entries are evicted at insert time when the map hits the bound.
-    static constexpr std::size_t c_preStoreLogDedupCap = 256;
-    static constexpr std::chrono::seconds c_preStoreLogDedupTtl{60};
-    std::unordered_map<bcos::crypto::HashType, std::chrono::steady_clock::time_point>
-        m_preStoreDropLogLastWarn;
-    mutable std::mutex x_preStoreDropLogLastWarn;
 };
 }  // namespace bcos::txpool

@@ -87,14 +87,8 @@ void TxPool::stop()
         m_txsPreStore->stop();
         // Abandoned lambdas in the stopped thread pool never run their cleanup; clear
         // stale entries so a restart doesn't see phantom in-flight blocks.
-        {
-            std::lock_guard lock(x_preStoreInFlight);
-            m_preStoreInFlight.clear();
-        }
-        {
-            std::lock_guard lock(x_preStoreDropLogLastWarn);
-            m_preStoreDropLogLastWarn.clear();
-        }
+        std::scoped_lock lock(x_preStoreInFlight);
+        m_preStoreInFlight.clear();
     }
     if (m_verifier)
     {
@@ -293,8 +287,8 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                 if (!verifyError && verifyRet && block)
                 {
                     auto const& blockHash = block->blockHeader()->hash();
-                    auto admission = txpool->tryAcquirePreStoreSlot(blockHash);
-                    if (admission == TxPool::PreStoreAdmission::Accepted)
+                    if (const auto admission = txpool->tryAcquirePreStoreSlot(blockHash);
+                        admission == TxPool::PreStoreAdmission::Accepted)
                     {
                         txpool->m_txsPreStore->enqueue([txpool, block, blockHash]() {
                             try
@@ -785,64 +779,26 @@ bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStore
     {
         return PreStoreAdmission::Disabled;
     }
-
-    // Snapshot the in-flight count inside the critical section so the WARN line below
-    // reflects the size that caused the drop, without needing a second lock.
-    std::size_t inflightAtCap = 0;
+    std::scoped_lock lock(x_preStoreInFlight);
+    if (m_preStoreInFlight.contains(_blockHash))
     {
-        std::lock_guard lock(x_preStoreInFlight);
-        if (m_preStoreInFlight.count(_blockHash))
-        {
-            TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: skip duplicate block")
-                              << LOG_KV("hash", _blockHash.abridged());
-            return PreStoreAdmission::DuplicateSkipped;
-        }
-        if (m_preStoreInFlight.size() < m_preStoreMaxInflight)
-        {
-            m_preStoreInFlight.insert(_blockHash);
-            return PreStoreAdmission::Accepted;
-        }
-        inflightAtCap = m_preStoreInFlight.size();
+        TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: skip duplicate block")
+                          << LOG_KV("hash", _blockHash.abridged());
+        return PreStoreAdmission::DuplicateSkipped;
     }
-
-    // Cap reached. x_preStoreInFlight and x_preStoreDropLogLastWarn are never held
-    // simultaneously, so the dedup map below cannot deadlock against the gate.
-    bool shouldWarn = false;
-    auto const now = std::chrono::steady_clock::now();
+    if (m_preStoreInFlight.size() < m_preStoreMaxInflight)
     {
-        std::lock_guard logLock(x_preStoreDropLogLastWarn);
-        auto it = m_preStoreDropLogLastWarn.find(_blockHash);
-        if (it == m_preStoreDropLogLastWarn.end() || (now - it->second) >= c_preStoreLogDedupTtl)
-        {
-            if (m_preStoreDropLogLastWarn.size() >= c_preStoreLogDedupCap)
-            {
-                // Bounded-memory sweep: evict every entry older than TTL.
-                for (auto sweep = m_preStoreDropLogLastWarn.begin();
-                    sweep != m_preStoreDropLogLastWarn.end();)
-                {
-                    if ((now - sweep->second) >= c_preStoreLogDedupTtl)
-                    {
-                        sweep = m_preStoreDropLogLastWarn.erase(sweep);
-                    }
-                    else
-                    {
-                        ++sweep;
-                    }
-                }
-            }
-            m_preStoreDropLogLastWarn[_blockHash] = now;
-            shouldWarn = true;
-        }
+        m_preStoreInFlight.insert(_blockHash);
+        return PreStoreAdmission::Accepted;
     }
-    if (shouldWarn)
-    {
-        TXPOOL_LOG(WARNING)
-            << LOG_DESC(
-                   "pre-store backlog cap reached, dropping (further WARNs for this "
-                   "hash suppressed for 60s)")
-            << LOG_KV("hash", _blockHash.abridged()) << LOG_KV("inflight", inflightAtCap)
-            << LOG_KV("cap", m_preStoreMaxInflight.load());
-    }
+    // Cap reached. With cap=1024 (NodeConfig default) and typical PBFT pipeline depth,
+    // this branch is not expected to fire in normal operation; under DoS the DEBUG
+    // level keeps log I/O out of the picture by default. Ops can enable DEBUG (or
+    // monitor the drop side-channel via metrics) to observe cap hits.
+    TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: backlog cap reached, dropping")
+                      << LOG_KV("hash", _blockHash.abridged())
+                      << LOG_KV("inflight", m_preStoreInFlight.size())
+                      << LOG_KV("cap", m_preStoreMaxInflight.load());
     return PreStoreAdmission::CapDropped;
 }
 
