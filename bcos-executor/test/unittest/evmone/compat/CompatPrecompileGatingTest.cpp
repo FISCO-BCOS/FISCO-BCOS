@@ -56,6 +56,77 @@ bytes scalarZero32()
     return bytes(32, 0);
 }
 
+// https://eips.ethereum.org/assets/eip-2537/msm_G1_bls.json — bls_g1msm_(g1+g1=2*g1)
+bytes blsG1MsmOfficialInputG1PlusG1Times2()
+{
+    return bcos::fromHex(
+        "0000000000000000000000000000000017f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f17"
+        "1bac586c55e83ff97a1aeffb3af00adb22c6bb"
+        "0000000000000000000000000000000008b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c"
+        "04b3edd03cc744a2888ae40caa232946c5e7e1"
+        "0000000000000000000000000000000000000000000000000000000000000002");
+}
+
+bytes blsG1MsmOfficialExpectedG1PlusG1Times2()
+{
+    return bcos::fromHex(
+        "000000000000000000000000000000000572cbea904d67468808c8eb50a9450c9721db309128012543902d0ac"
+        "358a62ae28f75bb8f1c7c42c39a8c5529bf0f4e"
+        "00000000000000000000000000000000166a9d8cabc673a322fda673779d8e3822ba3ecb8670e461f73bb902"
+        "1d5fd76a4c56d9d4cd16bd1bba86881979749d28");
+}
+
+// https://eips.ethereum.org/assets/eip-2537/map_fp_to_G1_bls.json — bls_g1map_
+bytes blsMapFpToG1OfficialInput()
+{
+    return bcos::fromHex(
+        "00000000000000000000000000000000156c8a6a2c184569d69a76be144b5cdc5141d2d2ca4fe341f011e25e39"
+        "6"
+        "9c55ad9e9b9ce2eb833c81a908e5fa4ac5f03");
+}
+
+bytes blsMapFpToG1OfficialExpected()
+{
+    return bcos::fromHex(
+        "00000000000000000000000000000000184bb665c37ff561a89ec2122dd343f20e0f4cbcaec84e3c3052ea81d1"
+        "83"
+        "4e192c426074b02ed3dca4e7676ce4ce48ba"
+        "0000000000000000000000000000000004407b8d35af4dacc809927071fc0405218f1401a6d15af775810e4e46"
+        "0"
+        "064bcc9468beeba82fdc751be70476c888bf3");
+}
+
+// https://eips.ethereum.org/assets/eip-2537/add_G2_bls.json — bls_g2add_g2+p2
+bytes blsG2AddOfficialInputG2PlusP2()
+{
+    return bcos::fromHex(
+        "00000000000000000000000000000000024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02"
+        "b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb800000000000000000000000000000000"
+        "13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57"
+        "e5ac7d055d042b7e000000000000000000000000000000000ce5d527727d6e118cc9cdc6da2e351a"
+        "adfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b828010000000000000000"
+        "00000000000000000606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab"
+        "3f370d275cec1da1aaa9075ff05f79be00000000000000000000000000000000103121a2ceaae586"
+        "d240843a398967325f8eb5a93e8fea99b62b9f88d8556c80dd726a4b30e84a36eeabaf3592937f27"
+        "00000000000000000000000000000000086b990f3da2aeac0a36143b7d7c824428215140db1bb859"
+        "338764cb58458f081d92664f9053b50b3fbd2e4723121b6800000000000000000000000000000000"
+        "0f9e7ba9a86a8f7624aa2b42dcc8772e1af4ae115685e60abc2c9b90242167acef3d0be4050bf935"
+        "eed7c3b6fc7ba77e000000000000000000000000000000000d22c3652d0dc6f0fc9316e14268477c"
+        "2049ef772e852108d269d9c38dba1d4802e8dae479818184c08f9a569d878451");
+}
+
+bytes blsG2AddOfficialExpectedG2PlusP2()
+{
+    return bcos::fromHex(
+        "000000000000000000000000000000000b54a8a7b08bd6827ed9a797de216b8c9057b3a9ca93e2f8"
+        "8e7f04f19accc42da90d883632b9ca4dc38d013f71ede4db00000000000000000000000000000000"
+        "077eba4eecf0bd764dce8ed5f45040dd8f3b3427cb35230509482c14651713282946306247866dfe"
+        "39a8e33016fcbe520000000000000000000000000000000014e60a76a29ef85cbd69f251b9f29147"
+        "b67cfe3ed2823d3f9776b3a0efd2731941d47436dc6d2b58d9e65f8438bad0730000000000000000"
+        "00000000000000001586c3c910d95754fef7a732df78e279c3d37431c6a2b77e67a00c7c130a8fcd"
+        "4d19f159cbeb997a178108fffffcbd20");
+}
+
 bytes pointEvaluationValidProofInput()
 {
     return bcos::fromHex(
@@ -75,6 +146,31 @@ bytes p256verifyValidSignatureInput()
     input += bcos::fromHex("2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838");
     input += bcos::fromHex("c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e");
     return input;
+}
+
+void assertBlsPrecompileVectorOk(
+    CompatHostContextFixture& fixture, std::string_view addr, bytes input, bytes const& expected)
+{
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(
+        fixture, CompatFeatureProfile::pragueEnabled(), CompatEvmAttach::BlsAll);
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr), std::move(input));
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.output_size, expected.size());
+    BOOST_CHECK(std::memcmp(r.output_data, expected.data(), expected.size()) == 0);
+}
+
+void assertBlsPrecompileRejected(
+    CompatHostContextFixture& fixture, std::string_view addr, bytes input)
+{
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(
+        fixture, CompatFeatureProfile::pragueEnabled(), CompatEvmAttach::BlsAll);
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr), std::move(input));
+    BOOST_CHECK(r.status_code == EVMC_INTERNAL_ERROR || r.status_code == EVMC_REVERT);
+    BOOST_CHECK_EQUAL(r.output_size, 0);
 }
 }  // namespace
 
@@ -254,6 +350,60 @@ BOOST_AUTO_TEST_CASE(FC_P_bls_invalid_point_rejected_with_prague)
     BOOST_CHECK_EQUAL(r.output_size, 0);
 }
 
+BOOST_AUTO_TEST_CASE(FC_P_bls_g1msm_ok_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    auto in = blsG1MsmOfficialInputG1PlusG1Times2();
+    auto const expected = blsG1MsmOfficialExpectedG1PlusG1Times2();
+    BOOST_REQUIRE_EQUAL(in.size(), 160u);
+    BOOST_REQUIRE_EQUAL(expected.size(), 128u);
+    assertBlsPrecompileVectorOk(*this, addr::BLS_G1MSM, std::move(in), expected);
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_bls_g1msm_invalid_length_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    assertBlsPrecompileRejected(*this, addr::BLS_G1MSM, bytes(128, 0));
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_bls_map_fp_to_g1_ok_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    auto in = blsMapFpToG1OfficialInput();
+    auto const expected = blsMapFpToG1OfficialExpected();
+    BOOST_REQUIRE_EQUAL(in.size(), 64u);
+    BOOST_REQUIRE_EQUAL(expected.size(), 128u);
+    assertBlsPrecompileVectorOk(*this, addr::BLS_MAP_FP_TO_G1, std::move(in), expected);
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_bls_map_fp_to_g1_invalid_field_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    assertBlsPrecompileRejected(*this, addr::BLS_MAP_FP_TO_G1, bytes(64, 0xff));
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_bls_g2add_ok_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    auto in = blsG2AddOfficialInputG2PlusP2();
+    auto const expected = blsG2AddOfficialExpectedG2PlusP2();
+    BOOST_REQUIRE_EQUAL(in.size(), 512u);
+    BOOST_REQUIRE_EQUAL(expected.size(), 256u);
+    assertBlsPrecompileVectorOk(*this, addr::BLS_G2ADD, std::move(in), expected);
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_bls_g2add_invalid_point_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    assertBlsPrecompileRejected(*this, addr::BLS_G2ADD, bytes(512, 0xff));
+}
+
 BOOST_AUTO_TEST_CASE(FC_P_bls_g1msm_semantics_with_prague)
 {
     namespace addr = bcos::test::compat::compat_addr;
@@ -356,16 +506,15 @@ BOOST_AUTO_TEST_CASE(FC_P_bls_pairing_and_map_semantics_with_prague)
     BOOST_CHECK_EQUAL(mapG2.status_code, EVMC_SUCCESS);
     BOOST_REQUIRE_EQUAL(mapG2.output_size, 256u);
 
-    // pairing_check with one (inf, inf) pair should be true (last byte = 1).
+    // pairing_check bls_pairing_e(0,0) from pairing_check_bls.json (384 zero bytes → true).
+    auto const pairE00Expected =
+        bcos::fromHex("0000000000000000000000000000000000000000000000000000000000000001");
     auto pairTrue =
         compatCallBuiltInPrecompiled(host, std::string(addr::BLS_PAIRING_CHECK), bytes(384, 0));
     BOOST_CHECK_EQUAL(pairTrue.status_code, EVMC_SUCCESS);
-    BOOST_REQUIRE_EQUAL(pairTrue.output_size, 32u);
-    for (size_t i = 0; i < 31; ++i)
-    {
-        BOOST_CHECK_EQUAL(pairTrue.output_data[i], 0);
-    }
-    BOOST_CHECK_EQUAL(pairTrue.output_data[31], 1);
+    BOOST_REQUIRE_EQUAL(pairTrue.output_size, pairE00Expected.size());
+    BOOST_CHECK(
+        std::memcmp(pairTrue.output_data, pairE00Expected.data(), pairE00Expected.size()) == 0);
 
     // pairing_check with one non-trivial mapped pair should be false (last byte = 0).
     bytes onePair;
