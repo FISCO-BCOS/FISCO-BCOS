@@ -30,7 +30,9 @@
 #include <bcos-tool/TreeTopology.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <atomic>
+#include <chrono>
 #include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 namespace bcos::txpool
 {
@@ -133,25 +135,12 @@ public:
     tool::TreeTopology::Ptr treeRouter() const;
 
     void setCheckBlockLimit(bool _checkBlockLimit);
+    // pre-store backpressure controls (NodeConfig-driven)
+    void setPreStoreBackpressureEnabled(bool _enabled);
+    void setPreStoreMaxInflight(std::size_t _max);
 
     void registerTxsNotifier(
         std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier) override;
-
-    // FIB-154 test-only accessors (bcos-txpool test target uses UNITY_BUILD ON;
-    // helpers are FIB-suffixed to avoid symbol collisions across unity translation units).
-    std::size_t testOnlyPreStoreCount() const
-    {
-        std::lock_guard lock(x_preStoreInFlight);
-        return m_preStoreInFlight.size();
-    }
-    // Exercises the dedup/cap gate without posting work to the thread pool.
-    void testOnlyEnqueuePreStore(bcos::crypto::HashType const& h);
-    // Exercises the full gate + synchronous success path (cleanup happens in-line).
-    void testOnlyEnqueuePreStoreSyncSuccess(bcos::crypto::HashType const& h);
-    // Exercises the full gate + synchronous exception path (cleanup happens in catch).
-    void testOnlyEnqueuePreStoreSyncThrow(bcos::crypto::HashType const& h);
-    // Directly removes a hash from the in-flight set (for UT teardown).
-    void testOnlyCleanupPreStore(bcos::crypto::HashType const& h);
 
 protected:
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,
@@ -165,6 +154,19 @@ protected:
     void initSendResponseHandler();
 
     virtual void storeVerifiedBlock(bcos::protocol::Block::ConstPtr _block);
+
+    // FIB-154 pre-store admission gate. Protected so an Inspectable subclass in
+    // unit tests can drive the same code path the production lambda uses (no
+    // parallel implementation in tests).
+    enum class PreStoreAdmission
+    {
+        Accepted,          // slot acquired; caller must releasePreStoreSlot when done
+        DuplicateSkipped,  // hash already in-flight
+        Disabled,          // backpressure turned off via config
+        CapDropped         // cap reached
+    };
+    PreStoreAdmission tryAcquirePreStoreSlot(bcos::crypto::HashType const& _blockHash);
+    void releasePreStoreSlot(bcos::crypto::HashType const& _blockHash);
 
 private:
     TxPoolConfig::Ptr m_config;
@@ -182,10 +184,19 @@ private:
     std::atomic_bool m_running = {false};
     bool m_checkBlockLimit = true;
 
-    // FIB-154: pre-store backlog control.
-    // ThreadPool (boost::asio::post) has no queue cap; bookkeep at TxPool layer.
-    static constexpr std::size_t c_maxPreStoreInFlight = 32;
+    // Pre-store backlog control. Runtime-configurable via NodeConfig.
+    bool m_preStoreBackpressureEnabled = true;
+    std::size_t m_preStoreMaxInflight = 1024;
     std::unordered_set<bcos::crypto::HashType> m_preStoreInFlight;
     mutable std::mutex x_preStoreInFlight;
+
+    // Dedup the cap-reached WARNING with a per-hash 60s TTL so a sustained DoS
+    // cannot amplify into a log-I/O storm. Bounded to 256 entries; expired
+    // entries are evicted at insert time when the map hits the bound.
+    static constexpr std::size_t c_preStoreLogDedupCap = 256;
+    static constexpr std::chrono::seconds c_preStoreLogDedupTtl{60};
+    std::unordered_map<bcos::crypto::HashType, std::chrono::steady_clock::time_point>
+        m_preStoreDropLogLastWarn;
+    mutable std::mutex x_preStoreDropLogLastWarn;
 };
 }  // namespace bcos::txpool
