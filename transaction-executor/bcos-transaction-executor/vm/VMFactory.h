@@ -49,9 +49,8 @@ public:
             // FIB-95: wrap analyze() in try/catch to prevent unhandled exceptions
             try
             {
-                return VMInstance{
-                    std::make_shared<evmone::baseline::CodeAnalysis>(evmone::baseline::analyze(
-                        evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
+                return VMInstance{std::make_shared<evmoneCodeAnalysis>(evmone::baseline::analyze(
+                    evmone::bytes_view((const uint8_t*)code.data(), code.size())))};
             }
             catch (const std::exception& e)
             {

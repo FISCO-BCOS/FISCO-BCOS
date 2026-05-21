@@ -1,20 +1,25 @@
 #include "VMInstance.h"
-#include <evmc/evmc.hpp>
+#include <evmone/evmone.h>
+#include <evmone/vm.hpp>
 
 bcos::executor_v1::VMInstance::VMInstance(
-    std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
-  : m_instance(std::move(instance))
-{}
+    std::shared_ptr<evmoneCodeAnalysis const> analysis) noexcept
+  : m_analysis(std::move(analysis))
+{
+    assert(m_analysis != nullptr);
+}
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
     const evmc_message* msg, const uint8_t* code, size_t codeSize)
 {
-    thread_local static evmc::VM s_vm{evmc_create_evmone()};
-    (void)code;  // code/codeSize 未使用：execute 使用预分析的 m_instance
+    (void)code;  // execute uses pre-analyzed m_analysis
     (void)codeSize;
+    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
+    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
+    evmc::VM evm{evmc_create_evmone()};
     return EVMCResult(evmone::baseline::execute(
-        *static_cast<evmone::VM*>(s_vm.get_raw_pointer()), *host, context, rev, *msg, *m_instance));
+        *static_cast<evmone::VM*>(evm.get_raw_pointer()), *host, context, rev, *msg, *m_analysis));
 }
 
 void bcos::executor_v1::VMInstance::enableDebugOutput() {}
