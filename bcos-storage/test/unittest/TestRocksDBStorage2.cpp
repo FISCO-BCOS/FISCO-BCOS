@@ -21,6 +21,9 @@ using namespace bcos::storage2::rocksdb;
 using namespace bcos::executor_v1;
 using namespace std::string_view_literals;
 
+using TestCheckpointStorage =
+    CheckpointRocksDBStorage<StateKey, StateValue, StateKeyResolver, StateValueResolver>;
+
 struct TestRocksDBStorage2Fixture
 {
     std::string path = "./rocksdbtestdb" + std::to_string(std::random_device{}());
@@ -236,43 +239,72 @@ BOOST_AUTO_TEST_CASE(merge)
 BOOST_AUTO_TEST_CASE(openLatestOrCheckpointByDirectory)
 {
     auto root = path + "_checkpoint_root";
-    CheckpointRocksDBStorage checkpointRocksDBStorage(root);
+    TestCheckpointStorage checkpointRocksDBStorage(root, StateKeyResolver{}, StateValueResolver{});
     auto latestPath = checkpointRocksDBStorage.latestPath();
-    auto checkpointName = std::string("blockHash123");
-    auto checkpointPath = checkpointRocksDBStorage.checkpointPath(checkpointName);
-
-    populate(latestPath, "sys"sv, "key"sv, "latest-value"sv);
-    populate(checkpointPath, "sys"sv, "key"sv, "checkpoint-value"sv);
+    auto firstCheckpointName = h256("1111111111111111111111111111111111111111111111111111111111111111");
+    auto secondCheckpointName = h256("2222222222222222222222222222222222222222222222222222222222222222");
+    auto firstCheckpointPath = checkpointRocksDBStorage.checkpointPath(firstCheckpointName);
+    auto secondCheckpointPath = checkpointRocksDBStorage.checkpointPath(secondCheckpointName);
 
     task::syncWait([&]() -> task::Task<void> {
-        auto latestDB = checkpointRocksDBStorage.open(latestCheckpointStorage);
-        RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver> latestStorage(
-            *latestDB, StateKeyResolver{}, StateValueResolver{});
-        auto latestValue =
-            co_await storage2::readOne(latestStorage, StateKey{"sys"sv, "key"sv});
+        auto latestStorage = checkpointRocksDBStorage.open();
+        co_await storage2::writeOne(
+            latestStorage, StateKey{"sys"sv, "key"sv}, storage::Entry("latest-value-1"));
+        auto latestValue = co_await storage2::readOne(latestStorage, StateKey{"sys"sv, "key"sv});
         BOOST_REQUIRE(latestValue);
-        BOOST_CHECK_EQUAL(latestValue->get(), "latest-value");
+        BOOST_CHECK_EQUAL(latestValue->get(), "latest-value-1");
         BOOST_CHECK_EQUAL(checkpointRocksDBStorage.latestPath(), latestPath);
+        BOOST_CHECK(!checkpointRocksDBStorage.latestCheckpointName());
+        BOOST_CHECK(!checkpointRocksDBStorage.oldestCheckpointName());
 
-        {
-            auto checkpointDB = checkpointRocksDBStorage.open(checkpointName);
-            RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver>
-                checkpointStorage(*checkpointDB, StateKeyResolver{}, StateValueResolver{});
-            auto checkpointValue = co_await storage2::readOne(
-                checkpointStorage, StateKey{"sys"sv, "key"sv});
-            BOOST_REQUIRE(checkpointValue);
-            BOOST_CHECK_EQUAL(checkpointValue->get(), "checkpoint-value");
-            BOOST_CHECK_EQUAL(checkpointRocksDBStorage.checkpointPath(checkpointName), checkpointPath);
-        }
+        checkpointRocksDBStorage.createCheckpoint(latestStorage, firstCheckpointName);
+        auto firstCheckpointTime = std::filesystem::file_time_type::clock::now();
+        std::filesystem::last_write_time(firstCheckpointPath, firstCheckpointTime);
+        BOOST_REQUIRE(checkpointRocksDBStorage.latestCheckpointName());
+        BOOST_REQUIRE(checkpointRocksDBStorage.oldestCheckpointName());
+        BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.latestCheckpointName(), firstCheckpointName);
+        BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.oldestCheckpointName(), firstCheckpointName);
 
-        auto checkpointDBByBlock = checkpointRocksDBStorage.open("blockHash123"sv);
-        RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver>
-            checkpointStorageByBlock(*checkpointDBByBlock, StateKeyResolver{}, StateValueResolver{});
-        auto checkpointValueByBlock = co_await storage2::readOne(
-            checkpointStorageByBlock, StateKey{"sys"sv, "key"sv});
-        BOOST_REQUIRE(checkpointValueByBlock);
-        BOOST_CHECK_EQUAL(checkpointValueByBlock->get(), "checkpoint-value");
-        BOOST_CHECK_EQUAL(checkpointRocksDBStorage.checkpointPath("blockHash123"sv), checkpointPath);
+        auto firstCheckpointStorage = checkpointRocksDBStorage.open(firstCheckpointName);
+        auto firstCheckpointValue = co_await storage2::readOne(
+            firstCheckpointStorage, StateKey{"sys"sv, "key"sv});
+        BOOST_REQUIRE(firstCheckpointValue);
+        BOOST_CHECK_EQUAL(firstCheckpointValue->get(), "latest-value-1");
+        BOOST_CHECK_EQUAL(
+            checkpointRocksDBStorage.checkpointPath(firstCheckpointName), firstCheckpointPath);
+
+        co_await storage2::writeOne(
+            latestStorage, StateKey{"sys"sv, "key"sv}, storage::Entry("latest-value-2"));
+        checkpointRocksDBStorage.createCheckpoint(latestStorage, secondCheckpointName);
+        auto secondCheckpointTime = firstCheckpointTime + std::chrono::seconds(1);
+        std::filesystem::last_write_time(secondCheckpointPath, secondCheckpointTime);
+        BOOST_REQUIRE(checkpointRocksDBStorage.latestCheckpointName());
+        BOOST_REQUIRE(checkpointRocksDBStorage.oldestCheckpointName());
+        BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.latestCheckpointName(), secondCheckpointName);
+        BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.oldestCheckpointName(), firstCheckpointName);
+
+        auto secondCheckpointStorage = checkpointRocksDBStorage.open(secondCheckpointName);
+        auto secondCheckpointValue = co_await storage2::readOne(
+            secondCheckpointStorage, StateKey{"sys"sv, "key"sv});
+        BOOST_REQUIRE(secondCheckpointValue);
+        BOOST_CHECK_EQUAL(secondCheckpointValue->get(), "latest-value-2");
+        BOOST_CHECK_EQUAL(
+            checkpointRocksDBStorage.checkpointPath(secondCheckpointName), secondCheckpointPath);
+
+        auto latestValueAfterSecondCheckpoint =
+            co_await storage2::readOne(latestStorage, StateKey{"sys"sv, "key"sv});
+        BOOST_REQUIRE(latestValueAfterSecondCheckpoint);
+        BOOST_CHECK_EQUAL(latestValueAfterSecondCheckpoint->get(), "latest-value-2");
+
+        checkpointRocksDBStorage.deleteCheckpoint(firstCheckpointName);
+        BOOST_REQUIRE(checkpointRocksDBStorage.latestCheckpointName());
+        BOOST_REQUIRE(checkpointRocksDBStorage.oldestCheckpointName());
+        BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.latestCheckpointName(), secondCheckpointName);
+        BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.oldestCheckpointName(), secondCheckpointName);
+
+        checkpointRocksDBStorage.deleteCheckpoint(secondCheckpointName);
+        BOOST_CHECK(!checkpointRocksDBStorage.latestCheckpointName());
+        BOOST_CHECK(!checkpointRocksDBStorage.oldestCheckpointName());
 
         co_return;
     }());
