@@ -281,6 +281,8 @@ public:
     bool isValidPort(int port);
 
     bool enableTxsFromFreeNode() const;
+    bool preStoreBackpressureEnabled() const;
+    uint64_t preStoreMaxInflight() const;
     int executorVersion() const;
 
 protected:
@@ -337,6 +339,9 @@ private:
     bool m_checkBlockLimit = true;
     // permit txs from free node or not
     bool m_enableTxsFromFreeNode = false;
+    // FIB-154 pre-store backpressure tunables
+    bool m_preStoreBackpressureEnabled = true;
+    uint64_t m_preStoreMaxInflight = 1024;
     // TODO: the block sync module need some configurations?
 
     // chain configuration

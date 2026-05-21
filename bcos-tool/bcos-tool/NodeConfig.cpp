@@ -638,12 +638,23 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 
     // enable free node to send transactions or not
     m_enableTxsFromFreeNode = _pt.get<bool>("txpool.enable_txs_from_free_node", false);
+    // FIB-154 pre-store backpressure controls
+    m_preStoreBackpressureEnabled = _pt.get<bool>("txpool.pre_store_backpressure_enabled", true);
+    auto preStoreCap = checkAndGetValue(_pt, "txpool.pre_store_max_inflight", "1024");
+    if (preStoreCap <= 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Please set txpool.pre_store_max_inflight to positive !"));
+    }
+    m_preStoreMaxInflight = static_cast<uint64_t>(preStoreCap);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
                          << LOG_KV("verifierWorkers", m_verifierWorkerNum)
                          << LOG_KV("checkBlockLimit", m_checkBlockLimit)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime)
-                         << LOG_KV("enableTxsFromFreeNode", m_enableTxsFromFreeNode);
+                         << LOG_KV("enableTxsFromFreeNode", m_enableTxsFromFreeNode)
+                         << LOG_KV("preStoreBackpressureEnabled", m_preStoreBackpressureEnabled)
+                         << LOG_KV("preStoreMaxInflight", m_preStoreMaxInflight);
 }
 
 void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt, bool _enforceGroupId)
@@ -2001,6 +2012,16 @@ NodeConfig::TarsRPCConfig const& NodeConfig::tarsRPCConfig() const
 bool NodeConfig::enableTxsFromFreeNode() const
 {
     return m_enableTxsFromFreeNode;
+}
+
+bool NodeConfig::preStoreBackpressureEnabled() const
+{
+    return m_preStoreBackpressureEnabled;
+}
+
+uint64_t NodeConfig::preStoreMaxInflight() const
+{
+    return m_preStoreMaxInflight;
 }
 
 void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)
