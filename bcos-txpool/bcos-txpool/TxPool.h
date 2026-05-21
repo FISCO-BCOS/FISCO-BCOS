@@ -168,6 +168,14 @@ protected:
     PreStoreAdmission tryAcquirePreStoreSlot(bcos::crypto::HashType const& _blockHash);
     void releasePreStoreSlot(bcos::crypto::HashType const& _blockHash);
 
+    // Pre-store backlog control. Runtime-configurable via NodeConfig. Kept
+    // protected so the Inspectable subclass in the FIB-154 UT can re-export
+    // these for direct state inspection via `using` declarations.
+    bool m_preStoreBackpressureEnabled = true;
+    std::size_t m_preStoreMaxInflight = 1024;
+    std::unordered_set<bcos::crypto::HashType> m_preStoreInFlight;
+    mutable std::mutex x_preStoreInFlight;
+
 private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;
@@ -183,12 +191,6 @@ private:
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
     bool m_checkBlockLimit = true;
-
-    // Pre-store backlog control. Runtime-configurable via NodeConfig.
-    bool m_preStoreBackpressureEnabled = true;
-    std::size_t m_preStoreMaxInflight = 1024;
-    std::unordered_set<bcos::crypto::HashType> m_preStoreInFlight;
-    mutable std::mutex x_preStoreInFlight;
 
     // Dedup the cap-reached WARNING with a per-hash 60s TTL so a sustained DoS
     // cannot amplify into a log-I/O storm. Bounded to 256 entries; expired
