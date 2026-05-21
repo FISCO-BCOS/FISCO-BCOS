@@ -124,31 +124,33 @@ void Sealer::asyncNoteLatestBlockTimestamp(int64_t _timestamp)
 
 void Sealer::executeWorker()
 {
-    // try to fetch transactions
-    if (m_sealingManager->fetchTransactions() == SealingManager::FetchResult::NO_TRANSACTION)
-    {
-        // 轮到本节点出块，且超过一定时间取不到交易，广播交易同步请求
-        // When it is this node's turn to mint a block, and no transactions can be obtained after a
-        // certain period of time, broadcast a transaction synchronization request.
-        if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
-            duration > std::chrono::seconds(m_fetchTimeout))
-        {
-            increaseLastFetchTimepoint();
-            m_sealerConfig->txpool()->tryToSyncTxsFromPeers();
-        }
-    }
-    else
-    {
-        increaseLastFetchTimepoint();
-    }
-
-    // try to generateProposal
     // FIB-152: contain exceptions inside the worker iteration. Any throw from
-    // generateProposal / hookWhenSealBlock / submitProposal would otherwise
-    // escape the Worker loop and halt block production until restart.
+    // fetchTransactions / tryToSyncTxsFromPeers / generateProposal /
+    // hookWhenSealBlock / submitProposal would otherwise escape the Worker
+    // loop and halt block production until restart. A short backoff in the
+    // catch arm prevents a persistently-failing path from busy-looping.
     try
     {
+        // try to fetch transactions
+        if (m_sealingManager->fetchTransactions() == SealingManager::FetchResult::NO_TRANSACTION)
+        {
+            // 轮到本节点出块，且超过一定时间取不到交易，广播交易同步请求
+            // When it is this node's turn to mint a block, and no transactions can be obtained
+            // after a certain period of time, broadcast a transaction synchronization request.
+            if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
+                duration > std::chrono::seconds(m_fetchTimeout))
+            {
+                increaseLastFetchTimepoint();
+                m_sealerConfig->txpool()->tryToSyncTxsFromPeers();
+            }
+        }
+        else
+        {
+            increaseLastFetchTimepoint();
+        }
+
+        // try to generateProposal
         if (m_sealingManager->shouldGenerateProposal())
         {
             auto ret = m_sealingManager->generateProposal(
@@ -176,6 +178,8 @@ void Sealer::executeWorker()
             SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
                             << LOG_KV("message", boost::diagnostic_information(nested));
         }
+        boost::unique_lock<boost::mutex> lock(x_signalled);
+        m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
     }
 }
 

@@ -100,6 +100,31 @@ struct ReadyForProposalSealingManager : public bcos::sealer::SealingManager
     }
 };
 
+// SealingManager whose fetchTransactions() throws. Used to exercise the
+// FIB-152 catch arm for the txpool-fetch path (the audit explicitly named
+// transaction fetching as one of the unprotected fallible operations).
+struct ThrowingFetchSealingManager : public bcos::sealer::SealingManager
+{
+    std::atomic<int> fetchInvocations{0};
+    std::atomic<int> resetSealingCalls{0};
+
+    explicit ThrowingFetchSealingManager(bcos::sealer::SealerConfig::Ptr cfg)
+      : bcos::sealer::SealingManager(std::move(cfg))
+    {}
+
+    FetchResult fetchTransactions() override
+    {
+        ++fetchInvocations;
+        throw std::runtime_error("FIB-152 simulated fetchTransactions failure");
+    }
+
+    void resetSealing() override
+    {
+        ++resetSealingCalls;
+        bcos::sealer::SealingManager::resetSealing();
+    }
+};
+
 // Sealer subclass whose hookWhenSealBlock throws. The hook runs inside
 // SealingManager::generateProposal, so the throw escapes back into
 // Sealer::executeWorker and exercises the FIB-152 try/catch boundary.
@@ -156,6 +181,38 @@ BOOST_AUTO_TEST_CASE(executeWorker_swallows_hook_exception_and_resets_sealing)
 
     // Second iteration must still execute (worker loop did not die).
     BOOST_CHECK_NO_THROW(sealer->executeWorker());
+}
+
+BOOST_AUTO_TEST_CASE(executeWorker_swallows_fetch_exception_and_resets_sealing)
+{
+    // Audit explicitly listed transaction fetching as an unprotected fallible
+    // operation in executeWorker(). With the FIB-152 try block extended to
+    // wrap the fetch path, a throw from fetchTransactions() must be contained
+    // and the worker must remain ready for the next iteration.
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+    auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
+    auto cryptoSuite =
+        std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, nullptr, nullptr);
+    auto txpool = std::make_shared<StubTxPoolForFIB152>();
+    auto nodeTime = std::make_shared<bcos::tool::NodeTimeMaintenance>();
+    auto cfg = std::make_shared<bcos::sealer::SealerConfig>(blockFactory, txpool, nodeTime);
+
+    auto mgr = std::make_shared<ThrowingFetchSealingManager>(cfg);
+    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg);
+    sealer->setSealingManager(mgr);
+    sealer->setFetchTimeout(60);
+
+    BOOST_CHECK_NO_THROW(sealer->executeWorker());
+    BOOST_CHECK_GE(mgr->fetchInvocations.load(), 1);
+    BOOST_CHECK_GE(mgr->resetSealingCalls.load(), 1);
+
+    // Worker must survive a second iteration even though fetch keeps throwing.
+    BOOST_CHECK_NO_THROW(sealer->executeWorker());
+    BOOST_CHECK_GE(mgr->fetchInvocations.load(), 2);
 }
 
 BOOST_AUTO_TEST_CASE(executeWorker_normal_path_does_not_throw)
