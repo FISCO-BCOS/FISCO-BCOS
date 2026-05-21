@@ -6,6 +6,17 @@ module bcostars {
         1 optional vector<vector<byte>> storageKeys;  // each key is 32 bytes (h256)
     };
 
+    /// EIP-7702 authorization tuple (derived from Web3 RLP at submission).
+    struct Web3AuthorizationListEntry
+    {
+        0 optional string chainId;        // decimal string, 0 = any chain
+        1 optional string address;        // 40-char hex, no 0x prefix
+        2 optional string nonce;          // decimal string
+        3 optional byte   yParity;        // 0 or 1
+        4 optional vector<byte> r;        // 32 bytes
+        5 optional vector<byte> s;        // 32 bytes
+    };
+
     struct TransactionData {
         1  optional int          version;
         2  optional string       chainID;
@@ -22,6 +33,7 @@ module bcostars {
         13 optional string       maxPriorityFeePerGas;
         14 optional vector<byte> extension;
         15 optional vector<Web3AccessListEntry> accessList;
+        16 optional vector<Web3AuthorizationListEntry> authorizationList;
     };
 
     struct Transaction

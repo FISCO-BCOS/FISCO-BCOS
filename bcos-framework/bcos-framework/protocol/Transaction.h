@@ -19,6 +19,7 @@
 #pragma once
 #include "TransactionSubmitResult.h"
 #include "Web3AccessList.h"
+#include "Web3AuthorizationList.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
@@ -92,6 +93,8 @@ public:
     virtual uint8_t web3TypedTxKind() const { return 0; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
     virtual Web3AccessList const& web3AccessList() const;
+    /// Parsed EIP-7702 authorization list (may be empty for non-type-4 Web3 txs).
+    virtual Web3AuthorizationList const& web3AuthorizationList() const;
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl);
 
@@ -196,6 +199,7 @@ private:
     mutable bool m_storeToBackend = {false};
 
     static Web3AccessList const& emptyWeb3AccessList();
+    static Web3AuthorizationList const& emptyWeb3AuthorizationList();
 };
 
 using Transactions = std::vector<Transaction::Ptr>;
@@ -204,7 +208,7 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 using AnyTransaction =
-    AnyHolder<bcos::protocol::Transaction, 184>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
+    AnyHolder<bcos::protocol::Transaction, 224>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
                                                   // TransactinImpl across platforms)
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);

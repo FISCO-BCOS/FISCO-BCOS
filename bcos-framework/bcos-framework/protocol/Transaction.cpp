@@ -17,9 +17,20 @@ Web3AccessList const& Transaction::emptyWeb3AccessList()
     return empty;
 }
 
+Web3AuthorizationList const& Transaction::emptyWeb3AuthorizationList()
+{
+    static Web3AuthorizationList const empty;
+    return empty;
+}
+
 Web3AccessList const& Transaction::web3AccessList() const
 {
     return emptyWeb3AccessList();
+}
+
+Web3AuthorizationList const& Transaction::web3AuthorizationList() const
+{
+    return emptyWeb3AuthorizationList();
 }
 
 Transaction::Transaction(const Transaction& other)

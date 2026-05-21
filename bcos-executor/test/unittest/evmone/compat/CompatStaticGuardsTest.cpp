@@ -7,6 +7,7 @@
 
 #include <boost/test/unit_test.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -106,6 +107,17 @@ bool lineHasAuthorizationListOutsideSlashSlashComment(std::string_view line)
     return work.find(needle) != std::string_view::npos;
 }
 
+std::filesystem::path repoRootFromCompatTestFile()
+{
+    // __FILE__ = .../bcos-executor/test/unittest/evmone/compat/CompatStaticGuardsTest.cpp
+    auto cur = std::filesystem::path(__FILE__);
+    for (int i = 0; i < 6; ++i)
+    {
+        cur = cur.parent_path();
+    }
+    return cur;
+}
+
 bool sourceFileHasAuthorizationListOutsideComments(const std::filesystem::path& path)
 {
     std::ifstream in(path);
@@ -166,12 +178,77 @@ BOOST_AUTO_TEST_CASE(FC_G_7685_requests_not_applicable)
     BOOST_CHECK(true);
 }
 
-BOOST_AUTO_TEST_CASE(FC_G_7702_deferred)
+BOOST_AUTO_TEST_CASE(FC_G_7702_constants)
 {
-    BOOST_TEST_MESSAGE(
-        "EIP-7702 (authorization_list) is out of scope for T16 — protocol has no field; "
-        "full implementation UT deferred. Track: evmone Phase 2 / T16.");
-    BOOST_CHECK(true);
+    const auto commonPath = repoRootFromCompatTestFile() /
+                            "transaction-executor/bcos-transaction-executor/Eip7702Common.h";
+    BOOST_REQUIRE(std::filesystem::exists(commonPath));
+    BOOST_CHECK_MESSAGE(fileContains(commonPath.string(), "25000"),
+        "EIP_7702_PER_EMPTY_ACCOUNT_COST must be 25000");
+    BOOST_CHECK_MESSAGE(
+        fileContains(commonPath.string(), "EIP_7702_REFUND_PER_EXISTING_AUTHORITY = 12500"),
+        "EIP_7702 refund constant must be 12500");
+}
+
+BOOST_AUTO_TEST_CASE(FC_G_7702_signing_domains)
+{
+    const auto root = repoRootFromCompatTestFile();
+    const auto web3TxPath = root / "bcos-rpc/bcos-rpc/web3jsonrpc/model/Web3Transaction.cpp";
+    const auto applyPath = root / "bcos-executor/src/Web3Eip7702Apply.cpp";
+    BOOST_REQUIRE(std::filesystem::exists(web3TxPath));
+    BOOST_REQUIRE(std::filesystem::exists(applyPath));
+    BOOST_CHECK_MESSAGE(fileContains(web3TxPath.string(), "TransactionType::EIP7702"),
+        "type-4 envelope must be decoded in Web3Transaction");
+    BOOST_CHECK_MESSAGE(fileContains(applyPath.string(), "0x05"),
+        "per-tuple EIP-7702 signing domain must use 0x05 prefix");
+}
+
+BOOST_AUTO_TEST_CASE(FC_G_7702_secp256k1_only)
+{
+    const auto root = repoRootFromCompatTestFile();
+    const auto fillPath = root / "bcos-executor/src/Web3Eip7702Fill.cpp";
+    const auto applyPath = root / "bcos-executor/src/Web3Eip7702Apply.cpp";
+    BOOST_REQUIRE(std::filesystem::exists(fillPath));
+    BOOST_REQUIRE(std::filesystem::exists(applyPath));
+    BOOST_CHECK_MESSAGE(
+        !fileContains(fillPath.string(), "SM2Crypto"), "Web3Eip7702Fill must not reference SM2");
+    BOOST_CHECK_MESSAGE(!fileContains(applyPath.string(), "SM2Crypto"),
+        "Web3Eip7702Apply must use secp256k1 recovery only");
+    BOOST_CHECK_MESSAGE(fileContains(applyPath.string(), "Secp256k1Crypto"),
+        "Web3Eip7702Apply must reference Secp256k1Crypto");
+}
+
+BOOST_AUTO_TEST_CASE(FC_G_7702_idl_has_field)
+{
+    const auto root = repoRootFromCompatTestFile();
+    const auto tarsPath = root / "bcos-tars-protocol/bcos-tars-protocol/tars/Transaction.tars";
+    BOOST_REQUIRE(std::filesystem::exists(tarsPath));
+    BOOST_CHECK_MESSAGE(fileContains(tarsPath.string(), "authorizationList"),
+        "Transaction.tars must define authorizationList");
+    BOOST_CHECK_MESSAGE(fileContains(tarsPath.string(),
+                            "16 optional vector<Web3AuthorizationListEntry> authorizationList"),
+        "authorizationList must be Tars tag 16");
+}
+
+BOOST_AUTO_TEST_CASE(FC_G_7702_application_before_savepoint_refresh)
+{
+    const auto root = repoRootFromCompatTestFile();
+    const auto execPath =
+        root / "transaction-executor/bcos-transaction-executor/TransactionExecutorImpl.h";
+    BOOST_REQUIRE(std::filesystem::exists(execPath));
+    BOOST_CHECK_MESSAGE(fileContains(execPath.string(), "FC_G_7702_apply_before_savepoint"),
+        "executeStep must document EIP-7702 apply-before-savepoint ordering");
+    BOOST_CHECK_MESSAGE(fileContains(execPath.string(), "applyEip7702AuthorizationList"),
+        "ExecuteContext must apply EIP-7702 authorizations");
+}
+
+BOOST_AUTO_TEST_CASE(FC_G_7702_target_path_only)
+{
+    const auto root = repoRootFromCompatTestFile();
+    const auto legacyExecPath = root / "bcos-executor/src/executor/TransactionExecutor.cpp";
+    BOOST_REQUIRE(std::filesystem::exists(legacyExecPath));
+    BOOST_CHECK_MESSAGE(!sourceFileHasAuthorizationListOutsideComments(legacyExecPath),
+        "legacy TransactionExecutor must not reference authorization_list");
 }
 
 BOOST_AUTO_TEST_CASE(FC_G_no_authorization_list_in_protocol)

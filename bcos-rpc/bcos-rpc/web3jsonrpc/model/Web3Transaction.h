@@ -42,6 +42,7 @@ enum class TransactionType : uint8_t
     EIP2930 = 1,  // https://eips.ethereum.org/EIPS/eip-2930
     EIP1559 = 2,  // https://eips.ethereum.org/EIPS/eip-1559
     EIP4844 = 3,  // https://eips.ethereum.org/EIPS/eip-4844
+    EIP7702 = 4,  // https://eips.ethereum.org/EIPS/eip-7702
 };
 
 constexpr auto operator<=>(TransactionType const& ltype, auto rtype)
@@ -61,6 +62,24 @@ struct AccessListEntry
     friend bool operator==(const AccessListEntry& lhs, const AccessListEntry& rhs) noexcept
     {
         return lhs.account == rhs.account && lhs.storageKeys == rhs.storageKeys;
+    }
+};
+
+// EIP-7702: Set code for EOAs — per-entry in authorization_list (signed by authority).
+struct AuthorizationListEntry
+{
+    uint64_t chainId{0};  // 0 = valid on any chain
+    Address address;      // delegation target (zero address clears delegation)
+    uint64_t nonce{0};    // expected nonce of the authorising EOA
+    uint8_t yParity{0};   // signature recovery bit (0 or 1)
+    h256 r;
+    h256 s;
+    std::optional<Address> cachedAuthority;  // populated after ecrecover; not serialised
+    friend bool operator==(
+        const AuthorizationListEntry& lhs, const AuthorizationListEntry& rhs) noexcept
+    {
+        return lhs.chainId == rhs.chainId && lhs.address == rhs.address && lhs.nonce == rhs.nonce &&
+               lhs.yParity == rhs.yParity && lhs.r == rhs.r && lhs.s == rhs.s;
     }
 };
 
@@ -94,6 +113,8 @@ public:
     uint64_t gasLimit{0};
     // EIP-2930: Optional access lists
     std::vector<AccessListEntry> accessList;
+    // EIP-7702: Optional authorization list (type-4 only; must be non-empty when type is EIP7702)
+    std::vector<AuthorizationListEntry> authorizationList;
     // EIP-1559: Fee market change for ETH 1.0 chain
     u256 maxPriorityFeePerGas{0};  // for legacy tx, it stands for gasPrice
     u256 maxFeePerGas{0};
@@ -112,14 +133,23 @@ Header header(const rpc::AccessListEntry& entry) noexcept;
 void encode(bcos::bytes& out, const rpc::AccessListEntry&) noexcept;
 size_t length(const rpc::AccessListEntry&) noexcept;
 
+Header header(const rpc::AuthorizationListEntry& entry) noexcept;
+void encode(bcos::bytes& out, const rpc::AuthorizationListEntry&) noexcept;
+size_t length(const rpc::AuthorizationListEntry&) noexcept;
+
 size_t length(const rpc::Web3Transaction&) noexcept;
 Header headerForSign(const rpc::Web3Transaction& tx) noexcept;
 Header headerTxBase(const rpc::Web3Transaction& tx) noexcept;
 Header header(const rpc::Web3Transaction& tx) noexcept;
 void encode(bcos::bytes& out, const rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AccessListEntry&) noexcept;
+bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::AuthorizationListEntry&) noexcept;
 bcos::Error::UniquePtr decode(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
 bcos::Error::UniquePtr decodeFromPayload(bcos::bytesRef& in, rpc::Web3Transaction&) noexcept;
+/// Decode RLP tx payload when EIP-2718 type is known (e.g. `encodeForSign()` bytes without 0x04
+/// prefix).
+bcos::Error::UniquePtr decodeFromPayload(
+    bcos::bytesRef& in, rpc::Web3Transaction& out, rpc::TransactionType knownType) noexcept;
 bcos::Error::UniquePtr decodeTransaction(
     bcos::bytesRef& in, rpc::Web3Transaction&, bool withSignature) noexcept;
 }  // namespace codec::rlp

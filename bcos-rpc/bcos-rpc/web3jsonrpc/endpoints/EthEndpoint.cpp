@@ -21,10 +21,12 @@
 #include "EthEndpoint.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-executor/src/Common.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
@@ -38,12 +40,61 @@
 #include <bcos-rpc/web3jsonrpc/utils/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
+#include <magic_enum/magic_enum.hpp>
 #include <string>
 
 using namespace bcos;
 using namespace bcos::rpc;
+
+namespace
+{
+constexpr std::string_view EIP7702_LEGACY_EXECUTOR_MSG = "type-4 unsupported on legacy executor";
+constexpr std::string_view EIP7702_SM2_REJECT_MSG = "EIP-7702 transactions require secp256k1";
+
+bool nodeUsesSecp256k1(NodeService::Ptr const& nodeService)
+{
+    auto blockFactory = nodeService->blockFactory();
+    if (!blockFactory || !blockFactory->cryptoSuite()) [[unlikely]]
+    {
+        return false;
+    }
+    return dynamic_cast<crypto::Secp256k1Crypto const*>(
+               blockFactory->cryptoSuite()->signatureImpl().get()) != nullptr;
+}
+
+task::Task<int> queryActiveExecutorVersion(ledger::LedgerInterface& ledger)
+{
+    auto const key = std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto config = co_await ledger::getSystemConfig(ledger, key);
+    if (!config) [[unlikely]]
+    {
+        co_return 0;
+    }
+    co_return boost::lexical_cast<int>(std::get<0>(config.value()));
+}
+
+void rejectEip7702IfGated(
+    Web3Transaction const& web3Tx, NodeService::Ptr const& nodeService, int executorVersion)
+{
+    if (web3Tx.type != TransactionType::EIP7702) [[likely]]
+    {
+        return;
+    }
+    if (executorVersion == 0) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            Web3JsonRpcError::Web3DefaultError, std::string(EIP7702_LEGACY_EXECUTOR_MSG)));
+    }
+    if (!nodeUsesSecp256k1(nodeService)) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            Web3JsonRpcError::Web3DefaultError, std::string(EIP7702_SM2_REJECT_MSG)));
+    }
+}
+}  // namespace
 
 task::Task<void> EthEndpoint::protocolVersion(const Json::Value&, Json::Value&)
 {
@@ -433,6 +484,14 @@ task::Task<void> EthEndpoint::sendRawTransaction(const Json::Value& request, Jso
     {
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, error->errorMessage()));
     }
+
+    int executorVersion = 0;
+    if (auto ledger = m_nodeService->ledger()) [[likely]]
+    {
+        executorVersion = co_await queryActiveExecutorVersion(*ledger);
+    }
+    rejectEip7702IfGated(web3Tx, m_nodeService, executorVersion);
+
     auto encodeTxHash = web3Tx.txHash();
 
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(

@@ -6,13 +6,19 @@
  */
 
 #include "../bcos-transaction-executor/vm/HostContext.h"
+#include "Eip7702TestHelpers.h"
 #include "TestMemoryStorage.h"
 #include "bcos-executor/src/CallParameters.h"
+#include "bcos-executor/src/Web3Eip7702Fill.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
+#include "bcos-framework/ledger/EVMAccount.h"
+
+using bcos::ledger::account::EVMAccount;
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
+#include "bcos-transaction-executor/Eip7702Common.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -70,7 +76,11 @@ public:
         evmc_address originIn = {}, evmc_address recipientIn = {},
         evmc_call_kind kindIn = EVMC_CALL,
         std::shared_ptr<const bcos::executor::Eip2930AccessList> eip2930AccessList = {},
-        uint8_t web3TypedTxKindForAccessList = 0)
+        uint8_t web3TypedTxKindForAccessList = 0, int64_t messageGas = 1'000'000,
+        std::shared_ptr<const bcos::executor::Eip7702AuthorizationList> eip7702AuthorizationList =
+            {},
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmAuthorities = {},
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets = {})
     {
         ledgerConfig.setFeatures(features);
         blockHeader.setVersion(blockHeaderVersion);
@@ -78,7 +88,7 @@ public:
         evmc_message message = {.kind = kindIn,
             .flags = 0,
             .depth = 0,
-            .gas = 1'000'000,
+            .gas = messageGas,
             .recipient = recipientIn,
             .sender = {},
             .input_data = nullptr,
@@ -95,7 +105,9 @@ public:
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
             rollbackableStorage, rollbackableTransientStorage, blockHeader, message, originIn, "",
             0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait,
-            std::move(eip2930AccessList), web3TypedTxKindForAccessList);
+            std::move(eip2930AccessList), web3TypedTxKindForAccessList,
+            std::move(eip7702AuthorizationList), std::move(eip7702WarmAuthorities),
+            std::move(eip7702WarmTargets));
     }
 };
 
@@ -548,6 +560,233 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_empty_access_list_no_extra_warm)
     evmc_address const extra{};
     BOOST_CHECK_EQUAL(host.accessAccount(extra), EVMC_ACCESS_COLD);
 }
+
+BOOST_AUTO_TEST_SUITE(Eip7702)
+
+BOOST_AUTO_TEST_CASE(IntrinsicGasAddedPerTuple)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    auto authList = std::make_shared<bcos::executor::Eip7702AuthorizationList>();
+    authList->resize(2);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x71;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x72;
+
+    constexpr int64_t startGas = 500'000;
+    int64_t const intrinsic =
+        static_cast<int64_t>(authList->size()) * executor_v1::EIP_7702_PER_EMPTY_ACCOUNT_COST;
+
+    syncWait([&, authList]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        bcos::bytes const stopCode{0x00};
+        auto const codeHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await recipientAccount.setCode(stopCode, "", codeHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, recipient, EVMC_CALL, {}, 4, startGas, authList);
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+        // Intrinsic 25000×N is debited before EVM run; additional gas may be spent on STOP + 2929.
+        BOOST_CHECK_GE(startGas - result.gas_left, intrinsic);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(RefundCapDeferred)
+{
+    BOOST_WARN_MESSAGE(
+        true, "EIP-3529 refund cap is not enforced on transaction-executor in M1 (Q-Refund=B)");
+}
+
+BOOST_AUTO_TEST_CASE(WarmsAddresses)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address authority{};
+    authority.bytes[19] = 0x81;
+    evmc_address target{};
+    target.bytes[19] = 0x82;
+    evmc_address origin{};
+    origin.bytes[19] = 0x83;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x84;
+
+    auto warmAuthorities = std::make_shared<std::vector<evmc_address>>();
+    warmAuthorities->push_back(authority);
+    auto warmTargets = std::make_shared<std::vector<evmc_address>>();
+    warmTargets->push_back(target);
+
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, {}, 4, 1'000'000, {}, warmAuthorities, warmTargets);
+    host.warmEip7702Addresses();
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    BOOST_CHECK_EQUAL(host.accessAccount(authority), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessAccount(target), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(CallFollowsIndicator)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address target{};
+    target.bytes[19] = 0x91;
+    evmc_address authority{};
+    authority.bytes[19] = 0x92;
+    evmc_address origin{};
+    origin.bytes[19] = 0x93;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> targetAccount(rollbackableStorage, target, false);
+        co_await targetAccount.create();
+        auto const writer = eip7702::storageWriterBytecode();
+        auto const writerHash = hashImpl->hash(bcos::bytesConstRef(writer.data(), writer.size()));
+        co_await targetAccount.setCode(writer, "", writerHash);
+
+        bcos::Address targetAddr;
+        std::memcpy(targetAddr.data(), target.bytes, sizeof(target.bytes));
+        co_await eip7702::setDelegationIndicator(
+            rollbackableStorage, hashImpl, authority, targetAddr, false);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, authority, EVMC_CALL, {}, 4, 2'000'000);
+        host.mutableMessage().code_address = authority;
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        EVMAccount<decltype(rollbackableStorage)> authorityAccount(
+            rollbackableStorage, authority, false);
+        evmc_bytes32 key{};
+        auto const authoritySlot = co_await authorityAccount.storage(key);
+        BOOST_CHECK_EQUAL(authoritySlot.bytes[31], 0x2a);
+
+        auto const targetSlot = co_await targetAccount.storage(key);
+        BOOST_CHECK_EQUAL(targetSlot.bytes[31], 0);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(DelegatecallFollowsIndicator)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address target{};
+    target.bytes[19] = 0xa1;
+    evmc_address authority{};
+    authority.bytes[19] = 0xa2;
+    evmc_address origin{};
+    origin.bytes[19] = 0xa3;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> targetAccount(rollbackableStorage, target, false);
+        co_await targetAccount.create();
+        auto const writer = eip7702::storageWriterBytecode();
+        auto const writerHash = hashImpl->hash(bcos::bytesConstRef(writer.data(), writer.size()));
+        co_await targetAccount.setCode(writer, "", writerHash);
+
+        bcos::Address targetAddr;
+        std::memcpy(targetAddr.data(), target.bytes, sizeof(target.bytes));
+        co_await eip7702::setDelegationIndicator(
+            rollbackableStorage, hashImpl, authority, targetAddr, false);
+
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        co_await originAccount.create();
+        bcos::bytes const stopCode{0x00};
+        auto const stopHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await originAccount.setCode(stopCode, "", stopHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, origin, EVMC_DELEGATECALL, {}, 4, 2'000'000);
+        host.mutableMessage().code_address = authority;
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        evmc_bytes32 key{};
+        auto const originSlot = co_await originAccount.storage(key);
+        BOOST_CHECK_EQUAL(originSlot.bytes[31], 0x2a);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(ExtcodeOpsReturnIndicator)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
+
+    evmc_address delegated{};
+    delegated.bytes[19] = 0xb1;
+    evmc_address origin{};
+    origin.bytes[19] = 0xb2;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0xb3;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::Address targetAddr = bcos::Address("0xcccccccccccccccccccccccccccccccccccccccc");
+        co_await eip7702::setDelegationIndicator(
+            rollbackableStorage, hashImpl, delegated, targetAddr, false);
+
+        auto const indicator = eip7702::makeDelegationIndicatorCode(targetAddr);
+        auto const indicatorHash =
+            hashImpl->hash(bcos::bytesConstRef(indicator.data(), indicator.size()));
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, recipient, EVMC_CALL, {}, 4, 1'000'000);
+        co_await host.prepare();
+
+        auto const size = co_await host.codeSizeAt(delegated);
+        BOOST_CHECK_EQUAL(size, executor_v1::EIP_7702_DELEGATION_CODE_SIZE);
+
+        auto const hash = co_await host.codeHashAt(delegated);
+        BOOST_CHECK_EQUAL(hash, indicatorHash);
+
+        auto const codeEntry = co_await host.code(delegated);
+        BOOST_REQUIRE(codeEntry);
+        BOOST_CHECK_EQUAL(codeEntry->get().size(), indicator.size());
+    }());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()
 

@@ -30,6 +30,8 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/Eip7702Delegation.h"
+#include "bcos-executor/src/Web3Eip7702Apply.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
@@ -46,6 +48,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
+#include "bcos-transaction-executor/Eip7702Common.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
@@ -152,6 +155,9 @@ private:
     /// Optional EIP-2930 access list (TE path); warmed after W1 for any typed tx (kind != 0).
     std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
     uint8_t m_web3TypedTxKindForAccessList = 0;
+    std::shared_ptr<const executor::Eip7702AuthorizationList> m_eip7702AuthorizationList;
+    std::shared_ptr<std::vector<evmc_address>> m_eip7702WarmAuthorities;
+    std::shared_ptr<std::vector<evmc_address>> m_eip7702WarmTargets;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -201,7 +207,10 @@ private:
         const evmc_host_interface* hostInterface,
         std::shared_ptr<executor::Eip2929AccessState> eip2929Access,
         std::shared_ptr<const executor::Eip2930AccessList> eip2930AccessList,
-        uint8_t web3TypedTxKindForAccessList)
+        uint8_t web3TypedTxKindForAccessList,
+        std::shared_ptr<const executor::Eip7702AuthorizationList> eip7702AuthorizationList,
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmAuthorities,
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets)
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -226,7 +235,10 @@ private:
         m_web3Tx(web3Tx),
         m_eip2929Access(std::move(eip2929Access)),
         m_eip2930AccessList(std::move(eip2930AccessList)),
-        m_web3TypedTxKindForAccessList(web3TypedTxKindForAccessList)
+        m_web3TypedTxKindForAccessList(web3TypedTxKindForAccessList),
+        m_eip7702AuthorizationList(std::move(eip7702AuthorizationList)),
+        m_eip7702WarmAuthorities(std::move(eip7702WarmAuthorities)),
+        m_eip7702WarmTargets(std::move(eip7702WarmTargets))
     {}
 
 public:
@@ -236,13 +248,40 @@ public:
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
         std::shared_ptr<const executor::Eip2930AccessList> eip2930AccessList = {},
-        uint8_t web3TypedTxKindForAccessList = 0)
+        uint8_t web3TypedTxKindForAccessList = 0,
+        std::shared_ptr<const executor::Eip7702AuthorizationList> eip7702AuthorizationList = {},
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmAuthorities = {},
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets = {})
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
             std::make_shared<executor::Eip2929AccessState>(), std::move(eip2930AccessList),
-            web3TypedTxKindForAccessList)
+            web3TypedTxKindForAccessList, std::move(eip7702AuthorizationList),
+            std::move(eip7702WarmAuthorities), std::move(eip7702WarmTargets))
     {}
+
+    /// EIP-7702 W3: warm authority + target for successfully applied tuples only (spec §5.6).
+    void warmEip7702Addresses()
+    {
+        if (!m_eip2929Access)
+        {
+            return;
+        }
+        if (m_eip7702WarmAuthorities)
+        {
+            for (auto const& addr : *m_eip7702WarmAuthorities)
+            {
+                (void)m_eip2929Access->warmUpAddress(addr);
+            }
+        }
+        if (m_eip7702WarmTargets)
+        {
+            for (auto const& addr : *m_eip7702WarmTargets)
+            {
+                (void)m_eip2929Access->warmUpAddress(addr);
+            }
+        }
+    }
 
     ~HostContext() noexcept = default;
     HostContext(HostContext const&) = default;
@@ -485,6 +524,27 @@ public:
                     }
                 }
 
+                // EIP-7702 intrinsic gas (Prague+, type-4, top-level only; spec §5.7).
+                if (!evmResult && m_level == 0 && m_revision >= EVMC_PRAGUE &&
+                    m_web3TypedTxKindForAccessList == executor_v1::EIP_7702_WEB3_TX_TYPE &&
+                    m_eip7702AuthorizationList && !m_eip7702AuthorizationList->empty())
+                {
+                    auto& msg = mutableMessage();
+                    const int64_t authIntrinsic =
+                        static_cast<int64_t>(m_eip7702AuthorizationList->size()) *
+                        executor_v1::EIP_7702_PER_EMPTY_ACCOUNT_COST;
+                    if (msg.gas < authIntrinsic)
+                    {
+                        evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                            protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
+                            fixErrorGas ? 0 : msg.gas, "EIP-7702 auth intrinsic OOG"));
+                    }
+                    else
+                    {
+                        msg.gas -= authIntrinsic;
+                    }
+                }
+
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -595,7 +655,8 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface, m_eip2929Access, m_eip2930AccessList, m_web3TypedTxKindForAccessList);
+            interface, m_eip2929Access, m_eip2930AccessList, m_web3TypedTxKindForAccessList,
+            m_eip7702AuthorizationList, m_eip7702WarmAuthorities, m_eip7702WarmTargets);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -642,6 +703,30 @@ public:
     }
 
 private:
+    task::Task<evmc_address> resolveDelegateCodeAddress(evmc_address const& addr)
+    {
+        if (m_revision < EVMC_PRAGUE ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_prague))
+        {
+            co_return addr;
+        }
+
+        if (auto codeEntry = co_await code(addr))
+        {
+            auto const codeView = codeEntry->get();
+            if (executor::isEip7702DelegationIndicator(bcos::bytesConstRef(
+                    reinterpret_cast<bcos::byte const*>(codeView.data()), codeView.size())))
+            {
+                evmc_address target{};
+                std::memcpy(target.bytes,
+                    codeView.data() + executor::EIP7702_DELEGATION_TARGET_OFFSET,
+                    sizeof(target.bytes));
+                co_return target;
+            }
+        }
+        co_return addr;
+    }
+
     void prepareCreate()
     {
         auto& ref = message();
@@ -800,7 +885,13 @@ private:
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
-        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+        evmc_address codeLoadAddress = ref.code_address;
+        if (ref.kind == EVMC_CALL || ref.kind == EVMC_DELEGATECALL)
+        {
+            codeLoadAddress = co_await resolveDelegateCodeAddress(ref.code_address);
+        }
+
+        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), codeLoadAddress,
                 m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             !m_executable)

@@ -262,6 +262,46 @@ bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3A
     return m_web3AccessListCache;
 }
 
+void bcostars::protocol::TransactionImpl::ensureWeb3AuthorizationListCache() const
+{
+    if (m_web3AuthorizationListCacheBuilt)
+    {
+        return;
+    }
+    m_web3AuthorizationListCacheBuilt = true;
+    m_web3AuthorizationListCache.clear();
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        return;
+    }
+    auto const& entries = m_inner()->data.authorizationList;
+    m_web3AuthorizationListCache.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::protocol::Web3AuthorizationEntry out;
+        out.chainIdDec = entry.chainId;
+        out.addressHex = entry.address;
+        out.nonceDec = entry.nonce;
+        out.yParity = static_cast<uint8_t>(entry.yParity);
+        if (entry.r.size() == bcos::h256::SIZE)
+        {
+            std::memcpy(out.r.data(), entry.r.data(), bcos::h256::SIZE);
+        }
+        if (entry.s.size() == bcos::h256::SIZE)
+        {
+            std::memcpy(out.s.data(), entry.s.data(), bcos::h256::SIZE);
+        }
+        m_web3AuthorizationListCache.emplace_back(std::move(out));
+    }
+}
+
+bcos::protocol::Web3AuthorizationList const&
+bcostars::protocol::TransactionImpl::web3AuthorizationList() const
+{
+    ensureWeb3AuthorizationListCache();
+    return m_web3AuthorizationListCache;
+}
+
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
 {
     return *m_inner();

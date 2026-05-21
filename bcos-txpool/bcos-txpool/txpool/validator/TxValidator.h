@@ -65,6 +65,9 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) override;
     task::Task<protocol::TransactionStatus> validateChainId(const bcos::protocol::Transaction& _tx,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) override;
+    task::Task<protocol::TransactionStatus> validateEip7702Admission(
+        const bcos::protocol::Transaction& _tx,
+        std::shared_ptr<bcos::ledger::LedgerInterface> _ledger) override;
     Web3NonceChecker::Ptr web3NonceChecker() override { return m_web3NonceChecker; }
 
     LedgerNonceChecker::Ptr ledgerNonceChecker() override { return m_ledgerNonceChecker; }

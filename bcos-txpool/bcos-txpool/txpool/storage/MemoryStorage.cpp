@@ -36,8 +36,8 @@
 #include <memory>
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/remove_if.hpp>
-#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <variant>
@@ -137,7 +137,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             // This lambda may outlive the Awaitable (e.g. stored in a Transaction callback),
             // so it must NOT capture 'this'.
             auto completeOnce = [state = m_state, handle](Error::Ptr error,
-                                     bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                                    bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
                 bool expected = false;
                 if (!state->m_resumed.compare_exchange_strong(
                         expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
@@ -161,8 +161,8 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
             try
             {
-                auto result = m_self->verifyAndSubmitTransaction(
-                    m_transaction, completeOnce, true, true);
+                auto result =
+                    m_self->verifyAndSubmitTransaction(m_transaction, completeOnce, true, true);
 
                 if (result != TransactionStatus::None)
                 {
@@ -171,8 +171,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
                         << LOG_KV("result", result);
                     completeOnce(
-                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)),
-                        nullptr);
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)), nullptr);
                 }
             }
             catch (std::exception& e)
@@ -425,6 +424,11 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             // Step 5: Check chain Id
             return task::syncWait(
                 m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
+        },
+        [this, transaction]() {
+            // Step 5.5: EIP-7702 path gating (defence in depth; spec §7.1)
+            return task::syncWait(m_config->txValidator()->validateEip7702Admission(
+                *transaction, m_config->ledger()));
         },
     };
 
@@ -950,7 +954,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
-                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                         toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
                 {
                     transaction = toAccessor.value();
                 }

@@ -101,7 +101,8 @@ Web3Eip2930Parsed parseEip2930FromExtraBytes(protocol::Transaction const& tx)
     if (envelope > 0 && envelope < bcos::codec::rlp::BYTES_HEAD_BASE &&
         envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP2930) &&
         envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP1559) &&
-        envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP4844))
+        envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP4844) &&
+        envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP7702))
     {
         out.web3TypedTxKind = envelope;
         return out;
