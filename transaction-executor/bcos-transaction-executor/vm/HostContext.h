@@ -67,6 +67,7 @@
 #include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/fill.hpp>
 #include <range/v3/algorithm/move.hpp>
@@ -124,6 +125,48 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
     }
     co_return {};
 }
+
+namespace
+{
+struct Eip2929CheckpointGuard
+{
+    std::shared_ptr<bcos::executor::Eip2929AccessState> state;
+    bool committed{false};
+
+    explicit Eip2929CheckpointGuard(std::shared_ptr<bcos::executor::Eip2929AccessState> accessState)
+      : state(std::move(accessState))
+    {
+        if (state)
+        {
+            state->pushCheckpoint();
+        }
+    }
+
+    void commit()
+    {
+        if (state && !committed)
+        {
+            state->commitCheckpoint();
+            committed = true;
+        }
+    }
+
+    ~Eip2929CheckpointGuard()
+    {
+        if (state && !committed)
+        {
+            state->rollbackCheckpoint();
+        }
+    }
+};
+
+inline bool eip2929CheckpointEnabled(
+    evmc_revision revision, bcos::ledger::LedgerConfig const& ledgerConfig) noexcept
+{
+    return revision >= EVMC_BERLIN &&
+           ledgerConfig.features().get(bcos::ledger::Features::Flag::feature_evm_eip2929);
+}
+}  // namespace
 
 template <class Storage, class TransientStorage>
 class HostContext : public evmc_host_context
@@ -282,14 +325,14 @@ public:
         {
             for (auto const& addr : *m_eip7702WarmAuthorities)
             {
-                (void)m_eip2929Access->warmUpAddress(addr);
+                (void)m_eip2929Access->warmUpAddressNoJournal(addr);
             }
         }
         if (m_eip7702WarmTargets)
         {
             for (auto const& addr : *m_eip7702WarmTargets)
             {
-                (void)m_eip2929Access->warmUpAddress(addr);
+                (void)m_eip2929Access->warmUpAddressNoJournal(addr);
             }
         }
     }
@@ -462,6 +505,12 @@ public:
             }
             m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
 
+            // EIP-2929: contract address is accessed at CREATE/CREATE2 entry (even if init fails).
+            if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+            {
+                (void)m_eip2929Access->warmUpAddress(ref.code_address);
+            }
+
             // EIP-2929 W2: warm access_list entries for any typed tx (kind != 0).
             // EIP-2930 (kind=1), EIP-1559 (kind=2), EIP-4844 (kind=3) all support accessList.
             if (m_web3TypedTxKindForAccessList != 0 && m_eip2930AccessList &&
@@ -489,6 +538,13 @@ public:
 
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
+
+        std::optional<Eip2929CheckpointGuard> topCheckpointGuard;
+        if (m_level == 0 && m_eip2929Access &&
+            eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()))
+        {
+            topCheckpointGuard.emplace(m_eip2929Access);
+        }
 
         std::optional<EVMCResult> evmResult;
         // FIB-88/89/92: read once, gate receipt-affecting error paths for hard-fork compat
@@ -672,6 +728,10 @@ public:
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
                                 << " level: " << m_level << " seq: " << m_seq << " " << *evmResult;
+        if (topCheckpointGuard && evmResult->status_code == EVMC_SUCCESS)
+        {
+            topCheckpointGuard->commit();
+        }
         co_return std::move(*evmResult);
     }
 
@@ -679,10 +739,24 @@ public:
     {
         ++m_seq;
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
-        auto senderAccount = getAccount(*this, message.sender);
 
+        auto senderAccount = getAccount(*this, message.sender);
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
+
+        std::optional<Eip2929CheckpointGuard> checkpointGuard;
+        if (m_eip2929Access && eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()))
+        {
+            checkpointGuard.emplace(m_eip2929Access);
+            if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
+            {
+                // EVM CREATE passes empty code_address; pin must match getMessage() resolution.
+                auto const resolved = getMessage(m_web3Tx, message, m_blockHeader.get().number(),
+                    m_contextID, m_seq, nonce, m_hashImpl);
+                m_eip2929Access->setCreateRollbackPin(resolved.code_address);
+            }
+        }
+
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
@@ -696,6 +770,13 @@ public:
         {
             m_logs.reserve(m_logs.size() + ::ranges::size(logs));
             ::ranges::move(logs, std::back_inserter(m_logs));
+        }
+        if (checkpointGuard)
+        {
+            if (result.status_code == EVMC_SUCCESS)
+            {
+                checkpointGuard->commit();
+            }
         }
         co_return result;
     }

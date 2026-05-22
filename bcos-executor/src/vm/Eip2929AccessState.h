@@ -25,6 +25,7 @@
 #include <optional>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace bcos::executor
 {
@@ -66,18 +67,101 @@ struct Eip2929PairEqual
     }
 };
 
+struct Eip2929Checkpoint
+{
+    std::vector<evmc_address> newAccounts;
+    std::vector<std::pair<evmc_address, evmc_bytes32>> newStorage;
+    /// EIP-2929: CREATE/CREATE2 failure keeps contract address in accessed_addresses.
+    std::optional<evmc_address> pinnedCreateAddress;
+};
+
 /// Warm account/storage sets for one transaction (contextID). Shared by all HostContext depths.
 struct Eip2929AccessState
 {
+    std::vector<Eip2929Checkpoint> m_checkpointStack;
+
     std::unordered_set<evmc_address, Eip2929AddrHash, Eip2929AddrEqual> warmAccounts;
     std::unordered_set<std::pair<evmc_address, evmc_bytes32>, Eip2929PairHash, Eip2929PairEqual>
         warmStorage;
 
-    bool warmUpAddress(const evmc_address& address) { return warmAccounts.insert(address).second; }
+    void pushCheckpoint() { m_checkpointStack.emplace_back(); }
+
+    bool hasActiveCheckpoint() const noexcept { return !m_checkpointStack.empty(); }
+
+    /// Pin contract address for CREATE/CREATE2 child scope rollback (EIP-2929 clarification).
+    void setCreateRollbackPin(evmc_address const& address)
+    {
+        if (m_checkpointStack.empty())
+        {
+            return;
+        }
+        auto& cp = m_checkpointStack.back();
+        cp.pinnedCreateAddress = address;
+        warmAccounts.insert(address);
+        cp.newAccounts.push_back(address);
+    }
+
+    void rollbackCheckpoint()
+    {
+        if (m_checkpointStack.empty())
+        {
+            return;
+        }
+        auto& cp = m_checkpointStack.back();
+        for (auto const& [addr, key] : cp.newStorage)
+        {
+            warmStorage.erase({addr, key});
+        }
+        for (auto const& addr : cp.newAccounts)
+        {
+            if (cp.pinnedCreateAddress.has_value() &&
+                std::memcmp(addr.bytes, cp.pinnedCreateAddress->bytes, sizeof(addr.bytes)) == 0)
+            {
+                continue;
+            }
+            warmAccounts.erase(addr);
+        }
+        m_checkpointStack.pop_back();
+    }
+
+    void commitCheckpoint()
+    {
+        if (m_checkpointStack.empty())
+        {
+            return;
+        }
+        if (m_checkpointStack.size() >= 2)
+        {
+            auto top = std::move(m_checkpointStack.back());
+            m_checkpointStack.pop_back();
+            auto& parent = m_checkpointStack.back();
+            parent.newAccounts.insert(parent.newAccounts.end(),
+                std::make_move_iterator(top.newAccounts.begin()),
+                std::make_move_iterator(top.newAccounts.end()));
+            parent.newStorage.insert(parent.newStorage.end(),
+                std::make_move_iterator(top.newStorage.begin()),
+                std::make_move_iterator(top.newStorage.end()));
+        }
+        else
+        {
+            m_checkpointStack.pop_back();
+        }
+    }
+
+    bool warmUpAddress(const evmc_address& address)
+    {
+        return warmUpAddressImpl(address, /*recordJournal=*/true);
+    }
+
+    /// Warm without checkpoint journal (EIP-7702 W3, initial tx set, access list).
+    bool warmUpAddressNoJournal(const evmc_address& address)
+    {
+        return warmUpAddressImpl(address, /*recordJournal=*/false);
+    }
 
     bool warmUpStorage(const evmc_address& address, const evmc_bytes32& key)
     {
-        return warmStorage.insert({address, key}).second;
+        return warmUpStorageImpl(address, key, /*recordJournal=*/true);
     }
 
     bool containsAddress(const evmc_address& address) const
@@ -98,13 +182,13 @@ struct Eip2929AccessState
         {
             evmc_address p{};
             p.bytes[precompile_hi] = i;
-            (void)warmUpAddress(p);
+            (void)warmUpAddressImpl(p, false);
         }
         if (revision >= EVMC_CANCUN)
         {
             evmc_address p{};
             p.bytes[precompile_hi] = 0x0a;
-            (void)warmUpAddress(p);
+            (void)warmUpAddressImpl(p, false);
         }
         if (revision >= EVMC_PRAGUE)
         {
@@ -112,7 +196,7 @@ struct Eip2929AccessState
             {
                 evmc_address p{};
                 p.bytes[precompile_hi] = i;
-                (void)warmUpAddress(p);
+                (void)warmUpAddressImpl(p, false);
             }
         }
         if (revision >= EVMC_OSAKA)
@@ -120,7 +204,7 @@ struct Eip2929AccessState
             evmc_address p{};
             p.bytes[18] = 0x01;
             p.bytes[19] = 0x00;
-            (void)warmUpAddress(p);
+            (void)warmUpAddressImpl(p, false);
         }
     }
 
@@ -129,10 +213,10 @@ struct Eip2929AccessState
     void warmUpInitialTxSet(const evmc_address& origin,
         std::optional<evmc_address> transactionToEVMC, evmc_revision revision)
     {
-        (void)warmUpAddress(origin);
+        (void)warmUpAddressImpl(origin, false);
         if (transactionToEVMC.has_value())
         {
-            (void)warmUpAddress(*transactionToEVMC);
+            (void)warmUpAddressImpl(*transactionToEVMC, false);
         }
         warmUpActivePrecompiles(revision);
     }
@@ -145,15 +229,36 @@ struct Eip2929AccessState
         for (auto const& [addrHex, keys] : list)
         {
             auto const addr = toAddr(addrHex);
-            (void)warmUpAddress(addr);
+            (void)warmUpAddressImpl(addr, false);
             for (auto const& k : keys)
             {
                 evmc_bytes32 key{};
                 static_assert(sizeof(key.bytes) == 32);
                 std::memcpy(key.bytes, k.data(), sizeof(key.bytes));
-                (void)warmUpStorage(addr, key);
+                (void)warmUpStorageImpl(addr, key, false);
             }
         }
+    }
+
+private:
+    bool warmUpAddressImpl(const evmc_address& address, bool recordJournal)
+    {
+        auto const inserted = warmAccounts.insert(address).second;
+        if (recordJournal && inserted && !m_checkpointStack.empty())
+        {
+            m_checkpointStack.back().newAccounts.push_back(address);
+        }
+        return inserted;
+    }
+
+    bool warmUpStorageImpl(const evmc_address& address, const evmc_bytes32& key, bool recordJournal)
+    {
+        auto const inserted = warmStorage.insert({address, key}).second;
+        if (recordJournal && inserted && !m_checkpointStack.empty())
+        {
+            m_checkpointStack.back().newStorage.emplace_back(address, key);
+        }
+        return inserted;
     }
 };
 
