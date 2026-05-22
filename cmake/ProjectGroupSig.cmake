@@ -12,6 +12,8 @@ ExternalProject_Add(GroupSigLib
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_PATCH 1
+    LOG_DOWNLOAD 1
     BUILD_IN_SOURCE 1
     # Fix pbc_sig CMakeLists.txt: original tarball has backslash line continuations
     # in warnflags that produce invalid ninja build files.
