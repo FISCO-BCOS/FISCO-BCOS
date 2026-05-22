@@ -13,7 +13,7 @@ ExternalProject_Add(GroupSigLib
     LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_IN_SOURCE 1
-    # Fix pbc_sig CMakeLists.txt: original tarball has \\ line continuations
+    # Fix pbc_sig CMakeLists.txt: original tarball has backslash line continuations
     # in warnflags that produce invalid ninja build files.
     # 1) Copy fix script into GroupSigLib cmake/
     # 2) Modify cmake/ProjectPbcSig.cmake to call it after pbc_sig patch step
