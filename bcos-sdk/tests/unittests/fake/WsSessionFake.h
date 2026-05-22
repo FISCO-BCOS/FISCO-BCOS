@@ -22,7 +22,7 @@
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/Common.h>
-#include <oneapi/tbb/task_arena.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcos
 {
@@ -33,8 +33,8 @@ namespace test
 class WsSessionFake : public bcos::boostssl::ws::WsSession
 {
 public:
-    WsSessionFake(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
-      : bcos::boostssl::ws::WsSession(taskArena, taskGroup)
+    WsSessionFake(IOServicePool::Ptr ioServicePool)
+      : bcos::boostssl::ws::WsSession(std::move(ioServicePool))
     {
         WEBSOCKET_SESSION(INFO) << LOG_KV("[NEWOBJ][WSSESSION]", this);
     }

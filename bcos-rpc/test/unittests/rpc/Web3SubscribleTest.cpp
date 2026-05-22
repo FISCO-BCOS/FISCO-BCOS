@@ -27,7 +27,7 @@
 #include <bcos-rpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <bcos-rpc/web3jsonrpc/Web3Subscribe.h>
-#
+#include <bcos-utilities/IOServicePool.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::crypto;
@@ -62,8 +62,8 @@ class MockWsSession : public WsSession
 public:
     using Ptr = std::shared_ptr<MockWsSession>;
 
-    MockWsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup)
-      : WsSession(taskArena, taskGroup)
+    MockWsSession(IOServicePool::Ptr ioServicePool)
+      : WsSession(std::move(ioServicePool))
     {
         setEndPoint("127.0.0.1:8080");
     }
@@ -139,11 +139,11 @@ BOOST_AUTO_TEST_CASE(testOnHttpSubscribeRequest)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
-    auto mockSession = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto mockSession = std::make_shared<MockWsSession>(ioServicePool);
 
     int id = 111;
     // Test newHeads subscription
@@ -195,11 +195,11 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeRequest)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
-    auto mockSession = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto mockSession = std::make_shared<MockWsSession>(ioServicePool);
 
     int id = 111;
     // Test newHeads subscription
@@ -268,9 +268,9 @@ BOOST_AUTO_TEST_CASE(testOnSubscribeNewHeads)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
     int id = 123;
     Json::Value request;
@@ -313,13 +313,13 @@ BOOST_AUTO_TEST_CASE(testOnUnsubscribeRequest)
     std::string subscriptionId4;
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    // auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    // auto session = std::make_shared<MockWsSession>(ioServicePool);
 
-    auto session1 = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
     session1->setEndPoint("127.0.0.1:8080");
-    auto session2 = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
     session2->setEndPoint("127.0.0.1:8081");
 
     Json::Reader reader;
@@ -588,13 +588,13 @@ BOOST_AUTO_TEST_CASE(testOnRemoveSubscribeBySession)
     std::string subscriptionId4;
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    // auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    // auto session = std::make_shared<MockWsSession>(ioServicePool);
 
-    auto session1 = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
     session1->setEndPoint("127.0.0.1:8080");
-    auto session2 = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
     session2->setEndPoint("127.0.0.1:8081");
 
     Json::Reader reader;
@@ -718,9 +718,9 @@ BOOST_AUTO_TEST_CASE(testOnNewBlock)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
     Json::Value request;
     request["jsonrpc"] = "2.0";
@@ -758,9 +758,9 @@ BOOST_AUTO_TEST_CASE(testWeb3SubscribeInvalidRequests)
     auto web3Subscribe = std::make_shared<Web3Subscribe>(weakPtr);
 
     // Create mock session
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
     // Test with empty request
     Json::Value emptyRequest;
@@ -793,11 +793,11 @@ BOOST_AUTO_TEST_CASE(testConcurrentAccess)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create multiple mock sessions
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session1 = std::make_shared<MockWsSession>(taskArena, taskGroup);
-    auto session2 = std::make_shared<MockWsSession>(taskArena, taskGroup);
-    auto session3 = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session1 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session2 = std::make_shared<MockWsSession>(ioServicePool);
+    auto session3 = std::make_shared<MockWsSession>(ioServicePool);
 
     // Create subscription requests
     Json::Value request1, request2, request3;
@@ -865,9 +865,9 @@ BOOST_AUTO_TEST_CASE(testMultiSubInOneRequest)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create multiple mock sessions
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
 
     Json::Value request;
@@ -934,9 +934,9 @@ BOOST_AUTO_TEST_CASE(testMultiRequestInOneRequest)
     mockWeb3JsonRpcImpl->setWeb3Subscribe(web3Subscribe);
 
     // Create multiple mock sessions
-    tbb::task_arena taskArena(1);
-    tbb::task_group taskGroup;
-    auto session = std::make_shared<MockWsSession>(taskArena, taskGroup);
+    auto ioServicePool = std::make_shared<IOServicePool>(1);
+    ioServicePool->start();
+    auto session = std::make_shared<MockWsSession>(ioServicePool);
 
 
     Json::Value request;

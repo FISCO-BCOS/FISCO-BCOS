@@ -31,8 +31,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
@@ -146,14 +144,8 @@ public:
     void setReconnectedPeers(EndPointsPtr _reconnectedPeers);
     EndPointsPtr reconnectedPeers() const;
 
-    // init
-    void initTaskArena(uint32_t _taskArenaPoolSize);
-
 private:
     bool m_running{false};
-
-    tbb::task_arena m_taskArena;
-    tbb::task_group m_taskGroup;
 
     int32_t m_waitConnectFinishTimeout = 30000;
 

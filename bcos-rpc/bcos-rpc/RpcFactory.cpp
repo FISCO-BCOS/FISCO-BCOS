@@ -359,7 +359,30 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     auto wsService = std::make_shared<bcos::boostssl::ws::WsService>();
     auto initializer = std::make_shared<bcos::boostssl::ws::WsInitializer>();
 
+    // Check threadPoolSize configuration (read before moving _config)
+    size_t threadPoolSize = _config ? _config->threadPoolSize() : 0;
+
     initializer->setConfig(std::move(_config));
+
+    if (threadPoolSize > 0)
+    {
+        // Use a dedicated thread pool for RPC
+        auto rpcIOServicePool = std::make_shared<bcos::IOServicePool>(threadPoolSize);
+        rpcIOServicePool->start();
+        initializer->setIOServicePool(rpcIOServicePool);
+    }
+    else if (m_ioServicePool)
+    {
+        // Use the shared external IOServicePool
+        initializer->setIOServicePool(m_ioServicePool);
+    }
+    else
+    {
+        // No external pool and no threadPoolSize configured, throw exception
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "No IOServicePool available for RPC: please configure "
+                                  "threadPoolSize or set shared IOServicePool!"));
+    }
     initializer->initWsService(wsService);
 
     return wsService;

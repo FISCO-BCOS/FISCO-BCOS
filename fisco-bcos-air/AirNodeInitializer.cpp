@@ -91,6 +91,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         m_nodeInitializer->protocolInitializer()->getKeyEncryptionByType(
             nodeConfig->keyEncryptionType()));
     rpcFactory.setNodeConfig(nodeConfig);
+    rpcFactory.setIOServicePool(ioServicePool);
     m_rpc = rpcFactory.buildLocalRpc(groupInfo, nodeService);
     if (gateway->amop())
     {

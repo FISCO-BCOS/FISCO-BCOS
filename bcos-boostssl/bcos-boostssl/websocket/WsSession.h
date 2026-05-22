@@ -26,10 +26,10 @@
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
-#include <oneapi/tbb/task_arena.h>
-#include <oneapi/tbb/task_group.h>
+#include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -55,7 +55,7 @@ public:
     using Ptrs = std::vector<std::shared_ptr<WsSession>>;
 
 public:
-    explicit WsSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
+    explicit WsSession(IOServicePool::Ptr ioServicePool);
 
     virtual ~WsSession() noexcept;
 
@@ -149,8 +149,7 @@ public:
     };
 
 protected:
-    tbb::task_arena& m_taskArena;
-    tbb::task_group& m_taskGroup;
+    IOServicePool::Ptr m_ioServicePool;
 
     // flag for message that need to check respond packet like p2p message
     bool m_needCheckRspPacket = false;
@@ -200,7 +199,7 @@ public:
     virtual ~WsSessionFactory() = default;
 
 public:
-    virtual WsSession::Ptr createSession(tbb::task_arena& taskArena, tbb::task_group& taskGroup);
+    virtual WsSession::Ptr createSession(IOServicePool::Ptr ioServicePool);
 };
 
 }  // namespace bcos::boostssl::ws
