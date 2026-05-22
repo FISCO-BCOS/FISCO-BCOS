@@ -831,7 +831,7 @@ CheckResult PBFTEngine::checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface>
 CheckResult PBFTEngine::checkSignature(PBFTBaseMessageInterface::Ptr _req)
 {
     // check the signature
-    auto* nodeInfo = m_config->getConsensusNodeByIndex(_req->generatedFrom());
+    auto nodeInfo = m_config->getConsensusNodeByIndex(_req->generatedFrom());
     if (!nodeInfo)
     {
         PBFT_LOG(WARNING) << LOG_DESC("checkSignature failed for the node is not a consensus node")
@@ -869,8 +869,8 @@ bool PBFTEngine::checkProposalSignature(
     {
         return false;
     }
-    auto* nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
-    if (nodeInfo == nullptr)
+    auto nodeInfo = m_config->getConsensusNodeByIndex(_generatedFrom);
+    if (!nodeInfo)
     {
         PBFT_LOG(WARNING) << LOG_DESC(
                                  "checkProposalSignature failed for the node "
@@ -1049,8 +1049,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     // verify the proposal
     auto self = weak_from_this();
-    auto* leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
-    if (leaderNodeInfo == nullptr)
+    auto leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
+    if (!leaderNodeInfo)
     {
         return false;
     }
@@ -1077,6 +1077,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         }
         m_inFlightProposals.insert(key);
     }
+    // leaderNodeInfo is captured by value into the lambda: it is a ConsensusNode copy made
+    // while the list lock was held (FIB-125), so it remains valid after setConsensusNodeList().
     m_config->validator()->verifyProposal(leaderNodeInfo->nodeID,
         _prePrepareMsg->consensusProposal()->index(), block,
         [self, _prePrepareMsg, _generatedFromNewView, leaderNodeInfo, _needCheckSignature, block](
@@ -1492,7 +1494,7 @@ bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newView
                               << printPBFTMsgInfo(viewChangeReq);
             return false;
         }
-        auto* nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
+        auto nodeInfo = m_config->getConsensusNodeByIndex(viewChangeReq->generatedFrom());
         if (!nodeInfo)
         {
             continue;
@@ -1580,7 +1582,11 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
             continue;
         }
         // miss the cache, request to from node
-        auto* from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
+        auto from = m_config->getConsensusNodeByIndex(prePrepare->generatedFrom());
+        if (!from)
+        {
+            continue;
+        }
         m_logSync->requestPrecommitData(
             from->nodeID, prePrepare, [self](PBFTMessageInterface::Ptr _prePrepare) {
                 auto engine = self.lock();

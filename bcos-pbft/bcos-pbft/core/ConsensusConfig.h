@@ -25,6 +25,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
 #include <shared_mutex>
+#include <optional>
 
 namespace bcos::consensus
 {
@@ -94,7 +95,9 @@ public:
 
     virtual void updateQuorum() = 0;
     IndexType getNodeIndexByNodeID(bcos::crypto::PublicPtr _nodeID);
-    ConsensusNode* getConsensusNodeByIndex(IndexType _nodeIndex);
+    // Returns a copy of the ConsensusNode at the given index (while holding the list lock),
+    // or std::nullopt if the index is out of range (FIB-125: eliminates dangling-pointer UAF).
+    std::optional<ConsensusNode> getConsensusNodeByIndex(IndexType _nodeIndex);
     bcos::crypto::KeyPairInterface::Ptr keyPair() { return m_keyPair; }
 
     virtual void setBlockTxCountLimit(uint64_t _blockTxCountLimit)

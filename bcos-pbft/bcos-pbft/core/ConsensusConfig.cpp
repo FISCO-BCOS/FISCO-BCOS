@@ -137,14 +137,18 @@ IndexType ConsensusConfig::getNodeIndexByNodeID(bcos::crypto::PublicPtr _nodeID)
     return nodeIndex;
 }
 
-ConsensusNode* ConsensusConfig::getConsensusNodeByIndex(IndexType _nodeIndex)
+// Returns a value-copy of the ConsensusNode while holding x_consensusNodeList (FIB-125):
+// returning a pointer into the locked container is unsafe because the lock is released
+// on return, and the caller may use the pointer after setConsensusNodeList() replaces
+// the backing vector.  Copying the value while locked is race-free.
+std::optional<ConsensusNode> ConsensusConfig::getConsensusNodeByIndex(IndexType _nodeIndex)
 {
     ReadGuard lock(x_consensusNodeList);
     if (_nodeIndex < m_consensusNodeList.size())
     {
-        return std::addressof((m_consensusNodeList)[_nodeIndex]);
+        return m_consensusNodeList[_nodeIndex];
     }
-    return {};
+    return std::nullopt;
 }
 bcos::ledger::Features bcos::consensus::ConsensusConfig::features() const
 {
