@@ -1,5 +1,6 @@
 include(ExternalProject)
 include(GNUInstallDirs)
+set(LIB_SUFFIX .a)
 ExternalProject_Add(GroupSigLib
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
     DOWNLOAD_NAME group_sig_lib-b8b9164.tar.gz
@@ -19,11 +20,17 @@ ExternalProject_Add(GroupSigLib
     # in warnflags that produce invalid ninja build files.
     # 1) Copy fix script into GroupSigLib cmake/
     # 2) Modify cmake/ProjectPbcSig.cmake to call it after pbc_sig patch step
-    PATCH_COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/fix_pbc_sig_cmake.py cmake/ && python3 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/inject_pbc_sig_fix.py
+    # NOTE: MUST use "sh -c" because Ninja executes commands directly (not via
+    # shell), so "&&" would be treated as a cp argument without it.
+    PATCH_COMMAND sh -c "cp ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/fix_pbc_sig_cmake.py cmake/ && python3 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/inject_pbc_sig_fix.py"
+    # Tell Ninja which files the external project produces so it can track them.
+    BUILD_BYPRODUCTS
+        ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/libgroup_sig${LIB_SUFFIX}
+        <SOURCE_DIR>/deps/lib/libpbc_sig${LIB_SUFFIX}
+        <SOURCE_DIR>/deps/lib/libpbc${LIB_SUFFIX}
 )
 
 ExternalProject_Get_Property(GroupSigLib SOURCE_DIR)
-set(LIB_SUFFIX .a)
 set(DEPS_INCLUDE_DIR ${SOURCE_DIR}/deps/include)
 file(MAKE_DIRECTORY ${DEPS_INCLUDE_DIR})
 
