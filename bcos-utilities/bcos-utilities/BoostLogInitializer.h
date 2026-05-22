@@ -119,7 +119,7 @@ private:
     }
 
     template <typename T>
-    void stopLogging(boost::shared_ptr<T> sink)
+    void stopLogging(boost::shared_ptr<T> const& sink)
     {
         if (!sink)
         {
@@ -131,10 +131,9 @@ private:
         sink->stop();
         // flush all log records that may have left buffered
         sink->flush();
-        sink.reset();
     }
 
-    void stopLogging(boost::shared_ptr<sink_t> sink);
+    void stopLogging(boost::shared_ptr<sink_t> const& sink);
     std::vector<boost::shared_ptr<sink_t>> m_sinks;
     std::vector<boost::shared_ptr<console_sink_t>> m_consoleSinks;
 

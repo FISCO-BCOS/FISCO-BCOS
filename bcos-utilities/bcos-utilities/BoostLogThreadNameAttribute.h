@@ -33,7 +33,7 @@ class thread_name_impl : public boost::log::attribute::impl
 public:
     boost::log::attribute_value get_value() override
     {
-        auto name = bcos::pthread_getThreadName();
+        auto const& name = bcos::pthread_getThreadNameRef();
         return boost::log::attributes::make_attribute_value(name.empty() ? "Unnamed" : name);
     }
 };

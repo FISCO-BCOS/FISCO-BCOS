@@ -39,6 +39,7 @@
 #include <boost/spirit/home/qi/numeric/numeric_utils.hpp>
 #include <boost/system/detail/error_category.hpp>
 #include <boost/system/detail/error_code.hpp>
+#include <utility>
 namespace bcos
 {
 std::string const FileLogger = "FileLogger";
@@ -538,7 +539,7 @@ private:
 
 public:
     //! Constructor
-    file_collector(boost::shared_ptr<file_collector_repository> const& repo,
+    file_collector(boost::shared_ptr<file_collector_repository> repo,
         boost::filesystem::path const& target_dir, uintmax_t max_size, uintmax_t min_free_space,
         uintmax_t max_files);
 
@@ -625,10 +626,10 @@ private:
 };
 
 //! Constructor
-file_collector::file_collector(boost::shared_ptr<file_collector_repository> const& repo,
+file_collector::file_collector(boost::shared_ptr<file_collector_repository> repo,
     boost::filesystem::path const& target_dir, uintmax_t max_size, uintmax_t min_free_space,
     uintmax_t max_files)
-  : m_pRepository(repo),
+  : m_pRepository(std::move(repo)),
     m_MaxSize(max_size),
     m_MinFreeSpace(min_free_space),
     m_MaxFiles(max_files),
@@ -775,14 +776,15 @@ void file_collector::store_file(boost::filesystem::path const& src_path)
     }
     if (m_ConvertTarGZ)
     {
-        auto from = info.m_Path;
-        info.m_Path = info.m_Path.string() + std::string(".gz");
-        convert_to_tar_gz(from, info.m_Path);
+        auto compressedPath = info.m_Path;
+        compressedPath += ".gz";
+        convert_to_tar_gz(info.m_Path, compressedPath);
+        info.m_Path = std::move(compressedPath);
         info.m_Size = boost::filesystem::file_size(info.m_Path);
     }
 
-    m_Files.push_back(info);
     m_TotalSize += info.m_Size;
+    m_Files.push_back(std::move(info));
 }
 
 //! The function checks if the specified path refers to an existing file in the storage
@@ -875,7 +877,7 @@ boost::log::sinks::file::scan_result file_collector::scan_for_files(
                             info.m_Size = boost::filesystem::file_size(info.m_Path);
                             total_size += info.m_Size;
                             info.m_TimeStamp = boost::filesystem::last_write_time(info.m_Path);
-                            files.push_back(info);
+                            files.push_back(std::move(info));
                             ++result.found_count;
 
                             // Test that the file_number >= result.last_file_counter accounting for
