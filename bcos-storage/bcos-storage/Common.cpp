@@ -27,14 +27,12 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/vector.hpp>
-#include <optional>
-
-using namespace std;
-
 namespace bcos::storage
 {
-const __itt_string_handle* const ITT_STRING_STORAGE_PREPARE = __itt_string_handle_create("storage.prepare");
-const __itt_string_handle* const ITT_STRING_STORAGE_COMMIT = __itt_string_handle_create("storage.commit");
+const __itt_string_handle* const ITT_STRING_STORAGE_PREPARE =
+    __itt_string_handle_create("storage.prepare");
+const __itt_string_handle* const ITT_STRING_STORAGE_COMMIT =
+    __itt_string_handle_create("storage.commit");
 const __itt_string_handle* const ITT_STRING_STORAGE_ROLLBACK =
     __itt_string_handle_create("storage.rollback");
 const __itt_string_handle* const ITT_STRING_STORAGE_SET_ROWS =

@@ -27,7 +27,9 @@ add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS})
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
-target_include_directories(txpool PUBLIC .)
-target_include_directories(txpool PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/bcos-txpool)
-target_link_libraries(txpool PUBLIC ledger TBB::tbb protobuf::libprotobuf bcos-protocol bcos-utilities tool)
+target_include_directories(txpool PUBLIC .
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_BINARY_DIR}/bcos-txpool
+    ${CMAKE_CURRENT_BINARY_DIR}/..)
+target_link_libraries(txpool PUBLIC ledger rpc TBB::tbb protobuf::libprotobuf bcos-protocol bcos-utilities tool)
 set_target_properties(txpool PROPERTIES UNITY_BUILD "ON")

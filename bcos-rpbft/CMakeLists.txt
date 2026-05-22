@@ -21,8 +21,10 @@ project(bcos-rpbft VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS bcos-rpbft/*.cpp)
 add_library(rpbft ${SRCS})
-include_directories(${CMAKE_BINARY_DIR}/bcos-pbft/)
-target_link_libraries(rpbft PUBLIC bcos-framework)
+target_include_directories(rpbft PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/bcos-pbft>)
+target_link_libraries(rpbft PUBLIC bcos-framework bcos-protocol)
 set_target_properties(rpbft PROPERTIES UNITY_BUILD "ON")
 add_dependencies(rpbft pbft)
 

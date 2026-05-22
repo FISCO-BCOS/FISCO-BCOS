@@ -9,6 +9,7 @@
 #include <bcos-tars-protocol/tars/GatewayService.h>
 #include <chrono>
 #include <mutex>
+#include <vector>
 
 namespace bcostars
 {
@@ -24,19 +25,19 @@ public:
     void destroy() override;
 
     bcostars::Error asyncSendBroadcastMessage(tars::Int32 _type, const std::string& groupID,
-        tars::Int32 moduleID, const vector<tars::Char>& srcNodeID,
+        tars::Int32 moduleID, const std::vector<tars::Char>& srcNodeID,
         const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncGetPeers(bcostars::GatewayInfo&, std::vector<bcostars::GatewayInfo>&,
         tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncSendMessageByNodeID(const std::string& groupID, tars::Int32 moduleID,
-        const vector<tars::Char>& srcNodeID, const vector<tars::Char>& dstNodeID,
-        const vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
+        const std::vector<tars::Char>& srcNodeID, const std::vector<tars::Char>& dstNodeID,
+        const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncSendMessageByNodeIDs(const std::string& groupID, tars::Int32 moduleID,
-        const vector<tars::Char>& srcNodeID, const vector<vector<tars::Char>>& dstNodeID,
-        const vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
+        const std::vector<tars::Char>& srcNodeID, const std::vector<std::vector<tars::Char>>& dstNodeID,
+        const std::vector<tars::Char>& payload, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncGetGroupNodeInfo(
         const std::string& groupID, GroupNodeInfo&, tars::TarsCurrentPtr current) override;

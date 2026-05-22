@@ -28,7 +28,10 @@ file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 find_package(tarscpp REQUIRED)
 
 add_library(rpc ${SRCS} ${HEADERS})
+target_include_directories(rpc PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto protocol-tars jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil)
+add_dependencies(rpc BuildInfo.h)
 set_target_properties(rpc PROPERTIES UNITY_BUILD "ON")
 
  if (TESTS)

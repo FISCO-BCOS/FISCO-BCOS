@@ -47,7 +47,10 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 add_library(pbft ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(pbft PUBLIC txpool ledger bcos-utilities tool bcos-framework jsoncpp_static)
+target_include_directories(pbft PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${PROTO_OUTPUT_PATH}>)
+target_link_libraries(pbft PUBLIC txpool ledger bcos-utilities tool bcos-framework bcos-protocol jsoncpp_static)
 set_source_files_properties(
     "bcos-pbft/pbft/protocol/proto/PBFT.pb.cc"
     "bcos-pbft/core/proto/Consensus.pb.cc"

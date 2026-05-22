@@ -20,6 +20,7 @@
  */
 
 #include "DAG.h"
+#include "../Common.h"
 using namespace bcos;
 using namespace bcos::executor;
 

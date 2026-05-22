@@ -44,11 +44,11 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "SchedulerService std::exception:" << e.what() << std::endl;
+        std::cerr << "SchedulerService std::exception:" << e.what() << std::endl;
     }
     catch (...)
     {
-        cerr << "unknown exception." << std::endl;
+        std::cerr << "unknown exception." << std::endl;
     }
     return -1;
 }
