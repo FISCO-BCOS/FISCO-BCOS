@@ -233,35 +233,48 @@ constexpr static int64_t BALANCE_TRANSFER_GAS = 21000;
 constexpr static int64_t TOKENS_PER_NONZERO_BYTE = 4;  // EIP-7623 token weight for non-zero byte
 constexpr static int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;  // EIP-7623 floor cost per token
 
-/// EIP-7623 calldata floor: max(standard calldata gas, tokens * 10).
-inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
+struct Eip7623Components
 {
-    // Defensive overflow guard for theoretical large inputs:
-    // numTokens * TOTAL_COST_FLOOR_PER_TOKEN <= int64_t max.
+    int64_t normalCost = 0;
+    int64_t floorCost = 0;
+    int64_t tokenCount = 0;
+};
+
+/// EIP-7623 calldata components: standard cost, floor reserve, and token count.
+inline Eip7623Components calcEip7623Components(bcos::bytesConstRef data)
+{
     constexpr auto MAX_SAFE_EIP7623_BYTES =
         static_cast<size_t>(std::numeric_limits<int64_t>::max() /
                             (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
     if (data.size() > MAX_SAFE_EIP7623_BYTES)
     {
-        return std::numeric_limits<int64_t>::max();
+        return {std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::max(),
+            std::numeric_limits<int64_t>::max()};
     }
 
-    int64_t normalDataCost = 0;
-    int64_t numTokens = 0;
+    Eip7623Components components;
     for (auto byte : data)
     {
         if (byte == 0)
         {
-            normalDataCost += 4;
-            ++numTokens;
+            components.normalCost += 4;
+            ++components.tokenCount;
         }
         else
         {
-            normalDataCost += 16;
-            numTokens += TOKENS_PER_NONZERO_BYTE;
+            components.normalCost += 16;
+            components.tokenCount += TOKENS_PER_NONZERO_BYTE;
         }
     }
-    return std::max(normalDataCost, numTokens * TOTAL_COST_FLOOR_PER_TOKEN);
+    components.floorCost = components.tokenCount * TOTAL_COST_FLOOR_PER_TOKEN;
+    return components;
+}
+
+/// EIP-7623 calldata floor: max(standard calldata gas, tokens * 10).
+inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
+{
+    auto const components = calcEip7623Components(data);
+    return std::max(components.normalCost, components.floorCost);
 }
 
 constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};

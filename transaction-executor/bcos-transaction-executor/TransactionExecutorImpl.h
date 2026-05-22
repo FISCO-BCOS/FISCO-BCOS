@@ -5,6 +5,7 @@
 #include "bcos-executor/src/Web3Eip7702Apply.h"
 #include "bcos-executor/src/Web3Eip7702Fill.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
+#include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
@@ -12,6 +13,7 @@
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/EVMCResult.h"
 #include "bcos-transaction-executor/Eip7702Common.h"
+#include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
 #include "precompiled/PrecompiledManager.h"
@@ -75,6 +77,7 @@ public:
             int64_t m_eip7702Refund = 0;
             std::shared_ptr<std::vector<evmc_address>> m_eip7702WarmAuthorities;
             std::shared_ptr<std::vector<evmc_address>> m_eip7702WarmTargets;
+            gas::TxGasSettlementContext m_gasSettlement{};
             hostcontext::HostContext<decltype(m_rollbackableStorage),
                 decltype(m_rollbackableTransientStorage)>
                 m_hostContext;
@@ -108,8 +111,10 @@ public:
                     ledgerConfig, *executor.m_hashImpl, transaction.type() != 0, m_nonce,
                     task::syncWait, m_eip2930Parsed.accessList, m_eip2930Parsed.web3TypedTxKind,
                     m_eip7702Parsed.authorizationList, m_eip7702WarmAuthorities,
-                    m_eip7702WarmTargets)
-            {}
+                    m_eip7702WarmTargets, std::addressof(m_gasSettlement))
+            {
+                m_gasSettlement.gasLimit = m_gasLimit;
+            }
         };
         std::unique_ptr<Data> m_data;
 
@@ -140,6 +145,7 @@ public:
                 }
                 m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
                 m_data->m_evmcResult->gas_refund += m_data->m_eip7702Refund;
+                finalizeGasUsed();
                 co_await consumeBalance();
             }
             else if constexpr (step == 2)
@@ -294,10 +300,48 @@ public:
             }
         }
 
+        void finalizeGasUsed()
+        {
+            auto& evmcResult = *m_data->m_evmcResult;
+            auto const& features = m_data->m_ledgerConfig.get().features();
+            auto const revision =
+                bcos::executor::toRevision(features, m_data->m_blockHeader.get().version());
+            auto const web3Tx = m_data->m_transaction.get().type() != 0;
+            if (!gas::ethGasSettlementEnabled(features, revision, 0, web3Tx))
+            {
+                m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
+                return;
+            }
+
+            if (m_data->m_gasSettlement.gasBeforeEvm > 0)
+            {
+                m_data->m_gasSettlement.evmGasLeft = evmcResult.gas_left;
+                m_data->m_gasSettlement.evmGasRefund = evmcResult.gas_refund;
+                m_data->m_gasUsed = gas::finalizeEthereumGasUsed(m_data->m_gasSettlement);
+                return;
+            }
+
+            auto const& msg = m_data->m_hostContext.message();
+            auto const web3TypedTxKind = m_data->m_eip7702Parsed.web3TypedTxKind != 0 ?
+                                             m_data->m_eip7702Parsed.web3TypedTxKind :
+                                             m_data->m_eip2930Parsed.web3TypedTxKind;
+            auto const* accessList = m_data->m_eip2930Parsed.accessList ?
+                                         m_data->m_eip2930Parsed.accessList.get() :
+                                         nullptr;
+            auto const* authorizationList = m_data->m_eip7702Parsed.authorizationList ?
+                                                m_data->m_eip7702Parsed.authorizationList.get() :
+                                                nullptr;
+            auto const intrinsic =
+                gas::computeTxIntrinsicGas(msg, accessList, web3TypedTxKind, authorizationList);
+            auto const fixErrorGas =
+                features.get(ledger::Features::Flag::bugfix_v1_exec_error_gas_used);
+            m_data->m_gasUsed = gas::finalizeEthereumGasUsedWithoutEvmStart(m_data->m_gasSettlement,
+                intrinsic.preExecutionDebit(), evmcResult.gas_left, fixErrorGas);
+        }
+
         task::Task<void> consumeBalance()
         {
             auto& evmcResult = *m_data->m_evmcResult;
-            m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
             if (!m_data->m_call)
             {
                 auto& evmcMessage = m_data->m_hostContext.message();

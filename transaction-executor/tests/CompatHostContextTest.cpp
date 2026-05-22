@@ -14,12 +14,14 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 
 using bcos::ledger::account::EVMAccount;
+#include "Eip7702TestHelpers.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/Eip7702Common.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
+#include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -80,7 +82,8 @@ public:
         std::shared_ptr<const bcos::executor::Eip7702AuthorizationList> eip7702AuthorizationList =
             {},
         std::shared_ptr<std::vector<evmc_address>> eip7702WarmAuthorities = {},
-        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets = {})
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets = {}, bool web3Tx = false,
+        gas::TxGasSettlementContext* gasSettlementCtx = nullptr)
     {
         ledgerConfig.setFeatures(features);
         blockHeader.setVersion(blockHeaderVersion);
@@ -104,10 +107,10 @@ public:
             .sender_len = 0};
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
             rollbackableStorage, rollbackableTransientStorage, blockHeader, message, originIn, "",
-            0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait,
+            0, seq, *precompiledManager, ledgerConfig, *hashImpl, web3Tx, 0, bcos::task::syncWait,
             std::move(eip2930AccessList), web3TypedTxKindForAccessList,
             std::move(eip7702AuthorizationList), std::move(eip7702WarmAuthorities),
-            std::move(eip7702WarmTargets));
+            std::move(eip7702WarmTargets), gasSettlementCtx);
     }
 };
 
@@ -560,6 +563,347 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_empty_access_list_no_extra_warm)
     evmc_address const extra{};
     BOOST_CHECK_EQUAL(host.accessAccount(extra), EVMC_ACCESS_COLD);
 }
+
+BOOST_AUTO_TEST_SUITE(EthTxGasSettlementHost)
+
+BOOST_AUTO_TEST_CASE(Web3_stop_debitsIntrinsicOnce_notTransfer21000)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x81;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x82;
+
+    constexpr int64_t startGas = 500'000;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        bcos::bytes const stopCode{0x00};
+        auto const codeHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await recipientAccount.setCode(stopCode, "", codeHash);
+
+        gas::TxGasSettlementContext settlement{};
+        settlement.gasLimit = startGas;
+
+        auto host = makeHost(features,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), origin, recipient,
+            EVMC_CALL, {}, 0, startGas, {}, {}, {}, true, std::addressof(settlement));
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        BOOST_CHECK_EQUAL(settlement.gasBeforeEvm, startGas - gas::TX_BASE_GAS);
+        BOOST_CHECK_EQUAL(result.gas_left, settlement.gasBeforeEvm);
+
+        settlement.evmGasLeft = result.gas_left;
+        settlement.evmGasRefund = result.gas_refund;
+        settlement.fixedIntrinsic = gas::TX_BASE_GAS;
+        BOOST_CHECK_EQUAL(gas::finalizeEthereumGasUsed(settlement), gas::TX_BASE_GAS);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(Web3_mixedCalldata_finalizeUsesFloor)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+
+    bytes mixed(100);
+    for (int i = 0; i < 50; ++i)
+    {
+        mixed[i] = 0x00;
+    }
+    for (int i = 50; i < 100; ++i)
+    {
+        mixed[i] = 0x42;
+    }
+    auto const components = bcos::executor::calcEip7623Components(ref(mixed));
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x91;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x92;
+
+    constexpr int64_t startGas = 500'000;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        bcos::bytes const stopCode{0x00};
+        auto const codeHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await recipientAccount.setCode(stopCode, "", codeHash);
+
+        gas::TxGasSettlementContext settlement{};
+        settlement.gasLimit = startGas;
+
+        auto host = makeHost(features,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), origin, recipient,
+            EVMC_CALL, {}, 0, startGas, {}, {}, {}, true, std::addressof(settlement));
+        auto& msg = host.mutableMessage();
+        msg.input_data = mixed.data();
+        msg.input_size = mixed.size();
+        msg.code_address = recipient;
+
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        settlement.calldata = components;
+        settlement.fixedIntrinsic = gas::TX_BASE_GAS;
+        settlement.evmGasLeft = result.gas_left;
+        settlement.evmGasRefund = result.gas_refund;
+
+        BOOST_CHECK_EQUAL(
+            gas::finalizeEthereumGasUsed(settlement), gas::TX_BASE_GAS + components.floorCost);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(Web3_intrinsicOOG_beforeEvm_stillReportsIntrinsicGas)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::bugfix_v1_exec_error_gas_used);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x81;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x82;
+
+    constexpr int64_t startGas = 20'000;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        bcos::bytes const stopCode{0x00};
+        auto const codeHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await recipientAccount.setCode(stopCode, "", codeHash);
+
+        gas::TxGasSettlementContext settlement{};
+        settlement.gasLimit = startGas;
+
+        auto host = makeHost(features,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), origin, recipient,
+            EVMC_CALL, {}, 0, startGas, {}, {}, {}, true, std::addressof(settlement));
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_CHECK_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
+        BOOST_CHECK_EQUAL(result.gas_left, 0);
+        BOOST_CHECK_EQUAL(settlement.gasBeforeEvm, 0);
+
+        auto const& msg = host.message();
+        auto const intrinsic = gas::computeTxIntrinsicGas(msg, nullptr, 0, nullptr);
+        BOOST_CHECK_EQUAL(gas::finalizeEthereumGasUsedWithoutEvmStart(
+                              settlement, intrinsic.preExecutionDebit(), result.gas_left, true),
+            startGas);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(Web3_revert_executionBurnIncludedInFinalize)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0xc1;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0xc2;
+
+    constexpr int64_t startGas = 500'000;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        auto const& revertCode = bcos::test::eip7702::revertBytecode();
+        auto const codeHash =
+            hashImpl->hash(bcos::bytesConstRef(revertCode.data(), revertCode.size()));
+        co_await recipientAccount.setCode(revertCode, "", codeHash);
+
+        gas::TxGasSettlementContext settlement{};
+        settlement.gasLimit = startGas;
+
+        auto host = makeHost(features,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), origin, recipient,
+            EVMC_CALL, {}, 0, startGas, {}, {}, {}, true, std::addressof(settlement));
+        auto& msg = host.mutableMessage();
+        msg.code_address = recipient;
+
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_REVERT);
+        BOOST_CHECK_GT(settlement.gasBeforeEvm, 0);
+        BOOST_CHECK_LT(result.gas_left, settlement.gasBeforeEvm);
+
+        settlement.calldata =
+            executor::calcEip7623Components(bcos::bytesConstRef(msg.input_data, msg.input_size));
+        settlement.fixedIntrinsic = gas::TX_BASE_GAS;
+        settlement.evmGasLeft = result.gas_left;
+        settlement.evmGasRefund = result.gas_refund;
+        BOOST_CHECK_GT(gas::finalizeEthereumGasUsed(settlement), gas::TX_BASE_GAS);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(Web3_valueTransfer_noDouble21000OnFinalize)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_balance);
+    features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0xd1;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0xd2;
+
+    constexpr int64_t startGas = 500'000;
+
+    syncWait([&]() -> task::Task<void> {
+        ledgerConfig.setFeatures(features);
+        ledgerConfig.setBalanceTransfer(true);
+
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        bcos::bytes const stopCode{0x00};
+        auto const codeHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await recipientAccount.setCode(stopCode, "", codeHash);
+
+        gas::TxGasSettlementContext settlement{};
+        settlement.gasLimit = startGas;
+
+        auto host = makeHost(features,
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION), origin, recipient,
+            EVMC_CALL, {}, 0, startGas, {}, {}, {}, true, std::addressof(settlement));
+        auto& msg = host.mutableMessage();
+        msg.sender = origin;
+        msg.code_address = recipient;
+        msg.value = bcos::toEvmC(bcos::u256(1));
+
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        settlement.fixedIntrinsic = gas::TX_BASE_GAS;
+        settlement.evmGasLeft = result.gas_left;
+        settlement.evmGasRefund = result.gas_refund;
+        auto const gasUsed = gas::finalizeEthereumGasUsed(settlement);
+        BOOST_CHECK_EQUAL(gasUsed, gas::TX_BASE_GAS);
+        BOOST_CHECK_LT(gasUsed, 2 * gas::TX_BASE_GAS);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(Legacy_nonWeb3_stillDebits7702IntrinsicBeforeEvm)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+
+    auto authList = std::make_shared<bcos::executor::Eip7702AuthorizationList>();
+    authList->resize(1);
+
+    evmc_address origin{};
+    origin.bytes[19] = 0xa1;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0xa2;
+
+    constexpr int64_t startGas = 500'000;
+    int64_t const authCost = executor_v1::EIP_7702_PER_EMPTY_ACCOUNT_COST;
+
+    syncWait([&]() -> task::Task<void> {
+        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        if (!co_await originAccount.exists())
+        {
+            co_await originAccount.create();
+        }
+        co_await originAccount.setBalance(bcos::u256(1) << 96);
+
+        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+            rollbackableStorage, recipient, false);
+        if (!co_await recipientAccount.exists())
+        {
+            co_await recipientAccount.create();
+        }
+        bcos::bytes const stopCode{0x00};
+        auto const codeHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
+        co_await recipientAccount.setCode(stopCode, "", codeHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, recipient, EVMC_CALL, {}, 4, startGas, authList, {}, {}, false);
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+        BOOST_CHECK_GE(startGas - result.gas_left, authCost);
+    }());
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(Eip7702)
 
