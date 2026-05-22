@@ -7,6 +7,7 @@ find_package(tomlplusplus CONFIG REQUIRED)
 # command: used by fisco-bcos-air, tars RpcService/GatewayService/ExecutorService/SchedulerService/NodeService
 add_library(command CommandHelper.cpp)
 target_link_libraries(command PUBLIC bcos-framework Boost::program_options)
+add_dependencies(command BuildInfo.h)
 
 # protocol_init: used by tars services and lightnode
 add_library(protocol_init ProtocolInitializer.cpp Common.cpp)
@@ -17,6 +18,7 @@ target_link_libraries(protocol_init PUBLIC
 add_library(pbft_init PBFTInitializer.cpp ProPBFTInitializer.cpp)
 target_link_libraries(pbft_init PUBLIC protocol_init ledger tool sealer rpbft pbft sync storage)
 set_target_properties(pbft_init PROPERTIES UNITY_BUILD "ON")
+add_dependencies(pbft_init BuildInfo.h)
 if(WITH_LEDGER_ELECTION)
     target_link_libraries(pbft_init PUBLIC leader_election)
 endif()
