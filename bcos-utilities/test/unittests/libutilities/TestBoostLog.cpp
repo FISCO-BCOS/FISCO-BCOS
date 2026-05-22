@@ -35,5 +35,14 @@ BOOST_AUTO_TEST_CASE(testCreatFileColletctor)
     auto collector = bcos::log::make_collector(targetDir, 0, 0, 0, false);
     BOOST_CHECK(collector != nullptr);
 }
+
+BOOST_AUTO_TEST_CASE(testThreadNameCache)
+{
+    constexpr auto threadName = "log-test";
+    bcos::pthread_setThreadName(threadName);
+
+    BOOST_CHECK_EQUAL(bcos::pthread_getThreadNameRef(), threadName);
+    BOOST_CHECK_EQUAL(bcos::pthread_getThreadName(), threadName);
+}
 }  // namespace test
 }  // namespace bcos
