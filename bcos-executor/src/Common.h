@@ -39,6 +39,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
@@ -174,6 +175,8 @@ struct VMSchedule
     bool enableLondon = true;
     bool enablePairs = false;
     bool enableCanCun = false;
+    bool enablePrague = false;
+    bool enableOsaka = false;
     unsigned sstoreRefundGas = 15000;
     unsigned suicideRefundGas = 24000;
     unsigned createDataGas = 20;
@@ -202,7 +205,77 @@ static const VMSchedule FiscoBcosScheduleCancun = [] {
     return schedule;
 }();
 
+static const VMSchedule FiscoBcosSchedulePrague = [] {
+    VMSchedule schedule;
+    schedule.enablePairs = true;
+    schedule.enableCanCun = true;
+    schedule.enablePrague = true;
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    return schedule;
+}();
+
+static const VMSchedule FiscoBcosScheduleOsaka = [] {
+    VMSchedule schedule;
+    schedule.enablePairs = true;
+    schedule.enableCanCun = true;
+    schedule.enablePrague = true;
+    schedule.enableOsaka = true;
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    return schedule;
+}();
+
 constexpr static int64_t BALANCE_TRANSFER_GAS = 21000;
+
+// EIP-7623: calldata floor cost constants (Prague+)
+// token = 1 for zero byte, TOKENS_PER_NONZERO_BYTE for non-zero byte; floor = tokens * 10
+constexpr static int64_t TOKENS_PER_NONZERO_BYTE = 4;  // EIP-7623 token weight for non-zero byte
+constexpr static int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;  // EIP-7623 floor cost per token
+
+struct Eip7623Components
+{
+    int64_t normalCost = 0;
+    int64_t floorCost = 0;
+    int64_t tokenCount = 0;
+};
+
+/// EIP-7623 calldata components: standard cost, floor reserve, and token count.
+inline Eip7623Components calcEip7623Components(bcos::bytesConstRef data)
+{
+    constexpr auto MAX_SAFE_EIP7623_BYTES =
+        static_cast<size_t>(std::numeric_limits<int64_t>::max() /
+                            (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
+    if (data.size() > MAX_SAFE_EIP7623_BYTES)
+    {
+        return {std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::max(),
+            std::numeric_limits<int64_t>::max()};
+    }
+
+    Eip7623Components components;
+    for (auto byte : data)
+    {
+        if (byte == 0)
+        {
+            components.normalCost += 4;
+            ++components.tokenCount;
+        }
+        else
+        {
+            components.normalCost += 16;
+            components.tokenCount += TOKENS_PER_NONZERO_BYTE;
+        }
+    }
+    components.floorCost = components.tokenCount * TOTAL_COST_FLOOR_PER_TOKEN;
+    return components;
+}
+
+/// EIP-7623 calldata floor: max(standard calldata gas, tokens * 10).
+inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
+{
+    auto const components = calcEip7623Components(data);
+    return std::max(components.normalCost, components.floorCost);
+}
 
 constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 

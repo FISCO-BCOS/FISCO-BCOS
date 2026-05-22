@@ -22,13 +22,18 @@
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/ledger/SystemConfigs.h"
+#include "bcos-framework/protocol/Web3AuthorizationList.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <boost/lexical_cast.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -248,5 +253,50 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
             }
         }
     }
+    co_return TransactionStatus::None;
+}
+
+task::Task<protocol::TransactionStatus> TxValidator::validateEip7702Admission(
+    const bcos::protocol::Transaction& _tx, std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
+{
+    if (_tx.type() != static_cast<uint8_t>(TransactionType::Web3Transaction))
+    {
+        co_return TransactionStatus::None;
+    }
+    if (_tx.web3AuthorizationList().empty())
+    {
+        co_return TransactionStatus::None;
+    }
+    if (_tx.web3AuthorizationList().size() > protocol::WEB3_EIP7702_MAX_AUTHORIZATION_LIST_ENTRIES)
+    {
+        TX_VALIDATOR_CHECKER_LOG(WARNING) << LOG_BADGE("validateEip7702Admission")
+                                          << LOG_DESC("Reject EIP-7702 authorization_list size")
+                                          << LOG_KV("size", _tx.web3AuthorizationList().size());
+        co_return TransactionStatus::Malformed;
+    }
+
+    if (dynamic_cast<crypto::Secp256k1Crypto const*>(m_cryptoSuite->signatureImpl().get()) ==
+        nullptr)
+    {
+        TX_VALIDATOR_CHECKER_LOG(WARNING) << LOG_BADGE("validateEip7702Admission")
+                                          << LOG_DESC("Reject EIP-7702 on non-secp256k1 chain");
+        co_return TransactionStatus::Malformed;
+    }
+
+    auto const key = std::string(magic_enum::enum_name(ledger::SystemConfig::executor_version));
+    auto config = co_await ledger::getSystemConfig(*_ledger, key);
+    int executorVersion = 0;
+    if (config)
+    {
+        executorVersion = boost::lexical_cast<int>(std::get<0>(config.value()));
+    }
+    if (executorVersion != 1)
+    {
+        TX_VALIDATOR_CHECKER_LOG(WARNING) << LOG_BADGE("validateEip7702Admission")
+                                          << LOG_DESC("Reject EIP-7702 on legacy executor")
+                                          << LOG_KV("executorVersion", executorVersion);
+        co_return TransactionStatus::Malformed;
+    }
+
     co_return TransactionStatus::None;
 }

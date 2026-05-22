@@ -1,0 +1,6 @@
+{
+  "name": "tx_reject_empty_auth_list",
+  "expect": "reject",
+  "description": "Empty authorization_list must fail decode",
+  "rlp": "0x04f8650103020382520894aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa8082deadc0c001a01111111111111111111111111111111111111111111111111111111111111111a02222222222222222222222222222222222222222222222222222222222222222"
+}

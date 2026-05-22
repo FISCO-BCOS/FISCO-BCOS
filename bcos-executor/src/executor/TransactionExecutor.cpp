@@ -102,6 +102,7 @@
 #include <utility>
 #include <vector>
 
+
 #ifdef USE_TCMALLOC
 #include "gperftools/malloc_extension.h"
 #endif
@@ -115,6 +116,7 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace tbb::flow;
+
 
 crypto::Hash::Ptr GlobalHashImpl::g_hashImpl;
 
@@ -261,6 +263,27 @@ void TransactionExecutor::initEvmEnvironment()
     m_evmPrecompiled->insert({fillZero(9),
         make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("blake2_compression"),
             PrecompiledRegistrar::executor("blake2_compression"))});
+    // EIP-4844 point evaluation (Cancun) — gated by feature_evm_cancun in callBuiltInPrecompiled
+    m_evmPrecompiled->insert({fillZero(10),
+        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("point_evaluation"),
+            PrecompiledRegistrar::executor("point_evaluation"))});
+
+    // EIP-2537 BLS12-381 precompiles (Prague) — gated by feature_evm_prague in
+    // callBuiltInPrecompiled
+    static const char* bls_names[] = {"bls12_g1add", "bls12_g1msm", "bls12_g2add", "bls12_g2msm",
+        "bls12_pairing_check", "bls12_map_fp_to_g1", "bls12_map_fp2_to_g2"};
+    for (int addr = 0x0b; addr <= 0x11; ++addr)
+    {
+        const char* name = bls_names[addr - 0x0b];
+        m_evmPrecompiled->insert(
+            {fillZero(addr), make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer(name),
+                                 PrecompiledRegistrar::executor(name))});
+    }
+
+    // EIP-7951 p256verify at 0x0100 (Osaka-gated, guard in HostContext)
+    m_evmPrecompiled->insert({"0000000000000000000000000000000000000100",
+        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("p256verify"),
+            PrecompiledRegistrar::executor("p256verify"))});
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
@@ -1696,8 +1719,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("ABI loaded") << LOG_KV("address", to)
-                                    << LOG_KV("selector", toHex(selector))
-                                    << LOG_KV("ABI", abiStr);
+                                    << LOG_KV("selector", toHex(selector)) << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)
@@ -2848,6 +2870,16 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->maxPriorityFeePerGas = u256(input.maxPriorityFeePerGas());
     callParameters->transactionType = input.txType();
     callParameters->nonce = hex2u(input.nonce());
+
+    // TODO(C2): EIP-2930 accessList pre-warm is NOT wired in the bcos-executor path.
+    // The transaction-executor path (TransactionExecutorImpl + HostContext) already handles W2
+    // correctly via parseEip2930FromWeb3Transaction() + warmUpAccessList().
+    // This path must be fixed before bcos-executor can support EIP-2930/1559 access lists:
+    //   1. Call parseEip2930FromWeb3Transaction(tx) here to obtain Eip2930AccessList.
+    //   2. Assign parsed.web3TypedTxKind → callParameters->web3TypedTxKind.
+    //   3. Assign parsed.accessList       → callParameters->eip2930AccessList.
+    //   4. In TransactionExecutive::execute(), call warmUpEip2930AccessList(*callParameters)
+    //      right after warmUpEip2929InitialSet(*callParameters) (see ~line 478).
 
     if (!m_isWasm && !callParameters->create)
     {

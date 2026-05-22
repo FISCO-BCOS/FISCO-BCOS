@@ -49,6 +49,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
     m_transientStorageMap(std::make_shared<transientStorageMap>(10)),
+    m_eip2929AccessMap(std::make_shared<Eip2929AccessMap>(10)),
     m_hashImpl(std::move(_hashImpl)),
     m_ledgerCache(std::move(ledgerCache)),
     m_backendStorage(std::move(backendStorage))
@@ -126,7 +127,15 @@ void BlockContext::setExecutiveFlow(
 }
 void BlockContext::setVMSchedule()
 {
-    if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
+    if (m_features.get(ledger::Features::Flag::feature_evm_osaka))
+    {
+        m_schedule = FiscoBcosScheduleOsaka;
+    }
+    else if (m_features.get(ledger::Features::Flag::feature_evm_prague))
+    {
+        m_schedule = FiscoBcosSchedulePrague;
+    }
+    else if (m_features.get(ledger::Features::Flag::feature_evm_cancun))
     {
         m_schedule = FiscoBcosScheduleCancun;
     }

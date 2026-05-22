@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "EvmPrecompiledAddress.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
@@ -347,6 +348,47 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
+        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
+        // message call to an account with no code halts non-exceptionally (z=1, no execution).
+        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
+        // and is not applicable for calls to future precompile addresses before fork activation.
+        if (isPointEvaluationPrecompileAddress(_request->receiveAddress) &&
+            !features().get(ledger::Features::Flag::feature_evm_cancun))
+        {
+            callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
+            preResult.status_code = EVMC_SUCCESS;
+            preResult.gas_left = _request->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
+
+        if (isBLSPrecompileAddress(_request->receiveAddress) &&
+            !features().get(ledger::Features::Flag::feature_evm_prague))
+        {
+            callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
+            preResult.status_code = EVMC_SUCCESS;
+            preResult.gas_left = _request->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
+
+        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
+        // message call to an account with no code halts non-exceptionally (z=1, no execution).
+        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
+        // and is not applicable for calls to future precompile addresses before fork activation.
+        if (isP256verifyPrecompileAddress(_request->receiveAddress) &&
+            !features().get(ledger::Features::Flag::feature_evm_osaka))
+        {
+            callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
+            preResult.status_code = EVMC_SUCCESS;
+            preResult.gas_left = _request->gas;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
+
         auto gasUsed =
             m_executive->costOfPrecompiled(_request->receiveAddress, ref(_request->data));
         /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled

@@ -28,6 +28,8 @@
 #endif
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/protocol/Web3AccessList.h"
+#include "bcos-framework/protocol/Web3AuthorizationList.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 
@@ -89,6 +91,9 @@ public:
 
     uint8_t type() const override;
     bcos::bytesConstRef extraTransactionBytes() const override;
+    uint8_t web3TypedTxKind() const override;
+    bcos::protocol::Web3AccessList const& web3AccessList() const override;
+    bcos::protocol::Web3AuthorizationList const& web3AuthorizationList() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();
@@ -97,6 +102,21 @@ public:
     size_t size() const override;
 
 private:
+    void ensureWeb3AccessListCache() const;
+    void ensureWeb3AuthorizationListCache() const;
+
     std::function<bcostars::Transaction*()> m_inner;
+    mutable bcos::protocol::Web3AccessList m_web3AccessListCache;
+    mutable bool m_web3AccessListCacheBuilt = false;
+    mutable bcos::protocol::Web3AuthorizationList m_web3AuthorizationListCache;
+    mutable bool m_web3AuthorizationListCacheBuilt = false;
 };
+
+// Guard: TransactionImpl must fit inside the AnyTransaction fixed-size buffer.
+// If this assertion fires, update the size constant in
+// bcos-framework/bcos-framework/protocol/Transaction.h  (using AnyTransaction = AnyHolder<..., N>).
+static_assert(sizeof(TransactionImpl) <= 224,
+    "TransactionImpl exceeds AnyTransaction buffer (224 bytes); "
+    "update the size constant in bcos-framework/protocol/Transaction.h");
+
 }  // namespace bcostars::protocol

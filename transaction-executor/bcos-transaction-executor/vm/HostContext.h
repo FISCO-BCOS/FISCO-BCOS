@@ -28,7 +28,12 @@
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/Eip7702Delegation.h"
+#include "bcos-executor/src/Web3Eip7702Apply.h"
+#include "bcos-executor/src/vm/Eip2929AccessState.h"
+#include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -43,6 +48,8 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
+#include "bcos-transaction-executor/Eip7702Common.h"
+#include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
@@ -51,17 +58,21 @@
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
+#include <cstring>
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <range/v3/algorithm/equal.hpp>
 #include <range/v3/algorithm/fill.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <string_view>
+#include <unordered_set>
 
 namespace bcos::executor_v1::hostcontext
 {
@@ -115,6 +126,48 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
     co_return {};
 }
 
+namespace
+{
+struct Eip2929CheckpointGuard
+{
+    std::shared_ptr<bcos::executor::Eip2929AccessState> state;
+    bool committed{false};
+
+    explicit Eip2929CheckpointGuard(std::shared_ptr<bcos::executor::Eip2929AccessState> accessState)
+      : state(std::move(accessState))
+    {
+        if (state)
+        {
+            state->pushCheckpoint();
+        }
+    }
+
+    void commit()
+    {
+        if (state && !committed)
+        {
+            state->commitCheckpoint();
+            committed = true;
+        }
+    }
+
+    ~Eip2929CheckpointGuard()
+    {
+        if (state && !committed)
+        {
+            state->rollbackCheckpoint();
+        }
+    }
+};
+
+inline bool eip2929CheckpointEnabled(
+    evmc_revision revision, bcos::ledger::LedgerConfig const& ledgerConfig) noexcept
+{
+    return revision >= EVMC_BERLIN &&
+           ledgerConfig.features().get(bcos::ledger::Features::Flag::feature_evm_eip2929);
+}
+}  // namespace
+
 template <class Storage, class TransientStorage>
 class HostContext : public evmc_host_context
 {
@@ -122,7 +175,7 @@ private:
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
     std::reference_wrapper<const protocol::BlockHeader> m_blockHeader;
-    std::reference_wrapper<const evmc_address> m_origin;
+    evmc_address m_origin{};
     std::string_view m_abi;
     int m_contextID;
     std::reference_wrapper<int64_t> m_seq;
@@ -140,6 +193,22 @@ private:
     bool m_enableTransfer = false;
     int64_t m_level;
     bool m_web3Tx;
+
+    /// EIP-2929 warm sets shared across nested externalCall HostContext instances (one tx).
+    std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
+    /// Optional EIP-2930 access list (TE path); warmed after W1 for any typed tx (kind != 0).
+    std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
+    uint8_t m_web3TypedTxKindForAccessList = 0;
+    std::shared_ptr<const executor::Eip7702AuthorizationList> m_eip7702AuthorizationList;
+    std::shared_ptr<std::vector<evmc_address>> m_eip7702WarmAuthorities;
+    std::shared_ptr<std::vector<evmc_address>> m_eip7702WarmTargets;
+    gas::TxGasSettlementContext* m_gasSettlementCtx{};
+
+    bool ethGasSettlementEnabled() const noexcept
+    {
+        return gas::ethGasSettlementEnabled(
+            m_ledgerConfig.get().features(), m_revision, m_level, m_web3Tx);
+    }
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -186,7 +255,14 @@ private:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
-        const evmc_host_interface* hostInterface)
+        const evmc_host_interface* hostInterface,
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access,
+        std::shared_ptr<const executor::Eip2930AccessList> eip2930AccessList,
+        uint8_t web3TypedTxKindForAccessList,
+        std::shared_ptr<const executor::Eip7702AuthorizationList> eip7702AuthorizationList,
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmAuthorities,
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets,
+        gas::TxGasSettlementContext* gasSettlementCtx = nullptr)
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -206,9 +282,16 @@ private:
         m_message(getMessage(
             web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        m_revision(EVMC_CANCUN),
+        m_revision(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())),
         m_level(seq),
-        m_web3Tx(web3Tx)
+        m_web3Tx(web3Tx),
+        m_eip2929Access(std::move(eip2929Access)),
+        m_eip2930AccessList(std::move(eip2930AccessList)),
+        m_web3TypedTxKindForAccessList(web3TypedTxKindForAccessList),
+        m_eip7702AuthorizationList(std::move(eip7702AuthorizationList)),
+        m_eip7702WarmAuthorities(std::move(eip7702WarmAuthorities)),
+        m_eip7702WarmTargets(std::move(eip7702WarmTargets)),
+        m_gasSettlementCtx(gasSettlementCtx)
     {}
 
 public:
@@ -216,11 +299,43 @@ public:
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
+        std::shared_ptr<const executor::Eip2930AccessList> eip2930AccessList = {},
+        uint8_t web3TypedTxKindForAccessList = 0,
+        std::shared_ptr<const executor::Eip7702AuthorizationList> eip7702AuthorizationList = {},
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmAuthorities = {},
+        std::shared_ptr<std::vector<evmc_address>> eip7702WarmTargets = {},
+        gas::TxGasSettlementContext* gasSettlementCtx = nullptr)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
-            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
+            std::make_shared<executor::Eip2929AccessState>(), std::move(eip2930AccessList),
+            web3TypedTxKindForAccessList, std::move(eip7702AuthorizationList),
+            std::move(eip7702WarmAuthorities), std::move(eip7702WarmTargets), gasSettlementCtx)
     {}
+
+    /// EIP-7702 W3: warm authority + target for successfully applied tuples only (spec §5.6).
+    void warmEip7702Addresses()
+    {
+        if (!m_eip2929Access)
+        {
+            return;
+        }
+        if (m_eip7702WarmAuthorities)
+        {
+            for (auto const& addr : *m_eip7702WarmAuthorities)
+            {
+                (void)m_eip2929Access->warmUpAddressNoJournal(addr);
+            }
+        }
+        if (m_eip7702WarmTargets)
+        {
+            for (auto const& addr : *m_eip7702WarmTargets)
+            {
+                (void)m_eip2929Access->warmUpAddressNoJournal(addr);
+            }
+        }
+    }
 
     ~HostContext() noexcept = default;
     HostContext(HostContext const&) = default;
@@ -230,6 +345,7 @@ public:
 
     constexpr evmc_message const& message() const& { return m_message; }
     constexpr evmc_message& mutableMessage() & { return m_message; }
+    const ledger::LedgerConfig& ledgerConfig() const { return m_ledgerConfig.get(); }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -377,6 +493,34 @@ public:
     task::Task<void> prepare()
     {
         auto const& ref = message();
+
+        // EIP-2929 (W1): transaction-entry accesses before execution starts.
+        if (m_level == 0 && m_revision >= EVMC_BERLIN &&
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+        {
+            std::optional<evmc_address> callee;
+            if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
+            {
+                callee = ref.recipient;
+            }
+            m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
+
+            // EIP-2929: contract address is accessed at CREATE/CREATE2 entry (even if init fails).
+            if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+            {
+                (void)m_eip2929Access->warmUpAddress(ref.code_address);
+            }
+
+            // EIP-2929 W2: warm access_list entries for any typed tx (kind != 0).
+            // EIP-2930 (kind=1), EIP-1559 (kind=2), EIP-4844 (kind=3) all support accessList.
+            if (m_web3TypedTxKindForAccessList != 0 && m_eip2930AccessList &&
+                !m_eip2930AccessList->empty())
+            {
+                m_eip2929Access->warmUpAccessList(
+                    *m_eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
+            }
+        }
+
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
@@ -394,6 +538,13 @@ public:
 
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
+
+        std::optional<Eip2929CheckpointGuard> topCheckpointGuard;
+        if (m_level == 0 && m_eip2929Access &&
+            eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()))
+        {
+            topCheckpointGuard.emplace(m_eip2929Access);
+        }
 
         std::optional<EVMCResult> evmResult;
         // FIB-88/89/92: read once, gate receipt-affecting error paths for hard-fork compat
@@ -420,34 +571,95 @@ public:
 
             if (!evmResult)
             {
-                // Transfer first, then proceed execute
-                if (m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_delegatecall_transfer))
+                if (ethGasSettlementEnabled())
                 {
-                    if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
-                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
-                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                        m_ledgerConfig.get().balanceTransfer())
+                    auto& msg = mutableMessage();
+                    auto const intrinsic = gas::computeTxIntrinsicGas(msg,
+                        m_eip2930AccessList ? m_eip2930AccessList.get() : nullptr,
+                        m_web3TypedTxKindForAccessList,
+                        m_eip7702AuthorizationList ? m_eip7702AuthorizationList.get() : nullptr);
+                    if (msg.gas < intrinsic.preExecutionDebit())
                     {
-                        co_await transferBalance(*ref);
+                        evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                            protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
+                            fixErrorGas ? 0 : msg.gas, "Ethereum intrinsic gas OOG"));
+                    }
+                    else if (m_gasSettlementCtx != nullptr)
+                    {
+                        m_gasSettlementCtx->calldata = executor::calcEip7623Components(
+                            bcos::bytesConstRef(msg.input_data, msg.input_size));
+                        m_gasSettlementCtx->fixedIntrinsic = intrinsic.fixedCost();
+                        m_gasSettlementCtx->createTerm = intrinsic.createIntrinsic;
+                        msg.gas -= intrinsic.preExecutionDebit();
+                        m_gasSettlementCtx->gasBeforeEvm = msg.gas;
                     }
                 }
-                else
+                else if (m_level == 0 && m_revision >= EVMC_PRAGUE)
                 {
-                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                        m_ledgerConfig.get().balanceTransfer())
+                    auto& msg = mutableMessage();
+                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
+                        bcos::bytesConstRef(msg.input_data, msg.input_size));
+                    if (msg.gas < calldataGas)
                     {
-                        co_await transferBalance(*ref);
+                        evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                            protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
+                            fixErrorGas ? 0 : msg.gas, "EIP-7623 calldata floor OOG"));
+                    }
+                    else
+                    {
+                        msg.gas -= calldataGas;
+                    }
+
+                    if (!evmResult && m_web3TypedTxKindForAccessList == EIP_7702_WEB3_TX_TYPE &&
+                        m_eip7702AuthorizationList && !m_eip7702AuthorizationList->empty())
+                    {
+                        const int64_t authIntrinsic =
+                            static_cast<int64_t>(m_eip7702AuthorizationList->size()) *
+                            EIP_7702_PER_EMPTY_ACCOUNT_COST;
+                        if (msg.gas < authIntrinsic)
+                        {
+                            evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
+                                fixErrorGas ? 0 : msg.gas, "EIP-7702 auth intrinsic OOG"));
+                        }
+                        else
+                        {
+                            msg.gas -= authIntrinsic;
+                        }
                     }
                 }
 
-                if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
+                if (!evmResult)
                 {
-                    evmResult.emplace(co_await executeCreate());
-                }
-                else
-                {
-                    evmResult.emplace(co_await executeCall());
+                    // Transfer first, then proceed execute
+                    if (m_ledgerConfig.get().features().get(
+                            ledger::Features::Flag::bugfix_delegatecall_transfer))
+                    {
+                        if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
+                                (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
+                            !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                            m_ledgerConfig.get().balanceTransfer())
+                        {
+                            co_await transferBalance(*ref);
+                        }
+                    }
+                    else
+                    {
+                        if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                            m_ledgerConfig.get().balanceTransfer())
+                        {
+                            co_await transferBalance(*ref);
+                        }
+                    }
+
+                    if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
+                    {
+                        evmResult.emplace(co_await executeCreate());
+                    }
+                    else
+                    {
+                        evmResult.emplace(co_await executeCall());
+                    }
                 }
             }
         }
@@ -516,6 +728,10 @@ public:
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
                                 << " level: " << m_level << " seq: " << m_seq << " " << *evmResult;
+        if (topCheckpointGuard && evmResult->status_code == EVMC_SUCCESS)
+        {
+            topCheckpointGuard->commit();
+        }
         co_return std::move(*evmResult);
     }
 
@@ -523,14 +739,29 @@ public:
     {
         ++m_seq;
         HOST_CONTEXT_LOG(TRACE) << "External call, seq: " << m_seq;
-        auto senderAccount = getAccount(*this, message.sender);
 
+        auto senderAccount = getAccount(*this, message.sender);
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
+
+        std::optional<Eip2929CheckpointGuard> checkpointGuard;
+        if (m_eip2929Access && eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()))
+        {
+            checkpointGuard.emplace(m_eip2929Access);
+            if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
+            {
+                // EVM CREATE passes empty code_address; pin must match getMessage() resolution.
+                auto const resolved = getMessage(m_web3Tx, message, m_blockHeader.get().number(),
+                    m_contextID, m_seq, nonce, m_hashImpl);
+                m_eip2929Access->setCreateRollbackPin(resolved.code_address);
+            }
+        }
+
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface);
+            interface, m_eip2929Access, m_eip2930AccessList, m_web3TypedTxKindForAccessList,
+            m_eip7702AuthorizationList, m_eip7702WarmAuthorities, m_eip7702WarmTargets, nullptr);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -540,12 +771,74 @@ public:
             m_logs.reserve(m_logs.size() + ::ranges::size(logs));
             ::ranges::move(logs, std::back_inserter(m_logs));
         }
+        if (checkpointGuard)
+        {
+            if (result.status_code == EVMC_SUCCESS)
+            {
+                checkpointGuard->commit();
+            }
+        }
         co_return result;
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
 
+    evmc_access_status accessAccount(const evmc_address& addr) noexcept
+    {
+        return accessAccount(addr, m_revision);
+    }
+
+    evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev) noexcept
+    {
+        if (rev < EVMC_BERLIN ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+        {
+            return EVMC_ACCESS_COLD;
+        }
+        return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
+    evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
+    {
+        return accessStorage(addr, key, m_revision);
+    }
+
+    evmc_access_status accessStorage(
+        const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev) noexcept
+    {
+        if (rev < EVMC_BERLIN ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+        {
+            return EVMC_ACCESS_COLD;
+        }
+        return m_eip2929Access->warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
 private:
+    task::Task<evmc_address> resolveDelegateCodeAddress(evmc_address const& addr)
+    {
+        if (m_revision < EVMC_PRAGUE ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_prague))
+        {
+            co_return addr;
+        }
+
+        if (auto codeEntry = co_await code(addr))
+        {
+            auto const codeView = codeEntry->get();
+            if (executor::isEip7702DelegationIndicator(bcos::bytesConstRef(
+                    reinterpret_cast<bcos::byte const*>(codeView.data()), codeView.size())))
+            {
+                evmc_address target{};
+                std::memcpy(target.bytes,
+                    codeView.data() + executor::EIP7702_DELEGATION_TARGET_OFFSET,
+                    sizeof(target.bytes));
+                co_return target;
+            }
+        }
+        co_return addr;
+    }
+
     void prepareCreate()
     {
         auto& ref = message();
@@ -620,6 +913,10 @@ private:
 
     void consumeTransferGas(evmc_message& ref)
     {
+        if (ethGasSettlementEnabled())
+        {
+            return;
+        }
         if (m_level == 0)
         {
             if (ref.gas < executor::BALANCE_TRANSFER_GAS)
@@ -704,7 +1001,13 @@ private:
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
-        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
+        evmc_address codeLoadAddress = ref.code_address;
+        if (ref.kind == EVMC_CALL || ref.kind == EVMC_DELEGATECALL)
+        {
+            codeLoadAddress = co_await resolveDelegateCodeAddress(ref.code_address);
+        }
+
+        if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), codeLoadAddress,
                 m_revision,
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             !m_executable)
