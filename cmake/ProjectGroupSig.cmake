@@ -1,6 +1,5 @@
 include(ExternalProject)
 include(GNUInstallDirs)
-set(LIB_SUFFIX .a)
 ExternalProject_Add(GroupSigLib
     PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
     DOWNLOAD_NAME group_sig_lib-b8b9164.tar.gz
@@ -25,16 +24,16 @@ ExternalProject_Add(GroupSigLib
     PATCH_COMMAND sh -c "cp ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/fix_pbc_sig_cmake.py cmake/ && python3 ${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts/inject_pbc_sig_fix.py"
     # Tell Ninja which files the external project produces so it can track them.
     BUILD_BYPRODUCTS
-        ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/libgroup_sig${LIB_SUFFIX}
-        <SOURCE_DIR>/deps/lib/libpbc_sig${LIB_SUFFIX}
-        <SOURCE_DIR>/deps/lib/libpbc${LIB_SUFFIX}
+        ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/${CMAKE_STATIC_LIBRARY_PREFIX}group_sig${CMAKE_STATIC_LIBRARY_SUFFIX}
+        <SOURCE_DIR>/deps/lib/${CMAKE_STATIC_LIBRARY_PREFIX}pbc_sig${CMAKE_STATIC_LIBRARY_SUFFIX}
+        <SOURCE_DIR>/deps/lib/${CMAKE_STATIC_LIBRARY_PREFIX}pbc${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 
 ExternalProject_Get_Property(GroupSigLib SOURCE_DIR)
 set(DEPS_INCLUDE_DIR ${SOURCE_DIR}/deps/include)
 file(MAKE_DIRECTORY ${DEPS_INCLUDE_DIR})
 
-find_library(GMP_LIBRARIES NAMES "libgmp.a")
+find_library(GMP_LIBRARIES NAMES "${CMAKE_STATIC_LIBRARY_PREFIX}gmp${CMAKE_STATIC_LIBRARY_SUFFIX}")
 find_path(GMP_INCLUDE_DIR "gmp.h")
 if(NOT GMP_INCLUDE_DIR)
     message(FATAL_ERROR "Please install libgmp first")
@@ -44,19 +43,19 @@ set_property(TARGET Gmp PROPERTY IMPORTED_LOCATION ${GMP_LIBRARIES})
 set_property(TARGET Gmp PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${GMP_INCLUDE_DIR})
 
 add_library(Pbc STATIC IMPORTED GLOBAL)
-set_property(TARGET Pbc PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/deps/lib/libpbc${LIB_SUFFIX})
+set_property(TARGET Pbc PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/deps/lib/${CMAKE_STATIC_LIBRARY_PREFIX}pbc${CMAKE_STATIC_LIBRARY_SUFFIX})
 set_property(TARGET Pbc PROPERTY INTERFACE_LINK_LIBRARIES Gmp)
 set_property(TARGET Pbc PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${DEPS_INCLUDE_DIR} ${GMP_INCLUDE_DIR})
 add_dependencies(Pbc GroupSigLib)
 
 add_library(PbcSig STATIC IMPORTED GLOBAL)
-set_property(TARGET PbcSig PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/deps/lib/libpbc_sig${LIB_SUFFIX})
+set_property(TARGET PbcSig PROPERTY IMPORTED_LOCATION ${SOURCE_DIR}/deps/lib/${CMAKE_STATIC_LIBRARY_PREFIX}pbc_sig${CMAKE_STATIC_LIBRARY_SUFFIX})
 set_property(TARGET PbcSig PROPERTY INTERFACE_LINK_LIBRARIES Pbc)
 set_property(TARGET PbcSig PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${DEPS_INCLUDE_DIR})
 add_dependencies(PbcSig GroupSigLib)
 
 add_library(GroupSig STATIC IMPORTED GLOBAL)
-set(GROUPSIG_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/libgroup_sig${LIB_SUFFIX})
+set(GROUPSIG_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib/${CMAKE_STATIC_LIBRARY_PREFIX}group_sig${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(GROUPSIG_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/include)
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deps/lib)  # Must exist.

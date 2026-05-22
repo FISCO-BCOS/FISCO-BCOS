@@ -20,12 +20,12 @@ ExternalProject_Add(paillier
     LOG_BUILD 1
     LOG_INSTALL 1
     # Tell Ninja which files the external project produces.
-    BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libpaillier.a
+    BUILD_BYPRODUCTS <INSTALL_DIR>/lib/${CMAKE_STATIC_LIBRARY_PREFIX}paillier${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 
 ExternalProject_Get_Property(paillier INSTALL_DIR)
 add_library(Paillier STATIC IMPORTED)
-set(PAILLIER_LIBRARY ${INSTALL_DIR}/lib/libpaillier.a)
+set(PAILLIER_LIBRARY ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}paillier${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(PAILLIER_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${INSTALL_DIR}/lib)  # Must exist.
 file(MAKE_DIRECTORY ${PAILLIER_INCLUDE_DIR})  # Must exist.
