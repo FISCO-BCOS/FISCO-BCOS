@@ -181,6 +181,28 @@ int32_t toMillisecond(int32_t _seconds)
 }
 }  // namespace bcos
 
+namespace
+{
+thread_local std::string c_threadName;
+thread_local bool c_threadNameInitialized = false;
+
+void refreshThreadNameCache()
+{
+#if defined(__GLIBC__) || defined(__APPLE__)
+    std::array<char, 16> name = {0};
+    auto err = pthread_getname_np(pthread_self(), name.data(), name.size());
+    if (err == 0)
+    {
+        c_threadName = name[0] == '\0' ? "" : std::string{name.data()};
+        c_threadNameInitialized = true;
+        return;
+    }
+#endif
+    c_threadName.clear();
+    c_threadNameInitialized = true;
+}
+}  // namespace
+
 void bcos::pthread_setThreadName(std::string const& _n)
 {
 #if defined(__GLIBC__)
@@ -188,21 +210,21 @@ void bcos::pthread_setThreadName(std::string const& _n)
 #elif defined(__APPLE__)
     pthread_setname_np(_n.c_str());
 #endif
+
+    refreshThreadNameCache();
+}
+
+std::string const& bcos::pthread_getThreadNameRef()
+{
+    if (!c_threadNameInitialized)
+    {
+        refreshThreadNameCache();
+    }
+
+    return c_threadName;
 }
 
 std::string bcos::pthread_getThreadName()
 {
-#if defined(__GLIBC__) || defined(__APPLE__)
-    std::array<char, 16> name = {0};
-    auto err = pthread_getname_np(pthread_self(), (char*)name.data(), name.size());
-    if (err == 0)
-    {
-        if (name[0] == '\0')
-        {
-            return "";
-        }
-        return {name.data()};
-    }
-#endif
-    return "";
+    return pthread_getThreadNameRef();
 }

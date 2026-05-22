@@ -25,6 +25,7 @@
 #include "../../mock/MockKeyFactor.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"

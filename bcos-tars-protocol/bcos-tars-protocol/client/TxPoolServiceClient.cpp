@@ -147,21 +147,21 @@ bcostars::TxPoolServiceClient::sealTxs(uint64_t _txsLimit)
     auto sysTxs = std::make_shared<bcostars::protocol::BlockImpl>();
     m_proxy->asyncSealTxs(_txsLimit, tarsAvoidTxs, txs->inner(), sysTxs->inner());
 
-    auto txsList =
-        ::ranges::views::transform(txs->inner().transactionsMetaData,
-            [](auto& metaData) -> bcos::protocol::TransactionMetaData::Ptr {
-                return std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-                    [m_metaData = std::move(metaData)]() mutable { return &m_metaData; });
-            }) |
-        ::ranges::to<std::vector>();
-    auto sysTxsList =
-        ::ranges::views::transform(sysTxs->inner().transactionsMetaData,
-            [](auto& metaData) -> bcos::protocol::TransactionMetaData::Ptr {
-                return std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
-                    [m_metaData = std::move(metaData)]() mutable { return &m_metaData; });
-            }) |
-        ::ranges::to<std::vector>();
-    return {txsList, sysTxsList};
+    std::vector<bcos::protocol::TransactionMetaData::Ptr> txsList;
+    txsList.reserve(txs->inner().transactionsMetaData.size());
+    for (auto& metaData : txs->inner().transactionsMetaData)
+    {
+        txsList.emplace_back(std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+            [m_metaData = std::move(metaData)]() mutable { return &m_metaData; }));
+    }
+    std::vector<bcos::protocol::TransactionMetaData::Ptr> sysTxsList;
+    sysTxsList.reserve(sysTxs->inner().transactionsMetaData.size());
+    for (auto& metaData : sysTxs->inner().transactionsMetaData)
+    {
+        sysTxsList.emplace_back(std::make_shared<bcostars::protocol::TransactionMetaDataImpl>(
+            [m_metaData = std::move(metaData)]() mutable { return &m_metaData; }));
+    }
+    return std::make_tuple(std::move(txsList), std::move(sysTxsList));
 }
 void bcostars::TxPoolServiceClient::asyncMarkTxs(const bcos::crypto::HashList& _txsHash,
     bool _sealedFlag, bcos::protocol::BlockNumber _batchId,

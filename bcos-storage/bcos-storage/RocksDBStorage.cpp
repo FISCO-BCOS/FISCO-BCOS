@@ -41,7 +41,6 @@
 using namespace bcos::storage;
 using namespace bcos::protocol;
 using namespace rocksdb;
-using namespace std;
 
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
@@ -60,7 +59,7 @@ void RocksDBStorage::asyncGetPrimaryKeys(std::string_view _table,
     std::vector<std::string> result;
 
     std::string keyPrefix;
-    keyPrefix = string(_table) + TABLE_KEY_SPLIT;
+    keyPrefix = std::string(_table) + TABLE_KEY_SPLIT;
 
     ReadOptions read_options;
     read_options.total_order_seek = true;
@@ -312,7 +311,7 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
         }
         std::atomic_uint64_t putCount{0};
         std::atomic_uint64_t deleteCount{0};
-        atomic_bool isTableValid = true;
+        std::atomic_bool isTableValid = true;
 
         tbb::concurrent_vector<std::tuple<Entry::Status, std::string,
             std::variant<std::monostate, std::string, Entry>>>

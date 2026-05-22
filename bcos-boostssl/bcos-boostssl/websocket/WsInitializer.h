@@ -22,6 +22,7 @@
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <utility>
 
 namespace bcos::boostssl::ws
@@ -41,11 +42,17 @@ public:
     std::shared_ptr<WsSessionFactory> sessionFactory();
     void setSessionFactory(std::shared_ptr<WsSessionFactory> _sessionFactory);
 
+    void setIOServicePool(bcos::IOServicePool::Ptr _ioServicePool)
+    {
+        m_ioServicePool = std::move(_ioServicePool);
+    }
+
     void initWsService(WsService::Ptr _wsService);
 
 private:
     std::shared_ptr<MessageFaceFactory> m_messageFactory;
     std::shared_ptr<WsConfig> m_config;
     WsSessionFactory::Ptr m_sessionFactory;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace bcos::boostssl::ws

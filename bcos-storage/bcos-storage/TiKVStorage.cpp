@@ -37,7 +37,6 @@ constexpr uint32_t MAX_RETRY_LIMIT = 32;
 
 using namespace bcos::storage;
 using namespace bcos::protocol;
-using namespace std;
 
 #define STORAGE_TIKV_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-TiKV]"
 namespace bcos::storage
@@ -73,7 +72,7 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
         std::vector<std::string> result;
 
         std::string keyPrefix;
-        keyPrefix = string(_table) + TABLE_KEY_SPLIT;
+        keyPrefix = std::string(_table) + TABLE_KEY_SPLIT;
         // snapshot is not threadsafe so create it every time
 
         auto snap = getSnapshot();
@@ -84,7 +83,7 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
         while (!finished)
         {
             auto keys = snap->scan_keys(
-                lastKey, Bound::Excluded, string(), Bound::Unbounded, scan_batch_size);
+                lastKey, Bound::Excluded, std::string(), Bound::Unbounded, scan_batch_size);
             if (keys.empty())
             {
                 finished = true;
@@ -294,7 +293,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& params, const TraverseStorageI
                 << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
             auto start = utcTime();
             std::mutex writeMutex;
-            atomic_bool isTableValid = true;
+            std::atomic_bool isTableValid = true;
             std::atomic_uint64_t putCount{0};
             std::atomic_uint64_t deleteCount{0};
             std::atomic_uint64_t dataSize{0};

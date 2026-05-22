@@ -18,7 +18,7 @@ public:
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
         size_t keyPageSize = 10240);
 
-    scheduler::SchedulerImpl::Ptr build(int64_t schedulerTermId);
+    SchedulerImpl::Ptr build(int64_t schedulerTermId);
 
     void setBlockNumberReceiver(std::function<void(protocol::BlockNumber blockNumber)> callback);
 

@@ -32,17 +32,17 @@ ExternalProject_Add(blst_project
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ${BLST_BUILD_COMMAND}
-        INSTALL_COMMAND sh -c "cp <SOURCE_DIR>/bindings/blst.h <INSTALL_DIR>/include/  && cp <SOURCE_DIR>/bindings/blst_aux.h <INSTALL_DIR>/include/ && cp <SOURCE_DIR>/libblst.a <INSTALL_DIR>/lib/"
+        INSTALL_COMMAND sh -c "cp <SOURCE_DIR>/bindings/blst.h <INSTALL_DIR>/include/  && cp <SOURCE_DIR>/bindings/blst_aux.h <INSTALL_DIR>/include/ && cp <SOURCE_DIR>/${CMAKE_STATIC_LIBRARY_PREFIX}blst${CMAKE_STATIC_LIBRARY_SUFFIX} <INSTALL_DIR>/lib/"
         LOG_BUILD true
         LOG_INSTALL true
         LOG_CONFIGURE true
-        BUILD_BYPRODUCTS libblst.a
+        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/${CMAKE_STATIC_LIBRARY_PREFIX}blst${CMAKE_STATIC_LIBRARY_SUFFIX}
         )
 
 ExternalProject_Get_Property(blst_project INSTALL_DIR)
 add_library(blst STATIC IMPORTED)
 
-set(BLST_LIBRARY ${INSTALL_DIR}/lib/libblst.a)
+set(BLST_LIBRARY ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}blst${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(BLST_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${INSTALL_DIR}/lib/)
 file(MAKE_DIRECTORY ${BLST_INCLUDE_DIR})

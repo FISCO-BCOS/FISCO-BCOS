@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
     }
     catch (std::exception& e)
     {
-        cerr << "RpcService std::exception:" << e.what() << std::endl;
+        std::cerr << "RpcService std::exception:" << e.what() << std::endl;
     }
     return -1;
 }

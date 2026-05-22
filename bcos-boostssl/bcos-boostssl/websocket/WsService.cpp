@@ -52,7 +52,6 @@ WsService::WsService()
 WsService::~WsService()
 {
     stop();
-    m_taskGroup.wait();
     WEBSOCKET_SERVICE(INFO) << LOG_KV("[DELOBJ][WsService]", this);
 }
 
@@ -175,11 +174,6 @@ EndPointsPtr WsService::reconnectedPeers() const
     return m_reconnectedPeers;
 }
 
-void WsService::initTaskArena(uint32_t _taskArenaPoolSize)
-{
-    m_taskArena.initialize(_taskArenaPoolSize, 0);
-}
-
 void WsService::start()
 {
     if (m_running)
@@ -247,7 +241,6 @@ void WsService::start()
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("start")
                             << LOG_DESC("start websocket service successfully")
                             << LOG_KV("model", m_config->model())
-                            << LOG_KV("taskArenaMaxConcurrency", m_taskArena.max_concurrency())
                             << LOG_KV("max msg size", m_config->maxMsgSize());
 }
 
@@ -272,9 +265,6 @@ void WsService::stop()
     {
         m_ioservicePool->stop();
     }
-
-    m_taskGroup.cancel();
-    m_taskGroup.wait();
 
     if (m_statTimer)
     {
@@ -532,7 +522,7 @@ std::shared_ptr<WsSession> WsService::newSession(
     _wsStreamDelegate->setMaxReadMsgSize(m_config->maxMsgSize());
 
     std::string endPoint = _wsStreamDelegate->remoteEndpoint();
-    auto session = m_sessionFactory->createSession(m_taskArena, m_taskGroup);
+    auto session = m_sessionFactory->createSession(m_ioservicePool);
 
     session->setWsStreamDelegate(std::move(_wsStreamDelegate));
     session->setIoc(m_ioservicePool->getIOService());
