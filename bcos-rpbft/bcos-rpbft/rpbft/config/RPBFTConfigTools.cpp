@@ -69,25 +69,11 @@ void RPBFTConfigTools::updateWorkingSealerNodeList(
         m_onSealerListChanged();
     }
 
-    RPBFT_LOG(INFO) << METRIC << LOG_DESC("updateWorkingConsensusNodeList")
+    // FIB-119: match function name; was "updateWorkingConsensusNodeList".
+    RPBFT_LOG(INFO) << METRIC << LOG_DESC("updateWorkingSealerNodeList")
                     << LOG_KV("workingNodeNum", m_workingSealerNodeNum)
                     << LOG_KV("nodeIndexInWorkingSealer", m_nodeIndexInWorkingSealer)
                     << decsConsensusNodeList(workingSealerNodeList);
-    //
-    //    if (!compareConsensusNode(*m_workingSealerNodeList, *m_consensusNodeList))
-    //    {
-    //        bcos::consensus::ConsensusNodeList pendingConsensusNodeList;
-    //        for (const auto& node : _ledgerConfig->mutableConsensusNodeList())
-    //        {
-    //            if (!ConsensusConfig::isNodeExist(node, *m_workingSealerNodeList))
-    //            {
-    //                pendingConsensusNodeList.emplace_back(node);
-    //            }
-    //        }
-    //
-    //        *_ledgerConfig->mutableConsensusList() = *m_workingSealerNodeList;
-    //        *_ledgerConfig->mutableObserverList() += pendingConsensusNodeList;
-    //    }
 }
 
 void RPBFTConfigTools::updateShouldRotateSealers(

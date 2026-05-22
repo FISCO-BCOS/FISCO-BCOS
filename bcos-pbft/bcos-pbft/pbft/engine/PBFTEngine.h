@@ -99,6 +99,10 @@ public:
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
     void clearAllCache();
+    // FIB-137: drain m_msgQueue. Called by PBFTImpl::enableAsMasterNode on demotion
+    // (discard stale messages routed under a previous master role) and on promotion
+    // before resuming processing (discard messages enqueued during demotion).
+    void clearMsgQueue();
     void recoverState();
 
     void fetchAndUpdateLedgerConfig();

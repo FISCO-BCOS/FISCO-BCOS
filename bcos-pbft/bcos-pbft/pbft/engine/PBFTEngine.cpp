@@ -164,7 +164,21 @@ void PBFTEngine::tryToResendCheckPoint()
 void PBFTEngine::restart()
 {
     PBFT_LOG(INFO) << LOG_DESC("restart the consensus module");
-    m_config->enableAsMasterNode(true);
+    // FIB-138: only re-affirm the master flag when we are ALREADY in master state
+    // (steady-state recovery-in-place). When this restart() is invoked from
+    // PBFTImpl::enableAsMasterNode(true)'s promotion sequence, the flag is still
+    // false and PBFTImpl owns the final flip after init/recover/restart all succeed.
+    // Pre-empting the flag here would re-open the consensus-state race that FIB-138
+    // is meant to close.
+    if (m_config->asMasterNode())
+    {
+        m_config->enableAsMasterNode(true);
+    }
+    else
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+            "restart: skip master-flag flip during promotion transition (FIB-138)");
+    }
     triggerTimeout(false);
 }
 
@@ -583,6 +597,24 @@ void PBFTEngine::clearAllCache()
 {
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->clearAllCache();
+}
+
+void PBFTEngine::clearMsgQueue()
+{
+    // FIB-137: tbb::concurrent_queue has no .clear(); drain via try_pop loop.
+    // Discards stale PBFT messages enqueued under a previous role/term so they are
+    // not replayed against the freshly-recovered state after a role transition.
+    std::shared_ptr<PBFTBaseMessageInterface> msg;
+    std::size_t drained = 0;
+    while (m_msgQueue.try_pop(msg))
+    {
+        ++drained;
+    }
+    if (drained > 0)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("clearMsgQueue: drained stale PBFT messages")
+                       << LOG_KV("drained", drained);
+    }
 }
 
 void PBFTEngine::executeWorker()
