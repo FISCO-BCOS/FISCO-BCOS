@@ -61,14 +61,19 @@ void IOServicePool::stop()
     }
     m_running = false;
 
-    // 1. Reset work to release keep-alive, allowing io_context to exit naturally after all tasks
-    // are finished
+    // 1. Reset work to release keep-alive, allowing io_context to exit when no handlers remain
     for (auto& work : m_works)
     {
         work.reset();
     }
 
-    // 2. Do not call stop() on ioService, let run() return automatically when no tasks remain
+    // 2. Signal all io_contexts to stop. This causes run() to return after finishing
+    //    currently queued handlers. Without this, recurring timers/callbacks would
+    //    keep run() alive indefinitely, causing join() to hang.
+    for (auto& ioService : m_ioServices)
+    {
+        ioService->stop();
+    }
 
     // 3. Wait for all threads to exit
     for (auto& thread : m_threads)
