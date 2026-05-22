@@ -171,18 +171,30 @@ public:
 
     task::AwaitableValue<void> writeOne(auto key, auto value)
     {
-        auto rocksDBKey = m_keyResolver.encode(key);
-        auto rocksDBValue = m_valueResolver.encode(value);
-
-        ::rocksdb::WriteOptions options;
-        if (auto status = rocksDBRef().Put(options,
-                ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
-                ::rocksdb::Slice(::ranges::data(rocksDBValue), ::ranges::size(rocksDBValue)));
-            !status.ok())
+        if constexpr (std::is_same_v<std::decay_t<decltype(value)>, storage2::DELETED_TYPE>)
         {
-            BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
+            return removeOne(key);
         }
-        return {};
+        else
+        {
+            auto rocksDBKey = m_keyResolver.encode(key);
+            auto rocksDBValue = m_valueResolver.encode(value);
+
+            ::rocksdb::WriteOptions options;
+            if (auto status = rocksDBRef().Put(options,
+                    ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
+                    ::rocksdb::Slice(::ranges::data(rocksDBValue), ::ranges::size(rocksDBValue)));
+                !status.ok())
+            {
+                BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
+            }
+            return {};
+        }
+    }
+
+    task::AwaitableValue<void> removeOne(auto const& key, auto&&... /*args*/)
+    {
+        return removeSome(::ranges::single_view(key));
     }
 
     task::AwaitableValue<void> removeSome(::ranges::input_range auto keys)

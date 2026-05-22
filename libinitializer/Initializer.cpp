@@ -267,9 +267,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
-    auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
     m_globalStateStorageInitializer =
-        GlobalStateStorageInitializer::build(existsRocksDB->rocksDB());
+        GlobalStateStorageInitializer::build(m_nodeConfig->storagePath());
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
     std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =

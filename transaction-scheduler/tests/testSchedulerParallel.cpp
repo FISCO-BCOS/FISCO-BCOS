@@ -4,6 +4,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "TrivialCheckpointStorage.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
@@ -52,18 +53,22 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using CheckpointBackend =
+        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     TestSchedulerParallelFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        multiLayerStorage(backendStorage)
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend)
     {}
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    BackendStorage backendStorage;
+    CheckpointBackend checkpointBackend;
+    MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 };
 
