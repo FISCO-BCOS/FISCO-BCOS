@@ -19,6 +19,8 @@ ExternalProject_Add(paillier
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    # Tell Ninja which files the external project produces.
+    BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libpaillier.a
 )
 
 ExternalProject_Get_Property(paillier INSTALL_DIR)
