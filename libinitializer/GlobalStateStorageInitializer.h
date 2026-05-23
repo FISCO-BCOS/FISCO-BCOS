@@ -42,6 +42,8 @@ public:
     GlobalStateStorage& storage() { return m_storage; }
     GlobalStateStorage const& storage() const { return m_storage; }
 
+    ::rocksdb::DB& rocksDB() { return m_storage.latestBackend().rocksDB(); }
+
 private:
     GlobalStateCacheStorage m_cacheStorage;
     GlobalStateCheckpointStorage m_checkpointStorage;

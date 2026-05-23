@@ -588,6 +588,8 @@ public:
     }
 
     BackendStorage& backendStorage() { return m_backendStorage; }
+
+    OpenedStorage& latestBackend() { return m_latestBackend; }
 };
 
 }  // namespace bcos::storage2
