@@ -1,0 +1,4 @@
+The package blst provides CMake targets:
+
+    find_package(blst CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE blst::blst)

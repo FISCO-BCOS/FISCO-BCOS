@@ -99,6 +99,7 @@ set(EVMONE_CONFIG "${CURRENT_PACKAGES_DIR}/share/evmone/evmoneConfig.cmake")
 file(WRITE "${EVMONE_CONFIG}" [=[
 include(CMakeFindDependencyMacro)
 find_dependency(intx)
+find_dependency(blst)
 
 if(NOT TARGET evmone::evmone)
     if(WIN32)
@@ -119,7 +120,15 @@ if(NOT TARGET evmone::evmone)
             "${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone${_evmone_lib_suffix}"
         INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../include"
         INTERFACE_LINK_LIBRARIES
-            "intx::intx;${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone_precompiles${_evmone_lib_suffix}"
+            "intx::intx;evmone::precompiles"
+    )
+
+    # Separate target for evmone_precompiles so blst can be a proper dependency
+    add_library(evmone::precompiles STATIC IMPORTED)
+    set_target_properties(evmone::precompiles PROPERTIES
+        IMPORTED_LOCATION
+            "${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone_precompiles${_evmone_lib_suffix}"
+        INTERFACE_LINK_LIBRARIES "blst"
     )
 endif()
 ]=])

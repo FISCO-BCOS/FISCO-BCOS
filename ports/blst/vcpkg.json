@@ -1,0 +1,7 @@
+{
+  "name": "blst",
+  "version-string": "20240520",
+  "homepage": "https://github.com/supranational/blst",
+  "description": "BLS12-381 signature library",
+  "license": "Apache-2.0"
+}

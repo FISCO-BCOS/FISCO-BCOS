@@ -13,7 +13,7 @@ list(APPEND SRC_LIST bcos-storage/CheckpointRocksDBStorage.cpp)
 set(LIB_LIST table bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb ittapi)
 
 if (WITH_TIKV)
-    include(ProjectTiKVClient)
+    find_package(tikv-client-cpp CONFIG REQUIRED)
     list(APPEND SRC_LIST bcos-storage/TiKVStorage.cpp)
     list(APPEND LIB_LIST kv_client)
     # find_package(gRPC CONFIG REQUIRED)
