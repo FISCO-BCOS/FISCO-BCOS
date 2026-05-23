@@ -613,7 +613,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
-    auto ioServicePool = m_ioServicePool ? m_ioServicePool : std::make_shared<IOServicePool>();
+    auto ioServicePool = m_ioServicePool ? m_ioServicePool : std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "gateway");
     asioInterface->setIOServicePool(ioServicePool, !m_ioServicePool);
     asioInterface->setSrvContext(srvCtx);
     asioInterface->setClientContext(clientCtx);

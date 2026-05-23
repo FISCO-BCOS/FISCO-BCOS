@@ -158,20 +158,10 @@ void ASIOInterface::init(std::string listenHost, uint16_t listenPort)
 }
 
 void ASIOInterface::start()
-{
-    if (m_manageIOServicePool)
-    {
-        m_ioServicePool->start();
-    }
-}
+{}
 
 void ASIOInterface::stop()
-{
-    if (m_manageIOServicePool)
-    {
-        m_ioServicePool->stop();
-    }
-}
+{}
 
 void ASIOInterface::asyncAccept(const std::shared_ptr<SocketFace>& socket, Handler_Type handler,
     boost::system::error_code)

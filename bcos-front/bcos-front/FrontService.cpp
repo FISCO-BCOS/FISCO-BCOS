@@ -37,9 +37,7 @@ namespace
 template <class Task>
 void dispatchToIOServicePool(bcos::IOServicePool& ioServicePool, Task&& task)
 {
-    auto& ioService = ioServicePool.getIOService();
-    auto executor = ioService->get_executor();
-    boost::asio::post(executor, [task = std::forward<Task>(task)]() mutable { task(); });
+    ioServicePool.post(std::forward<Task>(task));
 }
 }  // namespace
 

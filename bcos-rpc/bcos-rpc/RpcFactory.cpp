@@ -367,8 +367,7 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     if (threadPoolSize > 0)
     {
         // Use a dedicated thread pool for RPC
-        auto rpcIOServicePool = std::make_shared<bcos::IOServicePool>(threadPoolSize);
-        rpcIOServicePool->start();
+        auto rpcIOServicePool = std::make_shared<bcos::IOServicePool>(threadPoolSize, "rpc");
         initializer->setIOServicePool(rpcIOServicePool);
     }
     else if (m_ioServicePool)

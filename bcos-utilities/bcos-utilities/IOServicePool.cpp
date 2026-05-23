@@ -8,80 +8,41 @@
 
 using namespace bcos;
 
-IOServicePool::IOServicePool(size_t _workerNum) : m_works(_workerNum), m_nextIOService(0)
+IOServicePool::IOServicePool(size_t _workerNum, std::string_view _threadName)
+  : m_threadName(_threadName.substr(0, 15))
 {
+    m_contexts.reserve(_workerNum);
     for (size_t i = 0; i < _workerNum; i++)
     {
-        m_ioServices.emplace_back(std::make_shared<IOService>());
-    }
-}
-
-IOServicePool::~IOServicePool()
-{
-    stop();
-}
-
-void IOServicePool::start()
-{
-    if (m_running)
-    {
-        return;
-    }
-    m_running = true;
-    for (size_t i = 0; i < m_ioServices.size(); ++i)
-    {
-        m_works[i] = std::make_unique<Work>(m_ioServices[i]->get_executor());
+        m_contexts.emplace_back(std::make_shared<IOService>());
     }
 
-    for (const auto& ioService : m_ioServices)
+    for (auto& ctx : m_contexts)
     {
-        m_threads.emplace_back([ioService, running = std::ref(m_running)]() {
-            if (!running)
-            {
-                return;
-            }
-
-            bcos::pthread_setThreadName("ioService");
+        ctx.thread = std::thread([ioService = ctx.ioService, name = m_threadName]() {
+            bcos::pthread_setThreadName(name);
             ioService->run();
         });
     }
 }
 
-std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
+IOServicePool::~IOServicePool()
 {
-    auto selectedIoService = (m_nextIOService.fetch_add(1) % m_ioServices.size());
-    return m_ioServices.at(selectedIoService);
-}
-
-void IOServicePool::stop()
-{
-    if (!m_running)
+    for (auto& ctx : m_contexts)
     {
-        return;
+        ctx.ioService->stop();
     }
-    m_running = false;
-
-    // 1. Reset work to release keep-alive, allowing io_context to exit when no handlers remain
-    for (auto& work : m_works)
+    for (auto& ctx : m_contexts)
     {
-        work.reset();
-    }
-
-    // 2. Signal all io_contexts to stop. This causes run() to return after finishing
-    //    currently queued handlers. Without this, recurring timers/callbacks would
-    //    keep run() alive indefinitely, causing join() to hang.
-    for (auto& ioService : m_ioServices)
-    {
-        ioService->stop();
-    }
-
-    // 3. Wait for all threads to exit
-    for (auto& thread : m_threads)
-    {
-        if (thread.joinable())
+        if (ctx.thread.joinable())
         {
-            thread.join();
+            ctx.thread.join();
         }
     }
-    m_threads.clear();
+}
+
+std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
+{
+    auto idx = (m_nextIOService.fetch_add(1) % m_contexts.size());
+    return m_contexts[idx].ioService;
 }

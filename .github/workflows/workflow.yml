@@ -127,7 +127,7 @@ jobs:
       - name: Build
         run: |
           cd build
-          cmake --build . --parallel 3
+          cmake --build .
       - name: Test
         if: matrix.os != 'windows-2025'
         run: |

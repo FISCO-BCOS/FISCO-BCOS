@@ -227,7 +227,7 @@ void WsSession::drop(WsError _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
+            m_ioServicePool->post(
                 [callback = std::move(callback), error]() mutable {
                     callback->respCallBack(error, nullptr, nullptr);
                 });
@@ -245,7 +245,7 @@ void WsSession::drop(WsError _reason)
         m_wsStreamDelegate->close();
     }
 
-    boost::asio::post(m_ioServicePool->getIOService()->get_executor(), [self]() {
+    m_ioServicePool->post([self]() {
         auto session = self.lock();
         if (session)
         {
@@ -328,7 +328,7 @@ void WsSession::onReadPacket()
         m_buffer->consume(m_buffer->size());
 
         auto self = weak_from_this();
-        boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
+        m_ioServicePool->post(
             [self, message = std::move(message)]() {
                 auto session = self.lock();
                 if (!session)
@@ -632,7 +632,7 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
 
     auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
 
-    boost::asio::post(m_ioServicePool->getIOService()->get_executor(),
+    m_ioServicePool->post(
         [callback = std::move(callback), error = std::move(error)]() mutable {
             callback->respCallBack(error, nullptr, nullptr);
         });

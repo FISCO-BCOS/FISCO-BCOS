@@ -20,6 +20,8 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <memory>
+#include <string>
+#include <string_view>
 namespace bcos
 {
 class IOServicePool
@@ -30,22 +32,36 @@ public:
     using IOService = boost::asio::io_context;
     using ExecutorType = boost::asio::io_context::executor_type;
     using Work = boost::asio::executor_work_guard<ExecutorType>;
-    using WorkPtr = std::unique_ptr<Work>;
-    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency() + 1);
+    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency() + 1,
+        std::string_view _threadName = "ioService");
 
     IOServicePool(const IOServicePool&) = delete;
     IOServicePool& operator=(const IOServicePool&) = delete;
-    virtual ~IOServicePool();
+    ~IOServicePool();
 
-    void start();
     std::shared_ptr<IOService>& getIOService();
-    void stop();
+
+    template <class Task>
+    void post(Task&& task)
+    {
+        auto& ioService = getIOService();
+        boost::asio::post(
+            ioService->get_executor(), [task = std::forward<Task>(task)]() mutable { task(); });
+    }
 
 private:
-    std::vector<std::shared_ptr<IOService>> m_ioServices;
-    std::vector<WorkPtr> m_works;
-    std::vector<std::thread> m_threads;
+    struct IOServiceContext
+    {
+        std::shared_ptr<IOService> ioService;
+        Work work;
+        std::thread thread;
+
+        explicit IOServiceContext(std::shared_ptr<IOService> _ioService)
+          : ioService(std::move(_ioService)), work(this->ioService->get_executor())
+        {}
+    };
+    std::vector<IOServiceContext> m_contexts;
     std::atomic_size_t m_nextIOService = 0;
-    bool m_running = false;
+    std::string m_threadName;
 };
 }  // namespace bcos
