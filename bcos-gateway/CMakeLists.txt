@@ -45,5 +45,5 @@ endif()
 # for code coverage
 #if (COVERAGE)
 #    include(Coverage)
-#    config_coverage("gateway-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+#    config_coverage(gateway-coverage "/usr/.*" ".*/bcos-cmake-scripts.*" ".*/test/mock.*" ".*/test/main.*")
 #endif ()

@@ -14,28 +14,75 @@
 # limitations under the License.
 # ------------------------------------------------------------------------------
 # File: Coverage.cmake
-# Function: Define coverage related functions
+# Function: Define coverage related functions using gcovr (cross-platform)
+# Dependency: gcovr (pip install gcovr)
 # ------------------------------------------------------------------------------
-# REMOVE_FILE_PATTERN eg.: '/usr*' '${CMAKE_SOURCE_DIR}/deps**' '${CMAKE_SOURCE_DIR}/evmc*' ‘${CMAKE_SOURCE_DIR}/fisco-bcos*’
-function(config_coverage TARGET REMOVE_FILE_PATTERN)
-    find_program(LCOV_TOOL lcov)
-    message(STATUS "lcov tool: ${LCOV_TOOL}")
-    if (LCOV_TOOL)
-        message(STATUS "coverage dir: " ${CMAKE_BINARY_DIR})
-        message(STATUS "coverage TARGET: " ${TARGET})
-        message(STATUS "coverage REMOVE_FILE_PATTERN: " ${REMOVE_FILE_PATTERN})
-        if (APPLE)
-            add_custom_target(${TARGET}
-                COMMAND ${LCOV_TOOL} -keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
-                COMMAND ${LCOV_TOOL} -keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -r ${CMAKE_BINARY_DIR}/coverage.info.in '*MacOS*' '/usr*' '.*vcpkg_installed*' '.*boost/*' '*test*' '*build*' '*deps*' ${REMOVE_FILE_PATTERN} -o ${CMAKE_BINARY_DIR}/coverage.info
-                COMMAND genhtml --keep-going --ignore-errors inconsistent,unmapped,source --rc lcov_branch_coverage=1 -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
-        else()
-            add_custom_target(${TARGET}
-                COMMAND ${LCOV_TOOL} --keep-going -o ${CMAKE_BINARY_DIR}/coverage.info.in -c -d ${CMAKE_BINARY_DIR}/
-                COMMAND ${LCOV_TOOL} --keep-going -r ${CMAKE_BINARY_DIR}/coverage.info.in '/usr*' '*vcpkg_installed*' '*boost*' '*test*' '*build*' '*deps*' ${REMOVE_FILE_PATTERN} -o ${CMAKE_BINARY_DIR}/coverage.info
-                COMMAND genhtml -q -o ${CMAKE_BINARY_DIR}/CodeCoverage ${CMAKE_BINARY_DIR}/coverage.info)
-        endif()
-    else ()
-        message(FATAL_ERROR "Can't find lcov tool. Please install lcov")
+# Usage:
+#   config_coverage(<target_name> [exclude_regex...])
+#
+#   <target_name>   - Name of the custom target (e.g., "coverage")
+#   [exclude_regex]  - Optional regex patterns to exclude from coverage.
+#                      Each is a regex matching source file paths.
+#                      Example: "/usr/.*" ".*/test/.*" ".*/mock/.*"
+#
+#   Generates under ${CMAKE_BINARY_DIR}/CodeCoverage/:
+#     - index.html          (HTML detailed report)
+#     - coverage.xml        (Cobertura XML for CI tools)
+#     - coverage.json       (JSON summary)
+# ------------------------------------------------------------------------------
+function(config_coverage TARGET)
+
+    # ---- Parse optional exclude patterns from ARGN ----
+    set(GCOVR_EXCLUDE_ARGS)
+    foreach(PAT ${ARGN})
+        list(APPEND GCOVR_EXCLUDE_ARGS --exclude "${PAT}")
+    endforeach()
+
+    # ---- Locate gcovr ----
+    find_program(GCOVR_TOOL gcovr)
+    message(STATUS "gcovr tool: ${GCOVR_TOOL}")
+
+    if(NOT GCOVR_TOOL)
+        message(FATAL_ERROR
+            "Cannot find gcovr.\n"
+            "  pip install gcovr\n"
+            "  or: pip3 install gcovr\n"
+            "  or: conda install -c conda-forge gcovr")
     endif()
+
+    message(STATUS "coverage build dir: ${CMAKE_BINARY_DIR}")
+    message(STATUS "coverage source dir: ${CMAKE_SOURCE_DIR}")
+    message(STATUS "coverage target: ${TARGET}")
+
+    # ---- Build the coverage report target ----
+    add_custom_target(${TARGET}
+        # Always ensure output directory exists (cross-platform)
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/CodeCoverage
+        # Generate HTML + XML + JSON + text summary in one gcovr run
+        COMMAND ${GCOVR_TOOL}
+            --root ${CMAKE_SOURCE_DIR}
+            --object-directory ${CMAKE_BINARY_DIR}
+            --exclude "usr/.*"
+            --exclude ".*vcpkg_installed.*"
+            --exclude ".*boost.*"
+            --exclude ".*test.*"
+            --exclude ".*build.*"
+            --exclude ".*deps.*"
+            --exclude ".*/MacOS/.*"
+            ${GCOVR_EXCLUDE_ARGS}
+            --exclude-unreachable-branches
+            --exclude-throw-branches
+            --html-details ${CMAKE_BINARY_DIR}/CodeCoverage/index.html
+            --html-title "FISCO BCOS Coverage Report"
+            --xml ${CMAKE_BINARY_DIR}/CodeCoverage/coverage.xml
+            --json ${CMAKE_BINARY_DIR}/CodeCoverage/coverage.json
+            --print-summary
+        COMMENT "Generating coverage report with gcovr..."
+        VERBATIM
+    )
+
+    message(STATUS
+        "Coverage target '${TARGET}' configured.\n"
+        "  Build then run: cmake --build ${CMAKE_BINARY_DIR} --target ${TARGET}\n"
+        "  Open: ${CMAKE_BINARY_DIR}/CodeCoverage/index.html")
 endfunction()

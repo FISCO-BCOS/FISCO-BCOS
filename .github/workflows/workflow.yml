@@ -69,12 +69,15 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y --no-install-recommends \
-              lcov wget python3-dev python3-pip git curl zip unzip tar \
+              wget python3-dev python3-pip git curl zip unzip tar \
               clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
               flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+          pip3 install gcovr
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
-        run: brew install libomp autoconf automake libtool
+        run: |
+          brew install libomp autoconf automake libtool
+          pip3 install gcovr
       - name: Add MSbuild to PATH
         if: matrix.os == 'windows-2025'
         uses: microsoft/setup-msbuild@v1.1
@@ -97,27 +100,27 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for linux arm
         if: matrix.os == 'ubuntu-24.04-arm'
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
+          CC=gcc-14 CXX=g++-14 cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DLINKER=mold -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-linux-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS
         if: matrix.os == 'macos-15'
         run: |
           export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p build
           cd build
-          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-osx-release ${EXTRA_FLAGS} ..
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=arm64-osx-release ${EXTRA_FLAGS} ..
       - name: Configure for macOS (Intel)
         if: matrix.os == 'macos-15-intel'
         run: |
           export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
           mkdir -p build
           cd build
-          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=OFF -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-osx-release ${EXTRA_FLAGS} ..
+          CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-osx-release ${EXTRA_FLAGS} ..
       - name: Configure for windows
         if: matrix.os == 'windows-2025'
         run: |
@@ -133,6 +136,11 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      - name: Generate coverage report
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          cd build
+          cmake --build . --target coverage
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4
@@ -140,12 +148,13 @@ jobs:
           name: fisco-bcos-ubuntu-24-x86_64
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 30
-      # - name: Upload coverage report
-      #   if: matrix.os == 'ubuntu-24.04'
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: coverage-report
-      #     path: build/coverage.info
+      - name: Upload coverage report
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build/CodeCoverage/
+          retention-days: 30
       - name: prepare RPCAPI Tests
         if: matrix.os != 'windows-2025'
         run: |

@@ -43,7 +43,7 @@ endif()
 # for code coverage
 #if (COVERAGE)
 #    include(Coverage)
-#    config_coverage("tool-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+#    config_coverage(tool-cov "/usr/.*" ".*/bcos-cmake-scripts.*" ".*/test/bcos-test.*")
 #endif ()
 
 include(GNUInstallDirs)

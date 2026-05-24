@@ -18,7 +18,66 @@
 # ------------------------------------------------------------------------------
 function(config_test_cases TEST_ARGS SOURCES TEST_BINARY_PATH EXCLUDE_SUITES WORKING_DIRECTORY)
     foreach(file ${SOURCES})
-        file(STRINGS ${file} test_list_raw REGEX "BOOST_.*TEST_(SUITE|CASE|SUITE_END)")
+        # Read the entire file content
+        file(READ ${file} file_content)
+
+        # Normalize line endings (handle Windows \r\n)
+        string(REGEX REPLACE "\r\n" "\n" file_content "${file_content}")
+
+        # Step 1: Remove /* */ block comments first (must precede // removal,
+        # otherwise // inside a block comment would break the block comment)
+        # CMake regex does not support non-greedy matching, use the classic
+        # pattern that matches: /* (any non-* or * not followed by /) */
+        string(REGEX REPLACE "/\\*([^*]|\\*[^/])*\\*/" "" file_content "${file_content}")
+
+        # Step 2: Remove // line comments (everything from // to end of line)
+        string(REGEX REPLACE "//[^\n]*" "" file_content "${file_content}")
+
+        # Step 3: Split into lines and filter out #if 0 ... #endif blocks
+        string(REGEX REPLACE "\n" ";" file_lines "${file_content}")
+
+        set(test_list_raw "")
+        set(_disabled_depth 0)
+
+        foreach(line ${file_lines})
+            string(STRIP "${line}" _stripped)
+
+            # Track #if 0 / #if(0) block nesting (explicitly disabled code)
+            if(_stripped MATCHES "^#[ \t]*if[ \t(]*0[ \t)]*$")
+                math(EXPR _disabled_depth "${_disabled_depth} + 1")
+                continue()
+            endif()
+
+            # Handle #else within #if 0: toggle to enabled if depth was exactly 1
+            # (else branch of #if 0 is active code)
+            if(_stripped MATCHES "^#[ \t]*else[ \t]*$")
+                if(_disabled_depth EQUAL 1)
+                    set(_disabled_depth 0)
+                elseif(_disabled_depth GREATER 1)
+                    # inside nested #if 0, #else doesn't change anything
+                endif()
+                continue()
+            endif()
+
+            # Track #endif to close #if 0 blocks
+            if(_stripped MATCHES "^#[ \t]*endif[ \t]*$")
+                if(_disabled_depth GREATER 0)
+                    math(EXPR _disabled_depth "${_disabled_depth} - 1")
+                endif()
+                continue()
+            endif()
+
+            # Skip lines inside a disabled block
+            if(_disabled_depth GREATER 0)
+                continue()
+            endif()
+
+            # Check for boost test macros on non-disabled lines
+            if(line MATCHES "BOOST_.*TEST_(SUITE|CASE|SUITE_END)")
+                list(APPEND test_list_raw "${line}")
+            endif()
+        endforeach()
+
         set(TestSuite "DEFAULT")
         set(TestSuitePath "")
         # Set working directory variable
