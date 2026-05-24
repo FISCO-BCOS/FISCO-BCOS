@@ -101,9 +101,8 @@ public:
 
     virtual void strandPost(Base_Handler handler);
 
-protected:
+private:
     IOServicePool::Ptr m_ioServicePool;
-    std::shared_ptr<ba::io_context> m_timerIOService;
     ba::io_context::strand m_strand;
     bi::tcp::acceptor m_acceptor;
     bi::tcp::resolver m_resolver;

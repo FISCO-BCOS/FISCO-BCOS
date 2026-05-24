@@ -17,18 +17,10 @@ using namespace std;
 
 Socket::Socket(std::shared_ptr<ba::io_context> _ioService, ba::ssl::context& _sslContext,
     NodeIPEndpoint _nodeIPEndpoint)
-  : m_nodeIPEndpoint(std::move(_nodeIPEndpoint)), m_ioService(std::move(_ioService))
-{
-    try
-    {
-        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioService, _sslContext);
-    }
-    catch (const std::exception& _error)
-    {
-        SESSION_LOG(ERROR) << "ERROR: " << boost::diagnostic_information(_error);
-        SESSION_LOG(ERROR) << "Ssl Socket Init Fail! Please Check CERTIFICATE!";
-    }
-}
+  : m_nodeIPEndpoint(std::move(_nodeIPEndpoint)),
+    m_ioService(std::move(_ioService)),
+    m_sslSocket(*m_ioService, _sslContext)
+{}
 
 Socket::~Socket()
 {
@@ -37,7 +29,7 @@ Socket::~Socket()
 
 bool Socket::isConnected() const
 {
-    return m_sslSocket->lowest_layer().is_open();
+    return m_sslSocket.lowest_layer().is_open();
 }
 
 void Socket::close()
@@ -45,10 +37,10 @@ void Socket::close()
     try
     {
         boost::system::error_code ec;
-        m_sslSocket->lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
-        if (m_sslSocket->lowest_layer().is_open())
+        m_sslSocket.lowest_layer().shutdown(bi::tcp::socket::shutdown_both, ec);
+        if (m_sslSocket.lowest_layer().is_open())
         {
-            m_sslSocket->lowest_layer().close();
+            m_sslSocket.lowest_layer().close();
         }
     }
     catch (...)
@@ -57,22 +49,22 @@ void Socket::close()
 
 bi::tcp::endpoint Socket::remoteEndpoint(boost::system::error_code ec)
 {
-    return m_sslSocket->lowest_layer().remote_endpoint(ec);
+    return m_sslSocket.lowest_layer().remote_endpoint(ec);
 }
 
 bi::tcp::endpoint Socket::localEndpoint(boost::system::error_code ec)
 {
-    return m_sslSocket->lowest_layer().local_endpoint(ec);
+    return m_sslSocket.lowest_layer().local_endpoint(ec);
 }
 
 bi::tcp::socket& Socket::ref()
 {
-    return m_sslSocket->next_layer();
+    return m_sslSocket.next_layer();
 }
 
 ba::ssl::stream<bi::tcp::socket>& Socket::sslref()
 {
-    return *m_sslSocket;
+    return m_sslSocket;
 }
 
 const NodeIPEndpoint& Socket::nodeIPEndpoint() const
@@ -93,7 +85,6 @@ ba::io_context& Socket::ioService()
 ASIOInterface::ASIOInterface(
     IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort)
   : m_ioServicePool(std::move(_ioServicePool)),
-    m_timerIOService(m_ioServicePool->getIOService()),
     m_strand(*m_ioServicePool->getIOService()),
     m_acceptor(*m_ioServicePool->getIOService(),
         bi::tcp::endpoint(bi::make_address(listenHost), listenPort)),
@@ -113,7 +104,6 @@ void ASIOInterface::setType(int type)
 void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool)
 {
     m_ioServicePool = std::move(_ioServicePool);
-    m_timerIOService = m_ioServicePool->getIOService();
 }
 
 ba::ssl::context* ASIOInterface::srvContext()
@@ -138,7 +128,8 @@ void ASIOInterface::setClientContext(ba::ssl::context _clientContext)
 
 boost::asio::steady_timer ASIOInterface::newTimer(uint32_t timeout)
 {
-    return boost::asio::steady_timer(*(m_timerIOService), std::chrono::milliseconds(timeout));
+    return boost::asio::steady_timer(
+        *(m_ioServicePool->getIOService()), std::chrono::milliseconds(timeout));
 }
 
 std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
