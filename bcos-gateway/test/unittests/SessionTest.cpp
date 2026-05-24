@@ -41,7 +41,9 @@ class FakeASIO : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    FakeASIO() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
+    FakeASIO()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
+        m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
     virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -87,7 +89,7 @@ public:
         });
     }
     void strandPost(Base_Handler handler) override { m_handler = handler; }
-    void stop() override { m_threadPool->stop(); }
+    void stop() { m_threadPool->stop(); }
 
 public:  // for testing
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }

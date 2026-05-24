@@ -227,7 +227,7 @@ void WsSession::drop(WsError _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_ioServicePool->post(
+            m_ioServicePool->dispatch(
                 [callback = std::move(callback), error]() mutable {
                     callback->respCallBack(error, nullptr, nullptr);
                 });

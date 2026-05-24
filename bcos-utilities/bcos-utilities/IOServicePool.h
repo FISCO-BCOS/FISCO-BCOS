@@ -20,8 +20,10 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <memory>
+#include <range/v3/algorithm/binary_search.hpp>
 #include <string>
 #include <string_view>
+#include <thread>
 namespace bcos
 {
 class IOServicePool
@@ -37,6 +39,8 @@ public:
 
     IOServicePool(const IOServicePool&) = delete;
     IOServicePool& operator=(const IOServicePool&) = delete;
+    IOServicePool(IOServicePool&&) = delete;
+    IOServicePool& operator=(IOServicePool&&) = delete;
     ~IOServicePool();
 
     std::shared_ptr<IOService>& getIOService();
@@ -45,8 +49,21 @@ public:
     void post(Task&& task)
     {
         auto& ioService = getIOService();
-        boost::asio::post(
-            ioService->get_executor(), [task = std::forward<Task>(task)]() mutable { task(); });
+        boost::asio::post(ioService->get_executor(), std::forward<Task>(task));
+    }
+
+    template <class Task>
+    void dispatch(Task&& task)
+    {
+        auto id = std::this_thread::get_id();
+        if (::ranges::binary_search(m_threadIds, id))
+        {
+            task();
+        }
+        else
+        {
+            post(std::forward<Task>(task));
+        }
     }
 
 private:
@@ -56,12 +73,11 @@ private:
         Work work;
         std::thread thread;
 
-        explicit IOServiceContext(std::shared_ptr<IOService> _ioService)
-          : ioService(std::move(_ioService)), work(this->ioService->get_executor())
-        {}
+        explicit IOServiceContext(std::shared_ptr<IOService> _ioService);
     };
     std::vector<IOServiceContext> m_contexts;
-    std::atomic_size_t m_nextIOService = 0;
+    std::vector<std::thread::id> m_threadIds;
     std::string m_threadName;
+    std::atomic_size_t m_nextIOService = 0;
 };
 }  // namespace bcos

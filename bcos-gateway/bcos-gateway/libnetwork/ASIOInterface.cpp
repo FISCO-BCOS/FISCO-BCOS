@@ -6,7 +6,7 @@
  * @date 2019-07-244
  */
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
-
+#include "Socket.h"
 #include <chrono>
 
 namespace ba = boost::asio;
@@ -52,8 +52,7 @@ void Socket::close()
         }
     }
     catch (...)
-    {
-    }
+    {}
 }
 
 bi::tcp::endpoint Socket::remoteEndpoint(boost::system::error_code ec)
@@ -91,6 +90,19 @@ ba::io_context& Socket::ioService()
     return *m_ioService;
 }
 
+ASIOInterface::ASIOInterface(
+    IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort)
+  : m_ioServicePool(std::move(_ioServicePool)),
+    m_timerIOService(m_ioServicePool->getIOService()),
+    m_strand(*m_ioServicePool->getIOService()),
+    m_acceptor(*m_ioServicePool->getIOService(),
+        bi::tcp::endpoint(bi::make_address(listenHost), listenPort)),
+    m_resolver(*m_ioServicePool->getIOService())
+{
+    boost::asio::socket_base::reuse_address optionReuseAddress(true);
+    m_acceptor.set_option(optionReuseAddress);
+}
+
 ASIOInterface::~ASIOInterface() = default;
 
 void ASIOInterface::setType(int type)
@@ -98,36 +110,30 @@ void ASIOInterface::setType(int type)
     m_type = type;
 }
 
-std::shared_ptr<ba::io_context> ASIOInterface::ioService()
-{
-    return m_ioServicePool->getIOService();
-}
-
-void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool, bool _manageLifecycle)
+void ASIOInterface::setIOServicePool(IOServicePool::Ptr _ioServicePool)
 {
     m_ioServicePool = std::move(_ioServicePool);
-    m_manageIOServicePool = _manageLifecycle;
     m_timerIOService = m_ioServicePool->getIOService();
 }
 
-std::shared_ptr<ba::ssl::context> ASIOInterface::srvContext()
+ba::ssl::context* ASIOInterface::srvContext()
 {
-    return m_srvContext;
+    return m_srvContext.has_value() ? &*m_srvContext : nullptr;
 }
 
-std::shared_ptr<ba::ssl::context> ASIOInterface::clientContext()
+ba::ssl::context* ASIOInterface::clientContext()
 {
-    return m_clientContext;
+    return m_clientContext.has_value() ? &*m_clientContext : nullptr;
 }
 
-void ASIOInterface::setSrvContext(std::shared_ptr<ba::ssl::context> _srvContext)
+void ASIOInterface::setSrvContext(ba::ssl::context _srvContext)
 {
-    m_srvContext = std::move(_srvContext);
+    m_srvContext.emplace(std::move(_srvContext));
 }
 
-void ASIOInterface::setClientContext(std::shared_ptr<ba::ssl::context> _clientContext)
+void ASIOInterface::setClientContext(ba::ssl::context _clientContext)
 {
-    m_clientContext = std::move(_clientContext);
+    m_clientContext.emplace(std::move(_clientContext));
 }
 
 boost::asio::steady_timer ASIOInterface::newTimer(uint32_t timeout)
@@ -137,36 +143,20 @@ boost::asio::steady_timer ASIOInterface::newTimer(uint32_t timeout)
 
 std::shared_ptr<SocketFace> ASIOInterface::newSocket(bool _server, NodeIPEndpoint nodeIPEndpoint)
 {
-    std::shared_ptr<SocketFace> socket = std::make_shared<Socket>(
-        m_ioServicePool->getIOService(), _server ? *m_srvContext : *m_clientContext, nodeIPEndpoint);
+    std::shared_ptr<SocketFace> socket = std::make_shared<Socket>(m_ioServicePool->getIOService(),
+        _server ? *m_srvContext : *m_clientContext, nodeIPEndpoint);
     return socket;
 }
 
-std::shared_ptr<bi::tcp::acceptor> ASIOInterface::acceptor()
+bi::tcp::acceptor* ASIOInterface::acceptor()
 {
-    return m_acceptor;
+    return &m_acceptor;
 }
 
-void ASIOInterface::init(std::string listenHost, uint16_t listenPort)
+void ASIOInterface::asyncAccept(
+    const std::shared_ptr<SocketFace>& socket, Handler_Type handler, boost::system::error_code)
 {
-    m_strand = std::make_shared<boost::asio::io_context::strand>(*(m_ioServicePool->getIOService()));
-    m_resolver = std::make_shared<bi::tcp::resolver>(*(m_ioServicePool->getIOService()));
-    m_acceptor = std::make_shared<bi::tcp::acceptor>(*(m_ioServicePool->getIOService()),
-        bi::tcp::endpoint(bi::make_address(listenHost), listenPort));
-    boost::asio::socket_base::reuse_address optionReuseAddress(true);
-    m_acceptor->set_option(optionReuseAddress);
-}
-
-void ASIOInterface::start()
-{}
-
-void ASIOInterface::stop()
-{}
-
-void ASIOInterface::asyncAccept(const std::shared_ptr<SocketFace>& socket, Handler_Type handler,
-    boost::system::error_code)
-{
-    m_acceptor->async_accept(socket->ref(), handler);
+    m_acceptor.async_accept(socket->ref(), handler);
 }
 
 void ASIOInterface::asyncRead(const std::shared_ptr<SocketFace>& socket,
@@ -219,14 +209,14 @@ void ASIOInterface::setVerifyCallback(
 
 void ASIOInterface::strandPost(Base_Handler handler)
 {
-    m_strand->post(handler, std::allocator<void>());
+    m_strand.post(handler, std::allocator<void>());
 }
 
 void ASIOInterface::asyncResolveConnect(
     const std::shared_ptr<SocketFace>& socket, Handler_Type handler)
 {
     auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
-    m_resolver->async_resolve(protocol, socket->nodeIPEndpoint().address(),
+    m_resolver.async_resolve(protocol, socket->nodeIPEndpoint().address(),
         to_string(socket->nodeIPEndpoint().port()),
         [=](const boost::system::error_code& ec, bi::tcp::resolver::results_type results) {
             if (ec || results.empty())
