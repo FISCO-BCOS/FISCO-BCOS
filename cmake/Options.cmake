@@ -86,6 +86,8 @@ macro(configure_project)
 
     if(NOT WITH_VTUNE_ITT)
         add_definitions(-DINTEL_NO_ITTNOTIFY_API)
+    else()
+        add_definitions(-DTBB_USE_PROFILING_TOOLS=1)
     endif()
     if(FULLNODE)
         list(APPEND VCPKG_MANIFEST_FEATURES "fullnode")
