@@ -78,8 +78,27 @@ using RealGlobalStateBackendStorage =
         bcos::storage2::memory_storage::Attribute(
             bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::CONCURRENT),
         std::hash<bcos::executor_v1::StateKey>>;
+
+// Minimal CheckpointStorage stub — only the interface needed by MultiLayerStorage
+template <class Key, class Value, bcos::storage2::ReadWriteStorage<Key, Value> Storage>
+struct TrivialCheckpointStorage
+{
+    using CheckpointName = bcos::h256;
+
+    Storage& m_storage;
+    explicit TrivialCheckpointStorage(Storage& s) : m_storage(s) {}
+    Storage& open() { return m_storage; }
+    [[noreturn]] Storage& open(CheckpointName const&) { std::abort(); }
+    void createCheckpoint(Storage&, CheckpointName const&) {}
+    void deleteCheckpoint(CheckpointName const&) {}
+    std::optional<CheckpointName> latestCheckpointName() const { return std::nullopt; }
+    std::optional<CheckpointName> oldestCheckpointName() const { return std::nullopt; }
+};
+
+using RealGlobalCheckpointBackend = TrivialCheckpointStorage<
+    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue, RealGlobalStateBackendStorage>;
 using RealGlobalStateStorage = bcos::storage2::MultiLayerStorage<RealGlobalStateMutableStorage,
-    void, RealGlobalStateBackendStorage>;
+    void, RealGlobalCheckpointBackend>;
 
 task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backendStorage,
     const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
@@ -95,7 +114,8 @@ task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backen
 struct RealGlobalStateStorageFixture
 {
     RealGlobalStateBackendStorage backendStorage;
-    RealGlobalStateStorage storage{backendStorage};
+    RealGlobalCheckpointBackend checkpointBackend{backendStorage};
+    RealGlobalStateStorage storage{checkpointBackend};
 
     void setBlockNumber(const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
     {

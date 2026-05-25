@@ -343,7 +343,8 @@ private:
             }
             auto ledgerConfig =
                 co_await ledger::getLedgerConfig(view, blockHeader->number(), m_blockFactory.get());
-            auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
+            auto receipts = co_await m_schedulerImpl.get().executeBlock(
+                view.backendStorageRef(), m_executor.get(),
                 *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader =

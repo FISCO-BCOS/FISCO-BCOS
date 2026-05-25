@@ -14,6 +14,12 @@ std::string resolveCheckpointsPath(std::string_view rootDir)
     return path.lexically_normal().string();
 }
 
+bool isExistingRocksDB(std::string_view path)
+{
+    // RocksDB always writes a CURRENT file at the database root
+    return std::filesystem::exists(std::filesystem::path(path) / "CURRENT");
+}
+
 std::optional<bcos::h256> parseCheckpointName(std::string const& checkpointName)
 {
     try
@@ -63,10 +69,25 @@ void ensureCheckpointDirectories(std::string_view rootDir)
     auto normalizedRoot = std::filesystem::path(rootDir).lexically_normal();
     std::filesystem::create_directories(normalizedRoot);
     std::filesystem::create_directories(normalizedRoot / "checkpoints");
+
+    // For new-style paths, also ensure the "latest" subdirectory exists.
+    // For old-style paths (rootDir itself contains RocksDB data), skip this
+    // so the existing data is used directly.
+    if (!isExistingRocksDB(normalizedRoot.string()))
+    {
+        std::filesystem::create_directories(normalizedRoot / "latest");
+    }
 }
 
 std::string resolveLatestCheckpointPath(std::string_view rootDir)
 {
+    // Backward compatibility: if rootDir itself contains a RocksDB database
+    // (old-style layout), use it directly as the "latest" store.
+    // Otherwise use the new-style rootDir/latest/ layout.
+    if (isExistingRocksDB(rootDir))
+    {
+        return std::filesystem::path(rootDir).lexically_normal().string();
+    }
     auto path = std::filesystem::path(rootDir) / "latest";
     return path.lexically_normal().string();
 }

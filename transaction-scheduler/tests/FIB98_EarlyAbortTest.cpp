@@ -20,6 +20,7 @@
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "TrivialCheckpointStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
@@ -81,18 +82,22 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using CheckpointBackend =
+        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     FIB98Fixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
-        multiLayerStorage(backendStorage)
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend)
     {}
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    BackendStorage backendStorage;
+    CheckpointBackend checkpointBackend;
+    MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB98_EarlyAbortTest, FIB98Fixture)
@@ -127,8 +132,10 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
 
         using ContextIterator = ::ranges::iterator_t<decltype(contexts)>;
         using ContextRange = ::ranges::subrange<ContextIterator>;
-        using ViewType = decltype(view);
-        using ChunkType = ChunkStatus<MutableStorage, ViewType, CountingExecutor, ContextRange>;
+        using BackendStorageType =
+            std::remove_reference_t<decltype(view.backendStorageRef())>;
+        using ChunkType =
+            ChunkStatus<MutableStorage, BackendStorageType, CountingExecutor, ContextRange>;
 
         // Case 1: hasRAW already set before calling executeStep1 -- expect zero contexts created.
         {
@@ -137,7 +144,7 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
 
             ContextRange contextRange(contexts);
             executor.createCount.store(0);
-            ChunkType chunk(0, hasRAW, contextRange, executor, view);
+            ChunkType chunk(0, hasRAW, contextRange, executor, view.backendStorageRef());
 
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });
@@ -153,7 +160,7 @@ BOOST_AUTO_TEST_CASE(executeStep1AbortsWhenHasRAWIsSet)
 
             ContextRange contextRange(contexts);
             executor.createCount.store(0);
-            ChunkType chunk(0, hasRAW, contextRange, executor, view);
+            ChunkType chunk(0, hasRAW, contextRange, executor, view.backendStorageRef());
 
             bcostars::protocol::BlockHeaderImpl blockHeader(
                 [inner = bcostars::BlockHeader()]() mutable { return std::addressof(inner); });

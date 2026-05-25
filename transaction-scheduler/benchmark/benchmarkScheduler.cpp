@@ -4,6 +4,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "../tests/TrivialCheckpointStorage.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -33,7 +34,9 @@ constexpr static std::string_view transferMethod{"transfer(address,address,int25
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage = MemoryStorage<StateKey, StateValue, ORDERED | LRU | CONCURRENT>;
-using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, BackendStorage>;
+using CheckpointBackend =
+    TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 
 template <bool parallel>
@@ -46,6 +49,7 @@ struct Fixture
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> m_blockFactory;
 
     BackendStorage m_backendStorage;
+    CheckpointBackend m_checkpointBackend;
     MultiLayerStorageType m_multiLayerStorage;
     bcos::bytes m_helloworldBytecodeBinary;
 
@@ -76,7 +80,8 @@ struct Fixture
             std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(m_cryptoSuite)),
         m_blockFactory(std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             m_cryptoSuite, m_blockHeaderFactory, m_transactionFactory, m_receiptFactory)),
-        m_multiLayerStorage(m_backendStorage),
+        m_checkpointBackend(m_backendStorage),
+        m_multiLayerStorage(m_checkpointBackend),
         m_precompiledManager(m_cryptoSuite->hashImpl()),
         m_executor(*m_receiptFactory, m_cryptoSuite->hashImpl(), m_precompiledManager)
     {
