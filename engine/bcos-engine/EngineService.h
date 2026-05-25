@@ -20,8 +20,14 @@
 #pragma once
 
 #include "bcos-framework/ledger/Ledger.h"
+#include "bcos-framework/ledger/LedgerConfig.h"
+
+#include "bcos-crypto/merkle/Merkle.h"
+#include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include "bcos-framework/transaction-executor/TransactionExecutor.h"
+#include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Bloom.h"
@@ -163,13 +169,34 @@ std::optional<std::string> validateExecutionPayload(
     const ExecutionPayload& executionPayload, std::uint32_t version);
 }  // namespace detail
 
-template <class MemPoolType, class GlobalStateStorageType>
+template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
 class EngineService
 {
 public:
-    EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage)
-      : m_memPool(std::ref(memPool)), m_globalStateStorage(std::ref(globalStateStorage))
-    {}
+    using ViewType = typename GlobalStateStorageType::ViewType;
+
+    // Verify types satisfy the framework concepts
+    static_assert(executor_v1::TransactionExecutor<ExecutorType, ViewType>,
+        "ExecutorType must satisfy executor_v1::TransactionExecutor<ExecutorType, ViewType>");
+    static_assert(scheduler_v1::TransactionScheduler<SchedulerType, ViewType, ExecutorType,
+                      std::vector<protocol::Transaction::Ptr>>,
+        "SchedulerType must satisfy scheduler_v1::TransactionScheduler");
+
+    EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
+        ExecutorType& executor, SchedulerType& scheduler,
+        bcos::protocol::BlockFactory::Ptr blockFactory, int64_t blockTxCountLimit = 1000)
+      : m_memPool(std::ref(memPool)),
+        m_globalStateStorage(std::ref(globalStateStorage)),
+        m_blockTxCountLimit(blockTxCountLimit),
+        m_executor(std::ref(executor)),
+        m_scheduler(std::ref(scheduler)),
+        m_blockFactory(std::move(blockFactory))
+    {
+        if (!m_blockFactory)
+        {
+            BOOST_THROW_EXCEPTION(std::invalid_argument{"blockFactory must not be null"});
+        }
+    }
     ~EngineService() = default;
     EngineService(const EngineService&) = delete;
     EngineService(EngineService&&) = delete;
@@ -280,7 +307,17 @@ public:
             .blockNumber = *headBlockNumber,
         };
         updateTrackedBlockNumbers(safeBlockNumber, finalizedBlockNumber);
+
+        // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
+        // nonce)
         m_memPool.get().remove(view);
+
+        // Step 2: Create mutable storage layer on the view for transaction sealing
+        view.newMutable();
+
+        // Step 3: Pull valid transactions from mempool (in nonce order, with nonce verification)
+        std::vector<protocol::Transaction::Ptr> sealedTxs;
+        m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
 
         ForkchoiceUpdatedResult result{
             .payloadStatus = makeStatus(
@@ -293,14 +330,16 @@ public:
         }
 
         auto payloadId = nextPayloadID();
-        auto payload =
-            buildPayloadSkeleton(forkchoiceState, *payloadAttributes, payloadId, version);
+        auto nextBlockNumber = *headBlockNumber + 1;
+        auto payload = co_await buildPayload(forkchoiceState, *payloadAttributes, payloadId,
+            version, nextBlockNumber, std::move(sealedTxs), view);
         PayloadEntry entry{
             .version = version,
             .executionPayload = std::move(payload),
             .blockValue = 0,
             .blobsBundle = std::nullopt,
             .shouldOverrideBuilder = false,
+            .view = std::make_shared<ViewType>(std::move(view)),
         };
         if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
         {
@@ -321,7 +360,7 @@ public:
     bcos::task::Task<PayloadStatus> newPayload(
         const NewPayloadRequest& request, std::uint32_t version)
     {
-        co_return handleNewPayload(request, version);
+        co_return co_await handleNewPayload(request, version);
     }
 
     std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
@@ -350,6 +389,7 @@ private:
         u256 blockValue = 0;
         std::optional<BlobsBundleV1> blobsBundle;
         bool shouldOverrideBuilder = false;
+        std::shared_ptr<ViewType> view;
     };
 
     static bool isVersionSupported(std::uint32_t version)
@@ -399,7 +439,8 @@ private:
         };
     }
 
-    PayloadStatus handleNewPayload(const NewPayloadRequest& request, std::uint32_t version)
+    bcos::task::Task<PayloadStatus> handleNewPayload(
+        const NewPayloadRequest& request, std::uint32_t version)
     {
         if (!isVersionSupported(version))
         {
@@ -414,24 +455,24 @@ private:
             auto status = validationError->find("blockHash") != std::string::npos ?
                               PayloadValidationStatus::InvalidBlockHash :
                               PayloadValidationStatus::Invalid;
-            return makeStatus(status, std::nullopt, validationError);
+            co_return makeStatus(status, std::nullopt, validationError);
         }
         if (version <= 2 && request.parentBeaconBlockRoot.has_value())
         {
-            return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+            co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                 std::string("parentBeaconBlockRoot is only valid for newPayloadV3"));
         }
         if (version == 3)
         {
             if (!request.parentBeaconBlockRoot.has_value())
             {
-                return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
+                co_return makeStatus(PayloadValidationStatus::Invalid, std::nullopt,
                     std::string("parentBeaconBlockRoot must be a 32-byte hash for newPayloadV3"));
             }
             if (request.expectedBlobVersionedHashes.empty() &&
                 !request.executionPayload.transactions.empty())
             {
-                return makeStatus(PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
+                co_return makeStatus(PayloadValidationStatus::Accepted, std::nullopt, std::nullopt);
             }
         }
 
@@ -440,7 +481,7 @@ private:
                            m_blockHashToPayloadId.contains(request.executionPayload.parentHash);
         if (!parentKnown)
         {
-            return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
+            co_return makeStatus(PayloadValidationStatus::Syncing, std::nullopt, std::nullopt);
         }
 
         auto payloadIdIt = m_blockHashToPayloadId.find(request.executionPayload.blockHash);
@@ -461,30 +502,35 @@ private:
             .blockValue = 0,
             .blobsBundle = std::nullopt,
             .shouldOverrideBuilder = false,
+            .view = nullptr,
         };
         if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
+
+        // If this payload was built locally (via updateForkchoice), commit the view's
+        // state changes to storage. Externally received payloads have no view to commit.
+        auto it = m_payloadCache.find(payloadId);
+        if (it != m_payloadCache.end() && it->second.view)
+        {
+            m_globalStateStorage.get().pushView(std::move(*it->second.view));
+            co_await m_globalStateStorage.get().mergeBackStorage();
+        }
+
         m_payloadCache[payloadId] = std::move(entry);
 
-        return makeStatus(
+        co_return makeStatus(
             PayloadValidationStatus::Valid, request.executionPayload.blockHash, std::nullopt);
     }
 
     PayloadID nextPayloadID() { return detail::encodePayloadSequence(m_nextPayloadSequence++); }
 
-    ExecutionPayload buildPayloadSkeleton(const ForkchoiceState& forkchoiceState,
+    bcos::task::Task<ExecutionPayload> buildPayload(const ForkchoiceState& forkchoiceState,
         const PayloadAttributes& payloadAttributes, const PayloadID& payloadId,
-        std::uint32_t version) const
+        std::uint32_t version, bcos::protocol::BlockNumber nextBlockNumber,
+        std::vector<protocol::Transaction::Ptr> sealedTxs, ViewType& view) const
     {
-        auto nextBlockNumber = bcos::protocol::BlockNumber{0};
-        if (auto currentBlockNumber = lookupBlockNumberByHash(forkchoiceState.headBlockHash);
-            currentBlockNumber.has_value())
-        {
-            nextBlockNumber = *currentBlockNumber + 1;
-        }
-
         ExecutionPayload executionPayload{
             .parentHash = forkchoiceState.headBlockHash,
             .feeRecipient = payloadAttributes.suggestedFeeRecipient,
@@ -499,7 +545,7 @@ private:
             .extraData = {},
             .baseFeePerGas = 0,
             .blockHash = detail::syntheticHash(payloadId),
-            .transactions = {},
+            .transactions = std::move(sealedTxs),
             .withdrawals = std::nullopt,
             .blobGasUsed = std::nullopt,
             .excessBlobGas = std::nullopt,
@@ -515,8 +561,133 @@ private:
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);
         }
-        return executionPayload;
+
+        // Step 2a: Get LedgerConfig via storage-based LedgerMethods
+        // Uses the parent block number since system configs are effective up to the parent
+        ledger::LedgerConfig ledgerConfig;
+        co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
+        auto blockVersion = ledgerConfig.compatibilityVersion();
+
+        // Real EVM execution: execute transactions and compute real hashes.
+        if (executionPayload.transactions.empty())
+        {
+            auto emptyHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+            emptyHeader->setNumber(nextBlockNumber);
+            emptyHeader->setVersion(blockVersion);
+            emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+            emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+            emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+            executionPayload.stateRoot = emptyHeader->stateRoot();
+            executionPayload.blockHash = emptyHeader->hash();
+            co_return executionPayload;
+        }
+
+        // Step 2b: Create BlockHeader for the new block
+        auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        blockHeader->setNumber(nextBlockNumber);
+        blockHeader->setVersion(blockVersion);
+        blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
+
+        // Step 2c: Execute transactions via the scheduler
+        // Use views::indirect to dereference shared_ptr<Transaction> -> const Transaction&
+        auto receipts = co_await m_scheduler.get().executeBlock(view, m_executor.get(),
+            *blockHeader, executionPayload.transactions | ::ranges::views::indirect, ledgerConfig);
+
+        // Step 2d: Compute transaction root (Merkle over tx hashes)
+        h256 txRoot;
+        {
+            auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+            auto hasher = hashImpl.hasher();
+            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
+                hasher.clone());
+            if (!executionPayload.transactions.empty())
+            {
+                auto txHashes = executionPayload.transactions |
+                                ::ranges::views::transform([](auto& tx) { return tx->hash(); });
+                std::vector<h256> merkleTrie;
+                merkle.generateMerkle(txHashes, merkleTrie);
+                if (!merkleTrie.empty())
+                {
+                    txRoot = merkleTrie.back();
+                }
+            }
+        }
+
+        // Step 2e: Compute receipt root (Merkle over receipt hashes)
+        h256 receiptRoot;
+        {
+            auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
+            auto hasher = hashImpl.hasher();
+            crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
+                hasher.clone());
+            if (!receipts.empty())
+            {
+                auto receiptHashes =
+                    receipts | ::ranges::views::transform([](auto& r) { return r->hash(); });
+                std::vector<h256> merkleTrie;
+                merkle.generateMerkle(receiptHashes, merkleTrie);
+                if (!merkleTrie.empty())
+                {
+                    receiptRoot = merkleTrie.back();
+                }
+            }
+        }
+
+        // Step 2f: Compute gas used
+        u256 totalGasUsed;
+        for (auto& receipt : receipts)
+        {
+            totalGasUsed += receipt->gasUsed();
+        }
+
+        // Step 2g: Compute state root (MPT over state storage)
+        h256 stateRoot = co_await calculateStateRoot(view, blockHeader->version());
+
+        // Step 2h: Set computed values in the block header and calculate block hash
+        blockHeader->setStateRoot(stateRoot);
+        blockHeader->setReceiptsRoot(receiptRoot);
+        blockHeader->setTxsRoot(txRoot);
+        blockHeader->setGasUsed(totalGasUsed);
+        blockHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
+
+        // Step 2i: Fill the execution payload with real values
+        executionPayload.stateRoot = stateRoot;
+        executionPayload.receiptsRoot = receiptRoot;
+        executionPayload.gasUsed = totalGasUsed;
+        executionPayload.blockHash = blockHeader->hash();
+        executionPayload.logsBloom = {};
+
+        co_return executionPayload;
     }
+
+    /// Compute state root by iterating over storage and XOR-ing entry hashes.
+    /// This is a simplified MPT approximation; for full correctness use
+    /// scheduler_v1::calculateStateRoot from BaselineScheduler.h.
+    task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const
+    {
+        auto range = co_await storage2::range(view);
+        h256 totalHash;
+        while (auto keyValue = co_await range.next())
+        {
+            auto& [key, value] = *keyValue;
+            executor_v1::StateKeyView viewKey(key);
+            auto [tableName, keyName] = viewKey.get();
+
+            storage::Entry entry;
+            if (auto* e = std::get_if<storage::Entry>(std::addressof(value)))
+            {
+                entry = *e;
+            }
+            else
+            {
+                entry.setStatus(storage::Entry::DELETED);
+            }
+            totalHash ^= entry.hash(
+                tableName, keyName, *m_blockFactory->cryptoSuite()->hashImpl(), blockVersion);
+        }
+        co_return totalHash;
+    }
+
 
     std::optional<bcos::protocol::BlockNumber> lookupBlockNumberByHash(const h256& blockHash) const
     {
@@ -544,6 +715,10 @@ private:
     mutable std::shared_mutex x_state;
     std::reference_wrapper<MemPoolType> m_memPool;
     std::reference_wrapper<GlobalStateStorageType> m_globalStateStorage;
+    int64_t m_blockTxCountLimit;
+    std::reference_wrapper<ExecutorType> m_executor;
+    std::reference_wrapper<SchedulerType> m_scheduler;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
