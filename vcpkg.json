@@ -80,7 +80,12 @@
         "ittapi",
         "fbwasm",
         "group-sig",
-        "paillier",
+        "paillier"
+      ]
+    },
+    "tikv": {
+      "description": "TiKV storage backend dependencies",
+      "dependencies": [
         "tikv-client-cpp"
       ]
     },
