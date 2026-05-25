@@ -72,6 +72,8 @@ function(config_coverage TARGET)
             ${GCOVR_EXCLUDE_ARGS}
             --exclude-unreachable-branches
             --exclude-throw-branches
+            --gcov-ignore-errors=no_working_dir_found
+            --gcov-ignore-parse-errors
             --html-details ${CMAKE_BINARY_DIR}/CodeCoverage/index.html
             --html-title "FISCO BCOS Coverage Report"
             --xml ${CMAKE_BINARY_DIR}/CodeCoverage/coverage.xml
