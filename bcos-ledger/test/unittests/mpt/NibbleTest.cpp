@@ -56,6 +56,13 @@ BOOST_AUTO_TEST_CASE(NibblesToBytesOddThrows)
     BOOST_CHECK_THROW(nibblesToBytes(odd), MPTInvariantViolation);
 }
 
+BOOST_AUTO_TEST_CASE(NibblesToBytesOutOfRangeThrows)
+{
+    // 0x10 has bits above the low nibble — violates the strict 4-bit invariant.
+    std::vector<uint8_t> const bad{0x01, 0x10};
+    BOOST_CHECK_THROW(nibblesToBytes(bad), MPTInvariantViolation);
+}
+
 BOOST_AUTO_TEST_CASE(BytesToNibblesRoundTrip)
 {
     bcos::bytes const input{0x12, 0x34, 0x56, 0x78};

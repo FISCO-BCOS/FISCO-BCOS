@@ -18,25 +18,26 @@
  */
 #pragma once
 
-#include "Types.h"
+#include <bcos-utilities/FixedBytes.h>
+#include <string_view>
 
 namespace bcos::ledger::mpt
 {
 
 /// Hex string for keccak256(RLP("")) = the empty trie root hash
-constexpr std::string_view EMPTY_ROOT_HASH_HEX =
+inline constexpr std::string_view EMPTY_ROOT_HASH_HEX =
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
 
 /// Hex string for keccak256("") = the empty code hash
-constexpr std::string_view EMPTY_CODE_HASH_HEX =
+inline constexpr std::string_view EMPTY_CODE_HASH_HEX =
     "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
 
-/// Returns the singleton Hash32 for the empty trie root.
+/// Returns the singleton h256 for the empty trie root.
 /// Initialised from EMPTY_ROOT_HASH_HEX on first call (Meyers singleton).
-Hash32 const& emptyRootHash();
+bcos::h256 const& emptyRootHash();
 
-/// Returns the singleton Hash32 for keccak256("") (empty code hash).
+/// Returns the singleton h256 for keccak256("") (empty code hash).
 /// Initialised from EMPTY_CODE_HASH_HEX on first call (Meyers singleton).
-Hash32 const& emptyCodeHash();
+bcos::h256 const& emptyCodeHash();
 
 }  // namespace bcos::ledger::mpt

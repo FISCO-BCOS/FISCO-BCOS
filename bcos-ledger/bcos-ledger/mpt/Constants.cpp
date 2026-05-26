@@ -23,15 +23,15 @@
 namespace bcos::ledger::mpt
 {
 
-Hash32 const& emptyRootHash()
+bcos::h256 const& emptyRootHash()
 {
-    static Hash32 const s_value{EMPTY_ROOT_HASH_HEX, Hash32::FromHex};
+    static bcos::h256 const s_value{EMPTY_ROOT_HASH_HEX, bcos::h256::FromHex};
     return s_value;
 }
 
-Hash32 const& emptyCodeHash()
+bcos::h256 const& emptyCodeHash()
 {
-    static Hash32 const s_value{EMPTY_CODE_HASH_HEX, Hash32::FromHex};
+    static bcos::h256 const s_value{EMPTY_CODE_HASH_HEX, bcos::h256::FromHex};
     return s_value;
 }
 

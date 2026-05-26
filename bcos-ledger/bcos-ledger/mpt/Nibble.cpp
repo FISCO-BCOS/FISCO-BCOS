@@ -47,7 +47,14 @@ bcos::bytes nibblesToBytes(std::span<uint8_t const> nibbles)
     out.reserve(nibbles.size() / 2);
     for (size_t i = 0; i < nibbles.size(); i += 2)
     {
-        out.push_back(static_cast<bcos::byte>((nibbles[i] << 4) | (nibbles[i + 1] & 0x0f)));
+        // Strict invariant: each nibble must fit in 4 bits.
+        if ((nibbles[i] | nibbles[i + 1]) > 0x0fu)
+        {
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                      "nibblesToBytes: nibble value out of range [0, 15]"));
+        }
+        out.push_back(
+            static_cast<bcos::byte>(((nibbles[i] & 0x0fu) << 4) | (nibbles[i + 1] & 0x0fu)));
     }
     return out;
 }

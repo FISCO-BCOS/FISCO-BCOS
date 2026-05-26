@@ -67,16 +67,31 @@ BOOST_AUTO_TEST_CASE(EncodeOddWithTerminator)
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
 
-// Round-trip for both terminator values
-BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTrip)
+// Round-trip for both isLeaf values, odd nibble count
+BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripOdd)
 {
     std::vector<uint8_t> const nibbles{0x0a, 0x0b, 0x0c, 0x0d, 0x0e};
 
-    for (bool term : {false, true})
+    for (bool isLeaf : {false, true})
     {
-        auto const encoded = hexPrefixEncode(nibbles, term);
-        auto const [decoded, decodedTerm] = hexPrefixDecode(encoded);
-        BOOST_CHECK_EQUAL(decodedTerm, term);
+        auto const encoded = hexPrefixEncode(nibbles, isLeaf);
+        auto const [decoded, decodedIsLeaf] = hexPrefixDecode(encoded);
+        BOOST_CHECK_EQUAL(decodedIsLeaf, isLeaf);
+        BOOST_CHECK_EQUAL_COLLECTIONS(
+            decoded.begin(), decoded.end(), nibbles.begin(), nibbles.end());
+    }
+}
+
+// Round-trip for both isLeaf values, even nibble count
+BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripEven)
+{
+    std::vector<uint8_t> const nibbles{0x0a, 0x0b, 0x0c, 0x0d};
+
+    for (bool isLeaf : {false, true})
+    {
+        auto const encoded = hexPrefixEncode(nibbles, isLeaf);
+        auto const [decoded, decodedIsLeaf] = hexPrefixDecode(encoded);
+        BOOST_CHECK_EQUAL(decodedIsLeaf, isLeaf);
         BOOST_CHECK_EQUAL_COLLECTIONS(
             decoded.begin(), decoded.end(), nibbles.begin(), nibbles.end());
     }

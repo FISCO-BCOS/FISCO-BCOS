@@ -27,23 +27,24 @@
 namespace bcos::ledger::mpt
 {
 
-/// Encodes a nibble sequence with a terminator flag using Hex-Prefix encoding.
+/// Encodes a nibble sequence with a leaf/extension flag using Hex-Prefix encoding.
 ///
 /// HP 编码（Yellow Paper Appendix C）首字节布局：
 ///   bits [7:6] = 0
-///   bit  5     = terminator flag (1 = leaf, 0 = extension)
+///   bit  5     = leaf flag (Yellow Paper "terminator"): 1 = leaf, 0 = extension
 ///   bit  4     = 1 when the nibble count is odd
 ///   bits [3:0] = first nibble (only meaningful when bit 4 = 1; zero when even)
 ///
 /// @param nibbles  Input nibble sequence (each element in [0, 15])
-/// @param terminator  true = leaf node (terminating), false = extension node
+/// @param isLeaf   true = leaf node (Yellow Paper terminator=1),
+///                 false = extension node (terminator=0)
 /// @return Compact-encoded byte sequence
-bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool terminator);
+bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool isLeaf);
 
 /// Decodes a Hex-Prefix encoded byte sequence.
 ///
 /// @param encoded  Compact-encoded input (must be non-empty)
-/// @return {nibbles, terminator}
+/// @return {nibbles, isLeaf}
 /// @throws MPTDecodeError on empty input
 std::pair<std::vector<uint8_t>, bool> hexPrefixDecode(std::span<bcos::byte const> encoded);
 
