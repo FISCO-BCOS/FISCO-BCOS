@@ -132,7 +132,7 @@ public:
 protected:
     void setRawProposal(std::shared_ptr<RawProposal> _rawProposal)
     {
-        m_rawProposal = _rawProposal;
+        m_rawProposal = std::move(_rawProposal);
         deserializeObject();
     }
     virtual void deserializeObject()

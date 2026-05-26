@@ -167,7 +167,14 @@ void PBFTLogSync::onRecvPrecommitResponse(Error::Ptr _error, bcos::crypto::NodeI
     }
     PBFT_LOG(INFO) << LOG_DESC("onRecvPrecommitResponse") << printPBFTMsgInfo(response);
     auto pbftMessage = std::dynamic_pointer_cast<ViewChangeMsgInterface>(response);
-    assert(pbftMessage->preparedProposals().size() == 1);
+    if (pbftMessage->preparedProposals().size() != 1)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("onRecvPrecommitResponse: invalid preparedProposals size")
+                          << LOG_KV("expected", 1)
+                          << LOG_KV("actual", pbftMessage->preparedProposals().size())
+                          << LOG_KV("from", _nodeID->shortHex());
+        return;
+    }
     auto precommitMsg = (pbftMessage->preparedProposals())[0];
     if (!precommitMsg->consensusProposal())
     {
