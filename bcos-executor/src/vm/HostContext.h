@@ -24,10 +24,13 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
+#include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
+#include <boost/container_hash/hash.hpp>
 #include <memory>
+#include <unordered_set>
 
 namespace bcos
 {
@@ -149,6 +152,25 @@ public:
         return m_executive->blockContext().features();
     }
 
+    evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
+
+    evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
+    {
+        if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
+                                     ledger::Features::Flag::feature_evm_eip2929))
+            return EVMC_ACCESS_COLD;
+        return m_warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
+    evmc_access_status accessStorage(
+        const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
+    {
+        if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
+                                     ledger::Features::Flag::feature_evm_eip2929))
+            return EVMC_ACCESS_COLD;
+        return m_warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
     std::string getContractTableName(const std::string_view& _address);
 
 protected:
@@ -169,6 +191,44 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
+
+    // EIP-2929 cold/warm access tracking (revision-gated, see accessAccount/accessStorage)
+    struct EVMCAddrHash
+    {
+        size_t operator()(const evmc_address& a) const noexcept
+        {
+            return boost::hash_range(a.bytes, a.bytes + 20);
+        }
+    };
+    struct EVMCAddrEqual
+    {
+        bool operator()(const evmc_address& a, const evmc_address& b) const noexcept
+        {
+            return std::memcmp(a.bytes, b.bytes, 20) == 0;
+        }
+    };
+    struct EVMCPairHash
+    {
+        size_t operator()(const std::pair<evmc_address, evmc_bytes32>& p) const noexcept
+        {
+            size_t h = 0;
+            boost::hash_combine(h, boost::hash_range(p.first.bytes, p.first.bytes + 20));
+            boost::hash_combine(h, boost::hash_range(p.second.bytes, p.second.bytes + 32));
+            return h;
+        }
+    };
+    struct EVMCPairEqual
+    {
+        bool operator()(const std::pair<evmc_address, evmc_bytes32>& a,
+            const std::pair<evmc_address, evmc_bytes32>& b) const noexcept
+        {
+            return std::memcmp(a.first.bytes, b.first.bytes, 20) == 0 &&
+                   std::memcmp(a.second.bytes, b.second.bytes, 32) == 0;
+        }
+    };
+    std::unordered_set<evmc_address, EVMCAddrHash, EVMCAddrEqual> m_warmAccounts;
+    std::unordered_set<std::pair<evmc_address, evmc_bytes32>, EVMCPairHash, EVMCPairEqual>
+        m_warmStorage;
 };
 
 }  // namespace executor
