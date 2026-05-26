@@ -23,6 +23,8 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "vm/EvmPrecompiledAddress.h"
 #include "vm/Precompiled.h"
+#include "vm/VMInstance.h"
+#include <Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string_view>
 
@@ -867,6 +869,278 @@ BOOST_AUTO_TEST_CASE(point_evaluation_pricer)
     auto& pricer = executor::PrecompiledRegistrar::pricer(kzgName);
     bytes empty;
     BOOST_CHECK_EQUAL(pricer(ref(empty)), 50000);
+}
+
+BOOST_AUTO_TEST_CASE(toRevisionMapping)
+{
+    using namespace bcos::executor;
+    // existing behavior — unchanged
+    {
+        VMSchedule s;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_LONDON);
+    }
+    {
+        VMSchedule s;
+        s.enablePairs = true;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_SHANGHAI);
+    }
+    {
+        VMSchedule s;
+        s.enableCanCun = true;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_CANCUN);
+    }
+    // new behavior
+    {
+        VMSchedule s;
+        s.enableCanCun = true;
+        s.enablePrague = true;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_PRAGUE);
+    }
+    {
+        VMSchedule s;
+        s.enablePairs = true;
+        s.enableCanCun = true;
+        s.enablePrague = true;
+        s.enableOsaka = true;
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_OSAKA);
+        BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleOsaka), EVMC_OSAKA);
+    }
+}
+
+namespace
+{
+static bytes makeModexpInput(bytes base, bytes exp, bytes mod)
+{
+    bytes input;
+    input.resize(input.size() + 32, 0);
+    input.back() = (uint8_t)base.size();
+    input.resize(input.size() + 32, 0);
+    input.back() = (uint8_t)exp.size();
+    input.resize(input.size() + 32, 0);
+    input.back() = (uint8_t)mod.size();
+    input.insert(input.end(), base.begin(), base.end());
+    input.insert(input.end(), exp.begin(), exp.end());
+    input.insert(input.end(), mod.begin(), mod.end());
+    return input;
+}
+}  // namespace
+
+BOOST_AUTO_TEST_CASE(modexpCompatibility)
+{
+    using bcos::executor::PrecompiledRegistrar;
+    auto run = [](bytes input) { return PrecompiledRegistrar::executor("modexp")(ref(input)); };
+
+    {
+        auto r = run(makeModexpInput({0x02}, {0x08}, {0x0a}));
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK_EQUAL(r.second[0], 6);
+    }
+
+    {
+        auto r = run(makeModexpInput({0x05}, {0x03}, {}));
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK(r.second.empty());
+    }
+
+    {
+        auto r = run(makeModexpInput({0x01}, {}, {0x07}));
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK_EQUAL(r.second[0], 1);
+    }
+
+    {
+        auto r = run(makeModexpInput({0x00}, {0x05}, {0x0d}));
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK_EQUAL(r.second[0], 0);
+    }
+
+    {
+        auto r = run(makeModexpInput({0xff}, {0xff}, {0x01}));
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK_EQUAL(r.second[0], 0);
+    }
+
+    {
+        bytes short_input(96, 0);
+        short_input[31] = 1;
+        short_input[63] = 1;
+        short_input[95] = 7;
+        auto r = run(short_input);
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK_EQUAL(r.second.size(), 7u);
+        BOOST_CHECK(r.second == bytes(7, 0));
+    }
+    {
+        auto r = run(makeModexpInput({0xff}, {0xff}, {0x00}));
+        BOOST_REQUIRE(r.first);
+        BOOST_CHECK_EQUAL(r.second[0], 0);
+    }
+}
+
+// ===== EIP-7212 p256verify (secp256r1) ======================================
+// Test vectors derived from the evmone precompiles_secp256r1_test.cpp suite.
+
+BOOST_AUTO_TEST_CASE(p256verify_short_input)
+{
+    // EIP-7212: wrong input size → success (true) with empty output.
+    bytes short_in(159, 0x00);
+    auto [ok, out] = exec("p256verify", short_in);
+    BOOST_CHECK(ok == true);
+    BOOST_CHECK(out.empty());
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_long_input)
+{
+    // EIP-7212: wrong input size → success (true) with empty output.
+    bytes long_in(161, 0x00);
+    auto [ok, out] = exec("p256verify", long_in);
+    BOOST_CHECK(ok == true);
+    BOOST_CHECK(out.empty());
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_all_zero)
+{
+    // All-zero input: invalid signature → success (true) with empty output per EIP-7212.
+    bytes zero_in(160, 0x00);
+    auto [ok, out] = exec("p256verify", zero_in);
+    BOOST_CHECK(ok == true);
+    BOOST_CHECK(out.empty());
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_valid_signature)
+{
+    // Official evmone test vector (precompiles_secp256r1_test.cpp VALID_INPUTS[0]):
+    //   h  = bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023
+    //   r  = 2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18
+    //   s  = 4cd60b855d442f5b3c7b11eb6c4e0ae7525fe710fab9aa7c77a67f79e6fadd76
+    //   x  = 2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838
+    //   y  = c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e
+    bytes input;
+    input +=
+        bcos::fromHex("bb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023");  // h
+    input +=
+        bcos::fromHex("2ba3a8be6b94d5ec80a6d9d1190a436effe50d85a1eee859b8cc6af9bd5c2e18");  // r
+    input +=
+        bcos::fromHex("4cd60b855d442f5b3c7b11eb6c4e0ae7525fe710fab9aa7c77a67f79e6fadd76");  // s
+    input +=
+        bcos::fromHex("2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838");  // x
+    input +=
+        bcos::fromHex("c7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e");  // y
+    BOOST_REQUIRE_EQUAL(input.size(), 160u);
+    auto [ok, out] = exec("p256verify", input);
+    BOOST_CHECK(ok);
+    BOOST_REQUIRE_EQUAL(out.size(), 32u);
+    // All bytes zero except last byte = 0x01 (success).
+    for (size_t i = 0; i < 31; ++i)
+        BOOST_CHECK_EQUAL(out[i], 0);
+    BOOST_CHECK_EQUAL(out[31], 1);
+}
+
+BOOST_AUTO_TEST_CASE(p256verify_gas)
+{
+    // EIP-7212 / evmone 0.21 flat gas cost = 6900.
+    auto& pricer = executor::PrecompiledRegistrar::pricer("p256verify");
+    bytes empty;
+    BOOST_CHECK_EQUAL(pricer(ref(empty)), 6900);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ===== EIP-7623 calldata floor cost =========================================
+// Stand-alone arithmetic test — verifies the floor formula without needing
+// the full executor / block-context infrastructure.
+BOOST_AUTO_TEST_SUITE(testEip7623)
+
+BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
+{
+    using namespace bcos::executor;
+
+    // -----------------------------------------------------------------------
+    // Scenario: empty calldata
+    //   normalDataCost = 0, floorDataCost = 0, calldataGas = 0
+    // -----------------------------------------------------------------------
+    {
+        bytes dataEmpty;
+        int64_t normalDataCost = 0;
+        int64_t numTokens = 0;
+        for (auto byte : dataEmpty)
+        {
+            if (byte == 0)
+            {
+                normalDataCost += 4;
+                numTokens += 1;
+            }
+            else
+            {
+                normalDataCost += 16;
+                numTokens += TOKENS_PER_NONZERO_BYTE;
+            }
+        }
+        int64_t floorDataCost = numTokens * TOTAL_COST_FLOOR_PER_TOKEN;
+        int64_t calldataGas = std::max(normalDataCost, floorDataCost);
+        BOOST_CHECK_EQUAL(calldataGas, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Scenario: 100 zero bytes of calldata
+    //   normalDataCost = 100 * 4        = 400
+    //   floorDataCost  = (100 * 1) * 10 = 1000
+    //   calldataGas    = max(400, 1000) = 1000
+    // -----------------------------------------------------------------------
+    bytes data(100, 0x00);
+
+    int64_t normalDataCost = 0;
+    int64_t numTokens = 0;
+    for (auto byte : data)
+    {
+        if (byte == 0)
+        {
+            normalDataCost += 4;
+            numTokens += 1;
+        }
+        else
+        {
+            normalDataCost += 16;
+            numTokens += TOKENS_PER_NONZERO_BYTE;
+        }
+    }
+    int64_t floorDataCost = numTokens * TOTAL_COST_FLOOR_PER_TOKEN;
+    BOOST_CHECK_EQUAL(normalDataCost, 400);  // 100 * 4
+    BOOST_CHECK_EQUAL(floorDataCost, 1000);  // 100 * 1 * 10
+    BOOST_CHECK_GT(floorDataCost, normalDataCost);
+
+    int64_t calldataGas = std::max(normalDataCost, floorDataCost);
+    BOOST_CHECK_EQUAL(calldataGas, 1000);
+
+    // -----------------------------------------------------------------------
+    // Scenario: 100 nonzero bytes (e.g. 0xff)
+    //   normalDataCost = 100 * 16       = 1600
+    //   floorDataCost  = (100 * 4) * 10 = 4000
+    //   calldataGas    = max(1600, 4000) = 4000
+    // -----------------------------------------------------------------------
+    bytes data2(100, 0xff);
+
+    int64_t normalDataCost2 = 0;
+    int64_t numTokens2 = 0;
+    for (auto byte : data2)
+    {
+        if (byte == 0)
+        {
+            normalDataCost2 += 4;
+            numTokens2 += 1;
+        }
+        else
+        {
+            normalDataCost2 += 16;
+            numTokens2 += TOKENS_PER_NONZERO_BYTE;
+        }
+    }
+    int64_t floorDataCost2 = numTokens2 * TOTAL_COST_FLOOR_PER_TOKEN;
+    BOOST_CHECK_EQUAL(normalDataCost2, 1600);  // 100 * 16
+    BOOST_CHECK_EQUAL(floorDataCost2, 4000);   // 100 * 4 * 10
+
+    int64_t calldataGas2 = std::max(normalDataCost2, floorDataCost2);
+    BOOST_CHECK_EQUAL(calldataGas2, 4000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

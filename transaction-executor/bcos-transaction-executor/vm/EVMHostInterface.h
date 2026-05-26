@@ -151,7 +151,7 @@ struct EVMHostInterface
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
         hostContext.suicide();  // FISCO BCOS has no _beneficiary
-        return false;
+        return true;
     }
 
     static void log(evmc_host_context* context, const evmc_address* addr, uint8_t const* data,
@@ -167,17 +167,18 @@ struct EVMHostInterface
         hostContext.log(*addr, std::move(hashTopics), bytesConstRef{data, dataSize});
     }
 
-    static evmc_access_status accessAccount([[maybe_unused]] evmc_host_context* context,
-        [[maybe_unused]] const evmc_address* addr) noexcept
+    static evmc_access_status accessAccount(
+        evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        return EVMC_ACCESS_COLD;
+        auto& hostContext = static_cast<HostContextType&>(*context);
+        return hostContext.accessAccount(*addr);
     }
 
-    static evmc_access_status accessStorage([[maybe_unused]] evmc_host_context* context,
-        [[maybe_unused]] const evmc_address* addr,
-        [[maybe_unused]] const evmc_bytes32* key) noexcept
+    static evmc_access_status accessStorage(
+        evmc_host_context* context, const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
-        return EVMC_ACCESS_COLD;
+        auto& hostContext = static_cast<HostContextType&>(*context);
+        return hostContext.accessStorage(*addr, *key);
     }
 
     static evmc_tx_context getTxContext(evmc_host_context* context) noexcept

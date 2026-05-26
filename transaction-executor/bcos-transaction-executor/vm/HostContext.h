@@ -29,6 +29,7 @@
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -51,6 +52,7 @@
 #include <evmone/evmone.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/concept_archetype.hpp>
+#include <boost/container_hash/hash.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
@@ -62,6 +64,7 @@
 #include <range/v3/algorithm/fill.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <string_view>
+#include <unordered_set>
 
 namespace bcos::executor_v1::hostcontext
 {
@@ -141,6 +144,31 @@ private:
     int64_t m_level;
     bool m_web3Tx;
 
+    // EIP-2929 cold/warm access tracking (revision-gated, see accessAccount/accessStorage)
+    struct EVMCPairHash
+    {
+        size_t operator()(const std::pair<evmc_address, evmc_bytes32>& p) const noexcept
+        {
+            size_t h = 0;
+            boost::hash_combine(h, boost::hash_range(p.first.bytes, p.first.bytes + 20));
+            boost::hash_combine(h, boost::hash_range(p.second.bytes, p.second.bytes + 32));
+            return h;
+        }
+    };
+    struct EVMCPairEqual
+    {
+        bool operator()(const std::pair<evmc_address, evmc_bytes32>& a,
+            const std::pair<evmc_address, evmc_bytes32>& b) const noexcept
+        {
+            return std::memcmp(a.first.bytes, b.first.bytes, 20) == 0 &&
+                   std::memcmp(a.second.bytes, b.second.bytes, 32) == 0;
+        }
+    };
+    std::unordered_set<evmc_address> m_warmAccounts;  // uses std::hash<evmc_address> from
+                                                      // VMInstance.h
+    std::unordered_set<std::pair<evmc_address, evmc_bytes32>, EVMCPairHash, EVMCPairEqual>
+        m_warmStorage;
+
     constexpr auto buildLegacyExternalCaller()
     {
         return
@@ -206,7 +234,7 @@ private:
         m_message(getMessage(
             web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        m_revision(EVMC_CANCUN),
+        m_revision(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())),
         m_level(seq),
         m_web3Tx(web3Tx)
     {}
@@ -431,6 +459,26 @@ public:
 
             if (!evmResult)
             {
+                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
+                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
+                // The 21000 base cost sits outside this formula and is handled separately.
+                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
+                {
+                    auto& msg = mutableMessage();
+                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
+                        bcos::bytesConstRef(msg.input_data, msg.input_size));
+                    if (msg.gas < calldataGas)
+                    {
+                        evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
+                            protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
+                            fixErrorGas ? 0 : msg.gas, "EIP-7623 calldata floor OOG"));
+                    }
+                    else
+                    {
+                        msg.gas -= calldataGas;
+                    }
+                }
+
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_delegatecall_transfer))
@@ -554,6 +602,22 @@ public:
     }
 
     std::vector<protocol::LogEntry>& logs() & { return m_logs; }
+
+    evmc_access_status accessAccount(const evmc_address& addr) noexcept
+    {
+        if (m_revision < EVMC_BERLIN ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+            return EVMC_ACCESS_COLD;
+        return m_warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
+
+    evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
+    {
+        if (m_revision < EVMC_BERLIN ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+            return EVMC_ACCESS_COLD;
+        return m_warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    }
 
 private:
     void prepareCreate()

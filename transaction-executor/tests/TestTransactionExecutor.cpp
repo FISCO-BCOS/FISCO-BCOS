@@ -51,7 +51,9 @@ BOOST_AUTO_TEST_CASE(execute)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
         bcostars::protocol::BlockHeaderImpl blockHeader;
-        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
+        // helloworldBytecode uses PUSH0 (EIP-3855, Shanghai+); V3_1 maps to London and fails
+        // deploy.
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         bcos::bytes helloworldBytecodeBinary;
@@ -455,8 +457,7 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
 
         for (auto i : ::ranges::views::iota(1, 11))
         {
-            auto rawAddr =
-                newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
+            auto rawAddr = newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
             evmc_address expectAddress;
             std::copy(rawAddr.begin(), rawAddr.end(), expectAddress.bytes);
             ledger::account::EVMAccount account(storage, expectAddress, false);

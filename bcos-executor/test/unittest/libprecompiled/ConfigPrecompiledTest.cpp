@@ -22,7 +22,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <boost/endian/conversion.hpp>
-#include <range/v3/algorithm/any_of.hpp>
+#include <algorithm>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -676,9 +676,10 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
         auto nodeID = KeyImpl(fromHex(node1));
 
-        BOOST_CHECK(::ranges::any_of(nodeList, [&](const consensus::ConsensusNode& node) {
-            return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
-        }));
+        BOOST_CHECK(std::any_of(
+            nodeList.begin(), nodeList.end(), [&](const consensus::ConsensusNode& node) {
+                return node.nodeID->data() == nodeID.data() && node.termWeight == 2022;
+            }));
     }
 
     // add node3 to sealer
