@@ -2048,7 +2048,8 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
         ++totalCount;
         return true;
     });
-    // Original scale was 9730, here (tables 100->10, writes 5000->500, reads 500->50) reduced by 100x overall
+    // Original scale was 9730, here (tables 100->10, writes 5000->500, reads 500->50) reduced by
+    // 100x overall
     BOOST_REQUIRE_EQUAL(totalCount, 250);  // meta + 5page + s_table（按比例缩放）
 }
 
@@ -3048,7 +3049,7 @@ BOOST_AUTO_TEST_CASE(bugfix_keypage_system_entry_hash)
         BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
         auto entry = std::make_optional(table0->newEntry());
         entry->setField(0, value);
-        storage->asyncSetRow(ledger::SYS_TABLES, "1", *entry, [](Error::UniquePtr) {});
+        storage->asyncSetRow(StorageInterface::SYS_TABLES, "1", *entry, [](Error::UniquePtr) {});
         return storage->hash(hashImpl, f);
     };
     auto keypage = std::make_shared<KeyPageStorage>(

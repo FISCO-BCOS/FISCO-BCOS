@@ -32,6 +32,7 @@ class TxValidator
 public:
     static task::Task<protocol::TransactionStatus> checkSenderBalance(
         const protocol::Transaction& _tx, bcos::scheduler::SchedulerInterface::Ptr _scheduler,
+        std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         protocol::BlockNumber _blockNumber = 0);
 };
 }  // namespace bcos::rpc

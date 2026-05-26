@@ -333,6 +333,15 @@ void Session::write()
 
 void Session::drop(DisconnectReason _reason)
 {
+    // FIB-97-new: idempotency guard — only the first caller (wins the CAS) proceeds
+    // with the actual teardown; all subsequent or concurrent calls are no-ops.
+    bool expected = false;
+    if (!m_dropped.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+        return;
+    }
+
     m_active = false;
 
     int errorCode = P2PExceptionType::Disconnect;
@@ -462,10 +471,15 @@ void Session::doRead()
 {
     if (m_active && m_server.get().haveNetwork())
     {
-        auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this())](
-                             boost::system::error_code ec, std::size_t bytesTransferred) {
-            auto session = self.lock();
-            if (session)
+        // NOTE: Capture m_socket as a shared_ptr to keep the SSL context alive for the duration
+        // of this async read. The handler never references `socket` directly — it touches
+        // the socket only via the Session recovered from `self.lock()` — but removing this
+        // capture re-introduces the FIB-97 use-after-free: a concurrent drop() can free
+        // the SSL stream while this read is still in flight.
+        auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this()), socket = m_socket](
+                             const boost::system::error_code& ec, std::size_t bytesTransferred) {
+            std::ignore = socket;
+            if (const auto session = self.lock())
             {
                 if (ec)
                 {
@@ -510,6 +524,7 @@ void Session::doRead()
                                 session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                        "ProtocolError(msg overflow)"),
                                     message);
+                                session->drop(UserReason);
                                 break;
                             }
 
@@ -551,6 +566,7 @@ void Session::doRead()
                             session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                    "ProtocolError(decode msg error)"),
                                 message);
+                            session->drop(UserReason);
                             break;
                         }
                     }
@@ -561,6 +577,7 @@ void Session::doRead()
                         session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                "ProtocolError(decode msg exception)"),
                             message);
+                        session->drop(UserReason);
                         break;
                     }
                 }
