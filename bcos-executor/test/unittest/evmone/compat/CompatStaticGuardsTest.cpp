@@ -147,12 +147,22 @@ BOOST_AUTO_TEST_CASE(FC_G_no_system_call_block_start)
     }
     BOOST_CHECK_MESSAGE(!fileContains(hostPath.string(), "system_call_block_start"),
         "PoS system_call_block_start must not appear in executor host (FC-10)");
+    BOOST_CHECK_MESSAGE(!fileContains(hostPath.string(), "system_call_block_end"),
+        "PoS system_call_block_end must not appear in executor host (FC-10)");
 }
 
 BOOST_AUTO_TEST_CASE(FC_G_blob_not_applicable)
 {
     BOOST_TEST_MESSAGE(
         "FC-09: EIP-7691 blob throughput N/A for PBFT FISCO-BCOS — no blob_count in block");
+    BOOST_CHECK(true);
+}
+
+BOOST_AUTO_TEST_CASE(FC_G_7685_requests_not_applicable)
+{
+    BOOST_TEST_MESSAGE(
+        "FC-08: EIP-7685 execution-layer requests are N/A on PBFT FISCO-BCOS. "
+        "No system_call_block_start/end request pipeline should be wired.");
     BOOST_CHECK(true);
 }
 

@@ -348,8 +348,10 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
-        // Reference: Yellow Paper — call to account with no code halts non-exceptionally.
-        // Future precompile addresses before fork activation are no-op (EVMC_SUCCESS), not REVERT.
+        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
+        // message call to an account with no code halts non-exceptionally (z=1, no execution).
+        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
+        // and is not applicable for calls to future precompile addresses before fork activation.
         if (isBLSPrecompileAddress(_request->receiveAddress) &&
             !features().get(ledger::Features::Flag::feature_evm_prague))
         {
@@ -361,11 +363,13 @@ evmc_result HostContext::callBuiltInPrecompiled(
             return preResult;
         }
 
+        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
+        // message call to an account with no code halts non-exceptionally (z=1, no execution).
+        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
         if (isP256verifyPrecompileAddress(_request->receiveAddress) &&
             !features().get(ledger::Features::Flag::feature_evm_osaka))
         {
             callResults->status = (int32_t)TransactionStatus::None;
-            callResults->gas = _request->gas;
             preResult.status_code = EVMC_SUCCESS;
             preResult.gas_left = _request->gas;
             m_responseStore.emplace_back(std::move(callResults));
