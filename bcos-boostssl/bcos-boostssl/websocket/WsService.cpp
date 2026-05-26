@@ -189,12 +189,6 @@ void WsService::start()
         m_timerFactory = std::make_shared<timer::TimerFactory>();
     }
 
-    // start ioc thread
-    if (m_ioservicePool)
-    {
-        m_ioservicePool->start();
-    }
-
     // start as server
     if (m_config->asServer())
     {
@@ -259,12 +253,6 @@ void WsService::stop()
     //            session->drop(WsError::SessionDisconnect);
     //        }
     //    }
-
-    // stop ioc thread
-    if (m_ioservicePool)
-    {
-        m_ioservicePool->stop();
-    }
 
     if (m_statTimer)
     {

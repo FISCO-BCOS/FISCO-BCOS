@@ -7,15 +7,15 @@
  * @date 2018
  */
 
-#include "bcos-gateway/libnetwork/Message.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Overloaded.h"
+#include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Host.h"
-#include "bcos-gateway/libnetwork/Session.h"
+#include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Overloaded.h"
 #include <boost/asio/buffer.hpp>
 #include <boost/container/container_fwd.hpp>
 #include <boost/throw_exception.hpp>
@@ -158,7 +158,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
             boost::asio::post(m_socket->ioService(), [callback = std::move(callback), errorCode,
-                                                      errorMessage = std::move(errorMessage)] {
+                                                         errorMessage = std::move(errorMessage)] {
                 callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
         }
@@ -617,66 +617,66 @@ bool Session::checkRead(boost::system::error_code _ec)
 
 void Session::onMessage(NetworkException const& e, Message::Ptr message)
 {
-    boost::asio::post(m_socket->ioService(), [self = weak_from_this(), e,
-                                                  message = std::move(message)]() {
-        try
-        {
-            auto session = self.lock();
-            if (!session)
+    boost::asio::post(
+        m_socket->ioService(), [self = weak_from_this(), e, message = std::move(message)]() {
+            try
             {
-                return;
-            }
-            // TODO: move the logic to Service for deal with the forwarding message
-            if (!message->dstP2PNodeID().empty() &&
-                message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
-                message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
-            {
-                session->m_messageHandler(e, session, message);
-                return;
-            }
-            // in-activate session
-            if (!session->m_active || !session->m_server.get().haveNetwork())
-            {
-                return;
-            }
+                auto session = self.lock();
+                if (!session)
+                {
+                    return;
+                }
+                // TODO: move the logic to Service for deal with the forwarding message
+                if (!message->dstP2PNodeID().empty() &&
+                    message->dstP2PNodeID() != session->m_hostInfo.p2pID &&
+                    message->dstP2PNodeID() != session->m_hostInfo.rawP2pID)
+                {
+                    session->m_messageHandler(e, session, message);
+                    return;
+                }
+                // in-activate session
+                if (!session->m_active || !session->m_server.get().haveNetwork())
+                {
+                    return;
+                }
 
-            if (!message->isRespPacket())
-            {
-                session->m_messageHandler(e, session, message);
-                return;
-            }
+                if (!message->isRespPacket())
+                {
+                    session->m_messageHandler(e, session, message);
+                    return;
+                }
 
-            auto callbackManager = session->sessionCallbackManager();
-            auto callbackPtr = callbackManager->getCallback(message->seq(), true);
-            // without callback, call default handler
-            if (!callbackPtr)
-            {
-                SESSION_LOG(WARNING)
-                    << LOG_BADGE("onMessage")
-                    << LOG_DESC("callback not found, maybe the callback timeout")
-                    << LOG_KV("endpoint", session->nodeIPEndpoint())
-                    << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
-                return;
-            }
+                auto callbackManager = session->sessionCallbackManager();
+                auto callbackPtr = callbackManager->getCallback(message->seq(), true);
+                // without callback, call default handler
+                if (!callbackPtr)
+                {
+                    SESSION_LOG(WARNING)
+                        << LOG_BADGE("onMessage")
+                        << LOG_DESC("callback not found, maybe the callback timeout")
+                        << LOG_KV("endpoint", session->nodeIPEndpoint())
+                        << LOG_KV("seq", message->seq()) << LOG_KV("resp", message->isRespPacket());
+                    return;
+                }
 
-            // with callback
-            if (callbackPtr->timeoutHandler)
-            {
-                callbackPtr->timeoutHandler->cancel();
+                // with callback
+                if (callbackPtr->timeoutHandler)
+                {
+                    callbackPtr->timeoutHandler->cancel();
+                }
+                auto& callback = callbackPtr->callback;
+                if (!callback)
+                {
+                    return;
+                }
+                callback(e, message);
             }
-            auto& callback = callbackPtr->callback;
-            if (!callback)
+            catch (std::exception const& e)
             {
-                return;
+                SESSION_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("onMessage exception")
+                                     << LOG_KV("msg", boost::diagnostic_information(e));
             }
-            callback(e, message);
-        }
-        catch (std::exception const& e)
-        {
-            SESSION_LOG(WARNING) << LOG_BADGE("onMessage") << LOG_DESC("onMessage exception")
-                                 << LOG_KV("msg", boost::diagnostic_information(e));
-        }
-    });
+        });
 }
 
 void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)

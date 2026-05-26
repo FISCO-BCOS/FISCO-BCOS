@@ -36,8 +36,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayFactory = std::make_shared<bcos::gateway::GatewayFactory>("", "");
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
-    ioServicePool->start();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontBuild");
     auto threadPool = std::make_shared<bcos::ThreadPool>("frontServiceTest", 16);
 
     // build gateway

@@ -170,8 +170,7 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 
-    auto ioServicePool = std::make_shared<IOServicePool>(2);
-    ioServicePool->start();
+    auto ioServicePool = std::make_shared<IOServicePool>(2, "evtSubTest");
     {
         // task is running
         auto session = std::make_shared<bcos::cppsdk::test::WsSessionFake>(ioServicePool);
@@ -210,7 +209,6 @@ BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
         BOOST_CHECK_EQUAL(es->suspendTasksCount(), 0);
     }
 
-    ioServicePool->stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

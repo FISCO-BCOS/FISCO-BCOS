@@ -56,8 +56,7 @@ std::shared_ptr<FrontService> buildFrontService()
 {
     auto gateway = std::make_shared<FakeGateway>();
     auto srcNodeID = createKey(g_srcNodeID);
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1);
-    ioServicePool->start();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontTest");
 
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(gateway);
