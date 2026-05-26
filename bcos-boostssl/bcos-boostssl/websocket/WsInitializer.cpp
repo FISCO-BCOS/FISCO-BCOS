@@ -30,7 +30,6 @@
 #include <bcos-boostssl/websocket/WsTools.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/system/detail/error_code.hpp>
 
 using namespace bcos;

@@ -27,7 +27,6 @@
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>

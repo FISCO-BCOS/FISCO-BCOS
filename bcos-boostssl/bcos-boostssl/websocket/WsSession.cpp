@@ -24,7 +24,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/asio/post.hpp>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/stream.hpp>
@@ -32,7 +31,6 @@
 #include <chrono>
 #include <exception>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -227,10 +225,9 @@ void WsSession::drop(WsError _reason)
             WEBSOCKET_SESSION(TRACE)
                 << LOG_DESC("the session has been disconnected") << LOG_KV("seq", cbEntry.first);
 
-            m_ioServicePool->dispatch(
-                [callback = std::move(callback), error]() mutable {
-                    callback->respCallBack(error, nullptr, nullptr);
-                });
+            m_ioServicePool->dispatch([callback = std::move(callback), error]() mutable {
+                callback->respCallBack(error, nullptr, nullptr);
+            });
         }
     }
 
@@ -328,15 +325,14 @@ void WsSession::onReadPacket()
         m_buffer->consume(m_buffer->size());
 
         auto self = weak_from_this();
-        m_ioServicePool->post(
-            [self, message = std::move(message)]() {
-                auto session = self.lock();
-                if (!session)
-                {
-                    return;
-                }
-                session->onMessage(message);
-            });
+        m_ioServicePool->post([self, message = std::move(message)]() {
+            auto session = self.lock();
+            if (!session)
+            {
+                return;
+            }
+            session->onMessage(message);
+        });
     }
     catch (std::exception const& e)
     {
@@ -632,8 +628,7 @@ void WsSession::onRespTimeout(const boost::system::error_code& _error, const std
 
     auto error = BCOS_ERROR_PTR(WsError::TimeOut, "waiting for message response timed out");
 
-    m_ioServicePool->post(
-        [callback = std::move(callback), error = std::move(error)]() mutable {
-            callback->respCallBack(error, nullptr, nullptr);
-        });
+    m_ioServicePool->post([callback = std::move(callback), error = std::move(error)]() mutable {
+        callback->respCallBack(error, nullptr, nullptr);
+    });
 }
