@@ -161,6 +161,10 @@ jobs:
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
+      - name: Strip debug symbols from vcpkg static libs
+        if: matrix.os != 'windows-2025'
+        run: |
+          find build/vcpkg_installed -path "*/debug/*" \( -name "*.a" -o -name "*.dylib" \) -print -exec strip --strip-debug {} \; 2>/dev/null || true
       - name: Set packaging variables
         if: github.event_name == 'release' && matrix.os != 'windows-2025'
         id: pkgvars

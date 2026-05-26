@@ -118,7 +118,7 @@ std::string newEVMAddress(
     return newEVMAddress(*_hashImpl, blockNumber, contextID, seq);
 }
 
-evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
+std::array<bcos::byte, 20> newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept
 {
     codec::rlp::Header header{.isList = true, .payloadLength = 1 + sender.size()};
     header.payloadLength += codec::rlp::length(nonce);
@@ -127,8 +127,8 @@ evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexce
     codec::rlp::encode(rlp, sender);
     codec::rlp::encode(rlp, nonce);
     auto hash = bcos::crypto::keccak256Hash(ref(rlp));
-    evmc_address address;
-    std::uninitialized_copy(hash.begin() + 12, hash.end(), address.bytes);
+    std::array<bcos::byte, 20> address;
+    std::uninitialized_copy(hash.begin() + 12, hash.end(), address.begin());
 
     return address;
 }
@@ -136,7 +136,7 @@ evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexce
 std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept
 {
     auto address = newLegacyEVMAddress(sender, nonce);
-    auto view = std::span{address.bytes};
+    auto view = std::span{address};
     std::string out;
     out.reserve(view.size() * 2);
     boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(out));
