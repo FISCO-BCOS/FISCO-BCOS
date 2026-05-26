@@ -357,7 +357,16 @@ void Session::drop(DisconnectReason _reason)
 
     if (m_messageHandler)
     {
-        m_messageHandler(NetworkException(errorCode, errorMsg), shared_from_this(), Message::Ptr());
+        boost::asio::post(m_socket->ioService(),
+            [self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
+                auto session = self.lock();
+                if (!session)
+                {
+                    return;
+                }
+                session->m_messageHandler(
+                    NetworkException(errorCode, errorMsg), session, Message::Ptr());
+            });
     }
 
     if (m_socket->isConnected())
