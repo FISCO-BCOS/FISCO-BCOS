@@ -378,10 +378,20 @@ void TxPool::notifyObserverNodeList(
 void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
     std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled)
 {
+    // FIB-155: capture weak_ptr instead of raw `this`. The async callback can
+    // outlive the TxPool during shutdown/reconfiguration, which would
+    // dereference freed memory if `this` were captured directly.
+    auto self = weak_from_this();
     // fetch from the local ledger
     m_transactionSync->requestMissedTxs(nullptr, std::move(_missedTxs), nullptr,
-        [this, _txsHash = std::move(_txsHash), _onBlockFilled = std::move(_onBlockFilled)](
+        [self, _txsHash = std::move(_txsHash), _onBlockFilled = std::move(_onBlockFilled)](
             const Error::Ptr& _error, bool _verifyResult) {
+            auto txpool = self.lock();
+            if (!txpool)
+            {
+                // owning TxPool has been destroyed; drop the callback
+                return;
+            }
             if (_error || !_verifyResult)
             {
                 TXPOOL_LOG(WARNING) << LOG_DESC("getTxsFromLocalLedger failed")
@@ -395,7 +405,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
             }
             TXPOOL_LOG(INFO) << LOG_DESC(
                 "asyncFillBlock miss and try to get the transaction from the ledger success");
-            fillBlock(_txsHash, _onBlockFilled, false);
+            txpool->fillBlock(_txsHash, _onBlockFilled, false);
         });
 }
 

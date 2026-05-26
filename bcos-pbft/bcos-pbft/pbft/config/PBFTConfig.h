@@ -396,6 +396,19 @@ public:
     void setMinSealTime(int64_t _minSealTime) noexcept { this->m_minSealTime = _minSealTime; }
     void setPipeLineSize(int64_t _pipeSize) noexcept { this->m_waterMarkLimit = _pipeSize; }
 
+    void setPipelineAdmissionEnabled(bool _enabled) noexcept
+    {
+        m_pipelineAdmissionEnabled = _enabled;
+    }
+    void setPipelinePerPeerCapacity(size_t _cap) noexcept { m_pipelinePerPeerCapacity = _cap; }
+    void setPipelineLruCapacity(size_t _cap) noexcept { m_pipelineLruCapacity = _cap; }
+    void setPipelineMaxPeers(size_t _cap) noexcept { m_pipelineMaxPeers = _cap; }
+
+    bool pipelineAdmissionEnabled() const noexcept { return m_pipelineAdmissionEnabled; }
+    size_t pipelinePerPeerCapacity() const noexcept { return m_pipelinePerPeerCapacity; }
+    size_t pipelineLruCapacity() const noexcept { return m_pipelineLruCapacity; }
+    size_t pipelineMaxPeers() const noexcept { return m_pipelineMaxPeers; }
+
     void registerTxsStatusSyncHandler(std::function<void()> const& _txsStatusSyncHandler)
     {
         m_txsStatusSyncHandler = _txsStatusSyncHandler;
@@ -457,6 +470,10 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_sealEndIndex = {0};
 
     int64_t m_waterMarkLimit = 50;
+    bool m_pipelineAdmissionEnabled = true;
+    size_t m_pipelinePerPeerCapacity = 64;
+    size_t m_pipelineLruCapacity = 256;
+    size_t m_pipelineMaxPeers = 1024;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
     std::atomic<int64_t> m_minSealTime = {3000};
 
