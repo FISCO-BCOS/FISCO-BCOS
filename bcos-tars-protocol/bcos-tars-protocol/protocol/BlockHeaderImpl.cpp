@@ -26,6 +26,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/endian/conversion.hpp>
+#include <range/v3/view/transform.hpp>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);
 
@@ -70,7 +71,8 @@ void bcostars::protocol::BlockHeaderImpl::clear()
     m_inner()->resetDefautlt();
 }
 
-::ranges::any_view<bcos::protocol::ParentInfo, ::ranges::category::input | ::ranges::category::sized>
+::ranges::any_view<bcos::protocol::ParentInfo,
+    ::ranges::category::input | ::ranges::category::sized>
 bcostars::protocol::BlockHeaderImpl::parentInfo() const
 {
     return m_inner()->data.parentInfo |

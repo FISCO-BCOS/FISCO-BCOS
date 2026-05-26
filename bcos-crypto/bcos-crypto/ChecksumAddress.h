@@ -22,7 +22,7 @@
 
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Common.h>
-#include <evmc/evmc.h>
+#include <array>
 #include <string>
 #include <string_view>
 
@@ -50,7 +50,7 @@ std::string newEVMAddress(
     const bcos::crypto::Hash::Ptr& _hashImpl, int64_t blockNumber, int64_t contextID, int64_t seq);
 
 // keccak256(rlp.encode([normalize_address(sender), nonce]))[12:]
-evmc_address newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept;
+std::array<bcos::byte, 20> newLegacyEVMAddress(bytesConstRef sender, const u256& nonce) noexcept;
 
 std::string newLegacyEVMAddressString(bytesConstRef sender, const u256& nonce) noexcept;
 
