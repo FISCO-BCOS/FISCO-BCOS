@@ -1,4 +1,7 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
+#include <rocksdb/filter_policy.h>
+#include <rocksdb/statistics.h>
+#include <rocksdb/table.h>
 #include <rocksdb/utilities/checkpoint.h>
 #include <boost/throw_exception.hpp>
 #include <filesystem>
@@ -50,17 +53,78 @@ std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
     return std::unique_ptr<::rocksdb::DB>(rocksDB);
 }
 
-::rocksdb::Options latestCheckpointOptions()
+::rocksdb::Options latestCheckpointOptions(const RocksDBCheckpointOption& rocksDBOption)
 {
     ::rocksdb::Options options;
     options.create_if_missing = true;
+
+    if (rocksDBOption.optimizeLevelStyleCompaction)
+    {
+        // Note: This option will increase much memory
+        options.IncreaseParallelism();
+        // Note: This option will increase much memory
+        options.OptimizeLevelStyleCompaction();
+    }
+
+    // to mitigate write stalls
+    options.max_background_jobs = rocksDBOption.maxBackgroundJobs;
+    options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
+    options.enable_blob_files = rocksDBOption.enable_blob_files;
+    options.bytes_per_sync = 1 << 20;  // 1MB
+    options.compression = ::rocksdb::kZSTD;
+    options.bottommost_compression = ::rocksdb::kZSTD;  // last level compression
+    options.max_open_files = 256;
+    options.write_buffer_size = rocksDBOption.writeBufferSize;
+    options.min_write_buffer_number_to_merge = rocksDBOption.minWriteBufferNumberToMerge;
+    options.enable_pipelined_write = true;
+    options.max_bytes_for_level_base = 512 << 20;  // 512MB
+    options.target_file_size_base = 128 << 20;     // 128MB
+
+    if (rocksDBOption.enableDBStatistics)
+    {
+        options.statistics = ::rocksdb::CreateDBStatistics();
+    }
+
+    // block cache
+    std::shared_ptr<::rocksdb::Cache> cache =
+        ::rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
+    ::rocksdb::BlockBasedTableOptions table_options;
+    table_options.block_cache = cache;
+    // use bloom filter to optimize point lookup, i.e. get
+    table_options.filter_policy.reset(::rocksdb::NewBloomFilterPolicy(10, false));
+    table_options.optimize_filters_for_memory = true;
+    table_options.block_size = 64 * 1024;
+    options.table_factory.reset(::rocksdb::NewBlockBasedTableFactory(table_options));
+
     return options;
 }
 
-::rocksdb::Options historicalCheckpointOptions()
+::rocksdb::Options historicalCheckpointOptions(const RocksDBCheckpointOption& rocksDBOption)
 {
     ::rocksdb::Options options;
     options.create_if_missing = false;
+
+    // Use the same tuning parameters as latest for consistent read performance.
+    // Most write-related options are ignored in read-only mode.
+    options.max_open_files = 256;
+    options.compression = ::rocksdb::kZSTD;
+    options.bottommost_compression = ::rocksdb::kZSTD;
+
+    // block cache for read performance
+    std::shared_ptr<::rocksdb::Cache> cache =
+        ::rocksdb::NewLRUCache(rocksDBOption.blockCacheSize);
+    ::rocksdb::BlockBasedTableOptions table_options;
+    table_options.block_cache = cache;
+    table_options.filter_policy.reset(::rocksdb::NewBloomFilterPolicy(10, false));
+    table_options.optimize_filters_for_memory = true;
+    table_options.block_size = 64 * 1024;
+    options.table_factory.reset(::rocksdb::NewBlockBasedTableFactory(table_options));
+
+    if (rocksDBOption.enableDBStatistics)
+    {
+        options.statistics = ::rocksdb::CreateDBStatistics();
+    }
+
     return options;
 }
 

@@ -152,6 +152,7 @@ RocksDBOption getRocksDBOption(
     option.blockCacheSize = nodeConfig->blockCacheSize();
     option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
     option.enable_blob_files = nodeConfig->enableRocksDBBlob();
+    option.enableDBStatistics = nodeConfig->enableStatistics();
     return option;
 }
 
@@ -187,13 +188,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // CheckpointRocksDBStorage owns the state RocksDB lifecycle.
     // Create it before the legacy storage so the old TransactionalStorageInterface
     // can share the same underlying ::rocksdb::DB.
+    auto rocksDBOption = getRocksDBOption(m_nodeConfig);
     m_globalStateStorageInitializer =
-        GlobalStateStorageInitializer::build(m_nodeConfig->storagePath());
+        GlobalStateStorageInitializer::build(m_nodeConfig->storagePath(), rocksDBOption);
 
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
-        RocksDBOption option = getRocksDBOption(m_nodeConfig);
-
         // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
         // Ownership stays with GlobalStateStorage (MultiLayerStorage::m_latestBackend).
         m_storage = StorageInitializer::build(
@@ -204,14 +204,13 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         schedulerStorage = m_storage;
         consensusStorage =
             StorageInitializer::build(StorageInitializer::createRocksDB(consensusStoragePath,
-                                          option, m_nodeConfig->enableStatistics()),
+                                          rocksDBOption),
                 m_protocolInitializer->dataEncryption());
         airExecutorStorage = m_storage;
         if (m_nodeConfig->enableSeparateBlockAndState())
         {
             m_blockStorage =
-                StorageInitializer::build(StorageInitializer::createRocksDB(blockDBPath, option,
-                                              m_nodeConfig->enableStatistics()),
+                StorageInitializer::build(StorageInitializer::createRocksDB(blockDBPath, rocksDBOption),
                     m_protocolInitializer->dataEncryption());
         }
     }
@@ -1191,7 +1190,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
     }
     auto rocksdbOption = getRocksDBOption(nodeConfig, true);
     auto rocksDB = StorageInitializer::createRocksDB(
-        stateDBPath, rocksdbOption, nodeConfig->enableStatistics(), nodeConfig->keyPageSize());
+        stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
     bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt
@@ -1227,7 +1226,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         {
             auto blockDBPath = getBlockDBPath(true);
             auto blockRocksDB = StorageInitializer::createRocksDB(
-                blockDBPath, rocksdbOption, nodeConfig->enableStatistics());
+                blockDBPath, rocksdbOption);
             if (blockRocksDB)
             {
                 ingestIntoRocksDB(*blockRocksDB, blockSstFiles, moveSSTFiles);

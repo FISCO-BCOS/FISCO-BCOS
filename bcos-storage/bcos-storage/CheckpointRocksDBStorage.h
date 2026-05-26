@@ -16,14 +16,26 @@ namespace bcos::storage2::rocksdb
 
 DERIVE_BCOS_EXCEPTION(CheckpointRocksDBException);
 
+struct RocksDBCheckpointOption
+{
+    int maxWriteBufferNumber = 3;
+    int maxBackgroundJobs = 4;
+    size_t writeBufferSize = 64 << 20;  // 64MB
+    int minWriteBufferNumberToMerge = 1;
+    size_t blockCacheSize = 128 << 20;  // 128MB
+    bool optimizeLevelStyleCompaction = false;
+    bool enable_blob_files = false;
+    bool enableDBStatistics = false;
+};
+
 namespace detail
 {
 std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
     const std::string& path, const ::rocksdb::Options& options, bool readOnly);
 
-::rocksdb::Options latestCheckpointOptions();
+::rocksdb::Options latestCheckpointOptions(const RocksDBCheckpointOption& option);
 
-::rocksdb::Options historicalCheckpointOptions();
+::rocksdb::Options historicalCheckpointOptions(const RocksDBCheckpointOption& option);
 
 void ensureCheckpointDirectories(std::string_view rootDir);
 
@@ -49,8 +61,10 @@ public:
     using CheckpointName = bcos::h256;
 
     explicit CheckpointRocksDBStorage(
-        std::string_view rootDir, KeyResolver keyResolver = {}, ValueResolver valueResolver = {})
+        std::string_view rootDir, KeyResolver keyResolver = {}, ValueResolver valueResolver = {},
+        RocksDBCheckpointOption option = {})
       : m_path(std::filesystem::path(rootDir).lexically_normal().string()),
+        m_option(std::move(option)),
         m_keyResolver(std::move(keyResolver)),
         m_valueResolver(std::move(valueResolver))
     {
@@ -69,7 +83,7 @@ public:
     Storage open()
     {
         return Storage(detail::openCheckpointRocksDB(detail::resolveLatestCheckpointPath(m_path),
-                           detail::latestCheckpointOptions(), false),
+                           detail::latestCheckpointOptions(m_option), false),
             m_keyResolver, m_valueResolver);
     }
 
@@ -77,7 +91,7 @@ public:
     {
         return Storage(detail::openCheckpointRocksDB(
                            detail::resolveHistoricalCheckpointPath(m_path, checkpointName),
-                           detail::historicalCheckpointOptions(), true),
+                           detail::historicalCheckpointOptions(m_option), true),
             m_keyResolver, m_valueResolver);
     }
 
@@ -103,6 +117,7 @@ public:
 
 private:
     std::string m_path;
+    RocksDBCheckpointOption m_option;
     [[no_unique_address]] KeyResolver m_keyResolver;
     [[no_unique_address]] ValueResolver m_valueResolver;
 };
