@@ -348,25 +348,32 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
-        // BLS12-381 (0x0b–0x11): Prague-gated
+        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
+        // message call to an account with no code halts non-exceptionally (z=1, no execution).
+        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
+        // and is not applicable for calls to future precompile addresses before fork activation.
         if (isBLSPrecompileAddress(_request->receiveAddress) &&
             !features().get(ledger::Features::Flag::feature_evm_prague))
         {
-            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
-            callResults->gas = 0;
-            preResult.status_code = EVMC_REVERT;
-            preResult.gas_left = 0;
+            callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
+            preResult.status_code = EVMC_SUCCESS;
+            preResult.gas_left = _request->gas;
             m_responseStore.emplace_back(std::move(callResults));
             return preResult;
         }
 
-        if (_request->receiveAddress == std::string(P256VERIFY_PRECOMPILED_ADDRESS) &&
+        // Reference: Yellow Paper (https://ethereum.github.io/yellowpaper/paper.pdf),
+        // message call to an account with no code halts non-exceptionally (z=1, no execution).
+        // Reference: EIP-140 (https://eips.ethereum.org/EIPS/eip-140), REVERT is failure semantics
+        // and is not applicable for calls to future precompile addresses before fork activation.
+        if (isP256verifyPrecompileAddress(_request->receiveAddress) &&
             !features().get(ledger::Features::Flag::feature_evm_osaka))
         {
-            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
-            callResults->gas = 0;
-            preResult.status_code = EVMC_REVERT;
-            preResult.gas_left = 0;
+            callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
+            preResult.status_code = EVMC_SUCCESS;
+            preResult.gas_left = _request->gas;
             m_responseStore.emplace_back(std::move(callResults));
             return preResult;
         }
