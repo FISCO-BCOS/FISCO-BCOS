@@ -147,7 +147,7 @@ bi::tcp::acceptor* ASIOInterface::acceptor()
 void ASIOInterface::asyncAccept(
     const std::shared_ptr<SocketFace>& socket, Handler_Type handler, boost::system::error_code)
 {
-    m_acceptor.async_accept(socket->ref(), handler);
+    m_acceptor.async_accept(socket->ref(), std::move(handler));
 }
 
 void ASIOInterface::asyncRead(const std::shared_ptr<SocketFace>& socket,
@@ -200,7 +200,7 @@ void ASIOInterface::setVerifyCallback(
 
 void ASIOInterface::strandPost(Base_Handler handler)
 {
-    m_strand.post(handler, std::allocator<void>());
+    m_strand.post(std::move(handler), std::allocator<void>());
 }
 
 void ASIOInterface::asyncResolveConnect(
