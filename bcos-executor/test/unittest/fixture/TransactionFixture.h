@@ -27,6 +27,7 @@
 #include "bcos-executor/src/precompiled/extension/CommitteeBin.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/ledger/Features.h"
+#include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"

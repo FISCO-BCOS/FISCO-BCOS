@@ -520,7 +520,7 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
         return;
     }
 
-    auto* nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+    auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
     if (!nodeInfo)
     {
         return;
@@ -727,7 +727,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
             for (auto const& cache : viewChangeCache)
             {
                 auto fromIdx = cache.first;
-                auto* nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+                auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
                 if (!nodeInfo)
                 {
                     continue;
@@ -806,7 +806,7 @@ bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precomm
     {
         auto proof = precommitProposal->signatureProof(i);
         // check the proof
-        auto* nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
+        auto nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
         if (!nodeInfo)
         {
             return false;
@@ -945,7 +945,7 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
         for (auto const& cache : viewChangeCache)
         {
             auto generatedFrom = cache.second->generatedFrom();
-            auto* nodeInfo = m_config->getConsensusNodeByIndex(generatedFrom);
+            auto nodeInfo = m_config->getConsensusNodeByIndex(generatedFrom);
             if (!nodeInfo)
             {
                 continue;
@@ -1114,7 +1114,7 @@ void PBFTCacheProcessor::addRecoverReqCache(PBFTMessageInterface::Ptr _recoverRe
     }
     m_recoverReqCache[view][fromIdx] = _recoverResponse;
     // update the weight
-    auto* nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+    auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
     if (!nodeInfo)
     {
         return;
