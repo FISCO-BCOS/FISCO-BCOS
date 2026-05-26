@@ -1,3 +1,4 @@
+#include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -6,6 +7,7 @@
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
@@ -32,7 +34,8 @@ using MutableStorage = memory_storage::MemoryStorage<StateKey, StateValue,
 using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
     memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
     std::hash<StateKey>>;
-using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, BackendStorage>;
+using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+using MyMultiLayerStorage = MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 
 struct MockExecutorBaseline
 {
@@ -126,7 +129,8 @@ public:
             cryptoSuite, blockHeaderFactory, transactionFactory, receiptFactory)),
         transactionSubmitResultFactory(
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>()),
-        multiLayerStorage(backendStorage),
+        checkpointBackend(backendStorage),
+        multiLayerStorage(checkpointBackend),
         baselineScheduler(multiLayerStorage, mockScheduler, mockExecutor, *blockFactory,
             mockLedger.get(), mockTxPool.get(), *transactionSubmitResultFactory, *hashImpl)
     {
@@ -175,13 +179,15 @@ public:
             std::move(number2HeaderEntry)));
     }
 
-    BackendStorage backendStorage;
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<bcostars::protocol::BlockHeaderFactoryImpl> blockHeaderFactory;
     std::shared_ptr<bcostars::protocol::TransactionFactoryImpl> transactionFactory;
     std::shared_ptr<bcostars::protocol::TransactionReceiptFactoryImpl> receiptFactory;
     std::shared_ptr<bcostars::protocol::BlockFactoryImpl> blockFactory;
     std::shared_ptr<protocol::TransactionSubmitResultFactoryImpl> transactionSubmitResultFactory;
+
+    BackendStorage backendStorage;
+    CheckpointBackend checkpointBackend;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 

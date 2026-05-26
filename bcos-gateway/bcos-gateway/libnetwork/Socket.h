@@ -45,7 +45,7 @@ public:
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;
     std::shared_ptr<ba::io_context> m_ioService;
-    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
+    ba::ssl::stream<bi::tcp::socket> m_sslSocket;
 };
 
 }  // namespace bcos::gateway

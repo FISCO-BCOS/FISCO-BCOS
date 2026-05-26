@@ -24,6 +24,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
+#include <shared_mutex>
+#include <optional>
 
 namespace bcos::consensus
 {
@@ -93,7 +95,9 @@ public:
 
     virtual void updateQuorum() = 0;
     IndexType getNodeIndexByNodeID(bcos::crypto::PublicPtr _nodeID);
-    ConsensusNode* getConsensusNodeByIndex(IndexType _nodeIndex);
+    // Returns a copy of the ConsensusNode at the given index (while holding the list lock),
+    // or std::nullopt if the index is out of range (FIB-125: eliminates dangling-pointer UAF).
+    std::optional<ConsensusNode> getConsensusNodeByIndex(IndexType _nodeIndex);
     bcos::crypto::KeyPairInterface::Ptr keyPair() { return m_keyPair; }
 
     virtual void setBlockTxCountLimit(uint64_t _blockTxCountLimit)
@@ -135,6 +139,18 @@ public:
     ledger::Features features() const override;
     void setFeatures(ledger::Features features) override;
 
+    // FIB-160: bundles the rotate decision with a coherent features snapshot
+    // so VRFBasedSealer's multi-flag selection (curve + blockNumberInput) is
+    // not racing a concurrent setFeatures. The features copy is taken under
+    // x_features; the virtual shouldRotateSealers is dispatched OUTSIDE the
+    // lock (its state is disjoint from m_features). See implementation.
+    struct RotationSnapshot
+    {
+        bool shouldRotateSealers;
+        ledger::Features features;
+    };
+    virtual RotationSnapshot getRotationSnapshot(protocol::BlockNumber blockNumber) const;
+
     void setSinglePointConsensus(bool singlePointConsensus)
     {
         m_singlePointConsensus = singlePointConsensus;
@@ -171,6 +187,11 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
     std::function<void(uint32_t _version)> m_versionNotification;
+
+    // FIB-160: protect m_features against concurrent reads from VRFBasedSealer
+    // and writes from PBFTConfig::resetConfig (PBFTConfig.cpp:64). RotationSnapshot
+    // and features() take shared_lock; setFeatures takes unique_lock.
+    mutable std::shared_mutex x_features;
     ledger::Features m_features;
     bool m_singlePointConsensus = false;
 };

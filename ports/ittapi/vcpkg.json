@@ -1,0 +1,13 @@
+{
+  "name": "ittapi",
+  "version-string": "3.24.0",
+  "homepage": "https://github.com/intel/ittapi",
+  "description": "Intel Instrumentation and Tracing Technology API",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}

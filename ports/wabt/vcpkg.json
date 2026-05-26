@@ -1,0 +1,17 @@
+{
+  "name": "wabt",
+  "version-string": "1.0.23",
+  "homepage": "https://github.com/WebAssembly/wabt",
+  "description": "The WebAssembly Binary Toolkit",
+  "license": "Apache-2.0",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ]
+}

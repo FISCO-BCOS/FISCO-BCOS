@@ -20,6 +20,10 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <memory>
+#include <range/v3/algorithm/binary_search.hpp>
+#include <string>
+#include <string_view>
+#include <thread>
 namespace bcos
 {
 class IOServicePool
@@ -30,22 +34,50 @@ public:
     using IOService = boost::asio::io_context;
     using ExecutorType = boost::asio::io_context::executor_type;
     using Work = boost::asio::executor_work_guard<ExecutorType>;
-    using WorkPtr = std::unique_ptr<Work>;
-    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency() + 1);
+    explicit IOServicePool(size_t _workerNum = std::thread::hardware_concurrency() + 1,
+        std::string_view _threadName = "ioService");
 
     IOServicePool(const IOServicePool&) = delete;
     IOServicePool& operator=(const IOServicePool&) = delete;
-    virtual ~IOServicePool();
+    IOServicePool(IOServicePool&&) = delete;
+    IOServicePool& operator=(IOServicePool&&) = delete;
+    ~IOServicePool();
 
-    void start();
     std::shared_ptr<IOService>& getIOService();
-    void stop();
+
+    template <class Task>
+    void post(Task&& task)
+    {
+        auto& ioService = getIOService();
+        boost::asio::post(ioService->get_executor(), std::forward<Task>(task));
+    }
+
+    template <class Task>
+    void dispatch(Task&& task)
+    {
+        auto id = std::this_thread::get_id();
+        if (::ranges::binary_search(m_threadIds, id))
+        {
+            task();
+        }
+        else
+        {
+            post(std::forward<Task>(task));
+        }
+    }
 
 private:
-    std::vector<std::shared_ptr<IOService>> m_ioServices;
-    std::vector<WorkPtr> m_works;
-    std::vector<std::thread> m_threads;
+    struct IOServiceContext
+    {
+        std::shared_ptr<IOService> ioService;
+        Work work;
+        std::thread thread;
+
+        explicit IOServiceContext(std::shared_ptr<IOService> _ioService);
+    };
+    std::vector<IOServiceContext> m_contexts;
+    std::vector<std::thread::id> m_threadIds;
+    std::string m_threadName;
     std::atomic_size_t m_nextIOService = 0;
-    bool m_running = false;
 };
 }  // namespace bcos

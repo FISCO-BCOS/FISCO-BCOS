@@ -3,6 +3,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "TrivialCheckpointStorage.h"
 #include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
@@ -23,11 +24,16 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
+    using CheckpointBackend =
+        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
-    TestMultiLayerStorageFixture() : multiLayerStorage(backendStorage) {}
+    TestMultiLayerStorageFixture()
+      : checkpointBackend(backendStorage), multiLayerStorage(checkpointBackend)
+    {}
 
     BackendStorage backendStorage;
-    MultiLayerStorage<MutableStorage, void, BackendStorage> multiLayerStorage;
+    CheckpointBackend checkpointBackend;
+    MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestMultiLayerStorage, TestMultiLayerStorageFixture)
@@ -134,13 +140,16 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LOGICAL_DELETION)>;
     using BackendStorage = memory_storage::MemoryStorage<int, int,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::LRU)>;
+    using CheckpointBackend = TrivialCheckpointStorage<int, int, BackendStorage>;
 
     task::syncWait([]() -> task::Task<void> {
         BackendStorage backendStorage;
+        CheckpointBackend checkpointBackend(backendStorage);
         co_await storage2::writeSome(backendStorage,
             ::ranges::views::zip(::ranges::views::iota(0, 4), ::ranges::views::repeat(0)));
 
-        MultiLayerStorage<MutableStorage, void, BackendStorage> myMultiLayerStorage(backendStorage);
+        MultiLayerStorage<MutableStorage, void, CheckpointBackend>
+            myMultiLayerStorage(checkpointBackend);
 
         auto view1 = myMultiLayerStorage.fork();
         view1.newMutable();

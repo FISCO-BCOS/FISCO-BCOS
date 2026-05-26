@@ -517,6 +517,196 @@ BOOST_AUTO_TEST_CASE(cashRevert)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(buyGasFailsDrainsLowBalance)
+{
+    // FIB-75: when sender balance is below the intrinsic gas penalty
+    // (21000 * gasPrice), the remaining balance is fully drained as the minimum
+    // anti-spam penalty. EVM does not run; nonce is incremented for replay protection.
+    using namespace std::string_view_literals;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+        features.set(bcos::ledger::Features::Flag::bugfix_gas_payment_balance_precheck);
+        ledgerConfig.setFeatures(features);
+        ledgerConfig.setGasPrice({"1000", 0});
+
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+
+        // gasPrice=1000, gasLimit=1000 → maxGasCost=1,000,000; intrinsicCost=21,000,000.
+        // balance=500 < intrinsicCost → penalty = min(500, 21M) = 500. Drained to 0.
+        auto transaction = transactionFactory.createTransaction(1, "", helloworldBytecodeBinary,
+            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x3e8", 1000, "0x0", "0x0");
+        evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
+
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        co_await senderAccount.setBalance(500);
+
+        auto receipt = co_await executor.executeTransaction(
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
+
+        BOOST_CHECK_EQUAL(
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+        BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "6");
+        // Balance fully drained: penalty = min(500, intrinsicCost) = 500
+        BOOST_CHECK_EQUAL(co_await senderAccount.balance(), u256(0));
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(buyGasFailsChargesIntrinsicPenalty)
+{
+    // FIB-75: when sender balance covers the intrinsic gas penalty but not the full
+    // maxGasCost, exactly 21000 * gasPrice is charged as penalty (geth-compatible floor).
+    using namespace std::string_view_literals;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+        features.set(bcos::ledger::Features::Flag::bugfix_gas_payment_balance_precheck);
+        ledgerConfig.setFeatures(features);
+        ledgerConfig.setGasPrice({"1", 0});
+
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+
+        // gasPrice=1, gasLimit=100000 → maxGasCost=100000; intrinsicCost=21000.
+        // balance=50000 >= intrinsicCost but < maxGasCost → penalty = 21000. Final=29000.
+        auto transaction = transactionFactory.createTransaction(1, "", helloworldBytecodeBinary,
+            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x1", 100000, "0x0", "0x0");
+        evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
+
+        constexpr static int64_t initBalance = 50'000;
+        constexpr static int64_t intrinsicCost = 21'000;
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        co_await senderAccount.setBalance(initBalance);
+
+        auto receipt = co_await executor.executeTransaction(
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
+
+        BOOST_CHECK_EQUAL(
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::NotEnoughCash));
+        BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "6");
+        // Only the intrinsic penalty is charged, not the full remaining balance
+        BOOST_CHECK_EQUAL(co_await senderAccount.balance(), u256(initBalance - intrinsicCost));
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(buyGasAndRefundSuccessFlow)
+{
+    // FIB-75 (geth-style): Successful execution with gasLimit > gasUsed.
+    // Sender pre-pays gasLimit * gasPrice, EVM uses gasUsed, remaining is refunded.
+    // Final balance == initial - gasUsed * gasPrice (no "confiscation" possible).
+    using namespace std::string_view_literals;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+        features.set(bcos::ledger::Features::Flag::bugfix_gas_payment_balance_precheck);
+        ledgerConfig.setFeatures(features);
+        ledgerConfig.setGasPrice({"1", 0});
+
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+
+        // gasLimit=300000, tx.gasPrice=1: pre-deduct 300000; HelloWorld deploy uses ~149586,
+        // so ~150414 is refunded. Final balance = 1,000,000 - 149586.
+        auto transaction = transactionFactory.createTransaction(1, "", helloworldBytecodeBinary,
+            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x1", 300000, "0x0", "0x0");
+        evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
+
+        constexpr static int64_t initBalance = 1'000'000;
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        co_await senderAccount.setBalance(initBalance);
+
+        auto receipt = co_await executor.executeTransaction(
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
+
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        // Final balance = initBalance - gasUsed (gasPrice = 1)
+        BOOST_CHECK_EQUAL(co_await senderAccount.balance(), initBalance - receipt->gasUsed());
+        BOOST_CHECK_GT(receipt->gasUsed(), 0);
+        // Nonce incremented
+        BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "6");
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(buyGasChargesOnEvmFailure)
+{
+    // FIB-75 (geth-style): When EVM fails (OutOfGas, revert, etc.), sender still pays
+    // for the gas actually consumed. Balance invariant: finalBalance = initBalance - gasUsed *
+    // gasPrice. The "confiscation" case (balance forced to 0 as penalty) no longer exists because
+    // EVM budget == gasLimit guarantees gasUsed <= gasLimit.
+    using namespace std::string_view_literals;
+    task::syncWait([this]() mutable -> task::Task<void> {
+        bcostars::protocol::BlockHeaderImpl blockHeader;
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::MAX_VERSION);
+        blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
+        auto features = ledgerConfig.features();
+        features.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+        features.set(bcos::ledger::Features::Flag::feature_balance);
+        features.set(bcos::ledger::Features::Flag::feature_balance_policy1);
+        features.set(bcos::ledger::Features::Flag::bugfix_gas_payment_balance_precheck);
+        ledgerConfig.setFeatures(features);
+        ledgerConfig.setGasPrice({"1", 0});
+
+        bcos::bytes helloworldBytecodeBinary;
+        boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
+
+        // gasLimit=50000 is too small for HelloWorld deploy (~149586 gas needed).
+        // Balance 100000 covers gasLimit * gasPrice = 50000, pre-check passes.
+        // EVM fails (likely OutOfGas). Whatever gasUsed is, final balance = initBalance - gasUsed.
+        auto transaction = transactionFactory.createTransaction(1, "", helloworldBytecodeBinary,
+            "0x5", 0, "", "", 0, std::string{}, "0x0", "0x1", 50000, "0x0", "0x0");
+        evmc_address senderAddress = unhexAddress("e0e794ca86d198042b64285c5ce667aee747509b"sv);
+        transaction->forceSender(
+            bytes(senderAddress.bytes, senderAddress.bytes + sizeof(senderAddress.bytes)));
+        dynamic_cast<bcostars::protocol::TransactionImpl&>(*transaction).mutableInner().type = 1;
+
+        constexpr static int64_t initBalance = 100'000;
+        ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
+        co_await senderAccount.setBalance(initBalance);
+
+        auto receipt = co_await executor.executeTransaction(
+            storage, blockHeader, *transaction, 0, ledgerConfig, false);
+
+        // EVM failed (not SUCCESS) — status is non-zero
+        BOOST_CHECK_NE(receipt->status(), 0);
+        // Key invariant: final balance = initBalance - gasUsed * gasPrice
+        // No "confiscation" — balance doesn't drop below (initBalance - gasLimit)
+        auto finalBalance = co_await senderAccount.balance();
+        BOOST_CHECK_EQUAL(finalBalance, u256(initBalance) - u256(receipt->gasUsed()));
+        BOOST_CHECK_LE(receipt->gasUsed(), 50000);  // never exceeds gasLimit
+        // Nonce incremented
+        BOOST_CHECK_EQUAL((co_await senderAccount.nonce()).value(), "6");
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(proxyReceive)
 {
     task::syncWait([this]() mutable -> task::Task<void> {

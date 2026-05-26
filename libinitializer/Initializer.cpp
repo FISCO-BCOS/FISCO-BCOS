@@ -159,12 +159,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
-    if (!m_ioServicePool)
-    {
-        m_ioServicePool = std::make_shared<bcos::IOServicePool>(1);
-        m_ioServicePool->start();
-    }
-
     // build the front service
     m_frontServiceInitializer = std::make_shared<FrontServiceInitializer>(
         m_nodeConfig, m_protocolInitializer, _gateway, m_ioServicePool);
@@ -184,14 +178,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::storage::TransactionalStorageInterface::Ptr consensusStorage = nullptr;
     bcos::storage::TransactionalStorageInterface::Ptr airExecutorStorage = nullptr;
 
+    // CheckpointRocksDBStorage owns the state RocksDB lifecycle.
+    // Create it before the legacy storage so the old TransactionalStorageInterface
+    // can share the same underlying ::rocksdb::DB.
+    m_globalStateStorageInitializer =
+        GlobalStateStorageInitializer::build(m_nodeConfig->storagePath());
+
     if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
     {
         RocksDBOption option = getRocksDBOption(m_nodeConfig);
 
-        // m_protocolInitializer->dataEncryption() will return nullptr when storage_security = false
+        // Share CheckpointRocksDBStorage's RocksDB with the legacy storage layer.
+        // Ownership stays with GlobalStateStorage (MultiLayerStorage::m_latestBackend).
         m_storage = StorageInitializer::build(
-            StorageInitializer::createRocksDB(
-                stateDBPath, option, m_nodeConfig->enableStatistics(), m_nodeConfig->keyPageSize()),
+            std::unique_ptr<::rocksdb::DB, std::function<void(::rocksdb::DB*)>>(
+                &m_globalStateStorageInitializer->rocksDB(),
+                [](::rocksdb::DB*) { /* lifetime managed by GlobalStateStorage */ }),
             m_protocolInitializer->dataEncryption());
         schedulerStorage = m_storage;
         consensusStorage =
@@ -267,9 +269,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
 
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
-    auto existsRocksDB = std::dynamic_pointer_cast<storage::RocksDBStorage>(m_storage);
-    m_globalStateStorageInitializer =
-        GlobalStateStorageInitializer::build(existsRocksDB->rocksDB());
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
     std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
@@ -640,10 +639,6 @@ void Initializer::stop()
             m_archiveService->stop();
         }
 #endif
-        if (m_ioServicePool)
-        {
-            m_ioServicePool->stop();
-        }
     }
     catch (std::exception const& e)
     {

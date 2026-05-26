@@ -1,0 +1,7 @@
+{
+  "name": "fbwasm",
+  "version-string": "976b8993",
+  "homepage": "https://github.com/FISCO-BCOS/bcos-wasm",
+  "description": "FISCO-BCOS WebAssembly engine (Rust)",
+  "license": "Apache-2.0"
+}

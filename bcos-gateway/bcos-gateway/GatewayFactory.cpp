@@ -252,12 +252,11 @@ void GatewayFactory::initSSLContextPubHexHandlerWithoutExtInfo()
     m_sslContextPubHandlerWithoutExtInfo = handler;
 }
 
-std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
+boost::asio::ssl::context GatewayFactory::buildSSLContext(
     bool _server, uint8_t sslMode, const GatewayConfig::CertConfig& _certConfig)
 {
     std::ignore = _server;
-    std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+    boost::asio::ssl::context sslContext(boost::asio::ssl::context::tlsv12);
     /*
       std::shared_ptr<EC_KEY> ecdh(EC_KEY_new_by_curve_name(NID_secp384r1),
                                    [](EC_KEY *p) { EC_KEY_free(p); });
@@ -297,12 +296,12 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
 
         boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
     }
     // node.crt
     if (_certConfig.nodeCert)
     {
-        sslContext->use_certificate_chain_file(*_certConfig.nodeCert);
+        sslContext.use_certificate_chain_file(*_certConfig.nodeCert);
     }
     /*if (!SSL_CTX_get0_certificate(sslContext->native_handle())) {
       GATEWAY_FACTORY_LOG(ERROR)
@@ -325,24 +324,24 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
                 InvalidParameter() << errinfo_comment(
                     "buildSSLContext: unable read content of ca: " + *_certConfig.caCert));
         }
-        sslContext->add_certificate_authority(
+        sslContext.add_certificate_authority(
             boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
     }
     std::string caPath = _certConfig.multiCaPath;
     if (!caPath.empty())
     {
-        sslContext->add_verify_path(caPath);
+        sslContext.add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(sslMode);
+    sslContext.set_verify_mode(sslMode);
 
     return sslContext;
 }
 
-std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
+boost::asio::ssl::context GatewayFactory::buildSSLContext(
     bool _server, uint8_t sslMode, const GatewayConfig::SMCertConfig& _smCertConfig)
 {
-    SSL_CTX* ctx = NULL;
+    SSL_CTX* ctx = nullptr;
     if (_server)
     {
         const SSL_METHOD* meth = SSLv23_server_method();
@@ -357,15 +356,14 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         ctx = SSL_CTX_new(meth);
     }
 
-    std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(ctx);
+    boost::asio::ssl::context sslContext(ctx);
 
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
+    sslContext.set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
     if (_smCertConfig.nodeCert)
     {
         /* Load the server certificate into the SSL_CTX structure */
-        if (SSL_CTX_use_certificate_file(sslContext->native_handle(),
+        if (SSL_CTX_use_certificate_file(sslContext.native_handle(),
                 _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             ERR_print_errors_fp(stderr);
@@ -397,10 +395,10 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
         // nodekey
         boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
-        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext.use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
         /* Check if the server certificate and private-key matches */
-        if (!SSL_CTX_check_private_key(sslContext->native_handle()))
+        if (!SSL_CTX_check_private_key(sslContext.native_handle()))
         {
             ERR_print_errors_fp(stderr);
             BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_check_private_key failed"));
@@ -409,7 +407,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
     if (_smCertConfig.enNodeCert)
     {
         /* Load the server encrypt certificate into the SSL_CTX structure */
-        if (SSL_CTX_use_enc_certificate_file(sslContext->native_handle(),
+        if (SSL_CTX_use_enc_certificate_file(sslContext.native_handle(),
                 _smCertConfig.enNodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             ERR_print_errors_fp(stderr);
@@ -441,7 +439,7 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         }
         std::string enNodeKeyStr((const char*)enNodeKeyContent->data(), enNodeKeyContent->size());
         if (SSL_CTX_use_enc_PrivateKey(
-                sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
+                sslContext.native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
         {
             GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey failed");
             BOOST_THROW_EXCEPTION(
@@ -455,16 +453,16 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
         auto caContent = readContentsToString(
             boost::filesystem::path(*_smCertConfig.caCert));  // node.key content
 
-        sslContext->add_certificate_authority(
+        sslContext.add_certificate_authority(
             boost::asio::const_buffer(caContent->data(), caContent->size()));
     }
     std::string caPath = _smCertConfig.multiCaPath;
     if (!caPath.empty())
     {
-        sslContext->add_verify_path(caPath);
+        sslContext.add_verify_path(caPath);
     }
 
-    sslContext->set_verify_mode(sslMode);
+    sslContext.set_verify_mode(sslMode);
 
     return sslContext;
 }
@@ -601,22 +599,24 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
-    std::shared_ptr<ba::ssl::context> srvCtx =
+    auto srvCtx =
         (_config->smSSL() ?
                 buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
                 buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
 
-    std::shared_ptr<ba::ssl::context> clientCtx =
+    auto clientCtx =
         (_config->smSSL() ?
                 buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
                 buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
     // init ASIOInterface
-    auto asioInterface = std::make_shared<ASIOInterface>();
-    auto ioServicePool = m_ioServicePool ? m_ioServicePool : std::make_shared<IOServicePool>();
-    asioInterface->setIOServicePool(ioServicePool, !m_ioServicePool);
-    asioInterface->setSrvContext(srvCtx);
-    asioInterface->setClientContext(clientCtx);
+    auto ioServicePool = m_ioServicePool ? m_ioServicePool :
+                                           std::make_shared<IOServicePool>(
+                                               std::thread::hardware_concurrency() + 1, "gateway");
+    auto asioInterface =
+        std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
+    asioInterface->setSrvContext(std::move(srvCtx));
+    asioInterface->setClientContext(std::move(clientCtx));
     asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
     // Message Factory

@@ -63,7 +63,7 @@ public:
         m_hasRAW(hasRAW),
         m_contexts(std::move(contextRange)),
         m_executor(executor),
-        m_storageView(storage),
+        m_storageView(&storage),
         m_readWriteSetStorage(m_storageView)
     {
         m_storageView.newMutable();

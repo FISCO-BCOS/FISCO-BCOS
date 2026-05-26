@@ -449,6 +449,25 @@ void PBFTInitializer::createPBFT()
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
     pbftConfig->setMinSealTime(m_nodeConfig->minSealTime());
     pbftConfig->setPipeLineSize(m_nodeConfig->pipelineSize());
+    pbftConfig->setPipelineAdmissionEnabled(m_nodeConfig->pipelineAdmissionEnabled());
+    pbftConfig->setPipelinePerPeerCapacity(m_nodeConfig->pipelinePerPeerCapacity());
+    pbftConfig->setPipelineLruCapacity(m_nodeConfig->pipelineLruCapacity());
+    pbftConfig->setPipelineMaxPeers(m_nodeConfig->pipelineMaxPeers());
+
+    // FIB-146 follow-up: reset PBFTPipeline state when sealer set actually
+    // changes. RPBFT installs the tools instance during config construction;
+    // for non-rPBFT (plain PBFT), rpbftConfigTools() returns nullptr so we
+    // skip the hook.
+    if (auto rpbftTools = pbftConfig->rpbftConfigTools())
+    {
+        auto engineWeak = std::weak_ptr<bcos::consensus::PBFTEngine>(m_pbft->pbftEngine());
+        rpbftTools->registerOnSealerListChanged([engineWeak]() {
+            if (auto engine = engineWeak.lock())
+            {
+                engine->pipeline().reset();
+            }
+        });
+    }
 
     if (m_nodeConfig->singlePointConsensus())
     {
