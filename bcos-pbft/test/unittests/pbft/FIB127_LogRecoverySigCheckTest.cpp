@@ -13,8 +13,11 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Regression test for FIB-127: onRecvCommittedProposalsResponse must verify signature
- *        proofs on each recovered proposal before loading into cache.
+ * @brief Regression tests for FIB-127: onRecvCommittedProposalsResponse must verify signature
+ *        proofs on each recovered proposal before loading into cache. Coverage spans the
+ *        three failure modes that the PBFTConfig::verifyProposalQuorumSignatures helper
+ *        enforces: empty proof list, insufficient quorum weight, and duplicate-sealer
+ *        replay attacks (vote-weight inflation by repeating the same (idx, sig) entry).
  * @file FIB127_LogRecoverySigCheckTest.cpp
  */
 #include "test/unittests/pbft/PBFTFixture.h"
@@ -140,6 +143,100 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithInsufficientWeight)
 
     // Insufficient quorum → proposal must be rejected.
     BOOST_CHECK_EQUAL(cacheProcessor->caches().size(), beforeSize);
+}
+
+// FIB-127: A proposal whose signatureProof list repeats the same (sealerIdx, sig) entry
+// must be rejected. Without per-sealer dedup, a byzantine peer with a single valid signature
+// can inflate accumulated voteWeight past minRequiredQuorum() by replaying the same proof.
+BOOST_AUTO_TEST_CASE(testDropProposalWithDuplicateSealerProofs)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+
+    size_t consensusNodeSize = 4;
+    size_t currentBlockNumber = 10;
+    auto fakerMap =
+        createFakers(cryptoSuite, consensusNodeSize, currentBlockNumber, consensusNodeSize);
+
+    auto receiverFaker = fakerMap[0];
+    auto config = receiverFaker->pbftConfig();
+    auto cacheProcessor = std::dynamic_pointer_cast<FakeCacheProcessor>(
+        receiverFaker->pbftEngine()->cacheProcessor());
+
+    auto proposal = std::make_shared<PBFTProposal>();
+    proposal->setIndex(static_cast<protocol::BlockNumber>(currentBlockNumber + 1));
+    auto blockHash = hashImpl->hash(bytesConstRef("fib127-duplicate-sealer"));
+    proposal->setHash(blockHash);
+
+    // Repeat the same (sealerIdx=0, sig) entry enough times that summed voteWeight would
+    // satisfy minRequiredQuorum() if dedup were absent — proving the dedup gate fires.
+    auto sigData = cryptoSuite->signatureImpl()->sign(*fakerMap[0]->keyPair(), blockHash);
+    auto requiredQuorum = config->minRequiredQuorum();
+    for (uint64_t i = 0; i < requiredQuorum + 1; i++)
+    {
+        proposal->appendSignatureProof(0, ref(*sigData));
+    }
+    BOOST_REQUIRE_GE(proposal->signatureProofSize(), requiredQuorum);
+
+    // Sanity check: each individual proof is cryptographically valid against the chosen hash,
+    // so weight inflation is the only thing standing between the attacker and quorum.
+    BOOST_REQUIRE(cryptoSuite->signatureImpl()->verify(
+        fakerMap[0]->keyPair()->publicKey(), blockHash, ref(*sigData)));
+
+    auto responseMsg = std::make_shared<PBFTMessage>();
+    responseMsg->setPacketType(PacketType::CommittedProposalResponse);
+    responseMsg->setProposals({proposal});
+    auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
+
+    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor);
+
+    auto beforeSize = cacheProcessor->caches().size();
+    auto sender = cryptoSuite->signatureImpl()->generateKeyPair()->publicKey();
+    logSync->testOnRecvCommittedProposalsResponse(
+        nullptr, sender, ref(*encodedData), currentBlockNumber + 1, 1);
+
+    BOOST_CHECK_EQUAL(cacheProcessor->caches().size(), beforeSize);
+}
+
+// FIB-127: Directly exercise PBFTConfig::verifyProposalQuorumSignatures so the dedup contract
+// is tested at the helper's API surface, independent of the PBFTLogSync wrapper.
+BOOST_AUTO_TEST_CASE(testVerifyProposalQuorumSignaturesRejectsDuplicates)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+
+    size_t consensusNodeSize = 4;
+    size_t currentBlockNumber = 10;
+    auto fakerMap =
+        createFakers(cryptoSuite, consensusNodeSize, currentBlockNumber, consensusNodeSize);
+    auto config = fakerMap[0]->pbftConfig();
+
+    auto blockHash = hashImpl->hash(bytesConstRef("fib127-helper-dedup"));
+
+    // Build a proposal with quorum-sized DISTINCT signature proofs — must accept.
+    auto goodProposal = std::make_shared<PBFTProposal>();
+    goodProposal->setIndex(static_cast<protocol::BlockNumber>(currentBlockNumber + 1));
+    goodProposal->setHash(blockHash);
+    for (uint64_t idx = 0; idx < config->minRequiredQuorum(); idx++)
+    {
+        auto sig = cryptoSuite->signatureImpl()->sign(
+            *fakerMap[static_cast<size_t>(idx)]->keyPair(), blockHash);
+        goodProposal->appendSignatureProof(static_cast<int64_t>(idx), ref(*sig));
+    }
+    BOOST_CHECK(config->verifyProposalQuorumSignatures(goodProposal));
+
+    // Same number of proofs, but all are (sealer=0, sig0) replays — must reject on dedup.
+    auto badProposal = std::make_shared<PBFTProposal>();
+    badProposal->setIndex(static_cast<protocol::BlockNumber>(currentBlockNumber + 1));
+    badProposal->setHash(blockHash);
+    auto sig0 = cryptoSuite->signatureImpl()->sign(*fakerMap[0]->keyPair(), blockHash);
+    for (uint64_t i = 0; i < config->minRequiredQuorum(); i++)
+    {
+        badProposal->appendSignatureProof(0, ref(*sig0));
+    }
+    BOOST_CHECK(!config->verifyProposalQuorumSignatures(badProposal));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

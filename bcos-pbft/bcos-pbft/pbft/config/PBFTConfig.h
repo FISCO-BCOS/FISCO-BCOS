@@ -90,6 +90,16 @@ public:
 
     uint64_t minRequiredQuorum() const override;
 
+    // FIB-127: verify a committed proposal's signature proofs carry quorum weight from
+    // distinct consensus nodes. Used by both log-sync recovery (untrusted peer data) and
+    // precommit weight checks. Returns false if:
+    //   * proposal is null or carries no proofs
+    //   * any (sealerIdx, signature) pair fails the cryptoSuite verify against proposal->hash()
+    //   * the same sealerIdx appears more than once (byzantine inflation signal — honest
+    //     paths build the proof list from a deduplicated map so duplicates never occur)
+    //   * accumulated vote weight is below minRequiredQuorum()
+    virtual bool verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal);
+
     virtual ViewType view() const { return m_view; }
     virtual void setView(ViewType _view) { m_view.store(_view); }
 

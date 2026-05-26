@@ -19,6 +19,7 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
+#include <unordered_set>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -445,6 +446,45 @@ void PBFTConfig::asyncNotifySealProposal(
 uint64_t PBFTConfig::minRequiredQuorum() const
 {
     return m_minRequiredQuorum;
+}
+
+bool PBFTConfig::verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal)
+{
+    if (!_proposal)
+    {
+        return false;
+    }
+    auto proofSize = _proposal->signatureProofSize();
+    if (proofSize == 0)
+    {
+        return false;
+    }
+    std::unordered_set<int64_t> seenSealerIdx;
+    seenSealerIdx.reserve(proofSize);
+    uint64_t weight = 0;
+    for (size_t i = 0; i < proofSize; i++)
+    {
+        auto proof = _proposal->signatureProof(i);
+        if (!seenSealerIdx.insert(proof.first).second)
+        {
+            // Duplicate sealer index — honest paths build the proof list from a
+            // deduplicated std::map (see PBFTCache::intoPrecommit), so repeats here are a
+            // byzantine inflation attempt against minRequiredQuorum().
+            return false;
+        }
+        auto* nodeInfo = getConsensusNodeByIndex(proof.first);
+        if (nodeInfo == nullptr)
+        {
+            return false;
+        }
+        if (!m_cryptoSuite->signatureImpl()->verify(
+                nodeInfo->nodeID, _proposal->hash(), proof.second))
+        {
+            return false;
+        }
+        weight += nodeInfo->voteWeight;
+    }
+    return weight >= m_minRequiredQuorum;
 }
 
 void PBFTConfig::updateQuorum()

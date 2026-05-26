@@ -141,48 +141,23 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
     }
     auto proposalResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(response);
     // FIB-127: verify signature proofs on each recovered proposal before loading into cache.
-    // An untrusted peer could otherwise inject arbitrary committed-proposal data.
+    // An untrusted peer could otherwise inject arbitrary committed-proposal data, or repeat
+    // the same (sealerIdx, sig) pair to inflate vote weight past minRequiredQuorum().
+    // PBFTConfig::verifyProposalQuorumSignatures performs all required checks (non-empty
+    // proof list, per-sealer dedup, signature verify, quorum weight).
     auto proposals = proposalResponse->proposals();
     PBFTProposalList validProposals;
     for (const auto& proposal : proposals)
     {
-        auto proofSize = proposal->signatureProofSize();
-        if (proofSize == 0)
+        if (!m_config->verifyProposalQuorumSignatures(proposal))
         {
-            PBFT_LOG(WARNING)
-                << LOG_DESC("onRecvCommittedProposalsResponse: drop proposal with no sig proofs")
-                << LOG_KV("from", _nodeID->shortHex()) << LOG_KV("index", proposal->index())
-                << LOG_KV("hash", proposal->hash().abridged());
-            continue;
-        }
-        uint64_t weight = 0;
-        bool sigValid = true;
-        for (size_t i = 0; i < proofSize; i++)
-        {
-            auto proof = proposal->signatureProof(i);
-            auto* nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
-            if (!nodeInfo)
-            {
-                sigValid = false;
-                break;
-            }
-            if (!m_config->cryptoSuite()->signatureImpl()->verify(
-                    nodeInfo->nodeID, proposal->hash(), proof.second))
-            {
-                sigValid = false;
-                break;
-            }
-            weight += nodeInfo->voteWeight;
-        }
-        if (!sigValid || weight < m_config->minRequiredQuorum())
-        {
-            PBFT_LOG(WARNING)
-                << LOG_DESC(
-                       "onRecvCommittedProposalsResponse: drop proposal with invalid/insufficient "
-                       "sig proofs")
-                << LOG_KV("from", _nodeID->shortHex()) << LOG_KV("index", proposal->index())
-                << LOG_KV("hash", proposal->hash().abridged()) << LOG_KV("weight", weight)
-                << LOG_KV("required", m_config->minRequiredQuorum());
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "onRecvCommittedProposalsResponse: drop proposal failing "
+                                     "quorum-signature verification (FIB-127)")
+                              << LOG_KV("from", _nodeID->shortHex())
+                              << LOG_KV("index", proposal->index())
+                              << LOG_KV("hash", proposal->hash().abridged())
+                              << LOG_KV("required", m_config->minRequiredQuorum());
             continue;
         }
         validProposals.push_back(proposal);
