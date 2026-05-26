@@ -99,11 +99,20 @@ public:
     virtual void setVerifyCallback(
         const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
-    virtual void strandPost(Base_Handler handler);
+    template <class Task>
+    void dispatch(Task&& task)
+    {
+        m_ioServicePool->dispatch(std::forward<Task>(task));
+    }
+
+    template <class Task>
+    void post(Task&& task)
+    {
+        m_ioServicePool->post(std::forward<Task>(task));
+    }
 
 private:
     IOServicePool::Ptr m_ioServicePool;
-    ba::io_context::strand m_strand;
     bi::tcp::acceptor m_acceptor;
     bi::tcp::resolver m_resolver;
 

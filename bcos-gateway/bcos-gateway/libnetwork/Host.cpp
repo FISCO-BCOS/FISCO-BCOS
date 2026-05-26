@@ -626,7 +626,7 @@ void bcos::gateway::Host::setSessionCallbackManager(
 {
     m_sessionCallbackManager = std::move(sessionCallbackManager);
 }
-std::shared_ptr<ASIOInterface> bcos::gateway::Host::asioInterface() const
+const std::shared_ptr<ASIOInterface>& bcos::gateway::Host::asioInterface() const
 {
     return m_asioInterface;
 }

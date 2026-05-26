@@ -85,7 +85,6 @@ ba::io_context& Socket::ioService()
 ASIOInterface::ASIOInterface(
     IOServicePool::Ptr _ioServicePool, std::string listenHost, uint16_t listenPort)
   : m_ioServicePool(std::move(_ioServicePool)),
-    m_strand(*m_ioServicePool->getIOService()),
     m_acceptor(*m_ioServicePool->getIOService(),
         bi::tcp::endpoint(bi::make_address(listenHost), listenPort)),
     m_resolver(*m_ioServicePool->getIOService())
@@ -196,11 +195,6 @@ void ASIOInterface::setVerifyCallback(
     const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool)
 {
     socket->sslref().set_verify_callback(std::move(callback));
-}
-
-void ASIOInterface::strandPost(Base_Handler handler)
-{
-    m_strand.post(std::move(handler), std::allocator<void>());
 }
 
 void ASIOInterface::asyncResolveConnect(

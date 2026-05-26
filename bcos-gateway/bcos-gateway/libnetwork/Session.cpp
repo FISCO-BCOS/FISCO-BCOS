@@ -125,7 +125,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         SESSION_LOG(WARNING) << "Session inactive";
         if (callback)
         {
-            boost::asio::post(m_socket->ioService(), [callback = std::move(callback)] {
+            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Session inactive"), Message::Ptr());
             });
         }
@@ -140,7 +140,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                              << LOG_KV("allowMaxMsgSize", allowMaxMsgSize());
         if (callback)
         {
-            boost::asio::post(m_socket->ioService(), [callback = std::move(callback)] {
+            m_server.get().asioInterface()->dispatch([callback = std::move(callback)] {
                 callback(NetworkException(-1, "Msg size overflow"), Message::Ptr());
             });
         }
@@ -157,7 +157,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
             const auto& error = result.value();
             auto errorCode = error.errorCode();
             auto errorMessage = error.errorMessage();
-            boost::asio::post(m_socket->ioService(), [callback = std::move(callback), errorCode,
+            m_server.get().asioInterface()->dispatch([callback = std::move(callback), errorCode,
                                                          errorMessage = std::move(errorMessage)] {
                 callback(NetworkException((int64_t)errorCode, errorMessage), Message::Ptr());
             });
@@ -311,7 +311,7 @@ void Session::write()
                     {
                         if (payload.m_callback)
                         {
-                            boost::asio::post(session->m_socket->ioService(),
+                            session->m_server.get().asioInterface()->post(
                                 [callback = std::move(payload.m_callback), error = _error]() {
                                     callback(error);
                                 });
@@ -348,16 +348,7 @@ void Session::drop(DisconnectReason _reason)
 
     if (m_messageHandler)
     {
-        boost::asio::post(m_socket->ioService(),
-            [self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
-                auto session = self.lock();
-                if (!session)
-                {
-                    return;
-                }
-                session->m_messageHandler(
-                    NetworkException(errorCode, errorMsg), session, Message::Ptr());
-            });
+        m_messageHandler(NetworkException(errorCode, errorMsg), shared_from_this(), Message::Ptr());
     }
 
     if (m_socket->isConnected())
@@ -451,8 +442,7 @@ void Session::start()
         m_active = true;
         m_lastWriteTime.store(utcSteadyTime());
         m_lastReadTime.store(utcSteadyTime());
-        m_server.get().asioInterface()->strandPost(
-            [session = shared_from_this()] { session->doRead(); });
+        doRead();
     }
 
     auto self = weak_from_this();
@@ -617,8 +607,8 @@ bool Session::checkRead(boost::system::error_code _ec)
 
 void Session::onMessage(NetworkException const& e, Message::Ptr message)
 {
-    boost::asio::post(
-        m_socket->ioService(), [self = weak_from_this(), e, message = std::move(message)]() {
+    m_server.get().asioInterface()->post(
+        [self = weak_from_this(), e, message = std::move(message)]() {
             try
             {
                 auto session = self.lock();
@@ -692,10 +682,8 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     {
         return;
     }
-    boost::asio::post(m_socket->ioService(), [callback = std::move(callback)]() {
-        NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
-        callback->callback(e, Message::Ptr());
-    });
+    NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
+    callback->callback(e, Message::Ptr());
 }
 
 void Session::checkNetworkStatus()
