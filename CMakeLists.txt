@@ -38,6 +38,22 @@ fisco_patch_fmt_apple_consteval()
 
 include(IncludeDirectories)
 
+# for code coverage - MUST set compiler flags before any add_subdirectory()
+# so that all targets (including test targets) are compiled with --coverage
+if(COVERAGE)
+    set(TESTS ON)
+    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+        set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS} -fprofile-update=atomic")
+        set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS} -fprofile-update=atomic")
+        set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
+        set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
+    elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+        add_compile_options(-Wno-unused-command-line-argument)
+        set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
+        set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
+    endif()
+endif()
+
 add_subdirectory(bcos-boostssl)
 add_subdirectory(concepts)
 add_subdirectory(bcos-framework)
@@ -108,20 +124,10 @@ if(TOOLS)
   add_subdirectory(tools)
 endif()
 
-# for code coverage
+# for code coverage - custom target (config_coverage) only
+# compiler flags (--coverage) are set before add_subdirectory() above
 if(COVERAGE)
     include(Coverage)
-    set(TESTS ON)
-    if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS} -fprofile-update=atomic")
-        set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS} -fprofile-update=atomic")
-        set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
-        set(CMAKE_EXE_LINKER_FLAGS "--coverage ${CMAKE_EXE_LINKER_FLAGS}")
-    elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-        add_compile_options(-Wno-unused-command-line-argument)
-        set(CMAKE_CXX_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_CXX_FLAGS}")
-        set(CMAKE_C_FLAGS "-g -fprofile-arcs -ftest-coverage ${CMAKE_C_FLAGS}")
-    endif()
     config_coverage(coverage)
 endif()
 
