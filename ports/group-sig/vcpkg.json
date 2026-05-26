@@ -1,0 +1,14 @@
+{
+  "name": "group-sig",
+  "version-string": "b9f3e258",
+  "homepage": "https://github.com/FISCO-BCOS/group-signature-lib",
+  "description": "FISCO-BCOS group signature library",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    "gmp",
+    "cryptopp"
+  ]
+}
