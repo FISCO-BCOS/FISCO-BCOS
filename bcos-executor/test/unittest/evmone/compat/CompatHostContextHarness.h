@@ -7,6 +7,7 @@
 #pragma once
 
 #include "../../mock/MockLedger.h"
+#include "CallParameters.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/StateStorage.h"
@@ -161,8 +162,26 @@ inline void compatAttachBlsAndP256VerifyEvmPrecompile(
     exe->setEVMPrecompiled(std::move(m));
 }
 
+/// Default CallParameters matching `makeCompatHostContext` (for W1 warm tests; avoids protected
+/// `getCallParameters()`). `params` must be default-constructed as MESSAGE (CallParameters is
+/// non-copyable / non-movable).
+inline void compatFillDefaultCallParametersForWarm(
+    executor::CallParameters& params, bool createTransaction = false)
+{
+    params.origin = "0000000000000000000000000000000000000001";
+    params.senderAddress = params.origin;
+    params.receiveAddress = "0000000000000000000000000000000000000002";
+    params.create = createTransaction;
+    if (createTransaction)
+    {
+        params.receiveAddress.clear();
+    }
+    params.seq = 0;
+}
+
 inline executor::HostContext makeCompatHostContext(CompatHostContextFixture& fixture,
-    ledger::Features const& features, CompatEvmAttach attach = CompatEvmAttach::None)
+    ledger::Features const& features, CompatEvmAttach attach = CompatEvmAttach::None,
+    bool createTransaction = false)
 {
     task::syncWait(ledger::writeToStorage(features, *fixture.stateStorage, 1));
     auto blockContext = std::make_shared<executor::BlockContext>(fixture.stateStorage,
@@ -194,10 +213,22 @@ inline executor::HostContext makeCompatHostContext(CompatHostContextFixture& fix
         compatAttachP256VerifyEvmPrecompile(executive);
     }
     auto callParams = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
-    callParams->origin = "0000000000000000000000000000000000000001";
-    callParams->senderAddress = callParams->origin;
-    callParams->receiveAddress = "0000000000000000000000000000000000000002";
+    compatFillDefaultCallParametersForWarm(*callParams, createTransaction);
     return executor::HostContext(std::move(callParams), executive, "");
+}
+
+/// Mirror TransactionExecutive seq==0 W1 warm for harness tests (no execute()).
+inline void compatExecutorEip2929WarmInitial(
+    executor::HostContext& host, executor::CallParameters const& params)
+{
+    host.getTransactionExecutive()->warmUpEip2929InitialSet(params);
+}
+
+/// Mirror TransactionExecutive seq==0 W2 warm for harness tests.
+inline void compatExecutorEip2930WarmAccessList(
+    executor::HostContext& host, executor::CallParameters const& params)
+{
+    host.getTransactionExecutive()->warmUpEip2930AccessList(params);
 }
 
 inline evmc_result compatCallBuiltInPrecompiled(

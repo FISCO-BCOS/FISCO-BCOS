@@ -16,7 +16,7 @@ find_package(Boost REQUIRED unit_test_framework)
 find_package(TBB CONFIG REQUIRED)
 include(SearchTestCases)
 
-target_link_libraries(${TEST_BINARY_NAME} executor ledger bcos-crypto protocol-tars bcos-framework Boost::serialization Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} executor ledger bcos-crypto protocol-tars bcos-framework rpc Boost::serialization Boost::unit_test_framework)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -fno-var-tracking -Wno-unused-parameter)
 set_source_files_properties("main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 # Unity batches pull range-v3 and libc++ std::ranges into the same TU on newer SDKs.

@@ -21,6 +21,7 @@
 
 #pragma once
 #include "../Common.h"
+#include "../vm/Eip2929AccessState.h"
 #include "ExecutiveFactory.h"
 #include "ExecutiveFlowInterface.h"
 #include "LedgerCache.h"
@@ -64,10 +65,13 @@ public:
 
     std::shared_ptr<storage::StateStorageInterface> storage() const { return m_storage; }
     using transientStorageMap = BucketMap<int64_t, std::shared_ptr<storage::StateStorageInterface>>;
+    using Eip2929AccessMap = BucketMap<int64_t, std::shared_ptr<Eip2929AccessState>>;
     std::shared_ptr<transientStorageMap> getTransientStorageMap() const
     {
         return m_transientStorageMap;
     }
+
+    std::shared_ptr<Eip2929AccessMap> getEip2929AccessMap() const { return m_eip2929AccessMap; }
 
     uint64_t txGasLimit() const { return m_ledgerCache->fetchTxGasLimit(); }
 
@@ -129,6 +133,7 @@ private:
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
     transientStorageMap::Ptr m_transientStorageMap;
+    Eip2929AccessMap::Ptr m_eip2929AccessMap;
     crypto::Hash::Ptr m_hashImpl;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;

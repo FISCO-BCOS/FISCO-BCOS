@@ -24,13 +24,12 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
+#include "Eip2929AccessState.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
-#include <boost/container_hash/hash.hpp>
 #include <memory>
-#include <unordered_set>
 
 namespace bcos
 {
@@ -160,8 +159,11 @@ public:
     {
         if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
                                      ledger::Features::Flag::feature_evm_eip2929))
+        {
             return EVMC_ACCESS_COLD;
-        return m_warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        }
+        auto& accessState = *m_executive->getEip2929AccessState(m_executive->contextID());
+        return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     // Reserved for dedicated EIP-2929 PR. See accessAccount note above.
@@ -170,8 +172,11 @@ public:
     {
         if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
                                      ledger::Features::Flag::feature_evm_eip2929))
+        {
             return EVMC_ACCESS_COLD;
-        return m_warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        }
+        auto& accessState = *m_executive->getEip2929AccessState(m_executive->contextID());
+        return accessState.warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     std::string getContractTableName(const std::string_view& _address);

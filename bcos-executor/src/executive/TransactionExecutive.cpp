@@ -36,6 +36,7 @@
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
 #include "bcos-utilities/Exceptions.h"
+#include <optional>
 #include <range/v3/view/reverse.hpp>
 
 #ifdef WITH_WASM
@@ -445,6 +446,11 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
         }
     }
 
+    if (callParameters->seq == 0)
+    {
+        warmUpEip2929InitialSet(*callParameters);
+    }
+
     if (callParameters->create)
     {
         std::tie(hostContext, callResults) = create(std::move(callParameters));
@@ -744,7 +750,8 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     // NotEnoughCashError
     catch (protocol::NotEnoughCashError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "NotEnoughCashError"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: "
+                            << "NotEnoughCashError"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         writeErrInfoToOutput(e.what(), *callParameters);
@@ -756,7 +763,8 @@ CallParameters::UniquePtr TransactionExecutive::callPrecompiled(
     }
     catch (protocol::PrecompiledError const& e)
     {
-        EXECUTIVE_LOG(INFO) << "Revert transaction: " << "PrecompiledFailed"
+        EXECUTIVE_LOG(INFO) << "Revert transaction: "
+                            << "PrecompiledFailed"
                             << LOG_KV("address", precompiledCallParams->m_precompiledAddress)
                             << LOG_KV("message", e.what());
         // Note: considering the scenario where the contract calls the contract, the error message
@@ -2185,4 +2193,79 @@ std::shared_ptr<storage::StateStorageInterface> TransactionExecutive::getTransie
         }
     }
     return transientStorage;
+}
+
+std::shared_ptr<Eip2929AccessState> TransactionExecutive::getEip2929AccessState(int64_t contextID)
+{
+    auto accessMap = blockContext().getEip2929AccessMap();
+    std::shared_ptr<Eip2929AccessState> accessState;
+    bool has = false;
+    {
+        BlockContext::Eip2929AccessMap::ReadAccessor readAccessor;
+        has =
+            accessMap->find<BlockContext::Eip2929AccessMap::ReadAccessor>(readAccessor, contextID);
+        if (has)
+        {
+            accessState = readAccessor.value();
+        }
+    }
+    if (!has)
+    {
+        BlockContext::Eip2929AccessMap::WriteAccessor writeAccessor;
+        auto hasWrite = accessMap->find<BlockContext::Eip2929AccessMap::WriteAccessor>(
+            writeAccessor, contextID);
+        if (!hasWrite)
+        {
+            accessState = std::make_shared<Eip2929AccessState>();
+            accessMap->insert(writeAccessor, {contextID, accessState});
+        }
+        else
+        {
+            accessState = writeAccessor.value();
+        }
+    }
+    return accessState;
+}
+
+void TransactionExecutive::warmUpEip2929InitialSet(CallParameters const& params)
+{
+    if (!blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
+    {
+        return;
+    }
+    if (toRevision(blockContext().vmSchedule()) < EVMC_BERLIN)
+    {
+        return;
+    }
+
+    auto const originSv = params.origin.empty() ? std::string_view{params.senderAddress} :
+                                                  std::string_view{params.origin};
+    auto const originAddr = unhexAddress(originSv);
+
+    std::optional<evmc_address> callee;
+    if (!params.create && !params.receiveAddress.empty())
+    {
+        callee.emplace(unhexAddress(std::string_view{params.receiveAddress}));
+    }
+
+    getEip2929AccessState(m_contextID)
+        ->warmUpInitialTxSet(originAddr, callee, toRevision(blockContext().vmSchedule()));
+}
+
+void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)
+{
+    // EIP-2930/1559/4844 all carry an accessList; pre-warm whenever kind != 0 (not legacy).
+    if (params.web3TypedTxKind == 0 || params.eip2930AccessList.empty())
+    {
+        return;
+    }
+    if (!blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
+        toRevision(blockContext().vmSchedule()) < EVMC_BERLIN)
+    {
+        return;
+    }
+
+    getEip2929AccessState(m_contextID)
+        ->warmUpAccessList(
+            params.eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
 }
