@@ -174,6 +174,8 @@ struct VMSchedule
     bool enableLondon = true;
     bool enablePairs = false;
     bool enableCanCun = false;
+    bool enablePrague = false;
+    bool enableOsaka = false;
     unsigned sstoreRefundGas = 15000;
     unsigned suicideRefundGas = 24000;
     unsigned createDataGas = 20;
@@ -201,6 +203,28 @@ static const VMSchedule FiscoBcosScheduleCancun = [] {
     schedule.maxWasmCodeSize = 0xF00000;  // 15MB
     return schedule;
 }();
+
+static const VMSchedule FiscoBcosSchedulePrague = [] {
+    VMSchedule schedule;
+    schedule.enablePairs = true;
+    schedule.enableCanCun = true;
+    schedule.enablePrague = true;
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    return schedule;
+}();
+
+static const VMSchedule FiscoBcosScheduleOsaka = [] {
+    VMSchedule schedule;
+    schedule.enablePairs = true;
+    schedule.enableCanCun = true;
+    schedule.enablePrague = true;
+    schedule.enableOsaka = true;
+    schedule.maxEvmCodeSize = 0x100000;   // 1MB
+    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    return schedule;
+}();
+
 
 constexpr static int64_t BALANCE_TRANSFER_GAS = 21000;
 
