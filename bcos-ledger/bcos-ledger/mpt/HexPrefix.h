@@ -48,6 +48,6 @@ bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool isLeaf);
 /// @param encoded  Compact-encoded input (must be non-empty)
 /// @return {nibbles, isLeaf}
 /// @throws MPTDecodeError on empty input
-std::pair<std::vector<uint8_t>, bool> hexPrefixDecode(std::span<bcos::byte const> encoded);
+std::pair<bcos::bytes, bool> hexPrefixDecode(std::span<bcos::byte const> encoded);
 
 }  // namespace bcos::ledger::mpt

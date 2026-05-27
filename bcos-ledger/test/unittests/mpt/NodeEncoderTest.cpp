@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(InlineThresholdAt31Bytes)
 {
     using namespace bcos::ledger::mpt;
 
-    std::vector<uint8_t> const key = {1, 2, 3, 4};
+    bcos::bytes const key = {1, 2, 3, 4};
 
     // 31-byte encoding → Inline
     {

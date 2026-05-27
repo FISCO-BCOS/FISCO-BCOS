@@ -29,7 +29,7 @@ namespace bcos::ledger::mpt
 
 /// Splits each byte into two nibbles (high nibble first).
 /// Example: {0xab, 0xcd} -> {0x0a, 0x0b, 0x0c, 0x0d}
-std::vector<uint8_t> bytesToNibbles(std::span<bcos::byte const> in);
+bcos::bytes bytesToNibbles(std::span<bcos::byte const> in);
 
 /// Merges pairs of nibbles back into bytes (high nibble first).
 /// @throws MPTInvariantViolation when nibbles.size() is odd.

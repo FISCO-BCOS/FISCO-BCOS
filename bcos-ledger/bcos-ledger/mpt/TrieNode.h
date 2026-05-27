@@ -38,14 +38,14 @@ struct EmptyNode
 /// A leaf node: stores a path suffix (nibble-space, no terminator) and a value.
 struct LeafNode
 {
-    std::vector<uint8_t> keyNibbles;  ///< Nibble sequence (no HP terminator; each in [0, 15])
-    bcos::bytes value;                ///< Raw value bytes (encoded as RLP byte-string)
+    bcos::bytes keyNibbles;  ///< Nibble sequence (no HP terminator; each in [0, 15])
+    bcos::bytes value;       ///< Raw value bytes (encoded as RLP byte-string)
 };
 
 /// An extension node: stores a shared nibble prefix and an already-RLP-encoded child reference.
 struct ExtensionNode
 {
-    std::vector<uint8_t> sharedNibbles;  ///< Shared nibble prefix (no HP terminator)
+    bcos::bytes sharedNibbles;  ///< Shared nibble prefix (no HP terminator)
     bcos::bytes child;  ///< Already RLP-encoded child ref (inline bytes or 33-byte hash string)
 };
 

@@ -24,9 +24,9 @@
 namespace bcos::ledger::mpt
 {
 
-std::vector<uint8_t> bytesToNibbles(std::span<bcos::byte const> in)
+bcos::bytes bytesToNibbles(std::span<bcos::byte const> in)
 {
-    std::vector<uint8_t> out;
+    bcos::bytes out;
     out.reserve(in.size() * 2);
     for (bcos::byte b : in)
     {

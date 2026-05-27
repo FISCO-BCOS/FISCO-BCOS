@@ -53,7 +53,7 @@ bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool isLeaf)
     return out;
 }
 
-std::pair<std::vector<uint8_t>, bool> hexPrefixDecode(std::span<bcos::byte const> encoded)
+std::pair<bcos::bytes, bool> hexPrefixDecode(std::span<bcos::byte const> encoded)
 {
     if (encoded.empty())
     {
@@ -64,7 +64,7 @@ std::pair<std::vector<uint8_t>, bool> hexPrefixDecode(std::span<bcos::byte const
     bool const isLeaf = ((first & HP_LEAF_FLAG) != 0u);
     bool const odd = ((first & HP_ODD_FLAG) != 0u);
 
-    std::vector<uint8_t> nibbles;
+    bcos::bytes nibbles;
     nibbles.reserve((encoded.size() - 1) * 2 + (odd ? 1u : 0u));
 
     if (odd)

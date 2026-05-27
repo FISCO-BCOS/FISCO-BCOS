@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_SUITE(HexPrefixSuite)
 // nibbles={0,1,2,3,4,5}, term=false -> {0x00, 0x01, 0x23, 0x45}
 BOOST_AUTO_TEST_CASE(EncodeEvenNoTerminator)
 {
-    std::vector<uint8_t> const nibbles{0, 1, 2, 3, 4, 5};
+    bcos::bytes const nibbles{0, 1, 2, 3, 4, 5};
     bcos::bytes const expected{0x00, 0x01, 0x23, 0x45};
     auto const result = hexPrefixEncode(nibbles, false);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(EncodeEvenNoTerminator)
 // nibbles={1,2,3,4,5}, term=false -> {0x11, 0x23, 0x45}
 BOOST_AUTO_TEST_CASE(EncodeOddNoTerminator)
 {
-    std::vector<uint8_t> const nibbles{1, 2, 3, 4, 5};
+    bcos::bytes const nibbles{1, 2, 3, 4, 5};
     bcos::bytes const expected{0x11, 0x23, 0x45};
     auto const result = hexPrefixEncode(nibbles, false);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
@@ -51,7 +51,7 @@ BOOST_AUTO_TEST_CASE(EncodeOddNoTerminator)
 // nibbles={0,1,2,3,4,5}, term=true -> {0x20, 0x01, 0x23, 0x45}
 BOOST_AUTO_TEST_CASE(EncodeEvenWithTerminator)
 {
-    std::vector<uint8_t> const nibbles{0, 1, 2, 3, 4, 5};
+    bcos::bytes const nibbles{0, 1, 2, 3, 4, 5};
     bcos::bytes const expected{0x20, 0x01, 0x23, 0x45};
     auto const result = hexPrefixEncode(nibbles, true);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(EncodeEvenWithTerminator)
 // nibbles={1,2,3,4,5}, term=true -> {0x31, 0x23, 0x45}
 BOOST_AUTO_TEST_CASE(EncodeOddWithTerminator)
 {
-    std::vector<uint8_t> const nibbles{1, 2, 3, 4, 5};
+    bcos::bytes const nibbles{1, 2, 3, 4, 5};
     bcos::bytes const expected{0x31, 0x23, 0x45};
     auto const result = hexPrefixEncode(nibbles, true);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(EncodeOddWithTerminator)
 // Round-trip for both isLeaf values, odd nibble count
 BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripOdd)
 {
-    std::vector<uint8_t> const nibbles{0x0a, 0x0b, 0x0c, 0x0d, 0x0e};
+    bcos::bytes const nibbles{0x0a, 0x0b, 0x0c, 0x0d, 0x0e};
 
     for (bool isLeaf : {false, true})
     {
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripOdd)
 // Round-trip for both isLeaf values, even nibble count
 BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripEven)
 {
-    std::vector<uint8_t> const nibbles{0x0a, 0x0b, 0x0c, 0x0d};
+    bcos::bytes const nibbles{0x0a, 0x0b, 0x0c, 0x0d};
 
     for (bool isLeaf : {false, true})
     {

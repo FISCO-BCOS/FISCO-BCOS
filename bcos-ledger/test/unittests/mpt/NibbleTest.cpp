@@ -30,14 +30,14 @@ BOOST_AUTO_TEST_SUITE(NibbleSuite)
 BOOST_AUTO_TEST_CASE(BytesToNibblesEvenLength)
 {
     bcos::bytes const input{0xab, 0xcd};
-    std::vector<uint8_t> const expected{0x0a, 0x0b, 0x0c, 0x0d};
+    bcos::bytes const expected{0x0a, 0x0b, 0x0c, 0x0d};
     auto const result = bytesToNibbles(input);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
 
 BOOST_AUTO_TEST_CASE(NibblesToBytesRoundTripEvenOnly)
 {
-    std::vector<uint8_t> const input{0x01, 0x02, 0x03, 0x04};
+    bcos::bytes const input{0x01, 0x02, 0x03, 0x04};
     bcos::bytes const expected{0x12, 0x34};
     auto const result = nibblesToBytes(input);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
@@ -45,21 +45,21 @@ BOOST_AUTO_TEST_CASE(NibblesToBytesRoundTripEvenOnly)
 
 BOOST_AUTO_TEST_CASE(CommonPrefixBasic)
 {
-    std::vector<uint8_t> const a{0x01, 0x02, 0x0a, 0x0b};
-    std::vector<uint8_t> const b{0x01, 0x02, 0x0c, 0x0d};
+    bcos::bytes const a{0x01, 0x02, 0x0a, 0x0b};
+    bcos::bytes const b{0x01, 0x02, 0x0c, 0x0d};
     BOOST_CHECK_EQUAL(commonPrefixLen(a, b), 2u);
 }
 
 BOOST_AUTO_TEST_CASE(NibblesToBytesOddThrows)
 {
-    std::vector<uint8_t> const odd{0x01, 0x02, 0x03};
+    bcos::bytes const odd{0x01, 0x02, 0x03};
     BOOST_CHECK_THROW(nibblesToBytes(odd), MPTInvariantViolation);
 }
 
 BOOST_AUTO_TEST_CASE(NibblesToBytesOutOfRangeThrows)
 {
     // 0x10 has bits above the low nibble — violates the strict 4-bit invariant.
-    std::vector<uint8_t> const bad{0x01, 0x10};
+    bcos::bytes const bad{0x01, 0x10};
     BOOST_CHECK_THROW(nibblesToBytes(bad), MPTInvariantViolation);
 }
 
@@ -73,14 +73,14 @@ BOOST_AUTO_TEST_CASE(BytesToNibblesRoundTrip)
 
 BOOST_AUTO_TEST_CASE(CommonPrefixEmpty)
 {
-    std::vector<uint8_t> const a{};
-    std::vector<uint8_t> const b{0x01};
+    bcos::bytes const a{};
+    bcos::bytes const b{0x01};
     BOOST_CHECK_EQUAL(commonPrefixLen(a, b), 0u);
 }
 
 BOOST_AUTO_TEST_CASE(CommonPrefixIdentical)
 {
-    std::vector<uint8_t> const a{0x01, 0x02, 0x03};
+    bcos::bytes const a{0x01, 0x02, 0x03};
     BOOST_CHECK_EQUAL(commonPrefixLen(a, a), 3u);
 }
 
