@@ -31,12 +31,12 @@ namespace bcos::ledger::mpt
 // keccak256 — Ethereum-flavour (0x01 domain padding, not NIST 0x06)
 // ---------------------------------------------------------------------------
 
-Hash32 keccak256(std::span<bcos::byte const> in)
+bcos::h256 keccak256(std::span<bcos::byte const> in)
 {
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     // bytesConstRef satisfies the TrivialObject Range concept and is the idiomatic input type.
     hasher.update(bcos::bytesConstRef(in.data(), in.size()));
-    Hash32 out;
+    bcos::h256 out;
     hasher.final(out);
     return out;
 }
@@ -79,7 +79,7 @@ static bcos::bytes encodeEmpty(EmptyNode const& /*node*/)
 static bcos::bytes encodeLeaf(LeafNode const& node)
 {
     bcos::bytes out;
-    auto hp = hexPrefixEncode(node.keyNibbles, /*terminator=*/true);
+    auto hp = hexPrefixEncode(node.keyNibbles, /*isLeaf=*/true);
     // Two-argument encode() wraps in an RLP list automatically.
     bcos::codec::rlp::encode(out, hp, node.value);
     return out;
@@ -92,7 +92,7 @@ static bcos::bytes encodeExtension(ExtensionNode const& node)
 {
     using namespace bcos::codec::rlp;
     bcos::bytes out;
-    auto hp = hexPrefixEncode(node.sharedNibbles, /*terminator=*/false);
+    auto hp = hexPrefixEncode(node.sharedNibbles, /*isLeaf=*/false);
     // child contributes its own bytes directly (not as an RLP-wrapped byte-string).
     const size_t payloadLen = length(hp) + node.child.size();
     encodeHeader(out, {.isList = true, .payloadLength = payloadLen});

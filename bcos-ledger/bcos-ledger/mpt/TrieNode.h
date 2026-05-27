@@ -18,8 +18,8 @@
  */
 #pragma once
 
-#include "Types.h"
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <array>
 #include <cstdint>
 #include <variant>
@@ -27,6 +27,8 @@
 
 namespace bcos::ledger::mpt
 {
+
+inline constexpr uint8_t NIBBLE_RANGE = 16;
 
 /// The empty trie node — its RLP encoding is the single byte 0x80 (RLP empty string).
 struct EmptyNode
@@ -53,7 +55,7 @@ struct ExtensionNode
 /// - Hash:   the referenced subtree is ≥32 bytes; only the 32-byte keccak256 digest is stored.
 struct NodeRef
 {
-    enum class Kind
+    enum class Kind : uint8_t
     {
         Inline,
         Hash
@@ -63,14 +65,15 @@ struct NodeRef
     bcos::bytes inlineBytes;  ///< Valid when kind == Inline. An empty inlineBytes
                               ///< with kind == Inline encodes as RLP-empty (0x80) and
                               ///< represents an absent branch child.
-    Hash32 hash{};            ///< Valid when kind == Hash; keccak256(child RLP)
+    bcos::h256 hash;          ///< Valid when kind == Hash; keccak256(child RLP)
 };
 
 /// A branch node: 16 child references (one per hex nibble) plus an optional value.
 struct BranchNode
 {
-    std::array<NodeRef, 16> children;  ///< Default-constructed = Inline + empty (absent child)
-    bcos::bytes value;                 ///< Typically empty for internal branch nodes
+    std::array<NodeRef, NIBBLE_RANGE> children;  ///< Default-constructed = Inline + empty (absent
+                                                 ///< child)
+    bcos::bytes value;                           ///< Typically empty for internal branch nodes
 };
 
 /// Tagged union of all MPT node types.

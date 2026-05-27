@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(EncodeBranchHashedWhenLarge)
     // Set children[0] to a Hash-kind ref with a dummy 32-byte hash
     branch.children[0].kind = NodeRef::Kind::Hash;
     branch.children[0].hash =
-        Hash32("0x1111111111111111111111111111111111111111111111111111111111111111");
+        bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111");
 
     auto [raw, ref] = NodeEncoder::encodeAndRef(TrieNode{branch});
 
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(EmptyTrieRootMatchesEthereumConstant)
     BOOST_CHECK_EQUAL(raw.size(), 1u);
     BOOST_CHECK_EQUAL(raw[0], 0x80u);
 
-    Hash32 digest = keccak256(std::span<bcos::byte const>(raw.data(), raw.size()));
+    bcos::h256 digest = keccak256(std::span<bcos::byte const>(raw.data(), raw.size()));
     BOOST_CHECK_EQUAL(digest, emptyRootHash());
 }
 

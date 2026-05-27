@@ -29,7 +29,7 @@ namespace bcos::ledger::mpt
 /// Ethereum-flavour Keccak256 (0x01 padding, NOT NIST SHA3-256 which uses 0x06 padding).
 /// @param in  Raw input bytes (bcos::byte = uint8_t)
 /// @return    32-byte Keccak256 digest
-Hash32 keccak256(std::span<bcos::byte const> in);
+bcos::h256 keccak256(std::span<bcos::byte const> in);
 
 /// Encodes MPT nodes to RLP and determines inline-vs-hash node references.
 ///
