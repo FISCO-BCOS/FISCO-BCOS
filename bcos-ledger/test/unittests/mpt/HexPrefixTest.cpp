@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(EncodeEvenNoTerminator)
 {
     bcos::bytes const nibbles{0, 1, 2, 3, 4, 5};
     bcos::bytes const expected{0x00, 0x01, 0x23, 0x45};
-    auto const result = hexPrefixEncode(nibbles, false);
+    auto const result = hexPrefixEncode(bcos::ref(nibbles), false);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
 
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(EncodeOddNoTerminator)
 {
     bcos::bytes const nibbles{1, 2, 3, 4, 5};
     bcos::bytes const expected{0x11, 0x23, 0x45};
-    auto const result = hexPrefixEncode(nibbles, false);
+    auto const result = hexPrefixEncode(bcos::ref(nibbles), false);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
 
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(EncodeEvenWithTerminator)
 {
     bcos::bytes const nibbles{0, 1, 2, 3, 4, 5};
     bcos::bytes const expected{0x20, 0x01, 0x23, 0x45};
-    auto const result = hexPrefixEncode(nibbles, true);
+    auto const result = hexPrefixEncode(bcos::ref(nibbles), true);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
 
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(EncodeOddWithTerminator)
 {
     bcos::bytes const nibbles{1, 2, 3, 4, 5};
     bcos::bytes const expected{0x31, 0x23, 0x45};
-    auto const result = hexPrefixEncode(nibbles, true);
+    auto const result = hexPrefixEncode(bcos::ref(nibbles), true);
     BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), expected.begin(), expected.end());
 }
 
@@ -74,8 +74,8 @@ BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripOdd)
 
     for (bool isLeaf : {false, true})
     {
-        auto const encoded = hexPrefixEncode(nibbles, isLeaf);
-        auto const [decoded, decodedIsLeaf] = hexPrefixDecode(encoded);
+        auto const encoded = hexPrefixEncode(bcos::ref(nibbles), isLeaf);
+        auto const [decoded, decodedIsLeaf] = hexPrefixDecode(bcos::ref(encoded));
         BOOST_CHECK_EQUAL(decodedIsLeaf, isLeaf);
         BOOST_CHECK_EQUAL_COLLECTIONS(
             decoded.begin(), decoded.end(), nibbles.begin(), nibbles.end());
@@ -89,8 +89,8 @@ BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripEven)
 
     for (bool isLeaf : {false, true})
     {
-        auto const encoded = hexPrefixEncode(nibbles, isLeaf);
-        auto const [decoded, decodedIsLeaf] = hexPrefixDecode(encoded);
+        auto const encoded = hexPrefixEncode(bcos::ref(nibbles), isLeaf);
+        auto const [decoded, decodedIsLeaf] = hexPrefixDecode(bcos::ref(encoded));
         BOOST_CHECK_EQUAL(decodedIsLeaf, isLeaf);
         BOOST_CHECK_EQUAL_COLLECTIONS(
             decoded.begin(), decoded.end(), nibbles.begin(), nibbles.end());
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(EncodeDecodeRoundTripEven)
 BOOST_AUTO_TEST_CASE(DecodeEmptyThrows)
 {
     bcos::bytes const empty{};
-    BOOST_CHECK_THROW(hexPrefixDecode(empty), MPTDecodeError);
+    BOOST_CHECK_THROW(hexPrefixDecode(bcos::ref(empty)), MPTDecodeError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -20,22 +20,20 @@
 
 #include <bcos-utilities/Common.h>
 #include <cstddef>
-#include <cstdint>
-#include <span>
-#include <vector>
 
 namespace bcos::ledger::mpt
 {
 
 /// Splits each byte into two nibbles (high nibble first).
 /// Example: {0xab, 0xcd} -> {0x0a, 0x0b, 0x0c, 0x0d}
-bcos::bytes bytesToNibbles(std::span<bcos::byte const> in);
+bcos::bytes bytesToNibbles(bcos::bytesConstRef bytes);
 
 /// Merges pairs of nibbles back into bytes (high nibble first).
-/// @throws MPTInvariantViolation when nibbles.size() is odd.
-bcos::bytes nibblesToBytes(std::span<uint8_t const> nibbles);
+/// @param nibbles  Nibble sequence; each element MUST be in [0, 15].
+/// @throws MPTInvariantViolation when nibbles.size() is odd or any element exceeds 0x0f.
+bcos::bytes nibblesToBytes(bcos::bytesConstRef nibbles);
 
 /// Returns the length of the longest common prefix of two nibble sequences.
-size_t commonPrefixLen(std::span<uint8_t const> a, std::span<uint8_t const> b) noexcept;
+size_t commonPrefixLen(bcos::bytesConstRef lhs, bcos::bytesConstRef rhs) noexcept;
 
 }  // namespace bcos::ledger::mpt

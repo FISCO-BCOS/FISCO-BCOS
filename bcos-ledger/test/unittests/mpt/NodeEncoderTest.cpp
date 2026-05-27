@@ -23,7 +23,7 @@
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
-namespace bcos::test
+namespace bcos::ledger::mpt::test
 {
 
 BOOST_AUTO_TEST_SUITE(NodeEncoderSuite)
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(EncodeLeafShort)
     leaf.keyNibbles = {1, 2, 3, 4};
     leaf.value = bcos::bytes{0xaa};
 
-    auto [raw, ref] = NodeEncoder::encodeAndRef(TrieNode{leaf});
+    auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{leaf});
 
     BOOST_CHECK(!raw.empty());
     BOOST_CHECK(raw.size() < 32);
@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(EncodeBranchHashedWhenLarge)
     branch.children[0].hash =
         bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111");
 
-    auto [raw, ref] = NodeEncoder::encodeAndRef(TrieNode{branch});
+    auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{branch});
 
     // 33 (hash child) + 15 × 1 (absent children) + 1 (empty value) = 49 payload → 50 total
     BOOST_CHECK(raw.size() >= 32);
@@ -90,11 +90,13 @@ BOOST_AUTO_TEST_CASE(EmptyTrieRootMatchesEthereumConstant)
 {
     using namespace bcos::ledger::mpt;
 
-    bcos::bytes raw = NodeEncoder::encodeRaw(TrieNode{EmptyNode{}});
+    bcos::bytes raw = encodeRaw(TrieNode{EmptyNode{}});
     BOOST_CHECK_EQUAL(raw.size(), 1u);
-    BOOST_CHECK_EQUAL(raw[0], 0x80u);
+    BOOST_CHECK_EQUAL(raw[0], RLP_EMPTY_STRING);
 
-    bcos::h256 digest = keccak256(std::span<bcos::byte const>(raw.data(), raw.size()));
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    bcos::h256 digest;
+    bcos::crypto::hasher::hash(hasher, bcos::bytesConstRef(raw.data(), raw.size()), digest);
     BOOST_CHECK_EQUAL(digest, emptyRootHash());
 }
 
@@ -118,7 +120,7 @@ BOOST_AUTO_TEST_CASE(InlineThresholdAt31Bytes)
         leaf.keyNibbles = key;
         leaf.value = bcos::bytes(25, 0xff);
 
-        auto [raw, ref] = NodeEncoder::encodeAndRef(TrieNode{leaf});
+        auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{leaf});
         BOOST_CHECK_EQUAL(raw.size(), 31u);
         BOOST_CHECK(ref.kind == NodeRef::Kind::Inline);
         BOOST_CHECK(ref.inlineBytes == raw);
@@ -130,7 +132,7 @@ BOOST_AUTO_TEST_CASE(InlineThresholdAt31Bytes)
         leaf.keyNibbles = key;
         leaf.value = bcos::bytes(26, 0xff);
 
-        auto [raw, ref] = NodeEncoder::encodeAndRef(TrieNode{leaf});
+        auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{leaf});
         BOOST_CHECK_EQUAL(raw.size(), 32u);
         BOOST_CHECK(ref.kind == NodeRef::Kind::Hash);
         BOOST_CHECK_EQUAL(ref.hash.size(), 32u);
@@ -138,6 +140,28 @@ BOOST_AUTO_TEST_CASE(InlineThresholdAt31Bytes)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Test 5: encodeRaw(node, out) appends — does not overwrite
+// ---------------------------------------------------------------------------
+// The append overload's contract is "write to the end of `out`, preserving prior content".
+// Existing tests only verify the resulting bytes match expectations, which cannot distinguish
+// "append" from "overwrite" when out starts empty. This case pre-fills out with a sentinel
+// prefix and checks the prefix survives — proving the contract independent of body bytes.
+BOOST_AUTO_TEST_CASE(EncodeRawAppendsToExistingBuffer)
+{
+    using namespace bcos::ledger::mpt;
+
+    bcos::bytes out{0xde, 0xad, 0xbe, 0xef};
+    encodeRaw(TrieNode{EmptyNode{}}, out);
+
+    BOOST_CHECK_EQUAL(out.size(), 5U);
+    BOOST_CHECK_EQUAL(out[0], 0xde);
+    BOOST_CHECK_EQUAL(out[1], 0xad);
+    BOOST_CHECK_EQUAL(out[2], 0xbe);
+    BOOST_CHECK_EQUAL(out[3], 0xef);
+    BOOST_CHECK_EQUAL(out[4], RLP_EMPTY_STRING);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
-}  // namespace bcos::test
+}  // namespace bcos::ledger::mpt::test

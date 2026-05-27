@@ -28,32 +28,33 @@ namespace bcos::ledger::mpt
 // Header byte bit layout (Yellow Paper Appendix C):
 //   bit 5 = leaf flag (1 = leaf / terminator, 0 = extension)
 //   bit 4 = odd flag  (1 = odd nibble count, first nibble packed into low 4 bits)
-inline constexpr uint8_t HP_LEAF_FLAG = 0b0010'0000u;
-inline constexpr uint8_t HP_ODD_FLAG = 0b0001'0000u;
-inline constexpr uint8_t HP_NIBBLE_MASK = 0b0000'1111u;
+inline constexpr uint8_t HP_LEAF_FLAG = 0b0010'0000U;
+inline constexpr uint8_t HP_ODD_FLAG = 0b0001'0000U;
+inline constexpr uint8_t HP_NIBBLE_MASK = 0b0000'1111U;
 
-bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool isLeaf)
+bcos::bytes hexPrefixEncode(bcos::bytesConstRef nibbles, bool isLeaf)
 {
     bcos::bytes out;
     bool const odd = (nibbles.size() % 2 == 1);
-    uint8_t firstByte = (isLeaf ? HP_LEAF_FLAG : 0u) | (odd ? HP_ODD_FLAG : 0u);
+    assert(nibbles.empty() == false && "nibbles cannot be empty");
+    uint8_t firstByte = (isLeaf ? HP_LEAF_FLAG : 0U) | (odd ? HP_ODD_FLAG : 0U);
     if (odd)
     {
         assert(nibbles[0] < 16 && "nibble out of range");
         firstByte |= (nibbles[0] & HP_NIBBLE_MASK);
     }
     out.push_back(firstByte);
-    size_t const start = odd ? 1u : 0u;
+    size_t const start = odd ? 1U : 0U;
     for (size_t i = start; i + 1 < nibbles.size(); i += 2)
     {
         assert(nibbles[i] < 16 && nibbles[i + 1] < 16 && "nibble out of range");
         out.push_back(
-            static_cast<bcos::byte>(((nibbles[i] & 0x0fu) << 4u) | (nibbles[i + 1] & 0x0fu)));
+            static_cast<bcos::byte>(((nibbles[i] & 0x0fU) << 4U) | (nibbles[i + 1] & 0x0fU)));
     }
     return out;
 }
 
-std::pair<bcos::bytes, bool> hexPrefixDecode(std::span<bcos::byte const> encoded)
+std::pair<bcos::bytes, bool> hexPrefixDecode(bcos::bytesConstRef encoded)
 {
     if (encoded.empty())
     {
@@ -61,11 +62,11 @@ std::pair<bcos::bytes, bool> hexPrefixDecode(std::span<bcos::byte const> encoded
             MPTDecodeError{} << bcos::errinfo_comment("hexPrefixDecode: empty input"));
     }
     uint8_t const first = encoded[0];
-    bool const isLeaf = ((first & HP_LEAF_FLAG) != 0u);
-    bool const odd = ((first & HP_ODD_FLAG) != 0u);
+    bool const isLeaf = ((first & HP_LEAF_FLAG) != 0U);
+    bool const odd = ((first & HP_ODD_FLAG) != 0U);
 
     bcos::bytes nibbles;
-    nibbles.reserve((encoded.size() - 1) * 2 + (odd ? 1u : 0u));
+    nibbles.reserve(((encoded.size() - 1) * 2) + (odd ? 1U : 0U));
 
     if (odd)
     {
@@ -73,8 +74,8 @@ std::pair<bcos::bytes, bool> hexPrefixDecode(std::span<bcos::byte const> encoded
     }
     for (size_t i = 1; i < encoded.size(); ++i)
     {
-        nibbles.push_back(static_cast<uint8_t>((encoded[i] >> 4u) & 0x0fu));
-        nibbles.push_back(static_cast<uint8_t>(encoded[i] & 0x0fu));
+        nibbles.push_back(static_cast<uint8_t>((encoded[i] >> 4U) & 0x0fU));
+        nibbles.push_back(static_cast<uint8_t>(encoded[i] & 0x0fU));
     }
     return {std::move(nibbles), isLeaf};
 }

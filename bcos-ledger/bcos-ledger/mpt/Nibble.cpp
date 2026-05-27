@@ -20,15 +20,16 @@
 #include "Nibble.h"
 #include "Errors.h"
 #include <boost/throw_exception.hpp>
+#include <string>
 
 namespace bcos::ledger::mpt
 {
 
-bcos::bytes bytesToNibbles(std::span<bcos::byte const> in)
+bcos::bytes bytesToNibbles(bcos::bytesConstRef bytes)
 {
     bcos::bytes out;
-    out.reserve(in.size() * 2);
-    for (bcos::byte b : in)
+    out.reserve(bytes.size() * 2);
+    for (bcos::byte b : bytes)
     {
         out.push_back(static_cast<uint8_t>((b >> 4) & 0x0f));
         out.push_back(static_cast<uint8_t>(b & 0x0f));
@@ -36,7 +37,7 @@ bcos::bytes bytesToNibbles(std::span<bcos::byte const> in)
     return out;
 }
 
-bcos::bytes nibblesToBytes(std::span<uint8_t const> nibbles)
+bcos::bytes nibblesToBytes(bcos::bytesConstRef nibbles)
 {
     if (nibbles.size() % 2 != 0)
     {
@@ -50,8 +51,10 @@ bcos::bytes nibblesToBytes(std::span<uint8_t const> nibbles)
         // Strict invariant: each nibble must fit in 4 bits.
         if ((nibbles[i] | nibbles[i + 1]) > 0x0fu)
         {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                      "nibblesToBytes: nibble value out of range [0, 15]"));
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    "nibblesToBytes: nibble value out of range [0, 15] at index " +
+                    std::to_string(i) + " or " + std::to_string(i + 1)));
         }
         out.push_back(
             static_cast<bcos::byte>(((nibbles[i] & 0x0fu) << 4) | (nibbles[i + 1] & 0x0fu)));
@@ -59,13 +62,13 @@ bcos::bytes nibblesToBytes(std::span<uint8_t const> nibbles)
     return out;
 }
 
-size_t commonPrefixLen(std::span<uint8_t const> a, std::span<uint8_t const> b) noexcept
+size_t commonPrefixLen(bcos::bytesConstRef lhs, bcos::bytesConstRef rhs) noexcept
 {
-    size_t const maxLen = std::min(a.size(), b.size());
+    size_t const maxLen = std::min(lhs.size(), rhs.size());
     size_t i = 0;
     for (; i < maxLen; ++i)
     {
-        if (a[i] != b[i])
+        if (lhs[i] != rhs[i])
         {
             break;
         }

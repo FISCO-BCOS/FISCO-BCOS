@@ -14,15 +14,23 @@
  *  limitations under the License.
  *
  * @file Constants.h
- * @brief Ethereum well-known hash constants for the MPT module (spec §5.5)
+ * @brief Ethereum well-known constants for the MPT module (spec §5.5)
  */
 #pragma once
 
+#include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <string_view>
 
 namespace bcos::ledger::mpt
 {
+
+/// RLP encoding of the empty byte-string (Yellow Paper §B item-encoding):
+/// a zero-length string encodes to the single byte 0x80. In the MPT this byte
+/// is reused as:
+///   - the complete RLP form of EmptyNode
+///   - an absent-child placeholder inside a BranchNode payload
+inline constexpr bcos::byte RLP_EMPTY_STRING = 0x80;
 
 /// Hex string for keccak256(RLP("")) = the empty trie root hash
 inline constexpr std::string_view EMPTY_ROOT_HASH_HEX =

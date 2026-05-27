@@ -19,10 +19,7 @@
 #pragma once
 
 #include <bcos-utilities/Common.h>
-#include <cstdint>
-#include <span>
 #include <utility>
-#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -36,18 +33,18 @@ namespace bcos::ledger::mpt
 ///   bits [3:0] = first nibble (only meaningful when bit 4 = 1; zero when even)
 ///
 /// @param nibbles  Input nibble sequence; each element MUST be in [0, 15].
-///                 Violations trigger assert in debug builds; release builds
-///                 silently mask the high bits via & 0x0f (defense-in-depth).
+///                 Violations trigger assert in debug builds. In all builds the high
+///                 bits are silently masked via & 0x0f (defense-in-depth).
 /// @param isLeaf   true = leaf node (Yellow Paper terminator=1),
 ///                 false = extension node (terminator=0)
 /// @return Compact-encoded byte sequence
-bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool isLeaf);
+bcos::bytes hexPrefixEncode(bcos::bytesConstRef nibbles, bool isLeaf);
 
 /// Decodes a Hex-Prefix encoded byte sequence.
 ///
 /// @param encoded  Compact-encoded input (must be non-empty)
 /// @return {nibbles, isLeaf}
 /// @throws MPTDecodeError on empty input
-std::pair<bcos::bytes, bool> hexPrefixDecode(std::span<bcos::byte const> encoded);
+std::pair<bcos::bytes, bool> hexPrefixDecode(bcos::bytesConstRef encoded);
 
 }  // namespace bcos::ledger::mpt

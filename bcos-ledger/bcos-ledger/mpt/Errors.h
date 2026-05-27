@@ -30,7 +30,10 @@ DERIVE_BCOS_EXCEPTION(MPTDecodeError);
 /// nibblesToBytes)
 DERIVE_BCOS_EXCEPTION(MPTInvariantViolation);
 
-/// Thrown when an unexpected BCOS-specific field is encountered in an L2 data structure (spec §5.2)
+/// Thrown when an unexpected BCOS-specific field is encountered in an L2 data structure (spec
+/// §5.2). Forward-declared here so M3 PRs (Builder classify path) can throw without re-touching
+/// this header. If M3 ships without using it, this declaration must be removed in that PR rather
+/// than left as dead code.
 DERIVE_BCOS_EXCEPTION(UnexpectedBCOSFieldInL2);
 
 }  // namespace bcos::ledger::mpt

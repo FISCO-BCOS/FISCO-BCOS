@@ -18,28 +18,15 @@
  */
 
 #include "NodeEncoder.h"
+#include "Constants.h"
 #include "HexPrefix.h"
+#include "bcos-utilities/Overloaded.h"
 #include <bcos-codec/rlp/Common.h>
 #include <bcos-codec/rlp/RLPEncode.h>
-#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos::ledger::mpt
 {
-
-// ---------------------------------------------------------------------------
-// keccak256 — Ethereum-flavour (0x01 domain padding, not NIST 0x06)
-// ---------------------------------------------------------------------------
-
-bcos::h256 keccak256(std::span<bcos::byte const> in)
-{
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    // bytesConstRef satisfies the TrivialObject Range concept and is the idiomatic input type.
-    hasher.update(bcos::bytesConstRef(in.data(), in.size()));
-    bcos::h256 out;
-    hasher.final(out);
-    return out;
-}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -55,7 +42,7 @@ static void appendChildRef(bcos::bytes& dst, NodeRef const& ref)
     {
         if (ref.inlineBytes.empty())
         {
-            dst.push_back(0x80);  // RLP empty string = absent child
+            dst.push_back(RLP_EMPTY_STRING);  // absent child
         }
         else
         {
@@ -70,43 +57,41 @@ static void appendChildRef(bcos::bytes& dst, NodeRef const& ref)
 }
 
 // Encode EmptyNode → single-byte RLP empty string {0x80}
-static bcos::bytes encodeEmpty(EmptyNode const& /*node*/)
+static void encodeEmpty(EmptyNode const& /*node*/, bcos::bytes& out)
 {
-    return bcos::bytes{0x80};
+    out.push_back(RLP_EMPTY_STRING);
 }
 
 // Encode LeafNode → RLP list [HP(keyNibbles, leaf=true), value]
-static bcos::bytes encodeLeaf(LeafNode const& node)
+static void encodeLeaf(LeafNode const& node, bcos::bytes& out)
 {
-    bcos::bytes out;
-    auto hp = hexPrefixEncode(node.keyNibbles, /*isLeaf=*/true);
+    const auto hpe = hexPrefixEncode(bcos::ref(node.keyNibbles), /*isLeaf=*/true);
     // Two-argument encode() wraps in an RLP list automatically.
-    bcos::codec::rlp::encode(out, hp, node.value);
-    return out;
+    bcos::codec::rlp::encode(out, hpe, node.value);
 }
 
 // Encode ExtensionNode → RLP list [HP(sharedNibbles, leaf=false), child_ref_raw]
 // ExtensionNode.child is ALREADY a complete RLP-encoded child reference, so we must
 // splice it raw rather than re-encode it as a byte-string (which would double-wrap).
-static bcos::bytes encodeExtension(ExtensionNode const& node)
+static void encodeExtension(ExtensionNode const& node, bcos::bytes& out)
 {
     using namespace bcos::codec::rlp;
-    bcos::bytes out;
-    auto hp = hexPrefixEncode(node.sharedNibbles, /*isLeaf=*/false);
+    const auto hpe = hexPrefixEncode(bcos::ref(node.sharedNibbles), /*isLeaf=*/false);
     // child contributes its own bytes directly (not as an RLP-wrapped byte-string).
-    const size_t payloadLen = length(hp) + node.child.size();
+    const size_t payloadLen = length(hpe) + node.child.size();
     encodeHeader(out, {.isList = true, .payloadLength = payloadLen});
-    encode(out, hp);
+    encode(out, hpe);
     out.insert(out.end(), node.child.begin(), node.child.end());
-    return out;
 }
 
 // Encode BranchNode → RLP list [child0..child15, value]
-static bcos::bytes encodeBranch(BranchNode const& node)
+static void encodeBranch(BranchNode const& node, bcos::bytes& out)
 {
     using namespace bcos::codec::rlp;
 
-    // Build the 17-item payload bytes first, then wrap with a list header.
+    // RLP list header needs payload length up front, so the 17-item payload is built into a
+    // local buffer first. Once sealed, the payload is spliced into `out` — caller pays one
+    // allocation for `payload` per BranchNode regardless of how many parents are chained.
     bcos::bytes payload;
     for (NodeRef const& child : node.children)
     {
@@ -115,60 +100,23 @@ static bcos::bytes encodeBranch(BranchNode const& node)
     // 17th entry: the branch node's own value (empty in most internal nodes)
     encode(payload, node.value);
 
-    bcos::bytes out;
     encodeHeader(out, {.isList = true, .payloadLength = payload.size()});
     out.insert(out.end(), payload.begin(), payload.end());
-    return out;
 }
 
 // ---------------------------------------------------------------------------
-// NodeEncoder public API
+// Public API
 // ---------------------------------------------------------------------------
 
-bcos::bytes NodeEncoder::encodeRaw(TrieNode const& node)
+void encodeRaw(TrieNode const& node, bcos::bytes& out)
 {
-    return std::visit(
-        [](auto const& n) -> bcos::bytes {
-            using T = std::decay_t<decltype(n)>;
-            if constexpr (std::is_same_v<T, EmptyNode>)
-            {
-                return encodeEmpty(n);
-            }
-            else if constexpr (std::is_same_v<T, LeafNode>)
-            {
-                return encodeLeaf(n);
-            }
-            else if constexpr (std::is_same_v<T, ExtensionNode>)
-            {
-                return encodeExtension(n);
-            }
-            else if constexpr (std::is_same_v<T, BranchNode>)
-            {
-                return encodeBranch(n);
-            }
-            else
-            {
-                static_assert(!sizeof(T*), "unhandled TrieNode variant alternative");
-            }
-        },
+    std::visit(bcos::overloaded{
+                   [&out](EmptyNode const& n) { encodeEmpty(n, out); },
+                   [&out](LeafNode const& n) { encodeLeaf(n, out); },
+                   [&out](ExtensionNode const& n) { encodeExtension(n, out); },
+                   [&out](BranchNode const& n) { encodeBranch(n, out); },
+               },
         node);
-}
-
-std::pair<bcos::bytes, NodeRef> NodeEncoder::encodeAndRef(TrieNode const& node)
-{
-    bcos::bytes raw = encodeRaw(node);
-    NodeRef ref;
-    if (raw.size() < 32)
-    {
-        ref.kind = NodeRef::Kind::Inline;
-        ref.inlineBytes = raw;
-    }
-    else
-    {
-        ref.kind = NodeRef::Kind::Hash;
-        ref.hash = keccak256(std::span<bcos::byte const>(raw.data(), raw.size()));
-    }
-    return {std::move(raw), std::move(ref)};
 }
 
 }  // namespace bcos::ledger::mpt

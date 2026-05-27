@@ -21,14 +21,13 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <array>
-#include <cstdint>
 #include <variant>
 #include <vector>
 
 namespace bcos::ledger::mpt
 {
 
-inline constexpr uint8_t NIBBLE_RANGE = 16;
+inline constexpr std::uint8_t NIBBLE_RANGE = 16;
 
 /// The empty trie node — its RLP encoding is the single byte 0x80 (RLP empty string).
 struct EmptyNode
@@ -38,15 +37,19 @@ struct EmptyNode
 /// A leaf node: stores a path suffix (nibble-space, no terminator) and a value.
 struct LeafNode
 {
-    bcos::bytes keyNibbles;  ///< Nibble sequence (no HP terminator; each in [0, 15])
-    bcos::bytes value;       ///< Raw value bytes (encoded as RLP byte-string)
+    /// Nibble sequence (no HP terminator; each in [0, 15])
+    bcos::bytes keyNibbles;
+    /// Raw value bytes (encoded as RLP byte-string)
+    bcos::bytes value;
 };
 
 /// An extension node: stores a shared nibble prefix and an already-RLP-encoded child reference.
 struct ExtensionNode
 {
-    bcos::bytes sharedNibbles;  ///< Shared nibble prefix (no HP terminator)
-    bcos::bytes child;  ///< Already RLP-encoded child ref (inline bytes or 33-byte hash string)
+    /// Shared nibble prefix (no HP terminator)
+    bcos::bytes sharedNibbles;
+    /// Already RLP-encoded child ref (inline bytes or 33-byte hash string)
+    bcos::bytes child;
 };
 
 /// A node reference used inside BranchNode children.
@@ -62,18 +65,24 @@ struct NodeRef
     };
 
     Kind kind{Kind::Inline};
-    bcos::bytes inlineBytes;  ///< Valid when kind == Inline. An empty inlineBytes
-                              ///< with kind == Inline encodes as RLP-empty (0x80) and
-                              ///< represents an absent branch child.
-    bcos::h256 hash;          ///< Valid when kind == Hash; keccak256(child RLP)
+    /// Valid when kind == Inline. An empty inlineBytes with kind == Inline encodes as RLP-empty
+    /// (0x80) and represents an absent branch child.
+    [[no_unique_address]] bcos::bytes inlineBytes;
+    /// Valid when kind == Hash; keccak256(child RLP)
+    [[no_unique_address]] bcos::h256 hash;
+
+    /// Explicit factory for the absent-child sentinel (Inline + empty inlineBytes).
+    /// Identical to default-construction; named for self-documenting call sites.
+    static NodeRef absent() { return NodeRef{}; }
 };
 
 /// A branch node: 16 child references (one per hex nibble) plus an optional value.
 struct BranchNode
 {
-    std::array<NodeRef, NIBBLE_RANGE> children;  ///< Default-constructed = Inline + empty (absent
-                                                 ///< child)
-    bcos::bytes value;                           ///< Typically empty for internal branch nodes
+    /// Default-constructed = Inline + empty (absent child)
+    std::array<NodeRef, NIBBLE_RANGE> children;
+    ///< Typically empty for internal branch nodes
+    bcos::bytes value;
 };
 
 /// Tagged union of all MPT node types.
