@@ -400,7 +400,9 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
 
         std::string hexHelloworldAddress(receipt->contractAddress());
         auto helloworldAddress = unhexAddress(hexHelloworldAddress);
-        auto expectAddress = newLegacyEVMAddress(bytesConstRef{helloworldAddress.bytes}, 1);
+        auto rawExpectAddr = newLegacyEVMAddress(bytesConstRef{helloworldAddress.bytes}, 1);
+        evmc_address expectAddress;
+        std::copy(rawExpectAddr.begin(), rawExpectAddr.end(), expectAddress.bytes);
         ledger::account::EVMAccount expectAccount(storage, expectAddress, false);
 
         auto input = abiCodec.abiIn("deployAndCall(int256)", bcos::s256(90));
@@ -453,8 +455,10 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
 
         for (auto i : ::ranges::views::iota(1, 11))
         {
-            auto expectAddress =
+            auto rawAddr =
                 newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
+            evmc_address expectAddress;
+            std::copy(rawAddr.begin(), rawAddr.end(), expectAddress.bytes);
             ledger::account::EVMAccount account(storage, expectAddress, false);
             BOOST_TEST(co_await account.exists());
             BOOST_TEST((co_await account.nonce()).value() == "1");
