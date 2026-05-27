@@ -292,6 +292,9 @@ public:
     bytesRef ref() { return bytesRef(m_data.data(), N); }
     /// @returns a constant byte RefDataContainer to the object's data.
     bytesConstRef ref() const { return bytesConstRef(m_data.data(), N); }
+    std::span<byte> span() { return std::span<byte>(m_data.data(), N); }
+    std::span<const byte> constSpan() const { return std::span<const byte>(m_data.data(), N); }
+
     /// @returns a mutable byte pointer to the object's data.
     byte* data() { return m_data.data(); }
     /// @returns a constant byte pointer to the object's data.
