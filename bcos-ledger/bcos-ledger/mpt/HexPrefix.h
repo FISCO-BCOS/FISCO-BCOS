@@ -35,7 +35,9 @@ namespace bcos::ledger::mpt
 ///   bit  4     = 1 when the nibble count is odd
 ///   bits [3:0] = first nibble (only meaningful when bit 4 = 1; zero when even)
 ///
-/// @param nibbles  Input nibble sequence (each element in [0, 15])
+/// @param nibbles  Input nibble sequence; each element MUST be in [0, 15].
+///                 Violations trigger assert in debug builds; release builds
+///                 silently mask the high bits via & 0x0f (defense-in-depth).
 /// @param isLeaf   true = leaf node (Yellow Paper terminator=1),
 ///                 false = extension node (terminator=0)
 /// @return Compact-encoded byte sequence

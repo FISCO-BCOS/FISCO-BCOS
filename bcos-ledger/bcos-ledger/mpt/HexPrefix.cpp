@@ -20,6 +20,7 @@
 #include "HexPrefix.h"
 #include "Errors.h"
 #include <boost/throw_exception.hpp>
+#include <cassert>
 
 namespace bcos::ledger::mpt
 {
@@ -38,12 +39,14 @@ bcos::bytes hexPrefixEncode(std::span<uint8_t const> nibbles, bool isLeaf)
     uint8_t firstByte = (isLeaf ? HP_LEAF_FLAG : 0u) | (odd ? HP_ODD_FLAG : 0u);
     if (odd)
     {
+        assert(nibbles[0] < 16 && "nibble out of range");
         firstByte |= (nibbles[0] & HP_NIBBLE_MASK);
     }
     out.push_back(firstByte);
     size_t const start = odd ? 1u : 0u;
     for (size_t i = start; i + 1 < nibbles.size(); i += 2)
     {
+        assert(nibbles[i] < 16 && nibbles[i + 1] < 16 && "nibble out of range");
         out.push_back(
             static_cast<bcos::byte>(((nibbles[i] & 0x0fu) << 4u) | (nibbles[i + 1] & 0x0fu)));
     }
