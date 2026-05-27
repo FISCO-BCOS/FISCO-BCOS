@@ -22,6 +22,8 @@
 #include "Common.h"
 #include "bcos-framework/consensus/ConsensusEngineInterface.h"
 #include <bcos-utilities/Worker.h>
+#include <chrono>
+#include <thread>
 
 
 namespace bcos::consensus
@@ -75,11 +77,19 @@ public:
             {
                 CONSENSUS_LOG(ERROR) << LOG_DESC("Process consensus task exception")
                                      << LOG_KV("message", boost::diagnostic_information(_e));
+                // FIB-111: sleep after each exception to prevent tight CPU spin
+                // when executeWorker() repeatedly throws (e.g. due to malformed
+                // consensus messages from a Byzantine peer).
+                std::this_thread::sleep_for(std::chrono::milliseconds(c_exceptionBackoffMs));
             }
         }
     }
 
 protected:
     std::atomic_bool m_started = {false};
+
+    // Backoff delay (ms) applied after each exception in workerProcessLoop().
+    // Prevents tight CPU spin when executeWorker() repeatedly throws.
+    static constexpr unsigned c_exceptionBackoffMs = 50;
 };
 }  // namespace bcos::consensus

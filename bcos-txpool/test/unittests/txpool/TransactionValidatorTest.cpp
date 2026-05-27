@@ -130,6 +130,73 @@ BOOST_AUTO_TEST_CASE(testTransactionValidator)
     std::cout << "#### testTransactionValidator finish" << std::endl;
 }
 
+BOOST_AUTO_TEST_CASE(testValidateBalanceIncludesGasCost)
+{
+    // FIB-75: validateBalance should:
+    // 1. Reject transactions where tx.gasPrice < systemGasPrice
+    // 2. Use tx.gasPrice (not systemGasPrice) to compute gas cost
+    // 3. Reject transactions where balance < txValue + txGasLimit * txGasPrice
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    std::string groupId = "group_test_for_txpool";
+    std::string chainId = "chain_test_for_txpool";
+    int64_t blockLimit = 10;
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(
+        keyPair->publicKey(), cryptoSuite, groupId, chainId, blockLimit, fakeGateWay, false, false);
+    faker->init();
+
+    auto txpoolConfig = faker->txpool()->txpoolConfig();
+    auto ledger = faker->ledger();
+
+    // Set system gas price to "1000"
+    ledger->setSystemConfig(std::string(bcos::ledger::SYSTEM_KEY_TX_GAS_PRICE), "1000");
+
+    std::string inputStr = "testGasCostValidation";
+
+    // Case 1: tx.gasPrice below systemGasPrice → rejected
+    {
+        auto tx = fakeInvalidateTransacton(inputStr, 0);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().type =
+            static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction);
+        txImpl->mutableInner().data.gasLimit = 1000;
+        txImpl->mutableInner().data.gasPrice = "0x64";  // 100 (hex) < systemGasPrice 1000
+        auto result = task::syncWait(txpoolConfig->txValidator()->validateBalance(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::InsufficientFunds);
+    }
+
+    // Case 2: tx.gasPrice >= systemGasPrice, but balance insufficient for gas cost
+    // tx.gasPrice = 1000, gasLimit = 1000, value = 0 → totalRequired = 1,000,000
+    // balance = 0 (default in FakeLedger without scheduler) → rejected
+    {
+        auto tx = fakeInvalidateTransacton(inputStr, 0);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().type =
+            static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction);
+        txImpl->mutableInner().data.gasLimit = 1000;
+        txImpl->mutableInner().data.gasPrice = "0x3e8";  // 1000 (hex) == systemGasPrice
+        auto result = task::syncWait(txpoolConfig->txValidator()->validateBalance(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::InsufficientFunds);
+    }
+
+    // Case 3: value-only check with no gasLimit (backward-compatible with Case 3 of existing test)
+    {
+        auto tx = fakeInvalidateTransacton(inputStr, 1234567);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().type =
+            static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction);
+        txImpl->mutableInner().data.gasPrice = "0x3e8";  // 1000 (hex), passes gasPrice check
+        // gasLimit defaults to 0, so gasCost = 0, totalRequired = 1234567, balance 0 → reject
+        auto result = task::syncWait(txpoolConfig->txValidator()->validateBalance(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::InsufficientFunds);
+    }
+
+    std::cout << "#### testValidateBalanceIncludesGasCost finish" << std::endl;
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

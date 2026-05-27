@@ -99,8 +99,18 @@ void SealingManager::clearPendingTxs()
 
 void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag, size_t _retryTime)
 {
+    // FIB-155: capture weak_ptr instead of raw `this`. The async callback may
+    // outlive this SealingManager during shutdown/reconfiguration, which would
+    // dereference freed memory if `this` were captured directly.
+    auto self = weak_from_this();
     m_config->txpool()->asyncMarkTxs(_txsHashList, _flag, -1, HashType(),
-        [this, _txsHashList, _flag, _retryTime](Error::Ptr _error) {
+        [self, _txsHashList, _flag, _retryTime](Error::Ptr _error) {
+            auto sm = self.lock();
+            if (!sm)
+            {
+                // owning SealingManager has been destroyed; drop the callback
+                return;
+            }
             if (_error == nullptr)
             {
                 return;
@@ -110,7 +120,7 @@ void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag
             {
                 return;
             }
-            this->notifyResetTxsFlag(_txsHashList, _flag, _retryTime + 1);
+            sm->notifyResetTxsFlag(_txsHashList, _flag, _retryTime + 1);
         });
 }
 

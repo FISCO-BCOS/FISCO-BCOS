@@ -103,6 +103,10 @@ public:
     bool allowFreeNodeSync() const;
     size_t checkPointTimeoutInterval() const;
     size_t pipelineSize() const;
+    bool pipelineAdmissionEnabled() const { return m_pipelineAdmissionEnabled; }
+    size_t pipelinePerPeerCapacity() const { return m_pipelinePerPeerCapacity; }
+    size_t pipelineLruCapacity() const { return m_pipelineLruCapacity; }
+    size_t pipelineMaxPeers() const { return m_pipelineMaxPeers; }
 
     std::string const& storagePath() const;
     std::string const& stateDBPath() const;
@@ -343,6 +347,10 @@ private:
     bool m_allowFreeNode = false;
     size_t m_checkPointTimeoutInterval{};
     size_t m_pipelineSize = 50;
+    bool m_pipelineAdmissionEnabled = true;
+    size_t m_pipelinePerPeerCapacity = 64;
+    size_t m_pipelineLruCapacity = 256;
+    size_t m_pipelineMaxPeers = 1024;
 
     // for security
     std::string m_privateKeyPath;

@@ -1,11 +1,12 @@
+#include "TrivialCheckpointStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-framework/storage2/MultiLayerStorage.h"
-#include "TrivialCheckpointStorage.h"
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-task/Wait.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
@@ -52,8 +53,7 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
-    using CheckpointBackend =
-        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+    using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     TestSchedulerSerialFixture()
       : cryptoSuite(std::make_shared<bcos::crypto::CryptoSuite>(

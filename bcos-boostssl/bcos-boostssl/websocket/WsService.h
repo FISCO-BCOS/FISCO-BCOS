@@ -30,7 +30,6 @@
 #include <bcos-boostssl/websocket/WsStream.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>

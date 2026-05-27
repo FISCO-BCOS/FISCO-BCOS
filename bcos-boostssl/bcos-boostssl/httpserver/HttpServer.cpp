@@ -20,7 +20,6 @@
 
 #include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/HttpServer.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <memory>
 #include <utility>
 

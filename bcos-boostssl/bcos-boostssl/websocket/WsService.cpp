@@ -25,7 +25,6 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <json/json.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -189,12 +188,6 @@ void WsService::start()
         m_timerFactory = std::make_shared<timer::TimerFactory>();
     }
 
-    // start ioc thread
-    if (m_ioservicePool)
-    {
-        m_ioservicePool->start();
-    }
-
     // start as server
     if (m_config->asServer())
     {
@@ -259,12 +252,6 @@ void WsService::stop()
     //            session->drop(WsError::SessionDisconnect);
     //        }
     //    }
-
-    // stop ioc thread
-    if (m_ioservicePool)
-    {
-        m_ioservicePool->stop();
-    }
 
     if (m_statTimer)
     {

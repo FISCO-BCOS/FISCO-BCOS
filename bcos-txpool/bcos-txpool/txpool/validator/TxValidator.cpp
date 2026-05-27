@@ -201,28 +201,62 @@ task::Task<TransactionStatus> TxValidator::validateBalance(
                 << LOG_KV("error", boost::diagnostic_information(e));
         }
     }
-    // if gasPriceConfig is not set, we can skip the balance check
+    // Gas price config handling:
+    // - config set to 0  → skip all balance checks (free-gas chain)
+    // - config unset     → only check value (no baseline to validate gas cost against)
+    // - config set > 0   → FIB-75: also validate tx.effectiveGasPrice >= config and
+    //                       include gasLimit * effectiveGasPrice in required amount
     bool skipBalanceCheck = false;
+    u256 systemGasPrice{0};
     if (auto gasPriceConfig =
             co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_TX_GAS_PRICE))
     {
-        if (auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
-            gasPriceStr == "0x0" || gasPriceStr == "0")
+        auto& [gasPriceStr, blockNumber] = gasPriceConfig.value();
+        if (gasPriceStr == "0x0" || gasPriceStr == "0")
         {
             skipBalanceCheck = true;
             TX_VALIDATOR_CHECKER_LOG(TRACE) << LOG_BADGE("validateBalance")
                                             << LOG_DESC("Skip balance check due to zero gas price")
                                             << LOG_KV("gasPrice", gasPriceStr);
         }
+        else
+        {
+            systemGasPrice = u256(gasPriceStr);
+        }
     }
-    if (auto txValue = u256(_tx.value());
-        !skipBalanceCheck && (balanceValue < txValue || balanceValue == 0))
+    if (!skipBalanceCheck)
     {
-        TX_VALIDATOR_CHECKER_LOG(TRACE)
-            << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
-            << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
-            << LOG_KV("txValue", txValue);
-        co_return TransactionStatus::InsufficientFunds;
+        u256 gasCost{0};
+        // Only validate gas price / gas cost when systemGasPrice is configured (> 0)
+        if (systemGasPrice > 0)
+        {
+            // effectiveGasPrice() handles legacy (gasPrice field) and EIP-1559 (maxFeePerGas)
+            const auto txGasPrice = protocol::effectiveGasPrice(_tx);
+            if (txGasPrice < systemGasPrice)
+            {
+                TX_VALIDATOR_CHECKER_LOG(TRACE)
+                    << LOG_BADGE("ValidateTransactionWithState")
+                    << LOG_DESC("tx gasPrice below system minimum") << LOG_KV("sender", sender)
+                    << LOG_KV("txGasPrice", txGasPrice) << LOG_KV("systemGasPrice", systemGasPrice);
+                co_return TransactionStatus::InsufficientFunds;
+            }
+            if (_tx.gasLimit() > 0)
+            {
+                gasCost = u256(_tx.gasLimit()) * txGasPrice;
+            }
+        }
+
+        auto txValue = u256(_tx.value());
+        if (auto totalRequired = txValue + gasCost;
+            balanceValue < totalRequired || balanceValue == 0)
+        {
+            TX_VALIDATOR_CHECKER_LOG(TRACE)
+                << LOG_BADGE("ValidateTransactionWithState") << LOG_DESC("InsufficientFunds")
+                << LOG_KV("sender", sender) << LOG_KV("balance", balanceValue)
+                << LOG_KV("txValue", txValue) << LOG_KV("gasCost", gasCost)
+                << LOG_KV("totalRequired", totalRequired);
+            co_return TransactionStatus::InsufficientFunds;
+        }
     }
 
     co_return TransactionStatus::None;

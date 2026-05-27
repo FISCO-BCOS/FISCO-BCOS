@@ -15,9 +15,9 @@
  * threads it should allow to run simultaneously.") (since ethereum use 2, we
  * modify io_service from 1 to 2) 2.
  */
+#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include <boost/algorithm/string.hpp>
@@ -417,12 +417,10 @@ void Host::start()
     if (!haveNetwork())
     {
         m_run = true;
-        m_asioInterface->init(m_listenHost, m_listenPort);
         if (m_asioInterface->acceptor())
         {
             startAccept();
         }
-        m_asioInterface->start();
     }
 }
 
@@ -564,10 +562,6 @@ void Host::stop()
     }
     // signal run() to prepare for shutdown and reset m_timer
     m_run = false;
-    if (m_asioInterface)
-    {
-        m_asioInterface->stop();
-    }
 }
 bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,
@@ -632,7 +626,7 @@ void bcos::gateway::Host::setSessionCallbackManager(
 {
     m_sessionCallbackManager = std::move(sessionCallbackManager);
 }
-std::shared_ptr<ASIOInterface> bcos::gateway::Host::asioInterface() const
+const std::shared_ptr<ASIOInterface>& bcos::gateway::Host::asioInterface() const
 {
     return m_asioInterface;
 }

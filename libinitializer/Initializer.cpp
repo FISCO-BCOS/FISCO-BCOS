@@ -160,12 +160,6 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
-    if (!m_ioServicePool)
-    {
-        m_ioServicePool = std::make_shared<bcos::IOServicePool>(1);
-        m_ioServicePool->start();
-    }
-
     // build the front service
     m_frontServiceInitializer = std::make_shared<FrontServiceInitializer>(
         m_nodeConfig, m_protocolInitializer, _gateway, m_ioServicePool);
@@ -644,10 +638,6 @@ void Initializer::stop()
             m_archiveService->stop();
         }
 #endif
-        if (m_ioServicePool)
-        {
-            m_ioServicePool->stop();
-        }
     }
     catch (std::exception const& e)
     {

@@ -22,6 +22,7 @@
 #include "Sealer.h"
 #include "SealerConfig.h"
 #include "SealingManager.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
 #include <bcos-utilities/Worker.h>
 #include <utility>
@@ -46,11 +47,29 @@ public:
 
     uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr _block) override;
 
+    // FIB-160: legacy convenience wrapper -- reads features through the synchronized
+    // ConsensusConfig::features() (which now takes a shared_lock). For race-free
+    // multi-flag selection in the same generation pass, use the (Features) overload.
     static sealer::VrfCurveType getVrfCurveType(SealerConfig::Ptr const& _sealerConfig);
+    // FIB-160: snapshot-friendly overload. Takes the features bitset already copied
+    // out (typically from ConsensusConfig::getRotationSnapshot) so the curve choice
+    // is computed against the same view as the rotate decision and other flag
+    // reads in the same call.
+    static sealer::VrfCurveType getVrfCurveType(ledger::Features const& features);
 
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
+    // Legacy entry point: reads features fresh inside (curve choice may not be
+    // snapshot-consistent with the caller's earlier reads).
+    [[deprecated(
+        "Use the Features-snapshot overload (FIB-160). The bool overload re-reads features "
+        "and breaks snapshot consistency.")]] static uint16_t
+    generateTransactionForRotating(bcos::protocol::Block::Ptr& _block, SealerConfig::Ptr const&,
+        SealingManager::ConstPtr const&, crypto::Hash::Ptr const&, bool blockNumberInput);
+    // FIB-160: snapshot-aware overload. Caller supplies a single Features view so
+    // both the curve choice and the blockNumberInput flag come from the same
+    // snapshot (avoids cross-read races during VRF mode selection).
     static uint16_t generateTransactionForRotating(bcos::protocol::Block::Ptr& _block,
         SealerConfig::Ptr const&, SealingManager::ConstPtr const&, crypto::Hash::Ptr const&,
-        bool blockNumberInput);
+        ledger::Features const& features);
 };
 }  // namespace bcos::sealer

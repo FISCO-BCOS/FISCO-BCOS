@@ -11,13 +11,12 @@
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-utilities/Common.h"
-#include <boost/asio/steady_timer.hpp>
+#include <openssl/x509.h>
 #include <boost/asio/ssl/stream_base.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/system/error_code.hpp>
 #include <memory>
-#include <openssl/x509.h>
 #include <string>
-#include <utility>
 
 
 namespace boost::asio::ssl
@@ -84,7 +83,7 @@ public:
     virtual void setSessionCallbackManager(
         SessionCallbackManagerInterface::Ptr sessionCallbackManager);
 
-    virtual std::shared_ptr<ASIOInterface> asioInterface() const;
+    virtual const std::shared_ptr<ASIOInterface>& asioInterface() const;
     virtual std::shared_ptr<SessionFactory> sessionFactory() const;
     virtual MessageFactory::Ptr messageFactory() const;
     virtual P2PInfo p2pInfo();

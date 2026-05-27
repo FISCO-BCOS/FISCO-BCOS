@@ -189,6 +189,33 @@ private:
     mutable bool m_storeToBackend = {false};
 };
 
+// FIB-75: Return the effective gas price for a transaction.
+// - Legacy / EIP-2930 web3 txs: value is written into the gasPrice field
+//   (see Web3Transaction::takeToTarsTransaction: gasPrice = maxPriorityFeePerGas for
+//   pre-EIP-1559 types)
+// - EIP-1559+ web3 txs: gasPrice field is empty, value is in maxFeePerGas
+// Returns 0 when no parseable price is available.
+inline u256 effectiveGasPrice(Transaction const& tx)
+{
+    try
+    {
+        if (const auto price = tx.gasPrice(); !price.empty())
+        {
+            if (auto value = u256(price); value > 0)
+            {
+                return value;
+            }
+        }
+        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
+        {
+            return u256(mfg);
+        }
+    }
+    catch (...)
+    {}
+    return u256{0};
+}
+
 using Transactions = std::vector<Transaction::Ptr>;
 using TransactionsPtr = std::shared_ptr<Transactions>;
 using TransactionsConstPtr = std::shared_ptr<const Transactions>;

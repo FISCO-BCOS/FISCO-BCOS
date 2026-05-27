@@ -211,8 +211,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     protocolInitializer.init(nodeConfig);
     protocolInitializer.loadKeyPair(nodeConfig->privateKeyPath());
     auto nodeID = protocolInitializer.keyPair()->publicKey()->hex();
-    auto ioServicePool = std::make_shared<bcos::IOServicePool>();
-    ioServicePool->start();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(std::thread::hardware_concurrency() + 1, "lightNode");
 
     auto front = std::make_shared<bcos::front::FrontService>();
     // gateway
