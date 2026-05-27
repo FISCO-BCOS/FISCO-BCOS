@@ -21,7 +21,6 @@
  */
 
 #pragma once
-#include "Common.h"
 #include <boost/asio.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/executor_work_guard.hpp>

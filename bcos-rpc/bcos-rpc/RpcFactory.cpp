@@ -39,7 +39,6 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -367,8 +366,7 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     if (threadPoolSize > 0)
     {
         // Use a dedicated thread pool for RPC
-        auto rpcIOServicePool = std::make_shared<bcos::IOServicePool>(threadPoolSize);
-        rpcIOServicePool->start();
+        auto rpcIOServicePool = std::make_shared<bcos::IOServicePool>(threadPoolSize, "rpc");
         initializer->setIOServicePool(rpcIOServicePool);
     }
     else if (m_ioServicePool)

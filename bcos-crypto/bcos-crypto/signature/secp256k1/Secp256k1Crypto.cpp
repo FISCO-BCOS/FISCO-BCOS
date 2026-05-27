@@ -32,7 +32,7 @@
 using namespace bcos;
 using namespace bcos::crypto;
 
-static const std::unique_ptr<secp256k1_context, decltype(&secp256k1_context_destroy)>
+static const std::unique_ptr<secp256k1_context, void (*)(secp256k1_context*)>
     g_SECP256K1_CTX{secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
         &secp256k1_context_destroy};
 

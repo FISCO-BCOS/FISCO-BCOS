@@ -74,7 +74,19 @@
         "zstd",
         "cryptopp",
         "redis-plus-plus",
-        "tarscpp"
+        "tarscpp",
+        "wabt",
+        "blst",
+        "ittapi",
+        "fbwasm",
+        "group-sig",
+        "paillier"
+      ]
+    },
+    "tikv": {
+      "description": "TiKV storage backend dependencies",
+      "dependencies": [
+        "tikv-client-cpp"
       ]
     },
     "lightnode": {

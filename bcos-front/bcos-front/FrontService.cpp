@@ -35,11 +35,9 @@
 namespace
 {
 template <class Task>
-void dispatchToIOServicePool(bcos::IOServicePool& ioServicePool, Task&& task)
+void dispatchTo(bcos::IOServicePool& ioServicePool, Task&& task)
 {
-    auto& ioService = ioServicePool.getIOService();
-    auto executor = ioService->get_executor();
-    boost::asio::post(executor, [task = std::forward<Task>(task)]() mutable { task(); });
+    ioServicePool.dispatch(std::forward<Task>(task));
 }
 }  // namespace
 
@@ -310,7 +308,7 @@ void FrontService::asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInf
                             (groupNodeInfo ? groupNodeInfo->nodeIDList().size() : 0));
     if (_onGetGroupNodeInfo)
     {
-        dispatchToIOServicePool(
+        dispatchTo(
             *m_ioServicePool, [_onGetGroupNodeInfo = std::move(_onGetGroupNodeInfo),
                                   groupNodeInfo = std::move(groupNodeInfo)]() mutable {
                 _onGetGroupNodeInfo(nullptr, groupNodeInfo);
@@ -456,7 +454,7 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
                            (_groupNodeInfo ? _groupNodeInfo->nodeIDList().size() : 0));
 
     auto self = weak_from_this();
-    dispatchToIOServicePool(
+    dispatchTo(
         *m_ioServicePool, [self, _groupID, _groupNodeInfo = std::move(_groupNodeInfo)]() mutable {
             if (auto frontService = self.lock())
             {
@@ -560,7 +558,7 @@ void FrontService::handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoa
 
     // Copy the payload before dispatching asynchronously.
     auto buffer = bytes(_payLoad.begin(), _payLoad.end());
-    dispatchToIOServicePool(
+    dispatchTo(
         *m_ioServicePool, [_uuid, _error = std::move(_error), callback = std::move(callback),
                               buffer = std::move(buffer), _nodeID = std::move(_nodeID),
                               respFunc = std::move(respFunc)]() mutable {
@@ -612,7 +610,8 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
                 // Copy the payload before dispatching asynchronously.
                 bytes buffer(message.payload().begin(), message.payload().end());
 
-                dispatchToIOServicePool(
+                // dispatch to io service pool
+                dispatchTo(
                     *m_ioServicePool, [uuid, callback = std::move(callback),
                                           buffer = std::move(buffer), _nodeID]() mutable {
                         callback(_nodeID, uuid, bytesConstRef(buffer.data(), buffer.size()));
@@ -633,7 +632,7 @@ void FrontService::onReceiveMessage(const std::string& _groupID,
 
     if (_receiveMsgCallback)
     {
-        dispatchToIOServicePool(
+        dispatchTo(
             *m_ioServicePool, [_receiveMsgCallback = std::move(_receiveMsgCallback)]() mutable {
                 _receiveMsgCallback(nullptr);
             });
@@ -710,7 +709,7 @@ void FrontService::onMessageTimeout(const boost::system::error_code& _error,
         if (callback)
         {
             auto errorPtr = BCOS_ERROR_PTR(CommonError::TIMEOUT, "timeout");
-            dispatchToIOServicePool(*m_ioServicePool,
+            dispatchTo(*m_ioServicePool,
                 [_uuid, _nodeID = std::move(_nodeID), callback = std::move(callback),
                     errorPtr = std::move(errorPtr)]() mutable {
                     callback->callbackFunc(errorPtr, _nodeID, {}, _uuid, {});

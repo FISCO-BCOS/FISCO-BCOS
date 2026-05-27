@@ -1053,9 +1053,23 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
                                   "Please set consensus.pipeline_size to no less than " +
                                   std::to_string(DEFAULT_PIPELINE_SIZE)));
     }
+    m_pipelineAdmissionEnabled = _pt.get<bool>("consensus.pipeline_admission_enabled", true);
+    m_pipelinePerPeerCapacity = checkAndGetValue(_pt, "consensus.pipeline_per_peer_capacity", "64");
+    m_pipelineLruCapacity = checkAndGetValue(_pt, "consensus.pipeline_lru_capacity", "256");
+    m_pipelineMaxPeers = checkAndGetValue(_pt, "consensus.pipeline_max_peers", "1024");
+    if (m_pipelinePerPeerCapacity == 0 || m_pipelineLruCapacity == 0 || m_pipelineMaxPeers == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "pipeline_per_peer_capacity / pipeline_lru_capacity / "
+                                  "pipeline_max_peers must all be > 0"));
+    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
                          << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval)
-                         << LOG_KV("pipeline_size", m_pipelineSize);
+                         << LOG_KV("pipeline_size", m_pipelineSize)
+                         << LOG_KV("pipeline_admission_enabled", m_pipelineAdmissionEnabled)
+                         << LOG_KV("pipeline_per_peer_capacity", m_pipelinePerPeerCapacity)
+                         << LOG_KV("pipeline_lru_capacity", m_pipelineLruCapacity)
+                         << LOG_KV("pipeline_max_peers", m_pipelineMaxPeers);
 }
 
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)
@@ -2047,9 +2061,8 @@ std::string bcos::tool::generateGenesisData(
         size_t j = 0;
         for (const auto& node : ledgerConfig.consensusNodeList())
         {
-            ss << "node." + boost::lexical_cast<std::string>(j) + ":" +
-                      toHex(node.nodeID->data()) + "," + std::to_string(node.voteWeight) +
-                      "\n";
+            ss << "node." + boost::lexical_cast<std::string>(j) + ":" + toHex(node.nodeID->data()) +
+                      "," + std::to_string(node.voteWeight) + "\n";
             ++j;
         }
         std::string genesisdata = ss.str();

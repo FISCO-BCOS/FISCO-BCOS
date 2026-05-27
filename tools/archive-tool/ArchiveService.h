@@ -52,7 +52,7 @@ public:
         m_listenIP(std::move(_listenIP)),
         m_listenPort(_listenPort)
     {
-        m_ioServicePool = std::make_shared<IOServicePool>();
+        m_ioServicePool = std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "archive");
         m_httpServer = std::make_shared<bcos::boostssl::http::HttpServer>(
             m_listenIP, m_listenPort, -1, bcos::boostssl::http::CorsConfig());
         auto acceptor =
@@ -197,7 +197,6 @@ public:
     // virtual ~ArchiveService() = default;
     virtual void start()
     {
-        m_ioServicePool->start();
         m_httpServer->start();
         ARCHIVE_SERVICE_LOG(INFO) << LOG_BADGE("start") << LOG_KV("listenIP", m_listenIP)
                                   << LOG_KV("listenPort", m_listenPort);
@@ -206,7 +205,6 @@ public:
     virtual void stop()
     {
         ARCHIVE_SERVICE_LOG(INFO) << LOG_BADGE("stop");
-        m_ioServicePool->stop();
         m_httpServer->stop();
     }
 

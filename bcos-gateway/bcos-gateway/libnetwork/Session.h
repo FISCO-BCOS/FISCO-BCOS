@@ -18,6 +18,7 @@
 #include <boost/asio/buffer.hpp>
 #include <boost/container/small_vector.hpp>
 #include <boost/heap/priority_queue.hpp>
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -236,6 +237,12 @@ public:
     std::atomic<uint64_t> m_lastReadTime;
     std::atomic<uint64_t> m_lastWriteTime;
     std::shared_ptr<bcos::Timer> m_idleCheckTimer;
+
+    // FIB-97-new: idempotency guard. drop() may be invoked concurrently from the
+    // teardown signal, explicit disconnect, or a deferred async callback that the
+    // shared_ptr capture (FIB-97 primary fix) kept alive. CAS to true ensures the
+    // actual teardown body runs exactly once; all subsequent callers no-op.
+    std::atomic_bool m_dropped{false};
     P2PInfo m_hostInfo;
 
     struct Writings

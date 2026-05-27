@@ -22,9 +22,11 @@
 #include "PBFTLogSync.h"
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
+#include "bcos-pbft/pbft/utilities/PBFTPipeline.h"
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <unordered_set>
 #include <utility>
 
 namespace bcos
@@ -66,6 +68,11 @@ public:
 
     std::shared_ptr<PBFTConfig> pbftConfig() { return m_config; }
 
+    // FIB-146 follow-up: exposed so the initializer can wire reset() to
+    // sealer-set rotation. Not for use on the hot path — admit() / consumed()
+    // are called via the engine itself.
+    PBFTPipeline& pipeline() { return m_pipeline; }
+
     // Receive PBFT message package from frontService
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, std::string const& _id,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data);
@@ -92,6 +99,10 @@ public:
     virtual void clearExceptionProposalState(bcos::protocol::BlockNumber _number);
 
     void clearAllCache();
+    // FIB-137: drain m_msgQueue. Called by PBFTImpl::enableAsMasterNode on demotion
+    // (discard stale messages routed under a previous master role) and on promotion
+    // before resuming processing (discard messages enqueued during demotion).
+    void clearMsgQueue();
     void recoverState();
 
     void fetchAndUpdateLedgerConfig();
@@ -201,6 +212,10 @@ protected:
     virtual void onStableCheckPointCommitFailed(
         Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
 
+    // FIB-132: helpers for in-flight proposal deduplication
+    static std::string inFlightKey(std::shared_ptr<PBFTBaseMessageInterface> const& _msg);
+    void eraseInFlightProposal(std::shared_ptr<PBFTBaseMessageInterface> const& _msg);
+
 private:
     // utility functions
     void waitSignal()
@@ -239,6 +254,23 @@ protected:
 
     ledger::LedgerInterface::Ptr m_ledger;
     ledger::LedgerConfig::Ptr m_ledgerConfig;
+
+public:
+    // FIB-132: hard cap on in-flight verifications. Sized well above the
+    // typical worker-pool concurrency so legitimate load never hits it;
+    // reaches the cap only under a flood of distinct invalid PrePrepares
+    // whose verify callbacks lag.
+    static constexpr size_t c_maxInFlightProposals = 1024;
+
+protected:
+    // FIB-132: in-flight verification set keyed by "<index>:<hash>:<view>".
+    // Prevents the same PrePrepare proposal from being re-submitted to
+    // verifyProposal() while a prior verification is still pending.
+    // Bounded by c_maxInFlightProposals; new entries are rejected when full.
+    std::unordered_set<std::string> m_inFlightProposals;
+
+    // FIB-145 / FIB-146: 3-stage admission pipeline applied before m_msgQueue.push().
+    PBFTPipeline m_pipeline;
 };
 }  // namespace consensus
 }  // namespace bcos

@@ -57,10 +57,8 @@ public:
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
         uint32_t version, bool isAuth, const ledger::Features& features) const override
     {
-        auto addressBytes = fromHex(_address);
-        auto address = fromBigEndian<u160>(addressBytes);
-        const auto* precompiled =
-            m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>());
+        auto evmcAddr = unhexAddress(_address);
+        const auto* precompiled = m_precompiledManager.getPrecompiled(evmcAddr);
         if (precompiled == nullptr)
         {
             return nullptr;
@@ -71,9 +69,8 @@ public:
 
     bool isPrecompiled(const std::string& _address) const override
     {
-        auto addressBytes = fromHex(_address);
-        auto address = fromBigEndian<u160>(addressBytes);
-        return m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>()) != nullptr;
+        auto evmcAddr = unhexAddress(_address);
+        return m_precompiledManager.getPrecompiled(evmcAddr) != nullptr;
     }
 
     executor::CallParameters::UniquePtr externalCall(
@@ -131,17 +128,31 @@ public:
         auto callResult =
             std::make_unique<executor::CallParameters>(executor::CallParameters::FINISHED);
         callResult->evmStatus = result.status_code;
-        callResult->status = result.status_code;
         callResult->gas = result.gas_left;
         callResult->data.assign(result.output_data, result.output_data + result.output_size);
 
-        if (result.status_code != 0)
+        const bool applyBugfix =
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_v1_executive_wrapper);
+        if (applyBugfix)
         {
-            if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
-                errorMessage->buffer != nullptr && errorMessage->size > 0)
+            callResult->status = static_cast<int32_t>(result.status);
+            if (result.status_code != 0 && result.output_data != nullptr && result.output_size > 0)
             {
-                callResult->message.assign(
-                    errorMessage->buffer, errorMessage->buffer + errorMessage->size);
+                callResult->message.assign(reinterpret_cast<const char*>(result.output_data),
+                    reinterpret_cast<const char*>(result.output_data) + result.output_size);
+            }
+        }
+        else
+        {
+            callResult->status = result.status_code;
+            if (result.status_code != 0)
+            {
+                if (auto* errorMessage = (ErrorMessage*)result.create_address.bytes;
+                    errorMessage->buffer != nullptr && errorMessage->size > 0)
+                {
+                    callResult->message.assign(
+                        errorMessage->buffer, errorMessage->buffer + errorMessage->size);
+                }
             }
         }
 

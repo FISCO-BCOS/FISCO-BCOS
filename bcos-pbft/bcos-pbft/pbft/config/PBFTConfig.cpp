@@ -28,10 +28,15 @@ using namespace std::chrono_literals;
 
 void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
+    // FIB-116: hold x_committedProposal while reading m_committedProposal so that
+    // all accesses to m_committedProposal are consistently protected by the mutex.
     bcos::protocol::BlockNumber committedIndex = 0;
-    if (m_committedProposal)
     {
-        committedIndex = m_committedProposal->index();
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIndex = m_committedProposal->index();
+        }
     }
     if (_ledgerConfig->blockNumber() <= committedIndex && committedIndex > 0)
     {
@@ -77,11 +82,10 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     }
     if (m_compatibilityVersion != _ledgerConfig->compatibilityVersion())
     {
-        PBFT_LOG(INFO)
-            << LOG_DESC("compatibilityVersion updated")
-            << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
-            << LOG_KV("updatedVersion",
-                   (bcos::protocol::BlockVersion)(_ledgerConfig->compatibilityVersion()));
+        PBFT_LOG(INFO) << LOG_DESC("compatibilityVersion updated")
+                       << LOG_KV("version", (bcos::protocol::BlockVersion)m_compatibilityVersion)
+                       << LOG_KV("updatedVersion", (bcos::protocol::BlockVersion)(
+                                                       _ledgerConfig->compatibilityVersion()));
         m_compatibilityVersion = _ledgerConfig->compatibilityVersion();
         if (m_versionNotification && m_asMasterNode)
         {
@@ -161,7 +165,16 @@ void PBFTConfig::notifyResetSealing(std::function<void()> _callback)
     }
     // only notify the non-leader to reset sealing
     PBFT_LOG(INFO) << LOG_DESC("notifyResetSealing") << printCurrentState();
-    auto committedIndex = m_committedProposal->index();
+    // FIB-116: hold x_committedProposal while reading m_committedProposal to prevent
+    // null-pointer dereference or data race with concurrent setCommittedProposal().
+    bcos::protocol::BlockNumber committedIndex = 0;
+    {
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIndex = m_committedProposal->index();
+        }
+    }
     m_sealerResetNotifier(
         [this, _callback = std::move(_callback), committedIndex](Error::Ptr _error) {
             if (_error)
@@ -184,7 +197,16 @@ void PBFTConfig::notifyResetSealing(std::function<void()> _callback)
 
 void PBFTConfig::reNotifySealer(bcos::protocol::BlockNumber _index)
 {
-    if (_index >= highWaterMark() || _index < m_committedProposal->index())
+    // FIB-116: hold x_committedProposal while reading m_committedProposal.
+    bcos::protocol::BlockNumber committedIdx = 0;
+    {
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIdx = m_committedProposal->index();
+        }
+    }
+    if (_index >= highWaterMark() || _index < committedIdx)
     {
         PBFT_LOG(INFO) << LOG_DESC("reNotifySealer return for invalid expectedStart")
                        << LOG_KV("expectedStart", _index)
@@ -224,7 +246,14 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     {
         return true;
     }
+    // FIB-116: hold x_committedProposal AND null-check m_committedProposal before deref.
+    // The lock guards against concurrent setCommittedProposal(), the null-check covers the
+    // early-startup window where m_committedProposal has not been initialised yet.
     ReadGuard lock(x_committedProposal);
+    if (!m_committedProposal)
+    {
+        return false;
+    }
     auto committedIndex = m_committedProposal->index();
     return _msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
            _msg->index() <= m_waitResealUntil;
@@ -252,13 +281,14 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    auto* leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
+    auto leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
     if (!leaderNodeInfo)
     {
         return false;
     }
-    // Note: must register m_faultyDiscriminator before start the PBFTEngine
-    if (!m_faultyDiscriminator(leaderNodeInfo->nodeID))
+    // Note: must register m_faultyDiscriminator before start the PBFTEngine.
+    // Guard against unregistered callback to avoid std::bad_function_call (FIB-118).
+    if (!m_faultyDiscriminator || !m_faultyDiscriminator(leaderNodeInfo->nodeID))
     {
         return false;
     }
@@ -326,7 +356,15 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
     {
         return;
     }
-    auto committedIndex = m_committedProposal->index();
+    // FIB-116: hold x_committedProposal while reading m_committedProposal.
+    bcos::protocol::BlockNumber committedIndex = 0;
+    {
+        ReadGuard lock(x_committedProposal);
+        if (m_committedProposal)
+        {
+            committedIndex = m_committedProposal->index();
+        }
+    }
     if (m_validator->resettingProposalSize() > 0 && (startSealIndex > (committedIndex + 1)))
     {
         PBFT_LOG(INFO) << LOG_DESC(
