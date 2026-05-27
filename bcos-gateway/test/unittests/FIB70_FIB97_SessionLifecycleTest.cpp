@@ -24,6 +24,7 @@
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/ThreadPool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
@@ -43,7 +44,9 @@ class FakeASIO_FIB : public bcos::gateway::ASIOInterface
 {
 public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
-    FakeASIO_FIB() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB", 1)) {}
+    FakeASIO_FIB()
+      : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
+        m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB", 1)) {}
     ~FakeASIO_FIB() noexcept override {}
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -89,8 +92,8 @@ public:
         });
     }
 
-    void strandPost(Base_Handler handler) override { m_handler = handler; }
-    void stop() override { m_threadPool->stop(); }
+    void strandPost(Base_Handler handler) { m_handler = handler; }
+    void stop() { m_threadPool->stop(); }
 
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
     void asyncAppendRecvPacket(Packet packet)
