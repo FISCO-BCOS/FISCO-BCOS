@@ -141,7 +141,8 @@ void setForkchoiceBlockNumbers(RealGlobalStateStorageFixture& storageFixture,
 
 // Stub types satisfying executor_v1::TransactionExecutor and
 // scheduler_v1::TransactionScheduler concepts for unit testing.
-// The tests pass nullptr as blockFactory, so real execution is never triggered.
+// Stub executor and scheduler return empty results; blockFactory is a real
+// instance used for block header creation and hash computation.
 struct StubExecutor
 {
     template <class Storage>
@@ -183,8 +184,8 @@ using TestEngineService =
 TestEngineService makeEngineService(
     MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
-    static StubExecutor executor;
-    static StubScheduler scheduler;
+    StubExecutor executor;
+    StubScheduler scheduler;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
     return TestEngineService(memPool, storage, executor, scheduler, blockFactory);

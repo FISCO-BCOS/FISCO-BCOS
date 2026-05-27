@@ -38,6 +38,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <range/v3/algorithm/any_of.hpp>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -271,53 +272,47 @@ public:
                     "Forkchoice finalized block number must not exceed safe block number"});
         }
 
-        std::unique_lock lock(x_state);
-        if (m_trackedHeadBlock.has_value())
+        // Phase 1: Validate and update tracked block state under lock.
+        // The lock is released before any co_await to avoid holding a mutex
+        // across a coroutine suspension point (which is UB under POSIX).
         {
-            auto const& trackedHeadBlock = *m_trackedHeadBlock;
-            if (*headBlockNumber < trackedHeadBlock.blockNumber)
+            std::unique_lock lock(x_state);
+            if (m_trackedHeadBlock.has_value())
             {
-                ForkchoiceUpdatedResult result{
-                    .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
-                        forkchoiceState.headBlockHash, std::nullopt),
-                    .payloadId = std::nullopt,
-                };
-                co_return result;
-            }
-            if (*headBlockNumber == trackedHeadBlock.blockNumber)
-            {
-                if (forkchoiceState.headBlockHash != trackedHeadBlock.hash)
+                auto const& trackedHeadBlock = *m_trackedHeadBlock;
+                if (*headBlockNumber < trackedHeadBlock.blockNumber)
+                {
+                    ForkchoiceUpdatedResult result{
+                        .payloadStatus = makeStatus(PayloadValidationStatus::Valid,
+                            forkchoiceState.headBlockHash, std::nullopt),
+                        .payloadId = std::nullopt,
+                    };
+                    co_return result;
+                }
+                if (*headBlockNumber == trackedHeadBlock.blockNumber)
+                {
+                    if (forkchoiceState.headBlockHash != trackedHeadBlock.hash)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            InvalidForkchoiceState{} << bcos::errinfo_comment{
+                                "Forkchoice head block hash conflicts with tracked block number"});
+                    }
+                }
+                else if (*headBlockNumber != trackedHeadBlock.blockNumber + 1)
                 {
                     BOOST_THROW_EXCEPTION(
                         InvalidForkchoiceState{} << bcos::errinfo_comment{
-                            "Forkchoice head block hash conflicts with tracked block number"});
+                            "Forkchoice head block number must increase by exactly 1"});
                 }
             }
-            else if (*headBlockNumber != trackedHeadBlock.blockNumber + 1)
-            {
-                BOOST_THROW_EXCEPTION(
-                    InvalidForkchoiceState{} << bcos::errinfo_comment{
-                        "Forkchoice head block number must increase by exactly 1"});
-            }
-        }
 
-        m_forkchoiceState = forkchoiceState;
-        m_trackedHeadBlock = TrackedHeadBlock{
-            .hash = forkchoiceState.headBlockHash,
-            .blockNumber = *headBlockNumber,
-        };
-        updateTrackedBlockNumbers(safeBlockNumber, finalizedBlockNumber);
-
-        // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
-        // nonce)
-        m_memPool.get().remove(view);
-
-        // Step 2: Create mutable storage layer on the view for transaction sealing
-        view.newMutable();
-
-        // Step 3: Pull valid transactions from mempool (in nonce order, with nonce verification)
-        std::vector<protocol::Transaction::Ptr> sealedTxs;
-        m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
+            m_forkchoiceState = forkchoiceState;
+            m_trackedHeadBlock = TrackedHeadBlock{
+                .hash = forkchoiceState.headBlockHash,
+                .blockNumber = *headBlockNumber,
+            };
+            updateTrackedBlockNumbers(safeBlockNumber, finalizedBlockNumber);
+        }  // Lock released here — safe to co_await below.
 
         ForkchoiceUpdatedResult result{
             .payloadStatus = makeStatus(
@@ -328,6 +323,18 @@ public:
         {
             co_return result;
         }
+
+        // Mempool operations run without lock — they only depend on the view, not on x_state.
+        // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
+        // nonce)
+        m_memPool.get().remove(view);
+
+        // Step 2: Create mutable storage layer on the view for transaction sealing
+        view.newMutable();
+
+        // Step 3: Pull valid transactions from mempool (in nonce order, with nonce verification)
+        std::vector<protocol::Transaction::Ptr> sealedTxs;
+        m_memPool.get().seal(m_blockTxCountLimit, view, std::back_inserter(sealedTxs));
 
         auto payloadId = nextPayloadID();
         auto nextBlockNumber = *headBlockNumber + 1;
@@ -346,8 +353,12 @@ public:
             entry.blobsBundle = BlobsBundleV1{};
         }
 
-        m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
-        m_payloadCache[payloadId] = entry;
+        // Re-acquire lock to publish the built payload to the cache.
+        {
+            std::unique_lock lock(x_state);
+            m_blockHashToPayloadId[entry.executionPayload.blockHash] = payloadId;
+            m_payloadCache[payloadId] = entry;
+        }
         result.payloadId = payloadId;
         co_return result;
     }
@@ -511,6 +522,9 @@ private:
 
         // If this payload was built locally (via updateForkchoice), commit the view's
         // state changes to storage. Externally received payloads have no view to commit.
+        // TODO: merge pushView + mergeBackStorage into a single atomic mergeView()
+        // operation. This will eliminate the risk of leaking a mutable layer if
+        // mergeBackStorage throws, and avoid holding x_state across a co_await.
         auto it = m_payloadCache.find(payloadId);
         if (it != m_payloadCache.end() && it->second.view)
         {
@@ -568,22 +582,37 @@ private:
         co_await ledger::getLedgerConfig(view, ledgerConfig, nextBlockNumber - 1, *m_blockFactory);
         auto blockVersion = ledgerConfig.compatibilityVersion();
 
+        // Fill gasLimit from ledger config (FISCO-BCOS does not use EIP-1559 baseFeePerGas,
+        // and logsBloom is not part of BlockHeader hash computation in FISCO-BCOS).
+        executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
+
         // Real EVM execution: execute transactions and compute real hashes.
         if (executionPayload.transactions.empty())
         {
             auto emptyHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+            std::vector<bcos::protocol::ParentInfo> parentInfos{
+                {.blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash}};
+            emptyHeader->setParentInfo(parentInfos);
             emptyHeader->setNumber(nextBlockNumber);
             emptyHeader->setVersion(blockVersion);
             emptyHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
             emptyHeader->setStateRoot(co_await calculateStateRoot(view, emptyHeader->version()));
+            emptyHeader->setReceiptsRoot(h256{});
+            emptyHeader->setTxsRoot(h256{});
+            emptyHeader->setGasUsed(0);
             emptyHeader->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
             executionPayload.stateRoot = emptyHeader->stateRoot();
+            executionPayload.receiptsRoot = h256{};
+            executionPayload.gasUsed = 0;
             executionPayload.blockHash = emptyHeader->hash();
             co_return executionPayload;
         }
 
         // Step 2b: Create BlockHeader for the new block
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
+        std::vector<bcos::protocol::ParentInfo> parentInfos{
+            {nextBlockNumber - 1, forkchoiceState.headBlockHash}};
+        blockHeader->setParentInfo(parentInfos);
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
         blockHeader->setTimestamp(static_cast<int64_t>(payloadAttributes.timestamp));
@@ -594,6 +623,9 @@ private:
             *blockHeader, executionPayload.transactions | ::ranges::views::indirect, ledgerConfig);
 
         // Step 2d: Compute transaction root (Merkle over tx hashes)
+        // TODO: Use scheduler_v1::calculateTransactionRoot from BaselineScheduler.h
+        // once MPTStorage is available. The current tx->hash() call lacks exception
+        // handling for malformed transactions.
         h256 txRoot;
         {
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
@@ -616,6 +648,11 @@ private:
         // Step 2e: Compute receipt root (Merkle over receipt hashes)
         h256 receiptRoot;
         {
+            // Validate receipts are non-null before computing hashes
+            if (::ranges::any_of(receipts, [](auto& r) { return !r; }))
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+            }
             auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
             auto hasher = hashImpl.hasher();
             crypto::merkle::Merkle<std::remove_reference_t<decltype(hasher)>> merkle(
@@ -637,6 +674,10 @@ private:
         u256 totalGasUsed;
         for (auto& receipt : receipts)
         {
+            if (!receipt)
+            {
+                BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
+            }
             totalGasUsed += receipt->gasUsed();
         }
 
@@ -655,6 +696,7 @@ private:
         executionPayload.receiptsRoot = receiptRoot;
         executionPayload.gasUsed = totalGasUsed;
         executionPayload.blockHash = blockHeader->hash();
+        executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
         executionPayload.logsBloom = {};
 
         co_return executionPayload;
@@ -663,6 +705,9 @@ private:
     /// Compute state root by iterating over storage and XOR-ing entry hashes.
     /// This is a simplified MPT approximation; for full correctness use
     /// scheduler_v1::calculateStateRoot from BaselineScheduler.h.
+    /// TODO: Replace with scheduler_v1::calculateStateRoot from BaselineScheduler.h
+    /// once MPTStorage is available. The XOR approach is not collision-resistant
+    /// and is a consensus risk for production use.
     task::Task<h256> calculateStateRoot(ViewType& view, uint32_t blockVersion) const
     {
         auto range = co_await storage2::range(view);
