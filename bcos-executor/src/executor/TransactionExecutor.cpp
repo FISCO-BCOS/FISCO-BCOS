@@ -262,6 +262,23 @@ void TransactionExecutor::initEvmEnvironment()
         make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("blake2_compression"),
             PrecompiledRegistrar::executor("blake2_compression"))});
 
+    // EIP-2537 BLS12-381 precompiles (Prague) — gated by feature_evm_prague in
+    // callBuiltInPrecompiled
+    static const char* bls_names[] = {"bls12_g1add", "bls12_g1msm", "bls12_g2add", "bls12_g2msm",
+        "bls12_pairing_check", "bls12_map_fp_to_g1", "bls12_map_fp2_to_g2"};
+    for (int addr = 0x0b; addr <= 0x11; ++addr)
+    {
+        const char* name = bls_names[addr - 0x0b];
+        m_evmPrecompiled->insert(
+            {fillZero(addr), make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer(name),
+                                 PrecompiledRegistrar::executor(name))});
+    }
+
+    // EIP-7951 p256verify at 0x0100 (Osaka-gated, guard in HostContext)
+    m_evmPrecompiled->insert({"0000000000000000000000000000000000000100",
+        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("p256verify"),
+            PrecompiledRegistrar::executor("p256verify"))});
+
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
@@ -1696,8 +1713,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 EXECUTOR_NAME_LOG(TRACE)
                                     << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("ABI loaded") << LOG_KV("address", to)
-                                    << LOG_KV("selector", toHex(selector))
-                                    << LOG_KV("ABI", abiStr);
+                                    << LOG_KV("selector", toHex(selector)) << LOG_KV("ABI", abiStr);
                                 auto functionAbi = FunctionAbi::deserialize(
                                     abiStr, selector.toBytes(), isSmCrypto);
                                 if (!functionAbi)

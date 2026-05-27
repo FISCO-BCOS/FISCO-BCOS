@@ -1,25 +1,25 @@
 #include "VMInstance.h"
-#include <evmc/evmc.hpp>
+#include <evmone/evmone.h>
+#include <evmone/vm.hpp>
 
 bcos::executor_v1::VMInstance::VMInstance(
-    std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept
-  : m_instance(std::move(instance))
-{}
+    std::shared_ptr<evmoneCodeAnalysis const> analysis) noexcept
+  : m_analysis(std::move(analysis))
+{
+    assert(m_analysis != nullptr);
+}
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     const struct evmc_host_interface* host, struct evmc_host_context* context, evmc_revision rev,
     const evmc_message* msg, const uint8_t* code, size_t codeSize)
 {
-    evmc::VM evm{evmc_create_evmone()};
-    // TODO: code/codeSize are currently unused because evmone 0.21 baseline::execute() takes a
-    // pre-analyzed CodeAnalysis (m_instance) rather than raw bytecode. These parameters exist for
-    // interface compatibility (e.g. WASM/external VM paths). When aligning with full EVM semantics
-    // (e.g. supporting EVMC_EOFCREATE inline code, or switching to an interpreter that takes raw
-    // code), wire code/codeSize through to the underlying execute call.
-    (void)code;
+    (void)code;  // execute uses pre-analyzed m_analysis
     (void)codeSize;
+    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
+    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
+    evmc::VM evm{evmc_create_evmone()};
     return EVMCResult(evmone::baseline::execute(
-        *static_cast<evmone::VM*>(evm.get_raw_pointer()), *host, context, rev, *msg, *m_instance));
+        *static_cast<evmone::VM*>(evm.get_raw_pointer()), *host, context, rev, *msg, *m_analysis));
 }
 
 void bcos::executor_v1::VMInstance::enableDebugOutput() {}

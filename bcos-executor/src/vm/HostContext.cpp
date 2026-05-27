@@ -23,6 +23,7 @@
 #include "../Common.h"
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
+#include "EvmPrecompiledAddress.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
@@ -347,6 +348,29 @@ evmc_result HostContext::callBuiltInPrecompiled(
 
     if (_isEvmPrecompiled)
     {
+        // BLS12-381 (0x0b–0x11): Prague-gated
+        if (isBLSPrecompileAddress(_request->receiveAddress) &&
+            !features().get(ledger::Features::Flag::feature_evm_prague))
+        {
+            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            callResults->gas = 0;
+            preResult.status_code = EVMC_REVERT;
+            preResult.gas_left = 0;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
+
+        if (_request->receiveAddress == std::string(P256VERIFY_PRECOMPILED_ADDRESS) &&
+            !features().get(ledger::Features::Flag::feature_evm_osaka))
+        {
+            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            callResults->gas = 0;
+            preResult.status_code = EVMC_REVERT;
+            preResult.gas_left = 0;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
+        }
+
         auto gasUsed =
             m_executive->costOfPrecompiled(_request->receiveAddress, ref(_request->data));
         /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled
