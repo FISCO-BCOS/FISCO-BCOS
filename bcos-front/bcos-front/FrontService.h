@@ -24,7 +24,6 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/IOServicePool.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/asio.hpp>
 
 namespace bcos::front

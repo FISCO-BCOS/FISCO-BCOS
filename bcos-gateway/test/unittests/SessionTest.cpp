@@ -88,7 +88,6 @@ public:
             readSome(socket, buffers, handler);
         });
     }
-    void strandPost(Base_Handler handler) override { m_handler = handler; }
     void stop() { m_threadPool->stop(); }
 
 public:  // for testing
@@ -99,18 +98,7 @@ public:  // for testing
         m_threadPool->enqueue([this, packet]() { appendRecvPacket(packet); });
     }
 
-    void triggerRead()
-    {
-        m_threadPool->enqueue([this]() {
-            if (m_handler)
-            {
-                m_handler();
-            }
-        });
-    }
-
 protected:
-    Base_Handler m_handler;
     std::queue<Packet> m_recvPackets;
     bcos::ThreadPool::Ptr m_threadPool;
 };
@@ -350,7 +338,6 @@ BOOST_AUTO_TEST_CASE(doReadTest)
             });
 
         session->start();
-        std::dynamic_pointer_cast<FakeASIO>(fakeHost->asioInterface())->triggerRead();
 
         // send packets
         while (auto packet = messageBuilder.nextPacket())

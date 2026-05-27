@@ -62,28 +62,28 @@ public:
     virtual void asyncResolveConnect(
         const std::shared_ptr<SocketFace>& socket, Handler_Type handler);
 
-    void asyncWrite(const std::shared_ptr<SocketFace>& socket, const auto& buffers, auto handler)
+    void asyncWrite(const std::shared_ptr<SocketFace>& socket, auto buffers, auto handler)
     {
         auto type = m_type;
         if (socket->isConnected())
         {
             auto& ioService = socket->ioService();
-            boost::asio::post(
-                ioService, [type, socket, &buffers, handler = std::move(handler)]() mutable {
-                    switch (type)
-                    {
-                    case TCP_ONLY:
-                    {
-                        ba::async_write(socket->ref(), buffers, std::move(handler));
-                        break;
-                    }
-                    case SSL:
-                    {
-                        ba::async_write(socket->sslref(), buffers, std::move(handler));
-                        break;
-                    }
-                    }
-                });
+            boost::asio::post(ioService, [type, socket, buffers = std::move(buffers),
+                                             handler = std::move(handler)]() mutable {
+                switch (type)
+                {
+                case TCP_ONLY:
+                {
+                    ba::async_write(socket->ref(), buffers, std::move(handler));
+                    break;
+                }
+                case SSL:
+                {
+                    ba::async_write(socket->sslref(), buffers, std::move(handler));
+                    break;
+                }
+                }
+            });
         }
     }
 
@@ -99,11 +99,20 @@ public:
     virtual void setVerifyCallback(
         const std::shared_ptr<SocketFace>& socket, VerifyCallback callback, bool /*unused*/ = true);
 
-    virtual void strandPost(Base_Handler handler);
+    template <class Task>
+    void dispatch(Task&& task)
+    {
+        m_ioServicePool->dispatch(std::forward<Task>(task));
+    }
+
+    template <class Task>
+    void post(Task&& task)
+    {
+        m_ioServicePool->post(std::forward<Task>(task));
+    }
 
 private:
     IOServicePool::Ptr m_ioServicePool;
-    ba::io_context::strand m_strand;
     bi::tcp::acceptor m_acceptor;
     bi::tcp::resolver m_resolver;
 
