@@ -90,7 +90,13 @@ file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/ecc.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/hash_types.h"
     "${SOURCE_PATH}/lib/evmone_precompiles/mulmod.hpp"
+    "${SOURCE_PATH}/lib/evmone_precompiles/secp256r1.hpp"
+    "${SOURCE_PATH}/lib/evmone_precompiles/modexp.hpp"
+    "${SOURCE_PATH}/lib/evmone_precompiles/bls.hpp"
     DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone_precompiles")
+
+file(INSTALL "${SOURCE_PATH}/lib/evmone_precompiles/pairing"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone_precompiles")
 
 # 5. Write a manual cmake config file (avoids install(EXPORT) issues)
 #    Creates evmone::evmone imported target with proper dependencies.
