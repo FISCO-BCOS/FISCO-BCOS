@@ -62,7 +62,7 @@ function(config_coverage TARGET)
         COMMAND ${GCOVR_TOOL}
             --root ${CMAKE_SOURCE_DIR}
             --object-directory ${CMAKE_BINARY_DIR}
-            --exclude "usr/.*"
+            --exclude "/usr/.*"
             --exclude ".*vcpkg_installed.*"
             --exclude ".*boost.*"
             --exclude ".*test.*"
@@ -73,7 +73,7 @@ function(config_coverage TARGET)
             --exclude-unreachable-branches
             --exclude-throw-branches
             --gcov-ignore-errors=no_working_dir_found
-            --gcov-ignore-parse-errors
+            --gcov-ignore-parse-errors=all
             --html-details ${CMAKE_BINARY_DIR}/CodeCoverage/index.html
             --html-title "FISCO BCOS Coverage Report"
             --xml ${CMAKE_BINARY_DIR}/CodeCoverage/coverage.xml
