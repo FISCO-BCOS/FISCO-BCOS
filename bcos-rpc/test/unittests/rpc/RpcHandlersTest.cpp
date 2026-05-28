@@ -11,6 +11,7 @@
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -38,6 +39,29 @@ auto capturing(Captured& out)
         out.hasError = (error != nullptr);
         out.value = value;
     };
+}
+
+// For handlers whose callback fires off-thread: block on a promise so the
+// lambda never outlives the test frame and we observe the result.
+struct AsyncResult
+{
+    bool hasError = false;
+    Json::Value value;
+};
+
+template <typename Invoke>
+AsyncResult awaitHandler(Invoke&& invoke)
+{
+    std::promise<AsyncResult> promise;
+    auto future = promise.get_future();
+    auto shared = std::make_shared<std::promise<AsyncResult>>(std::move(promise));
+    std::forward<Invoke>(invoke)([shared](bcos::Error::Ptr error, Json::Value& value) {
+        AsyncResult result;
+        result.hasError = (error != nullptr);
+        result.value = value;
+        shared->set_value(std::move(result));
+    });
+    return future.get();
 }
 }  // namespace
 
@@ -156,6 +180,18 @@ BOOST_AUTO_TEST_CASE(pendingTxSizeFires)
     Captured cap;
     rpc->jsonRpcImpl()->getPendingTxSize(groupId, "", capturing(cap));
     BOOST_CHECK(cap.called);
+}
+
+BOOST_AUTO_TEST_CASE(callViaAsyncWait)
+{
+    auto rpc = factory->buildLocalRpc(groupInfo, nodeService);
+    rpc->groupManager()->updateGroupInfo(groupInfo);
+    auto* impl = rpc->jsonRpcImpl().get();
+
+    // call routes through FakeScheduler2 which returns an empty receipt.
+    std::string to = "0x1234567890123456789012345678901234567890";
+    auto result = awaitHandler([&](auto cb) { impl->call(groupId, "", to, "0x", std::move(cb)); });
+    BOOST_CHECK(!result.value.isNull() || result.hasError);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
