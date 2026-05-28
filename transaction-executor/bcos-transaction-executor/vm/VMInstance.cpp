@@ -3,7 +3,7 @@
 #include <evmone/vm.hpp>
 
 bcos::executor_v1::VMInstance::VMInstance(
-    std::shared_ptr<evmoneCodeAnalysis const> analysis) noexcept
+    std::shared_ptr<EvmoneCodeAnalysis const> analysis) noexcept
   : m_analysis(std::move(analysis))
 {
     assert(m_analysis != nullptr);

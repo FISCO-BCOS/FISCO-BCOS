@@ -32,13 +32,13 @@
 namespace bcos::executor_v1
 {
 
-using evmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
+using EvmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
 
 /// RAII wrapper: cached baseline analysis + fresh evmc::VM per execute (see VMInstance.cpp).
 class VMInstance
 {
 public:
-    explicit VMInstance(std::shared_ptr<evmoneCodeAnalysis const> analysis) noexcept;
+    explicit VMInstance(std::shared_ptr<EvmoneCodeAnalysis const> analysis) noexcept;
     ~VMInstance() noexcept = default;
 
     VMInstance(VMInstance const&) = delete;
@@ -52,7 +52,7 @@ public:
     void enableDebugOutput();
 
 private:
-    std::shared_ptr<evmoneCodeAnalysis const> m_analysis;
+    std::shared_ptr<EvmoneCodeAnalysis const> m_analysis;
 };
 
 }  // namespace bcos::executor_v1

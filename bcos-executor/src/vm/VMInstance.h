@@ -32,8 +32,8 @@ namespace bcos
 namespace executor
 {
 
-// using evmoneCodeAnalysis = evmone::advanced::AdvancedCodeAnalysis;
-using evmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
+// using EvmoneCodeAnalysis = evmone::advanced::AdvancedCodeAnalysis;
+using EvmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
 class HostContext;
 class Result : public evmc_result
 {
@@ -65,7 +65,7 @@ class VMInstance
 {
 public:
     explicit VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept;
-    explicit VMInstance(std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision,
+    explicit VMInstance(std::shared_ptr<EvmoneCodeAnalysis> analysis, evmc_revision revision,
         bytes_view code) noexcept;
     ~VMInstance() = default;
 
@@ -77,7 +77,7 @@ public:
 private:
     /// CREATE / EVMC path: owns VM from evmc_create_* (RAII via evmc::VM).
     std::optional<evmc::VM> m_evmcVm;
-    std::shared_ptr<evmoneCodeAnalysis> m_analysis = nullptr;
+    std::shared_ptr<EvmoneCodeAnalysis> m_analysis = nullptr;
     evmc_revision m_revision;
     bytes_view m_code;
 };

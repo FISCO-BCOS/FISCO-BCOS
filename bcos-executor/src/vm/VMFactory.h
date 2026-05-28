@@ -75,13 +75,13 @@ public:
         bytes_view code, bool isCreate = false);
 
     /// @brief Gets baseline analysis from the cache, or nullptr if missing / revision mismatch.
-    std::shared_ptr<evmoneCodeAnalysis> get(EvmCodeCacheKey const& key) noexcept;
+    std::shared_ptr<EvmoneCodeAnalysis> get(EvmCodeCacheKey const& key) noexcept;
 
     void put(
-        EvmCodeCacheKey const& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis) noexcept;
+        EvmCodeCacheKey const& key, const std::shared_ptr<EvmoneCodeAnalysis>& analysis) noexcept;
 
 private:
-    boost::compute::detail::lru_cache<EvmCodeCacheKey, std::shared_ptr<evmoneCodeAnalysis>> m_cache;
+    boost::compute::detail::lru_cache<EvmCodeCacheKey, std::shared_ptr<EvmoneCodeAnalysis>> m_cache;
     std::mutex m_cacheMutex;
 };
 }  // namespace bcos::executor
