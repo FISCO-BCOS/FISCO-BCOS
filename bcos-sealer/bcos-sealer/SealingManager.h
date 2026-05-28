@@ -40,10 +40,23 @@ public:
     SealingManager& operator=(SealingManager&&) = delete;
 
     virtual ~SealingManager() noexcept = default;
-    bool shouldGenerateProposal();
+    virtual bool shouldGenerateProposal();
 
     std::pair<bool, bcos::protocol::Block::Ptr> generateProposal(
         std::function<uint16_t(bcos::protocol::Block::Ptr)>);
+
+    // Test-only helpers used by FIB-117 regression tests to deterministically
+    // race a queue mutator against the unlocked predicate check in
+    // generateProposal(). They take the same x_pendingTxs write lock as the
+    // production paths, so they are safe to call concurrently with the rest
+    // of the public API.
+    void testOnlySeedPendingTxs(const std::vector<bcos::protocol::TransactionMetaData::Ptr>& _txs);
+    void testOnlyDrainPendingTxs();
+    // FIB-153 regression helpers: drive / observe m_waitUntil from tests so
+    // we can verify the post-hook update path without having to inject a full
+    // sys-tx queue.
+    void setWaitUntilForTest(int64_t _waitUntil) { m_waitUntil.store(_waitUntil); }
+    int64_t getWaitUntilForTest() const { return m_waitUntil.load(); }
 
     // the consensus module notify the sealer to reset sealing when viewchange
     virtual void resetSealing();
@@ -77,12 +90,21 @@ public:
 protected:
     virtual void appendTransactions(TxsMetaDataQueue& _txsQueue,
         const std::vector<protocol::TransactionMetaData::Ptr>& _fetchedTxs);
-    virtual bool reachMinSealTimeCondition();
     virtual void clearPendingTxs();
 
 
     virtual int64_t txsSizeExpectedToFetch();
     virtual size_t pendingTxsSize();
+
+    // Single source of truth for the "should we seal the next proposal?"
+    // decision. Caller MUST hold x_pendingTxs (read or write). All inputs
+    // are atomics or guarded by that lock — no internal locking. Both
+    // shouldGenerateProposal() (read lock) and generateProposal()
+    // (write lock) call it, so FIB-117's race window is structurally
+    // eliminated: generateProposal evaluates this under the same write lock
+    // that serialises every queue mutator. Virtual so regression tests
+    // (FIB-153) can force entry past it.
+    virtual bool meetsProposalPreconditions() const;
 
 private:
     SealerConfig::Ptr m_config;

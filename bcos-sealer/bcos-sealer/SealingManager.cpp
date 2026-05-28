@@ -20,6 +20,7 @@
 #include "SealingManager.h"
 #include "Common.h"
 #include "Sealer.h"
+#include <limits>
 #include <range/v3/view/concat.hpp>
 
 using namespace bcos;
@@ -51,21 +52,57 @@ void SealingManager::appendTransactions(
     }
 }
 
+bool SealingManager::meetsProposalPreconditions() const
+{
+    if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
+    {
+        return false;
+    }
+    if (m_latestNumber < m_waitUntil)
+    {
+        return false;
+    }
+    auto txsSize = m_pendingTxs.size() + m_pendingSysTxs.size();
+    if (txsSize == 0)
+    {
+        return false;
+    }
+    if (txsSize < m_maxTxsPerBlock && (utcSteadyTime() - m_lastSealTime) < m_config->minSealTime())
+    {
+        return false;
+    }
+    return true;
+}
+
 bool SealingManager::shouldGenerateProposal()
 {
+    // Out-of-range sealing number triggers queue cleanup, which itself takes
+    // an UpgradableGuard; handle this side effect before acquiring our own
+    // read lock to avoid lock-mode escalation.
     if (m_sealingNumber < m_startSealingNumber || m_sealingNumber > m_endSealingNumber)
     {
         clearPendingTxs();
         return false;
     }
-    // should wait the given block submit to the ledger
-    if (m_latestNumber < m_waitUntil)
+    ReadGuard lock(x_pendingTxs);
+    return meetsProposalPreconditions();
+}
+
+void SealingManager::testOnlySeedPendingTxs(
+    const std::vector<bcos::protocol::TransactionMetaData::Ptr>& _txs)
+{
+    WriteGuard lock(x_pendingTxs);
+    for (const auto& tx : _txs)
     {
-        return false;
+        m_pendingTxs.emplace_back(tx);
     }
-    // check the txs size
-    auto txsSize = pendingTxsSize();
-    return (txsSize >= m_maxTxsPerBlock) || reachMinSealTimeCondition();
+}
+
+void SealingManager::testOnlyDrainPendingTxs()
+{
+    WriteGuard lock(x_pendingTxs);
+    m_pendingTxs.clear();
+    m_pendingSysTxs.clear();
 }
 
 void SealingManager::clearPendingTxs()
@@ -136,19 +173,34 @@ void SealingManager::notifyResetProposal(
 std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
     std::function<uint16_t(bcos::protocol::Block::Ptr)> _handleBlockHook)
 {
-    if (!shouldGenerateProposal())
+    // FIB-117: take the write lock first, then evaluate preconditions under
+    // the same lock that serialises every queue mutator. This structurally
+    // eliminates the prior race shape (predicate-true → another thread
+    // drained the queue → lock acquired on stale state → empty proposal):
+    // the predicate and the action that consumes its result now share the
+    // same critical section.
+    WriteGuard writeLock(x_pendingTxs);
+    if (!meetsProposalPreconditions())
     {
         return {false, nullptr};
     }
-    WriteGuard writeLock(x_pendingTxs);
     m_sealingNumber = std::max(m_sealingNumber.load(), m_latestNumber.load() + 1);
     auto block = m_config->blockFactory()->createBlock();
     auto blockHeader = m_config->blockFactory()->blockHeaderFactory()->createBlockHeader();
     blockHeader->setNumber(m_sealingNumber);
     auto timestamp = m_config->nodeTimeMaintenance()->getAlignedTime();
     if (timestamp <= m_latestTimestamp)
-    {  // make sure the timestamp is larger than the latestTimestamp in milliseconds
-        timestamp = m_latestTimestamp + 1;
+    {
+        // FIB-163: saturate at INT64_MAX. m_latestTimestamp is signed int64;
+        // poisoned timestamps (e.g. via resetLatestTimestamp from peer state)
+        // could push the stored value to INT64_MAX, in which case the naive
+        // m_latestTimestamp + 1 wraps to INT64_MIN — undefined behaviour for
+        // signed overflow and an instantly-rejected timestamp downstream.
+        // Practically unreachable (~2.92e8 years from epoch in ms) but
+        // UB-correctness matters for static analysis and audit posture.
+        timestamp = (m_latestTimestamp == std::numeric_limits<int64_t>::max()) ?
+                        m_latestTimestamp :
+                        m_latestTimestamp + 1;
     }
     blockHeader->setTimestamp(timestamp);
     blockHeader->calculateHash(*m_config->blockFactory()->cryptoSuite()->hashImpl());
@@ -180,6 +232,15 @@ std::pair<bool, bcos::protocol::Block::Ptr> SealingManager::generateProposal(
                 if (txsSize == m_maxTxsPerBlock)
                 {
                     txsSize--;
+                }
+                // FIB-153: when the hook synthesises a sys-tx into the block
+                // (e.g. VRF rotation), advance m_waitUntil so the next proposal
+                // waits for this block to commit. Guarded by `<` so this is a
+                // no-op when the pre-hook branch above already advanced
+                // m_waitUntil for a non-empty m_pendingSysTxs.
+                if (m_waitUntil < m_sealingNumber)
+                {
+                    m_waitUntil.store(m_sealingNumber);
                 }
             }
         }
@@ -225,20 +286,6 @@ size_t SealingManager::pendingTxsSize()
 {
     ReadGuard l(x_pendingTxs);
     return m_pendingSysTxs.size() + m_pendingTxs.size();
-}
-
-bool SealingManager::reachMinSealTimeCondition()
-{
-    auto txsSize = pendingTxsSize();
-    if (txsSize == 0)
-    {
-        return false;
-    }
-    if ((utcSteadyTime() - m_lastSealTime) < m_config->minSealTime())
-    {
-        return false;
-    }
-    return true;
 }
 
 int64_t SealingManager::txsSizeExpectedToFetch()
