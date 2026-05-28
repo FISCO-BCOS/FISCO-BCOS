@@ -40,5 +40,6 @@ target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} ${TOOL_TARGET} ${TAR
 set_source_files_properties("unittests/GatewayMessageTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/PeerBlackWhitelistTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/RateLimiterStatTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/RouterTableTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" "${TEST_BINARY_NAME}" "" ${CMAKE_SOURCE_DIR}/bcos-gateway/test/unittests)
