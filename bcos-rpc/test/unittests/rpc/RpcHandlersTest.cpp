@@ -148,5 +148,15 @@ BOOST_AUTO_TEST_CASE(totalTransactionCountFires)
     BOOST_CHECK(cap.called);
 }
 
+BOOST_AUTO_TEST_CASE(pendingTxSizeFires)
+{
+    auto rpc = factory->buildLocalRpc(groupInfo, nodeService);
+    rpc->groupManager()->updateGroupInfo(groupInfo);
+
+    Captured cap;
+    rpc->jsonRpcImpl()->getPendingTxSize(groupId, "", capturing(cap));
+    BOOST_CHECK(cap.called);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
