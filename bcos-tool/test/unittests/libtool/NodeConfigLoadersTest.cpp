@@ -14,6 +14,8 @@
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/test/unit_test.hpp>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
 using namespace bcos;
@@ -29,6 +31,8 @@ namespace
 // without going through the all-or-nothing public loadConfig().
 struct LoaderProbe : public NodeConfig
 {
+    using NodeConfig::checkService;
+    using NodeConfig::getServiceName;
     using NodeConfig::loadCertConfig;
     using NodeConfig::loadChainConfig;
     using NodeConfig::loadConsensusConfig;
@@ -276,6 +280,121 @@ BOOST_AUTO_TEST_CASE(ledgerConfigValidAndInvalid)
         c.loadLedgerConfig(fromIni("[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\n"
                                    "leader_period=1\n[tx]\ngas_limit=3000000000\n")),
         bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(serviceConfigWithoutTars)
+{
+    LoaderProbe a;  // without_tars_framework=false → skips tars proxy load
+    BOOST_CHECK_NO_THROW(a.loadServiceConfig(
+        fromIni("[service]\nrpc=app.rpc\ngateway=app.gw\nwithout_tars_framework=false\n")));
+    LoaderProbe b;
+    BOOST_CHECK_NO_THROW(
+        b.loadWithoutTarsFrameworkConfig(fromIni("[service]\nwithout_tars_framework=true\n")));
+}
+
+BOOST_AUTO_TEST_CASE(tarsProxyConfigFromFile)
+{
+    auto path = std::filesystem::temp_directory_path() / "nc_tars_proxy_test.ini";
+    {
+        std::ofstream out(path);
+        out << "[front]\nproxy.0=127.0.0.1:1234\n"
+               "[rpc]\nproxy.0=127.0.0.1:1235\n"
+               "[gateway]\nproxy.0=127.0.0.1:1236\n";
+    }
+    LoaderProbe cfg;
+    cfg.setWithoutTarsFramework(true);
+    cfg.loadTarsProxyConfig(path.string());  // parses sections → string2TarsEndPoint
+
+    std::vector<tars::TC_Endpoint> eps;
+    cfg.getTarsClientProxyEndpoints("front", eps);
+    BOOST_CHECK_EQUAL(eps.size(), 1U);
+
+    std::vector<tars::TC_Endpoint> missing;
+    BOOST_CHECK_THROW(
+        cfg.getTarsClientProxyEndpoints("no_such_service", missing), bcos::InvalidParameter);
+    std::filesystem::remove(path);
+
+    // a non-existent proxy file path → read_ini fails → wrapped InvalidParameter
+    LoaderProbe bad;
+    BOOST_CHECK_THROW(bad.loadTarsProxyConfig("/nonexistent/path/xyz.ini"), bcos::InvalidParameter);
+}
+
+BOOST_AUTO_TEST_CASE(nodeServiceConfigValidAndInvalid)
+{
+    LoaderProbe a;
+    BOOST_CHECK_NO_THROW(a.loadNodeServiceConfig(
+        "node0", fromIni("[service]\nnode_name=node0\nwithout_tars_framework=false\n"), false));
+
+    LoaderProbe b;  // non-alnum node name → throws
+    BOOST_CHECK_THROW(
+        b.loadNodeServiceConfig("n", fromIni("[service]\nnode_name=bad!name\n"), false),
+        bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(checkServiceValidAndInvalid)
+{
+    LoaderProbe cfg;
+    BOOST_CHECK_NO_THROW(cfg.checkService("service.rpc", "app.server"));
+    BOOST_CHECK_THROW(cfg.checkService("service.rpc", ""), bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(cfg.checkService("service.rpc", "oneword"), bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(cfg.checkService("service.rpc", "bad!.name"), bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(getServiceNameRequireAndNot)
+{
+    LoaderProbe cfg;
+    // require=false → returns the raw name
+    BOOST_CHECK_EQUAL(
+        cfg.getServiceName(fromIni("[service]\nrpc=raw.name\n"), "service.rpc", "Obj", "", false),
+        "raw.name");
+    // require=true with a valid app.server name → checkService + getPrxDesc
+    BOOST_CHECK_NO_THROW(
+        cfg.getServiceName(fromIni("[service]\nrpc=app.server\n"), "service.rpc", "Obj", "", true));
+}
+
+BOOST_AUTO_TEST_CASE(certSettersRoundTrip)
+{
+    LoaderProbe cfg;
+    cfg.setCertPath("/p");
+    cfg.setCaCert("ca");
+    cfg.setNodeCert("nc");
+    cfg.setNodeKey("nk");
+    cfg.setSmCaCert("smca");
+    cfg.setSmNodeCert("smnc");
+    cfg.setSmNodeKey("smnk");
+    cfg.setEnSmNodeCert("ensmnc");
+    cfg.setEnSmNodeKey("ensmnk");
+    cfg.setWithoutTarsFramework(true);
+    BOOST_CHECK_EQUAL(cfg.caCert(), "ca");
+    BOOST_CHECK_EQUAL(cfg.nodeKey(), "nk");
+    BOOST_CHECK_EQUAL(cfg.smCaCert(), "smca");
+    BOOST_CHECK_EQUAL(cfg.enSmNodeKey(), "ensmnk");
+    BOOST_CHECK(cfg.withoutTarsFramework());
+}
+
+BOOST_AUTO_TEST_CASE(genesisConfigFromStringFull)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    // exercises the loadGenesisConfig orchestrator: chain + web3chain + features
+    // + ledger (rpbft branch) + executor, in one public call.
+    std::string genesis =
+        "[version]\ncompatibility_version=3.6.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[features]\nfeature_balance=1\n"
+        "[consensus]\nconsensus_type=rpbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "epoch_sealer_num=4\nepoch_block_num=1000\nnode.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n";
+    NodeConfig cfg(keyFactory);
+    BOOST_CHECK_NO_THROW(cfg.loadGenesisConfigFromString(genesis));
+    BOOST_CHECK_EQUAL(cfg.chainId(), "1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
