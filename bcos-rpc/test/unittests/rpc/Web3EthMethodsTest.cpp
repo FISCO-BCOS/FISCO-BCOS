@@ -160,5 +160,34 @@ BOOST_AUTO_TEST_CASE(getStorageAtEmptyStorage)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
+BOOST_AUTO_TEST_CASE(uncleMethodsReturnEmpty)
+{
+    // BCOS has no uncles; these must answer with null/0x0, not error/crash.
+    for (auto const& r : {req("eth_getUncleCountByBlockNumber", R"(["0x1"])"),
+             req("eth_getUncleByBlockNumberAndIndex", R"(["0x1","0x0"])")})
+    {
+        auto resp = call(r);
+        BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+        BOOST_CHECK(resp.isMember("id"));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(blockAndPendingFiltersRegister)
+{
+    // eth_newBlockFilter / eth_newPendingTransactionFilter register an in-memory
+    // filter and return its id.
+    auto blockFilter = call(req("eth_newBlockFilter"));
+    BOOST_CHECK(blockFilter.isMember("result") || blockFilter.isMember("error"));
+
+    auto pendingFilter = call(req("eth_newPendingTransactionFilter"));
+    BOOST_CHECK(pendingFilter.isMember("result") || pendingFilter.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(uninstallUnknownFilter)
+{
+    auto resp = call(req("eth_uninstallFilter", R"(["0x1"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
