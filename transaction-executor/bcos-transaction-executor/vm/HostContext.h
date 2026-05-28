@@ -231,6 +231,7 @@ public:
 
     constexpr evmc_message const& message() const& { return m_message; }
     constexpr evmc_message& mutableMessage() & { return m_message; }
+    constexpr ledger::LedgerConfig const& ledgerConfig() const& { return m_ledgerConfig.get(); }
 
     friend auto getAccount(HostContext& hostContext, const evmc_address& address)
     {
@@ -242,6 +243,14 @@ public:
     task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
     {
         co_return co_await m_recipientAccount.storage(*key);
+    }
+
+    // DIRECT-tagged variant: reads the underlying slot without populating the
+    // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
+    // SSTORE status determination) that must not influence DAG conflict edges.
+    task::Task<evmc_bytes32> get(const evmc_bytes32* key, storage2::DIRECT_TYPE direct)
+    {
+        co_return co_await m_recipientAccount.storage(*key, direct);
     }
 
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
