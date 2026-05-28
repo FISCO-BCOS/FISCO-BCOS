@@ -274,11 +274,20 @@ jobs:
       - name: Generate coverage report
         run: |
           cd build
-          cmake --build . --target coverage
+          # gcda was produced by gcc-14, so geninfo must use the matching gcov-14
+          # (otherwise: "Incompatible GCC/GCOV version"). version/unused are tolerated
+          # as a fallback across lcov point releases.
+          IGN=inconsistent,unmapped,source,range,gcov,mismatch,version,negative,empty,unused
+          lcov --gcov-tool gcov-14 --capture --directory . \
+            --output-file coverage.info.in --ignore-errors "$IGN"
+          lcov --remove coverage.info.in \
+            '/usr*' '*vcpkg_installed*' '*boost/*' '*test*' '*build*' '*deps*' \
+            --output-file coverage.info --ignore-errors "$IGN"
+          genhtml coverage.info --output-directory CodeCoverage --ignore-errors "$IGN" || true
           {
             echo '## Code coverage (release-3.17.0)'
             echo '```'
-            lcov --summary coverage.info --rc lcov_branch_coverage=1 --ignore-errors inconsistent,unmapped,source 2>&1
+            lcov --summary coverage.info --ignore-errors inconsistent,unmapped,source 2>&1
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload coverage report to Codecov
