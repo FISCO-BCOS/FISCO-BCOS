@@ -10,6 +10,8 @@
 
 #include "../common/RPCFixture.h"
 #include <bcos-rpc/web3jsonrpc/model/BlockResponse.h>
+#include <bcos-rpc/web3jsonrpc/model/ReceiptResponse.h>
+#include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -90,6 +92,57 @@ BOOST_AUTO_TEST_CASE(combineBlockResponseFullTxsEmptyList)
     // fullTxs=true with no transactions → still an (empty) array.
     BOOST_REQUIRE(result["transactions"].isArray());
     BOOST_CHECK_EQUAL(result["transactions"].size(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(combineTxResponseShapesTransaction)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x01, 0x02}, "0x1", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x77;
+
+    Json::Value result(Json::objectValue);
+    combineTxResponse(result, *tx, /*transactionIndex=*/3, /*blockNumber=*/12, blockHash);
+
+    BOOST_CHECK_EQUAL(result["blockHash"].asString(), blockHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["blockNumber"].asString(), "0xc");  // 12
+    BOOST_CHECK_EQUAL(result["transactionIndex"].asString(), "0x3");
+    BOOST_CHECK_EQUAL(result["to"].asString().substr(0, 2), "0x");
+    BOOST_CHECK(result.isMember("from"));
+    BOOST_CHECK(result.isMember("input"));
+}
+
+BOOST_AUTO_TEST_CASE(combineReceiptResponseShapesReceipt)
+{
+    auto txFactory = m_blockFactory->transactionFactory();
+    auto tx = txFactory->createTransaction(0, "0x1234567890123456789012345678901234567890",
+        bcos::bytes{0x0a}, "0x2", 100, chainId, groupId, 0);
+    BOOST_REQUIRE(tx);
+
+    auto receiptFactory = m_blockFactory->receiptFactory();
+    std::vector<bcos::protocol::LogEntry> logs;
+    auto receipt = receiptFactory->createReceipt(bcos::u256(21000),
+        "0x1234567890123456789012345678901234567890", logs, /*status=*/0, bcos::bytesConstRef{},
+        /*blockNumber=*/12);
+    BOOST_REQUIRE(receipt);
+    receipt->setTransactionIndex(0);
+
+    bcos::crypto::HashType blockHash;
+    blockHash[0] = 0x88;
+
+    Json::Value result(Json::objectValue);
+    combineReceiptResponse(result, *receipt, *tx, blockHash);
+
+    BOOST_CHECK_EQUAL(result["blockHash"].asString(), blockHash.hexPrefixed());
+    BOOST_CHECK_EQUAL(result["blockNumber"].asString(), "0xc");  // 12
+    BOOST_CHECK(result.isMember("from"));
+    BOOST_CHECK(result.isMember("cumulativeGasUsed"));
+    BOOST_CHECK(result.isMember("gasUsed"));
+    BOOST_CHECK(result.isMember("logs"));
+    BOOST_CHECK(result["logs"].isArray());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
