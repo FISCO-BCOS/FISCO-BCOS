@@ -397,5 +397,64 @@ BOOST_AUTO_TEST_CASE(genesisConfigFromStringFull)
     BOOST_CHECK_EQUAL(cfg.chainId(), "1");
 }
 
+BOOST_AUTO_TEST_CASE(securityConfigHsmCloudKmsBcosKms)
+{
+    LoaderProbe hsm;  // explicit HSM type → reads key_index (no default)
+    hsm.loadSecurityConfig(
+        fromIni("[security]\nkms_type=HSM\nkey_index=1\nhsm_lib_path=/tmp/x.so\npassword=p\n"));
+    BOOST_CHECK_EQUAL(hsm.keyIndex(), 1);
+
+    LoaderProbe cloud;  // CLOUDKMS with valid AWS type
+    BOOST_CHECK_NO_THROW(
+        cloud.loadSecurityConfig(fromIni("[security]\nkms_type=CLOUDKMS\ncloud_kms_type=AWS\n")));
+
+    LoaderProbe cloudBad;  // CLOUDKMS with invalid type → throws
+    BOOST_CHECK_THROW(
+        cloudBad.loadSecurityConfig(fromIni("[security]\nkms_type=CLOUDKMS\ncloud_kms_type=ZZ\n")),
+        bcos::tool::InvalidConfig);
+
+    LoaderProbe bcoskms;  // BCOSKMS with cipher_data_key present
+    BOOST_CHECK_NO_THROW(bcoskms.loadSecurityConfig(
+        fromIni("[security]\nkms_type=BCOSKMS\ncipher_data_key=deadbeef\n")));
+
+    LoaderProbe bcoskmsBad;  // BCOSKMS without cipher_data_key → throws
+    BOOST_CHECK_THROW(bcoskmsBad.loadSecurityConfig(fromIni("[security]\nkms_type=BCOSKMS\n")),
+        bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(gettersAfterFullGenesisLoad)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    std::string genesis =
+        "[version]\ncompatibility_version=3.6.0\n"
+        "[chain]\nsm_crypto=false\ngroup_id=group0\nchain_id=1\n"
+        "[web3]\nchain_id=1\n"
+        "[consensus]\nconsensus_type=rpbft\nblock_tx_count_limit=1000\nleader_period=1\n"
+        "epoch_sealer_num=4\nepoch_block_num=1000\nnode.0=" +
+        node +
+        ":1:1\n"
+        "[tx]\ngas_limit=3000000000\n"
+        "[executor]\nis_wasm=false\nis_auth_check=false\nis_serial_execute=false\n"
+        "auth_admin_account=0x0000000000000000000000000000000000000001\n";
+    NodeConfig cfg(keyFactory);
+    cfg.loadGenesisConfigFromString(genesis);
+
+    // genesis-derived getters (set by loadLedgerConfig/loadExecutorConfig rpbft path)
+    BOOST_CHECK_EQUAL(cfg.consensusType(), "rpbft");
+    BOOST_CHECK_EQUAL(cfg.epochSealerNum(), 4);
+    BOOST_CHECK_EQUAL(cfg.epochBlockNum(), 1000);
+    BOOST_CHECK(!cfg.isWasm());
+    BOOST_CHECK(!cfg.isAuthCheck());
+    BOOST_CHECK(!cfg.isSerialExecute());
+    BOOST_CHECK_GT(cfg.txGasLimit(), 0U);
+    BOOST_CHECK_GT(cfg.compatibilityVersion(), 0U);
+    BOOST_CHECK(!cfg.compatibilityVersionStr().empty());
+    BOOST_CHECK_NO_THROW(cfg.genesisData());
+    BOOST_CHECK_NO_THROW(cfg.pdAddrs());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
