@@ -13,12 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EngineService.h
- * @brief Minimal Engine API service abstraction and in-memory implementation
+ * @file EngineServiceImpl.h
+ * @brief Minimal Engine API service implementation
  */
 
 #pragma once
 
+#include "bcos-framework/engine/EngineService.h"
+#include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 
@@ -55,104 +57,6 @@ DERIVE_BCOS_EXCEPTION(InvalidForkchoiceState);
 DERIVE_BCOS_EXCEPTION(UnknownPayload);
 DERIVE_BCOS_EXCEPTION(IncompatiblePayloadVersion);
 
-enum class EngineApiVersion : std::uint8_t
-{
-    V1 = 1,
-    V2 = 2,
-    V3 = 3,
-};
-
-using PayloadID = std::string;
-
-struct WithdrawalV1
-{
-    u256 index = 0;
-    u256 validatorIndex = 0;
-    Address address;
-    u256 amount = 0;
-};
-
-struct BlobsBundleV1
-{
-    std::vector<bytes> commitments;
-    std::vector<bytes> proofs;
-    std::vector<bytes> blobs;
-};
-
-struct ForkchoiceState
-{
-    h256 headBlockHash;
-    h256 safeBlockHash;
-    h256 finalizedBlockHash;
-};
-
-struct PayloadAttributes
-{
-    std::uint64_t timestamp = 0;
-    h256 prevRandao;
-    Address suggestedFeeRecipient;
-    std::optional<std::vector<WithdrawalV1>> withdrawals;
-    std::optional<h256> parentBeaconBlockRoot;
-};
-
-struct ExecutionPayload
-{
-    h256 parentHash;
-    Address feeRecipient;
-    h256 stateRoot;
-    h256 receiptsRoot;
-    Bloom logsBloom{};
-    h256 prevRandao;
-    bcos::protocol::BlockNumber blockNumber = 0;
-    u256 gasLimit = 0;
-    u256 gasUsed = 0;
-    std::uint64_t timestamp = 0;
-    bytes extraData;
-    u256 baseFeePerGas = 0;
-    h256 blockHash;
-    bcos::protocol::Transactions transactions;
-    std::optional<std::vector<WithdrawalV1>> withdrawals;
-    std::optional<u256> blobGasUsed;
-    std::optional<u256> excessBlobGas;
-};
-
-struct NewPayloadRequest
-{
-    ExecutionPayload executionPayload;
-    std::vector<h256> expectedBlobVersionedHashes;
-    std::optional<h256> parentBeaconBlockRoot;
-};
-
-enum class PayloadValidationStatus : std::uint8_t
-{
-    Valid,
-    Invalid,
-    Syncing,
-    Accepted,
-    InvalidBlockHash,
-};
-
-struct PayloadStatus
-{
-    PayloadValidationStatus status = PayloadValidationStatus::Syncing;
-    std::optional<h256> latestValidHash;
-    std::optional<std::string> validationError;
-};
-
-struct ForkchoiceUpdatedResult
-{
-    PayloadStatus payloadStatus;
-    std::optional<PayloadID> payloadId;
-};
-
-struct GetPayloadResult
-{
-    ExecutionPayload executionPayload;
-    u256 blockValue = 0;
-    std::optional<BlobsBundleV1> blobsBundle;
-    bool shouldOverrideBuilder = false;
-};
-
 namespace detail
 {
 std::string encodePayloadSequence(std::uint64_t value);
@@ -176,12 +80,12 @@ template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, c
              scheduler_v1::TransactionScheduler<SchedulerType,
                  typename GlobalStateStorageType::ViewType, ExecutorType,
                  std::vector<protocol::Transaction::Ptr>>
-class EngineService
+class EngineServiceImpl
 {
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
-    EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
+    EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory, int64_t blockTxCountLimit = 1000)
       : m_memPool(std::ref(memPool)),
@@ -196,11 +100,11 @@ public:
             BOOST_THROW_EXCEPTION(std::invalid_argument{"blockFactory must not be null"});
         }
     }
-    ~EngineService() = default;
-    EngineService(const EngineService&) = delete;
-    EngineService(EngineService&&) = delete;
-    EngineService& operator=(const EngineService&) = delete;
-    EngineService& operator=(EngineService&&) = delete;
+    ~EngineServiceImpl() = default;
+    EngineServiceImpl(const EngineServiceImpl&) = delete;
+    EngineServiceImpl(EngineServiceImpl&&) = delete;
+    EngineServiceImpl& operator=(const EngineServiceImpl&) = delete;
+    EngineServiceImpl& operator=(EngineServiceImpl&&) = delete;
 
     bcos::task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
