@@ -33,5 +33,12 @@ find_package(FakeIt CONFIG REQUIRED)
 target_link_libraries(${TEST_BINARY_NAME} ${TXPOOL_TARGET} ${LEDGER_TARGET} bcos-crypto ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework FakeIt::FakeIt-boost)
 target_link_libraries(${DEMO_BINARY_NAME} ${TXPOOL_TARGET} ${LEDGER_TARGET} bcos-crypto ${TARS_PROTOCOL_TARGET} Boost::unit_test_framework)
 set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# FIB-167: keep TxPoolStorageTest standalone. It transitively pulls
+# bcos-ledger/ConsensusNode.h (defining bcos::ledger::ConsensusNodeList) AND -- when
+# combined in the same unity TU as TxPoolTest.cpp -- the latter's include of
+# FakeLedger.h re-introduces `using namespace bcos::ledger; using namespace
+# bcos::consensus;` at file scope, making `ConsensusNodeList` ambiguous. Pinning this
+# test out of the unity batches keeps unity ordering robust as new test files are added.
+set_source_files_properties("unittests/txpool/TxPoolStorageTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")

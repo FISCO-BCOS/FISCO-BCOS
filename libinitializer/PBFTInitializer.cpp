@@ -297,11 +297,24 @@ void PBFTInitializer::registerHandlers()
 
     // the consensus moudle notify new block to the sync module
     std::weak_ptr<BlockSyncInterface> weakedSync = m_blockSync;
+    // FIB-167: propagate the live blockTxCountLimit (system-contract governance value) to
+    // txpool on every committed block so fillBlock's bound check tracks the current chain
+    // policy instead of the init-time snapshot. weak_ptr avoids extending txpool lifetime
+    // via this PBFT-owned callback.
+    std::weak_ptr<bcos::txpool::TxPoolInterface> weakedTxpool = m_txpool;
     m_pbft->registerNewBlockNotifier(
-        [weakedSync, weakedSealer](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
+        [weakedSync, weakedSealer, weakedTxpool](bcos::ledger::LedgerConfig::Ptr _ledgerConfig,
             std::function<void(Error::Ptr)> _onRecv) {
             try
             {
+                // FIB-167: push the limit to txpool first -- it is a local config update and
+                // must take effect before any subsequent fillBlock the sync notification may
+                // unblock. A missing txpool (shutdown race) is silently skipped; the sync
+                // notification still proceeds below.
+                if (auto txpool = weakedTxpool.lock())
+                {
+                    txpool->notifyBlockTxCountLimit(_ledgerConfig->blockTxCountLimit());
+                }
                 auto sync = weakedSync.lock();
                 auto sealer = weakedSealer.lock();
                 if (!sync || !sealer)

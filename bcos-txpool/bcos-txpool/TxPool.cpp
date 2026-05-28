@@ -142,19 +142,52 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
 {
     if (m_treeRouter != nullptr)
     {
-        auto protocolList =
-            m_transactionSync->config()->frontService()->groupNodeInfo()->nodeProtocolList();
+        // FIB-166: defensively validate group / protocol metadata before dereferencing it.
+        // Pre-handshake invocations (or test paths) can leave groupNodeInfo() null and the
+        // protocol list empty; previously this code dereferenced both unconditionally and
+        // would crash or take the empty-list 'no lower-version peer' path and route via the
+        // tree even when no protocol information was available. Fall back to the flood
+        // broadcast when metadata is missing.
+        auto groupNodeInfo = m_transactionSync->config()->frontService()->groupNodeInfo();
+        if (!groupNodeInfo)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC(
+                "broadcastTransactionBufferByTree: groupNodeInfo unavailable, falling back to "
+                "flood broadcast");
+            co_await m_transactionSync->config()->frontService()->broadcastMessage(
+                protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+                ::ranges::views::single(_data));
+            co_return;
+        }
+        auto const& protocolList = groupNodeInfo->nodeProtocolList();
+        if (protocolList.empty())
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC(
+                "broadcastTransactionBufferByTree: nodeProtocolList empty, falling back to "
+                "flood broadcast");
+            co_await m_transactionSync->config()->frontService()->broadcastMessage(
+                protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+                ::ranges::views::single(_data));
+            co_return;
+        }
         // NOTE: the protocolList is a vector which sorted by nodeID, and is NOT convenience
         // for filter whether send new protocol or not. So one-size-fits-all approach, if
         // protocolList have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default.
         auto index = ::ranges::find_if(protocolList, [](auto const& protocol) {
-            return protocol->version() < protocol::ProtocolVersion::V2;
+            // FIB-166: skip null entries in the sorted list rather than dereferencing them.
+            // A null protocol entry is treated as "lower version" so we err on the side of
+            // the safer SYNC_PUSH_TRANSACTION fanout, matching the existing pessimistic
+            // behaviour for any pre-V2 peer.
+            return !protocol || protocol->version() < protocol::ProtocolVersion::V2;
         });
         if (index != protocolList.end()) [[unlikely]]
         {
+            // FIB-166: the matched entry may be null when the protocol list contains null
+            // pointers; report -1 in that case rather than dereferencing.
+            auto matchedVersion = (*index) ? static_cast<int>((*index)->version()) : -1;
             TXPOOL_LOG(TRACE) << LOG_DESC(
                                      "broadcastTransactionBufferByTree but have lower version node")
-                              << LOG_KV("index", index->get()->version());
+                              << LOG_KV("index", matchedVersion);
             // have lower V2 version, broadcast SYNC_PUSH_TRANSACTION by default
             co_await m_transactionSync->config()->frontService()->broadcastMessage(
                 protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
@@ -182,6 +215,20 @@ task::Task<void> TxPool::broadcastTransactionBufferByTree(
                     protocol::TREE_PUSH_TRANSACTION, node, _data, 0, front::CallbackFunc());
             }
         }
+    }
+    else
+    {
+        // FIB-165: tree topology is unavailable (e.g. observer node, or the router was
+        // never installed). Previously the function silently returned, so callers that
+        // chose the tree path on capability had no signal that the broadcast was a no-op
+        // and transactions could be silently dropped. Fall back to the standard flood
+        // broadcast and log the substitution for diagnostics.
+        TXPOOL_LOG(INFO) << LOG_DESC(
+            "broadcastTransactionBufferByTree: tree router unavailable, falling back to "
+            "flood broadcast");
+        co_await m_transactionSync->config()->frontService()->broadcastMessage(
+            protocol::NodeType::CONSENSUS_NODE, protocol::SYNC_PUSH_TRANSACTION,
+            ::ranges::views::single(_data));
     }
 }
 
@@ -410,6 +457,17 @@ void TxPool::notifyObserverNodeList(
     _onRecvResponse(nullptr);
 }
 
+void TxPool::notifyBlockTxCountLimit(uint64_t _blockTxCountLimit)
+{
+    // FIB-167: keep both the live fillBlock cap and the legacy sync-response cap on
+    // m_maxResponseTxsToNodesWithEmptyTxs in sync with consensus governance. The latter
+    // was also originally derived from blockTxCountLimit at init time, so propagating
+    // here prevents it from going stale after a setSystemConfigPrecompile bump.
+    auto config = m_transactionSync->config();
+    config->setBlockTxCountLimit(_blockTxCountLimit);
+    config->setMaxResponseTxsToNodesWithEmptyTxs(_blockTxCountLimit);
+}
+
 void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
     std::function<void(Error::Ptr, ConstTransactionsPtr)> _onBlockFilled)
 {
@@ -456,6 +514,27 @@ void TxPool::fillBlock(HashListPtr _txsHash,
 {
     ittapi::Report report(
         ittapi::ITT_DOMAINS::instance().TXPOOL, ittapi::ITT_DOMAINS::instance().FILL_BLOCK);
+
+    // FIB-167: enforce an upper bound on caller-controlled txsHash size. Without this
+    // cap, a peer (or a forwarded p2p message) can request fillBlock with millions of
+    // hashes; the function would zip the full input against pool lookups and amplify into
+    // an unbounded ledger-fetch, creating a CPU/memory DoS vector. Reject anything larger
+    // than the chain's current per-block transaction limit. The cap is refreshed on every
+    // committed block via notifyBlockTxCountLimit so consensus-governance changes take
+    // effect immediately instead of using the init-time snapshot.
+    auto const blockTxLimit = m_transactionSync->config()->blockTxCountLimit();
+    if (_txsHash && blockTxLimit > 0 && _txsHash->size() > blockTxLimit)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("fillBlock: txsHash size exceeds blockTxCountLimit, reject")
+                            << LOG_KV("size", _txsHash->size()) << LOG_KV("limit", blockTxLimit);
+        if (_onBlockFilled)
+        {
+            _onBlockFilled(BCOS_ERROR_PTR(CommonError::TransactionsMissing,
+                               "fillBlock: txsHash size exceeds blockTxCountLimit"),
+                nullptr);
+        }
+        return;
+    }
 
     // getTransactions guarantees that txs and *_txsHash have the same size and order
     auto txs = m_txpoolStorage->getTransactions(*_txsHash);
@@ -570,6 +649,9 @@ void TxPool::init()
     txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
     m_transactionSync->config()->setMaxResponseTxsToNodesWithEmptyTxs(
         ledgerConfig->blockTxCountLimit());
+    // FIB-167: seed the live fillBlock cap with the same value; subsequent updates
+    // arrive via notifyBlockTxCountLimit from PBFT's new-block notifier.
+    m_transactionSync->config()->setBlockTxCountLimit(ledgerConfig->blockTxCountLimit());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
 }
 

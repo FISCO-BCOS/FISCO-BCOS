@@ -26,6 +26,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
 
+#include <atomic>
 #include <utility>
 namespace bcos
 {
@@ -79,6 +80,13 @@ public:
         return m_maxResponseTxsToNodesWithEmptyTxs;
     }
 
+    // FIB-167: track the chain's current blockTxCountLimit independently of the sync-response
+    // cap above. PBFTInitializer pushes the live value via TxPool::notifyBlockTxCountLimit on
+    // every committed block so fillBlock's bound check follows consensus-governance changes
+    // instead of staying at the init-time snapshot.
+    void setBlockTxCountLimit(uint64_t _limit) noexcept { m_blockTxCountLimit.store(_limit); }
+    uint64_t blockTxCountLimit() const noexcept { return m_blockTxCountLimit.load(); }
+
 private:
     bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::txpool::TxPoolStorageInterface::Ptr m_txpoolStorage;
@@ -92,6 +100,10 @@ private:
     unsigned m_forwardPercent = 25;
 
     size_t m_maxResponseTxsToNodesWithEmptyTxs = 1000;
+
+    // FIB-167: separate from m_maxResponseTxsToNodesWithEmptyTxs (sync-response cap).
+    // Updated on every PBFT new-block notification so fillBlock bound stays live.
+    std::atomic<uint64_t> m_blockTxCountLimit{0};
 };
 }  // namespace sync
 }  // namespace bcos

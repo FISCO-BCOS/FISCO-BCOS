@@ -117,6 +117,11 @@ public:
     void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) override;
 
+    // FIB-167: live update of the chain blockTxCountLimit. Wired from
+    // PBFTInitializer::registerNewBlockNotifier so fillBlock's bound check follows
+    // consensus-governance changes; init() sets the same value at startup.
+    void notifyBlockTxCountLimit(uint64_t _blockTxCountLimit) override;
+
     void tryToSyncTxsFromPeers() override;
 
     task::Task<std::optional<u256>> getWeb3PendingNonce(std::string_view address) override;
