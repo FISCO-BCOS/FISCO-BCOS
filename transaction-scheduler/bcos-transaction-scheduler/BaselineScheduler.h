@@ -175,6 +175,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
             size_t logIndex = 0;
+            block.clearReceipts();
             for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
             {
                 receipt->setTransactionIndex(index);
@@ -185,14 +186,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                 totalGasUsed += receipt->gasUsed();
                 receipt->setCumulativeGasUsed(totalGasUsed.str());
 
-                if (index < block.receiptsSize())
-                {
-                    block.setReceipt(index, receipt);
-                }
-                else
-                {
-                    block.appendReceipt(receipt);
-                }
+                block.appendReceipt(receipt);
             }
         },
         [&]() {
