@@ -12,6 +12,7 @@
 #include <bcos-framework/consensus/ConsensusConfigInterface.h>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+#include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
@@ -155,6 +156,26 @@ BOOST_AUTO_TEST_CASE(coinbaseDerivesAddressFromConsensusNodeId)
     auto addr = resp["result"].asString();
     BOOST_CHECK_EQUAL(addr.substr(0, 2), "0x");
     BOOST_CHECK_EQUAL(addr.size(), 42U);  // 0x + 20-byte address
+}
+
+BOOST_AUTO_TEST_CASE(jsonRpcConsensusAndSyncStatusHandlers)
+{
+    auto* impl = rpc->jsonRpcImpl().get();
+    bool pbftCalled = false;
+    bool consensusCalled = false;
+    bool syncCalled = false;
+
+    // The stub consensus/sync call their callbacks synchronously, so the
+    // RespFunc fires inline. These handlers previously segfaulted on null
+    // consensus()/sync().
+    impl->getPbftView(groupId, "", [&](bcos::Error::Ptr, Json::Value&) { pbftCalled = true; });
+    impl->getConsensusStatus(
+        groupId, "", [&](bcos::Error::Ptr, Json::Value&) { consensusCalled = true; });
+    impl->getSyncStatus(groupId, "", [&](bcos::Error::Ptr, Json::Value&) { syncCalled = true; });
+
+    BOOST_CHECK(pbftCalled);
+    BOOST_CHECK(consensusCalled);
+    BOOST_CHECK(syncCalled);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
