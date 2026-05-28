@@ -169,15 +169,14 @@ createBackendStorage(std::shared_ptr<bcos::tool::NodeConfig> nodeConfig, const s
             option.writeBufferSize = nodeConfig->writeBufferSize();
             option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
             option.blockCacheSize = nodeConfig->blockCacheSize();
+            option.enableDBStatistics = nodeConfig->enableStatistics();
             storage = StorageInitializer::build(
-                StorageInitializer::createRocksDB(
-                    stateDBPath, option, nodeConfig->enableStatistics(), nodeConfig->keyPageSize()),
+                StorageInitializer::createRocksDB(stateDBPath, option, nodeConfig->keyPageSize()),
                 dataEncryption);
             blockStorage = storage;
             if (nodeConfig->enableSeparateBlockAndState())
             {
-                auto blockDB = StorageInitializer::createRocksDB(
-                    nodeConfig->blockDBPath(), option, nodeConfig->enableStatistics());
+                auto blockDB = StorageInitializer::createRocksDB(nodeConfig->blockDBPath(), option);
                 blockStorage = StorageInitializer::build(std::move(blockDB), dataEncryption);
             }
         }
@@ -727,9 +726,9 @@ int main(int argc, const char* argv[])
         option.writeBufferSize = nodeConfig->writeBufferSize();
         option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
         option.blockCacheSize = nodeConfig->blockCacheSize();
+        option.enableDBStatistics = nodeConfig->enableStatistics();
         archiveStorage = StorageInitializer::build(
-            StorageInitializer::createRocksDB(archivePath, option, nodeConfig->enableStatistics()),
-            nullptr);
+            StorageInitializer::createRocksDB(archivePath, option), nullptr);
     }
     else if (boost::iequals(archiveType, "TiKV"))
     {  // create archive TiKV storage

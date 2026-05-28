@@ -151,7 +151,7 @@ RocksDBOption getRocksDBOption(
     option.minWriteBufferNumberToMerge = nodeConfig->minWriteBufferNumberToMerge();
     option.blockCacheSize = nodeConfig->blockCacheSize();
     option.optimizeLevelStyleCompaction = optimizeLevelStyleCompaction;
-    option.enable_blob_files = nodeConfig->enableRocksDBBlob();
+    option.enableBlobFiles = nodeConfig->enableRocksDBBlob();
     option.enableDBStatistics = nodeConfig->enableStatistics();
     return option;
 }

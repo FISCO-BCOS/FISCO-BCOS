@@ -16,6 +16,7 @@ namespace bcos::storage2::rocksdb
 
 DERIVE_BCOS_EXCEPTION(CheckpointRocksDBException);
 
+
 struct RocksDBCheckpointOption
 {
     int maxWriteBufferNumber = 3;
@@ -24,7 +25,7 @@ struct RocksDBCheckpointOption
     int minWriteBufferNumberToMerge = 1;
     size_t blockCacheSize = 128 << 20;  // 128MB
     bool optimizeLevelStyleCompaction = false;
-    bool enable_blob_files = false;
+    bool enableBlobFiles = false;
     bool enableDBStatistics = false;
 };
 
@@ -60,11 +61,13 @@ public:
     using Storage = RocksDBStorage2<KeyType, ValueType, KeyResolver, ValueResolver>;
     using CheckpointName = bcos::h256;
 
+
     explicit CheckpointRocksDBStorage(
         std::string_view rootDir, KeyResolver keyResolver = {}, ValueResolver valueResolver = {},
         RocksDBCheckpointOption option = {})
       : m_path(std::filesystem::path(rootDir).lexically_normal().string()),
         m_option(std::move(option)),
+        m_cache(::rocksdb::NewLRUCache(m_option.blockCacheSize)),
         m_keyResolver(std::move(keyResolver)),
         m_valueResolver(std::move(valueResolver))
     {
@@ -80,10 +83,11 @@ public:
         return detail::resolveHistoricalCheckpointPath(m_path, checkpointName);
     }
 
+
     Storage open()
     {
         return Storage(detail::openCheckpointRocksDB(detail::resolveLatestCheckpointPath(m_path),
-                           detail::latestCheckpointOptions(m_option), false),
+                           latestCheckpointOptions(), false),
             m_keyResolver, m_valueResolver);
     }
 
@@ -91,9 +95,12 @@ public:
     {
         return Storage(detail::openCheckpointRocksDB(
                            detail::resolveHistoricalCheckpointPath(m_path, checkpointName),
-                           detail::historicalCheckpointOptions(m_option), true),
+                           historicalCheckpointOptions(), true),
             m_keyResolver, m_valueResolver);
     }
+
+    ::rocksdb::Options latestCheckpointOptions() const;
+    ::rocksdb::Options historicalCheckpointOptions() const;
 
     void createCheckpoint(Storage& latestStorage, CheckpointName const& checkpointName)
     {
@@ -118,6 +125,7 @@ public:
 private:
     std::string m_path;
     RocksDBCheckpointOption m_option;
+    std::shared_ptr<::rocksdb::Cache> m_cache;
     [[no_unique_address]] KeyResolver m_keyResolver;
     [[no_unique_address]] ValueResolver m_valueResolver;
 };

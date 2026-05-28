@@ -64,7 +64,7 @@ public:
         options.max_write_buffer_number = rocksDBOption.maxWriteBufferNumber;
         // FIXME: enable blob support when space amplification is acceptable
         // options.enable_blob_files = keyPageSize > 1 ? true : false;
-        options.enable_blob_files = rocksDBOption.enable_blob_files;
+        options.enable_blob_files = rocksDBOption.enableBlobFiles;
         options.bytes_per_sync = 1 << 20;  // 1MB
         // options.level_compaction_dynamic_level_bytes = true;
         // options.compaction_pri = rocksdb::kMinOverlappingRatio;
