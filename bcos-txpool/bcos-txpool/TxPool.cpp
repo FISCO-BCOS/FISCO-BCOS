@@ -85,6 +85,10 @@ void TxPool::stop()
     if (m_txsPreStore)
     {
         m_txsPreStore->stop();
+        // Abandoned lambdas in the stopped thread pool never run their cleanup; clear
+        // stale entries so a restart doesn't see phantom in-flight blocks.
+        std::scoped_lock lock(x_preStoreInFlight);
+        m_preStoreInFlight.clear();
     }
     if (m_verifier)
     {
@@ -282,8 +286,39 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                 // m_txsPreStore
                 if (!verifyError && verifyRet && block)
                 {
-                    txpool->m_txsPreStore->enqueue(
-                        [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    auto const& blockHash = block->blockHeader()->hash();
+                    if (const auto admission = txpool->tryAcquirePreStoreSlot(blockHash);
+                        admission == TxPool::PreStoreAdmission::Accepted)
+                    {
+                        txpool->m_txsPreStore->enqueue([txpool, block, blockHash]() {
+                            try
+                            {
+                                txpool->storeVerifiedBlock(block);
+                            }
+                            catch (std::exception const& e)
+                            {
+                                TXPOOL_LOG(WARNING)
+                                    << LOG_DESC("pre-store storeVerifiedBlock threw")
+                                    << LOG_KV("blockHash", blockHash.abridged())
+                                    << LOG_KV("error", boost::diagnostic_information(e));
+                            }
+                            catch (...)
+                            {
+                                TXPOOL_LOG(WARNING) << LOG_DESC(
+                                                           "pre-store storeVerifiedBlock threw "
+                                                           "unknown exception")
+                                                    << LOG_KV("blockHash", blockHash.abridged());
+                            }
+                            txpool->releasePreStoreSlot(blockHash);
+                        });
+                    }
+                    else if (admission == TxPool::PreStoreAdmission::Disabled)
+                    {
+                        // backpressure off: legacy unbounded behavior (operator escape hatch)
+                        txpool->m_txsPreStore->enqueue(
+                            [txpool, block]() { txpool->storeVerifiedBlock(block); });
+                    }
+                    // DuplicateSkipped / CapDropped: nothing to do; logged inside the gate.
                 }
             };
 
@@ -719,4 +754,56 @@ void bcos::txpool::TxPool::registerTxsNotifier(
     std::function<void(size_t, std::function<void(Error::Ptr)>)> _txsNotifier)
 {
     m_txpoolStorage->registerTxsNotifier(_txsNotifier);
+}
+
+void bcos::txpool::TxPool::setPreStoreBackpressureEnabled(bool _enabled)
+{
+    m_preStoreBackpressureEnabled = _enabled;
+}
+
+void bcos::txpool::TxPool::setPreStoreMaxInflight(std::size_t _max)
+{
+    if (_max == 0)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC(
+            "setPreStoreMaxInflight ignored: 0 is invalid (would block all pre-store work)");
+        return;
+    }
+    m_preStoreMaxInflight = _max;
+}
+
+bcos::txpool::TxPool::PreStoreAdmission bcos::txpool::TxPool::tryAcquirePreStoreSlot(
+    bcos::crypto::HashType const& _blockHash)
+{
+    if (!m_preStoreBackpressureEnabled)
+    {
+        return PreStoreAdmission::Disabled;
+    }
+    std::scoped_lock lock(x_preStoreInFlight);
+    if (m_preStoreInFlight.contains(_blockHash))
+    {
+        TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: skip duplicate block")
+                          << LOG_KV("hash", _blockHash.abridged());
+        return PreStoreAdmission::DuplicateSkipped;
+    }
+    if (m_preStoreInFlight.size() < m_preStoreMaxInflight)
+    {
+        m_preStoreInFlight.insert(_blockHash);
+        return PreStoreAdmission::Accepted;
+    }
+    // Cap reached. With cap=1024 (NodeConfig default) and typical PBFT pipeline depth,
+    // this branch is not expected to fire in normal operation; under DoS the DEBUG
+    // level keeps log I/O out of the picture by default. Ops can enable DEBUG (or
+    // monitor the drop side-channel via metrics) to observe cap hits.
+    TXPOOL_LOG(DEBUG) << LOG_DESC("pre-store gate: backlog cap reached, dropping")
+                      << LOG_KV("hash", _blockHash.abridged())
+                      << LOG_KV("inflight", m_preStoreInFlight.size())
+                      << LOG_KV("cap", m_preStoreMaxInflight.load());
+    return PreStoreAdmission::CapDropped;
+}
+
+void bcos::txpool::TxPool::releasePreStoreSlot(bcos::crypto::HashType const& _blockHash)
+{
+    std::lock_guard lock(x_preStoreInFlight);
+    m_preStoreInFlight.erase(_blockHash);
 }
