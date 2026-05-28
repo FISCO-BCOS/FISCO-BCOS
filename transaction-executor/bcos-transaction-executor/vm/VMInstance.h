@@ -24,23 +24,21 @@
 #pragma once
 #include "../EVMCResult.h"
 #include <bcos-utilities/Common.h>
-#include <evmc/evmc.h>
-#include <evmone/evmone.h>
 #include <compare>
+#include <evmc/evmc.hpp>
 #include <evmone/baseline.hpp>
-#include <evmone/vm.hpp>
+#include <memory>
 
 namespace bcos::executor_v1
 {
 
-/// The RAII wrapper for an VMInstance-C instance.
+using EvmoneCodeAnalysis = evmone::baseline::CodeAnalysis;
+
+/// RAII wrapper: cached baseline analysis + fresh evmc::VM per execute (see VMInstance.cpp).
 class VMInstance
 {
-private:
-    std::shared_ptr<evmone::baseline::CodeAnalysis const> m_instance;
-
 public:
-    explicit VMInstance(std::shared_ptr<evmone::baseline::CodeAnalysis const> instance) noexcept;
+    explicit VMInstance(std::shared_ptr<EvmoneCodeAnalysis const> analysis) noexcept;
     ~VMInstance() noexcept = default;
 
     VMInstance(VMInstance const&) = delete;
@@ -52,6 +50,9 @@ public:
         evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t codeSize);
 
     void enableDebugOutput();
+
+private:
+    std::shared_ptr<EvmoneCodeAnalysis const> m_analysis;
 };
 
 }  // namespace bcos::executor_v1

@@ -42,45 +42,39 @@ Result::Result(Result&& _other) noexcept : evmc_result(_other)
 }
 
 VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view code) noexcept
-  : m_instance(instance), m_revision(revision), m_code(code)
+  : m_evmcVm(evmc::VM{instance}), m_revision(revision), m_code(code)
 {
-    assert(m_instance != nullptr);
-    // the abi_version of intepreter is EVMC_ABI_VERSION when callback VMFactory::create()
-    assert(m_instance->abi_version == EVMC_ABI_VERSION);
-
+    assert(m_evmcVm->is_abi_compatible());
     // Set the options.
-    if (m_instance->set_option != nullptr)
+    if (m_evmcVm->get_raw_pointer()->set_option != nullptr)
     {  // baseline interpreter could not work with precompiled
-       // m_instance->set_option(m_instance, "advanced", "");  // default is baseline interpreter
-       // m_instance->set_option(m_instance, "trace", "");
-       // m_instance->set_option(m_instance, "cgoto", "no");
+       // m_evmcVm->set_option("advanced", "");  // default is baseline interpreter
+       // m_evmcVm->set_option("trace", "");
+       // m_evmcVm->set_option("cgoto", "no");
     }
 }
 
 VMInstance::VMInstance(
-    std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
+    std::shared_ptr<EvmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
   : m_analysis(std::move(analysis)), m_revision(revision), m_code(code)
 {
     assert(m_analysis != nullptr);
 }
 
-VMInstance::~VMInstance()
-{
-    if (m_instance)
-    {
-        m_instance->destroy(m_instance);
-    }
-}
-
 Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 {
-    if (m_instance != nullptr)
+    if (m_evmcVm)
     {
-        return Result(m_instance->execute(m_instance, _hostContext.interface, &_hostContext,
-            m_revision, _msg, m_code.data(), m_code.size()));
+        return Result(m_evmcVm
+                          ->execute(*_hostContext.interface, &_hostContext, m_revision, *_msg,
+                              m_code.data(), m_code.size())
+                          .release_raw());
     }
 
-    // TODO: Cache the evmone::VM instance by code hash instead of creating one per execution.
+    // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
+    // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION). Cached analysis is still used.
+    // NOTE(perf): this is the correctness-first path for now; benchmark-backed pooling can be
+    // considered only after evmone reset/reuse guarantees are validated.
     evmc::VM evm{evmc_create_evmone()};
     return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(evm.get_raw_pointer()),
         *_hostContext.interface, &_hostContext, m_revision, *_msg, *m_analysis));
@@ -88,6 +82,14 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 
 evmc_revision toRevision(VMSchedule const& _schedule)
 {
+    if (_schedule.enableOsaka)
+    {
+        return EVMC_OSAKA;
+    }
+    if (_schedule.enablePrague)
+    {
+        return EVMC_PRAGUE;
+    }
     if (_schedule.enablePairs)
     {
         return EVMC_PARIS;
