@@ -154,6 +154,8 @@ public:
 
     evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
 
+    // Reserved for dedicated EIP-2929 PR. Callback wiring remains disabled in EVMHostInterface
+    // until tx-scope lifecycle and pre-warm semantics are finalized.
     evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
     {
         if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
@@ -162,6 +164,7 @@ public:
         return m_warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
+    // Reserved for dedicated EIP-2929 PR. See accessAccount note above.
     evmc_access_status accessStorage(
         const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
     {
@@ -192,7 +195,8 @@ private:
 
     std::list<CallParameters::UniquePtr> m_responseStore;
 
-    // EIP-2929 cold/warm access tracking (revision-gated, see accessAccount/accessStorage)
+    // EIP-2929 warm-set storage is reserved for the dedicated adaptation PR.
+    // Keep fields in place to minimize follow-up churn.
     struct EVMCAddrHash
     {
         size_t operator()(const evmc_address& a) const noexcept

@@ -198,6 +198,8 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
 {
+    // TODO(evmone-adaptation): enable HostContext::accessAccount when evmone/fork-specific
+    // EIP-2929 warm-set semantics are landed in the dedicated follow-up PR.
     std::ignore = _context;
     std::ignore = _addr;
     return EVMC_ACCESS_COLD;
@@ -207,6 +209,8 @@ evmc_access_status access_account(evmc_host_context* _context, const evmc_addres
 evmc_access_status access_storage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
+    // TODO(evmone-adaptation): enable HostContext::accessStorage together with the dedicated
+    // EIP-2929 adaptation PR to keep host callback semantics deterministic.
     std::ignore = _context;
     std::ignore = _addr;
     std::ignore = _key;

@@ -73,6 +73,8 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 
     // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
     // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION). Cached analysis is still used.
+    // NOTE(perf): this is the correctness-first path for now; benchmark-backed pooling can be
+    // considered only after evmone reset/reuse guarantees are validated.
     evmc::VM evm{evmc_create_evmone()};
     return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(evm.get_raw_pointer()),
         *_hostContext.interface, &_hostContext, m_revision, *_msg, *m_analysis));
@@ -88,15 +90,13 @@ evmc_revision toRevision(VMSchedule const& _schedule)
     {
         return EVMC_PRAGUE;
     }
+    if (_schedule.enablePairs)
+    {
+        return EVMC_PARIS;
+    }
     if (_schedule.enableCanCun)
     {
         return EVMC_CANCUN;
-    }
-    // FISCO enablePairs (V3.2+ pre-Cancun): Ethereum Shanghai = last fork before Cancun (EIP-3855
-    // PUSH0).
-    if (_schedule.enablePairs)
-    {
-        return EVMC_SHANGHAI;
     }
     return EVMC_LONDON;
 }

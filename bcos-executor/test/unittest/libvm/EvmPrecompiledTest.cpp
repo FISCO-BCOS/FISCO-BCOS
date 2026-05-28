@@ -21,6 +21,7 @@
 
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "vm/EvmPrecompiledAddress.h"
 #include "vm/Precompiled.h"
 #include <boost/test/unit_test.hpp>
 #include <string_view>
@@ -866,6 +867,325 @@ BOOST_AUTO_TEST_CASE(point_evaluation_pricer)
     auto& pricer = executor::PrecompiledRegistrar::pricer(kzgName);
     bytes empty;
     BOOST_CHECK_EQUAL(pricer(ref(empty)), 50000);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ---------------------------------------------------------------------------
+// isBLSPrecompileAddress — unit tests
+// EIP-2537 assigns 0x0b..0x11 as BLS12-381 precompile addresses.
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(testIsBLSPrecompileAddress)
+
+// ── valid range ─────────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0b_no_prefix)
+{
+    // 0x0b — G1 Add (lowest BLS address)
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0c)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000c"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0d)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000d"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0e)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000e"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0f)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("000000000000000000000000000000000000000f"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x10)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0000000000000000000000000000000000000010"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x11_no_prefix)
+{
+    // 0x11 — highest BLS address
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0000000000000000000000000000000000000011"));
+}
+
+// ── same addresses with 0x prefix ───────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_0b)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_0f)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x000000000000000000000000000000000000000f"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_11)
+{
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x0000000000000000000000000000000000000011"));
+}
+
+// ── just outside the valid range (boundary) ─────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x0a_below_range)
+{
+    // 0x0a is just below the BLS range — must return false
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000000a"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x12_above_range)
+{
+    // 0x12 is just above the BLS range — must return false
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000012"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x09_below_range)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000009"));
+}
+
+// ── non-zero leading bytes ───────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_leading_byte)
+{
+    // Second nibble is non-zero → not a BLS address
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("010000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_middle_byte)
+{
+    // 40-char address: body[17]='1' — caught mid-loop at i=17.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000001000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_penultimate_nibble_nonzero)
+{
+    // hi nibble of last byte is non-zero (e.g. 0x2b) → not in range
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000002b"));
+}
+
+// ── invalid length ───────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_empty_string)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress(""));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_too_short)
+{
+    // 39 nibbles — one short
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("00000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_too_long)
+{
+    // 41 nibbles — one too many
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_only_prefix)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0x"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_prefix_too_short)
+{
+    // "0x" + 39 nibbles = 41 chars total but body is 39 → invalid
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0x00000000000000000000000000000000000000b"));
+}
+
+// ── well-known non-BLS precompile addresses ──────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_ecrecover)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000001"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_p256verify)
+{
+    // 0x100 — P256Verify, not a BLS address
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000100"));
+}
+
+// ── additional isBLSPrecompileAddress coverage ───────────────────────────────
+
+BOOST_AUTO_TEST_CASE(bls_addr_all_zeros)
+{
+    // hi='0', lo='0' — lo < 'b', so neither branch fires → false
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000000000000000000000000000000000"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_0x_prefix_all_zeros)
+{
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0x0000000000000000000000000000000000000000"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_uppercase_last_nibble)
+{
+    // Function is case-sensitive. 'B' != 'b', so lo >= 'b' is false.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000000B"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_uppercase_nibble_in_leading_section)
+{
+    // 40-char address: body[10]='A' (uppercase, not '0') — caught in loop at i=10
+    // Tests that the loop is case-sensitive and does not treat 'A' as zero.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("0000000000A0000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_37)
+{
+    // 40-char address: body[37]='1' — caught at last loop iteration (i=37).
+    // hi=body[38]='0', lo=body[39]='b' would be in BLS range if loop passed.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000000000000000000000010b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_0)
+{
+    // 40-char address: body[0]='f' — caught at first loop iteration (i=0).
+    // hi=body[38]='0', lo=body[39]='b' would be in BLS range if loop passed.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("f00000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_20)
+{
+    // 40-char address: body[20]='1' — caught mid-loop at i=20.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000001000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_nonzero_at_loop_position_19)
+{
+    // 40-char address: body[19]='1' — caught at i=19 in loop.
+    BOOST_CHECK(!executor::isBLSPrecompileAddress("000000000000000000010000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(bls_addr_40_zeros_hi1_lo0_is_0x10)
+{
+    // hi='1', lo='0' — matches `hi=='1' && lo>='0' && lo<='1'` → true (same as 0x10 test)
+    // Confirm 0x10 address explicitly
+    BOOST_CHECK(executor::isBLSPrecompileAddress("0x0000000000000000000000000000000000000010"));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+// ---------------------------------------------------------------------------
+// isP256verifyPrecompileAddress — unit tests
+// EIP-7212: address is 0x0100 (256-bit P256/secp256r1 verify).
+// ---------------------------------------------------------------------------
+
+BOOST_AUTO_TEST_SUITE(testIsP256verifyPrecompileAddress)
+
+// ── valid matches ────────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(p256_exact_match_no_prefix)
+{
+    BOOST_CHECK(
+        executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_exact_match_with_prefix)
+{
+    BOOST_CHECK(
+        executor::isP256verifyPrecompileAddress("0x0000000000000000000000000000000000000100"));
+}
+
+// ── invalid length ───────────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(p256_empty_string)
+{
+    BOOST_CHECK(!executor::isP256verifyPrecompileAddress(""));
+}
+
+BOOST_AUTO_TEST_CASE(p256_only_prefix)
+{
+    BOOST_CHECK(!executor::isP256verifyPrecompileAddress("0x"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_too_short_39)
+{
+    // 39 nibbles
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_too_long_41)
+{
+    // 41 nibbles
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("00000000000000000000000000000000000000100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_prefix_body_39_chars)
+{
+    // "0x" + 39 nibbles → body length 39 ≠ 40 → false
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0x000000000000000000000000000000000000100"));
+}
+
+// ── different addresses ──────────────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(p256_all_zeros)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000000"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_ecrecover)
+{
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000001"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_bls_0x0b)
+{
+    // BLS address is not P256Verify
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000000b"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_near_miss_last_nibble)
+{
+    // Differs only in last nibble: "...0101" vs "...0100"
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000101"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_near_miss_second_nibble)
+{
+    // Differs only one nibble before last: "...0110" vs "...0100"
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("0000000000000000000000000000000000000110"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_uppercase_last_nibble)
+{
+    // isP256verifyPrecompileAddress uses exact string comparison with the lowercase constant.
+    // An uppercase nibble in the last byte must return false.
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000010A"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_uppercase_in_middle)
+{
+    // Uppercase letter mid-address → body != P256VERIFY_PRECOMPILED_ADDRESS → false
+    BOOST_CHECK(
+        !executor::isP256verifyPrecompileAddress("000000000000000000000000000000000000A100"));
+}
+
+BOOST_AUTO_TEST_CASE(p256_with_prefix_uppercase)
+{
+    // "0X" (uppercase X) is NOT stripped — body becomes 42 chars → invalid
+    BOOST_CHECK(
+        executor::isP256verifyPrecompileAddress("0X0000000000000000000000000000000000000100"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
