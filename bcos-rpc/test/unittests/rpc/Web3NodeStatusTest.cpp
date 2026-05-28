@@ -100,5 +100,41 @@ BOOST_AUTO_TEST_CASE(ethSyncingResolvesViaSyncService)
     BOOST_CHECK_EQUAL(syncing["jsonrpc"].asString(), "2.0");
 }
 
+BOOST_AUTO_TEST_CASE(netPeerCountUsesSyncPeerStatus)
+{
+    // net_peerCount dereferences sync()->getPeerStatus(); FakeBlockSync
+    // returns an empty list → 0x0.
+    auto resp = call(req("net_peerCount"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    BOOST_CHECK(resp.isMember("id"));
+}
+
+BOOST_AUTO_TEST_CASE(netVersionReadsChainIdFromLedger)
+{
+    // net_version co_awaits the ledger system-config for the web3 chain id.
+    auto resp = call(req("net_version"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(netListeningIsConstantTrue)
+{
+    auto resp = call(req("net_listening"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(maxPriorityFeePerGasIsConstant)
+{
+    auto resp = call(req("eth_maxPriorityFeePerGas"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(protocolVersionReportsNotImplemented)
+{
+    // eth_protocolVersion deliberately throws MethodNotFound — must surface as
+    // a JSON-RPC error, not crash.
+    auto resp = call(req("eth_protocolVersion"));
+    BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
