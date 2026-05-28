@@ -171,17 +171,15 @@ std::optional<std::string> validateExecutionPayload(
 }  // namespace detail
 
 template <class MemPoolType, class GlobalStateStorageType, class ExecutorType, class SchedulerType>
+    requires executor_v1::TransactionExecutor<ExecutorType,
+                 typename GlobalStateStorageType::ViewType> &&
+             scheduler_v1::TransactionScheduler<SchedulerType,
+                 typename GlobalStateStorageType::ViewType, ExecutorType,
+                 std::vector<protocol::Transaction::Ptr>>
 class EngineService
 {
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
-
-    // Verify types satisfy the framework concepts
-    static_assert(executor_v1::TransactionExecutor<ExecutorType, ViewType>,
-        "ExecutorType must satisfy executor_v1::TransactionExecutor<ExecutorType, ViewType>");
-    static_assert(scheduler_v1::TransactionScheduler<SchedulerType, ViewType, ExecutorType,
-                      std::vector<protocol::Transaction::Ptr>>,
-        "SchedulerType must satisfy scheduler_v1::TransactionScheduler");
 
     EngineService(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
@@ -611,7 +609,7 @@ private:
         // Step 2b: Create BlockHeader for the new block
         auto blockHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
         std::vector<bcos::protocol::ParentInfo> parentInfos{
-            {nextBlockNumber - 1, forkchoiceState.headBlockHash}};
+            {.blockNumber = nextBlockNumber - 1, .blockHash = forkchoiceState.headBlockHash}};
         blockHeader->setParentInfo(parentInfos);
         blockHeader->setNumber(nextBlockNumber);
         blockHeader->setVersion(blockVersion);
@@ -670,8 +668,9 @@ private:
             }
         }
 
-        // Step 2f: Compute gas used
+        // Step 2f: Compute gas used and block-level logsBloom from receipts
         u256 totalGasUsed;
+        Bloom logsBloom{};
         for (auto& receipt : receipts)
         {
             if (!receipt)
@@ -679,6 +678,7 @@ private:
                 BOOST_THROW_EXCEPTION(std::runtime_error{"Null receipt returned by scheduler"});
             }
             totalGasUsed += receipt->gasUsed();
+            orBloom(logsBloom, receipt->logsBloom());
         }
 
         // Step 2g: Compute state root (MPT over state storage)
@@ -697,7 +697,7 @@ private:
         executionPayload.gasUsed = totalGasUsed;
         executionPayload.blockHash = blockHeader->hash();
         executionPayload.gasLimit = std::get<0>(ledgerConfig.gasLimit());
-        executionPayload.logsBloom = {};
+        executionPayload.logsBloom = logsBloom;
 
         co_return executionPayload;
     }
