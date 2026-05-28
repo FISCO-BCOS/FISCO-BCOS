@@ -122,5 +122,36 @@ BOOST_AUTO_TEST_CASE(logEntryRoundTripAndTake)
     BOOST_CHECK_EQUAL(taken.address().size(), 3U);
 }
 
+BOOST_AUTO_TEST_CASE(gatewayInfoRoundTrip)
+{
+    auto gateway = std::make_shared<gateway::GatewayInfo>();
+    gateway::P2PInfo p2p;
+    p2p.p2pID = "peer1";
+    p2p.agencyName = "agency";
+    p2p.nodeName = "node";
+    p2p.nodeIPEndpoint = gateway::NodeIPEndpoint(std::string("127.0.0.1"), 30300);
+    gateway->setP2PInfo(std::move(p2p));
+
+    gateway::GatewayInfo::NodeIDInfoType nodeIDInfo;
+    nodeIDInfo["group0"].emplace("nodeA", 0U);
+    nodeIDInfo["group0"].emplace("nodeB", 1U);
+    gateway->setNodeIDInfo(std::move(nodeIDInfo));
+
+    auto tars = bcostars::toTarsGatewayInfo(gateway);
+    BOOST_CHECK_EQUAL(tars.p2pInfo.p2pID, "peer1");
+    BOOST_CHECK_EQUAL(tars.nodeIDInfo.size(), 1U);
+
+    auto back = bcostars::fromTarsGatewayInfo(tars);
+    BOOST_CHECK_EQUAL(back->p2pInfo().p2pID, "peer1");
+    BOOST_CHECK_EQUAL(back->p2pInfo().agencyName, "agency");
+    BOOST_CHECK_EQUAL(back->nodeIDInfo()["group0"].size(), 2U);
+}
+
+BOOST_AUTO_TEST_CASE(toTarsGatewayInfoNullReturnsEmpty)
+{
+    auto tars = bcostars::toTarsGatewayInfo(nullptr);
+    BOOST_CHECK(tars.nodeIDInfo.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
