@@ -20,8 +20,9 @@
 #include "NodeDecoder.h"
 #include "Errors.h"
 #include "HexPrefix.h"
-#include <bcos-codec/rlp/Common.h>
+#include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -29,126 +30,37 @@ namespace bcos::ledger::mpt
 namespace
 {
 
-// A parsed RLP item header. The item occupies the raw span [pos, pos + headerLen + payloadLen);
-// for a string the content is [pos + headerLen, pos + headerLen + payloadLen) — except a
-// single-byte string (b < 0x80) whose content is the one byte at `pos` (headerLen == 0).
-struct DecoderItemView
+// One RLP item read out of a buffer: its full raw span (header + payload), its string content span
+// (payload only; for a single byte < 0x80 the lone byte itself), and whether the item is a list.
+// MPT keeps branch/extension child references RLP-encoded, so we must track the raw span — the
+// high-level codec::rlp::decode strips headers and rejects lists-into-byte-strings, hence we drop
+// to decodeHeader and capture spans ourselves.
+struct DecoderItem
 {
+    bcos::bytesConstRef raw;
+    bcos::bytesConstRef content;
     bool isList{false};
-    size_t headerLen{0};
-    size_t payloadLen{0};
 };
 
-// Reads `count` big-endian bytes starting at raw[pos] into a size_t. Throws if the span is
-// truncated. `count` is at most 8 (RLP long-form length-of-length never needs more for our sizes).
-size_t readBigEndianLen(bcos::bytesConstRef raw, size_t pos, size_t count)
+// Read one RLP item from `cursor`, advancing it past the whole item. All head-byte / long-length
+// parsing is delegated to the shared bcos::codec::rlp::decodeHeader (which also bounds-checks the
+// payload against the remaining input). Throws MPTDecodeError on malformed input.
+DecoderItem readItem(bcos::bytesRef& cursor)
 {
-    if (count == 0 || count > sizeof(size_t) || pos + count > raw.size())
+    bcos::byte const* const itemStart = cursor.data();
+    auto&& [error, header] = bcos::codec::rlp::decodeHeader(cursor);
+    if (error)
     {
-        BOOST_THROW_EXCEPTION(
-            MPTDecodeError{} << bcos::errinfo_comment("RLP length-of-length truncated"));
+        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
+                                  "malformed RLP header while decoding MPT node"));
     }
-    size_t value = 0;
-    for (size_t i = 0; i < count; ++i)
-    {
-        value = (value << 8) | static_cast<size_t>(raw[pos + i]);
-    }
-    return value;
-}
-
-// Parse the RLP header of the item that starts at raw[pos]. Throws MPTDecodeError if the declared
-// span runs past raw.size().
-DecoderItemView parseItem(bcos::bytesConstRef raw, size_t pos)
-{
-    using namespace bcos::codec::rlp;
-    if (pos >= raw.size())
-    {
-        BOOST_THROW_EXCEPTION(
-            MPTDecodeError{} << bcos::errinfo_comment("RLP item starts past end of input"));
-    }
-
-    bcos::byte const b = raw[pos];
-    DecoderItemView view;
-    if (b < BYTES_HEAD_BASE)  // < 0x80: single-byte string, the byte IS the content
-    {
-        view = {.isList = false, .headerLen = 0, .payloadLen = 1};
-    }
-    else if (b <= LONG_BYTES_HEAD_BASE)  // 0x80..0xb7: short string
-    {
-        view = {.isList = false, .headerLen = 1, .payloadLen = static_cast<size_t>(b) - BYTES_HEAD_BASE};
-    }
-    else if (b < LIST_HEAD_BASE)  // 0xb8..0xbf: long string
-    {
-        size_t const lenOfLen = static_cast<size_t>(b) - LONG_BYTES_HEAD_BASE;
-        view = {.isList = false,
-            .headerLen = 1 + lenOfLen,
-            .payloadLen = readBigEndianLen(raw, pos + 1, lenOfLen)};
-    }
-    else if (b <= LONG_LIST_HEAD_BASE)  // 0xc0..0xf7: short list
-    {
-        view = {.isList = true, .headerLen = 1, .payloadLen = static_cast<size_t>(b) - LIST_HEAD_BASE};
-    }
-    else  // 0xf8..0xff: long list
-    {
-        size_t const lenOfLen = static_cast<size_t>(b) - LONG_LIST_HEAD_BASE;
-        view = {.isList = true,
-            .headerLen = 1 + lenOfLen,
-            .payloadLen = readBigEndianLen(raw, pos + 1, lenOfLen)};
-    }
-
-    if (pos + view.headerLen + view.payloadLen > raw.size())
-    {
-        BOOST_THROW_EXCEPTION(
-            MPTDecodeError{} << bcos::errinfo_comment("RLP item span exceeds input length"));
-    }
-    return view;
-}
-
-// One child item discovered while walking a list payload: its full RLP raw span, its string
-// content span, and whether the item is itself a list.
-struct DecoderChild
-{
-    bcos::bytesConstRef raw;      // [pos, pos + headerLen + payloadLen)
-    bcos::bytesConstRef content;  // [pos + headerLen, pos + headerLen + payloadLen), or the lone byte
-    bool isList{false};
-    size_t payloadLen{0};
-};
-
-// Walk the payload region [start, end) of a list, collecting one DecoderChild per item.
-std::vector<DecoderChild> walkList(bcos::bytesConstRef raw, size_t start, size_t end)
-{
-    std::vector<DecoderChild> items;
-    size_t pos = start;
-    while (pos < end)
-    {
-        DecoderItemView const view = parseItem(raw, pos);
-        size_t const total = view.headerLen + view.payloadLen;
-        DecoderChild child;
-        child.raw = raw.getCroppedData(pos, total);
-        child.isList = view.isList;
-        child.payloadLen = view.payloadLen;
-        if (view.headerLen == 0)  // single-byte string: content is the lone byte at pos
-        {
-            child.content = raw.getCroppedData(pos, 1);
-        }
-        else
-        {
-            child.content = raw.getCroppedData(pos + view.headerLen, view.payloadLen);
-        }
-        items.push_back(child);
-        pos += total;
-    }
-    if (pos != end)
-    {
-        BOOST_THROW_EXCEPTION(
-            MPTDecodeError{} << bcos::errinfo_comment("RLP list payload not exactly consumed"));
-    }
-    return items;
-}
-
-bcos::h256 toHash(bcos::bytesConstRef content)
-{
-    return bcos::h256{content.data(), content.size()};
+    // decodeHeader consumed the header (0 bytes for a single byte < 0x80) so cursor now starts at
+    // the payload; headerLen is how far it advanced.
+    auto const headerLen = static_cast<size_t>(cursor.data() - itemStart);
+    bcos::bytesConstRef const content(cursor.data(), header.payloadLength);
+    bcos::bytesConstRef const raw(itemStart, headerLen + header.payloadLength);
+    cursor = cursor.getCroppedData(header.payloadLength);
+    return DecoderItem{.raw = raw, .content = content, .isList = header.isList};
 }
 
 bcos::bytes toBytes(bcos::bytesConstRef ref)
@@ -158,14 +70,19 @@ bcos::bytes toBytes(bcos::bytesConstRef ref)
 
 }  // namespace
 
-TrieNode decodeNode(bcos::bytesConstRef raw)
+TrieNode decodeNode(bcos::bytesConstRef rawInput)
 {
-    DecoderItemView const top = parseItem(raw, 0);
+    // decodeHeader takes a mutable view but only advances it (never writes through the pointer);
+    // MPT node buffers are always real mutable vectors, so this const_cast is sound.
+    bcos::bytesRef cursor(const_cast<bcos::byte*>(rawInput.data()), rawInput.size());
 
-    // 1) Not a list → must be the empty-string EmptyNode {0x80}; any other string is malformed.
+    DecoderItem const top = readItem(cursor);
+
+    // 1) Not a list → only the empty string {0x80} is a valid node (EmptyNode); any other string
+    //    is malformed.
     if (!top.isList)
     {
-        if (top.payloadLen == 0 && top.headerLen == 1)
+        if (top.content.empty())
         {
             return EmptyNode{};
         }
@@ -173,9 +90,13 @@ TrieNode decodeNode(bcos::bytesConstRef raw)
                                   "top-level RLP item is a non-empty string, not a node list"));
     }
 
-    // 2) Walk the list payload.
-    std::vector<DecoderChild> items =
-        walkList(raw, top.headerLen, top.headerLen + top.payloadLen);
+    // 2) Walk the list payload into its items.
+    bcos::bytesRef payload(const_cast<bcos::byte*>(top.content.data()), top.content.size());
+    std::vector<DecoderItem> items;
+    while (!payload.empty())
+    {
+        items.push_back(readItem(payload));
+    }
 
     // 3) Two items → Leaf or Extension, distinguished by the HP terminator flag.
     if (items.size() == 2)
@@ -183,15 +104,10 @@ TrieNode decodeNode(bcos::bytesConstRef raw)
         auto [nibbles, isLeaf] = hexPrefixDecode(items[0].content);
         if (isLeaf)
         {
-            LeafNode leaf;
-            leaf.keyNibbles = std::move(nibbles);
-            leaf.value = toBytes(items[1].content);  // value byte-string content
-            return leaf;
+            return LeafNode{.keyNibbles = std::move(nibbles), .value = toBytes(items[1].content)};
         }
-        ExtensionNode ext;
-        ext.sharedNibbles = std::move(nibbles);
-        ext.child = toBytes(items[1].raw);  // keep the child RLP-encoded (raw span)
-        return ext;
+        // Keep the child RLP-encoded (raw span): it is itself a node reference, not a byte-string.
+        return ExtensionNode{.sharedNibbles = std::move(nibbles), .child = toBytes(items[1].raw)};
     }
 
     // 4) Seventeen items → Branch: 16 children + value.
@@ -200,19 +116,18 @@ TrieNode decodeNode(bcos::bytesConstRef raw)
         BranchNode branch;
         for (size_t i = 0; i < NIBBLE_RANGE; ++i)
         {
-            DecoderChild const& child = items[i];
-            if (!child.isList && child.payloadLen == 0)
+            DecoderItem const& child = items[i];
+            if (!child.isList && child.content.empty())  // empty string 0x80 → absent child
             {
                 branch.children[i] = NodeRef::absent();
             }
-            else if (!child.isList && child.payloadLen == bcos::h256::SIZE)
+            else if (!child.isList && child.content.size() == bcos::h256::SIZE)  // 0xa0 + 32 bytes
             {
                 branch.children[i].kind = NodeRef::Kind::Hash;
-                branch.children[i].hash = toHash(child.content);
+                branch.children[i].hash = bcos::h256{child.content.data(), child.content.size()};
             }
-            else
+            else  // inline subtree (a list) → keep the raw span
             {
-                // Inline subtree (a list) or any other non-empty/non-32 string: keep the raw span.
                 branch.children[i].kind = NodeRef::Kind::Inline;
                 branch.children[i].inlineBytes = toBytes(child.raw);
             }
