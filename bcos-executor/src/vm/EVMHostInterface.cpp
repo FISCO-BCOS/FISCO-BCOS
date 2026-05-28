@@ -206,11 +206,12 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     EXECUTIVE_LOG(DEBUG) << "selfdestruct successful";
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
-    // TODO:
-    // EVMC: true = first selfdestruct registration in this tx (enables evmone gas accounting).
-    // FISCO does not implement EIP-6780 same-tx creation tracking yet; return true for host/evmone
-    // consistency. EIP-6780 full semantics are a known deviation on EVMC_CANCUN+.
-    return true;
+    // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
+    // EIP-6780 (Cancun+): account deletion only when created in same tx;
+    //   no gas refund in either case ("Note that no refund is given since EIP-3529").
+    // Returning false (no refund) is the correct behavior for all cases.
+    // TODO(evmone-eip6780): implement same-tx creation tracking for account deletion.
+    return false;
 }
 
 

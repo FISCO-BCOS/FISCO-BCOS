@@ -253,7 +253,7 @@ BOOST_AUTO_TEST_CASE(modexp_pricer_small_inputs)
     // For exp=2 (msb=1): multComplexity(1)=1, max(1,1)=1, gas = 1*1/20 = 0
     // (integer division rounds down, minimum is floored by EVM callers but pricer itself returns 0)
     const std::string modexpName{"modexp"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(modexpName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(modexpName);
     bytes input(96, 0);
     input[31] = 1;          // baseLen = 1
     input[63] = 1;          // expLen  = 1
@@ -271,7 +271,7 @@ BOOST_AUTO_TEST_CASE(modexp_pricer_multcomplexity_branch_le64)
     // exp=1 → adjExpLen = msb(1) = 0 → max(0,1) = 1
     // gas = 1024 * 1 / 20 = 51
     const std::string modexpName{"modexp"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(modexpName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(modexpName);
     bytes input(96, 0);
     input[31] = 32;  // baseLen = 32
     input[63] = 1;   // expLen  = 1
@@ -290,7 +290,7 @@ BOOST_AUTO_TEST_CASE(modexp_pricer_multcomplexity_branch_le1024)
     //                                              = 4096 + 12288 - 3072 = 13312
     // exp=1 → adjExpLen=0 → max(0,1)=1; gas = 13312 / 20 = 665
     const std::string modexpName{"modexp"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(modexpName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(modexpName);
     bytes input(96, 0);
     input[31] = 128;  // baseLen = 128
     input[63] = 1;    // expLen  = 1
@@ -308,7 +308,7 @@ BOOST_AUTO_TEST_CASE(modexp_pricer_multcomplexity_branch_gt1024)
     //                                            = 262144 + 983040 - 199680 = 1045504
     // exp=1 → adjExpLen=msb(1)=0 → max(0,1)=1; gas = 1045504 * 1 / 20 = 52275
     const std::string modexpName{"modexp"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(modexpName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(modexpName);
     bytes input(96, 0);
     // Use uint16_t to set lengths > 255
     input[30] = 0x08;  // baseLen high byte → 0x0800 = 2048
@@ -333,7 +333,7 @@ BOOST_AUTO_TEST_CASE(modexp_pricer_explengthadjust_long_exponent)
     //   multComplexity(32) = 32² = 1024
     //   gas = 1024 * max(8,1) / 20 = 8192 / 20 = 409
     const std::string modexpName{"modexp"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(modexpName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(modexpName);
     bytes input(193, 0);  // 96 header + 32 base + 33 exp + 32 mod
     input[31] = 32;       // baseLen = 32
     input[63] = 33;       // expLen  = 33
@@ -500,7 +500,7 @@ BOOST_AUTO_TEST_CASE(blake2_compression_price_equals_rounds)
 {
     // The pricer must return the number of rounds (cost = 1 gas per round, EIP-152 §gas).
     const std::string blake2Name{"blake2_compression"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(blake2Name);
+    auto pricer = executor::PrecompiledRegistrar::pricer(blake2Name);
 
     // 12 rounds → cost 12
     bytes input12 = bcos::fromHex("0000000c" + BLAKE2_BODY_HEX + "01");
@@ -686,7 +686,7 @@ BOOST_AUTO_TEST_CASE(alt_bn128_pairing_pricer)
 {
     // EIP-197 §gas: 45000 + 34000 * k pairs
     const std::string pairingName{"alt_bn128_pairing_product"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(pairingName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(pairingName);
     bytes empty;
     BOOST_CHECK_EQUAL(pricer(ref(empty)), 45000);  // k=0
     bytes one_pair(192, 0);
@@ -866,7 +866,7 @@ BOOST_AUTO_TEST_CASE(point_evaluation_pricer)
 {
     // EIP-4844 §gas: flat cost of 50000
     const std::string kzgName{"point_evaluation"};
-    auto& pricer = executor::PrecompiledRegistrar::pricer(kzgName);
+    auto pricer = executor::PrecompiledRegistrar::pricer(kzgName);
     bytes empty;
     BOOST_CHECK_EQUAL(pricer(ref(empty)), 50000);
 }
@@ -882,7 +882,7 @@ BOOST_AUTO_TEST_CASE(toRevisionMapping)
     {
         VMSchedule s;
         s.enablePairs = true;
-        BOOST_CHECK_EQUAL(toRevision(s), EVMC_SHANGHAI);
+        BOOST_CHECK_EQUAL(toRevision(s), EVMC_PARIS);
     }
     {
         VMSchedule s;
@@ -1039,7 +1039,7 @@ BOOST_AUTO_TEST_CASE(p256verify_valid_signature)
 BOOST_AUTO_TEST_CASE(p256verify_gas)
 {
     // EIP-7212 / evmone 0.21 flat gas cost = 6900.
-    auto& pricer = executor::PrecompiledRegistrar::pricer("p256verify");
+    auto pricer = executor::PrecompiledRegistrar::pricer("p256verify");
     bytes empty;
     BOOST_CHECK_EQUAL(pricer(ref(empty)), 6900);
 }
@@ -1061,24 +1061,7 @@ BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
     // -----------------------------------------------------------------------
     {
         bytes dataEmpty;
-        int64_t normalDataCost = 0;
-        int64_t numTokens = 0;
-        for (auto byte : dataEmpty)
-        {
-            if (byte == 0)
-            {
-                normalDataCost += 4;
-                numTokens += 1;
-            }
-            else
-            {
-                normalDataCost += 16;
-                numTokens += TOKENS_PER_NONZERO_BYTE;
-            }
-        }
-        int64_t floorDataCost = numTokens * TOTAL_COST_FLOOR_PER_TOKEN;
-        int64_t calldataGas = std::max(normalDataCost, floorDataCost);
-        BOOST_CHECK_EQUAL(calldataGas, 0);
+        BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(dataEmpty)), 0);
     }
 
     // -----------------------------------------------------------------------
@@ -1089,28 +1072,8 @@ BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
     // -----------------------------------------------------------------------
     bytes data(100, 0x00);
 
-    int64_t normalDataCost = 0;
-    int64_t numTokens = 0;
-    for (auto byte : data)
-    {
-        if (byte == 0)
-        {
-            normalDataCost += 4;
-            numTokens += 1;
-        }
-        else
-        {
-            normalDataCost += 16;
-            numTokens += TOKENS_PER_NONZERO_BYTE;
-        }
-    }
-    int64_t floorDataCost = numTokens * TOTAL_COST_FLOOR_PER_TOKEN;
-    BOOST_CHECK_EQUAL(normalDataCost, 400);  // 100 * 4
-    BOOST_CHECK_EQUAL(floorDataCost, 1000);  // 100 * 1 * 10
-    BOOST_CHECK_GT(floorDataCost, normalDataCost);
-
-    int64_t calldataGas = std::max(normalDataCost, floorDataCost);
-    BOOST_CHECK_EQUAL(calldataGas, 1000);
+    // 100 zero bytes: normalDataCost = 100*4 = 400, numTokens = 100, floor = 1000
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data)), 1000);
 
     // -----------------------------------------------------------------------
     // Scenario: 100 nonzero bytes (e.g. 0xff)
@@ -1120,27 +1083,8 @@ BOOST_AUTO_TEST_CASE(eip7623CallDataFloorCost)
     // -----------------------------------------------------------------------
     bytes data2(100, 0xff);
 
-    int64_t normalDataCost2 = 0;
-    int64_t numTokens2 = 0;
-    for (auto byte : data2)
-    {
-        if (byte == 0)
-        {
-            normalDataCost2 += 4;
-            numTokens2 += 1;
-        }
-        else
-        {
-            normalDataCost2 += 16;
-            numTokens2 += TOKENS_PER_NONZERO_BYTE;
-        }
-    }
-    int64_t floorDataCost2 = numTokens2 * TOTAL_COST_FLOOR_PER_TOKEN;
-    BOOST_CHECK_EQUAL(normalDataCost2, 1600);  // 100 * 16
-    BOOST_CHECK_EQUAL(floorDataCost2, 4000);   // 100 * 4 * 10
-
-    int64_t calldataGas2 = std::max(normalDataCost2, floorDataCost2);
-    BOOST_CHECK_EQUAL(calldataGas2, 4000);
+    // 100 non-zero bytes: normalDataCost = 100*16 = 1600, numTokens = 400, floor = 4000
+    BOOST_CHECK_EQUAL(calcEip7623CalldataGas(ref(data2)), 4000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

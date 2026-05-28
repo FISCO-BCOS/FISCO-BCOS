@@ -60,6 +60,7 @@ inline constexpr std::string_view BLS_MAP_FP_TO_G1 = "00000000000000000000000000
 inline constexpr std::string_view BLS_MAP_FP2_TO_G2 = "0000000000000000000000000000000000000011";
 inline constexpr std::string_view P256VERIFY = "0000000000000000000000000000000000000100";
 inline constexpr std::string_view MODEXP = "0000000000000000000000000000000000000005";
+inline constexpr std::string_view SYSCONFIG = "0000000000000000000000000000000000001000";
 }  // namespace compat_addr
 
 /// EIP-198 modexp input (shared by FC-M / FC-P; unity build merges compat/*.cpp).

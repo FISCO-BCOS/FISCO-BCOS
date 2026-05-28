@@ -64,12 +64,6 @@ public:
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         precompiledManager.emplace(hashImpl);
 
-        // Enable CANCUN features (needed for solc 0.8.30 bytecode using MCOPY opcode)
-        auto features = ledgerConfig.features();
-        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
-        features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
-        ledgerConfig.setFeatures(features);
-
         // deploy the hello world contract
         blockHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION));
         blockHeader.calculateHash(*hashImpl);

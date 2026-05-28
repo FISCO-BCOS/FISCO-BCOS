@@ -56,6 +56,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
@@ -234,7 +235,12 @@ private:
         m_message(getMessage(
             web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        m_revision(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())),
+        // Never downgrade below EVMC_CANCUN (pre-PR baseline).
+        // Future EVM feature flags (Amsterdam, etc.) automatically upgrade through
+        // toRevision without requiring code changes here.
+        m_revision(
+            std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
+                EVMC_CANCUN)),
         m_level(seq),
         m_web3Tx(web3Tx)
     {}
@@ -469,9 +475,10 @@ public:
                         bcos::bytesConstRef(msg.input_data, msg.input_size));
                     if (msg.gas < calldataGas)
                     {
-                        evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                            protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS,
-                            fixErrorGas ? 0 : msg.gas, "EIP-7623 calldata floor OOG"));
+                        evmResult.emplace(
+                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
+                                "EIP-7623 calldata floor OOG", fixErrorHandling));
                     }
                     else
                     {

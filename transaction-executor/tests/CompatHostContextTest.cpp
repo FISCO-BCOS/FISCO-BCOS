@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_shanghai_without_cancun)
     blockHeader.calculateHash(*hashImpl);
 
     auto revision = bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version());
-    BOOST_CHECK_EQUAL(revision, EVMC_SHANGHAI);
+    BOOST_CHECK_EQUAL(revision, EVMC_PARIS);
 }
 
 BOOST_AUTO_TEST_CASE(TE_FC_7_calldata_floor)

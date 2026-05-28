@@ -151,7 +151,12 @@ struct EVMHostInterface
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
         hostContext.suicide();  // FISCO BCOS has no _beneficiary
-        return true;
+        // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
+        // EIP-6780 (Cancun+): account deletion only when created in same tx;
+        //   no gas refund in either case ("Note that no refund is given since EIP-3529").
+        // Returning false (no refund) is the correct behavior for all cases.
+        // TODO(evmone-eip6780): implement same-tx creation tracking for account deletion.
+        return false;
     }
 
     static void log(evmc_host_context* context, const evmc_address* addr, uint8_t const* data,

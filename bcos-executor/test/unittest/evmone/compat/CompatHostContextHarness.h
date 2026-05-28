@@ -137,6 +137,30 @@ inline void compatAttachP256VerifyEvmPrecompile(std::shared_ptr<CompatHostTestEx
     exe->setEVMPrecompiled(std::move(m));
 }
 
+/// Combined helper for tests that need both BLS and p256verify registered.
+/// Each compatAttach* helper creates a fresh map and calls setEVMPrecompiled, so they
+/// cannot be chained — the second call replaces the first. Use this instead.
+inline void compatAttachBlsAndP256VerifyEvmPrecompile(
+    std::shared_ptr<CompatHostTestExecutive> const& exe)
+{
+    auto m =
+        std::make_shared<std::map<std::string, std::shared_ptr<executor::PrecompiledContract>>>();
+    static const char* blsNames[] = {"bls12_g1add", "bls12_g1msm", "bls12_g2add", "bls12_g2msm",
+        "bls12_pairing_check", "bls12_map_fp_to_g1", "bls12_map_fp2_to_g2"};
+    for (int addr = 0x0b; addr <= 0x11; ++addr)
+    {
+        const char* name = blsNames[addr - 0x0b];
+        m->insert({compatFillZeroAddr(addr), std::make_shared<executor::PrecompiledContract>(
+                                                 executor::PrecompiledRegistrar::pricer(name),
+                                                 executor::PrecompiledRegistrar::executor(name))});
+    }
+    m->insert(
+        {compatFillZeroAddr(0x100), std::make_shared<executor::PrecompiledContract>(
+                                        executor::PrecompiledRegistrar::pricer("p256verify"),
+                                        executor::PrecompiledRegistrar::executor("p256verify"))});
+    exe->setEVMPrecompiled(std::move(m));
+}
+
 inline executor::HostContext makeCompatHostContext(CompatHostContextFixture& fixture,
     ledger::Features const& features, CompatEvmAttach attach = CompatEvmAttach::None)
 {

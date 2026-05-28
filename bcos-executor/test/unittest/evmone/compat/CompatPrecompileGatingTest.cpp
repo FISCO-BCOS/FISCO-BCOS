@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(bls_range_byte_parse_no_stoul)
     BOOST_CHECK(isBLSPrecompileAddress("0x000000000000000000000000000000000000000f"));
     BOOST_CHECK(!isBLSPrecompileAddress("000000000000000000000000000000000000000a"));
     BOOST_CHECK(!isBLSPrecompileAddress("0000000000000000000000000000000000000012"));
-    BOOST_CHECK(isBLSPrecompileAddress("000000000000000000000000000000000000000B"));
+    BOOST_CHECK(!isBLSPrecompileAddress("000000000000000000000000000000000000000B"));
     BOOST_CHECK(!isBLSPrecompileAddress("000000000000000000000000000000000000000g"));
     BOOST_CHECK(!isBLSPrecompileAddress("00000000000000000000000000000000000000"));    // too short
     BOOST_CHECK(!isBLSPrecompileAddress("100000000000000000000000000000000000000b"));  // non-zero
@@ -226,6 +226,32 @@ BOOST_AUTO_TEST_CASE(FC_P_bls_g1msm_semantics_with_prague)
     }
 }
 
+BOOST_AUTO_TEST_CASE(FC_P_bls_g1msm_multi_scalar_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    auto const g1addIn = blsG1AddValidInputG1PlusP1();
+    BOOST_REQUIRE_EQUAL(g1addIn.size(), 256u);
+    bytes point(g1addIn.begin(), g1addIn.begin() + 128);
+
+    // g1msm([P, P, 1, 0]) = 1*P + 0*P = P  (2 pairs, 320 bytes)
+    auto host = makeCompatHostContext(
+        *this, CompatFeatureProfile::pragueEnabled(), CompatEvmAttach::BlsAll);
+    auto one = scalarOne32();
+    auto zero = scalarZero32();
+    bytes input = point;                                    // P
+    input.insert(input.end(), one.begin(), one.end());      // 1
+    input.insert(input.end(), point.begin(), point.end());  // P
+    input.insert(input.end(), zero.begin(), zero.end());    // 0
+    BOOST_REQUIRE_EQUAL(input.size(), 320u);
+
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr::BLS_G1MSM), std::move(input));
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.output_size, point.size());
+    BOOST_CHECK(std::memcmp(r.output_data, point.data(), point.size()) == 0);
+}
+
 BOOST_AUTO_TEST_CASE(FC_P_bls_g2add_and_g2msm_semantics_with_prague)
 {
     namespace addr = bcos::test::compat::compat_addr;
@@ -272,6 +298,37 @@ BOOST_AUTO_TEST_CASE(FC_P_bls_g2add_and_g2msm_semantics_with_prague)
     {
         BOOST_CHECK_EQUAL(m0.output_data[i], 0);
     }
+}
+
+BOOST_AUTO_TEST_CASE(FC_P_bls_g2msm_multi_scalar_with_prague)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    auto host = makeCompatHostContext(
+        *this, CompatFeatureProfile::pragueEnabled(), CompatEvmAttach::BlsAll);
+
+    // Derive a valid G2 point via map_fp2_to_g2(0).
+    bytes fp2Zero(128, 0);
+    auto mapped = compatCallBuiltInPrecompiled(
+        host, std::string(addr::BLS_MAP_FP2_TO_G2), std::move(fp2Zero));
+    BOOST_REQUIRE_EQUAL(mapped.status_code, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(mapped.output_size, 256u);
+    bytes g2(mapped.output_data, mapped.output_data + mapped.output_size);
+
+    // g2msm([Q, Q, 1, 0]) = 1*Q + 0*Q = Q  (2 pairs, 576 bytes)
+    auto one = scalarOne32();
+    auto zero = scalarZero32();
+    bytes input = g2;
+    input.insert(input.end(), one.begin(), one.end());
+    input.insert(input.end(), g2.begin(), g2.end());
+    input.insert(input.end(), zero.begin(), zero.end());
+    BOOST_REQUIRE_EQUAL(input.size(), 576u);
+
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr::BLS_G2MSM), std::move(input));
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.output_size, g2.size());
+    BOOST_CHECK(std::memcmp(r.output_data, g2.data(), g2.size()) == 0);
 }
 
 BOOST_AUTO_TEST_CASE(FC_P_bls_pairing_and_map_semantics_with_prague)
@@ -347,6 +404,24 @@ BOOST_AUTO_TEST_CASE(FC_P_p256verify_ok_with_osaka)
     BOOST_CHECK_EQUAL(r.output_data[31], 1);
 }
 
+BOOST_AUTO_TEST_CASE(FC_P_p256verify_invalid_signature)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+    using compat::CompatFeatureProfile;
+
+    // Flip the message hash to make the signature invalid.
+    auto input = p256verifyValidSignatureInput();
+    BOOST_REQUIRE_EQUAL(input.size(), 160u);
+    input[0] ^= 0xff;
+
+    auto host = makeCompatHostContext(
+        *this, CompatFeatureProfile::osakaEnabled(), CompatEvmAttach::P256Verify);
+    auto r = compatCallBuiltInPrecompiled(host, std::string(addr::P256VERIFY), std::move(input));
+    // EIP-7212: invalid signature → success with empty output (not 0x00...00).
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(r.output_size, 0);
+}
+
 BOOST_AUTO_TEST_CASE(FC_P_legacy_modexp_still_works)
 {
     namespace addr = bcos::test::compat::compat_addr;
@@ -361,6 +436,50 @@ BOOST_AUTO_TEST_CASE(FC_P_legacy_modexp_still_works)
     BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
     BOOST_REQUIRE_EQUAL(r.output_size, 1u);
     BOOST_CHECK_EQUAL(r.output_data[0], 1);
+}
+
+// FC-P: verify that 36-zero EVM_PRECOMPILED_PREFIX and 35-zero SYS_ADDRESS_PREFIX
+// do not misroute addresses. The dual-check (prefix AND contains()) ensures:
+// - BLS (0x0b) / p256verify (0x0100) → Ethereum precompile, never caught by FISCO static
+// - SystemConfig (0x1000) → FISCO static precompile, never caught by Ethereum
+BOOST_AUTO_TEST_CASE(FC_P_address_routing_prefix_overlap)
+{
+    namespace addr = bcos::test::compat::compat_addr;
+
+    auto blockContext =
+        std::make_shared<executor::BlockContext>(stateStorage, ledgerCache, hashImpl, 1, h256(), 0,
+            static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION), false, false, backend);
+    auto exec = std::make_shared<CompatHostTestExecutive>(blockContext, "", 100, 0, gasInjector);
+
+    // Attach BLS + p256verify to m_evmPrecompiled (single combined map — each
+    // compatAttach* helper replaces the whole map, so they can't be chained).
+    compatAttachBlsAndP256VerifyEvmPrecompile(exec);
+
+    // Register SystemConfig in m_staticPrecompiled
+    exec->setStaticPrecompiled(std::make_shared<const std::set<std::string>>(
+        std::initializer_list<std::string>{std::string(addr::SYSCONFIG)}));
+
+    auto bls = std::string(addr::BLS_G1ADD);
+    auto p256 = std::string(addr::P256VERIFY);
+    auto sys = std::string(addr::SYSCONFIG);
+
+    // BLS: 35-zero prefix matches but contains() → false → falls through to Ethereum
+    BOOST_TEST_MESSAGE("BLS G1ADD: isStatic=" << exec->isStaticPrecompiled(bls)
+                                              << " isEvm=" << exec->isEthereumPrecompiled(bls));
+    BOOST_CHECK(!exec->isStaticPrecompiled(bls));
+    BOOST_CHECK(exec->isEthereumPrecompiled(bls));
+
+    // p256verify: same logic — prefix overlap but contains() gates correctly
+    BOOST_TEST_MESSAGE("p256verify: isStatic=" << exec->isStaticPrecompiled(p256)
+                                               << " isEvm=" << exec->isEthereumPrecompiled(p256));
+    BOOST_CHECK(!exec->isStaticPrecompiled(p256));
+    BOOST_CHECK(exec->isEthereumPrecompiled(p256));
+
+    // SystemConfig: registered in static set → caught by isStaticPrecompiled FIRST
+    BOOST_TEST_MESSAGE("SystemConfig: isStatic=" << exec->isStaticPrecompiled(sys)
+                                                 << " isEvm=" << exec->isEthereumPrecompiled(sys));
+    BOOST_CHECK(exec->isStaticPrecompiled(sys));
+    BOOST_CHECK(!exec->isEthereumPrecompiled(sys));
 }
 
 BOOST_AUTO_TEST_SUITE_END()  // CompatPrecompileGating

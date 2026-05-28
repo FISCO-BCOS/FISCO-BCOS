@@ -100,4 +100,30 @@ evmc_revision toRevision(VMSchedule const& _schedule)
     }
     return EVMC_LONDON;
 }
+
+evmc_revision toRevision(ledger::Features const& features, uint32_t blockVersion)
+{
+    VMSchedule schedule;
+    if (features.get(ledger::Features::Flag::feature_evm_osaka))
+    {
+        schedule = FiscoBcosScheduleOsaka;
+    }
+    else if (features.get(ledger::Features::Flag::feature_evm_prague))
+    {
+        schedule = FiscoBcosSchedulePrague;
+    }
+    else if (features.get(ledger::Features::Flag::feature_evm_cancun))
+    {
+        schedule = FiscoBcosScheduleCancun;
+    }
+    else if (blockVersion >= static_cast<uint32_t>(protocol::BlockVersion::V3_2_VERSION))
+    {
+        schedule = FiscoBcosScheduleV320;
+    }
+    else
+    {
+        schedule = FiscoBcosSchedule;
+    }
+    return toRevision(schedule);
+}
 }  // namespace bcos::executor

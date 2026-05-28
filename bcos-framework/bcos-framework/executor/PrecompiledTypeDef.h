@@ -99,7 +99,9 @@ constexpr static std::string_view SHARDING_PRECOMPILED_ADDRESS =
 constexpr static std::string_view BALANCE_PRECOMPILED_ADDRESS =
     "0000000000000000000000000000000000001011";
 constexpr std::string_view SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
-constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000000000000000";
+// 36 zeros covers Ethereum precompile addresses up to 0x0FFF (incl. p256verify at 0x0100).
+// SYS_ADDRESS_PREFIX (35 zeros) is checked first in isStaticPrecompiled, no conflict.
+constexpr std::string_view EVM_PRECOMPILED_PREFIX = "000000000000000000000000000000000000";
 constexpr std::string_view EMPTY_ADDRESS = "0000000000000000000000000000000000000000";
 // Contract address related to privacy computing
 constexpr static std::string_view PAILLIER_ADDRESS = "0000000000000000000000000000000000005003";

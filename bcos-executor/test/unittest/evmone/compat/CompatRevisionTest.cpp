@@ -40,8 +40,8 @@ BOOST_AUTO_TEST_CASE(FC_R_shanghai_via_pairs)
 {
     using namespace bcos::executor;
 
-    // V3.2+ without Cancun: Ethereum Shanghai (pre-Cancun last fork, EIP-3855 PUSH0).
-    BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleV320), EVMC_SHANGHAI);
+    // V3.2+ without Cancun keeps legacy FISCO mapping on Paris for replay compatibility.
+    BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleV320), EVMC_PARIS);
     BOOST_CHECK(FiscoBcosScheduleV320.enablePairs);
     BOOST_CHECK(!FiscoBcosScheduleV320.enableCanCun);
     BOOST_CHECK(!FiscoBcosScheduleV320.enablePrague);
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(FC_R_revision_priority_order)
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleOsaka), EVMC_OSAKA);
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosSchedulePrague), EVMC_PRAGUE);
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleCancun), EVMC_CANCUN);
-    BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleV320), EVMC_SHANGHAI);
+    BOOST_CHECK_EQUAL(toRevision(FiscoBcosScheduleV320), EVMC_PARIS);
     BOOST_CHECK_EQUAL(toRevision(FiscoBcosSchedule), EVMC_LONDON);
 }
 
@@ -68,8 +68,7 @@ BOOST_AUTO_TEST_CASE(FC_R_features_block_version_ladder)
     BOOST_CHECK_EQUAL(
         toRevision(f, static_cast<uint32_t>(BlockVersion::V3_0_VERSION)), EVMC_LONDON);
 
-    BOOST_CHECK_EQUAL(
-        toRevision(f, static_cast<uint32_t>(BlockVersion::V3_2_VERSION)), EVMC_SHANGHAI);
+    BOOST_CHECK_EQUAL(toRevision(f, static_cast<uint32_t>(BlockVersion::V3_2_VERSION)), EVMC_PARIS);
 
     f.set(ledger::Features::Flag::feature_evm_cancun);
     BOOST_CHECK_EQUAL(

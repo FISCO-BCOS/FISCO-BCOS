@@ -41,22 +41,7 @@ BOOST_AUTO_TEST_CASE(eip7623_calldata_cost)
     using namespace bcos::executor;
 
     auto calcCalldataGas = [](const std::vector<uint8_t>& data) -> int64_t {
-        int64_t normalDataCost = 0;
-        int64_t numTokens = 0;
-        for (auto byte : data)
-        {
-            if (byte == 0)
-            {
-                normalDataCost += 4;
-                numTokens += 1;
-            }
-            else
-            {
-                normalDataCost += 16;
-                numTokens += TOKENS_PER_NONZERO_BYTE;
-            }
-        }
-        return std::max(normalDataCost, numTokens * TOTAL_COST_FLOOR_PER_TOKEN);
+        return calcEip7623CalldataGas(ref(data));
     };
 
     // Empty calldata: normalDataCost=0, numTokens=0, floor=0 → gas=0

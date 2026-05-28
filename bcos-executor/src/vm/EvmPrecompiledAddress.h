@@ -27,19 +27,8 @@ inline std::string_view normalizeHexAddressBody(std::string_view addr)
     return addr;
 }
 
-/// @return 40-nibble hex body without 0x prefix, or empty view if length is invalid.
-inline std::string_view normalizeHexAddressBody(std::string_view addr)
-{
-    if (addr.size() >= 2 && (addr.compare(0, 2, "0x") == 0 || addr.compare(0, 2, "0X") == 0))
-    {
-        addr.remove_prefix(2);
-    }
-    if (addr.size() != 40)
-    {
-        return {};
-    }
-    return addr;
-}
+inline constexpr std::string_view P256VERIFY_PRECOMPILED_ADDRESS =
+    "0000000000000000000000000000000000000100";
 
 inline constexpr std::string_view BLS_ADDRESS_ZERO_PREFIX =
     "00000000000000000000000000000000000000";
@@ -60,6 +49,7 @@ inline bool isBLSPrecompileAddress(std::string_view addr)
         return false;
     }
     const char hi = body[38];
+    const char lo = body[39];
     if (hi == '0' && lo >= 'b' && lo <= 'f')
     {
         return true;

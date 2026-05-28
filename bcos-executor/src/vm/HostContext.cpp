@@ -370,6 +370,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
             !features().get(ledger::Features::Flag::feature_evm_osaka))
         {
             callResults->status = (int32_t)TransactionStatus::None;
+            callResults->gas = _request->gas;
             preResult.status_code = EVMC_SUCCESS;
             preResult.gas_left = _request->gas;
             m_responseStore.emplace_back(std::move(callResults));

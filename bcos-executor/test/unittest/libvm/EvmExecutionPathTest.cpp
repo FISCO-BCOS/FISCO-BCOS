@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(vmFactory_cacheKeyDistinguishesRevision)
     Keccak256 hasher;
     auto codeHash = hasher.hash(bytesConstRef(code.data(), code.size()));
 
-    auto analysisLondon = std::make_shared<evmoneCodeAnalysis>(
+    auto analysisLondon = std::make_shared<EvmoneCodeAnalysis>(
         evmone::baseline::analyze(evmone::bytes_view{code.data(), code.size()}));
     factory.put({codeHash, EVMC_LONDON}, analysisLondon);
 

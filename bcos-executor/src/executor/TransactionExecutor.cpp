@@ -52,6 +52,7 @@
 #include "../precompiled/extension/RingSigPrecompiled.h"
 #include "../precompiled/extension/SmallBankPrecompiled.h"
 #include "../precompiled/extension/ZkpPrecompiled.h"
+#include "../vm/EvmPrecompiledAddress.h"
 #include "../vm/Precompiled.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/FeaturesStorage.h"
@@ -274,8 +275,8 @@ void TransactionExecutor::initEvmEnvironment()
                                  PrecompiledRegistrar::executor(name))});
     }
 
-    // EIP-7951 p256verify at 0x0100 (Osaka-gated, guard in HostContext)
-    m_evmPrecompiled->insert({"0000000000000000000000000000000000000100",
+    // EIP-7212 / RIP-7212 p256verify at 0x0100 (Osaka-gated, guard in HostContext)
+    m_evmPrecompiled->insert({std::string(P256VERIFY_PRECOMPILED_ADDRESS),
         make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("p256verify"),
             PrecompiledRegistrar::executor("p256verify"))});
 

@@ -51,10 +51,9 @@ BOOST_AUTO_TEST_CASE(execute)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
         bcostars::protocol::BlockHeaderImpl blockHeader;
-        // helloworldBytecode uses PUSH0 (EIP-3855, Shanghai+); V3_1 maps to London and fails
-        // deploy.
-        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_2_VERSION);
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
+
 
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
