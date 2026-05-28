@@ -56,7 +56,7 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
 }
 
 VMInstance::VMInstance(
-    std::shared_ptr<evmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
+    std::shared_ptr<EvmoneCodeAnalysis> analysis, evmc_revision revision, bytes_view code) noexcept
   : m_analysis(std::move(analysis)), m_revision(revision), m_code(code)
 {
     assert(m_analysis != nullptr);

@@ -54,10 +54,10 @@ VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::
         // CALL: baseline analyze + LRU cache + baseline::execute (pre-0.21 behavior).
         bool useCache = (codeHash != crypto::HashType{});
         EvmCodeCacheKey cacheKey{codeHash, revision};
-        std::shared_ptr<evmoneCodeAnalysis> analysis{useCache ? get(cacheKey) : nullptr};
+        std::shared_ptr<EvmoneCodeAnalysis> analysis{useCache ? get(cacheKey) : nullptr};
         if (!analysis)
         {
-            analysis = std::make_shared<evmoneCodeAnalysis>(
+            analysis = std::make_shared<EvmoneCodeAnalysis>(
                 evmone::baseline::analyze(evmone::bytes_view(code.data(), code.size())));
             if (useCache)
             {
@@ -69,7 +69,7 @@ VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::
     }
 }
 
-std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(EvmCodeCacheKey const& key) noexcept
+std::shared_ptr<EvmoneCodeAnalysis> VMFactory::get(EvmCodeCacheKey const& key) noexcept
 {
     std::unique_lock lock(m_cacheMutex);
     auto analysis = m_cache.get(key);
@@ -81,7 +81,7 @@ std::shared_ptr<evmoneCodeAnalysis> VMFactory::get(EvmCodeCacheKey const& key) n
 }
 
 void VMFactory::put(
-    EvmCodeCacheKey const& key, const std::shared_ptr<evmoneCodeAnalysis>& analysis) noexcept
+    EvmCodeCacheKey const& key, const std::shared_ptr<EvmoneCodeAnalysis>& analysis) noexcept
 {
     std::unique_lock lock(m_cacheMutex);
     m_cache.insert(key, analysis);
