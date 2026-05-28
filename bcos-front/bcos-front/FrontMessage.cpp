@@ -141,6 +141,13 @@ ssize_t FrontMessage::decode(bytesConstRef _buffer)
     uint8_t uuidLength = *((uint8_t*)&_buffer[offset]);
     offset += 1;
 
+    // FIB-69 (a): explicit bounds covering uuid + ext fields BEFORE reading them.
+    // Required from buffer start: 2 + 1 + uuidLength + 2 = 5 + uuidLength.
+    if (_buffer.size() < HEADER_MIN_LENGTH + static_cast<size_t>(uuidLength))
+    {
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
+
     if (uuidLength > 0)
     {
         m_uuid.assign(&_buffer[offset], &_buffer[offset] + uuidLength);
@@ -149,6 +156,13 @@ ssize_t FrontMessage::decode(bytesConstRef _buffer)
 
     m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
     offset += 2;
+
+    // FIB-69 (b): payload size cap. Remaining buffer is payload; reject if oversized.
+    auto payloadSize = _buffer.size() - static_cast<size_t>(offset);
+    if (payloadSize > MAX_PAYLOAD_LENGTH)
+    {
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
 
     m_payload = _buffer.getCroppedData(offset);
 
