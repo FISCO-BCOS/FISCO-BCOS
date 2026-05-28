@@ -472,8 +472,8 @@ bool PBFTConfig::verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const
             // byzantine inflation attempt against minRequiredQuorum().
             return false;
         }
-        auto* nodeInfo = getConsensusNodeByIndex(proof.first);
-        if (nodeInfo == nullptr)
+        auto nodeInfo = getConsensusNodeByIndex(proof.first);
+        if (!nodeInfo)
         {
             return false;
         }
