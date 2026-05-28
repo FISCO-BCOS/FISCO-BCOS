@@ -125,5 +125,16 @@ BOOST_AUTO_TEST_CASE(callOnSchedulerBackedPath)
     BOOST_CHECK(resp.isMember("id"));
 }
 
+BOOST_AUTO_TEST_CASE(getBlockByNumberExtendedTags)
+{
+    for (auto tag : {R"(["earliest",false])", R"(["pending",false])", R"(["safe",false])",
+             R"(["finalized",false])"})
+    {
+        auto resp = call(req("eth_getBlockByNumber", tag));
+        BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+        BOOST_CHECK(resp.isMember("id"));
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
