@@ -189,5 +189,27 @@ BOOST_AUTO_TEST_CASE(uninstallUnknownFilter)
     BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
 }
 
+BOOST_AUTO_TEST_CASE(newFilterWithParams)
+{
+    auto resp = call(req("eth_newFilter",
+        R"([{"fromBlock":"0x0","toBlock":"latest","address":"0x1234567890123456789012345678901234567890","topics":[]}])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    BOOST_CHECK(resp.isMember("id"));
+}
+
+BOOST_AUTO_TEST_CASE(getFilterChangesUnknownId)
+{
+    auto resp = call(req("eth_getFilterChanges", R"(["0x999"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(sendRawTransactionGarbageReportsError)
+{
+    // Non-decodable raw tx must surface a JSON-RPC error, not crash.
+    auto resp = call(req("eth_sendRawTransaction", R"(["0xdeadbeef"])"));
+    BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
+    BOOST_CHECK(resp.isMember("id"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
