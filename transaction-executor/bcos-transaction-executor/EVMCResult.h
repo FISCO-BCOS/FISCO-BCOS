@@ -51,7 +51,8 @@ std::tuple<bcos::protocol::TransactionStatus, bcos::bytes> evmcStatusToErrorMess
     const bcos::crypto::Hash& hashImpl, evmc_status_code status);
 
 EVMCResult makeErrorEVMCResult(crypto::Hash const& hashImpl, protocol::TransactionStatus status,
-    evmc_status_code evmStatus, int64_t gas, const std::string& errorInfo);
+    evmc_status_code evmStatus, int64_t gas, const std::string& errorInfo,
+    bool clampGasLeft = false);
 
 }  // namespace bcos::executor_v1
 

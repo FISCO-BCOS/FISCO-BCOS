@@ -1,7 +1,7 @@
-#include <range/v3/algorithm/copy.hpp>
-#include <range/v3/algorithm/partition_point.hpp>
-#include <range/v3/algorithm/lower_bound.hpp>
 #include <range/v3/algorithm/binary_search.hpp>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/algorithm/lower_bound.hpp>
+#include <range/v3/algorithm/partition_point.hpp>
 
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
@@ -10,6 +10,7 @@
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cstdint>
 #include <gsl/pointers>
 
@@ -167,11 +168,36 @@ bcos::executor_v1::evmcStatusToErrorMessage(
 
 bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Hash const& hashImpl,
     protocol::TransactionStatus status, evmc_status_code evmStatus, int64_t gas,
-    const std::string& errorInfo)
+    const std::string& errorInfo, bool clampGasLeft)
 {
+    // FIB-78: when bugfix_clamp_gas_left_on_error is active, force gas_left to 0 for
+    // fatal EVM error statuses so downstream gasUsed computations cannot under-charge,
+    // and clamp any negative value to prevent signed-overflow in (gasLimit - gas_left).
+    // Gated by a feature flag to preserve consensus with pre-fix nodes.
+    int64_t gasLeft = gas;
+    if (clampGasLeft)
+    {
+        switch (evmStatus)
+        {
+        case EVMC_OUT_OF_GAS:
+        case EVMC_INTERNAL_ERROR:
+        case EVMC_STACK_OVERFLOW:
+        case EVMC_STACK_UNDERFLOW:
+        case EVMC_INVALID_INSTRUCTION:
+        case EVMC_UNDEFINED_INSTRUCTION:
+        case EVMC_BAD_JUMP_DESTINATION:
+        case EVMC_INVALID_MEMORY_ACCESS:
+            gasLeft = 0;
+            break;
+        default:
+            break;
+        }
+        gasLeft = std::max<int64_t>(gasLeft, 0);
+    }
+
     auto [outputData, outputSize, release] = fillErrorOutputInPlace(hashImpl, evmStatus, errorInfo);
     EVMCResult result{evmc_result{.status_code = evmStatus,
-                          .gas_left = gas,
+                          .gas_left = gasLeft,
                           .gas_refund = 0,
                           .output_data = outputData,
                           .output_size = outputSize,

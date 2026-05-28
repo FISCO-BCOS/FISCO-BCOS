@@ -465,8 +465,10 @@ public:
         {
             HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
             // FIB-89: use 0 instead of potentially uninitialized evmResult->gas_left
-            evmResult.emplace(makeErrorEVMCResult(
-                m_hashImpl, protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0, e.what()));
+            evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                EVMC_OUT_OF_GAS, 0, e.what(),
+                m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
         }
         catch (protocol::NotEnoughCashError& e)
         {
@@ -481,7 +483,6 @@ public:
         {
             HOST_CONTEXT_LOG(DEBUG)
                 << "Not found code exception: " << boost::diagnostic_information(e);
-
             // STATIC_CALL or DELEGATE_CALL, the EVMC_SUCCESS is returned when the contract does
             // not exist
             using namespace std::string_literals;
@@ -495,7 +496,9 @@ public:
                 // FIB-88: EVMC_REVERT preserves ref->gas per EVM spec
                 evmResult.emplace(
                     makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::RevertInstruction,
-                        EVMC_REVERT, ref->gas, "Call address error."s));
+                        EVMC_REVERT, ref->gas, "Call address error."s,
+                        m_ledgerConfig.get().features().get(
+                            ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
             }
         }
         catch (std::exception& e)
@@ -506,7 +509,9 @@ public:
             evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
                 fixErrorGas ? protocol::TransactionStatus::Unknown :
                               protocol::TransactionStatus::OutOfGas,
-                EVMC_INTERNAL_ERROR, fixErrorGas ? 0 : ref->gas, ""));
+                EVMC_INTERNAL_ERROR, fixErrorGas ? 0 : ref->gas, "",
+                m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
         }
 
         if (evmResult->gas_left < 0)
@@ -514,7 +519,9 @@ public:
             HOST_CONTEXT_LOG(DEBUG) << "Execute gas < 0: " << evmResult->gas_left;
             // FIB-88: fatal error consumes all gas when bugfix flag enabled
             evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                EVMC_OUT_OF_GAS, fixErrorGas ? 0 : ref->gas, ""));
+                EVMC_OUT_OF_GAS, fixErrorGas ? 0 : ref->gas, "",
+                m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
         }
 
         if (evmResult->status_code != EVMC_SUCCESS)

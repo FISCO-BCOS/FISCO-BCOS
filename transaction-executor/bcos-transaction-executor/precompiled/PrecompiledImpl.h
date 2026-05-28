@@ -68,14 +68,16 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
         {
             return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
                 protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
-                "Precompiled contract gas cost overflow");
+                "Precompiled contract gas cost overflow",
+                features.get(ledger::Features::Flag::bugfix_clamp_gas_left_on_error));
         }
         const auto gasCost = gas.template convert_to<int64_t>();
         if (gasCost > message.gas)
         {
             return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
                 protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
-                "Precompiled contract out of gas");
+                "Precompiled contract out of gas",
+                features.get(ledger::Features::Flag::bugfix_clamp_gas_left_on_error));
         }
         auto [success, output] =
             precompiledContract.execute({message.input_data, message.input_size});
@@ -147,7 +149,8 @@ inline EVMCResult callBcosPrecompiled(
                                 << LOG_KV("address", params->m_codeAddress)
                                 << LOG_KV("message", e.what());
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
-            protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(), e.what());
+            protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(), e.what(),
+            features.get(ledger::Features::Flag::bugfix_clamp_gas_left_on_error));
     }
     catch (std::exception& e)
     {
@@ -155,7 +158,8 @@ inline EVMCResult callBcosPrecompiled(
                                 << boost::diagnostic_information(e);
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
             protocol::TransactionStatus::PrecompiledError, EVMC_REVERT, errorGas(),
-            "InternalPrecompiledFailed"s);
+            "InternalPrecompiledFailed"s,
+            features.get(ledger::Features::Flag::bugfix_clamp_gas_left_on_error));
     }
 }
 
@@ -195,7 +199,8 @@ inline constexpr struct
             }
             return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
                 protocol::TransactionStatus::PrecompiledError, EVMC_INTERNAL_ERROR, 0,
-                "InternalPrecompiledError");
+                "InternalPrecompiledError",
+                features.get(ledger::Features::Flag::bugfix_clamp_gas_left_on_error));
         }
     }
 } callPrecompiled{};
