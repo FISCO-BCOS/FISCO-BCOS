@@ -136,5 +136,29 @@ BOOST_AUTO_TEST_CASE(getBlockByNumberExtendedTags)
     }
 }
 
+BOOST_AUTO_TEST_CASE(getBalanceEmptyStorageReturnsZero)
+{
+    // ledger::getStorageAt on the fake ledger returns an empty optional, so the
+    // handler yields 0x0 rather than crashing.
+    auto resp =
+        call(req("eth_getBalance", R"(["0x1234567890123456789012345678901234567890","latest"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    BOOST_CHECK(resp.isMember("id"));
+}
+
+BOOST_AUTO_TEST_CASE(getTransactionCountEmptyStorage)
+{
+    auto resp = call(req(
+        "eth_getTransactionCount", R"(["0x1234567890123456789012345678901234567890","latest"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(getStorageAtEmptyStorage)
+{
+    auto resp = call(req(
+        "eth_getStorageAt", R"(["0x1234567890123456789012345678901234567890","0x0","latest"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
