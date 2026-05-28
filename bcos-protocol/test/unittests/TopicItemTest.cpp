@@ -9,7 +9,6 @@
  */
 
 #include "bcos-protocol/amop/TopicItem.h"
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos::protocol;
