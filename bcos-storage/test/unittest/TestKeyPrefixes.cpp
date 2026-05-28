@@ -105,33 +105,37 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
         BOOST_REQUIRE(rawPtr != nullptr);
     }
 
-    std::unique_ptr<::rocksdb::DB> dbOwner(rawPtr);
+    // Inner scope: keep dbOwner + storage lifetime strictly shorter than the on-disk path.
+    // Background RocksDB threads (compaction, flush) may still touch lock/SST files while
+    // the DB is open, so the directory must outlive both objects' destructors — otherwise
+    // remove_all races the close path and can spuriously fail on lock-tracking filesystems.
+    {
+        std::unique_ptr<::rocksdb::DB> dbOwner(rawPtr);
 
-    // Construct RocksDBStorage2 wrapping our DB
-    RocksDBStorage2<executor_v1::StateKey, storage::Entry, StateKeyResolver, StateValueResolver>
-        storage(*dbOwner, StateKeyResolver{}, StateValueResolver{});
+        RocksDBStorage2<executor_v1::StateKey, storage::Entry, StateKeyResolver, StateValueResolver>
+            storage(*dbOwner, StateKeyResolver{}, StateValueResolver{});
 
-    // rocksDB() must reference the same underlying DB instance
-    BOOST_CHECK_EQUAL(&storage.rocksDB(), rawPtr);
+        // rocksDB() must reference the same underlying DB instance
+        BOOST_CHECK_EQUAL(&storage.rocksDB(), rawPtr);
 
-    // Demonstrate writing and reading a /mpt/<hash> key via rocksDB()
-    h256 hash = h256::generateRandomFixedBytes();
-    std::string mptKey = makeMPTNodeKey(hash);
-    std::string mptValue = "mpt_node_data";
+        // Demonstrate writing and reading a /mpt/<hash> key via rocksDB()
+        h256 hash = h256::generateRandomFixedBytes();
+        std::string mptKey = makeMPTNodeKey(hash);
+        std::string mptValue = "mpt_node_data";
 
-    ::rocksdb::WriteOptions wo;
-    auto putStatus =
-        storage.rocksDB().Put(wo, storage.rocksDB().DefaultColumnFamily(), mptKey, mptValue);
-    BOOST_REQUIRE(putStatus.ok());
+        ::rocksdb::WriteOptions wo;
+        auto putStatus =
+            storage.rocksDB().Put(wo, storage.rocksDB().DefaultColumnFamily(), mptKey, mptValue);
+        BOOST_REQUIRE(putStatus.ok());
 
-    std::string readback;
-    ::rocksdb::ReadOptions ro;
-    auto getStatus =
-        storage.rocksDB().Get(ro, storage.rocksDB().DefaultColumnFamily(), mptKey, &readback);
-    BOOST_REQUIRE(getStatus.ok());
-    BOOST_CHECK_EQUAL(readback, mptValue);
+        std::string readback;
+        ::rocksdb::ReadOptions ro;
+        auto getStatus =
+            storage.rocksDB().Get(ro, storage.rocksDB().DefaultColumnFamily(), mptKey, &readback);
+        BOOST_REQUIRE(getStatus.ok());
+        BOOST_CHECK_EQUAL(readback, mptValue);
+    }  // storage destructor, then dbOwner destructor (LIFO) — DB fully closed here
 
-    // Cleanup
     boost::filesystem::remove_all(path);
 }
 
