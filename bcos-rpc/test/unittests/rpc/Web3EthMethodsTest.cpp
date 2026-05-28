@@ -99,5 +99,31 @@ BOOST_AUTO_TEST_CASE(malformedParamsReportError)
     BOOST_CHECK(resp.isMember("error") || resp.isMember("result"));
 }
 
+BOOST_AUTO_TEST_CASE(getBlockTransactionCountByNumberEarliestAndPending)
+{
+    for (auto tag : {R"(["earliest"])", R"(["pending"])", R"(["0x0"])"})
+    {
+        auto resp = call(req("eth_getBlockTransactionCountByNumber", tag));
+        BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+        BOOST_CHECK(resp.isMember("id"));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(getTransactionByBlockNumberAndIndex)
+{
+    auto resp = call(req("eth_getTransactionByBlockNumberAndIndex", R"(["0x1","0x0"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+}
+
+BOOST_AUTO_TEST_CASE(callOnSchedulerBackedPath)
+{
+    // eth_call routes through the scheduler (FakeScheduler2 returns an empty
+    // receipt), so it should produce a result rather than crash.
+    auto resp = call(req("eth_call",
+        R"([{"to":"0x1234567890123456789012345678901234567890","data":"0x"},"latest"])"));
+    BOOST_CHECK(resp.isMember("result") || resp.isMember("error"));
+    BOOST_CHECK(resp.isMember("id"));
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
