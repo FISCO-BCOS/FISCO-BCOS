@@ -122,6 +122,7 @@ public:
         m_delegate->setReceipt(i, r);
     }
     void appendReceipt(TransactionReceipt::Ptr r) override { m_delegate->appendReceipt(r); }
+    void clearReceipts() override { m_delegate->clearReceipts(); }
     void appendTransactionMetaData(TransactionMetaData::Ptr m) override
     {
         m_delegate->appendTransactionMetaData(m);

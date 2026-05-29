@@ -800,30 +800,10 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
 
 bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg)
 {
-    auto precommitProposal = _precommitMsg->consensusProposal();
-    // check the signature
-    uint64_t weight = 0;
-    auto proofSize = precommitProposal->signatureProofSize();
-    for (size_t i = 0; i < proofSize; i++)
-    {
-        auto proof = precommitProposal->signatureProof(i);
-        // check the proof
-        auto nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
-        if (!nodeInfo)
-        {
-            return false;
-        }
-        // verify the signature
-        auto ret = m_config->cryptoSuite()->signatureImpl()->verify(
-            nodeInfo->nodeID, precommitProposal->hash(), proof.second);
-        if (!ret)
-        {
-            return false;
-        }
-        weight += nodeInfo->voteWeight;
-    }
-    // check the quorum
-    return (weight >= m_config->minRequiredQuorum());
+    // Delegated to PBFTConfig::verifyProposalQuorumSignatures so both this path and the
+    // FIB-127 log-recovery path share one audited implementation (proof-list dedup +
+    // per-proof sig verify + quorum weight check).
+    return m_config->verifyProposalQuorumSignatures(_precommitMsg->consensusProposal());
 }
 
 ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
