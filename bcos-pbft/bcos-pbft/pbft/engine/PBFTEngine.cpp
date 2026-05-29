@@ -1063,15 +1063,21 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     auto block = m_config->blockFactory().createBlock(
         _prePrepareMsg->consensusProposal()->data(), false, false);
+    // Validate the decoded proposal block before it enters the cache.  The structural
+    // cross-check (FIB-130) and the timestamp policy (FIB-126) both run here — after
+    // createBlock() and before the no-verify fast-path / async verifyProposal path — so a
+    // Byzantine leader cannot smuggle an inconsistent proposal through either route.  Fetch
+    // the header once and share it across both checks.
+    auto blockHeader = block->blockHeader();
+
     // FIB-130: cross-check the decoded block header against the carried proposal metadata.
     // A Byzantine leader could (a) carry a proposal index whose block-header number differs,
     // or (b) sign hash(A) while broadcasting body(B) under the same proposal hash, decoupling
     // the consensus identity from the executed payload. createBlock(data, false, false) leaves
     // the header hash as whatever bytes were on the wire, so we recompute via calculateHash()
-    // before comparing.
+    // before comparing.  Only meaningful when the proposal carries a body.
     if (!_prePrepareMsg->consensusProposal()->data().empty())
     {
-        auto blockHeader = block->blockHeader();
         if (!blockHeader)
         {
             PBFT_LOG(WARNING) << LOG_DESC(
@@ -1102,45 +1108,36 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         }
     }
 
-    // FIB-126: Validate the proposed block's header timestamp.
-    // A Byzantine leader can craft a PrePreparePacket with an arbitrary timestamp; reject it here
-    // before either the no-verify fast-path or the async verifyProposal path proceeds.
-    //
-    // Two invariants enforced:
-    //   1. Proposed timestamp must be strictly greater than the last committed block timestamp
-    //      (monotonicity — prevents time-reversal attacks).
-    //   2. Proposed timestamp must not exceed the current wall-clock time by more than
+    // FIB-126: validate the proposed block's header timestamp against two invariants:
+    //   1. Monotonicity — proposedTs must be strictly greater than the last committed block
+    //      timestamp (prevents time-reversal).  Skipped at genesis (parentTs == 0) to avoid
+    //      false positives on the first block.
+    //   2. Future-drift — proposedTs must not exceed wall-clock by more than
     //      c_maxAllowedFutureTimestampMs (prevents far-future timestamp attacks).
+    if (blockHeader)
     {
-        auto blockHeader = block->blockHeader();
-        if (blockHeader)
-        {
-            int64_t proposedTs = blockHeader->timestamp();
-            int64_t parentTs = m_ledgerConfig->timestamp();
-            // utcTime() returns uint64_t; make the narrowing to int64_t explicit so
-            // -Wconversion stays quiet and the signed arithmetic below is unambiguous.
-            int64_t nowTs = static_cast<int64_t>(utcTime());
+        int64_t proposedTs = blockHeader->timestamp();
+        int64_t parentTs = m_ledgerConfig->timestamp();
+        // utcTime() returns uint64_t; make the narrowing to int64_t explicit so -Wconversion
+        // stays quiet and the signed arithmetic below is unambiguous.
+        int64_t nowTs = static_cast<int64_t>(utcTime());
 
-            // Only enforce monotonicity when parentTs is non-zero (i.e., a real committed
-            // block exists with a known timestamp).  When parentTs==0 the ledger is at
-            // genesis / uninitialized and we skip the check to avoid false positives.
-            if (parentTs > 0 && proposedTs <= parentTs)
-            {
-                PBFT_LOG(WARNING)
-                    << LOG_DESC("handlePrePrepareMsg: reject proposal with non-monotonic timestamp")
-                    << LOG_KV("proposedTs", proposedTs) << LOG_KV("parentTs", parentTs)
-                    << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
-                return false;
-            }
-            if (proposedTs > nowTs + c_maxAllowedFutureTimestampMs)
-            {
-                PBFT_LOG(WARNING)
-                    << LOG_DESC("handlePrePrepareMsg: reject proposal with far-future timestamp")
-                    << LOG_KV("proposedTs", proposedTs) << LOG_KV("nowTs", nowTs)
-                    << LOG_KV("maxDrift", c_maxAllowedFutureTimestampMs)
-                    << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
-                return false;
-            }
+        if (parentTs > 0 && proposedTs <= parentTs)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: reject proposal with non-monotonic timestamp")
+                << LOG_KV("proposedTs", proposedTs) << LOG_KV("parentTs", parentTs)
+                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+        if (proposedTs > nowTs + c_maxAllowedFutureTimestampMs)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: reject proposal with far-future timestamp")
+                << LOG_KV("proposedTs", proposedTs) << LOG_KV("nowTs", nowTs)
+                << LOG_KV("maxDrift", c_maxAllowedFutureTimestampMs)
+                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
         }
     }
 
