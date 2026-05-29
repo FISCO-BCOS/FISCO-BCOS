@@ -212,6 +212,13 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-24.04
+    env:
+      # Surfaced as an env var so the upload step can be skipped when no token is
+      # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
+      # upload would be rate-limited and orphaned, leaving Codecov stuck at 0.00%
+      # ("incomplete uploads on the first attempt"). The token-carrying run is the
+      # push event on the fork (kyonRay/FISCO-BCOS) and on the base branch.
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -287,6 +294,10 @@ jobs:
           lcov --remove coverage.info.in \
             '/usr*' '*vcpkg_installed*' '*boost/*' '*test*' '*build*' '*deps*' \
             --output-file coverage.info --ignore-errors "$IGN"
+          # geninfo records absolute SF: paths ($GITHUB_WORKSPACE/bcos-.../x.cpp).
+          # Codecov needs repo-relative paths to map files; strip the workspace
+          # prefix so it doesn't report a "files paths" error and 0% coverage.
+          sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" coverage.info
           genhtml coverage.info --output-directory CodeCoverage --ignore-errors "$IGN" || true
           {
             echo '## Code coverage (release-3.17.0)'
@@ -295,11 +306,18 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v4
+        # Only upload when a token is available. On fork pull_request runs the
+        # token is empty (GitHub withholds secrets), so we skip rather than emit
+        # an orphaned tokenless report. The token-carrying push run (on the fork
+        # and on the base branch) is what feeds Codecov, which then comments and
+        # posts project/patch checks on the PR by commit SHA.
+        if: ${{ always() && env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
         with:
           files: build/coverage.info
           flags: unittests
           fail_ci_if_error: false
+          verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
