@@ -178,7 +178,12 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     block->encode(*blockData);
 
     // case1: invalid block number
-    auto hash = hashImpl->hash(bytesConstRef("invalidCase"));
+    // Use the real decoded block-header hash so the FIB-130 hash-binding check in
+    // handlePrePrepareMsg passes for the valid pre-prepare (case6). A synthetic hash that
+    // does not bind the block body is exactly the equivocation FIB-130 rejects; cases 1-5
+    // are rejected earlier for reasons unrelated to the proposal hash.
+    block->blockHeader()->calculateHash(*hashImpl);
+    auto hash = block->blockHeader()->hash();
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
     auto index = (expectedIndex - 1);
