@@ -97,7 +97,7 @@ HashType PBFTMessage::getHashFieldsDataHash(CryptoSuite::Ptr _cryptoSuite) const
     auto hashFieldsDataRef =
         bytesConstRef((byte const*)hashFieldsData.data(), hashFieldsData.size());
     // FIB-134: dual-mode digest — receiver-side branch on message version.
-    return PacketTypeDigest::inner(
+    return PacketTypeDigest::compute(
         version(), packetType(), hashFieldsDataRef, _cryptoSuite->hashImpl());
 }
 

@@ -118,22 +118,16 @@ BOOST_AUTO_TEST_CASE(helper_v1_packetType_changes_digest)
     bytes payload{0x01, 0x02, 0x03, 0x04, 0x05};
     auto payloadRef = bytesConstRef(payload.data(), payload.size());
 
-    auto digestPrePrepare = PacketTypeDigest::outer(
+    auto digestPrePrepare = PacketTypeDigest::compute(
         /*version=*/1, static_cast<int32_t>(PacketType::PrePreparePacket), payloadRef, hashImpl);
-    auto digestCommit = PacketTypeDigest::outer(
+    auto digestCommit = PacketTypeDigest::compute(
         /*version=*/1, static_cast<int32_t>(PacketType::CommitPacket), payloadRef, hashImpl);
     BOOST_CHECK(digestPrePrepare != digestCommit);
 
-    auto innerPP = PacketTypeDigest::inner(
-        /*version=*/1, static_cast<int32_t>(PacketType::PrePreparePacket), payloadRef, hashImpl);
-    auto innerCommit = PacketTypeDigest::inner(
-        /*version=*/1, static_cast<int32_t>(PacketType::CommitPacket), payloadRef, hashImpl);
-    BOOST_CHECK(innerPP != innerCommit);
-
     // v=0 legacy: digest must be independent of packetType
-    auto legacyPP = PacketTypeDigest::outer(
+    auto legacyPP = PacketTypeDigest::compute(
         /*version=*/0, static_cast<int32_t>(PacketType::PrePreparePacket), payloadRef, hashImpl);
-    auto legacyCommit = PacketTypeDigest::outer(
+    auto legacyCommit = PacketTypeDigest::compute(
         /*version=*/0, static_cast<int32_t>(PacketType::CommitPacket), payloadRef, hashImpl);
     BOOST_CHECK_EQUAL(legacyPP.hex(), legacyCommit.hex());
 }
@@ -184,6 +178,48 @@ BOOST_AUTO_TEST_CASE(v1_outer_packetType_tampered_rejected)
     // Outer-path verification: the receiver recomputes the digest using the tampered
     // packetType (NewView) under v=1, but the stored signature was sealed for the
     // original packetType (ViewChange) — so verify must fail.
+    BOOST_CHECK(decoded->verifySignature(h.cryptoSuite, h.keyPair->publicKey()) == false);
+}
+
+// Production-path regression: encode WITHOUT an explicit version, exactly as
+// broadcastViewChangeReq / addNewViewMsg do. Before the FIB-134 follow-up, the
+// encode() default was a stale `0`, so the outer-wrapper digest for ViewChange/
+// NewView never bound packetType — the v1_outer test above masked this by passing
+// outer-version=1 by hand. This case pins the default: a default-version encode
+// must (a) stamp the wire version with the current protocol version, and (b) reject
+// an outer wire-type tamper.
+BOOST_AUTO_TEST_CASE(default_version_binds_outer_packetType)
+{
+    auto h = makeHarness();
+    // NOTE: no version argument — relies on PBFTCodecInterface::encode's default.
+    auto vc = makeViewChangeMessage(h, toWireVersion(c_currentPBFTMsgVersion));
+    auto encoded = h.codec->encode(vc);
+
+    // (a) the default must be the current protocol version, not a stale 0.
+    auto raw = std::make_shared<RawMessage>();
+    bcos::protocol::decodePBObject(raw, bytesConstRef(encoded->data(), encoded->size()));
+    BOOST_CHECK_EQUAL(raw->version(), toWireVersion(c_currentPBFTMsgVersion));
+    BOOST_CHECK(digestBindsPacketType(raw->version()));
+
+    // Untampered round-trip still verifies.
+    auto clean = h.codec->decode(bytesConstRef(encoded->data(), encoded->size()));
+    BOOST_REQUIRE(clean != nullptr);
+    BOOST_CHECK(clean->verifySignature(h.cryptoSuite, h.keyPair->publicKey()) == true);
+
+    // (b) flip the outer wire type ViewChange -> NewView; verify must now fail.
+    auto tamperedBytes = tamperWirePacketType(encoded, PacketType::NewViewPacket);
+    PBFTBaseMessageInterface::Ptr decoded;
+    try
+    {
+        decoded = h.codec->decode(bytesConstRef(tamperedBytes.data(), tamperedBytes.size()));
+    }
+    catch (...)
+    {
+        // Structural decode may reject the NewView-shaped factory on ViewChange bytes.
+        BOOST_TEST_PASSPOINT();
+        return;
+    }
+    BOOST_REQUIRE(decoded != nullptr);
     BOOST_CHECK(decoded->verifySignature(h.cryptoSuite, h.keyPair->publicKey()) == false);
 }
 

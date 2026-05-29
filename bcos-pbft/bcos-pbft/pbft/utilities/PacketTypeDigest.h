@@ -17,56 +17,42 @@
  *        digest, gated by the message-carried protocol version (BaseMessage /
  *        RawMessage `version` proto field). v=0 preserves the legacy formula
  *        `hash(payload)`; v>=1 binds packetType as `hash(packetType_byte || payload)`.
- *        Used at both inner (PBFTMessage::getHashFieldsDataHash) and outer
- *        (PBFTCodec::encode/decode for ViewChange/NewView) signing paths.
+ *        Used at both the inner (PBFTMessage::getHashFieldsDataHash) and outer
+ *        (PBFTCodec::encode/decode for ViewChange/NewView) signing paths — both
+ *        paths feed the same bytes-with-bound-packetType formula.
  * @file PacketTypeDigest.h
  */
 #pragma once
 
+#include "PBFTMsgVersion.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Common.h>
 #include <cstdint>
 
 namespace bcos::consensus
 {
-// Must stay <= PBFTConfig::c_pbftMsgDefaultVersion (sender default in PBFTConfig.h).
-// Bumping the receiver threshold without bumping the sender default would silently
-// break wire round-trip; both constants encode the same FIB-134 hardfork boundary.
-constexpr unsigned c_pbftMsgVersion_PacketTypeBound = 1;
-
-// FIB-134: helper that returns the digest of a PBFT message-bytes payload,
-// branching by the message-carried protocol version. v=0 is the legacy formula
-// `hash(payload)`; v>=1 binds packetType into the digest as
-// `hash(packetType_byte || payload)`.
-class PacketTypeDigest
+// FIB-134: compute the digest a PBFT signature is taken over, branching on the
+// message-carried wire version. v=0 is the legacy formula `hash(data)`; v>=1
+// binds packetType into the digest as `hash(packetType_byte || data)` so that
+// rewriting the outer RawMessage.type invalidates the signature.
+//
+// `data` is the inner BaseMessage's hashFieldsData (inner signing path) or the
+// outer wrapper payload (ViewChange/NewView outer signing path); the formula is
+// identical for both.
+struct PacketTypeDigest
 {
-public:
-    static bcos::crypto::HashType inner(int32_t version, int32_t packetType,
-        bcos::bytesConstRef hashFieldsData, bcos::crypto::Hash::Ptr const& hashImpl)
+    static bcos::crypto::HashType compute(int32_t version, int32_t packetType,
+        bcos::bytesConstRef data, bcos::crypto::Hash::Ptr const& hashImpl)
     {
-        if (version >= static_cast<int32_t>(c_pbftMsgVersion_PacketTypeBound))
+        if (!digestBindsPacketType(version))
         {
-            bcos::bytes buffer;
-            buffer.reserve(1 + hashFieldsData.size());
-            buffer.push_back(static_cast<bcos::byte>(packetType));
-            buffer.insert(buffer.end(), hashFieldsData.begin(), hashFieldsData.end());
-            return hashImpl->hash(bcos::bytesConstRef(buffer.data(), buffer.size()));
+            return hashImpl->hash(data);
         }
-        return hashImpl->hash(hashFieldsData);
-    }
-
-    static bcos::crypto::HashType outer(int32_t version, int32_t packetType,
-        bcos::bytesConstRef payload, bcos::crypto::Hash::Ptr const& hashImpl)
-    {
-        if (version >= static_cast<int32_t>(c_pbftMsgVersion_PacketTypeBound))
-        {
-            bcos::bytes buffer;
-            buffer.reserve(1 + payload.size());
-            buffer.push_back(static_cast<bcos::byte>(packetType));
-            buffer.insert(buffer.end(), payload.begin(), payload.end());
-            return hashImpl->hash(bcos::bytesConstRef(buffer.data(), buffer.size()));
-        }
-        return hashImpl->hash(payload);
+        bcos::bytes buffer;
+        buffer.reserve(1 + data.size());
+        buffer.push_back(static_cast<bcos::byte>(packetType));
+        buffer.insert(buffer.end(), data.begin(), data.end());
+        return hashImpl->hash(bcos::bytesConstRef(buffer.data(), buffer.size()));
     }
 };
 }  // namespace bcos::consensus

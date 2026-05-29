@@ -46,7 +46,7 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
     if (shouldHandleSignature(packetType))
     {
         // FIB-134: bind packetType into the outer-wrapper digest when version >= 1.
-        auto hash = PacketTypeDigest::outer(_version, static_cast<int32_t>(packetType),
+        auto hash = PacketTypeDigest::compute(_version, static_cast<int32_t>(packetType),
             bytesConstRef(payLoad->data(), payLoad->size()), m_cryptoSuite->hashImpl());
         // sign for the payload
         auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
@@ -103,8 +103,8 @@ PBFTBaseMessageInterface::Ptr PBFTCodec::decode(bytesConstRef _data) const
         // FIB-134: dual-mode receiver — branch on the outer wrapper's wire
         // `version` (matches the `_version` argument the encoder passed). v=0 keeps
         // the legacy formula `hash(payload)`; v>=1 binds `packetType` into the digest.
-        auto hash = PacketTypeDigest::outer(pbMessage->version(), static_cast<int32_t>(packetType),
-            payLoadRefData, m_cryptoSuite->hashImpl());
+        auto hash = PacketTypeDigest::compute(pbMessage->version(),
+            static_cast<int32_t>(packetType), payLoadRefData, m_cryptoSuite->hashImpl());
         decodedMsg->setSignatureDataHash(hash);
 
         auto const& signatureData = pbMessage->signaturedata();
