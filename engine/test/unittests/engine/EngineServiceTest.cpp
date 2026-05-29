@@ -16,6 +16,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -177,6 +178,39 @@ struct StubScheduler
         co_return {};
     }
 };
+
+struct BloomScheduler
+{
+    template <class Storage, class Executor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
+        const protocol::BlockHeader&, ::ranges::input_range auto&&,
+        const ledger::LedgerConfig&)
+    {
+        Bloom bloom1{};
+        bloom1[255] = static_cast<bcos::byte>(0x01);
+        Bloom bloom2{};
+        bloom2[255] = static_cast<bcos::byte>(0x02);
+
+        auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+
+        co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
+    }
+};
+
+using BloomEngineServiceImpl =
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, BloomScheduler>;
+
+BloomEngineServiceImpl makeBloomEngineServiceImpl(
+    MemPoolImpl& memPool, RealGlobalStateStorage& storage, BloomScheduler& scheduler)
+{
+    StubExecutor executor;
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    return BloomEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+}
 
 using TestEngineServiceImpl =
     EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
@@ -499,6 +533,41 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
     auto thirdResult = task::syncWait(engineService.updateForkchoice(thirdForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(thirdResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("cccccccccccccccccccc", 20);
+    auto tx = makeTx(sender, 0);
+    memPool.add(std::vector{tx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+
+    BloomScheduler bloomScheduler;
+    auto engineService = makeBloomEngineServiceImpl(
+        memPool, globalStateStorageFixture.storage, bloomScheduler);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
+
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
+
+    // Verify bloom aggregation: bloom1[255]=0x01 | bloom2[255]=0x02 = 0x03
+    BOOST_CHECK_EQUAL(static_cast<int>(payload.executionPayload.logsBloom[255]), 0x03);
+    // Other bytes remain zero (only the last byte was set in both blooms)
+    for (size_t i = 0; i < 255; ++i)
+    {
+        BOOST_CHECK_EQUAL(static_cast<int>(payload.executionPayload.logsBloom[i]), 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -36,7 +36,7 @@ namespace bcos::engine
 /// exchangeCapabilities, updateForkchoice, getPayload, newPayload,
 /// getSafeBlockNumber, and getFinalizedBlockNumber.
 ///
-/// Unlike the concrete EngineService template which is parameterized on
+/// Unlike the concrete EngineServiceImpl template which is parameterized on
 /// MemPoolType/GlobalStateStorageType/ExecutorType/SchedulerType, this
 /// concept only checks the public API — enabling type-erased usage
 /// via AnyEngineService.

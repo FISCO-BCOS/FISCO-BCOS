@@ -21,6 +21,8 @@
 
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-task/Task.h"
+#include <cassert>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,12 +35,14 @@ namespace bcos::engine
 ///
 /// Uses the "PIMPL with virtual Concept/Model" pattern to erase the concrete
 /// type while still providing the full Engine API.  The stored implementation
-/// must satisfy EngineServiceConcept.
+/// must satisfy EngineServiceConcept and is held via reference_wrapper —
+/// the caller is responsible for ensuring the referenced object outlives
+/// this wrapper.
 ///
 /// Usage:
 /// @code
-///   EngineService<MyMemPool, MyStorage, MyExecutor, MyScheduler> concrete{...};
-///   AnyEngineService any(std::move(concrete));
+///   EngineServiceImpl<MyMemPool, MyStorage, MyExecutor, MyScheduler> concrete{...};
+///   AnyEngineService any(concrete);
 ///   auto result = co_await any.updateForkchoice(state, nullptr, 1);
 /// @endcode
 class AnyEngineService
@@ -62,79 +66,91 @@ private:
     };
 
     /// Concrete model wrapping a type-erased EngineService implementation.
+    /// Uses reference_wrapper — the caller must ensure the referenced
+    /// object outlives this Model.
     template <class T>
         requires EngineServiceConcept<T>
     struct Model final : Concept
     {
-        T m_engine;
+        std::reference_wrapper<T> m_engine;
 
-        template <class U>
-        explicit Model(U&& engine) : m_engine(std::forward<U>(engine))
+        explicit Model(T& engine) : m_engine(engine)
         {}
 
         task::Task<std::vector<std::string>> exchangeCapabilities(
             std::vector<std::string> remoteCapabilities) override
         {
-            co_return co_await m_engine.exchangeCapabilities(std::move(remoteCapabilities));
+            co_return co_await m_engine.get().exchangeCapabilities(std::move(remoteCapabilities));
         }
 
         task::Task<ForkchoiceUpdatedResult> updateForkchoice(
             const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
             std::uint32_t version) override
         {
-            co_return co_await m_engine.updateForkchoice(
+            co_return co_await m_engine.get().updateForkchoice(
                 forkchoiceState, payloadAttributes, version);
         }
 
         task::Task<GetPayloadResult> getPayload(
             const PayloadID& payloadId, std::uint32_t version) override
         {
-            co_return co_await m_engine.getPayload(payloadId, version);
+            co_return co_await m_engine.get().getPayload(payloadId, version);
         }
 
         task::Task<PayloadStatus> newPayload(
             const NewPayloadRequest& request, std::uint32_t version) override
         {
-            co_return co_await m_engine.newPayload(request, version);
+            co_return co_await m_engine.get().newPayload(request, version);
         }
 
         std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const override
         {
-            return m_engine.getSafeBlockNumber();
+            return m_engine.get().getSafeBlockNumber();
         }
 
         std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const override
         {
-            return m_engine.getFinalizedBlockNumber();
+            return m_engine.get().getFinalizedBlockNumber();
         }
     };
 
     std::unique_ptr<Concept> m_impl;
 
 public:
-    AnyEngineService() = default;
+    AnyEngineService() = delete;
     ~AnyEngineService() = default;
 
     AnyEngineService(const AnyEngineService&) = delete;
     AnyEngineService& operator=(const AnyEngineService&) = delete;
 
-    AnyEngineService(AnyEngineService&&) noexcept = default;
-    AnyEngineService& operator=(AnyEngineService&&) noexcept = default;
+    [[nodiscard]] AnyEngineService(AnyEngineService&& other) noexcept
+      : m_impl(std::move(other.m_impl))
+    {}
+    [[nodiscard]] AnyEngineService& operator=(AnyEngineService&& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_impl = std::move(other.m_impl);
+        }
+        return *this;
+    }
 
-    /// Construct from any type satisfying EngineServiceConcept.
+    /// Construct from a reference to any type satisfying EngineServiceConcept.
+    /// The referenced object must outlive this AnyEngineService.
     template <class T>
         requires EngineServiceConcept<std::remove_cvref_t<T>> &&
                  (!std::same_as<std::remove_cvref_t<T>, AnyEngineService>)
-    explicit AnyEngineService(T&& engine)
-      : m_impl(std::make_unique<Model<std::remove_cvref_t<T>>>(std::forward<T>(engine)))
+    explicit AnyEngineService(T& engine)
+      : m_impl(std::make_unique<Model<std::remove_cvref_t<T>>>(engine))
     {}
 
     /// Returns true if this wrapper holds an engine implementation.
-    explicit operator bool() const noexcept { return m_impl != nullptr; }
+    [[nodiscard]] explicit operator bool() const noexcept { return m_impl != nullptr; }
 
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {
+        assert(m_impl && "AnyEngineService must be initialized before use");
         co_return co_await m_impl->exchangeCapabilities(std::move(remoteCapabilities));
     }
 
@@ -142,26 +158,31 @@ public:
         const ForkchoiceState& forkchoiceState, const PayloadAttributes* payloadAttributes,
         std::uint32_t version)
     {
+        assert(m_impl && "AnyEngineService must be initialized before use");
         co_return co_await m_impl->updateForkchoice(forkchoiceState, payloadAttributes, version);
     }
 
     task::Task<GetPayloadResult> getPayload(const PayloadID& payloadId, std::uint32_t version)
     {
+        assert(m_impl && "AnyEngineService must be initialized before use");
         co_return co_await m_impl->getPayload(payloadId, version);
     }
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version)
     {
+        assert(m_impl && "AnyEngineService must be initialized before use");
         co_return co_await m_impl->newPayload(request, version);
     }
 
     std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
     {
+        assert(m_impl && "AnyEngineService must be initialized before use");
         return m_impl->getSafeBlockNumber();
     }
 
     std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
     {
+        assert(m_impl && "AnyEngineService must be initialized before use");
         return m_impl->getFinalizedBlockNumber();
     }
 };
