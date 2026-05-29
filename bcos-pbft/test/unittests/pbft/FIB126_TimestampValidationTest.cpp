@@ -43,9 +43,22 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(FIB126_TimestampValidationTest, TestPromptFixture)
 
 // ---------------------------------------------------------------------------
-// Helper: build an encoded block with a custom block header timestamp.
+// Helper: build an encoded block with a custom block header timestamp, and
+// return both the encoded bytes and the block-header hash.
+//
+// FIB-130 (also enforced in handlePrePrepareMsg) requires the consensus
+// proposal hash to equal the decoded block-header hash — not a hash of the
+// whole encoded block. Callers must therefore build the proposal / message with
+// the header hash returned here, otherwise the FIB-130 cross-check rejects the
+// proposal before the FIB-126 timestamp policy is ever reached.
 // ---------------------------------------------------------------------------
-static bytes buildBlockWithTimestamp(CryptoSuite::Ptr cryptoSuite, PBFTFixture::Ptr fixture,
+struct BuiltBlock
+{
+    bytes data;
+    crypto::HashType headerHash;
+};
+
+static BuiltBlock buildBlockWithTimestamp(CryptoSuite::Ptr cryptoSuite, PBFTFixture::Ptr fixture,
     BlockNumber blockIndex, int64_t blockTimestamp)
 {
     auto ledgerConfig = fixture->ledger()->ledgerConfig();
@@ -53,9 +66,14 @@ static bytes buildBlockWithTimestamp(CryptoSuite::Ptr cryptoSuite, PBFTFixture::
     // init() respects the timestamp argument
     auto block =
         fixture->ledger()->init(parent->blockHeader(), true, blockIndex, 0, blockTimestamp);
-    auto blockData = std::make_shared<bytes>();
-    block->encode(*blockData);
-    return *blockData;
+    // Compute the header hash after the timestamp is set so it matches the hash
+    // handlePrePrepareMsg recomputes via calculateHash() on the decoded header.
+    block->blockHeader()->calculateHash(*cryptoSuite->hashImpl());
+
+    BuiltBlock built;
+    built.headerHash = block->blockHeader()->hash();
+    block->encode(built.data);
+    return built;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,9 +97,9 @@ BOOST_AUTO_TEST_CASE(testFutureTimestampRejected)
 
     // Build a block with a timestamp 1 hour in the future.
     int64_t farFuture = utcTime() + 3600LL * 1000;  // +1 hour in ms
-    auto blockData = buildBlockWithTimestamp(cryptoSuite, leaderFaker, expectedIndex, farFuture);
-
-    auto hash = hashImpl->hash(bytesConstRef(blockData.data(), blockData.size()));
+    auto built = buildBlockWithTimestamp(cryptoSuite, leaderFaker, expectedIndex, farFuture);
+    auto& blockData = built.data;
+    auto hash = built.headerHash;
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
 
@@ -133,10 +151,9 @@ BOOST_AUTO_TEST_CASE(testNonMonotonicTimestampRejected)
 
     // Proposed block has timestamp = committedTs - 1000 (strictly in the past).
     int64_t pastTimestamp = committedTs - 1000;
-    auto blockData =
-        buildBlockWithTimestamp(cryptoSuite, leaderFaker, expectedIndex, pastTimestamp);
-
-    auto hash = hashImpl->hash(bytesConstRef(blockData.data(), blockData.size()));
+    auto built = buildBlockWithTimestamp(cryptoSuite, leaderFaker, expectedIndex, pastTimestamp);
+    auto& blockData = built.data;
+    auto hash = built.headerHash;
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
 
@@ -174,9 +191,9 @@ BOOST_AUTO_TEST_CASE(testValidTimestampAccepted)
     // We add 1000 ms to ensure proposedTs > parentTs even if both utcTime() calls
     // fall within the same millisecond.
     int64_t validTs = utcTime() + 1000;
-    auto blockData = buildBlockWithTimestamp(cryptoSuite, leaderFaker, expectedIndex, validTs);
-
-    auto hash = hashImpl->hash(bytesConstRef(blockData.data(), blockData.size()));
+    auto built = buildBlockWithTimestamp(cryptoSuite, leaderFaker, expectedIndex, validTs);
+    auto& blockData = built.data;
+    auto hash = built.headerHash;
     auto leaderMsgFixture =
         std::make_shared<PBFTMessageFixture>(cryptoSuite, leaderFaker->keyPair());
 
