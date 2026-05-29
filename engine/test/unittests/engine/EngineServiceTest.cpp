@@ -191,10 +191,13 @@ struct BloomScheduler
         Bloom bloom2{};
         bloom2[255] = static_cast<bcos::byte>(0x02);
 
+        Keccak256 hasher;
         auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        receipt1->calculateHash(hasher);
         auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
         receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+        receipt2->calculateHash(hasher);
 
         co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
     }
