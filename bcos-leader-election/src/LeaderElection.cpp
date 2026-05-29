@@ -88,16 +88,25 @@ std::pair<bool, int64_t> LeaderElection::grantLease()
 
 bool LeaderElection::campaignLeader()
 {
+    // FIB-169: do NOT hold m_mutex across blocking etcd RPCs or external
+    // handler callbacks. The lock is now used only to serialize the small
+    // bookkeeping window where we swap m_keepAlive and update the config's
+    // leader pointer; everything else (etcd grantLease/txn, m_onCampaignHandler,
+    // tryToSwitchToBackup) runs without the lock so a stalled etcd request or
+    // slow user-supplied handler cannot block sibling campaign / updateSelfConfig
+    // threads.
     try
     {
-        RecursiveGuard l(m_mutex);
-        // already has leader
+        // Step 1 (no lock): if there is already a leader, just defer to backup
+        // promotion logic. tryToSwitchToBackup() invokes m_onCampaignHandler and
+        // therefore must not run under m_mutex.
         if (m_config->getLeader())
         {
-            // tryToSwitchToBackup in case of the leader is not the node-self
             tryToSwitchToBackup();
             return false;
         }
+
+        // Step 2 (no lock): grantLease() performs a blocking etcd RPC.
         auto ret = grantLease();
         if (!ret.first)
         {
@@ -106,10 +115,18 @@ bool LeaderElection::campaignLeader()
             return false;
         }
         auto leaseID = ret.second;
-        auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
+
+        // Snapshot config-derived state without holding m_mutex; CampaignConfig
+        // already serializes its own internal state with x_self / x_leader.
+        auto const leaderKey = m_config->leaderKey();
+        auto const leaderValue = m_config->leaderValue();
+
+        auto tx = std::make_shared<etcdv3::Transaction>(leaderKey);
         tx->init_compare(0, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::MOD);
-        tx->setup_basic_failure_operation(m_config->leaderKey());
-        tx->setup_basic_create_sequence(m_config->leaderKey(), m_config->leaderValue(), leaseID);
+        tx->setup_basic_failure_operation(leaderKey);
+        tx->setup_basic_create_sequence(leaderKey, leaderValue, leaseID);
+
+        // Step 3 (no lock): blocking etcd txn RPC.
         auto response = m_etcdClient->txn(*tx).get();
         if (!response.is_ok())
         {
@@ -128,40 +145,55 @@ bool LeaderElection::campaignLeader()
                                << LOG_KV("code", response.error_code())
                                << LOG_KV("purpose", m_config->purpose())
                                << LOG_KV("lease", leaseID);
+            // tryToSwitchToBackup invokes m_onCampaignHandler — outside lock.
             tryToSwitchToBackup();
             return false;
         }
         m_campaignTimer->stop();
-        ELECTION_LOG(INFO) << LOG_DESC("campaignLeader success")
-                           << LOG_KV("leaderKey", m_config->leaderKey())
+        ELECTION_LOG(INFO) << LOG_DESC("campaignLeader success") << LOG_KV("leaderKey", leaderKey)
                            << LOG_KV("purpose", m_config->purpose()) << LOG_KV("lease", leaseID)
                            << LOG_KV("version", response.value().version())
                            << LOG_KV("msg", response.error_message())
                            << LOG_KV("value", response.value().as_string())
                            << LOG_KV("key", response.value().key());
-        // cancel the old keepAlive
-        if (m_keepAlive)
-        {
-            ELECTION_LOG(INFO) << LOG_DESC("campaignLeader: cancel keepAlive thread")
-                               << LOG_KV("lease", m_keepAlive->Lease())
-                               << LOG_KV("leaderKey", m_config->leaderKey());
-            m_keepAlive->Cancel();
-        }
-        // establish new keepAlive
+
+        // Step 4 (brief critical section): swap m_keepAlive and commit
+        // setLeaderToSelf. This is the ONLY work that needs m_mutex and it
+        // does no I/O — etcd::KeepAlive construction is non-blocking; the
+        // background heartbeat runs on its own thread.
         auto keepAliveTTL = m_config->leaseTTL() - 1;
         auto weakSelf = std::weak_ptr<LeaderElection>(shared_from_this());
-        m_keepAlive = std::make_shared<etcd::KeepAlive>(
-            *(m_config->etcdClient()),
-            [weakSelf](std::exception_ptr e) {
-                auto self = weakSelf.lock();
-                if (!self)
-                {
-                    return;
-                }
-                self->onKeepAliveException(e);
-            },
-            keepAliveTTL, leaseID);
-        m_config->setLeaderToSelf(leaseID, response.value().modified_index());
+        std::shared_ptr<etcd::KeepAlive> oldKeepAlive;
+        {
+            RecursiveGuard l(m_mutex);
+            oldKeepAlive = std::move(m_keepAlive);
+            m_keepAlive = std::make_shared<etcd::KeepAlive>(
+                *(m_config->etcdClient()),
+                [weakSelf](std::exception_ptr e) {
+                    auto self = weakSelf.lock();
+                    if (!self)
+                    {
+                        return;
+                    }
+                    self->onKeepAliveException(e);
+                },
+                keepAliveTTL, leaseID);
+            m_config->setLeaderToSelf(leaseID, response.value().modified_index());
+        }
+        // Cancel the old keepAlive outside the lock — Cancel() may join an
+        // internal thread and we must not pay that latency under m_mutex.
+        if (oldKeepAlive)
+        {
+            ELECTION_LOG(INFO) << LOG_DESC("campaignLeader: cancel keepAlive thread")
+                               << LOG_KV("lease", oldKeepAlive->Lease())
+                               << LOG_KV("leaderKey", leaderKey);
+            oldKeepAlive->Cancel();
+        }
+
+        // Step 5 (no lock): user-supplied campaign handler. Must not run under
+        // m_mutex because the handler does upper-layer work (e.g. switching the
+        // node into master-mode) which can be slow or itself acquire other
+        // locks.
         auto leader = m_config->getLeader();
         if (m_onCampaignHandler)
         {
@@ -170,20 +202,26 @@ bool LeaderElection::campaignLeader()
         ELECTION_LOG(INFO)
             << LOG_DESC("campaignLeader: establish new keepAlive thread and switch to master-node")
             << LOG_KV("ttl", keepAliveTTL) << LOG_KV("lease", leaseID)
-            << LOG_KV("leaderKey", m_config->leaderKey());
+            << LOG_KV("leaderKey", leaderKey);
         return true;
     }
     catch (std::exception const& e)
     {
         ELECTION_LOG(WARNING) << LOG_DESC("campaignLeader exception")
                               << LOG_KV("message", boost::diagnostic_information(e));
-        // release the leaderKey when exception
-        if (m_keepAlive)
+        // FIB-169: read m_keepAlive under the lock to avoid a torn pointer
+        // read racing with the success path. Cancel() runs outside the lock.
+        std::shared_ptr<etcd::KeepAlive> keepAlive;
+        {
+            RecursiveGuard l(m_mutex);
+            keepAlive = m_keepAlive;
+        }
+        if (keepAlive)
         {
             ELECTION_LOG(INFO) << LOG_DESC("campaignLeader: cancel keepAlive thread for exception")
-                               << LOG_KV("lease", m_keepAlive->Lease())
+                               << LOG_KV("lease", keepAlive->Lease())
                                << LOG_KV("leaderKey", m_config->leaderKey());
-            m_keepAlive->Cancel();
+            keepAlive->Cancel();
         }
     }
     return false;
@@ -234,33 +272,49 @@ void LeaderElection::tryToSwitchToBackup()
 
 void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self)
 {
-    RecursiveGuard l(m_mutex);
-
-    m_config->updateSelf(_self);
-    ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig") << LOG_KV("ID", _self->memberID());
-    // update the configuration if the node is leader
-    auto leader = m_config->getLeader();
-    if (!leader || leader->memberID() != _self->memberID())
+    // FIB-169: update local config under m_mutex but release the mutex BEFORE
+    // dispatching the etcd commit RPC. CampaignConfig::updateSelf already
+    // serializes via its own x_self lock; m_mutex here only protects ordering
+    // against campaignLeader's brief critical section.
+    int64_t leaseID = 0;
+    std::string leaderKey;
+    std::string leaderValue;
+    bool isSelfLeader = false;
     {
-        ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig return for the node is not leader")
-                           << LOG_KV("leaderID", leader ? leader->memberID() : "None");
+        RecursiveGuard l(m_mutex);
+        m_config->updateSelf(_self);
+        ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig") << LOG_KV("ID", _self->memberID());
+        auto leader = m_config->getLeader();
+        if (!leader || leader->memberID() != _self->memberID())
+        {
+            ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig return for the node is not leader")
+                               << LOG_KV("leaderID", leader ? leader->memberID() : "None");
+            return;
+        }
+        leaseID = leader->leaseID();
+        leaderKey = m_config->leaderKey();
+        leaderValue = m_config->leaderValue();
+        isSelfLeader = true;
+    }
+    if (!isSelfLeader)
+    {
         return;
     }
-    auto leaseID = leader->leaseID();
     ELECTION_LOG(INFO)
         << LOG_DESC("updateSelfConfig, the node-self is leader, sync the modified memberConfig")
         << LOG_KV("lease", leaseID);
-    auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
+    auto tx = std::make_shared<etcdv3::Transaction>(leaderKey);
     tx->init_lease_compare(leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
-    tx->setup_basic_failure_operation(m_config->leaderKey());
-    tx->setup_compare_and_swap_sequence(m_config->leaderValue(), leaseID);
+    tx->setup_basic_failure_operation(leaderKey);
+    tx->setup_compare_and_swap_sequence(leaderValue, leaseID);
+    // Blocking etcd RPC executed WITHOUT m_mutex held (FIB-169).
     auto response = m_etcdClient->txn(*tx).get();
     if (!response.is_ok())
     {
         ELECTION_LOG(WARNING) << LOG_DESC("sync the modified memberConfig to storage error")
                               << LOG_KV("code", response.error_code())
                               << LOG_KV("msg", response.error_message()) << LOG_KV("lease", leaseID)
-                              << LOG_KV("leaderKey", m_config->leaderKey());
+                              << LOG_KV("leaderKey", leaderKey);
         return;
     }
     ELECTION_LOG(INFO) << LOG_DESC("updateSelfConfig success");

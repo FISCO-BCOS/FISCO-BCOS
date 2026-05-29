@@ -20,6 +20,9 @@
  */
 #pragma once
 #include "ElectionConfig.h"
+#include <cstddef>
+#include <string>
+#include <string_view>
 
 namespace bcos
 {
@@ -29,6 +32,26 @@ class WatcherConfig : public ElectionConfig
 {
 public:
     using Ptr = std::shared_ptr<WatcherConfig>;
+
+    // FIB-168: hard upper bound on watched etcd value sizes. Values exceeding
+    // this cap are rejected before decode to limit the worst-case CPU and log
+    // amplification a malicious or compromised etcd writer can inflict on the
+    // watcher thread.
+    static constexpr std::size_t c_maxEtcdValueSize = 64 * 1024;
+    // FIB-168: log only the first c_logValuePrefixBytes bytes of a payload on
+    // failure paths so corrupt or oversized values cannot blow up log volume.
+    static constexpr std::size_t c_logValuePrefixBytes = 64;
+
+    /// FIB-168 testable helper: reject values whose size exceeds c_maxEtcdValueSize.
+    static bool isOversizeEtcdValue(std::size_t _size) noexcept
+    {
+        return _size > c_maxEtcdValueSize;
+    }
+
+    /// FIB-168 testable helper: produce a hex-prefix representation of the
+    /// value capped at c_logValuePrefixBytes bytes for safe logging.
+    static std::string truncateValueForLog(std::string_view _value);
+
     WatcherConfig(std::string const& _etcdEndPoint, std::string const& _watchDir,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
         const std::string& _caPath = "", const std::string& _certPath = "",
