@@ -53,7 +53,7 @@ public:
         m_sync(std::move(_sync)),
         m_blockFactory(std::move(_blockFactory))
     {}
-    virtual ~NodeService() = default;
+    ~NodeService() = default;
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
@@ -93,7 +93,7 @@ public:
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig);
 
     template <typename T, typename S, typename... Args>
-    inline std::pair<std::shared_ptr<T>, S> createServicePrx(bcos::protocol::ServiceType _type,
+    std::pair<std::shared_ptr<T>, S> createServicePrx(bcos::protocol::ServiceType _type,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig,
         const Args&... _args)
     {

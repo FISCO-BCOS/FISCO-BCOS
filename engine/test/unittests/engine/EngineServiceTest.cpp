@@ -3,7 +3,7 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
-#include "engine/bcos-engine/EngineService.h"
+#include "engine/bcos-engine/EngineServiceImpl.h"
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -16,6 +16,7 @@
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-mempool/MemPoolImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
+#include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Wait.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -178,17 +179,53 @@ struct StubScheduler
     }
 };
 
-using TestEngineService =
-    EngineService<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
+struct BloomScheduler
+{
+    template <class Storage, class Executor>
+    task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage&, Executor&,
+        const protocol::BlockHeader&, ::ranges::input_range auto&&,
+        const ledger::LedgerConfig&)
+    {
+        Bloom bloom1{};
+        bloom1[255] = static_cast<bcos::byte>(0x01);
+        Bloom bloom2{};
+        bloom2[255] = static_cast<bcos::byte>(0x02);
 
-TestEngineService makeEngineService(
+        Keccak256 hasher;
+        auto receipt1 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        receipt1->setLogsBloom({bloom1.data(), bloom1.size()});
+        receipt1->calculateHash(hasher);
+        auto receipt2 = std::make_shared<bcostars::protocol::TransactionReceiptImpl>();
+        receipt2->setLogsBloom({bloom2.data(), bloom2.size()});
+        receipt2->calculateHash(hasher);
+
+        co_return std::vector<protocol::TransactionReceipt::Ptr>{receipt1, receipt2};
+    }
+};
+
+using BloomEngineServiceImpl =
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, BloomScheduler>;
+
+BloomEngineServiceImpl makeBloomEngineServiceImpl(
+    MemPoolImpl& memPool, RealGlobalStateStorage& storage, BloomScheduler& scheduler)
+{
+    StubExecutor executor;
+    static auto blockFactory =
+        bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
+    return BloomEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
+}
+
+using TestEngineServiceImpl =
+    EngineServiceImpl<MemPoolImpl, RealGlobalStateStorage, StubExecutor, StubScheduler>;
+
+TestEngineServiceImpl makeEngineServiceImpl(
     MemPoolImpl& memPool, RealGlobalStateStorage& storage)
 {
     StubExecutor executor;
     StubScheduler scheduler;
     static auto blockFactory =
         bcos::test::createBlockFactory(bcos::test::createNormalCryptoSuite());
-    return TestEngineService(memPool, storage, executor, scheduler, blockFactory);
+    return TestEngineServiceImpl(memPool, storage, executor, scheduler, blockFactory);
 }
 
 ForkchoiceState makeForkchoiceState()
@@ -240,7 +277,7 @@ BOOST_AUTO_TEST_CASE(exchange_capabilities_returns_supported_methods)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto capabilities = task::syncWait(
         engineService.exchangeCapabilities({"engine_forkchoiceUpdatedV1", "unknown_method"}));
@@ -263,7 +300,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     globalStateStorageFixture.setNonce(sender, "1");
     auto payloadAttributes = makePayloadAttributesV2();
 
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
@@ -288,7 +325,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto initialForkchoice = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice,
@@ -329,7 +366,7 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
     setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_validationBlockNumber,
         c_validationBlockNumber, c_validationBlockNumber);
     auto payloadAttributes = makePayloadAttributesV3();
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto result =
         task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 3));
@@ -360,7 +397,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_returns_syncing_when_head_block_number_missing)
     auto tx = makeTx(sender, 0);
     memPool.add(std::vector{tx});
     globalStateStorageFixture.setNonce(sender, "1");
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3));
 
@@ -381,7 +418,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_returns_syncing_when_safe_block_number_missing)
         forkchoiceState.headBlockHash, c_validationBlockNumber);
     globalStateStorageFixture.setBlockNumber(
         forkchoiceState.finalizedBlockHash, c_validationBlockNumber);
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto result = task::syncWait(engineService.updateForkchoice(forkchoiceState, nullptr, 3));
 
@@ -394,7 +431,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_non_sequential_head_block_number)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     auto initialForkchoice = makeForkchoiceState();
     setForkchoiceBlockNumbers(globalStateStorageFixture, initialForkchoice, c_reorgStartBlockNumber,
@@ -419,7 +456,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_safe_block_number_above_head)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     ForkchoiceState forkchoiceState{
         h256("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
@@ -440,7 +477,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_rejects_finalized_block_number_above_safe)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     ForkchoiceState forkchoiceState{
         h256("1212121212121212121212121212121212121212121212121212121212121212"),
@@ -461,7 +498,7 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
 {
     MemPoolImpl memPool;
     RealGlobalStateStorageFixture globalStateStorageFixture;
-    auto engineService = makeEngineService(memPool, globalStateStorageFixture.storage);
+    auto engineService = makeEngineServiceImpl(memPool, globalStateStorageFixture.storage);
 
     ForkchoiceState firstForkchoice{
         h256("1515151515151515151515151515151515151515151515151515151515151515"),
@@ -499,6 +536,41 @@ BOOST_AUTO_TEST_CASE(forkchoice_ignores_stale_update_after_newer_head_wins)
     auto thirdResult = task::syncWait(engineService.updateForkchoice(thirdForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(thirdResult.payloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Valid));
+}
+
+BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
+{
+    MemPoolImpl memPool;
+    RealGlobalStateStorageFixture globalStateStorageFixture;
+    auto forkchoiceState = makeForkchoiceState();
+    setForkchoiceBlockNumbers(globalStateStorageFixture, forkchoiceState, c_initialBlockNumber,
+        c_initialBlockNumber, c_initialBlockNumber);
+    std::string sender("cccccccccccccccccccc", 20);
+    auto tx = makeTx(sender, 0);
+    memPool.add(std::vector{tx});
+    globalStateStorageFixture.setNonce(sender, "0");
+    auto payloadAttributes = makePayloadAttributesV2();
+
+    BloomScheduler bloomScheduler;
+    auto engineService = makeBloomEngineServiceImpl(
+        memPool, globalStateStorageFixture.storage, bloomScheduler);
+
+    auto result =
+        task::syncWait(engineService.updateForkchoice(forkchoiceState, &payloadAttributes, 2));
+
+    BOOST_CHECK_EQUAL(static_cast<int>(result.payloadStatus.status),
+        static_cast<int>(PayloadValidationStatus::Valid));
+    BOOST_REQUIRE(result.payloadId.has_value());
+
+    auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
+
+    // Verify bloom aggregation: bloom1[255]=0x01 | bloom2[255]=0x02 = 0x03
+    BOOST_CHECK_EQUAL(static_cast<int>(payload.executionPayload.logsBloom[255]), 0x03);
+    // Other bytes remain zero (only the last byte was set in both blooms)
+    for (size_t i = 0; i < 255; ++i)
+    {
+        BOOST_CHECK_EQUAL(static_cast<int>(payload.executionPayload.logsBloom[i]), 0);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
