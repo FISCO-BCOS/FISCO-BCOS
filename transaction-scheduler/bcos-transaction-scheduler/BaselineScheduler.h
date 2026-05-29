@@ -488,35 +488,48 @@ private:
                     nullptr};
             }
 
-            // FIB-101: Bootstrap from the ledger on the very first commit so that
-            // continuity / already-committed checks below are anchored correctly.
-            if (m_lastCommittedBlockNumber == -1)
+            // FIB-101: The genesis system-contract deploy block (number 0) is
+            // committed exactly once, during initSysContract() at node startup.
+            // buildGenesisBlock() has already written current-number=0, so the
+            // ledger bootstrap below reads 0 and the already-committed / continuity
+            // checks would wrongly reject this legitimate genesis commit (0 <= 0,
+            // and 0 - 0 != 1). Block 0 only ever reaches here at init, so skip the
+            // bootstrap-anchored validation for it; m_lastCommittedBlockNumber is
+            // still advanced to 0 after the merge succeeds below.
+            if (!isSysContractDeploy(header->number()))
             {
-                m_lastCommittedBlockNumber = co_await ledger::getCurrentBlockNumber(m_ledger.get());
-            }
+                // FIB-101: Bootstrap from the ledger on the very first commit so
+                // that continuity / already-committed checks are anchored correctly.
+                if (m_lastCommittedBlockNumber == -1)
+                {
+                    m_lastCommittedBlockNumber =
+                        co_await ledger::getCurrentBlockNumber(m_ledger.get());
+                }
 
-            // FIB-101: Reject blocks that have already been committed (out-of-order
-            // or duplicate commits from concurrent consensus / sync paths).
-            if (m_lastCommittedBlockNumber != -1 && header->number() <= m_lastCommittedBlockNumber)
-            {
-                auto message = fmt::format("Block already committed: {}! latest: {}",
-                    header->number(), m_lastCommittedBlockNumber);
+                // FIB-101: Reject blocks that have already been committed (out-of-order
+                // or duplicate commits from concurrent consensus / sync paths).
+                if (m_lastCommittedBlockNumber != -1 &&
+                    header->number() <= m_lastCommittedBlockNumber)
+                {
+                    auto message = fmt::format("Block already committed: {}! latest: {}",
+                        header->number(), m_lastCommittedBlockNumber);
 
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr};
-            }
-            if (m_lastCommittedBlockNumber != -1 &&
-                header->number() - m_lastCommittedBlockNumber != 1)
-            {
-                auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), m_lastCommittedBlockNumber + 1);
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr};
+                }
+                if (m_lastCommittedBlockNumber != -1 &&
+                    header->number() - m_lastCommittedBlockNumber != 1)
+                {
+                    auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
+                        header->number(), m_lastCommittedBlockNumber + 1);
 
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr};
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr};
+                }
             }
 
             {

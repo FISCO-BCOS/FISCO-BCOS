@@ -462,5 +462,52 @@ BOOST_AUTO_TEST_CASE(sequentialExecutionAndDuplicateCacheLookup)
     }
 }
 
+// FIB-101 regression: the genesis system-contract deploy block (number 0) is
+// committed through the scheduler during initSysContract() at node startup.
+// buildGenesisBlock() has already written current-number=0, so a freshly
+// started node reports ledgerBlockNumber=0 here. The commit-time bootstrap +
+// already-committed gate must NOT treat block 0 as "already committed"
+// (0 <= 0) or "discontinuous" (0 - 0 != 1), otherwise commitBlock fails and the
+// node never starts. With the bug present this returns InvalidBlockNumber; with
+// the fix block 0 bypasses the gate and falls through to the empty-results
+// guard (UnknownError) instead — either way, NOT InvalidBlockNumber.
+BOOST_AUTO_TEST_CASE(genesisBlockCommitBypassesAlreadyCommittedGate)
+{
+    ledgerBlockNumber = 0;  // buildGenesisBlock wrote SYS_KEY_CURRENT_NUMBER=0
+
+    auto genesisHeader = blockHeaderFactory->createBlockHeader();
+    genesisHeader->setNumber(0);
+    genesisHeader->setVersion(200);
+    genesisHeader->calculateHash(*hashImpl);
+
+    Error::Ptr commitError;
+    baselineScheduler.commitBlock(genesisHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { commitError = std::move(error); });
+
+    BOOST_REQUIRE(commitError);  // no execute → fails at the empty-results guard
+    BOOST_CHECK_MESSAGE(commitError->errorCode() != scheduler::SchedulerError::InvalidBlockNumber,
+        "genesis block 0 must not be rejected by the already-committed / continuity gate");
+}
+
+// FIB-101 guard: the fix above is narrow — for a normal block (number > 0) the
+// already-committed gate must still reject a height at or below the ledger's
+// current number. Here the ledger is at 10 and we try to commit 5.
+BOOST_AUTO_TEST_CASE(alreadyCommittedNonGenesisBlockStillRejected)
+{
+    ledgerBlockNumber = 10;
+
+    auto staleHeader = blockHeaderFactory->createBlockHeader();
+    staleHeader->setNumber(5);
+    staleHeader->setVersion(200);
+    staleHeader->calculateHash(*hashImpl);
+
+    Error::Ptr commitError;
+    baselineScheduler.commitBlock(staleHeader,
+        [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { commitError = std::move(error); });
+
+    BOOST_REQUIRE(commitError);
+    BOOST_CHECK_EQUAL(commitError->errorCode(), scheduler::SchedulerError::InvalidBlockNumber);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace
