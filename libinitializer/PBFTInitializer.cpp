@@ -63,7 +63,8 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+    boost::asio::io_context& _ioContext)
   : m_nodeArchType(_nodeArchType),
     m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
@@ -72,7 +73,8 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     m_scheduler(std::move(_scheduler)),
     m_storage(std::move(_storage)),
     m_frontService(std::move(_frontService)),
-    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance))
+    m_nodeTimeMaintenance(std::move(_nodeTimeMaintenance)),
+    m_ioContext(&_ioContext)
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     g_BCOSConfig.setIsWasm(m_nodeConfig->isWasm());
@@ -488,7 +490,7 @@ void PBFTInitializer::createSync()
         m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance,
         m_nodeConfig->enableSendBlockStatusByTree(), m_nodeConfig->treeWidth(),
         m_nodeConfig->syncArchivedBlocks());
-    m_blockSync = blockSyncFactory->createBlockSync();
+    m_blockSync = blockSyncFactory->createBlockSync(*m_ioContext);
     m_blockSync->setFaultyNodeBlockDelta(m_nodeConfig->pipelineSize());
     m_blockSync->setAllowFreeNodeSync(m_nodeConfig->allowFreeNodeSync());
 }
@@ -599,7 +601,7 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
         m_nodeConfig->leaseTTL(), m_nodeConfig->pdCaPath(), m_nodeConfig->pdCertPath(),
-        m_nodeConfig->pdKeyPath());
+        m_nodeConfig->pdKeyPath(), *m_ioContext);
 
     // register the handler
     m_leaderElection->registerOnCampaignHandler(

@@ -25,6 +25,7 @@
 #include "bcos-framework/testutils/faker/FakeLedger.h"
 #include "bcos-sealer/SealerFactory.h"
 #include "bcos-txpool/TxPoolFactory.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
@@ -57,7 +58,7 @@ struct TestSealerFixture
         txpool::TxPoolFactory factory(keyPair->publicKey(), cryptoSuite,
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>(), blockFactory, nullptr,
             ledger, "", "", 1000, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-        txpool = factory.createTxPool();
+        txpool = factory.createTxPool(*ioServicePool->getIOService());
         txpool->init();
     }
 
@@ -68,6 +69,8 @@ struct TestSealerFixture
     crypto::CryptoSuite::Ptr cryptoSuite = nullptr;
     bcos::tool::NodeConfig::Ptr nodeConfig;
     crypto::KeyPairInterface::Ptr keyPair;
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "vrfTest");
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFixture)

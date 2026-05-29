@@ -22,7 +22,6 @@
 
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Error.h"
-#include "bcos-utilities/Timer.h"
 #include "servant/ServantProxy.h"
 #include <util/tc_autoptr.h>
 #include <boost/exception/detail/type_info.hpp>
@@ -140,24 +139,11 @@ public:
 
     void start()
     {
-        if (m_keepAlive > 0)
-        {
-            // for heartbeat
-            m_heartbeat = std::make_shared<bcos::Timer>(m_keepAlive, "heartTimer");
-            m_heartbeat->registerTimeoutHandler([this]() {
-                heartbeat();
-                m_heartbeat->restart();
-            });
-            m_heartbeat->start();
-        }
+        // heartbeat timer removed: no longer needed
     }
 
     void stop()
     {
-        if (m_heartbeat)
-        {
-            m_heartbeat->stop();
-        }
     }
 
 public:
@@ -238,7 +224,6 @@ private:
     std::function<void(const tars::TC_Endpoint& ep)> m_onCloseHandler;
 
     int32_t m_keepAlive = 3000;
-    std::shared_ptr<bcos::Timer> m_heartbeat = nullptr;
     // TODO: circle reference
     tars::TC_AutoPtr<tars::ServantProxy> m_proxy;
 };

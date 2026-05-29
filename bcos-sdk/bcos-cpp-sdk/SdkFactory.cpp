@@ -221,7 +221,7 @@ bcos::cppsdk::amop::AMOP::Ptr SdkFactory::buildAMOP(
 
 bcos::cppsdk::event::EventSub::Ptr SdkFactory::buildEventSub(const Service::Ptr& _service)
 {
-    auto eventSub = std::make_shared<event::EventSub>();
+    auto eventSub = std::make_shared<event::EventSub>(*m_ioServicePool->getIOService());
     auto messageFactory = std::make_shared<WsMessageFactory>();
 
     eventSub->setMessageFactory(messageFactory);

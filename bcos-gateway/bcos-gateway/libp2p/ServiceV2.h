@@ -22,13 +22,16 @@
 #include "bcos-utilities/Timer.h"
 #include "router/RouterTableInterface.h"
 
+#include <boost/asio/io_context.hpp>
+
 namespace bcos::gateway
 {
 class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
-    ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory);
+    ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory,
+        boost::asio::io_context& _ioContext);
     ServiceV2() = delete;
     ServiceV2(const ServiceV2&) = delete;
     ServiceV2(ServiceV2&&) = delete;

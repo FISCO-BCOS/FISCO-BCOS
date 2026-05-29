@@ -51,13 +51,14 @@ using namespace bcos::crypto;
 using namespace bcos::protocol;
 
 MemoryStorage::MemoryStorage(
-    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
+    TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
     m_bcosTransactions(BcosTransactions(BUCKET_SIZE)),
     m_blockNumberUpdatedTime(utcTime()),
     m_txsExpirationTime(_txsExpirationTime),
-    m_cleanUpTimer(std::make_shared<Timer>(TXPOOL_CLEANUP_TIME, "txpoolTimer")),
-    m_txsSizeNotifierTimer(std::make_shared<Timer>(TXS_SIZE_NOTIFY_TIME, "txsNotifier"))
+    m_cleanUpTimer(std::make_shared<Timer>(_ioContext, TXPOOL_CLEANUP_TIME, "txpoolTimer")),
+    m_txsSizeNotifierTimer(std::make_shared<Timer>(_ioContext, TXS_SIZE_NOTIFY_TIME, "txsNotifier"))
 {
     // Trigger a transaction cleanup operation every 3s
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredTransactions(); });

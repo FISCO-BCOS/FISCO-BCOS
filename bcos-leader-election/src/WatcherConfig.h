@@ -31,8 +31,8 @@ public:
     using Ptr = std::shared_ptr<WatcherConfig>;
     WatcherConfig(std::string const& _etcdEndPoint, std::string const& _watchDir,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
-        const std::string& _caPath = "", const std::string& _certPath = "",
-        const std::string& _keyPath = "");
+        boost::asio::io_context& _ioContext, const std::string& _caPath = "",
+        const std::string& _certPath = "", const std::string& _keyPath = "");
 
     ~WatcherConfig() override {}
 

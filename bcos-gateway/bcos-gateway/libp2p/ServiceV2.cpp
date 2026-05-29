@@ -31,9 +31,11 @@ static bool isRawP2pID(std::string const& p2pID)
     return p2pID.size() > HASH_NODEID_MAX_SIZE;
 }
 
-ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory)
+ServiceV2::ServiceV2(
+    P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory,
+    boost::asio::io_context& _ioContext)
   : Service(_p2pInfo),
-    m_routerTimer(std::make_shared<Timer>(3000, "routerSeqSync")),
+    m_routerTimer(std::make_shared<Timer>(_ioContext, 3000, "routerSeqSync")),
     m_routerTableFactory(std::move(_routerTableFactory)),
     m_routerTable(m_routerTableFactory->createRouterTable())
 

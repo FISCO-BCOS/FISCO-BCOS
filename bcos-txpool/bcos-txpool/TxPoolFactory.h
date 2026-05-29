@@ -38,7 +38,8 @@ public:
         bool checkTransactionSignature);
 
     virtual ~TxPoolFactory() = default;
-    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
+    TxPool::Ptr createTxPool(boost::asio::io_context& _ioContext,
+        size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 4,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
 
     void setScheduler(std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler);

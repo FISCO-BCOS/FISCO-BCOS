@@ -32,10 +32,11 @@ class LeaderElection : public LeaderElectionInterface,
 {
 public:
     using Ptr = std::shared_ptr<LeaderElection>;
-    LeaderElection(CampaignConfig::Ptr _config)
+    LeaderElection(CampaignConfig::Ptr _config, boost::asio::io_context& _ioContext)
       : m_config(_config), m_etcdClient(_config->etcdClient())
     {
-        m_campaignTimer = std::make_shared<Timer>(m_config->leaseTTL() * 1000, "campTimer");
+        m_campaignTimer =
+            std::make_shared<Timer>(_ioContext, m_config->leaseTTL() * 1000, "campTimer");
     }
     ~LeaderElection() override { stop(); }
     void start() override;

@@ -38,6 +38,7 @@
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
 #include <bcos-txpool/txpool/validator/TxValidator.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -76,8 +77,9 @@ public:
 class FakeMemoryStorage : public MemoryStorage
 {
 public:
-    FakeMemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2)
-      : MemoryStorage(_config, _notifyWorkerNum)
+    FakeMemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        size_t _notifyWorkerNum = 2)
+      : MemoryStorage(_config, _ioContext, _notifyWorkerNum)
     {}
 };
 
@@ -131,7 +133,7 @@ public:
         auto txPoolFactory = std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite,
             m_txResultFactory, m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId,
             m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-        m_txpool = txPoolFactory->createTxPool();
+        m_txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService());
 
         m_sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
         auto syncConfig = m_sync->config();
@@ -188,11 +190,11 @@ public:
                 auto txPoolFactoryTemp = std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite,
                     m_txResultFactory, m_blockFactory, frontService, m_ledger, m_groupId, m_chainId,
                     m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-                txpool = txPoolFactoryTemp->createTxPool();
+                txpool = txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService());
             }
             else
             {
-                txpool = txPoolFactory->createTxPool();
+                txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService());
                 auto sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
                 sync = std::make_shared<FakeTransactionSync1>(sync->config());
                 txpool->setTransactionSync(sync);
@@ -337,6 +339,8 @@ public:
     FakeGateWay::Ptr m_fakeGateWay;
     TxPool::Ptr m_txpool;
     TransactionSync::Ptr m_sync;
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "txpoolTest");
 
     NodeIDs m_nodeIdList;
 };

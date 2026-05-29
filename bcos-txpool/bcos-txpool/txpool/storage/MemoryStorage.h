@@ -39,7 +39,8 @@ class MemoryStorage : public TxPoolStorageInterface,
 {
 public:
     // the default txsExpirationTime is 10 minutes
-    explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
+    explicit MemoryStorage(TxPoolConfig::Ptr _config,
+        boost::asio::io_context& _ioContext, size_t _notifyWorkerNum = 2,
         uint64_t _txsExpirationTime = TX_DEFAULT_EXPIRATION_TIME);
     ~MemoryStorage() override;
     MemoryStorage(const MemoryStorage&) = delete;

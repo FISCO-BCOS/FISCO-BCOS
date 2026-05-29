@@ -43,11 +43,12 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::protocol::NodeArchitectureType _nod
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
-    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+    bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+    boost::asio::io_context& _ioContext)
   : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
-        _storage, _frontService, _nodeTimeMaintenance)
+        _storage, _frontService, _nodeTimeMaintenance, _ioContext)
 {
-    m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
+    m_timer = std::make_shared<Timer>(_ioContext, m_timerSchedulerInterval, "node info report");
 
     std::vector<tars::TC_Endpoint> endPoints;
     auto withoutTarsFramework = m_nodeConfig->withoutTarsFramework();
