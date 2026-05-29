@@ -2,6 +2,7 @@
 
 #include "RollbackableStorage.h"
 #include "bcos-executor/src/Web3Eip2930Fill.h"
+#include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
@@ -84,6 +85,7 @@ public:
             evmc_address m_origin;
             u256 m_nonce;
             executor::Web3Eip2930Parsed m_eip2930Parsed;
+            std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
             hostcontext::HostContext<decltype(m_rollbackableStorage),
                 decltype(m_rollbackableTransientStorage)>
                 m_hostContext;
@@ -108,11 +110,13 @@ public:
                              evmc_address{}),
                 m_nonce(hex2u(transaction.nonce())),
                 m_eip2930Parsed(executor::parseEip2930FromWeb3Transaction(transaction)),
+                m_eip2929Access(std::make_shared<executor::Eip2929AccessState>()),
                 m_hostContext(m_rollbackableStorage, m_rollbackableTransientStorage, blockHeader,
                     newEVMCMessage(m_blockHeader.get().number(), transaction, m_gasLimit, m_origin),
                     m_origin, transaction.abi(), contextID, m_seq, executor.m_precompiledManager,
                     ledgerConfig, *executor.m_hashImpl, transaction.type() != 0, m_nonce,
-                    task::syncWait, m_eip2930Parsed.accessList, m_eip2930Parsed.web3TypedTxKind)
+                    task::syncWait, m_eip2930Parsed.accessList, m_eip2930Parsed.web3TypedTxKind,
+                    m_eip2929Access)
             {}
         };
         std::unique_ptr<Data> m_data;

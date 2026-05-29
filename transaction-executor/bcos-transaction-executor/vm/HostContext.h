@@ -28,7 +28,9 @@
 #include "VMInstance.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -213,6 +215,11 @@ private:
     std::unordered_set<std::pair<evmc_address, evmc_bytes32>, EVMCPairHash, EVMCPairEqual>
         m_warmStorage;
 
+    // EIP-2929/2930 access tracking
+    std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
+    std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
+    uint8_t m_web3TypedTxKindForAccessList = 0;
+
     constexpr auto buildLegacyExternalCaller()
     {
         return
@@ -258,7 +265,10 @@ private:
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce,
-        const evmc_host_interface* hostInterface)
+        const evmc_host_interface* hostInterface,
+        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
+        uint8_t web3TypedTxKind = 0,
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
       : evmc_host_context{.interface = hostInterface,
             .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
@@ -285,7 +295,10 @@ private:
             std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
                 EVMC_CANCUN)),
         m_level(seq),
-        m_web3Tx(web3Tx)
+        m_web3Tx(web3Tx),
+        m_eip2929Access(std::move(eip2929Access)),
+        m_eip2930AccessList(std::move(accessList)),
+        m_web3TypedTxKindForAccessList(web3TypedTxKind)
     {}
 
 public:
@@ -293,10 +306,14 @@ public:
         protocol::BlockHeader const& blockHeader, const evmc_message& message,
         const evmc_address& origin, std::string_view abi, int contextID, int64_t& seq,
         PrecompiledManager const& precompiledManager, ledger::LedgerConfig const& ledgerConfig,
-        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator)
+        crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
+        std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
+        uint8_t web3TypedTxKind = 0,
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
-            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)))
+            getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
+            std::move(accessList), web3TypedTxKind, std::move(eip2929Access))
     {}
 
     ~HostContext() noexcept = default;
@@ -691,7 +708,7 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface);
+            interface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
