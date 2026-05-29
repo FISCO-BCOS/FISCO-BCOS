@@ -1,4 +1,10 @@
 #include "bcos-storage/CheckpointRocksDBStorage.h"
+#include "bcos-storage/StateKVResolver.h"
+#include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <rocksdb/filter_policy.h>
+#include <rocksdb/statistics.h>
+#include <rocksdb/table.h>
 #include <rocksdb/utilities/checkpoint.h>
 #include <boost/throw_exception.hpp>
 #include <filesystem>
@@ -49,21 +55,79 @@ std::unique_ptr<::rocksdb::DB> openCheckpointRocksDB(
     }
     return std::unique_ptr<::rocksdb::DB>(rocksDB);
 }
+}  // namespace detail
 
-::rocksdb::Options latestCheckpointOptions()
+
+template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
+    Resolver<ValueType> ValueResolver>
+::rocksdb::Options CheckpointRocksDBStorage<KeyType, ValueType, KeyResolver, ValueResolver>::latestCheckpointOptions() const
 {
     ::rocksdb::Options options;
     options.create_if_missing = true;
+
+    if (m_option.optimizeLevelStyleCompaction)
+    {
+        options.IncreaseParallelism();
+        options.OptimizeLevelStyleCompaction();
+    }
+
+    options.max_background_jobs = m_option.maxBackgroundJobs;
+    options.max_write_buffer_number = m_option.maxWriteBufferNumber;
+    options.enable_blob_files = m_option.enableBlobFiles;
+    options.bytes_per_sync = 1 << 20;
+    options.compression = ::rocksdb::kZSTD;
+    options.bottommost_compression = ::rocksdb::kZSTD;
+    options.max_open_files = 256;
+    options.write_buffer_size = m_option.writeBufferSize;
+    options.min_write_buffer_number_to_merge = m_option.minWriteBufferNumberToMerge;
+    options.enable_pipelined_write = true;
+    options.max_bytes_for_level_base = 512 << 20;
+    options.target_file_size_base = 128 << 20;
+
+    if (m_option.enableDBStatistics)
+    {
+        options.statistics = ::rocksdb::CreateDBStatistics();
+    }
+
+    ::rocksdb::BlockBasedTableOptions table_options;
+    table_options.block_cache = m_cache;
+    table_options.filter_policy.reset(::rocksdb::NewBloomFilterPolicy(10, false));
+    table_options.optimize_filters_for_memory = true;
+    table_options.block_size = 64 * 1024;
+    options.table_factory.reset(::rocksdb::NewBlockBasedTableFactory(table_options));
+
     return options;
 }
 
-::rocksdb::Options historicalCheckpointOptions()
+
+template <class KeyType, class ValueType, Resolver<KeyType> KeyResolver,
+    Resolver<ValueType> ValueResolver>
+::rocksdb::Options CheckpointRocksDBStorage<KeyType, ValueType, KeyResolver, ValueResolver>::historicalCheckpointOptions() const
 {
     ::rocksdb::Options options;
     options.create_if_missing = false;
+
+    options.max_open_files = 256;
+    options.compression = ::rocksdb::kZSTD;
+    options.bottommost_compression = ::rocksdb::kZSTD;
+
+    ::rocksdb::BlockBasedTableOptions table_options;
+    table_options.block_cache = m_cache;
+    table_options.filter_policy.reset(::rocksdb::NewBloomFilterPolicy(10, false));
+    table_options.optimize_filters_for_memory = true;
+    table_options.block_size = 64 * 1024;
+    options.table_factory.reset(::rocksdb::NewBlockBasedTableFactory(table_options));
+
+    if (m_option.enableDBStatistics)
+    {
+        options.statistics = ::rocksdb::CreateDBStatistics();
+    }
+
     return options;
 }
 
+namespace detail
+{
 void ensureCheckpointDirectories(std::string_view rootDir)
 {
     auto normalizedRoot = std::filesystem::path(rootDir).lexically_normal();
@@ -187,4 +251,8 @@ std::optional<bcos::h256> findCheckpointByTime(std::string_view rootDir, bool la
     return selected ? std::make_optional(selected->first) : std::nullopt;
 }
 }  // namespace detail
+
+template class CheckpointRocksDBStorage<bcos::executor_v1::StateKey, bcos::storage::Entry,
+    bcos::storage2::rocksdb::StateKeyResolver, bcos::storage2::rocksdb::StateValueResolver>;
+
 }  // namespace bcos::storage2::rocksdb

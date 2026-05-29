@@ -35,9 +35,12 @@ class GlobalStateStorageInitializer
 public:
     using Ptr = std::shared_ptr<GlobalStateStorageInitializer>;
 
-    explicit GlobalStateStorageInitializer(std::string const& storageRootPath);
+    explicit GlobalStateStorageInitializer(
+        std::string const& storageRootPath,
+        bcos::storage2::rocksdb::RocksDBCheckpointOption const& rocksDBOption = {});
 
-    static Ptr build(std::string const& storageRootPath);
+    static Ptr build(std::string const& storageRootPath,
+        bcos::storage2::rocksdb::RocksDBCheckpointOption const& rocksDBOption = {});
 
     GlobalStateStorage& storage() { return m_storage; }
     GlobalStateStorage const& storage() const { return m_storage; }
