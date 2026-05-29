@@ -28,6 +28,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
+#include "bcos-pbft/pbft/utilities/PBFTMsgVersion.h"
 #include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -488,7 +489,10 @@ protected:
     std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
-    const unsigned c_pbftMsgDefaultVersion = 0;
+    // FIB-134: sender default, sourced from the single protocol-version knob so the
+    // sender default and the digest threshold can never drift apart.
+    const unsigned c_pbftMsgDefaultVersion =
+        static_cast<unsigned>(toWireVersion(c_currentPBFTMsgVersion));
     const unsigned c_networkTimeoutInterval = 1000;
     // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};
