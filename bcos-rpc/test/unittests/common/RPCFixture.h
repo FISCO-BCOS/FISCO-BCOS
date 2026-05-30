@@ -121,7 +121,7 @@ public:
         txPool->start();
 
         nodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory);
+            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory, nullptr);
 
 
         groupInfo = std::make_shared<group::GroupInfo>();
