@@ -40,7 +40,8 @@ BOOST_FIXTURE_TEST_SUITE(EventSubTest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(test_EventSub_suspendTask)
 {
-    auto es = std::make_shared<bcos::cppsdk::event::EventSub>();
+    boost::asio::io_context ioContext;
+    auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
     auto task = std::make_shared<bcos::cppsdk::event::EventSubTask>();
     std::string id = "123";
     task->setId(id);
@@ -63,7 +64,8 @@ BOOST_AUTO_TEST_CASE(test_EventSub_suspendTask)
 
 BOOST_AUTO_TEST_CASE(test_EventSub_addTask)
 {
-    auto es = std::make_shared<bcos::cppsdk::event::EventSub>();
+    boost::asio::io_context ioContext;
+    auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
     auto task1 = std::make_shared<bcos::cppsdk::event::EventSubTask>();
     auto task2 = std::make_shared<bcos::cppsdk::event::EventSubTask>();
 
@@ -144,7 +146,8 @@ BOOST_AUTO_TEST_CASE(test_EventSub_addTask)
 
 BOOST_AUTO_TEST_CASE(test_EventSub_unsubscribeEvent)
 {
-    auto es = std::make_shared<bcos::cppsdk::event::EventSub>();
+    boost::asio::io_context ioContext;
+    auto es = std::make_shared<bcos::cppsdk::event::EventSub>(ioContext);
     auto messageFactory = std::make_shared<bcos::boostssl::ws::WsMessageFactory>();
     es->setMessageFactory(messageFactory);
 
