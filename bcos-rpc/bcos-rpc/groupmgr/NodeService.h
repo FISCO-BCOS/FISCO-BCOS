@@ -24,6 +24,7 @@
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-framework/multigroup/ChainNodeInfo.h>
 #include <bcos-framework/multigroup/GroupInfo.h>
@@ -33,6 +34,7 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <servant/Application.h>
+#include <optional>
 #include <utility>
 
 namespace bcos::rpc
@@ -45,13 +47,15 @@ public:
         std::shared_ptr<bcos::scheduler::SchedulerInterface> _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
-        bcos::sync::BlockSyncInterface::Ptr _sync, bcos::protocol::BlockFactory::Ptr _blockFactory)
+        bcos::sync::BlockSyncInterface::Ptr _sync, bcos::protocol::BlockFactory::Ptr _blockFactory,
+        std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
       : m_ledger(std::move(_ledger)),
         m_scheduler(std::move(_scheduler)),
         m_txpool(std::move(_txpool)),
         m_consensus(std::move(_consensus)),
         m_sync(std::move(_sync)),
-        m_blockFactory(std::move(_blockFactory))
+        m_blockFactory(std::move(_blockFactory)),
+        m_engineService(std::move(_engineService))
     {}
     ~NodeService() = default;
 
@@ -63,6 +67,12 @@ public:
     bcos::protocol::BlockFactory::Ptr blockFactory() { return m_blockFactory; }
 
     bcos::txpool::TxPoolInterface& txpoolRef() { return *m_txpool; }
+
+    std::shared_ptr<bcos::engine::AnyEngineService>& engineService() { return m_engineService; }
+    std::shared_ptr<bcos::engine::AnyEngineService> const& engineService() const
+    {
+        return m_engineService;
+    }
 
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
@@ -79,6 +89,8 @@ private:
     bcos::consensus::ConsensusInterface::Ptr m_consensus;
     bcos::sync::BlockSyncInterface::Ptr m_sync;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+
+    std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

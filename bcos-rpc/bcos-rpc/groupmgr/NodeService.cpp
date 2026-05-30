@@ -94,7 +94,7 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
     }
 
     auto nodeService = std::make_shared<NodeService>(ledgerClient.first, schedulerClient.first,
-        txpoolClient.first, consensusClient.first, syncClient.first, blockFactory);
+        txpoolClient.first, consensusClient.first, syncClient.first, blockFactory, nullptr);
 
     nodeService->setLedgerPrx(ledgerClient.second);
     return nodeService;
