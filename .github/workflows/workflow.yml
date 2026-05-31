@@ -161,10 +161,26 @@ jobs:
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
-      - name: Strip debug symbols from vcpkg static libs
+      - name: Reduce vcpkg cache size
         if: matrix.os != 'windows-2025'
         run: |
-          find build/vcpkg_installed -path "*/debug/*" \( -name "*.a" -o -name "*.dylib" \) -print -exec strip --strip-debug {} \; 2>/dev/null || true
+          set -euo pipefail
+          echo "=== Before cleanup ==="
+          du -sh build/vcpkg_installed 2>/dev/null || true
+
+          # 1) Remove entire debug/ tree — MinSizeRel CI never links debug libs
+          echo "Removing debug libraries..."
+          find build/vcpkg_installed -type d -name debug -prune -print -exec rm -rf {} + 2>/dev/null || true
+
+          # 2) Strip release static libs (remove debug info, keep symbols needed for linking)
+          echo "Stripping release static libraries..."
+          find build/vcpkg_installed \( -name "*.a" -o -name "*.dylib" \) -print -exec strip --strip-debug {} \; 2>/dev/null || true
+
+          # 3) Remove per-package build workdirs if present (already excluded from cache, paranoia)
+          rm -rf build/vcpkg_installed/*/src 2>/dev/null || true
+
+          echo "=== After cleanup ==="
+          du -sh build/vcpkg_installed 2>/dev/null || true
       - name: Set packaging variables
         if: github.event_name == 'release' && matrix.os != 'windows-2025'
         id: pkgvars
