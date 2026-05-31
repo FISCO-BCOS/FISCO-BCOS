@@ -19,12 +19,11 @@
 
 #pragma once
 
+#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/engine/EngineService.h"
 #include "bcos-framework/engine/Types.h"
 #include "bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
-
-#include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
