@@ -52,13 +52,14 @@ jobs:
         id: vcpkg-cache
         with:
           path: |
-            ${{ github.workspace }}/vcpkg
+            ${{ github.workspace }}/vcpkg/.vcpkg-root
+            ${{ github.workspace }}/vcpkg/vcpkg
+            ${{ github.workspace }}/vcpkg/ports
+            ${{ github.workspace }}/vcpkg/scripts
+            ${{ github.workspace }}/vcpkg/triplets
+            ${{ github.workspace }}/vcpkg/versions
             ${{ github.workspace }}/build/vcpkg_installed
-            !${{ github.workspace }}/vcpkg/.git
-            !${{ github.workspace }}/vcpkg/buildtrees
-            !${{ github.workspace }}/vcpkg/packages
-            !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v2
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
