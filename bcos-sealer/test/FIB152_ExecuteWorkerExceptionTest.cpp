@@ -78,9 +78,12 @@ struct StubTxPoolForFIB152 : public bcos::txpool::TxPoolInterface
     {}
 };
 
-// SealingManager whose pendingTxsSize() reports >= maxTxsPerBlock so that
-// shouldGenerateProposal() returns true; tracks resetSealing() invocations
-// to verify the FIB-152 catch path.
+// SealingManager that reports ready-to-seal so shouldGenerateProposal() returns
+// true; tracks resetSealing() invocations to verify the FIB-152 catch path.
+// Note: meetsProposalPreconditions() reads the m_pendingTxs/m_pendingSysTxs
+// deques directly (not the virtual pendingTxsSize()), so the test must seed real
+// metadata via testOnlySeedPendingTxs() — overriding pendingTxsSize() no longer
+// influences the proposal-ready predicate after the FIB-117 refactor.
 struct ReadyForProposalSealingManager : public bcos::sealer::SealingManager
 {
     std::atomic<int> resetSealingCalls{0};
@@ -90,8 +93,6 @@ struct ReadyForProposalSealingManager : public bcos::sealer::SealingManager
     {}
 
     FetchResult fetchTransactions() override { return FetchResult::SUCCESS; }
-    size_t pendingTxsSize() override { return 1024; }
-    int64_t latestNumber() const override { return 0; }
 
     void resetSealing() override
     {
@@ -162,11 +163,17 @@ BOOST_AUTO_TEST_CASE(executeWorker_swallows_hook_exception_and_resets_sealing)
     auto cfg = std::make_shared<bcos::sealer::SealerConfig>(blockFactory, txpool, nodeTime);
 
     auto mgr = std::make_shared<ReadyForProposalSealingManager>(cfg);
-    // Establish a valid sealing window: [2, 1000] with maxTxsPerBlock=1, so
-    // shouldGenerateProposal() returns true (pendingTxsSize() >= maxTxsPerBlock).
+    // Establish a valid sealing window: [2, 1000] with maxTxsPerBlock=1.
     // start=2 (not endSealingNumber+1=1) triggers the non-continuous branch
     // which sets m_sealingNumber := startSealingNumber.
     mgr->resetSealingInfo(2, 1000, 1);
+    // meetsProposalPreconditions() reads the pending-txs deque directly, so seed
+    // one real metadata entry (>= maxTxsPerBlock=1, which skips the minSealTime
+    // gate) to make the proposal-ready predicate true and drive execution into
+    // the throwing hook.
+    auto seedHash = hashImpl->hash(bcos::bytesConstRef("FIB-152-seed-tx"));
+    mgr->testOnlySeedPendingTxs(
+        {blockFactory->createTransactionMetaData(seedHash, seedHash.abridged())});
 
     auto sealer = std::make_shared<ThrowingHookSealer>(cfg);
     sealer->setSealingManager(mgr);
