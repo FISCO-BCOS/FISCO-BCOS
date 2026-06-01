@@ -305,13 +305,13 @@ jobs:
             lcov --summary coverage.info --ignore-errors inconsistent,source 2>&1
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload coverage report to Codecov
-        # Only upload when a token is available. On fork pull_request runs the
-        # token is empty (GitHub withholds secrets), so we skip rather than emit
-        # an orphaned tokenless report. The token-carrying push run (on the fork
-        # and on the base branch) is what feeds Codecov, which then comments and
-        # posts project/patch checks on the PR by commit SHA.
-        if: ${{ always() && env.CODECOV_TOKEN != '' }}
+      - name: Upload base-branch coverage to Codecov
+        # Direct upload only for push events (base branches), which carry the
+        # token and establish the baseline the project status compares against.
+        # Pull requests (including fork PRs, which get no secrets here) are
+        # uploaded by the coverage-comment workflow_run job instead, so it can
+        # run with the token in the base-repo context.
+        if: ${{ github.event_name == 'push' && env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v5
         with:
           files: build/coverage.info
@@ -319,11 +319,18 @@ jobs:
           fail_ci_if_error: false
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
-      - name: Upload coverage artifacts
+      - name: Record PR number for the comment workflow
+        # Consumed by coverage-comment.yml (workflow_run): the workflow_run event
+        # does not expose the PR number for fork PRs, so pass it via the artifact.
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "$PR_NUMBER" > build/pr-number.txt
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-data
           path: |
             build/coverage.info
-            build/CodeCoverage
-          retention-days: 30
+            build/pr-number.txt
+          retention-days: 7
