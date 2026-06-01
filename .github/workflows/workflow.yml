@@ -175,7 +175,7 @@ jobs:
 
           # 2) Strip release static libs (remove debug info, keep symbols needed for linking)
           echo "Stripping release static libraries..."
-          find build/vcpkg_installed \( -name "*.a" -o -name "*.dylib" \) -print -exec strip --strip-debug {} \; 2>/dev/null || true
+          find build/vcpkg_installed \( -name "*.a" -o -name "*.dylib" \) -print -exec strip -S {} \; 2>/dev/null || true
 
           # 3) Remove per-package build workdirs if present (already excluded from cache, paranoia)
           rm -rf build/vcpkg_installed/*/src 2>/dev/null || true
