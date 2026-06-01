@@ -59,7 +59,7 @@ jobs:
         with:
           path: |
             ${{ github.workspace }}/build/vcpkg_installed
-          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v3
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
@@ -169,9 +169,9 @@ jobs:
           echo "=== Before cleanup ==="
           du -sh build/vcpkg_installed 2>/dev/null || true
 
-          # 1) Remove entire debug/ — MinSizeRel CI never links debug libs
+          # 1) Remove only debug libraries — keep debug metadata/includes intact
           echo "Removing debug libraries..."
-          find build/vcpkg_installed -type d -name debug -prune -print -exec rm -rf {} + 2>/dev/null || true
+          find build/vcpkg_installed -path '*/debug/lib/*' \( -name "*.a" -o -name "*.so" -o -name "*.so.*" -o -name "*.dylib" \) -print -delete 2>/dev/null || true
 
           # 2) Strip release static libs (remove debug info, keep symbols needed for linking)
           echo "Stripping release static libraries..."
