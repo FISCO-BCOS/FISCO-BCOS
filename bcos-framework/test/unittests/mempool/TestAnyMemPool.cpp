@@ -127,7 +127,6 @@ BOOST_AUTO_TEST_SUITE(TestAnyMemPool)
 BOOST_AUTO_TEST_CASE(constructWithMock)
 {
     bcos::test::MockMemPool mock;
-    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     BOOST_CHECK(static_cast<bool>(any));
@@ -137,7 +136,6 @@ BOOST_AUTO_TEST_CASE(constructWithMock)
 BOOST_AUTO_TEST_CASE(addDelegates)
 {
     bcos::test::MockMemPool mock;
-    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     fakeit::Mock<protocol::Transaction> mockTx;
@@ -185,7 +183,6 @@ BOOST_AUTO_TEST_CASE(removeByStateDelegates)
 BOOST_AUTO_TEST_CASE(removeByHashesDelegates)
 {
     bcos::test::MockMemPool mock;
-    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     std::vector<bcos::crypto::HashType> hashes{bcos::crypto::HashType{0x01}};
@@ -198,7 +195,6 @@ BOOST_AUTO_TEST_CASE(removeByHashesDelegates)
 BOOST_AUTO_TEST_CASE(getDelegates)
 {
     bcos::test::MockMemPool mock;
-    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     fakeit::Mock<protocol::Transaction> mockTx;
@@ -217,7 +213,6 @@ BOOST_AUTO_TEST_CASE(getDelegates)
 BOOST_AUTO_TEST_CASE(moveConstruction)
 {
     bcos::test::MockMemPool mock;
-    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any1(mock);
 
     // Move construct
@@ -237,7 +232,6 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
 {
     bcos::test::MockMemPool mock1;
     bcos::test::MockMemPool mock2;
-    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any1(mock1);
     AnyMemPool<bcos::test::MockStateStorage> any2(mock2);
 
