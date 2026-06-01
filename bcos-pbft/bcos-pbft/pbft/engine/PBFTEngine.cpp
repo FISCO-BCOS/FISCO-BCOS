@@ -1106,6 +1106,25 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                               << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
             return false;
         }
+        // FIB-142 receiver-side (defence-in-depth): FIB-130 above only proves the
+        // header is internally consistent (header.hash binds the header fields,
+        // incl. txsRoot). It does NOT prove the decoded body matches that txsRoot.
+        // Recompute the body's Merkle root and reject any mismatch, so a byzantine
+        // leader cannot ship a body whose real root differs from header.txsRoot —
+        // otherwise the poisoned (hash, data) pair is cached/forwarded and only
+        // fails much later during execution.
+        if (auto computedTxsRoot =
+                block->calculateTransactionRoot(*m_config->cryptoSuite()->hashImpl());
+            computedTxsRoot != blockHeader->txsRoot())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: reject for decoded body txsRoot "
+                                     "does not match header.txsRoot (FIB-142)")
+                              << LOG_KV("headerTxsRoot", blockHeader->txsRoot().abridged())
+                              << LOG_KV("computedTxsRoot", computedTxsRoot.abridged())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
     }
 
     // FIB-126: validate the proposed block's header timestamp against two invariants:

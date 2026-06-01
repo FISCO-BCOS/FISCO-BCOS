@@ -449,6 +449,13 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, PBFTFixture::Ptr _fak
         auto txMetaData = _faker->blockFactory()->createTransactionMetaData(hash, hash.abridged());
         block->appendTransactionMetaData(txMetaData);
     }
+    // FIB-142: mirror the honest sealer's submitProposal flow — bind body's
+    // Merkle root into header.txsRoot and recompute the hash. Otherwise the
+    // PBFTEngine receiver-side body-txsRoot defence rejects proposals built
+    // from this fixture (PBFTEngine::asyncSubmitProposal also runs the local
+    // handlePrePrepareMsg checks before broadcast).
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*_cryptoSuite->hashImpl()));
+    block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
     return block;
 }
 }  // namespace test

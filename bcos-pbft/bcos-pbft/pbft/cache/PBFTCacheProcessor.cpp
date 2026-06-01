@@ -71,6 +71,38 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
     // Note: to fetch the remote proposal(the from node hits all transactions)
     auto self = weak_from_this();
     auto block = m_config->blockFactory().createBlock(_proposal->data(), false, false);
+    // FIB-142 receiver-side: reject log-sync responses where the decoded block
+    // does not bind to the carried proposal hash; same-hash equivocation must
+    // be impossible at this trust boundary.
+    auto const& hashImpl = *m_config->blockFactory().cryptoSuite()->hashImpl();
+    block->blockHeader()->calculateHash(hashImpl);
+    if (block->blockHeader()->hash() != _proposal->hash())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "loadAndVerifyProposal: reject for decoded block hash "
+                                 "does not match proposal hash (FIB-142)")
+                          << LOG_KV("expected", _proposal->hash().abridged())
+                          << LOG_KV("decoded", block->blockHeader()->hash().abridged())
+                          << printPBFTProposal(_proposal);
+        m_onLoadAndVerifyProposalFinish(false, nullptr, _proposal);
+        return;
+    }
+    // FIB-142 receiver-side (defence-in-depth): the header-hash check above
+    // does not prove the body matches header.txsRoot. Recompute the body's
+    // Merkle root here and reject any mismatch so log-sync never caches a
+    // body that disagrees with the header's transaction commitment.
+    if (auto computedTxsRoot = block->calculateTransactionRoot(hashImpl);
+        computedTxsRoot != block->blockHeader()->txsRoot())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "loadAndVerifyProposal: reject for decoded body txsRoot "
+                                 "does not match header.txsRoot (FIB-142)")
+                          << LOG_KV("headerTxsRoot", block->blockHeader()->txsRoot().abridged())
+                          << LOG_KV("computedTxsRoot", computedTxsRoot.abridged())
+                          << printPBFTProposal(_proposal);
+        m_onLoadAndVerifyProposalFinish(false, nullptr, _proposal);
+        return;
+    }
     m_config->validator()->verifyProposal(_fromNode, _proposal->index(), block,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try

@@ -66,8 +66,14 @@ static BuiltBlock buildBlockWithTimestamp(CryptoSuite::Ptr cryptoSuite, PBFTFixt
     // init() respects the timestamp argument
     auto block =
         fixture->ledger()->init(parent->blockHeader(), true, blockIndex, 0, blockTimestamp);
-    // Compute the header hash after the timestamp is set so it matches the hash
-    // handlePrePrepareMsg recomputes via calculateHash() on the decoded header.
+    // FIB-142: bind the body's Merkle root into header.txsRoot so the receiver-side
+    // body-txsRoot defence in handlePrePrepareMsg accepts this otherwise-valid block.
+    // FakeLedger seeds a placeholder txsRoot=hash(number) that does not match the
+    // (empty) tx set, which the defence correctly rejects; an honest empty block
+    // carries the empty Merkle root.
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*cryptoSuite->hashImpl()));
+    // Compute the header hash after the timestamp and txsRoot are set so it matches
+    // the hash handlePrePrepareMsg recomputes via calculateHash() on the decoded header.
     block->blockHeader()->calculateHash(*cryptoSuite->hashImpl());
 
     BuiltBlock built;
