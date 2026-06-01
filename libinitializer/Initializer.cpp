@@ -285,22 +285,22 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         parallelScheduler->m_maxConcurrency = baselineSchedulerConfig.maxThread;
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), baselineScheduler,
+                m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), baselineScheduler);
+                m_protocolInitializer->blockFactory(), parallelScheduler);
     }
     else
     {
         auto serialScheduler = std::make_shared<scheduler_v1::SchedulerSerialImpl>();
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), baselineScheduler,
+                m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), baselineScheduler);
+                m_protocolInitializer->blockFactory(), serialScheduler);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
