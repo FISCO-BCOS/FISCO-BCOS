@@ -164,24 +164,30 @@ run_test_round() {
         fi
 
         LOG_INFO "[${ROUND_LABEL}] ======== console_ci_test ========"
-        bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "${SM_PARAM}" "${NODES_DIR}"
-        if [ $? -ne 0 ]; then
+        if ! (
+            cd "${ROUND_DIR}" &&
+            bash "${current_path}/.ci/console_ci_test.sh" "${console_branch}" "${SM_PARAM}" "${NODES_DIR}"
+        ); then
             exit_round "console_integrationTest failed"
             return
         fi
         LOG_INFO "[${ROUND_LABEL}] console_integrationTest success"
 
         LOG_INFO "[${ROUND_LABEL}] ======== java_sdk_ci_test ========"
-        bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "${SM_PARAM}" "${NODES_DIR}"
-        if [ $? -ne 0 ]; then
+        if ! (
+            cd "${ROUND_DIR}" &&
+            bash "${current_path}/.ci/java_sdk_ci_test.sh" "${console_branch}" "${SM_PARAM}" "${NODES_DIR}"
+        ); then
             exit_round "java_sdk_integrationTest failed"
             return
         fi
         LOG_INFO "[${ROUND_LABEL}] java_sdk_integrationTest success"
 
         LOG_INFO "[${ROUND_LABEL}] ======== java_sdk_demo_ci_test ========"
-        bash ${current_path}/.ci/java_sdk_demo_ci_test.sh ${console_branch} "${SM_PARAM}" "${NODES_DIR}"
-        if [ $? -ne 0 ]; then
+        if ! (
+            cd "${ROUND_DIR}" &&
+            bash "${current_path}/.ci/java_sdk_demo_ci_test.sh" "${console_branch}" "${SM_PARAM}" "${NODES_DIR}"
+        ); then
             exit_round "java_sdk_demo_ci_test failed"
             return
         fi
@@ -194,16 +200,17 @@ run_test_round() {
             return
         fi
         LOG_INFO "[${ROUND_LABEL}] ======== web3_test ========"
-        cp ${NODES_DIR}/sdk/* ${current_path}/console/dist/conf/ 2>/dev/null || true
-        rm -rf ${current_path}/console/dist/account/ecdsa/*
-        cp ${NODES_DIR}/../ca/accounts/* ${current_path}/console/dist/account/ecdsa/ 2>/dev/null || true
-        cd "${current_path}/console/dist/"
+        cp ${NODES_DIR}/sdk/* ${ROUND_DIR}/console/dist/conf/ 2>/dev/null || true
+        rm -rf ${ROUND_DIR}/console/dist/account/ecdsa/*
+        cp ${NODES_DIR}/../ca/accounts/* ${ROUND_DIR}/console/dist/account/ecdsa/ 2>/dev/null || true
+        cd "${ROUND_DIR}/console/dist/"
         local account=$(bash console.sh listAccount 2>/dev/null | grep "current account" | awk -F '(' '{print $1}')
         bash console.sh addBalance "${account}" 200 ether 2>/dev/null || true
         bash console.sh setSystemConfigByKey tx_gas_price 1 2>/dev/null || true
-        cd "${current_path}"
-        bash ${current_path}/.ci/web3_test.sh "${current_path}/console/dist/account/ecdsa/${account}.pem"
-        if [ $? -ne 0 ]; then
+        if ! (
+            cd "${ROUND_DIR}" &&
+            bash "${current_path}/.ci/web3_test.sh" "${ROUND_DIR}/console/dist/account/ecdsa/${account}.pem"
+        ); then
             exit_round "web3_test failed"
             return
         fi
