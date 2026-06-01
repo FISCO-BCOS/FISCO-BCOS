@@ -252,6 +252,11 @@ protected:
     const unsigned c_PopWaitSeconds = 5;
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
+    // FIB-126: Maximum allowed clock skew (ms) between the proposed block timestamp and the
+    // local wall-clock time.  Proposals more than this far in the future are rejected.
+    // 15 seconds matches common blockchain practice for BFT networks.
+    static constexpr int64_t c_maxAllowedFutureTimestampMs = 15'000;
+
     std::atomic_bool m_stopped = {false};
 
     // the timer used to resend checkPointProposal
