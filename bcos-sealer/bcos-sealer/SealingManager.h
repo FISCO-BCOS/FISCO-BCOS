@@ -23,10 +23,33 @@
 #include <bcos-utilities/ThreadPool.h>
 #include <atomic>
 #include <functional>
+#include <tuple>
 
 namespace bcos::sealer
 {
 using TxsMetaDataQueue = std::deque<bcos::protocol::TransactionMetaData::Ptr>;
+
+namespace detail
+{
+// Per-block system-tx cap; prevents one block from being dominated by sys txs.
+inline constexpr size_t c_maxSysTxsPerBlock = 10;
+
+// Compute the per-loop bounds (txsSize, systemTxsSize) used by
+// SealingManager::generateProposal to drain m_pendingSysTxs and m_pendingTxs
+// into a block.
+//
+// hookInsertedTx records whether _handleBlockHook injected a transaction into
+// the block; if true and the queues already fill the block to maxTxsPerBlock,
+// both bounds are collapsed by 1 so the final block (1 hook tx + queue txs)
+// never exceeds the configured cap (FIB-161).
+//
+// Postconditions:
+//   txsSize       <= maxTxsPerBlock
+//   systemTxsSize <= min(txsSize, pendingSysSize, maxSysTxsPerBlock)
+std::tuple<size_t, size_t> computeAssemblyPlan(size_t maxTxsPerBlock, size_t pendingNormalSize,
+    size_t pendingSysSize, bool hookInsertedTx, size_t maxSysTxsPerBlock = c_maxSysTxsPerBlock);
+}  // namespace detail
+
 class SealingManager : public std::enable_shared_from_this<SealingManager>
 {
 public:
@@ -57,6 +80,15 @@ public:
     // sys-tx queue.
     void setWaitUntilForTest(int64_t _waitUntil) { m_waitUntil.store(_waitUntil); }
     int64_t getWaitUntilForTest() const { return m_waitUntil.load(); }
+    // FIB-162 regression helpers: seed the system-tx queue (the FIB-117 seeder
+    // only fills m_pendingTxs), read the combined pending size, and probe
+    // whether x_pendingTxs is acquirable for writing right now. The probe MUST
+    // be called from a thread other than the one running clearPendingTxs —
+    // same-thread try_lock on a shared_mutex is not well-defined.
+    void testOnlySeedSysPendingTxs(
+        const std::vector<bcos::protocol::TransactionMetaData::Ptr>& _txs);
+    size_t testOnlyPendingTxsSize();
+    bool testOnlyPendingWriteLockFree();
 
     // the consensus module notify the sealer to reset sealing when viewchange
     virtual void resetSealing();
@@ -91,7 +123,6 @@ protected:
     virtual void appendTransactions(TxsMetaDataQueue& _txsQueue,
         const std::vector<protocol::TransactionMetaData::Ptr>& _fetchedTxs);
     virtual void clearPendingTxs();
-
 
     virtual int64_t txsSizeExpectedToFetch();
     virtual size_t pendingTxsSize();
@@ -129,6 +160,5 @@ private:
     std::atomic<ssize_t> m_latestNumber = {0};
     bcos::crypto::HashType m_latestHash;
     int64_t m_latestTimestamp = 0;
-    static constexpr size_t c_maxSysTxsPerBlock = 10;
 };
 }  // namespace bcos::sealer
