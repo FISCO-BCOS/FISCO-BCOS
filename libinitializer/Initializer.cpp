@@ -27,11 +27,12 @@
 #include "Initializer.h"
 #include "AuthInitializer.h"
 #include "BfsInitializer.h"
+#include "EngineServiceInitializer.h"
 #include "GlobalStateStorageInitializer.h"
 #include "LedgerInitializer.h"
+#include "MemPoolInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "MemPoolInitializer.h"
 #include "bcos-executor/src/executor/SwitchExecutorManager.h"
 #include "bcos-framework/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -68,6 +69,8 @@
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
+#include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
@@ -156,6 +159,11 @@ RocksDBOption getRocksDBOption(
     return option;
 }
 
+std::shared_ptr<bcos::engine::AnyEngineService> Initializer::engineService()
+{
+    return m_engineServiceInitializer ? m_engineServiceInitializer->engineService() : nullptr;
+}
+
 void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
@@ -196,16 +204,15 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 [](::rocksdb::DB*) { /* lifetime managed by GlobalStateStorage */ }),
             m_protocolInitializer->dataEncryption());
         schedulerStorage = m_storage;
-        consensusStorage =
-            StorageInitializer::build(StorageInitializer::createRocksDB(consensusStoragePath,
-                                          rocksDBOption),
-                m_protocolInitializer->dataEncryption());
+        consensusStorage = StorageInitializer::build(
+            StorageInitializer::createRocksDB(consensusStoragePath, rocksDBOption),
+            m_protocolInitializer->dataEncryption());
         airExecutorStorage = m_storage;
         if (m_nodeConfig->enableSeparateBlockAndState())
         {
-            m_blockStorage =
-                StorageInitializer::build(StorageInitializer::createRocksDB(blockDBPath, rocksDBOption),
-                    m_protocolInitializer->dataEncryption());
+            m_blockStorage = StorageInitializer::build(
+                StorageInitializer::createRocksDB(blockDBPath, rocksDBOption),
+                m_protocolInitializer->dataEncryption());
         }
     }
 #ifdef WITH_TIKV
@@ -270,10 +277,31 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
-    std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
-        scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
-            m_protocolInitializer->blockFactory(), m_txpoolInitializer->txpool(),
-            transactionSubmitResultFactory, ledger, baselineSchedulerConfig);
+    if (baselineSchedulerConfig.parallel)
+    {
+        auto parallelScheduler =
+            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>();
+        parallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
+        parallelScheduler->m_maxConcurrency = baselineSchedulerConfig.maxThread;
+        std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
+            scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), baselineScheduler,
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
+        m_engineServiceInitializer =
+            EngineServiceInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), baselineScheduler);
+    }
+    else
+    {
+        auto serialScheduler = std::make_shared<scheduler_v1::SchedulerSerialImpl>();
+        std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
+            scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), baselineScheduler,
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
+        m_engineServiceInitializer =
+            EngineServiceInitializer::build(m_globalStateStorageInitializer,
+                m_protocolInitializer->blockFactory(), baselineScheduler);
+    }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
         m_nodeConfig->executorServiceName(), m_nodeConfig);
@@ -1179,8 +1207,8 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         moveSSTFiles = false;
     }
     auto rocksdbOption = getRocksDBOption(nodeConfig, true);
-    auto rocksDB = StorageInitializer::createRocksDB(
-        stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
+    auto rocksDB =
+        StorageInitializer::createRocksDB(stateDBPath, rocksdbOption, nodeConfig->keyPageSize());
     ingestIntoRocksDB(*rocksDB, sstFiles, moveSSTFiles);
     bcos::storage::TransactionalStorageInterface::Ptr stateStorage = nullptr;
     // import tx and receipt
@@ -1215,8 +1243,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
         if (nodeConfig->enableSeparateBlockAndState())
         {
             auto blockDBPath = getBlockDBPath(true);
-            auto blockRocksDB = StorageInitializer::createRocksDB(
-                blockDBPath, rocksdbOption);
+            auto blockRocksDB = StorageInitializer::createRocksDB(blockDBPath, rocksdbOption);
             if (blockRocksDB)
             {
                 ingestIntoRocksDB(*blockRocksDB, blockSstFiles, moveSSTFiles);
