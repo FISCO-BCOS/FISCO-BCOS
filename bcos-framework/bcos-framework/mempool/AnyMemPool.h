@@ -111,8 +111,8 @@ public:
     AnyMemPool(const AnyMemPool&) = delete;
     AnyMemPool& operator=(const AnyMemPool&) = delete;
 
-    [[nodiscard]] AnyMemPool(AnyMemPool&& other) noexcept : m_impl(std::move(other.m_impl)) {}
-    [[nodiscard]] AnyMemPool& operator=(AnyMemPool&& other) noexcept
+    AnyMemPool(AnyMemPool&& other) noexcept : m_impl(std::move(other.m_impl)) {}
+    AnyMemPool& operator=(AnyMemPool&& other) noexcept
     {
         if (this != &other)
         {

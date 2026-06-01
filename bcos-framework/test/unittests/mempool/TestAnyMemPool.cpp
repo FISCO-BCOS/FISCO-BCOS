@@ -118,6 +118,8 @@ struct MockStateStorage
 
 /// Compile-time verification that mocks satisfy the MemPool concept.
 static_assert(MemPool<MockMemPool, MockStateStorage>, "MockMemPool must satisfy MemPool concept");
+static_assert(MemPool<AnyMemPool<MockStateStorage>, MockStateStorage>,
+    "AnyMemPool must satisfy MemPool concept");
 
 }  // namespace bcos::test
 
@@ -235,7 +237,7 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
     AnyMemPool<bcos::test::MockStateStorage> any1(mock1);
     AnyMemPool<bcos::test::MockStateStorage> any2(mock2);
 
-    static_cast<void>(any2 = std::move(any1));
+    any2 = std::move(any1);
 
     BOOST_CHECK(static_cast<bool>(any2));
     BOOST_CHECK(!static_cast<bool>(any1));

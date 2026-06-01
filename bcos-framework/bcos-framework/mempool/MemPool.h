@@ -35,11 +35,13 @@ concept MemPool =
     requires(MemPoolType& transactions, std::vector<protocol::Transaction::Ptr> inputTransactions,
         std::vector<bcos::crypto::HashType> hashes, StateStorage& state,
         std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out, int64_t limit) {
-        { transactions.add(inputTransactions) } -> std::same_as<void>;
+        { transactions.add(std::move(inputTransactions)) } -> std::same_as<void>;
         { transactions.seal(limit, state, out) } -> std::same_as<void>;
         { transactions.remove(state) } -> std::same_as<void>;
-        { transactions.remove(hashes) } -> std::same_as<void>;
-        { transactions.get(hashes) } -> std::same_as<std::vector<protocol::Transaction::Ptr>>;
+        { transactions.remove(std::move(hashes)) } -> std::same_as<void>;
+        {
+            transactions.get(std::move(hashes))
+        } -> std::same_as<std::vector<protocol::Transaction::Ptr>>;
     };
 
 }  // namespace bcos::mempool
