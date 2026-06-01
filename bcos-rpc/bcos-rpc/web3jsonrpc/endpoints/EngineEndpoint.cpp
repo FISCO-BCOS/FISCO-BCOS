@@ -125,11 +125,11 @@ engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
         .prevRandao = parseH256(ep["prevRandao"].asString()),
         .blockNumber = static_cast<bcos::protocol::BlockNumber>(
             fromQuantity(std::string(ep["blockNumber"].asString()))),
-        .gasLimit = u256(fromQuantity(std::string(ep["gasLimit"].asString()))),
-        .gasUsed = u256(fromQuantity(std::string(ep["gasUsed"].asString()))),
+        .gasLimit = fromBigQuantity(ep["gasLimit"].asString()),
+        .gasUsed = fromBigQuantity(ep["gasUsed"].asString()),
         .timestamp = fromQuantity(std::string(ep["timestamp"].asString())),
         .extraData = {},
-        .baseFeePerGas = u256(fromQuantity(std::string(ep["baseFeePerGas"].asString()))),
+        .baseFeePerGas = fromBigQuantity(ep["baseFeePerGas"].asString()),
         .blockHash = parseH256(ep["blockHash"].asString()),
         .transactions = {},
         .withdrawals = std::nullopt,
@@ -145,10 +145,13 @@ engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
     if (ep.isMember("logsBloom"))
     {
         auto bloomBytes = fromHex(ep["logsBloom"].asString());
-        if (bloomBytes.size() == 256)
+        if (bloomBytes.size() != BloomBytesSize)
         {
-            std::copy(bloomBytes.begin(), bloomBytes.end(), payload.logsBloom.begin());
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
+                "Expected 256-byte hex string for logsBloom, got " +
+                    std::to_string(bloomBytes.size()) + " bytes"));
         }
+        std::copy(bloomBytes.begin(), bloomBytes.end(), payload.logsBloom.begin());
     }
     // transactions — requires TransactionFactory to decode; left empty for now
     // TODO: parse transactions when a TransactionFactory is accessible from NodeService
@@ -203,7 +206,22 @@ engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
 Json::Value serializePayloadStatus(const engine::PayloadStatus& status)
 {
     Json::Value result(Json::objectValue);
-    result["status"] = std::string(magic_enum::enum_name(status.status));
+    result["status"] = [&] {
+        switch (status.status)
+        {
+        case engine::PayloadValidationStatus::Valid:
+            return "VALID";
+        case engine::PayloadValidationStatus::Invalid:
+            return "INVALID";
+        case engine::PayloadValidationStatus::Syncing:
+            return "SYNCING";
+        case engine::PayloadValidationStatus::Accepted:
+            return "ACCEPTED";
+        case engine::PayloadValidationStatus::InvalidBlockHash:
+            return "INVALID_BLOCK_HASH";
+        }
+        return "SYNCING";
+    }();
     if (status.latestValidHash.has_value())
     {
         result["latestValidHash"] = status.latestValidHash->hexPrefixed();
@@ -234,13 +252,13 @@ Json::Value serializeExecutionPayload(const engine::ExecutionPayload& payload)
     ep["feeRecipient"] = payload.feeRecipient.hexPrefixed();
     ep["stateRoot"] = payload.stateRoot.hexPrefixed();
     ep["receiptsRoot"] = payload.receiptsRoot.hexPrefixed();
-    ep["logsBloom"] = toHex(payload.logsBloom);
+    ep["logsBloom"] = toPaddingHexStringWithPrefix(BloomBytesSize, payload.logsBloom);
     ep["prevRandao"] = payload.prevRandao.hexPrefixed();
     ep["blockNumber"] = toQuantity(payload.blockNumber);
     ep["gasLimit"] = toQuantity(payload.gasLimit);
     ep["gasUsed"] = toQuantity(payload.gasUsed);
     ep["timestamp"] = toQuantity(payload.timestamp);
-    ep["extraData"] = toHex(payload.extraData);
+    ep["extraData"] = toHexStringWithPrefix(payload.extraData);
     ep["baseFeePerGas"] = toQuantity(payload.baseFeePerGas);
     ep["blockHash"] = payload.blockHash.hexPrefixed();
 
@@ -287,7 +305,7 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     }
 
     std::vector<std::string> remoteCaps;
-    for (auto const& cap : request["params"])
+    for (auto const& cap : request)
     {
         remoteCaps.push_back(cap.asString());
     }
@@ -311,7 +329,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     auto forkchoiceState = parseForkchoiceState(params);
     auto payloadAttrs = parsePayloadAttributes(params);
 
@@ -370,7 +388,7 @@ task::Task<void> EngineEndpoint::getPayloadV1(const Json::Value& request, Json::
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     engine::PayloadID payloadId = params[0u].asString();
 
     auto engineResult = co_await engineService->getPayload(payloadId, 1);
@@ -417,19 +435,19 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
         Json::Value commitments(Json::arrayValue);
         for (auto const& c : engineResult.blobsBundle->commitments)
         {
-            commitments.append(toHex(c));
+            commitments.append(toHexStringWithPrefix(c));
         }
         bb["commitments"] = std::move(commitments);
         Json::Value proofs(Json::arrayValue);
         for (auto const& p : engineResult.blobsBundle->proofs)
         {
-            proofs.append(toHex(p));
+            proofs.append(toHexStringWithPrefix(p));
         }
         bb["proofs"] = std::move(proofs);
         Json::Value blobs(Json::arrayValue);
         for (auto const& b : engineResult.blobsBundle->blobs)
         {
-            blobs.append(toHex(b));
+            blobs.append(toHexStringWithPrefix(b));
         }
         bb["blobs"] = std::move(blobs);
         jsonResult["blobsBundle"] = std::move(bb);
@@ -447,7 +465,7 @@ task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value& request, Json::
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     auto newPayloadReq = parseNewPayloadRequest(params);
 
     auto engineResult = co_await engineService->newPayload(newPayloadReq, 1);
