@@ -97,10 +97,10 @@ std::optional<engine::PayloadAttributes> parsePayloadAttributes(const Json::Valu
         for (auto const& w : pa["withdrawals"])
         {
             withdrawals.push_back(engine::WithdrawalV1{
-                .index = u256(fromQuantity(std::string(w["index"].asString()))),
-                .validatorIndex = u256(fromQuantity(std::string(w["validatorIndex"].asString()))),
+                .index = fromBigQuantity(w["index"].asString()),
+                .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
                 .address = parseAddress(w["address"].asString()),
-                .amount = u256(fromQuantity(std::string(w["amount"].asString()))),
+                .amount = fromBigQuantity(w["amount"].asString()),
             });
         }
         attrs.withdrawals = std::move(withdrawals);
@@ -113,7 +113,8 @@ std::optional<engine::PayloadAttributes> parsePayloadAttributes(const Json::Valu
 }
 
 /// Parse newPayload request from JSON params.
-engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
+engine::NewPayloadRequest parseNewPayloadRequest(
+    const Json::Value& params, bcos::protocol::TransactionFactory& transactionFactory)
 {
     auto const& ep = params[0u];
     engine::ExecutionPayload payload{
@@ -153,8 +154,16 @@ engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
         }
         std::copy(bloomBytes.begin(), bloomBytes.end(), payload.logsBloom.begin());
     }
-    // transactions — requires TransactionFactory to decode; left empty for now
-    // TODO: parse transactions when a TransactionFactory is accessible from NodeService
+    if (ep.isMember("transactions") && !ep["transactions"].isNull())
+    {
+        payload.transactions.reserve(ep["transactions"].size());
+        for (auto const& tx : ep["transactions"])
+        {
+            auto txData = fromHex(tx.asString());
+            payload.transactions.push_back(transactionFactory.decodeTransaction(ref(txData)));
+        }
+    }
+
     // withdrawals
     if (ep.isMember("withdrawals") && !ep["withdrawals"].isNull())
     {
@@ -162,10 +171,10 @@ engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
         for (auto const& w : ep["withdrawals"])
         {
             withdrawals.push_back(engine::WithdrawalV1{
-                .index = u256(fromQuantity(std::string(w["index"].asString()))),
-                .validatorIndex = u256(fromQuantity(std::string(w["validatorIndex"].asString()))),
+                .index = fromBigQuantity(w["index"].asString()),
+                .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
                 .address = parseAddress(w["address"].asString()),
-                .amount = u256(fromQuantity(std::string(w["amount"].asString()))),
+                .amount = fromBigQuantity(w["amount"].asString()),
             });
         }
         payload.withdrawals = std::move(withdrawals);
@@ -173,11 +182,11 @@ engine::NewPayloadRequest parseNewPayloadRequest(const Json::Value& params)
     // blobGasUsed / excessBlobGas
     if (ep.isMember("blobGasUsed"))
     {
-        payload.blobGasUsed = u256(fromQuantity(std::string(ep["blobGasUsed"].asString())));
+        payload.blobGasUsed = fromBigQuantity(ep["blobGasUsed"].asString());
     }
     if (ep.isMember("excessBlobGas"))
     {
-        payload.excessBlobGas = u256(fromQuantity(std::string(ep["excessBlobGas"].asString())));
+        payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
     }
 
     engine::NewPayloadRequest request{
@@ -262,8 +271,14 @@ Json::Value serializeExecutionPayload(const engine::ExecutionPayload& payload)
     ep["baseFeePerGas"] = toQuantity(payload.baseFeePerGas);
     ep["blockHash"] = payload.blockHash.hexPrefixed();
 
-    // TODO: serialize transactions when Transaction encode is accessible
-    ep["transactions"] = Json::Value(Json::arrayValue);
+    Json::Value transactions(Json::arrayValue);
+    for (auto const& transaction : payload.transactions)
+    {
+        bytes encoded;
+        transaction->encode(encoded);
+        transactions.append(toHexStringWithPrefix(encoded));
+    }
+    ep["transactions"] = std::move(transactions);
 
     if (payload.withdrawals.has_value())
     {
@@ -349,7 +364,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV2(
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     auto forkchoiceState = parseForkchoiceState(params);
     auto payloadAttrs = parsePayloadAttributes(params);
 
@@ -369,7 +384,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     auto forkchoiceState = parseForkchoiceState(params);
     auto payloadAttrs = parsePayloadAttributes(params);
 
@@ -405,7 +420,7 @@ task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value& request, Json::
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     engine::PayloadID payloadId = params[0u].asString();
 
     auto engineResult = co_await engineService->getPayload(payloadId, 2);
@@ -423,7 +438,7 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
         co_return;
     }
 
-    auto const& params = request["params"];
+    auto const& params = request;
     engine::PayloadID payloadId = params[0u].asString();
 
     auto engineResult = co_await engineService->getPayload(payloadId, 3);
@@ -466,7 +481,8 @@ task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value& request, Json::
     }
 
     auto const& params = request;
-    auto newPayloadReq = parseNewPayloadRequest(params);
+    auto newPayloadReq =
+        parseNewPayloadRequest(params, *m_nodeService->blockFactory()->transactionFactory());
 
     auto engineResult = co_await engineService->newPayload(newPayloadReq, 1);
     auto jsonResult = serializePayloadStatus(engineResult);
@@ -482,8 +498,9 @@ task::Task<void> EngineEndpoint::newPayloadV2(const Json::Value& request, Json::
         co_return;
     }
 
-    auto const& params = request["params"];
-    auto newPayloadReq = parseNewPayloadRequest(params);
+    auto const& params = request;
+    auto newPayloadReq =
+        parseNewPayloadRequest(params, *m_nodeService->blockFactory()->transactionFactory());
 
     auto engineResult = co_await engineService->newPayload(newPayloadReq, 2);
     auto jsonResult = serializePayloadStatus(engineResult);
@@ -499,8 +516,9 @@ task::Task<void> EngineEndpoint::newPayloadV3(const Json::Value& request, Json::
         co_return;
     }
 
-    auto const& params = request["params"];
-    auto newPayloadReq = parseNewPayloadRequest(params);
+    auto const& params = request;
+    auto newPayloadReq =
+        parseNewPayloadRequest(params, *m_nodeService->blockFactory()->transactionFactory());
 
     auto engineResult = co_await engineService->newPayload(newPayloadReq, 3);
     auto jsonResult = serializePayloadStatus(engineResult);
