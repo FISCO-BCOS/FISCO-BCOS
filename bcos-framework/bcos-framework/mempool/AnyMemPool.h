@@ -79,7 +79,7 @@ private:
 
         void add(std::vector<protocol::Transaction::Ptr> transactions) override
         {
-            m_mempool.get().add(transactions);
+            m_mempool.get().add(std::move(transactions));
         }
 
         void seal(int64_t limit, StateStorage& state,
@@ -92,13 +92,13 @@ private:
 
         void remove(std::vector<bcos::crypto::HashType> hashes) override
         {
-            m_mempool.get().remove(hashes);
+            m_mempool.get().remove(std::move(hashes));
         }
 
         std::vector<protocol::Transaction::Ptr> get(
             std::vector<bcos::crypto::HashType> hashes) override
         {
-            return m_mempool.get().get(hashes);
+            return m_mempool.get().get(std::move(hashes));
         }
     };
 

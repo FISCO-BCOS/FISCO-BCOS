@@ -7,10 +7,12 @@
 #include "bcos-framework/mempool/MemPool.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
+#include "bcos-task/Task.h"
 #include "bcos-utilities/Common.h"
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -125,7 +127,7 @@ BOOST_AUTO_TEST_SUITE(TestAnyMemPool)
 BOOST_AUTO_TEST_CASE(constructWithMock)
 {
     bcos::test::MockMemPool mock;
-    bcos::test::MockStateStorage state;
+    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     BOOST_CHECK(static_cast<bool>(any));
@@ -135,7 +137,7 @@ BOOST_AUTO_TEST_CASE(constructWithMock)
 BOOST_AUTO_TEST_CASE(addDelegates)
 {
     bcos::test::MockMemPool mock;
-    bcos::test::MockStateStorage state;
+    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     fakeit::Mock<protocol::Transaction> mockTx;
@@ -183,7 +185,7 @@ BOOST_AUTO_TEST_CASE(removeByStateDelegates)
 BOOST_AUTO_TEST_CASE(removeByHashesDelegates)
 {
     bcos::test::MockMemPool mock;
-    bcos::test::MockStateStorage state;
+    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     std::vector<bcos::crypto::HashType> hashes{bcos::crypto::HashType{0x01}};
@@ -196,7 +198,7 @@ BOOST_AUTO_TEST_CASE(removeByHashesDelegates)
 BOOST_AUTO_TEST_CASE(getDelegates)
 {
     bcos::test::MockMemPool mock;
-    bcos::test::MockStateStorage state;
+    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any(mock);
 
     fakeit::Mock<protocol::Transaction> mockTx;
@@ -215,7 +217,7 @@ BOOST_AUTO_TEST_CASE(getDelegates)
 BOOST_AUTO_TEST_CASE(moveConstruction)
 {
     bcos::test::MockMemPool mock;
-    bcos::test::MockStateStorage state;
+    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any1(mock);
 
     // Move construct
@@ -235,7 +237,7 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
 {
     bcos::test::MockMemPool mock1;
     bcos::test::MockMemPool mock2;
-    bcos::test::MockStateStorage state;
+    [[maybe_unused]] bcos::test::MockStateStorage state;
     AnyMemPool<bcos::test::MockStateStorage> any1(mock1);
     AnyMemPool<bcos::test::MockStateStorage> any2(mock2);
 
