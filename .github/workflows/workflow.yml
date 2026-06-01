@@ -167,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== Before cleanup ==="
-          du -sh build/vcpkg_installed 2>/dev/null || true
+          du -sh build/vcpkg_installed 2>/dev/null  || true
 
           # 1) Remove only debug libraries — keep debug metadata/includes intact
           echo "Removing debug libraries..."
