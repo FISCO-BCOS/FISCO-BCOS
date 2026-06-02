@@ -22,6 +22,7 @@
 #include "TxPool.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
+#include <boost/asio/io_context.hpp>
 
 namespace bcos::txpool
 {

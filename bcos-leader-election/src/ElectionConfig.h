@@ -101,6 +101,7 @@ protected:
     // regularly check the etcdClient inventory, and reset the watcher after disconnection and
     // reconnection
     std::shared_ptr<Timer> m_watcherTimer;
+    boost::asio::io_context* m_ioContext;
 
     std::atomic_bool m_electionClusterOk = {true};
     std::atomic_bool m_stopped = {false};
