@@ -21,6 +21,7 @@
 
 #include "../common/RPCFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -34,6 +35,7 @@
 #include <bcos-rpc/validator/CallValidator.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <ostream>
@@ -45,6 +47,50 @@ using namespace bcos::crypto;
 
 namespace bcos::test
 {
+
+class TestEngineService
+{
+public:
+    task::Task<std::vector<std::string>> exchangeCapabilities(
+        std::vector<std::string> remoteCapabilities)
+    {
+        co_return remoteCapabilities;
+    }
+
+    task::Task<engine::ForkchoiceUpdatedResult> updateForkchoice(
+        const engine::ForkchoiceState&, const engine::PayloadAttributes*, std::uint32_t)
+    {
+        co_return engine::ForkchoiceUpdatedResult{
+            .payloadStatus = payloadStatusResult, .payloadId = std::nullopt};
+    }
+
+    task::Task<engine::GetPayloadResult> getPayload(
+        const engine::PayloadID& payloadId, std::uint32_t version)
+    {
+        capturedPayloadId = payloadId;
+        capturedGetPayloadVersion = version;
+        co_return getPayloadResult;
+    }
+
+    task::Task<engine::PayloadStatus> newPayload(
+        const engine::NewPayloadRequest& request, std::uint32_t version)
+    {
+        capturedNewPayloadRequest = request;
+        capturedNewPayloadVersion = version;
+        co_return payloadStatusResult;
+    }
+
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() { return std::nullopt; }
+
+    engine::PayloadStatus payloadStatusResult{.status = engine::PayloadValidationStatus::Valid,
+        .latestValidHash = std::nullopt, .validationError = std::nullopt};
+    engine::GetPayloadResult getPayloadResult;
+    std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
+    std::optional<std::uint32_t> capturedNewPayloadVersion;
+    std::optional<engine::PayloadID> capturedPayloadId;
+    std::optional<std::uint32_t> capturedGetPayloadVersion;
+};
 
 class Web3TestFixture : public RPCFixture
 {
@@ -468,6 +514,92 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
         "0xa8fd95a70b4f2b6cea8c52bcb782b5c3f806a0d5250cf75a1d97a6e899f09979");
     // clang-format on
 }
+
+BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)
+{
+    const auto request =
+        R"({"jsonrpc":"2.0","id":7,"method":"engine_exchangeCapabilities","params":["engine_newPayloadV2"]})";
+    auto response = onRPCRequestWrapper(request);
+    BOOST_TEST(response.isMember("error"));
+    BOOST_TEST(response["error"]["code"].asInt() == -32000);
+    BOOST_TEST(
+        response["error"]["message"].asString() == "Engine service is not available on this node");
+}
+
+BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
+{
+    TestEngineService testEngineService;
+    nodeService->engineService() = std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
+        chainId, groupId, static_cast<int64_t>(utcTime()));
+    bytes encodedTx;
+    tx->encode(encodedTx);
+    auto encodedTxHex = toHexStringWithPrefix(encodedTx);
+
+    auto const largeQuantity = std::string("0x100000000000000000");
+    auto const expectedLargeValue = fromBigQuantity(largeQuantity);
+    auto const logsBloom = "0x" + std::string(BloomBytesSize * 2, '0');
+
+    std::string newPayloadRequest =
+        R"({"jsonrpc":"2.0","id":8,"method":"engine_newPayloadV2","params":[{"parentHash":"0x1111111111111111111111111111111111111111111111111111111111111111","feeRecipient":"0x2222222222222222222222222222222222222222","stateRoot":"0x3333333333333333333333333333333333333333333333333333333333333333","receiptsRoot":"0x4444444444444444444444444444444444444444444444444444444444444444","logsBloom":")";
+    newPayloadRequest += logsBloom;
+    newPayloadRequest +=
+        R"(","prevRandao":"0x5555555555555555555555555555555555555555555555555555555555555555","blockNumber":"0x1","gasLimit":"0x5208","gasUsed":"0x5208","timestamp":"0x1","extraData":"0x1234","baseFeePerGas":"0x1","blockHash":"0x6666666666666666666666666666666666666666666666666666666666666666","transactions":[")";
+    newPayloadRequest += encodedTxHex;
+    newPayloadRequest +=
+        R"("],"withdrawals":[{"index":"0x1","validatorIndex":"0x2","address":"0x7777777777777777777777777777777777777777","amount":")";
+    newPayloadRequest += largeQuantity;
+    newPayloadRequest += R"("}],"blobGasUsed":")";
+    newPayloadRequest += largeQuantity;
+    newPayloadRequest += R"(","excessBlobGas":")";
+    newPayloadRequest += largeQuantity;
+    newPayloadRequest += R"("}]})";
+
+    auto newPayloadResponse = onRPCRequestWrapper(newPayloadRequest);
+    validRespCheck(newPayloadResponse);
+    BOOST_TEST(newPayloadResponse["result"]["status"].asString() == "VALID");
+    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest.has_value());
+    BOOST_REQUIRE(testEngineService.capturedNewPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.capturedNewPayloadVersion == 2);
+    BOOST_TEST(testEngineService.capturedNewPayloadRequest->executionPayload.transactions.size() == 1);
+    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest->executionPayload.withdrawals.has_value());
+    BOOST_TEST(testEngineService.capturedNewPayloadRequest->executionPayload.withdrawals->front().amount ==
+               expectedLargeValue);
+    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest->executionPayload.blobGasUsed.has_value());
+    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest->executionPayload.excessBlobGas.has_value());
+    BOOST_TEST(*testEngineService.capturedNewPayloadRequest->executionPayload.blobGasUsed ==
+               expectedLargeValue);
+    BOOST_TEST(*testEngineService.capturedNewPayloadRequest->executionPayload.excessBlobGas ==
+               expectedLargeValue);
+
+    bytes decodedEncodedTx;
+    testEngineService.capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
+        decodedEncodedTx);
+    BOOST_TEST(toHexStringWithPrefix(decodedEncodedTx) == encodedTxHex);
+
+    testEngineService.getPayloadResult.executionPayload =
+        testEngineService.capturedNewPayloadRequest->executionPayload;
+    testEngineService.getPayloadResult.blockValue = expectedLargeValue;
+
+    const auto getPayloadRequest =
+        R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
+    auto getPayloadResponse = onRPCRequestWrapper(getPayloadRequest);
+    validRespCheck(getPayloadResponse);
+    BOOST_REQUIRE(testEngineService.capturedPayloadId.has_value());
+    BOOST_REQUIRE(testEngineService.capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.capturedPayloadId == "payload-id-1");
+    BOOST_TEST(*testEngineService.capturedGetPayloadVersion == 2);
+    BOOST_TEST(getPayloadResponse["result"]["transactions"].size() == 1);
+    BOOST_TEST(getPayloadResponse["result"]["transactions"][0].asString() == encodedTxHex);
+    BOOST_TEST(getPayloadResponse["result"]["withdrawals"][0]["amount"].asString() ==
+               largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["blobGasUsed"].asString() == largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["excessBlobGas"].asString() == largeQuantity);
+    BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
+}
+
 BOOST_AUTO_TEST_CASE(logMatcherTest)
 {
     // clang-format off
