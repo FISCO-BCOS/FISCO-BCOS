@@ -22,6 +22,7 @@
 #include "Common.h"
 #include <bcos-framework/protocol/MemberInterface.h>
 #include <bcos-utilities/Timer.h>
+#include <boost/asio/io_context.hpp>
 #include <etcd/Client.hpp>
 #include <etcd/Watcher.hpp>
 
@@ -36,9 +37,11 @@ public:
     using Ptr = std::shared_ptr<ElectionConfig>;
     ElectionConfig(std::string const& _etcdEndPoint,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _purpose,
-        std::string const& _caPath = "", std::string const& _certPath = "",
-        std::string const& _keyPath = "")
-      : m_memberFactory(_memberFactory), m_purpose(_purpose)
+        boost::asio::io_context& _ioContext, std::string const& _caPath = "",
+        std::string const& _certPath = "", std::string const& _keyPath = "")
+      : m_memberFactory(_memberFactory),
+        m_purpose(_purpose),
+        m_ioContext(&_ioContext)
     {
         if (!_caPath.empty() && !_certPath.empty() && !_keyPath.empty())
         {
@@ -98,6 +101,7 @@ protected:
     // regularly check the etcdClient inventory, and reset the watcher after disconnection and
     // reconnection
     std::shared_ptr<Timer> m_watcherTimer;
+    boost::asio::io_context* m_ioContext;
 
     std::atomic_bool m_electionClusterOk = {true};
     std::atomic_bool m_stopped = {false};

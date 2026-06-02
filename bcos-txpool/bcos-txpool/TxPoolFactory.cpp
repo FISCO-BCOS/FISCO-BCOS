@@ -51,7 +51,7 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
 {}
 
 
-TxPool::Ptr TxPoolFactory::createTxPool(
+TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
     size_t _notifyWorkerNum, size_t _verifierWorkerNum, uint64_t _txsExpirationTime)
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
@@ -66,7 +66,7 @@ TxPool::Ptr TxPoolFactory::createTxPool(
 
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
     auto txpoolStorage =
-        std::make_shared<MemoryStorage>(txpoolConfig, _notifyWorkerNum, _txsExpirationTime);
+        std::make_shared<MemoryStorage>(txpoolConfig, _ioContext, _notifyWorkerNum, _txsExpirationTime);
 
     auto syncMsgFactory = std::make_shared<TxsSyncMsgFactoryImpl>();
     TXPOOL_LOG(INFO) << LOG_DESC("create sync config");

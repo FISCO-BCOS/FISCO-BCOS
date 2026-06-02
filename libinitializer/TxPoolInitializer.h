@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
+#include <boost/asio/io_context.hpp>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/ledger/LedgerInterface.h>
@@ -46,7 +47,8 @@ public:
     TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         ProtocolInitializer::Ptr _protocolInitializer,
         bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcos::ledger::LedgerInterface::Ptr _ledger);
+        bcos::ledger::LedgerInterface::Ptr _ledger,
+        boost::asio::io_context& _ioContext);
     virtual ~TxPoolInitializer() { stop(); }
 
     virtual void init();

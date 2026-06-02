@@ -47,6 +47,7 @@
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
 #include <bcos-txpool/txpool/validator/TxValidator.h>
 #include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -116,7 +117,7 @@ public:
 
         scheduler = std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory);
         txPoolFactory->setScheduler(scheduler);
-        txPool = txPoolFactory->createTxPool();
+        txPool = txPoolFactory->createTxPool(*ioServicePool->getIOService());
         txPool->init();
         txPool->start();
 
@@ -152,6 +153,8 @@ public:
 
     rpc::NodeService::Ptr nodeService;
     group::GroupInfo::Ptr groupInfo;
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "rpcTest");
     // clang-format off
     std::string configini = "[p2p]\n"
         "    listen_ip=0.0.0.0\n"

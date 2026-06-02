@@ -39,7 +39,8 @@ TopicManager::Ptr AMOPImpl::topicManager()
 
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
-    P2PInterface::Ptr _network, P2pID const& _p2pNodeID)
+    P2PInterface::Ptr _network, P2pID const& _p2pNodeID,
+    boost::asio::io_context& _ioContext)
   : m_topicManager(_topicManager),
     m_messageFactory(_messageFactory),
     m_requestFactory(_requestFactory),
@@ -47,7 +48,7 @@ AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     m_p2pNodeID(_p2pNodeID)
 {
     m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
-    m_timer = std::make_shared<Timer>(TOPIC_SYNC_PERIOD, "topicSync");
+    m_timer = std::make_shared<Timer>(_ioContext, TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
 
     m_network->registerHandlerByMsgType(GatewayMessageType::AMOPMessageType,

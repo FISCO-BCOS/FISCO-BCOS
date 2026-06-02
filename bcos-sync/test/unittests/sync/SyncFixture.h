@@ -28,6 +28,7 @@
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
 #include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 
 using namespace bcos;
@@ -45,8 +46,9 @@ class FakeBlockSync : public BlockSync
 {
 public:
     using Ptr = std::shared_ptr<FakeBlockSync>;
-    FakeBlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs = 200)
-      : BlockSync(_config, _idleWaitMs)
+    FakeBlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        unsigned _idleWaitMs = 200)
+      : BlockSync(_config, _ioContext, _idleWaitMs)
     {
         m_running = true;
         enableAsMaster(true);
@@ -86,10 +88,10 @@ public:
             _nodeTimeMaintenance)
     {}
 
-    BlockSync::Ptr createBlockSync() override
+    BlockSync::Ptr createBlockSync(boost::asio::io_context& _ioContext) override
     {
-        auto sync = BlockSyncFactory::createBlockSync();
-        return std::make_shared<FakeBlockSync>(sync->config());
+        auto sync = BlockSyncFactory::createBlockSync(_ioContext);
+        return std::make_shared<FakeBlockSync>(sync->config(), _ioContext);
     }
 };
 
@@ -118,7 +120,8 @@ public:
         auto blockSyncFactory =
             std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(), m_blockFactory, m_ledger,
                 m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
-        m_sync = std::dynamic_pointer_cast<FakeBlockSync>(blockSyncFactory->createBlockSync());
+        m_sync = std::dynamic_pointer_cast<FakeBlockSync>(
+            blockSyncFactory->createBlockSync(*m_ioServicePool->getIOService()));
         if (_fakeGateWay)
         {
             _fakeGateWay->addSync(m_keyPair->publicKey(), m_sync);
@@ -207,6 +210,7 @@ private:
     FakeScheduler::Ptr m_scheduler;
     FakeBlockSync::Ptr m_sync;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    IOServicePool::Ptr m_ioServicePool = std::make_shared<IOServicePool>(1, "syncTest");
 };
 }  // namespace test
 }  // namespace bcos

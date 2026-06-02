@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "libinitializer/ProtocolInitializer.h"
+#include <boost/asio/io_context.hpp>
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/election/LeaderElectionInterface.h>
@@ -69,7 +70,8 @@ public:
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
         bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance);
+        bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
+        boost::asio::io_context& _ioContext);
 
     virtual ~PBFTInitializer() { stop(); }
 
@@ -129,6 +131,7 @@ protected:
     bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
     bcos::election::LeaderElectionInterface::Ptr m_leaderElection;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    boost::asio::io_context* m_ioContext;
 };
 }  // namespace initializer
 }  // namespace bcos

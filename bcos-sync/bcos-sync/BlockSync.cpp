@@ -38,7 +38,8 @@ using namespace bcos::crypto;
 using namespace bcos::ledger;
 using namespace bcos::tool;
 
-BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
+BlockSync::BlockSync(
+    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext, unsigned _idleWaitMs)
   : Worker("syncWorker", _idleWaitMs),
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
@@ -46,7 +47,8 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
 {
     m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
     m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
-    m_downloadingTimer = std::make_shared<Timer>(m_config->downloadTimeout(), "downloadTimer");
+    m_downloadingTimer =
+        std::make_shared<Timer>(_ioContext, m_config->downloadTimeout(), "downloadTimer");
 
     if (m_config->enableSendBlockStatusByTree())
     {
