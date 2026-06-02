@@ -19,7 +19,6 @@
  * @date 2021-10-11
  */
 #pragma once
-#include "bcos-tars-protocol/Common.h"
 #include "bcos-tool/NodeConfig.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
@@ -34,7 +33,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <servant/Application.h>
-#include <optional>
 #include <utility>
 
 namespace bcos::rpc

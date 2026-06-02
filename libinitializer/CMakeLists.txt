@@ -31,7 +31,7 @@ add_library(init
     TxPoolInitializer.cpp
     MemPoolInitializer.cpp
     LedgerInitializer.cpp
-    BaselineSchedulerInitializer.cpp GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
+    GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
 )
 target_link_libraries(init PUBLIC
     protocol_init
