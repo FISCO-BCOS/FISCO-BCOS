@@ -90,6 +90,20 @@ BOOST_AUTO_TEST_CASE(testIntoPrecommitPreservesHash)
     // Invariant pre-condition: precommit is null before intoPrecommit().
     BOOST_CHECK(cache->preCommitCache() == nullptr);
 
+    // intoPrecommit() -> setSignatureList() requires the prepare-quorum for this
+    // proposal to already be in m_prepareCacheList. In production this always holds
+    // because intoPrecommit() is only reached after collectEnoughPrepareReq(). The
+    // cache is keyed by the prepare message hash, which equals the proposal hash
+    // here. Seed a full prepare quorum so the precondition is met (without it, the
+    // setSignatureList assert aborts under a Debug/non-NDEBUG build).
+    for (IndexType nodeIdx = 0; nodeIdx < static_cast<IndexType>(consensusNodeSize); nodeIdx++)
+    {
+        auto prepareMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), nodeIdx,
+            hash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PreparePacket);
+        prepareMsg->setConsensusProposal(fakedProposal);
+        cache->addPrepareCache(prepareMsg);
+    }
+
     // Trigger intoPrecommit().
     cache->intoPrecommit();
 
@@ -143,6 +157,17 @@ BOOST_AUTO_TEST_CASE(testCollectEnoughCommitReqNoVotes)
     // With no commit votes the quorum check must return false.
     auto cache = std::make_shared<FakePBFTCache>(leaderFaker->pbftConfig(), expectedIndex);
     cache->addPrePrepareCache(pbftMsg);
+
+    // Seed a prepare quorum so intoPrecommit()'s setSignatureList precondition is met
+    // (see testIntoPrecommitPreservesHash). No commit votes are added, so the
+    // collectEnoughCommitReq() path under test still observes zero commit weight.
+    for (IndexType nodeIdx = 0; nodeIdx < static_cast<IndexType>(consensusNodeSize); nodeIdx++)
+    {
+        auto prepareMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), nodeIdx,
+            hash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PreparePacket);
+        prepareMsg->setConsensusProposal(fakedProposal);
+        cache->addPrepareCache(prepareMsg);
+    }
     cache->intoPrecommit();
 
     // checkAndCommit() calls collectEnoughCommitReq() internally.
