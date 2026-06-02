@@ -289,7 +289,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), parallelScheduler);
+                m_protocolInitializer->blockFactory(), parallelScheduler,
+                m_memPoolInitializer->memPool());
     }
     else
     {
@@ -300,7 +301,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), serialScheduler);
+                m_protocolInitializer->blockFactory(), serialScheduler,
+                m_memPoolInitializer->memPool());
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "GlobalStateStorageInitializer.h"
+#include "bcos-framework/mempool/AnyMemPool.h"
 #include "bcos-mempool/MemPoolImpl.h"
 #include <memory>
 
@@ -13,6 +15,11 @@ public:
     MemPoolInitializer() = default;
 
     static Ptr build();
+
+    bcos::mempool::AnyMemPool<GlobalStateStorage> anyMemPool()
+    {
+        return bcos::mempool::AnyMemPool<GlobalStateStorage>(m_memPool);
+    }
 
     bcos::txpool::MemPoolImpl& memPool() { return m_memPool; }
     bcos::txpool::MemPoolImpl const& memPool() const { return m_memPool; }
