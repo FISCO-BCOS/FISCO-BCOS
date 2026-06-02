@@ -37,6 +37,12 @@ jobs:
       - uses: actions/checkout@v3
         with:
           clean: false
+      - name: Initialize vcpkg submodule
+        run: git submodule update --init --recursive -- vcpkg
+      - name: Compute vcpkg revision
+        id: vcpkg-revision
+        shell: bash
+        run: echo "revision=$(git -C vcpkg rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Set up JDK 11
         if: matrix.os != 'windows-2025'
         uses: actions/setup-java@v5
@@ -52,13 +58,8 @@ jobs:
         id: vcpkg-cache
         with:
           path: |
-            ${{ github.workspace }}/vcpkg
             ${{ github.workspace }}/build/vcpkg_installed
-            !${{ github.workspace }}/vcpkg/.git
-            !${{ github.workspace }}/vcpkg/buildtrees
-            !${{ github.workspace }}/vcpkg/packages
-            !${{ github.workspace }}/vcpkg/downloads
-          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+          key: vcpkg-${{ hashFiles( 'vcpkg.json', 'vcpkg-configuration.json', 'ports/**' ) }}-${{ steps.vcpkg-revision.outputs.revision }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v4
       - name: Set up Node.js 20
         if: matrix.os != 'windows-2025'
         uses: actions/setup-node@v4
@@ -161,10 +162,26 @@ jobs:
         run: |
           cd tools
           bash .ci/ci_check_air.sh ${{ github.base_ref }} "true"
-      - name: Strip debug symbols from vcpkg static libs
+      - name: Reduce vcpkg cache size
         if: matrix.os != 'windows-2025'
         run: |
-          find build/vcpkg_installed -path "*/debug/*" \( -name "*.a" -o -name "*.dylib" \) -print -exec strip --strip-debug {} \; 2>/dev/null || true
+          set -euo pipefail
+          echo "=== Before cleanup ==="
+          du -sh build/vcpkg_installed 2>/dev/null  || true
+
+          # 1) Remove only debug libraries — keep debug metadata/includes intact
+          echo "Removing debug libraries..."
+          find build/vcpkg_installed -path '*/debug/lib/*' \( -name "*.a" -o -name "*.so" -o -name "*.so.*" -o -name "*.dylib" \) -print -delete 2>/dev/null || true
+
+          # 2) Strip release static libs (remove debug info, keep symbols needed for linking)
+          echo "Stripping release static libraries..."
+          find build/vcpkg_installed \( -name "*.a" -o -name "*.dylib" \) -print -exec strip -S {} \; 2>/dev/null || true
+
+          # 3) Remove per-package build workdirs if present (already excluded from cache, paranoia)
+          rm -rf build/vcpkg_installed/*/src 2>/dev/null || true
+
+          echo "=== After cleanup ==="
+          du -sh build/vcpkg_installed 2>/dev/null || true
       - name: Set packaging variables
         if: github.event_name == 'release' && matrix.os != 'windows-2025'
         id: pkgvars
