@@ -133,8 +133,10 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
         nodeInitializer->protocolInitializer()->blockFactory(), storage, nodeConfig);
 
     // init the txpool
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "miniConsensus");
     auto txpoolInitializer = std::make_shared<TxPoolInitializer>(nodeConfig,
-        nodeInitializer->protocolInitializer(), frontServiceInitializer->front(), ledger);
+        nodeInitializer->protocolInitializer(), frontServiceInitializer->front(), ledger,
+        *ioServicePool->getIOService());
 
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
     auto consensusStoragePath = nodeConfig->storagePath() + "/consensus_log";
@@ -143,7 +145,8 @@ void initAndStart(std::string const& _configFilePath, std::string const& _genesi
     auto scheduler = std::make_shared<MockScheduler>();
     auto pbftInitializer = std::make_shared<PBFTInitializer>(protocol::NodeArchitectureType::AIR,
         nodeConfig, nodeInitializer->protocolInitializer(), txpoolInitializer->txpool(), ledger,
-        scheduler, consensusStorage, frontServiceInitializer->front(), nodeTimeMaintenance);
+        scheduler, consensusStorage, frontServiceInitializer->front(), nodeTimeMaintenance,
+        *ioServicePool->getIOService());
 
     txpoolInitializer->init(pbftInitializer->sealer());
     pbftInitializer->init();

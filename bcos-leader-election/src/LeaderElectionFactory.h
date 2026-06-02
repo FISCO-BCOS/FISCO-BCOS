@@ -41,19 +41,19 @@ public:
         std::string const& _memberConfig, std::string const& _etcdEndPoint,
         std::string const& _leaderKey, std::string const& _purpose, unsigned _leaseTTL,
         const std::string& _caPath, const std::string& _certPath,
-        const std::string& _keyPath) override
+        const std::string& _keyPath, boost::asio::io_context& _ioContext) override
     {
         auto member = m_memberFactory->createMember();
         member->setMemberID(_memberID);
         member->setMemberConfig(_memberConfig);
 
         auto config = std::make_shared<CampaignConfig>(member, _etcdEndPoint, m_memberFactory,
-            _leaderKey, _purpose, _leaseTTL, _caPath, _certPath, _keyPath);
+            _leaderKey, _purpose, _ioContext, _leaseTTL, _caPath, _certPath, _keyPath);
         ELECTION_LOG(INFO) << LOG_DESC("createLeaderElection") << LOG_KV("memberID", _memberID)
                            << LOG_KV("etcdEndPoint", _etcdEndPoint)
                            << LOG_KV("leaderKey", _leaderKey) << LOG_KV("purpose", _purpose)
                            << LOG_KV("leaseTTL", _leaseTTL);
-        return std::make_shared<LeaderElection>(config);
+        return std::make_shared<LeaderElection>(config, _ioContext);
     }
 
 private:

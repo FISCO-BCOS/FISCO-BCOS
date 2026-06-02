@@ -497,7 +497,8 @@ std::shared_ptr<gateway::ratelimiter::GatewayRateLimiter> GatewayFactory::buildG
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
     const GatewayConfig::RedisConfig& _redisConfig)
 {
-    auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>();
+    auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>(
+        *m_ioServicePool->getIOService());
     rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
     rateLimiterStat->setEnableConnectDebugInfo(_rateLimiterConfig.enableConnectDebugInfo);
 
@@ -610,9 +611,12 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                 buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
     // init ASIOInterface
-    auto ioServicePool = m_ioServicePool ? m_ioServicePool :
-                                           std::make_shared<IOServicePool>(
-                                               std::thread::hardware_concurrency() + 1, "gateway");
+    if (!m_ioServicePool)
+    {
+        m_ioServicePool = std::make_shared<IOServicePool>(
+            std::thread::hardware_concurrency() + 1, "gateway");
+    }
+    auto ioServicePool = m_ioServicePool;
     auto asioInterface =
         std::make_shared<ASIOInterface>(ioServicePool, _config->listenIP(), _config->listenPort());
     asioInterface->setSrvContext(std::move(srvCtx));
@@ -655,7 +659,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     if (enableRIPProtocol)
     {
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(selfInfo, routerTableFactory);
+        service = std::make_shared<ServiceV2>(
+            selfInfo, routerTableFactory, *ioServicePool->getIOService());
     }
     else
     {
@@ -705,7 +710,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         if (_airVersion)
         {
             gatewayNodeManager =
-                std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
+                std::make_shared<GatewayNodeManager>(
+                    _config->uuid(), pubHex, keyFactory, service,
+                    *m_ioServicePool->getIOService());
             if (!_config->readonly())
             {
                 amop = buildLocalAMOP(service, pubHex);
@@ -717,12 +724,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             if (_entryPoint)
             {
                 gatewayNodeManager = std::make_shared<GatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service);
+                    _config->uuid(), pubHex, keyFactory, service,
+                    *m_ioServicePool->getIOService());
             }
             else
             {
                 gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service);
+                    _config->uuid(), pubHex, keyFactory, service,
+                    *m_ioServicePool->getIOService());
             }
 
             if (!_config->readonly())
@@ -1003,7 +1012,8 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     registerAMOPHandlers(service, topicManager);
 
     return std::make_shared<AMOPImpl>(
-        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
+        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID,
+        *m_ioServicePool->getIOService());
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
@@ -1018,7 +1028,8 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     registerAMOPHandlers(service, topicManager);
 
     return std::make_shared<AMOPImpl>(
-        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID);
+        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID,
+        *m_ioServicePool->getIOService());
 }
 
 void GatewayFactory::registerAMOPHandlers(

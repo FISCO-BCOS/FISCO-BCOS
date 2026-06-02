@@ -24,6 +24,7 @@
 #include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/IOServicePool.h"
 
 #include <sw/redis++/cxx_utils.h>
 #include <tbb/parallel_for.h>
@@ -51,7 +52,7 @@ struct MemoryStorageFixture
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>(), nullptr,
             nullptr, txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ 1024,
             /*checkSig*/ false)),
-        storage(config)
+        storage(config, *ioServicePool->getIOService())
     {
         fakeit::When(Method(mockValidator, checkTransaction))
             .AlwaysReturn(bcos::protocol::TransactionStatus::None);
@@ -121,6 +122,8 @@ struct MemoryStorageFixture
     std::shared_ptr<bcos::txpool::LedgerNonceChecker> ledgerNonceChecker;
     std::shared_ptr<bcos::ledger::LedgerInterface> ledger;
     std::shared_ptr<TxPoolConfig> config;
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "memStorTest");
     MemoryStorage storage;
 };
 
@@ -478,13 +481,13 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     auto configWithSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
         txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ true);
-    MemoryStorage storageWithSig(configWithSig);
+    MemoryStorage storageWithSig(configWithSig, *ioServicePool->getIOService());
 
     // Create config with signature check disabled
     auto configNoSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
         txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ false);
-    MemoryStorage storageNoSig(configNoSig);
+    MemoryStorage storageNoSig(configNoSig, *ioServicePool->getIOService());
 
     // Test 1: Step 1 - AlreadyInTxPool
     {
@@ -741,7 +744,7 @@ BOOST_AUTO_TEST_CASE(FIB55_PoolLimitEnforced)
     constexpr size_t kLimit = 3;
     auto limitedConfig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, nullptr,
         txPoolNonceChecker, /*blockLimit*/ 0, /*poolLimit*/ kLimit, /*checkSig*/ false);
-    MemoryStorage limitedStorage(limitedConfig);
+    MemoryStorage limitedStorage(limitedConfig, *ioServicePool->getIOService());
 
     // Insert kLimit txs directly (bypasses validator, fills the pool)
     for (size_t i = 0; i < kLimit; ++i)
@@ -841,7 +844,8 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
     // Expectation: coroutine continuation runs exactly once.
 
     // submitTransaction() uses shared_from_this(), so this instance must be owned by shared_ptr.
-    auto sharedStorage = std::make_shared<MemoryStorage>(config);
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "memStorageTest");
+    auto sharedStorage = std::make_shared<MemoryStorage>(config, *ioServicePool->getIOService());
 
     auto tx = makeTx("fib48_submit_once", false);
     BOOST_CHECK_EQUAL(sharedStorage->insert(tx), TransactionStatus::None);
@@ -950,7 +954,7 @@ BOOST_AUTO_TEST_CASE(FIB50_NonceNotInsertedOnValidationFailure)
     std::shared_ptr<TxValidatorInterface> v(&localValidator.get(), [](auto*) {});
     auto cfg = std::make_shared<TxPoolConfig>(
         v, nullptr, nullptr, nullptr, nc, 1000, 1024, /*checkSig=*/true);
-    MemoryStorage stor(cfg);
+    MemoryStorage stor(cfg, *ioServicePool->getIOService());
 
     // 1. Bad tx: validateTransaction returns OverFlowValue → chain stops → nonce NOT inserted
     auto badTx = makeTx(badNonce, false);

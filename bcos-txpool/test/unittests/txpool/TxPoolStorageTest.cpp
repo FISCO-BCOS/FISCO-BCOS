@@ -3,6 +3,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
+#include "bcos-utilities/IOServicePool.h"
 #include <boost/test/unit_test.hpp>
 
 struct MockTxValidator : public bcos::txpool::TxValidator
@@ -23,12 +24,14 @@ struct TxPoolStorageFixture
       : txValidator{std::make_shared<MockTxValidator>()},
         txpoolConfig{std::make_shared<bcos::txpool::TxPoolConfig>(
             txValidator, nullptr, nullptr, nullptr, nullptr, 0, 0, false)},
-        txpoolStorage(txpoolConfig)
+        txpoolStorage(txpoolConfig, *ioServicePool->getIOService())
     {}
 
 
     std::shared_ptr<MockTxValidator> txValidator;
     std::shared_ptr<bcos::txpool::TxPoolConfig> txpoolConfig;
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "txStorTest");
     bcos::txpool::MemoryStorage txpoolStorage;
     bcos::crypto::Keccak256 hashImpl;
 };

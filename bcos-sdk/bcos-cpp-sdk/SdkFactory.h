@@ -26,6 +26,7 @@
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <utility>
 
 namespace bcos::cppsdk
@@ -55,5 +56,9 @@ public:
         std::shared_ptr<bcos::boostssl::ws::WsConfig> _config = nullptr,
         bool _sendRequestToHighestBlockNode = true);
     bcos::cppsdk::Sdk::UniquePtr buildSdk(const std::string& _configFile);
+
+private:
+    bcos::IOServicePool::Ptr m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "sdk");
 };
 }  // namespace bcos::cppsdk

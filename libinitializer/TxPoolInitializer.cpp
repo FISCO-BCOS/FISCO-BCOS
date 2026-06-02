@@ -31,7 +31,8 @@ using namespace bcos::initializer;
 TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     ProtocolInitializer::Ptr _protocolInitializer,
     bcos::front::FrontServiceInterface::Ptr _frontService,
-    bcos::ledger::LedgerInterface::Ptr _ledger)
+    bcos::ledger::LedgerInterface::Ptr _ledger,
+    boost::asio::io_context& _ioContext)
   : m_nodeConfig(std::move(_nodeConfig)),
     m_protocolInitializer(std::move(_protocolInitializer)),
     m_frontService(std::move(_frontService)),
@@ -45,7 +46,7 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit(),
         m_nodeConfig->checkTransactionSignature());
 
-    m_txpool = m_txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
+    m_txpool = m_txpoolFactory->createTxPool(_ioContext, m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
     m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
     if (m_nodeConfig->enableSendTxByTree())

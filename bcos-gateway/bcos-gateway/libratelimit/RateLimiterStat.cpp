@@ -105,7 +105,7 @@ void RateLimiterStat::start()
     }
     m_running = true;
 
-    m_statTimer = std::make_shared<Timer>(m_statInterval, "ratelimiter_reporter");
+    m_statTimer = std::make_shared<Timer>(*m_ioContext, m_statInterval, "ratelimiter_reporter");
 
     auto statInterval = m_statInterval;
     auto statTimer = m_statTimer;

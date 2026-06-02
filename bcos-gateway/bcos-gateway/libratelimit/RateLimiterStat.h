@@ -22,6 +22,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-utilities/Timer.h"
+#include <boost/asio/io_context.hpp>
 #include <array>
 #include <memory>
 #include <mutex>
@@ -83,6 +84,10 @@ public:
 
     using Ptr = std::shared_ptr<RateLimiterStat>;
     using ConstPtr = std::shared_ptr<const RateLimiterStat>;
+
+    explicit RateLimiterStat(boost::asio::io_context& _ioContext)
+      : m_ioContext(&_ioContext)
+    {}
 
     void start();
     void stop();
@@ -162,6 +167,7 @@ private:
     int32_t m_statInterval{DEFAULT_STAT_INTERVAL_MS};
     // the timer that periodically report the stat
     std::shared_ptr<Timer> m_statTimer;
+    boost::asio::io_context* m_ioContext;
 };
 
 }  // namespace ratelimiter

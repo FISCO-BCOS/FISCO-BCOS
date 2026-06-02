@@ -47,12 +47,12 @@ BlockSyncFactory::BlockSyncFactory(bcos::crypto::PublicPtr _nodeId,
     m_syncArchivedBlockBody(_syncArchivedBlockBody)
 {}
 
-BlockSync::Ptr BlockSyncFactory::createBlockSync()
+BlockSync::Ptr BlockSyncFactory::createBlockSync(boost::asio::io_context& _ioContext)
 {
     auto msgFactory = std::make_shared<BlockSyncMsgFactoryImpl>();
     auto syncConfig = std::make_shared<BlockSyncConfig>(m_nodeId, m_ledger, m_txpool,
         m_blockFactory, m_txResultFactory, m_frontService, m_scheduler, m_consensus, msgFactory,
         m_nodeTimeMaintenance, m_enableSendBlockStatusByTree, m_syncTreeWidth,
         m_syncArchivedBlockBody);
-    return std::make_shared<BlockSync>(syncConfig);
+    return std::make_shared<BlockSync>(syncConfig, _ioContext);
 }

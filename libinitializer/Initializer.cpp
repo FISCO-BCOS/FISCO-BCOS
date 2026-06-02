@@ -262,7 +262,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger,
+        *m_ioServicePool->getIOService());
     m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
@@ -376,7 +377,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance);
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
+            *m_ioServicePool->getIOService());
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();
@@ -402,7 +404,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     {
         m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance);
+            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
+            *m_ioServicePool->getIOService());
     }
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {

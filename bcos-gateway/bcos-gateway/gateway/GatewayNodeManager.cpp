@@ -70,7 +70,8 @@ uint32_t GatewayNodeManager::statusSeq()
 }
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
-    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface,
+    boost::asio::io_context& _ioContext)
   : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
@@ -92,7 +93,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
         [this](NetworkException const& _e, P2PSession::Ptr _session,
             std::shared_ptr<P2PMessage> _msg) { onReceiveNodeStatus(_e, _session, std::move(_msg)); });
-    m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
+    m_timer = std::make_shared<Timer>(_ioContext, SEQ_SYNC_PERIOD, "seqSync");
     // broadcast seq periodically
     m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });
 }
