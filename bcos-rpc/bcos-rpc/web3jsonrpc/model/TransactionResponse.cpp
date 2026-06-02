@@ -1,5 +1,6 @@
 #include "TransactionResponse.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
+#include <bcos-crypto/hash/Keccak256.h>
 
 void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Transaction& tx,
     const protocol::TransactionReceipt& receipt, const crypto::HashType& blockHash)
