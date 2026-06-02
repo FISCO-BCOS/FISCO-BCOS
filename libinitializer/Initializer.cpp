@@ -69,6 +69,8 @@
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-transaction-executor/TransactionExecutorImpl.h>
+#include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
 #include <rocksdb/slice.h>
@@ -278,6 +280,14 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::executor::GlobalHashImpl::g_hashImpl = m_protocolInitializer->cryptoSuite()->hashImpl();
 
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
+
+    // Create shared PrecompiledManager and TransactionExecutorImpl
+    m_precompiledManager = std::make_shared<executor_v1::PrecompiledManager>(
+        m_protocolInitializer->cryptoSuite()->hashImpl());
+    auto transactionExecutor = std::make_shared<executor_v1::TransactionExecutorImpl>(
+        *m_protocolInitializer->blockFactory()->receiptFactory(),
+        m_protocolInitializer->cryptoSuite()->hashImpl(), *m_precompiledManager);
+
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
@@ -287,10 +297,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
-                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
+                transactionExecutor);
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), parallelScheduler);
+                m_protocolInitializer->blockFactory(), parallelScheduler,
+                transactionExecutor);
     }
     else
     {
@@ -298,10 +310,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
-                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger);
+                m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
+                transactionExecutor);
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), serialScheduler);
+                m_protocolInitializer->blockFactory(), serialScheduler,
+                transactionExecutor);
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(

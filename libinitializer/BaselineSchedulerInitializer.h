@@ -19,33 +19,15 @@ public:
         std::function<void(std::function<void(protocol::BlockNumber)>)>>
     build(std::shared_ptr<initializer::GlobalStateStorageInitializer> storageInitializer,
         std::shared_ptr<protocol::BlockFactory> blockFactory,
-        std::shared_ptr<SchedulerType> scheduler,
-        std::shared_ptr<txpool::TxPoolInterface> txpool,
+        std::shared_ptr<SchedulerType> scheduler, std::shared_ptr<txpool::TxPoolInterface> txpool,
         std::shared_ptr<protocol::TransactionSubmitResultFactory> transactionSubmitResultFactory,
-        std::shared_ptr<ledger::LedgerInterface> ledger)
+        std::shared_ptr<ledger::LedgerInterface> ledger,
+        std::shared_ptr<executor_v1::TransactionExecutorImpl> transactionExecutor)
     {
-        struct Data
-        {
-            initializer::GlobalStateStorageInitializer::Ptr m_storageInitializer;
-            executor_v1::PrecompiledManager m_precompiledManager;
-            executor_v1::TransactionExecutorImpl m_transactionExecutor;
-
-            Data(initializer::GlobalStateStorageInitializer::Ptr storageInitializer,
-                protocol::BlockFactory& blockFactory)
-              : m_storageInitializer(std::move(storageInitializer)),
-                m_precompiledManager(blockFactory.cryptoSuite()->hashImpl()),
-                m_transactionExecutor(*blockFactory.receiptFactory(),
-                    blockFactory.cryptoSuite()->hashImpl(), m_precompiledManager)
-            {}
-        };
-        auto data = std::make_shared<Data>(std::move(storageInitializer), *blockFactory);
-
-        auto baselineScheduler =
-            std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
-                decltype(data->m_transactionExecutor), SchedulerType, ledger::LedgerInterface>>(
-                data->m_storageInitializer->storage(), *scheduler, data->m_transactionExecutor,
-                *blockFactory, *ledger, *txpool, *transactionSubmitResultFactory,
-                *blockFactory->cryptoSuite()->hashImpl());
+        auto baselineScheduler = std::make_shared<BaselineScheduler<initializer::GlobalStateStorage,
+            executor_v1::TransactionExecutorImpl, SchedulerType, ledger::LedgerInterface>>(
+            storageInitializer->storage(), *scheduler, *transactionExecutor, *blockFactory, *ledger,
+            *txpool, *transactionSubmitResultFactory, *blockFactory->cryptoSuite()->hashImpl());
         baselineScheduler->registerTransactionNotifier(
             [txpool](bcos::protocol::BlockNumber blockNumber,
                 bcos::protocol::TransactionSubmitResultsPtr result,
@@ -54,7 +36,9 @@ public:
             });
 
         return std::make_tuple(
-            [scheduler = std::move(scheduler), baselineScheduler, data = std::move(data),
+            [scheduler = std::move(scheduler), baselineScheduler,
+                storageInitializer = std::move(storageInitializer),
+                transactionExecutor = std::move(transactionExecutor),
                 blockFactory = std::move(blockFactory), txpool = std::move(txpool),
                 transactionSubmitResultFactory = std::move(transactionSubmitResultFactory),
                 ledger = std::move(ledger)]() -> std::shared_ptr<scheduler::SchedulerInterface> {

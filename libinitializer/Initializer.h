@@ -25,6 +25,7 @@
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
@@ -147,6 +148,7 @@ private:
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
     std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
+    std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
