@@ -71,6 +71,64 @@ BOOST_AUTO_TEST_CASE(setterGetterRoundTrip)
     BOOST_CHECK_EQUAL(config->syncingHighestNumber(), 123456789);
 }
 
+// FIB-150: setSyncingHighestNumber advances monotonically. A smaller value must
+// not regress the target; an equal or larger value updates it.
+BOOST_AUTO_TEST_CASE(setSyncingHighestNumberIsMonotonic)
+{
+    auto fixture = makePbftFixtureFib150();
+    auto config = fixture->pbftConfig();
+    BOOST_REQUIRE(config != nullptr);
+
+    config->setSyncingHighestNumber(100);
+    BOOST_CHECK_EQUAL(config->syncingHighestNumber(), 100);
+
+    // smaller value is rejected — target stays at the high-water mark
+    config->setSyncingHighestNumber(50);
+    BOOST_CHECK_EQUAL(config->syncingHighestNumber(), 100);
+
+    // larger value advances the target
+    config->setSyncingHighestNumber(150);
+    BOOST_CHECK_EQUAL(config->syncingHighestNumber(), 150);
+
+    // equal value is a no-op (no regression, no spurious change)
+    config->setSyncingHighestNumber(150);
+    BOOST_CHECK_EQUAL(config->syncingHighestNumber(), 150);
+}
+
+// FIB-150: concurrent monotonic update under contention. Two writers race to
+// advance the target; the CAS loop guarantees the final value is the global max
+// and that no writer ever observes the value going backwards.
+BOOST_AUTO_TEST_CASE(concurrentMonotonicAdvanceNeverRegresses)
+{
+    auto fixture = makePbftFixtureFib150();
+    auto config = fixture->pbftConfig();
+    BOOST_REQUIRE(config != nullptr);
+
+    constexpr int64_t kIters = 100000;
+    std::atomic<bool> regressed{false};
+
+    auto writerFn = [&](int64_t base) {
+        for (int64_t i = 0; i < kIters; ++i)
+        {
+            auto before = config->syncingHighestNumber();
+            config->setSyncingHighestNumber(base + i);
+            if (config->syncingHighestNumber() < before)
+            {
+                regressed.store(true);
+            }
+        }
+    };
+
+    std::thread w1([&] { writerFn(0); });
+    std::thread w2([&] { writerFn(kIters); });
+    w1.join();
+    w2.join();
+
+    BOOST_CHECK(!regressed.load());
+    // highest value ever passed in is (kIters + kIters - 1)
+    BOOST_CHECK_EQUAL(config->syncingHighestNumber(), 2 * kIters - 1);
+}
+
 // FIB-150: concurrent writer + reader. With m_syncingHighestNumber non-atomic,
 // TSan flags the writer / reader pair as a data race. After the fix
 // (std::atomic<BlockNumber>), this test is TSan-clean.

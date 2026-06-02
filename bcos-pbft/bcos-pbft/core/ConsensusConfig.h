@@ -24,8 +24,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
-#include <shared_mutex>
 #include <optional>
+#include <shared_mutex>
 
 namespace bcos::consensus
 {
@@ -113,9 +113,19 @@ public:
     {
         return m_syncingHighestNumber.load();
     }
+    // FIB-150: the syncing target only ever moves forward. Advance monotonically
+    // via a compare-exchange loop so the read-compare-write is a single atomic
+    // step: a concurrent writer can never clobber a larger value with a smaller
+    // one, and a stale/out-of-order notification can never regress the target.
+    // (C++20 has no std::atomic::fetch_max, so the CAS loop is written out.)
     void setSyncingHighestNumber(bcos::protocol::BlockNumber _number)
     {
-        m_syncingHighestNumber.store(_number);
+        auto current = m_syncingHighestNumber.load();
+        while (_number > current && !m_syncingHighestNumber.compare_exchange_weak(current, _number))
+        {
+            // compare_exchange_weak refreshed `current` with the latest value on
+            // failure (including spurious failure); re-check and retry.
+        }
     }
 
     IndexType consensusNodesNum() const { return m_consensusNodeNum.load(); }
