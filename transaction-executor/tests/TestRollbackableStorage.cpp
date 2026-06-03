@@ -158,13 +158,13 @@ BOOST_AUTO_TEST_CASE(rollbackEmptyStorage)
 
         // Test rollback operation on empty storage, should work normally and have no effect
         auto savepoint = rollbackableStorage.current();
-        BOOST_CHECK_EQUAL(savepoint.records, 0);
+        BOOST_CHECK_EQUAL(savepoint, 0);
 
         // Rolling back empty storage should complete normally
         co_await rollbackableStorage.rollback(savepoint);
 
         // After rollback, current should still be 0
-        BOOST_CHECK_EQUAL(rollbackableStorage.current().records, 0);
+        BOOST_CHECK_EQUAL(rollbackableStorage.current(), 0);
     }());
 }
 
@@ -180,12 +180,12 @@ BOOST_AUTO_TEST_CASE(rollbackToFutureSavepoint)
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key1"sv}, storage::Entry{"Value1"});
         auto savepoint1 = rollbackableStorage.current();
-        BOOST_CHECK_EQUAL(savepoint1.records, 1);
+        BOOST_CHECK_EQUAL(savepoint1, 1);
 
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key2"sv}, storage::Entry{"Value2"});
         auto savepoint2 = rollbackableStorage.current();
-        BOOST_CHECK_EQUAL(savepoint2.records, 2);
+        BOOST_CHECK_EQUAL(savepoint2, 2);
 
         // Try to rollback to a future savepoint (greater than the current savepoint)
         // This should have no effect, since rollback only processes index > savepoint
