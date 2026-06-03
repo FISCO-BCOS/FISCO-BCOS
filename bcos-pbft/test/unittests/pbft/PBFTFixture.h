@@ -117,6 +117,44 @@ public:
         PBFTCacheProcessor::checkPrecommitWeight(_precommitMsg);
         return true;
     }
+
+    // Test helpers: allow direct queue manipulation for FIB regression tests.
+    void pushToCommittedQueueForTest(PBFTProposalInterface::Ptr _proposal)
+    {
+        m_committedQueue.push(std::move(_proposal));
+    }
+    // Inject an already-applied checkpoint so getAppliedCheckPointProposal(_slotIndex)
+    // returns _proposal.  _slotIndex is the key in m_caches; _proposal->index() may
+    // intentionally differ (e.g. stale) to exercise parent-consistency checks.
+    void setAppliedCheckPointAtSlotForTest(
+        bcos::protocol::BlockNumber _slotIndex, PBFTProposalInterface::Ptr _proposal)
+    {
+        if (!m_caches.contains(_slotIndex))
+        {
+            m_caches[_slotIndex] = m_cacheFactory->createPBFTCache(
+                m_config, _slotIndex, [](bcos::protocol::BlockNumber) {});
+        }
+        m_caches[_slotIndex]->setCheckPointProposal(std::move(_proposal));
+    }
+    // Override getAppliedCheckPointProposal to return an injected stale proposal regardless
+    // of internal state.  Used by FIB-128 regression test to simulate a corrupt cache entry.
+    void injectStaleLastAppliedForTest(ProposalInterface::Ptr _staleProposal)
+    {
+        m_staleLastAppliedForTest = std::move(_staleProposal);
+    }
+
+    ProposalInterface::ConstPtr getAppliedCheckPointProposal(
+        bcos::protocol::BlockNumber _index) override
+    {
+        if (m_staleLastAppliedForTest)
+        {
+            return m_staleLastAppliedForTest;
+        }
+        return PBFTCacheProcessor::getAppliedCheckPointProposal(_index);
+    }
+
+private:
+    ProposalInterface::Ptr m_staleLastAppliedForTest;
 };
 
 
@@ -173,6 +211,10 @@ public:
         return PBFTEngine::handlePrePrepareMsg(
             _prePrepareMsg, _needVerifyProposal, _generatedFromNewView, _needCheckSignature);
     }
+
+    // Test-only: inject a committed-block timestamp so FIB-126 monotonicity tests
+    // can exercise the timestamp check without a real ledger.
+    void setCommittedBlockTimestampForTest(int64_t _ts) { m_ledgerConfig->setTimestamp(_ts); }
 };
 
 class FakePBFTImpl : public PBFTImpl
@@ -445,6 +487,13 @@ inline Block::Ptr fakeBlock(CryptoSuite::Ptr _cryptoSuite, PBFTFixture::Ptr _fak
         auto txMetaData = _faker->blockFactory()->createTransactionMetaData(hash, hash.abridged());
         block->appendTransactionMetaData(txMetaData);
     }
+    // FIB-142: mirror the honest sealer's submitProposal flow — bind body's
+    // Merkle root into header.txsRoot and recompute the hash. Otherwise the
+    // PBFTEngine receiver-side body-txsRoot defence rejects proposals built
+    // from this fixture (PBFTEngine::asyncSubmitProposal also runs the local
+    // handlePrePrepareMsg checks before broadcast).
+    block->blockHeader()->setTxsRoot(block->calculateTransactionRoot(*_cryptoSuite->hashImpl()));
+    block->blockHeader()->calculateHash(*_cryptoSuite->hashImpl());
     return block;
 }
 }  // namespace test

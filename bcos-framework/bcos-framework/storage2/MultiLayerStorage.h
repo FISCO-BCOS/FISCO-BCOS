@@ -503,6 +503,15 @@ public:
         m_storages.push_front(std::move(view.m_mutableStorage));
     }
 
+    void popFrontStorage()
+    {
+        std::unique_lock lock(m_listMutex);
+        if (!m_storages.empty())
+        {
+            m_storages.pop_front();
+        }
+    }
+
     task::Task<std::shared_ptr<MutableStorage>> mergeBackStorage(auto&... extraStorages)
     {
         std::unique_lock mergeLock(m_mergeMutex);

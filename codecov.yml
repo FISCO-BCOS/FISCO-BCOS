@@ -4,8 +4,9 @@
 #   2. Status checks shown in the PR checks list (the "status" block):
 #      - codecov/project : total line coverage vs the target floor
 #      - codecov/patch   : coverage of the lines changed by the PR (informational)
-# Coverage data is produced by the "Coverage" job in .github/workflows/workflow.yml
-# (gcc-14 + lcov, uploaded under the "unittests" flag).
+# Coverage data is uploaded under the "unittests" flag by the coverage-comment
+# workflow_run job (on master) for pull requests, and directly by the Coverage
+# build job here for base-branch pushes.
 
 codecov:
   require_ci_to_pass: false # don't block the Codecov status on unrelated matrix flakes
@@ -19,7 +20,7 @@ coverage:
   status:
     project:
       default:
-        target: 55% # current gcc-measured baseline ~59%; floor leaves headroom
+        target: 55% # gcc-measured baseline ~59%; floor leaves headroom
         threshold: 1% # tolerate a 1% drop before failing the check
         flags:
           - unittests

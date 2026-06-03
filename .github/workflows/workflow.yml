@@ -140,6 +140,12 @@ jobs:
           name: fisco-bcos-ubuntu-24-x86_64
           path: build/fisco-bcos-air/fisco-bcos
           retention-days: 30
+      # - name: Upload coverage report
+      #   if: matrix.os == 'ubuntu-24.04'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: coverage-report
+      #     path: build/coverage.info
       - name: prepare RPCAPI Tests
         if: matrix.os != 'windows-2025'
         run: |
@@ -217,7 +223,7 @@ jobs:
       # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
       # upload would be rate-limited and orphaned, leaving Codecov stuck at 0.00%
       # ("incomplete uploads on the first attempt"). The token-carrying run is the
-      # push event on the fork (kyonRay/FISCO-BCOS) and on the base branch.
+      # push event on the base branch (and on a fork that sets the secret).
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@v3
@@ -269,7 +275,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOL=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
       - name: Build
         run: |
           cd build
@@ -298,6 +304,18 @@ jobs:
           # Codecov needs repo-relative paths to map files; strip the workspace
           # prefix so it doesn't report a "files paths" error and 0% coverage.
           sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" coverage.info
+          # The 'ctest || true' above tolerates flaky tests under instrumentation,
+          # but if tests fail to run at ALL, coverage collapses toward 0%. Fail
+          # rather than upload a misleading near-empty baseline (which would make
+          # every subsequent PR delta look inflated). Real coverage is ~59%, so a
+          # 20% floor only trips on a genuine no-run, not on flake tolerance.
+          LINES_PCT=$(lcov --summary coverage.info --ignore-errors inconsistent,source 2>&1 \
+            | sed -n 's/.*lines[.]*: \([0-9]*\)\..*/\1/p' | head -1)
+          echo "Measured line coverage: ${LINES_PCT:-unknown}%"
+          if [ -z "$LINES_PCT" ] || [ "$LINES_PCT" -lt 20 ]; then
+            echo "::error::Line coverage ${LINES_PCT:-unknown}% is implausibly low; tests likely did not execute. Refusing to publish a misleading baseline." >&2
+            exit 1
+          fi
           genhtml coverage.info --output-directory CodeCoverage --ignore-errors "$IGN" || true
           {
             echo '## Code coverage (release-3.17.0)'
@@ -320,8 +338,9 @@ jobs:
           verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Record PR number for the comment workflow
-        # Consumed by coverage-comment.yml (workflow_run): the workflow_run event
-        # does not expose the PR number for fork PRs, so pass it via the artifact.
+        # Consumed by coverage-comment.yml (workflow_run) on master: the
+        # workflow_run event does not expose the PR number for fork PRs, so pass
+        # it via the artifact.
         if: github.event_name == 'pull_request'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}

@@ -760,13 +760,16 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
                         << LOG_KV("proposalCommitted", proposalCommitted);
         return CheckResult::INVALID;
     }
-    // Note: Accept pbft message with larger view then local view, for other nodes may viewchange to
-    // a larger view, and the node-self is not aware of the viewchange.
-    // In normal case, it will not happen, node-self will recover the view from the viewchange, and
-    // soon will reach to new view.
-    // BUT in the Byzantium case, malicious node will send the pre-prepare message with a larger
-    // view, to lay down some specific txs.
-    // FIXME: to check this logic.
+    // Note: Accept pbft message with larger view than local view, for other nodes may viewchange
+    // to a larger view, and the node-self is not aware of the viewchange.
+    // In normal case, it will not happen — node-self will recover the view from the viewchange
+    // and soon reach the new view.
+    // BUT in the Byzantium case, a malicious node may send a higher-view message to nudge state.
+    //
+    // FIB-133: the PrePrepare normal path (handlePrePrepareMsg, _generatedFromNewView==false)
+    // additionally enforces strict view equality, so cross-view PrePrepare caching is no longer
+    // possible.  The Prepare/Commit paths still rely on this broader acceptance window —
+    // tightening them would require a separate audit pass.
     if (_pbftReq->view() < m_config->view())
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid view")
@@ -1006,6 +1009,20 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     if (!_generatedFromNewView)
     {
+        // FIB-133: reject PrePrepare messages whose view() does not match the local view.
+        // checkPBFTMsgState() accepts messages with view() >= local view (up to watermark),
+        // so without this check a byzantine leader can send a PrePrepare with a higher view
+        // that still passes the leader check (computed from local view) and causes the node
+        // to emit a Prepare at m_config->view() while caching a pre-prepare at a different
+        // view — breaking liveness and cross-view consistency.
+        if (_prePrepareMsg->view() != m_config->view())
+        {
+            PBFT_LOG(INFO) << LOG_DESC(
+                                  "handlePrePrepareMsg: reject non-local-view PrePrepare "
+                                  "in the normal path")
+                           << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
         // packet can be processed in this round of consensus
         // check the proposal is generated from the leader
         auto expectedLeader = m_config->leaderIndex(_prePrepareMsg->index());
@@ -1063,15 +1080,21 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
     }
     auto block = m_config->blockFactory().createBlock(
         _prePrepareMsg->consensusProposal()->data(), false, false);
+    // Validate the decoded proposal block before it enters the cache.  The structural
+    // cross-check (FIB-130) and the timestamp policy (FIB-126) both run here — after
+    // createBlock() and before the no-verify fast-path / async verifyProposal path — so a
+    // Byzantine leader cannot smuggle an inconsistent proposal through either route.  Fetch
+    // the header once and share it across both checks.
+    auto blockHeader = block->blockHeader();
+
     // FIB-130: cross-check the decoded block header against the carried proposal metadata.
     // A Byzantine leader could (a) carry a proposal index whose block-header number differs,
     // or (b) sign hash(A) while broadcasting body(B) under the same proposal hash, decoupling
     // the consensus identity from the executed payload. createBlock(data, false, false) leaves
     // the header hash as whatever bytes were on the wire, so we recompute via calculateHash()
-    // before comparing.
+    // before comparing.  Only meaningful when the proposal carries a body.
     if (!_prePrepareMsg->consensusProposal()->data().empty())
     {
-        auto blockHeader = block->blockHeader();
         if (!blockHeader)
         {
             PBFT_LOG(WARNING) << LOG_DESC(
@@ -1100,7 +1123,60 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                               << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
             return false;
         }
+        // FIB-142 receiver-side (defence-in-depth): FIB-130 above only proves the
+        // header is internally consistent (header.hash binds the header fields,
+        // incl. txsRoot). It does NOT prove the decoded body matches that txsRoot.
+        // Recompute the body's Merkle root and reject any mismatch, so a byzantine
+        // leader cannot ship a body whose real root differs from header.txsRoot —
+        // otherwise the poisoned (hash, data) pair is cached/forwarded and only
+        // fails much later during execution.
+        if (auto computedTxsRoot =
+                block->calculateTransactionRoot(*m_config->cryptoSuite()->hashImpl());
+            computedTxsRoot != blockHeader->txsRoot())
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "handlePrePrepareMsg: reject for decoded body txsRoot "
+                                     "does not match header.txsRoot (FIB-142)")
+                              << LOG_KV("headerTxsRoot", blockHeader->txsRoot().abridged())
+                              << LOG_KV("computedTxsRoot", computedTxsRoot.abridged())
+                              << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
     }
+
+    // FIB-126: validate the proposed block's header timestamp against two invariants:
+    //   1. Monotonicity — proposedTs must be strictly greater than the last committed block
+    //      timestamp (prevents time-reversal).  Skipped at genesis (parentTs == 0) to avoid
+    //      false positives on the first block.
+    //   2. Future-drift — proposedTs must not exceed wall-clock by more than
+    //      c_maxAllowedFutureTimestampMs (prevents far-future timestamp attacks).
+    if (blockHeader)
+    {
+        int64_t proposedTs = blockHeader->timestamp();
+        int64_t parentTs = m_ledgerConfig->timestamp();
+        // utcTime() returns uint64_t; make the narrowing to int64_t explicit so -Wconversion
+        // stays quiet and the signed arithmetic below is unambiguous.
+        int64_t nowTs = static_cast<int64_t>(utcTime());
+
+        if (parentTs > 0 && proposedTs <= parentTs)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: reject proposal with non-monotonic timestamp")
+                << LOG_KV("proposedTs", proposedTs) << LOG_KV("parentTs", parentTs)
+                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+        if (proposedTs > nowTs + c_maxAllowedFutureTimestampMs)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC("handlePrePrepareMsg: reject proposal with far-future timestamp")
+                << LOG_KV("proposedTs", proposedTs) << LOG_KV("nowTs", nowTs)
+                << LOG_KV("maxDrift", c_maxAllowedFutureTimestampMs)
+                << printPBFTMsgInfo(_prePrepareMsg) << m_config->printCurrentState();
+            return false;
+        }
+    }
+
     // add the prePrepareReq to the cache
     if (!_needVerifyProposal)
     {
@@ -1806,6 +1882,11 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
 void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
 {
     RecursiveGuard lock(m_mutex);
+    // Keep m_ledgerConfig in sync with the freshly-committed block.  Without this,
+    // m_ledgerConfig stays at the value loaded by fetchAndUpdateLedgerConfig() at init
+    // and is only refreshed on exception paths, leaving readers (e.g. FIB-126 timestamp
+    // validation in handlePrePrepareMsg) anchored to a stale parent timestamp.
+    *m_ledgerConfig = *_ledgerConfig;
     // try to switch rpbft
     switchToRPBFT(_ledgerConfig);
     // resetConfig after submit the block to ledger
