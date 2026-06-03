@@ -214,3 +214,142 @@ jobs:
         with:
           files: |
             ${{ steps.pkgvars.outputs.pkg_name }}
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    env:
+      # Surfaced as an env var so the upload step can be skipped when no token is
+      # present. Fork PRs (pull_request event) receive NO secrets, so a tokenless
+      # upload would be rate-limited and orphaned, leaving Codecov stuck at 0.00%
+      # ("incomplete uploads on the first attempt"). The token-carrying run is the
+      # push event on the base branch (and on a fork that sets the secret).
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          clean: false
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/local/lib/android /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          df -h /
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "11"
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 3.28.3
+          ninjaVersion: 1.12.1
+      - name: Restore vcpkg cache
+        uses: actions/cache@v4
+        id: vcpkg-cache
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ${{ github.workspace }}/build/vcpkg_installed
+            !${{ github.workspace }}/vcpkg/.git
+            !${{ github.workspace }}/vcpkg/buildtrees
+            !${{ github.workspace }}/vcpkg/packages
+            !${{ github.workspace }}/vcpkg/downloads
+          key: vcpkg-${{ hashFiles( 'vcpkg.json' ) }}-${{ hashFiles( 'vcpkg-configuration.json' ) }}-${{ runner.os }}-${{ runner.arch }}-cache-key-v1
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y --no-install-recommends \
+              lcov wget python3-dev python3-pip git curl zip unzip tar \
+              clang make build-essential libssl-dev zlib1g-dev ca-certificates mold autoconf \
+              flex bison patch pkg-config uuid-runtime automake gcc-14 g++-14
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-02-25
+          override: true
+      - name: Configure with coverage
+        run: |
+          mkdir -p build
+          cd build
+          CC=gcc-14 CXX=g++-14 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTESTS=ON -DCOVERAGE=ON -DWITH_LIGHTNODE=ON -DWITH_CPPSDK=ON -DWITH_TIKV=OFF -DWITH_WASM=OFF -DWITH_TARS_SERVICES=OFF -DTOOLS=OFF -DVCPKG_TARGET_TRIPLET=x64-linux-release ..
+      - name: Build
+        run: |
+          cd build
+          cmake --build . --parallel 3
+      - name: Run tests
+        run: |
+          cd build
+          # Coverage instrumentation runs ~2-3x slower, which makes some async/timing
+          # tests (e.g. PBFT) flaky. This job only needs the tests to *execute* so the
+          # .gcda data is produced; correctness is gated by the build matrix. Retry
+          # flakes once and never let a flake block the coverage report.
+          CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3 --repeat until-pass:2 || true
+      - name: Generate coverage report
+        run: |
+          cd build
+          # gcda was produced by gcc-14, so geninfo must use the matching gcov-14
+          # (otherwise: "Incompatible GCC/GCOV version"). version/unused are tolerated
+          # as a fallback across lcov point releases.
+          IGN=inconsistent,source,gcov,mismatch,version,negative,empty,unused
+          lcov --gcov-tool gcov-14 --capture --directory . \
+            --output-file coverage.info.in --ignore-errors "$IGN"
+          lcov --remove coverage.info.in \
+            '/usr*' '*vcpkg_installed*' '*boost/*' '*test*' '*build*' '*deps*' \
+            --output-file coverage.info --ignore-errors "$IGN"
+          # geninfo records absolute SF: paths ($GITHUB_WORKSPACE/bcos-.../x.cpp).
+          # Codecov needs repo-relative paths to map files; strip the workspace
+          # prefix so it doesn't report a "files paths" error and 0% coverage.
+          sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" coverage.info
+          # The 'ctest || true' above tolerates flaky tests under instrumentation,
+          # but if tests fail to run at ALL, coverage collapses toward 0%. Fail
+          # rather than upload a misleading near-empty baseline (which would make
+          # every subsequent PR delta look inflated). Real coverage is ~59%, so a
+          # 20% floor only trips on a genuine no-run, not on flake tolerance.
+          LINES_PCT=$(lcov --summary coverage.info --ignore-errors inconsistent,source 2>&1 \
+            | sed -n 's/.*lines[.]*: \([0-9]*\)\..*/\1/p' | head -1)
+          echo "Measured line coverage: ${LINES_PCT:-unknown}%"
+          if [ -z "$LINES_PCT" ] || [ "$LINES_PCT" -lt 20 ]; then
+            echo "::error::Line coverage ${LINES_PCT:-unknown}% is implausibly low; tests likely did not execute. Refusing to publish a misleading baseline." >&2
+            exit 1
+          fi
+          genhtml coverage.info --output-directory CodeCoverage --ignore-errors "$IGN" || true
+          {
+            echo '## Code coverage (release-3.17.0)'
+            echo '```'
+            lcov --summary coverage.info --ignore-errors inconsistent,source 2>&1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload base-branch coverage to Codecov
+        # Direct upload only for push events (base branches), which carry the
+        # token and establish the baseline the project status compares against.
+        # Pull requests (including fork PRs, which get no secrets here) are
+        # uploaded by the coverage-comment workflow_run job instead, so it can
+        # run with the token in the base-repo context.
+        if: ${{ github.event_name == 'push' && env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage.info
+          flags: unittests
+          fail_ci_if_error: false
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Record PR number for the comment workflow
+        # Consumed by coverage-comment.yml (workflow_run) on master: the
+        # workflow_run event does not expose the PR number for fork PRs, so pass
+        # it via the artifact.
+        if: github.event_name == 'pull_request'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "$PR_NUMBER" > build/pr-number.txt
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data
+          path: |
+            build/coverage.info
+            build/pr-number.txt
+          retention-days: 7
