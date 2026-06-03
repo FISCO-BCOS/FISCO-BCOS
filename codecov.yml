@@ -10,6 +10,12 @@
 
 codecov:
   require_ci_to_pass: false # don't block the Codecov status on unrelated matrix flakes
+  # Disable the report-age check. Codecov's default rejects reports older than
+  # 12h ("Upload exceeds the max age of 12h"); on this freshly-activated repo the
+  # processing queue lags long enough that fresh reports get flagged as expired
+  # and error out, leaving every commit at 0.00%. We never want to drop a real
+  # CI report for being "old".
+  max_report_age: false
   notify:
     wait_for_ci: false
 
@@ -35,9 +41,9 @@ comment:
 
 flags:
   unittests:
-    paths:
-      - "!**/test/**"
-      - "!**/tests/**"
+    # No path filter: coverage.info already excludes tests (lcov --remove
+    # '*test*'), and a negative-only paths list can collapse the flag's file set
+    # to empty. Let the flag include every uploaded source file.
     carryforward: true # reuse the last upload for a flag if a run didn't re-upload it
 
 github_checks:
