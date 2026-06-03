@@ -415,7 +415,13 @@ BOOST_AUTO_TEST_CASE(futureRollbackDoesNotClearInnerTracking)
     }());
 }
 
-BOOST_AUTO_TEST_CASE(exactSavepointStillRollsBackInnerOnlyChanges)
+// Write-only log (option B): reads are not journalled, so a read-only access
+// taken after a savepoint is NOT wound back on revert. This is intentional and
+// safe — a lingering read flag can only cost this chunk a redundant RAW retry,
+// never a missed dependency, and (since mergeWriteSet propagates only
+// flag.write) never a write-set pollution. Writes after the savepoint are still
+// rolled back exactly.
+BOOST_AUTO_TEST_CASE(revertedReadOnlyAccessIsConservativelyKept)
 {
     using Storage =
         memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
@@ -430,15 +436,51 @@ BOOST_AUTO_TEST_CASE(exactSavepointStillRollsBackInnerOnlyChanges)
         co_await storage2::writeOne(rollbackable, 1, 100);
         auto savepoint = rollbackable.current();
 
-        auto value = co_await storage2::readOne(rollbackable, 2);
+        auto value = co_await storage2::readOne(rollbackable, 2);  // read-only after savepoint
         BOOST_CHECK(!value);
         auto const hash2 = std::hash<int>{}(2);
         BOOST_CHECK(readWriteSet(rwStorage).contains(hash2));
 
         co_await rollbackable.rollback(savepoint);
 
-        BOOST_CHECK(!readWriteSet(rwStorage).contains(hash2));
+        // Read flag for key 2 is conservatively retained (reads are not logged).
+        BOOST_REQUIRE(readWriteSet(rwStorage).contains(hash2));
+        BOOST_CHECK(!readWriteSet(rwStorage).at(hash2).write);
+        // The earlier committed write to key 1 is intact.
         BOOST_CHECK(readWriteSet(rwStorage).contains(std::hash<int>{}(1)));
+        co_return;
+    }());
+}
+
+// Write-only log (option B) precision: writing the same key before and after a
+// savepoint must log only the first false->true transition, so rolling back the
+// savepoint does NOT drop the key's write flag — the earlier committed write
+// survives. (A naive "clear key on rollback" scheme would lose it.)
+BOOST_AUTO_TEST_CASE(repeatWriteAcrossSavepointKeepsEarlierWrite)
+{
+    using Storage =
+        memory_storage::MemoryStorage<int, int, memory_storage::Attribute(memory_storage::ORDERED)>;
+    using RWSet = ReadWriteSetStorage<Storage>;
+    using Rollbackable = bcos::executor_v1::Rollbackable<RWSet>;
+
+    task::syncWait([]() -> task::Task<void> {
+        Storage backend;
+        RWSet rwStorage(backend);
+        Rollbackable rollbackable(rwStorage);
+
+        co_await storage2::writeOne(rollbackable, 7, 1);  // committed write
+        auto savepoint = rollbackable.current();
+        co_await storage2::writeOne(rollbackable, 7, 2);  // same key again, after savepoint
+        co_await rollbackable.rollback(savepoint);        // revert the second write
+
+        auto const hash7 = std::hash<int>{}(7);
+        BOOST_REQUIRE(readWriteSet(rwStorage).contains(hash7));
+        BOOST_CHECK(readWriteSet(rwStorage).at(hash7).write);
+
+        // Data is the earlier committed value, not erased.
+        auto value = co_await storage2::readOne(rollbackable, 7);
+        BOOST_REQUIRE(value);
+        BOOST_CHECK_EQUAL(*value, 1);
         co_return;
     }());
 }

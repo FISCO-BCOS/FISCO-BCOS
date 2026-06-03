@@ -2,7 +2,6 @@
 #include "bcos-framework/storage2/Storage.h"
 #include <bcos-task/Trait.h>
 #include <cstddef>
-#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -19,9 +18,13 @@ private:
 public:
     using Key = std::decay_t<StorageType>::Key;
     using Value = std::decay_t<StorageType>::Value;
-    // FIB-109: Savepoint is the size of the mutation log; rollback pops the
-    // log entries added after it and restores m_readWriteSet to the state it
-    // had when the savepoint was taken.
+    // FIB-109: Savepoint is the size of the write-log. rollback pops the write
+    // markers added after it and clears those write flags. Only WRITE-flag
+    // transitions (false->true) are logged — reads are never logged, so the
+    // read-heavy common path pays nothing. A reverted read therefore keeps its
+    // flag: conservative (at worst a redundant RAW retry for this chunk), never
+    // a missed dependency, and never write-set pollution (mergeWriteSet only
+    // propagates flag.write).
     using Savepoint = std::size_t;
 
     ReadWriteSetStorage(StorageType& storage) : m_storage(std::ref(storage)) {}
@@ -32,16 +35,11 @@ private:
         bool read = false;
         bool write = false;
     };
-    struct LogEntry
-    {
-        size_t hash;
-        // nullopt => entry did not exist before putSet, so rollback erases it;
-        // otherwise rollback restores these flags.
-        std::optional<ReadWriteFlag> previous;
-    };
 
     std::unordered_map<size_t, ReadWriteFlag> m_readWriteSet;
-    std::vector<LogEntry> m_log;
+    // Hashes whose write flag flipped false->true, in order; LIFO-replayed by
+    // rollback(). Reads are intentionally absent (see Savepoint comment).
+    std::vector<size_t> m_writeLog;
 
     using Storage = StorageType;
 
@@ -49,17 +47,21 @@ private:
     {
         auto [it, inserted] =
             m_readWriteSet.try_emplace(hash, ReadWriteFlag{.read = !write, .write = write});
-        if (inserted)
+        if (write)
         {
-            m_log.push_back(LogEntry{.hash = hash, .previous = std::nullopt});
-            return;
+            // Log only the first false->true write transition for this key so
+            // rollback undoes exactly the writes after a savepoint. A repeat
+            // write (flag already set) logs nothing, which keeps an earlier
+            // committed write intact across a nested revert.
+            if (inserted || !it->second.write)
+            {
+                it->second.write = true;
+                m_writeLog.push_back(hash);
+            }
         }
-        ReadWriteFlag const previous = it->second;
-        it->second.write |= write;
-        it->second.read |= (!write);
-        if (it->second.read != previous.read || it->second.write != previous.write)
+        else if (!inserted)
         {
-            m_log.push_back(LogEntry{.hash = hash, .previous = previous});
+            it->second.read = true;
         }
     }
     void putSet(bool write, auto const& key)
@@ -189,22 +191,24 @@ public:
     // RollbackableStorage.h — Rollbackable forwards rollback() to its inner
     // storage, so a Savepoint taken on Rollbackable<ReadWriteSetStorage<...>>
     // captures both levels and restores this set when the transaction reverts.
-    Savepoint current() const noexcept { return m_log.size(); }
+    Savepoint current() const noexcept { return m_writeLog.size(); }
 
     task::Task<void> rollback(Savepoint savepoint)
     {
-        while (m_log.size() > savepoint)
+        while (m_writeLog.size() > savepoint)
         {
-            auto& entry = m_log.back();
-            if (entry.previous)
+            auto hash = m_writeLog.back();
+            m_writeLog.pop_back();
+            if (auto it = m_readWriteSet.find(hash); it != m_readWriteSet.end())
             {
-                m_readWriteSet[entry.hash] = *entry.previous;
+                it->second.write = false;
+                // A key that was only ever written drops out entirely; one that
+                // was also read keeps its (conservative) read flag.
+                if (!it->second.read)
+                {
+                    m_readWriteSet.erase(it);
+                }
             }
-            else
-            {
-                m_readWriteSet.erase(entry.hash);
-            }
-            m_log.pop_back();
         }
         co_return;
     }
