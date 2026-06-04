@@ -183,4 +183,15 @@ BOOST_AUTO_TEST_CASE(BadStorageValueRejected)
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }
 
+BOOST_AUTO_TEST_CASE(NonceOverflowRejected)
+{
+    // nonce = 2^64 (one past uint64 max) -> reject; it is decimal-valid but the
+    // genesis hash serializes nonce as uint64, so it must not overflow.
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "balance=0\nnonce=18446744073709551616\ncode=0x6080604052\n";
+    auto cfg = makeNodeConfig();
+    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
