@@ -308,7 +308,6 @@ BOOST_AUTO_TEST_CASE(operationsAfterRollback)
         // Continue operations after rollback
         co_await storage2::writeOne(
             rollbackableStorage, StateKey{tableID, "Key2"sv}, storage::Entry{"NewValue"});
-        auto newSavepoint = rollbackableStorage.current();
 
         // Verify that the new operation succeeded
         auto newValue =
@@ -591,12 +590,13 @@ BOOST_AUTO_TEST_CASE(rollbackRestoresBatchIntValues)
         constexpr int updatedValue2 = 21;
         constexpr int insertedValue = 31;
 
-        std::vector<std::pair<int, int>> initialValues{{key1, initialValue1}, {key2, initialValue2}};
+        std::vector<std::pair<int, int>> initialValues{
+            {key1, initialValue1}, {key2, initialValue2}};
         co_await storage2::writeSome(rollbackableStorage, initialValues);
 
         auto savepoint = rollbackableStorage.current();
-        std::vector<std::pair<int, int>> updatedValues{{key1, updatedValue1},
-            {key2, updatedValue2}, {key3, insertedValue}};
+        std::vector<std::pair<int, int>> updatedValues{
+            {key1, updatedValue1}, {key2, updatedValue2}, {key3, insertedValue}};
         co_await storage2::writeSome(rollbackableStorage, updatedValues);
 
         auto valuesBeforeRollback =
