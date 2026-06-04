@@ -54,3 +54,5 @@ if(WITH_LIGHTNODE)
 endif()
 set_target_properties(init PROPERTIES UNITY_BUILD "ON")
 add_dependencies(init BuildInfo.h)
+
+add_subdirectory(test)

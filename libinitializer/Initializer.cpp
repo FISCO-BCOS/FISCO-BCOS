@@ -282,6 +282,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto baselineSchedulerConfig = m_nodeConfig->baselineSchedulerConfig();
 
     // Create shared PrecompiledManager and TransactionExecutorImpl
+    // NOTE: The same scheduler and transactionExecutor shared_ptr is passed to both
+    // BaselineSchedulerInitializer (legacy consensus path) and EngineServiceInitializer
+    // (Engine API path). This assumes that only ONE path drives the scheduler at any
+    // given time. If both paths need concurrent access, SchedulerParallelImpl::executeBlock
+    // and TransactionExecutorImpl::executeTransaction must be audited for thread-safety
+    // and guarded with a lock.
     m_precompiledManager = std::make_shared<executor_v1::PrecompiledManager>(
         m_protocolInitializer->cryptoSuite()->hashImpl());
     auto transactionExecutor = std::make_shared<executor_v1::TransactionExecutorImpl>(
@@ -302,7 +308,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
-                transactionExecutor);
+                transactionExecutor, m_memPoolInitializer->memPool());
     }
     else
     {
@@ -315,7 +321,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_engineServiceInitializer =
             EngineServiceInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
-                transactionExecutor);
+                transactionExecutor, m_memPoolInitializer->memPool());
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(

@@ -102,6 +102,11 @@ public:
     NodeService::Ptr buildNodeService(std::string const& _chainID, std::string const& _groupID,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig);
 
+    void setEngineService(std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
+    {
+        m_engineService = std::move(_engineService);
+    }
+
     template <typename T, typename S, typename... Args>
     std::pair<std::shared_ptr<T>, S> createServicePrx(bcos::protocol::ServiceType _type,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig,
@@ -118,5 +123,8 @@ public:
 
         return std::make_pair(client, prx);
     }
+
+private:
+    std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
 };
 }  // namespace bcos::rpc

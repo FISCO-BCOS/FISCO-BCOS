@@ -122,7 +122,9 @@ public:
         txPool->start();
 
         nodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory, nullptr);
+            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory,
+            // EngineService not needed for existing RPC tests; pass nullptr as stub.
+            nullptr);
 
 
         groupInfo = std::make_shared<group::GroupInfo>();
