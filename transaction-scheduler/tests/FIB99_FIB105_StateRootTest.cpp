@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(bugfixFlagActivatedAtV3_17_0)
     BOOST_CHECK(!features.get(ledger::Features::Flag::bugfix_statestorage_hash_v3_17));
 
     features.setUpgradeFeatures(
-        protocol::BlockVersion::V3_16_5_VERSION, protocol::BlockVersion::V3_17_0_VERSION);
+        protocol::BlockVersion::V3_16_4_VERSION, protocol::BlockVersion::V3_17_0_VERSION);
     BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_statestorage_hash_v3_17));
 }
 

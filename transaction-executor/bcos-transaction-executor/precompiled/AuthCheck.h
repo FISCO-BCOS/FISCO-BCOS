@@ -48,7 +48,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     params->gas = message.gas;
     params->staticCall = (message.flags & EVMC_STATIC) != 0;
     // FIB-77: include EVMC_CREATE2 in deploy authorization check
-    if (features.get(ledger::Features::Flag::bugfix_auth_check_create2))
+    if (features.get(ledger::Features::Flag::bugfix_auth_check))
     {
         params->create = (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2);
     }
@@ -62,7 +62,7 @@ inline std::optional<EVMCResult> checkAuth(auto& storage, protocol::BlockHeader 
     {
         // FIB-81: return ABI-encoded error message instead of full transaction input
         bcos::bytes errorOutput;
-        if (features.get(ledger::Features::Flag::bugfix_auth_check_revert_status))
+        if (features.get(ledger::Features::Flag::bugfix_auth_check))
         {
             errorOutput = writeErrInfoToOutput(
                 hashImpl, params->message.empty() ? "Authorization check failed" : params->message);
