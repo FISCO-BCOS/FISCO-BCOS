@@ -23,15 +23,8 @@ void Entry::setStatus(Status status)
     m_status = status;
     if (m_status == DELETED)
     {
-        m_size = 0;
-        m_value = std::string();
+        m_buffer = {};
     }
-}
-
-const char* Entry::data() const&
-{
-    auto view = outputValueView(m_value);
-    return view.data();
 }
 
 crypto::HashType Entry::hash(std::string_view table, std::string_view key,
@@ -165,15 +158,4 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     return entryHash;
 }
 
-auto Entry::outputValueView(const ValueType& value) const& -> std::string_view
-{
-    std::string_view view;
-    std::visit(
-        [this, &view](auto&& valueInside) {
-            auto viewRaw = inputValueView(valueInside);
-            view = std::string_view(viewRaw.data(), m_size);
-        },
-        value);
-    return view;
-}
 }  // namespace bcos::storage

@@ -4,6 +4,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/protocol/Protocol.h>
+#include <bcos-utilities/AnyHolder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/archive/basic_archive.hpp>
@@ -12,22 +13,106 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <initializer_list>
+#include <memory>
+#include <new>
 #include <optional>
 #include <type_traits>
-#include <variant>
-
 namespace bcos::storage
 {
 
-template <class Input>
-concept EntryBufferInput =
-    std::same_as<Input, std::string_view> || std::same_as<Input, std::string> ||
-    std::same_as<Input, std::vector<char>> || std::same_as<Input, std::vector<unsigned char>>;
+template <class T>
+concept ByteBuffer = requires(const T& t) {
+    { t.data() } -> std::convertible_to<const void*>;
+    { t.size() } -> std::convertible_to<std::size_t>;
+    requires sizeof(typename std::remove_cvref_t<T>::value_type) == 1;
+};
 
 constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
+
+// ─── Type-erased byte-buffer interface ───────────────────────────────
+// AnyBuffer is an abstract base that exposes data()/size()/clone().
+// Concrete models adapt different storage strategies:
+//   SmallBuffer    — SBO: ≤31 bytes, repurposes 1 byte for length (32B total)
+//   Fixed32Buffer  — SBO: exactly 32 bytes, size() hard-wired (32B total)
+//   BufferModel<T> — adapts any ByteBuffer type (heap, owns the value)
+//   SharedBufferModel<T> — adapts shared_ptr-wrapped ByteBuffer (zero-copy)
+
+class AnyBuffer
+{
+public:
+    virtual ~AnyBuffer() = default;
+    [[nodiscard]] virtual const char* data() const noexcept = 0;
+    [[nodiscard]] virtual size_t size() const noexcept = 0;
+};
+
+// Stores ≤31 bytes inline.  Repurposes 1 byte for the length so the
+// total data-member footprint stays at 32 bytes (saving 8 B vs size_t).
+class SmallBuffer : public AnyBuffer
+{
+    static constexpr size_t CAPACITY = 31;
+    std::array<char, CAPACITY> m_buffer{};
+    uint8_t m_size = 0;
+
+public:
+    SmallBuffer() = default;
+    SmallBuffer(const char* data, size_t size) : m_size(static_cast<uint8_t>(size))
+    {
+        std::memcpy(m_buffer.data(), data, size);
+    }
+    [[nodiscard]] const char* data() const noexcept override { return m_buffer.data(); }
+    [[nodiscard]] size_t size() const noexcept override { return m_size; }
+};
+
+// Stores exactly 32 bytes inline — no size field needed.
+class Fixed32Buffer : public AnyBuffer
+{
+    static constexpr size_t CAPACITY = 32;
+    std::array<char, CAPACITY> m_buffer{};
+
+public:
+    Fixed32Buffer() = default;
+    Fixed32Buffer(const char* data, size_t) { std::memcpy(m_buffer.data(), data, CAPACITY); }
+    [[nodiscard]] const char* data() const noexcept override { return m_buffer.data(); }
+    [[nodiscard]] size_t size() const noexcept override { return CAPACITY; }
+};
+
+// Adapts any ByteBuffer-conforming type T (std::string, std::vector<char>,
+// std::array<char,N>, etc.). Owns the value by move/copy.
+template <ByteBuffer T>
+class BufferModel : public AnyBuffer
+{
+    T m_value;
+
+public:
+    explicit BufferModel(T value) : m_value(std::move(value)) {}
+    [[nodiscard]] const char* data() const noexcept override
+    {
+        return reinterpret_cast<const char*>(m_value.data());
+    }
+    [[nodiscard]] size_t size() const noexcept override { return m_value.size(); }
+};
+
+// Adapts a shared_ptr-wrapped ByteBuffer type. Shares ownership of the
+// underlying buffer — no copy on clone().
+template <ByteBuffer T>
+class SharedBufferModel : public AnyBuffer
+{
+    std::shared_ptr<T> m_ptr;
+
+public:
+    explicit SharedBufferModel(std::shared_ptr<T> ptr) : m_ptr(std::move(ptr)) {}
+    [[nodiscard]] const char* data() const noexcept override
+    {
+        return reinterpret_cast<const char*>(m_ptr->data());
+    }
+    [[nodiscard]] size_t size() const noexcept override { return m_ptr->size(); }
+};
 
 class Entry
 {
@@ -40,22 +125,32 @@ public:
         MODIFIED = 3,  // dirty() can use status
     };
 
-    constexpr static int32_t SMALL_SIZE = 32;
-    constexpr static int32_t MEDIUM_SIZE = 64;
-    constexpr static int32_t LARGE_SIZE = INT32_MAX;
+    constexpr static int32_t SMALL_SIZE = 31;
+    static constexpr size_t INLINE_BUFFER_SIZE = 40;
 
-    using SBOBuffer = std::array<char, SMALL_SIZE>;
-
-    using ValueType = std::variant<SBOBuffer, std::string, std::vector<unsigned char>,
-        std::vector<char>, std::shared_ptr<std::string>,
-        std::shared_ptr<std::vector<unsigned char>>, std::shared_ptr<std::vector<char>>>;
+    using ValueType = std::unique_ptr<AnyBuffer>;  // kept for backward compat
+    using Holder = bcos::AnyHolder<AnyBuffer, INLINE_BUFFER_SIZE, true, true>;
 
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry&) = default;
+    Entry(const Entry& other) : m_status(other.m_status)
+    {
+        if (other.m_buffer)
+            m_buffer = other.m_buffer;
+    }
     Entry(Entry&&) noexcept = default;
-    bcos::storage::Entry& operator=(const Entry&) = default;
+    bcos::storage::Entry& operator=(const Entry& other)
+    {
+        if (this != &other)
+        {
+            m_buffer = {};
+            m_status = other.m_status;
+            if (other.m_buffer)
+                m_buffer = other.m_buffer;
+        }
+        return *this;
+    }
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
     ~Entry() noexcept = default;
 
@@ -67,7 +162,6 @@ public:
         boost::iostreams::stream<boost::iostreams::array_source> inputStream(
             view.data(), view.size());
         InputArchive archive(inputStream, flag);
-
         archive >> out;
     }
 
@@ -77,7 +171,6 @@ public:
     {
         Out out;
         getObject<Out, InputArchive, flag>(out);
-
         return out;
     }
 
@@ -89,16 +182,31 @@ public:
         boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
             value);
         OutputArchive archive(outputStream, flag);
-
         archive << input;
         outputStream.flush();
-
         setField(0, std::move(value));
     }
 
-    std::string_view get() const& { return outputValueView(m_value); }
+    // ── Accessors ──────────────────────────────────────────────────
+
+    std::string_view get() const&
+    {
+        if (!m_buffer) [[unlikely]]
+            return {};
+        return {m_buffer->data(), m_buffer->size()};
+    }
 
     std::string_view getField(size_t index) const&;
+
+    const char* data() const&
+    {
+        if (!m_buffer) [[unlikely]]
+            return "";
+        return m_buffer->data();
+    }
+    int32_t size() const { return m_buffer ? static_cast<int32_t>(m_buffer->size()) : 0; }
+
+    // ── Mutators ───────────────────────────────────────────────────
 
     template <typename T>
     void setField(size_t index, T&& input)
@@ -109,73 +217,56 @@ public:
                 BCOS_ERROR(-1, "Set field index: " + boost::lexical_cast<std::string>(index) +
                                    " failed, index out of range"));
         }
-
         set(std::forward<T>(input));
     }
 
-    void set(EntryBufferInput auto value)
+    void set(ByteBuffer auto value)
     {
-        auto view = inputValueView(value);
-        m_size = view.size();
-        if (m_size <= SMALL_SIZE)
+        using RawType = std::remove_cvref_t<decltype(value)>;
+        if constexpr (std::same_as<RawType, std::string_view>)
         {
-            if (m_value.index() != 0)
-            {
-                m_value = SBOBuffer();
-            }
-
-            std::copy_n(view.data(), view.size(), std::get<0>(m_value).data());
+            setImplCopy(value.data(), value.size());
         }
         else
         {
-            using ValueType = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::same_as<ValueType, std::string_view>)
-            {
-                set(std::string(view));
-            }
+            auto sz = value.size();
+            if (sz <= SMALL_SIZE)
+                m_buffer = Holder(bcos::InPlace<SmallBuffer>{},
+                    reinterpret_cast<const char*>(value.data()), sz);
+            else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
+                m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{},
+                    reinterpret_cast<const char*>(value.data()), sz);
             else
-            {
-                if (m_size <= MEDIUM_SIZE)
-                {
-                    m_value = std::move(value);
-                }
-                else
-                {
-                    m_value = std::make_shared<ValueType>(std::move(value));
-                }
-            }
+                m_buffer = Holder(bcos::InPlace<BufferModel<RawType>>{},
+                    std::forward<decltype(value)>(value));
         }
-
         m_status = MODIFIED;
     }
 
     template <typename T>
-        requires(
-            !EntryBufferInput<std::remove_cvref_t<T>> && std::convertible_to<T, std::string_view>)
+        requires(!ByteBuffer<std::remove_cvref_t<T>> && std::convertible_to<T, std::string_view>)
     void set(T&& value)
     {
         set(std::string_view(std::forward<T>(value)));
     }
 
-    template <EntryBufferInput T>
+    template <ByteBuffer T>
     void set(std::shared_ptr<T> value)
     {
-        m_size = value->size();
-        m_value = std::move(value);
+        m_buffer = Holder(bcos::InPlace<SharedBufferModel<T>>{}, std::move(value));
         m_status = MODIFIED;
     }
 
     template <typename T>
     void setPointer(std::shared_ptr<T>&& value)
     {
-        m_size = value->size();
-        m_value = value;
+        set(std::move(value));
     }
 
+    // ── Status ─────────────────────────────────────────────────────
+
     Status status() const { return m_status; }
-
     void setStatus(Status status);
-
     bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
 
     template <typename Input>
@@ -186,55 +277,42 @@ public:
             BOOST_THROW_EXCEPTION(
                 BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
         }
-
         setField(0, std::move(*values.begin()));
     }
 
-    auto&& exportFields()
+    auto exportFields() const
     {
-        m_size = 0;
-        return std::move(m_value);
+        if (!m_buffer)
+            return std::unique_ptr<AnyBuffer>{};
+        auto copy = m_buffer;
+        return std::move(copy).toUnique();
     }
-
-    const char* data() const&;
-    int32_t size() const { return m_size; }
 
     bool valid() const { return m_status == Status::NORMAL; }
 
-    // Convenience overload for callers without Features. Forwards to the 5-arg overload
-    // with std::nullopt so all bugfix-flag lookups are skipped (legacy path).
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
     {
         return hash(table, key, hashImpl, blockVersion, std::nullopt);
     }
 
-    // 5-arg overload. When features carries bugfix_statestorage_hash_v3_17, uses the
-    // length-prefixed, status-aware preimage that fixes FIB-99 boundary/status ambiguity.
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
         std::optional<bcos::ledger::Features> const& features) const;
 
 private:
-    [[nodiscard]] auto outputValueView(const ValueType& value) const& -> std::string_view;
-
-    template <typename T>
-    [[nodiscard]] auto inputValueView(const T& value) const -> std::string_view
+    void setImplCopy(const char* data, size_t sz)
     {
-        std::string_view view((const char*)value.data(), value.size());
-        return view;
+        if (sz <= SMALL_SIZE)
+            m_buffer = Holder(bcos::InPlace<SmallBuffer>{}, data, sz);
+        else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+            m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{}, data, sz);
+        else
+            m_buffer = Holder(bcos::InPlace<BufferModel<std::string>>{}, std::string(data, sz));
     }
 
-    template <typename T>
-    [[nodiscard]] auto inputValueView(const std::shared_ptr<T>& value) const -> std::string_view
-    {
-        std::string_view view((const char*)value->data(), value->size());
-        return view;
-    }
-
-    ValueType m_value;                // should serialization
-    int32_t m_size = 0;               // no need to serialization
-    Status m_status = Status::EMPTY;  // should serialization
+    Holder m_buffer;
+    Status m_status = Status::EMPTY;
 };
 
 }  // namespace bcos::storage

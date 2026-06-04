@@ -14,7 +14,7 @@ struct InPlace
 };
 
 
-template <class Type, std::size_t maxSize>
+template <class Type, std::size_t maxSize, bool AllowMove = true, bool AllowCopy = false>
 class AnyHolder
 {
 private:
@@ -26,81 +26,132 @@ private:
     // cause undefined behavior (EXC_I386_GPFLT). Use max_align_t as a conservative upper bound to
     // cover the vast majority of alignment requirements.
     alignas(std::max_align_t) std::array<std::byte, maxSize> m_data;
-    struct MoveOperators
+
+    // Single VTable — one pointer (8 B) replaces up to 4 separate pointers (32 B).
+    // Slots for AllowMove / AllowCopy are zero-filled when the feature is disabled.
+    struct VTable
     {
-        void (*destroy)(Type*) noexcept;
-        void (*moveConstruct)(void* /*dst*/, Type* /*src*/) noexcept;
-        void (*moveAssign)(Type* /*dst*/, Type* /*src*/) noexcept;
-        std::unique_ptr<Type> (*moveToUnique)(Type* /*src*/);
-        std::shared_ptr<Type> (*moveToShared)(Type* /*src*/);
+        void (*destroy)(Type*) noexcept = nullptr;
+
+        // move slots (valid only when AllowMove)
+        void (*moveConstruct)(void* /*dst*/, Type* /*src*/) noexcept = nullptr;
+        void (*moveAssign)(Type* /*dst*/, Type* /*src*/) noexcept = nullptr;
+        std::unique_ptr<Type> (*moveToUnique)(Type* /*src*/) = nullptr;
+        std::shared_ptr<Type> (*moveToShared)(Type* /*src*/) = nullptr;
+
+        // copy slots (valid only when AllowCopy)
+        void (*copyConstruct)(void* /*dst*/, const Type* /*src*/) = nullptr;
+        void (*copyAssign)(Type* /*dst*/, const Type* /*src*/) = nullptr;
     };
-    const MoveOperators* m_moveOperators;
+    const VTable* m_vtable = nullptr;
 
     template <class HoldType>
-    static const MoveOperators* getMoveOperatorsFor() noexcept
+    static const VTable* getVTableFor() noexcept
     {
-        static const MoveOperators moveOperators{// destroy
-            [](Type* ptrValue) noexcept { std::destroy_at(static_cast<HoldType*>(ptrValue)); },
-            // moveConstruct
-            [](void* dst, Type* src) noexcept {
-                new (dst) HoldType(std::move(*static_cast<HoldType*>(src)));
-            },
-            // moveAssign
-            [](Type* dst, Type* src) noexcept {
-                *static_cast<HoldType*>(dst) = std::move(*static_cast<HoldType*>(src));
-            },
-            // moveToUnique
-            [](Type* src) -> std::unique_ptr<Type> {
-                auto uniqueDerived =
-                    std::make_unique<HoldType>(std::move(*static_cast<HoldType*>(src)));
-                return std::unique_ptr<Type>(std::move(uniqueDerived));
-            },
-            // moveToShared
-            [](Type* src) -> std::shared_ptr<Type> {
-                std::shared_ptr<HoldType> sharedDerived =
-                    std::make_shared<HoldType>(std::move(*static_cast<HoldType*>(src)));
-                return std::static_pointer_cast<Type>(std::move(sharedDerived));
-            }};
-        return std::addressof(moveOperators);
+        // IIFE — fills only the slots enabled by AllowMove / AllowCopy,
+        // so types with deleted copy ctor don't cause hard errors.
+        static const VTable vtable = []() {
+            VTable vtable{};
+            vtable.destroy = [](Type* ptr) noexcept {
+                std::destroy_at(static_cast<HoldType*>(ptr));
+            };
+
+            if constexpr (AllowMove)
+            {
+                vtable.moveConstruct = [](void* dst, Type* src) noexcept {
+                    new (dst) HoldType(std::move(*static_cast<HoldType*>(src)));
+                };
+                vtable.moveAssign = [](Type* dst, Type* src) noexcept {
+                    *static_cast<HoldType*>(dst) = std::move(*static_cast<HoldType*>(src));
+                };
+                vtable.moveToUnique = [](Type* src) -> std::unique_ptr<Type> {
+                    return std::make_unique<HoldType>(std::move(*static_cast<HoldType*>(src)));
+                };
+                vtable.moveToShared = [](Type* src) -> std::shared_ptr<Type> {
+                    return std::make_shared<HoldType>(std::move(*static_cast<HoldType*>(src)));
+                };
+            }
+
+            if constexpr (AllowCopy)
+            {
+                vtable.copyConstruct = [](void* dst, const Type* src) {
+                    new (dst) HoldType(*static_cast<const HoldType*>(src));
+                };
+                vtable.copyAssign = [](Type* dst, const Type* src) {
+                    *static_cast<HoldType*>(dst) = *static_cast<const HoldType*>(src);
+                };
+            }
+
+            return vtable;
+        }();
+        return std::addressof(vtable);
     }
 
 public:
-    Type* get() & { return reinterpret_cast<Type*>(m_data.data()); }
-    const Type* get() const& { return reinterpret_cast<const Type*>(m_data.data()); }
+    // ── Empty state ────────────────────────────────────────────────
+    AnyHolder() = default;
+    bool operator!() const noexcept { return m_vtable == nullptr; }
+    explicit operator bool() const noexcept { return m_vtable != nullptr; }
+
+    Type* get() & { return std::launder(reinterpret_cast<Type*>(m_data.data())); }
+    const Type* get() const& { return std::launder(reinterpret_cast<const Type*>(m_data.data())); }
 
     template <class HoldType>
         requires std::movable<HoldType> && std::derived_from<HoldType, Type> &&
                  (sizeof(HoldType) <= maxSize) && (alignof(HoldType) <= alignof(std::max_align_t))
-    AnyHolder(InPlace<HoldType> /*unused*/, auto&&... args)
-      : m_moveOperators(getMoveOperatorsFor<HoldType>())
+    AnyHolder(InPlace<HoldType> /*unused*/, auto&&... args) : m_vtable(getVTableFor<HoldType>())
     {
         new (m_data.data()) HoldType{std::forward<decltype(args)>(args)...};
     }
-    ~AnyHolder() noexcept { m_moveOperators->destroy(get()); }
-    AnyHolder(const AnyHolder&) = delete;
-    AnyHolder(AnyHolder&& other) noexcept : m_moveOperators(other.m_moveOperators)
+    ~AnyHolder() noexcept
     {
-        m_moveOperators->moveConstruct(get(), other.get());
+        if (m_vtable)
+            m_vtable->destroy(get());
+    }
+
+    // ── Copy (only when AllowCopy) ─────────────────────────────────
+    AnyHolder(const AnyHolder&) = delete;
+    AnyHolder(const AnyHolder& other)
+        requires AllowCopy
+      : m_vtable(other.m_vtable)
+    {
+        if (m_vtable)
+            m_vtable->copyConstruct(get(), other.get());
     }
     AnyHolder& operator=(const AnyHolder&) = delete;
-    AnyHolder& operator=(AnyHolder&& other) noexcept
+    AnyHolder& operator=(const AnyHolder& other)
+        requires AllowCopy
     {
         if (this == &other)
-        {
             return *this;
-        }
-        if (m_moveOperators == other.m_moveOperators)
-        {
-            // Same concrete type, do move-assign
-            m_moveOperators->moveAssign(get(), other.get());
-        }
-        else
-        {
-            // Different type (or uninitialized), destroy and move-construct new one
-            m_moveOperators->destroy(get());
-            m_moveOperators = other.m_moveOperators;
-            m_moveOperators->moveConstruct(get(), other.get());
-        }
+        if (m_vtable)
+            m_vtable->destroy(get());
+        m_vtable = other.m_vtable;
+        if (m_vtable)
+            m_vtable->copyConstruct(get(), other.get());
+        return *this;
+    }
+
+    // ── Move (only when AllowMove) ─────────────────────────────────
+    AnyHolder(AnyHolder&&) noexcept = delete;
+    AnyHolder(AnyHolder&& other) noexcept
+        requires AllowMove
+      : m_vtable(other.m_vtable)
+    {
+        if (m_vtable)
+            m_vtable->moveConstruct(get(), other.get());
+    }
+    AnyHolder& operator=(AnyHolder&&) noexcept = delete;
+    AnyHolder& operator=(AnyHolder&& other) noexcept
+        requires AllowMove
+    {
+        if (this == &other)
+            return *this;
+        if (m_vtable)
+            m_vtable->destroy(get());
+        m_vtable = other.m_vtable;
+        if (m_vtable)
+            m_vtable->moveConstruct(get(), other.get());
         return *this;
     }
 
@@ -109,7 +160,15 @@ public:
     Type* operator->() & { return get(); }
     const Type* operator->() const& { return get(); }
 
-    std::unique_ptr<Type> toUnique() && { return m_moveOperators->moveToUnique(get()); }
-    std::shared_ptr<Type> toShared() && { return m_moveOperators->moveToShared(get()); }
+    std::unique_ptr<Type> toUnique() &&
+        requires AllowMove
+    {
+        return m_vtable->moveToUnique(get());
+    }
+    std::shared_ptr<Type> toShared() &&
+        requires AllowMove
+    {
+        return m_vtable->moveToShared(get());
+    }
 };
 }  // namespace bcos
