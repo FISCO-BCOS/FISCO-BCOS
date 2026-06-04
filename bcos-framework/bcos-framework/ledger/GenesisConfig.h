@@ -60,6 +60,10 @@ public:
     std::string m_chainID;
     std::string m_groupID;
 
+    // chain operating mode: "pbft" (consortium) or "l2" (OP-Stack L2)
+    // set on first genesis; afterwards locked by genesis_immutable_hash (PR-3)
+    std::string m_chainMode = "pbft";
+
     // web3 chain config
     std::string m_web3ChainID;
 

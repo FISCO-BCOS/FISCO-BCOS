@@ -1,0 +1,76 @@
+# Copyright (c) FISCO-BCOS, Apache-2.0
+# chain-config template for build-allocs.py (L2 / OP-Stack genesis).
+# Copy this file, fill in the values, then:
+#   make allocs CONFIG=chain-config.yaml
+# or:
+#   python3 build-allocs.py --config chain-config.yaml \
+#       --contracts ../../bcos-l2-contracts --out allocs.ini
+
+# L2 chain id. Patched into SystemConfig's immutable `chainId` (runtime bytecode),
+# NOT a storage slot — see build-allocs.py / bcos-l2-contracts/README.md.
+chain_id: 901
+
+# SystemConfig slot 0 packing: l2BlockGasLimit (uint64, low 8 bytes) +
+# compatibilityVersion (uint32, next 4 bytes).
+l2_block_gas_limit: 30000000
+compatibility_version: 50397696  # 0x03_0a_00_00 == version 3.10.0
+
+# SystemConfig slot 1: featureFlags (uint256). 0 is omitted from the alloc
+# (an unset storage slot already reads 0).
+feature_flags: 0
+
+# SystemConfig slot 2: owner (address). The governance owner of SystemConfig.
+system_config_owner: "0x0000000000000000000000000000000000000000"
+
+# Predeploys: SystemConfig + L2ValidatorSet (self-written, src/) and the 11
+# vendored OP fork entry-point contracts (vendor/op-fork/). Canonical OP-Stack
+# predeploy addresses are fixed by the protocol.
+predeploys:
+  # --- FISCO-BCOS self-written predeploys (chainId/storage seeded) ---
+  - name: SystemConfig
+    address: "0x42000000000000000000000000000000000000C0"
+    sol_file: SystemConfig.sol
+  - name: L2ValidatorSet
+    address: "0x42000000000000000000000000000000000000C1"
+    sol_file: L2ValidatorSet.sol
+
+  # --- vendored OP fork predeploys (bytecode as-is, empty storage in Phase A) ---
+  - name: L1Block
+    address: "0x4200000000000000000000000000000000000015"
+    sol_file: L1Block.sol
+  - name: L2ToL1MessagePasser
+    address: "0x4200000000000000000000000000000000000016"
+    sol_file: L2ToL1MessagePasser.sol
+  - name: L2CrossDomainMessenger
+    address: "0x4200000000000000000000000000000000000007"
+    sol_file: L2CrossDomainMessenger.sol
+  - name: L2StandardBridge
+    address: "0x4200000000000000000000000000000000000010"
+    sol_file: L2StandardBridge.sol
+  - name: GasPriceOracle
+    address: "0x420000000000000000000000000000000000000F"
+    sol_file: GasPriceOracle.sol
+  - name: ProxyAdmin
+    address: "0x4200000000000000000000000000000000000018"
+    sol_file: ProxyAdmin.sol
+  - name: SequencerFeeVault
+    address: "0x4200000000000000000000000000000000000011"
+    sol_file: SequencerFeeVault.sol
+    # zero immutables accepted for Phase A — RECIPIENT=address(0) means fee withdrawal is unusable until a re-genesis or a future patch rule; do NOT enable for other contracts without review.
+    allow_unpatched_immutables: true
+  - name: BaseFeeVault
+    address: "0x4200000000000000000000000000000000000019"
+    sol_file: BaseFeeVault.sol
+    # zero immutables accepted for Phase A — RECIPIENT=address(0) means fee withdrawal is unusable until a re-genesis or a future patch rule; do NOT enable for other contracts without review.
+    allow_unpatched_immutables: true
+  - name: L1FeeVault
+    address: "0x420000000000000000000000000000000000001A"
+    sol_file: L1FeeVault.sol
+    # zero immutables accepted for Phase A — RECIPIENT=address(0) means fee withdrawal is unusable until a re-genesis or a future patch rule; do NOT enable for other contracts without review.
+    allow_unpatched_immutables: true
+  - name: WETH
+    address: "0x4200000000000000000000000000000000000006"
+    sol_file: WETH.sol
+  - name: OptimismMintableERC20Factory
+    address: "0x4200000000000000000000000000000000000012"
+    sol_file: OptimismMintableERC20Factory.sol

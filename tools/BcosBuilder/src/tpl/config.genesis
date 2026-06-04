@@ -5,6 +5,8 @@
     group_id=group0
     ; the chain id, should never be changed
     chain_id=chain0
+    ; chain operating mode, NEVER change after first init: pbft | l2
+    chain_mode=pbft
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft),rPBFT(consensus_type=rpbft)
     consensus_type=pbft

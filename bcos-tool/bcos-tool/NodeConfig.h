@@ -322,6 +322,11 @@ private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
+    // A6.5: L2 chain mode + genesis alloc parsing
+    void loadChainMode(boost::property_tree::ptree const& _genesisConfig);
+    void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
+    void validateL2Invariants();
+
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);
