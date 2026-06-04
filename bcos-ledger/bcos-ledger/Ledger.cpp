@@ -2442,3 +2442,17 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
     }
     return std::make_shared<bcos::storage::StateStorage>(m_stateStorage, true);
 }
+
+task::Task<void> Ledger::loadL2Config(protocol::BlockNumber blockNumber, ledger::LedgerConfig& cfg)
+{
+    // No loader configured (non-L2 mode, or PBFT short-circuit before the L2
+    // workflow wires one): nothing to refresh.
+    if (!m_l2Loader)
+    {
+        co_return;
+    }
+    // Delegate to the injected loader. A revert / short return / OOG throws out of
+    // here so the caller aborts the current block — we never swallow it.
+    co_await m_l2Loader->loadIntoLedgerConfig(blockNumber, cfg);
+    co_return;
+}

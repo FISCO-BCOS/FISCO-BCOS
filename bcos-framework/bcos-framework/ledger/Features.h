@@ -14,6 +14,7 @@
 #include <range/v3/view/zip.hpp>
 #include <set>
 #include <string_view>
+#include <unordered_map>
 
 // Forward declarations only — the storage-I/O member templates below take these
 // types as concept arguments / parameter types, which need name visibility but
@@ -145,6 +146,7 @@ public:
     void set(Flag flag);
 
     void set(std::string_view flag) { set(string2Flag(flag)); }
+
 
     void setToShardingDefault(protocol::BlockVersion version);
 

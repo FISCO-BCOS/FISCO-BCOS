@@ -25,6 +25,7 @@ find_package(TBB REQUIRED)
 
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
+    bcos-framework/ledger/L2ConfigLoader.cpp
     bcos-framework/multigroup/ChainNodeInfo.cpp
     bcos-framework/multigroup/GroupInfo.cpp
     bcos-framework/protocol/Protocol.cpp
