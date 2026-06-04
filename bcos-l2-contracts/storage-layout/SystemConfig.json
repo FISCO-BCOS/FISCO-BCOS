@@ -1,0 +1,78 @@
+{
+  "storage": [
+    {
+      "astId": 11,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "l2BlockGasLimit",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_uint64"
+    },
+    {
+      "astId": 13,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "compatibilityVersion",
+      "offset": 8,
+      "slot": "0",
+      "type": "t_uint32"
+    },
+    {
+      "astId": 15,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "featureFlags",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_uint256"
+    },
+    {
+      "astId": 17,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "owner",
+      "offset": 0,
+      "slot": "2",
+      "type": "t_address"
+    },
+    {
+      "astId": 21,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "_hardforkActivations",
+      "offset": 0,
+      "slot": "3",
+      "type": "t_mapping(t_uint8,t_uint64)"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    "t_mapping(t_uint8,t_uint64)": {
+      "encoding": "mapping",
+      "key": "t_uint8",
+      "label": "mapping(uint8 => uint64)",
+      "numberOfBytes": "32",
+      "value": "t_uint64"
+    },
+    "t_uint256": {
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    "t_uint32": {
+      "encoding": "inplace",
+      "label": "uint32",
+      "numberOfBytes": "4"
+    },
+    "t_uint64": {
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    },
+    "t_uint8": {
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
+    }
+  }
+}

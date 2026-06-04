@@ -79,6 +79,9 @@ macro(configure_project)
     default_option(WITH_VTUNE_ITT OFF)
     default_option(ONLY_CPP_SDK OFF)
     default_option(TOOLS OFF)
+    # Build the OP-Stack L2 Solidity contracts (bcos-l2-contracts/) via forge.
+    # Default OFF so the C++ main build does not depend on the forge toolchain.
+    default_option(WITH_L2_CONTRACTS OFF)
 
     if((NOT FULLNODE) AND (NOT WITH_LIGHTNODE) AND WITH_CPPSDK)
         set(ONLY_CPP_SDK ON)
@@ -172,6 +175,7 @@ macro(print_config NAME)
     message("-- WITH_WASM          Enable wasm                  ${WITH_WASM}")
     message("-- WITH_VTUNE_ITT     Enable vtune itt api support ${WITH_VTUNE_ITT}")
     message("-- ONLY_CPP_SDK       Only build cpp sdk           ${ONLY_CPP_SDK}")
+    message("-- WITH_L2_CONTRACTS  Build L2 solidity contracts  ${WITH_L2_CONTRACTS}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

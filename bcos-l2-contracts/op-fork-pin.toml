@@ -1,0 +1,43 @@
+# Pinned OP-Stack contracts release that FISCO-BCOS L2 mode targets.
+#
+# The upstream source tree is NOT vendored into this repo. CI
+# (`.github/workflows/l2-contracts.yml`) clones it into /tmp before running
+# `forge build` against vendored OP sources, and the storage-layout drift gate
+# diffs the resulting layouts against this repo's `storage-layout/` baseline.
+#
+# To bump: edit `tag` + `commit` + `date_pinned`, refresh the four submodule
+# SHAs from upstream's `git submodule status` at the new tag, then regenerate
+# the storage-layout baseline (`forge inspect <C> storage-layout --json`)
+# following `docs/runbook-op-fork-upgrade.md`.
+
+upstream      = "ethereum-optimism/optimism"
+tag           = "op-contracts/v1.6.0"
+commit        = "33f06d2d5e4034125df02264a5ffe84571bd0359"
+date_pinned   = "2026-06-04"
+contracts_path = "packages/contracts-bedrock"
+
+# Transitive closure of the 11 OP-Stack L2 predeploys we materialize at
+# genesis. Listed here as documentation; CI builds the entire upstream
+# `contracts_path/src` tree from this commit.
+predeploys = [
+    "src/L2/L1Block.sol",
+    "src/L2/L2ToL1MessagePasser.sol",
+    "src/L2/L2CrossDomainMessenger.sol",
+    "src/L2/L2StandardBridge.sol",
+    "src/L2/GasPriceOracle.sol",
+    "src/universal/ProxyAdmin.sol",
+    "src/L2/SequencerFeeVault.sol",
+    "src/L2/BaseFeeVault.sol",
+    "src/L2/L1FeeVault.sol",
+    "src/L2/WETH.sol",
+    "src/universal/OptimismMintableERC20Factory.sol",
+]
+
+# OP fork's external Solidity submodules pinned at the upstream tag. CI must
+# init these recursively after cloning OP fork. Verify these match upstream's
+# `git submodule status` at the tag before bumping `commit`.
+[deps]
+"openzeppelin-contracts"             = "ecd2ca2cd7cac116f7a37d0e474bbb3d7d5e1c4d"
+"openzeppelin-contracts-upgradeable" = "0a2cb9a445c365870ed7a8ab461b12acf3e27d63"
+solady                               = "502cc1ea718e6fa73b380635ee0868b0740595f0"
+solmate                              = "8f9b23f8838670afda0fd8983f2c41e8037ae6bc"
