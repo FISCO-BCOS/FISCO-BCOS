@@ -8,6 +8,12 @@
 # @ author  : kyonRay
 # @ file    : version_sync.sh
 # @ date    : 2026-06
+#
+# NOTE: this is a STRICT-CONTRACT tool wired into CI (tools/.ci/check-commit.sh).
+#       It fails closed (exit 2) when any managed file no longer matches the
+#       patterns below. If you reformat the README version line, the BcosBuilder
+#       config templates, or the BlockVersion enum declaration in Protocol.h,
+#       update the corresponding pattern here in the same PR.
 
 set -u
 
@@ -184,6 +190,11 @@ process_readme() {
     fi
     local found
     found=$(echo "${line}" | grep -o 'v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*' | sort -u)
+    if [ -z "${found}" ]; then
+        LOG_ERROR "${rel}:${lineno}: cannot parse current version value (unexpected format), refusing to rewrite"
+        PATTERN_BROKEN=1
+        return
+    fi
     if [ "$(echo "${found}" | wc -l | tr -d ' ')" -ne 1 ]; then
         LOG_ERROR "${rel}:${lineno}: mixed versions on the 最新版本 line: $(echo "${found}" | tr '\n' ' ')"
         PATTERN_BROKEN=1
@@ -200,14 +211,20 @@ PROTOCOL_REL="bcos-framework/bcos-framework/protocol/Protocol.h"
 
 # insert the new entry right after the opening brace of `enum class BlockVersion`
 # (entries are ordered newest-first, see Protocol.h:116)
-insert_enum_entry() {
-    local tmp
-    tmp=$(mktemp)
+
+# render the enum body with the new entry inserted, to stdout
+render_enum_insertion() {
     awk -v entry="    ${ENUM_NAME} = ${VERSION_HEX},  // ${VERSION}" '
         { print }
         prev ~ /^enum class BlockVersion : uint32_t/ && $0 ~ /^\{[[:space:]]*$/ { print entry }
         { prev = $0 }
-    ' "${PROTOCOL_H}" >"${tmp}"
+    ' "${PROTOCOL_H}"
+}
+
+insert_enum_entry() {
+    local tmp
+    tmp=$(mktemp)
+    render_enum_insertion >"${tmp}"
     if ! grep -q "^[[:space:]]*${ENUM_NAME} = " "${tmp}"; then
         rm -f "${tmp}"
         LOG_ERROR "${PROTOCOL_REL}: insertion anchor not found ('{' line after 'enum class BlockVersion'), file left untouched"
@@ -236,6 +253,11 @@ process_protocol_header() {
             ;;
         dry-run)
             LOG_INFO "would insert BlockVersion entry: ${ENUM_NAME} = ${VERSION_HEX},  // ${VERSION}"
+            local tmp
+            tmp=$(mktemp)
+            render_enum_insertion >"${tmp}"
+            diff -u "${PROTOCOL_H}" "${tmp}" || true
+            rm -f "${tmp}"
             CHANGED=1
             ;;
         sync)
@@ -284,6 +306,7 @@ process_protocol_header() {
             ;;
         dry-run)
             LOG_INFO "would update MAX_VERSION: ${max_name} -> ${ENUM_NAME}"
+            show_diff "${PROTOCOL_H}" "s/^\([[:space:]]*\)MAX_VERSION = ${max_name},/\1MAX_VERSION = ${ENUM_NAME},/"
             CHANGED=1
             ;;
         sync)
