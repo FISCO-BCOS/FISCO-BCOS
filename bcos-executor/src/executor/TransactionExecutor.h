@@ -179,6 +179,11 @@ public:
     // only for test, do not use in formal environment
     void setKeyPageIgnoreTable(auto ignoreTable) { m_keyPageIgnoreTables = std::move(ignoreTable); }
 
+    // only for test: exposes the real precompiled map built by initEvmEnvironment/
+    // initWasmEnvironment so the disabledInL2() invariant can be checked against the
+    // production registration sites (a dropped predicate is otherwise invisible).
+    const executor::PrecompiledMap* precompiledMapForTest() const { return m_precompiled.get(); }
+
 protected:
     void executeTransactionsInternal(std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs, bool useCoroutine,
