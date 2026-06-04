@@ -19,7 +19,6 @@
 #include <cstring>
 #include <initializer_list>
 #include <memory>
-#include <new>
 #include <optional>
 #include <type_traits>
 namespace bcos::storage
@@ -231,14 +230,14 @@ public:
         {
             auto sz = value.size();
             if (sz <= SMALL_SIZE)
-                m_buffer = Holder(bcos::InPlace<SmallBuffer>{},
-                    reinterpret_cast<const char*>(value.data()), sz);
+                m_buffer = Holder(
+                    bcos::InPlace<SmallBuffer>{}, reinterpret_cast<const char*>(value.data()), sz);
             else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
                 m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{},
                     reinterpret_cast<const char*>(value.data()), sz);
             else
-                m_buffer = Holder(bcos::InPlace<BufferModel<RawType>>{},
-                    std::forward<decltype(value)>(value));
+                m_buffer = Holder(
+                    bcos::InPlace<BufferModel<RawType>>{}, std::forward<decltype(value)>(value));
         }
         m_status = MODIFIED;
     }
