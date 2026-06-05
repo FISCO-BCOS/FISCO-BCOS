@@ -141,17 +141,9 @@ public:
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry& other) : m_buffer(other.m_buffer), m_status(other.m_status) {}
+    Entry(const Entry& other);
     Entry(Entry&&) noexcept = default;
-    bcos::storage::Entry& operator=(const Entry& other)
-    {
-        if (this != &other)
-        {
-            m_status = other.m_status;
-            m_buffer = other.m_buffer;
-        }
-        return *this;
-    }
+    bcos::storage::Entry& operator=(const Entry& other);
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
     ~Entry() noexcept = default;
 
@@ -190,25 +182,12 @@ public:
 
     // ── Accessors ──────────────────────────────────────────────────
 
-    std::string_view get() const&
-    {
-        if (!m_buffer.has_value()) [[unlikely]]
-            return {};
-        return {m_buffer->data(), m_buffer->size()};
-    }
+    std::string_view get() const&;
 
     std::string_view getField(size_t index) const&;
 
-    const char* data() const&
-    {
-        if (!m_buffer.has_value()) [[unlikely]]
-            return "";
-        return m_buffer->data();
-    }
-    int32_t size() const
-    {
-        return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
-    }
+    const char* data() const&;
+    int32_t size() const;
 
     // ── Mutators ───────────────────────────────────────────────────
 

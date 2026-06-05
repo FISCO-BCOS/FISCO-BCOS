@@ -6,6 +6,37 @@
 
 namespace bcos::storage
 {
+Entry::Entry(const Entry& other) : m_buffer(other.m_buffer), m_status(other.m_status) {}
+
+bcos::storage::Entry& Entry::operator=(const Entry& other)
+{
+    if (this != &other)
+    {
+        m_status = other.m_status;
+        m_buffer = other.m_buffer;
+    }
+    return *this;
+}
+
+std::string_view Entry::get() const&
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return {};
+    return {m_buffer->data(), m_buffer->size()};
+}
+
+const char* Entry::data() const&
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return "";
+    return m_buffer->data();
+}
+
+int32_t Entry::size() const
+{
+    return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
+}
+
 std::string_view Entry::getField(size_t index) const&
 {
     if (index > 0)
