@@ -19,7 +19,6 @@
  * @date 2021-10-11
  */
 #pragma once
-#include "bcos-tars-protocol/Common.h"
 #include "bcos-tool/NodeConfig.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
@@ -34,7 +33,6 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
 #include <servant/Application.h>
-#include <optional>
 #include <utility>
 
 namespace bcos::rpc
@@ -104,6 +102,11 @@ public:
     NodeService::Ptr buildNodeService(std::string const& _chainID, std::string const& _groupID,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig);
 
+    void setEngineService(std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
+    {
+        m_engineService = std::move(_engineService);
+    }
+
     template <typename T, typename S, typename... Args>
     std::pair<std::shared_ptr<T>, S> createServicePrx(bcos::protocol::ServiceType _type,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig,
@@ -120,5 +123,8 @@ public:
 
         return std::make_pair(client, prx);
     }
+
+private:
+    std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
 };
 }  // namespace bcos::rpc

@@ -31,13 +31,14 @@ add_library(init
     TxPoolInitializer.cpp
     MemPoolInitializer.cpp
     LedgerInitializer.cpp
-    BaselineSchedulerInitializer.cpp GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
+    GlobalStateStorageInitializer.cpp MultiVersionScheduler.cpp
 )
 target_link_libraries(init PUBLIC
     protocol_init
     tool front
     txpool
     mempool
+    engine
     ledger
     transaction-scheduler transaction-executor
     scheduler storage executor rpc

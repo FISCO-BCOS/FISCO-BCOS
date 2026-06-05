@@ -25,6 +25,7 @@
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
+#include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
 #ifdef TOOLS
 #include "tools/archive-tool/ArchiveService.h"
@@ -53,10 +54,15 @@ namespace scheduler
 {
 class SchedulerInterface;
 }
+namespace engine
+{
+class AnyEngineService;
+}
 namespace initializer
 {
 class GlobalStateStorageInitializer;
 class MemPoolInitializer;
+class EngineServiceInitializer;
 
 class Initializer
 {
@@ -74,6 +80,11 @@ public:
     PBFTInitializer::Ptr pbftInitializer() { return m_pbftInitializer; }
     TxPoolInitializer::Ptr txPoolInitializer() { return m_txpoolInitializer; }
     std::shared_ptr<MemPoolInitializer> memPoolInitializer() { return m_memPoolInitializer; }
+    std::shared_ptr<EngineServiceInitializer> engineServiceInitializer()
+    {
+        return m_engineServiceInitializer;
+    }
+    std::shared_ptr<bcos::engine::AnyEngineService> engineService();
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
     std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
@@ -136,6 +147,8 @@ private:
     std::shared_ptr<bcos::archive::ArchiveService> m_archiveService = nullptr;
 #endif
     std::shared_ptr<GlobalStateStorageInitializer> m_globalStateStorageInitializer;
+    std::shared_ptr<EngineServiceInitializer> m_engineServiceInitializer;
+    std::shared_ptr<executor_v1::PrecompiledManager> m_precompiledManager;
     bcos::storage::TransactionalStorageInterface::Ptr m_storage = nullptr;
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
