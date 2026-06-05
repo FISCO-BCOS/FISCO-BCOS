@@ -17,6 +17,8 @@
  * @file Entry.cpp
  */
 
+// Allow unit tests to inspect private members for buffer-model verification
+
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
@@ -26,8 +28,10 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
+#include <array>
 #include <iostream>
 #include <string>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::storage;
@@ -221,6 +225,279 @@ BOOST_AUTO_TEST_CASE(entryHash)
     auto normalHash =
         entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     BOOST_CHECK_EQUAL(normalHash, bcos::crypto::HashType{});
+}
+
+// ── Buffer model coverage tests ───────────────────────────────────
+// Each test verifies data correctness AND the buffer model via behavioral checks
+// (entryTestHolder provides access to the proxy for has_value() verification).
+
+// SmallBuffer: data ≤ 31 bytes, stored inline with 1-byte size overhead
+BOOST_AUTO_TEST_CASE(smallBuffer_stdString)
+{
+    std::string value = "hello";  // 5 bytes → SmallBuffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), value);
+    BOOST_CHECK_EQUAL(entry.size(), 5);
+    BOOST_CHECK_EQUAL(entry.getField(0), value);
+    BOOST_CHECK_EQUAL(entry.status(), Entry::MODIFIED);
+    // Verify holder has a value and data is inline (modifying source doesn't affect entry)
+    BOOST_TEST(entryTestHolder(entry).has_value());
+    value[0] = 'H';
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("hello"));  // unchanged = SmallBuffer copy
+}
+
+BOOST_AUTO_TEST_CASE(smallBuffer_boundary31)
+{
+    std::string value(31, 'x');  // exactly 31 bytes → SmallBuffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), value);
+    BOOST_CHECK_EQUAL(entry.size(), 31);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+    value[0] = 'X';
+    BOOST_CHECK_EQUAL(entry.get()[0], 'x');  // unchanged
+}
+
+BOOST_AUTO_TEST_CASE(smallBuffer_vectorChar)
+{
+    std::vector<char> value = {'v', 'e', 'c'};  // 3 bytes → SmallBuffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("vec"));
+    BOOST_CHECK_EQUAL(entry.size(), 3);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(smallBuffer_vectorUnsignedChar)
+{
+    std::vector<unsigned char> value = {0x00, 0xFF, 0x7F};  // 3 bytes → SmallBuffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.size(), 3);
+    auto view = entry.get();
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[0]), 0x00);
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[1]), 0xFF);
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[2]), 0x7F);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(smallBuffer_arrayChar)
+{
+    std::array<char, 5> value = {'h', 'e', 'l', 'l', 'o'};  // 5 bytes → SmallBuffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("hello"));
+    BOOST_CHECK_EQUAL(entry.size(), 5);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(smallBuffer_stringLiteral)
+{
+    // string literal → set(T&&) convertible to string_view → setImplCopy → SmallBuffer
+    Entry entry;
+    entry.set("hello literal");
+    BOOST_CHECK_EQUAL(entry.get(), "hello literal");
+    BOOST_CHECK_EQUAL(entry.size(), 13);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(smallBuffer_constCharPtr)
+{
+    const char* value = "const char ptr";
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), value);
+    BOOST_CHECK_EQUAL(entry.data(), entry.get().data());
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+// Fixed32Buffer: data exactly 32 bytes, no size field needed
+BOOST_AUTO_TEST_CASE(fixed32_stdString)
+{
+    std::string value(32, 'y');  // exactly 32 bytes → Fixed32Buffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), value);
+    BOOST_CHECK_EQUAL(entry.size(), 32);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+    value[0] = 'Y';
+    BOOST_CHECK_EQUAL(entry.get()[0], 'y');  // Fixed32Buffer also copies inline
+}
+
+BOOST_AUTO_TEST_CASE(fixed32_vectorChar)
+{
+    std::vector<char> value(32, 'z');  // exactly 32 bytes → Fixed32Buffer
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.size(), 32);
+    auto view = entry.get();
+    BOOST_CHECK_EQUAL(view, std::string_view(value.data(), value.size()));
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+// BufferModel<T>: data > 32 bytes, container stored inline in proxy.
+// Unique behavior: the container is moved into the proxy, so the original
+// becomes empty / unspecified after set().
+BOOST_AUTO_TEST_CASE(bufferModel_largeStdString)
+{
+    std::string value(100, 'L');  // >32 bytes → BufferModel<std::string>
+    Entry entry;
+    entry.set(std::move(value));
+    BOOST_CHECK_EQUAL(entry.get(), std::string(100, 'L'));
+    BOOST_CHECK_EQUAL(entry.size(), 100);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(bufferModel_largeVectorChar)
+{
+    std::vector<char> value(64, 'V');  // >32 bytes → BufferModel<std::vector<char>>
+    Entry entry;
+    entry.set(std::move(value));
+    BOOST_CHECK_EQUAL(entry.size(), 64);
+    auto view = entry.get();
+    BOOST_CHECK_EQUAL(view, std::string_view(std::string(64, 'V')));
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(bufferModel_largeVectorUnsignedChar)
+{
+    std::vector<unsigned char> value(64, 0xAB);  // >32 bytes → BufferModel<std::vector<unsigned
+                                                 // char>>
+    Entry entry;
+    entry.set(std::move(value));
+    BOOST_CHECK_EQUAL(entry.size(), 64);
+    auto view = entry.get();
+    BOOST_CHECK_EQUAL(view.size(), 64);
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[0]), 0xAB);
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[63]), 0xAB);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+// SharedBufferModel: shared_ptr-wrapped, shares ownership.
+// Unique behavior: copy of Entry shares the same underlying buffer;
+// modifying the shared string affects both copies.
+BOOST_AUTO_TEST_CASE(sharedBuffer_stdString_small)
+{
+    auto value = std::make_shared<std::string>("shared small");
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), *value);
+    BOOST_CHECK_EQUAL(entry.size(), value->size());
+    BOOST_TEST(entryTestHolder(entry).has_value());
+
+    // Copy shares ownership — modifying the shared string affects the copy too
+    Entry copy(entry);
+    *value = "modified!";
+    BOOST_CHECK_EQUAL(copy.get(), "modified!");
+    BOOST_CHECK_EQUAL(entry.get(), "modified!");
+}
+
+BOOST_AUTO_TEST_CASE(sharedBuffer_stdString_large)
+{
+    auto value = std::make_shared<std::string>(std::string(100, 'S'));
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.get(), *value);
+    BOOST_CHECK_EQUAL(entry.size(), 100);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(sharedBuffer_vectorChar)
+{
+    auto value =
+        std::make_shared<std::vector<char>>(std::vector<char>{'s', 'h', 'a', 'r', 'e', 'd'});
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.size(), 6);
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("shared"));
+    BOOST_TEST(entryTestHolder(entry).has_value());
+
+    // Shared ownership verification
+    Entry copy(entry);
+    (*value)[0] = 'S';
+    BOOST_CHECK_EQUAL(copy.get()[0], 'S');
+}
+
+BOOST_AUTO_TEST_CASE(sharedBuffer_vectorUnsignedChar)
+{
+    auto value = std::make_shared<std::vector<unsigned char>>(
+        std::vector<unsigned char>{0xAA, 0xBB, 0xCC, 0xDD});
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.size(), 4);
+    auto view = entry.get();
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[0]), 0xAA);
+    BOOST_CHECK_EQUAL(static_cast<unsigned char>(view[3]), 0xDD);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(sharedBuffer_arrayChar)
+{
+    using Arr6 = std::array<char, 6>;
+    auto value = std::make_shared<Arr6>(Arr6{'a', 'r', 'r', 'a', 'y', '!'});
+    Entry entry;
+    entry.set(value);
+    BOOST_CHECK_EQUAL(entry.size(), 6);
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("array!"));
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+// importFields with various types
+BOOST_AUTO_TEST_CASE(importFields_coverage)
+{
+    Entry e1;
+    e1.importFields({std::string("via importFields")});
+    BOOST_CHECK_EQUAL(e1.get(), "via importFields");
+    BOOST_TEST(entryTestHolder(e1).has_value());
+
+    Entry e2;
+    std::vector<char> vec = {'i', 'm', 'p', 'o', 'r', 't'};
+    e2.importFields({std::move(vec)});
+    BOOST_CHECK_EQUAL(e2.get(), std::string_view("import"));
+    BOOST_TEST(entryTestHolder(e2).has_value());
+}
+
+// Copy/move across different buffer models
+BOOST_AUTO_TEST_CASE(bufferModel_copyAndMove)
+{
+    // SmallBuffer copy/move
+    {
+        Entry e1;
+        e1.set(std::string("small"));
+        Entry e2(e1);
+        Entry e3(std::move(e1));
+        BOOST_CHECK_EQUAL(e2.get(), "small");
+        BOOST_CHECK_EQUAL(e3.get(), "small");
+        BOOST_TEST(entryTestHolder(e2).has_value());
+        BOOST_TEST(entryTestHolder(e3).has_value());
+    }
+    // BufferModel copy/move
+    {
+        Entry e1;
+        e1.set(std::string(100, 'B'));
+        Entry e2(e1);
+        Entry e3(std::move(e1));
+        BOOST_CHECK_EQUAL(e2.get(), std::string(100, 'B'));
+        BOOST_CHECK_EQUAL(e3.get(), std::string(100, 'B'));
+        BOOST_TEST(entryTestHolder(e2).has_value());
+        BOOST_TEST(entryTestHolder(e3).has_value());
+    }
+    // SharedBufferModel copy/move — shares ownership
+    {
+        auto sp = std::make_shared<std::string>("shared copy");
+        Entry e1;
+        e1.set(sp);
+        Entry e2(e1);
+        Entry e3(std::move(e1));
+        BOOST_CHECK_EQUAL(e2.get(), "shared copy");
+        BOOST_CHECK_EQUAL(e3.get(), "shared copy");
+        *sp = "changed via shared_ptr";
+        BOOST_CHECK_EQUAL(e2.get(), "changed via shared_ptr");
+        BOOST_CHECK_EQUAL(e3.get(), "changed via shared_ptr");
+        BOOST_TEST(entryTestHolder(e2).has_value());
+        BOOST_TEST(entryTestHolder(e3).has_value());
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

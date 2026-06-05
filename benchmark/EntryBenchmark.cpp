@@ -1,0 +1,606 @@
+/**
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @brief Benchmark: Proxy-based Entry vs Legacy AnyHolder-based Entry
+ * @file EntryBenchmark.cpp
+ */
+
+#include "bcos-framework/storage/Entry.h"
+#include <bcos-utilities/AnyHolder.h>
+#include <benchmark/benchmark.h>
+#include <array>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <vector>
+
+// ═══════════════════════════════════════════════════════════════════════
+// LegacyEntry — replicates the pre-proxy AnyHolder-based Entry (commit c6ed3e5c0)
+// sharing the same SmallBuffer / Fixed32Buffer / BufferModel<T> /
+// SharedBufferModel<T> buffer models but dispatching through AnyHolder's
+// vtable extension instead of proxy.
+// ═══════════════════════════════════════════════════════════════════════
+
+namespace bcos::benchmark_legacy
+{
+
+constexpr static int32_t SMALL_SIZE = 31;
+constexpr static size_t INLINE_BUFFER_SIZE = 40;
+
+// VTable extension that embeds data() / size() function pointers into
+// AnyHolder's vtable so AnyBuffer does not need its own virtual methods.
+struct AnyBufferVTableExt
+{
+    const char* (*data)(const void* obj) noexcept = nullptr;
+    size_t (*size)(const void* obj) noexcept = nullptr;
+
+    template <typename HoldType>
+    static void fillSlots(AnyBufferVTableExt& self)
+    {
+        self.data = [](const void* obj) noexcept -> const char* {
+            return static_cast<const HoldType*>(obj)->data();
+        };
+        self.size = [](const void* obj) noexcept -> size_t {
+            return static_cast<const HoldType*>(obj)->size();
+        };
+    }
+};
+
+class AnyBuffer
+{
+public:
+    ~AnyBuffer() = default;
+};
+
+class SmallBuffer : public AnyBuffer
+{
+    static constexpr size_t CAPACITY = 31;
+    std::array<char, CAPACITY> m_buffer{};
+    uint8_t m_size = 0;
+
+public:
+    SmallBuffer() = default;
+    SmallBuffer(const char* data, size_t size) : m_size(static_cast<uint8_t>(size))
+    {
+        std::memcpy(m_buffer.data(), data, size);
+    }
+    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
+    [[nodiscard]] size_t size() const noexcept { return m_size; }
+};
+
+class Fixed32Buffer : public AnyBuffer
+{
+    static constexpr size_t CAPACITY = 32;
+    std::array<char, CAPACITY> m_buffer{};
+
+public:
+    Fixed32Buffer() = default;
+    Fixed32Buffer(const char* data, size_t) { std::memcpy(m_buffer.data(), data, CAPACITY); }
+    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
+    [[nodiscard]] size_t size() const noexcept { return CAPACITY; }
+};
+
+template <class T>
+concept ByteBuffer = requires(const T& t) {
+    { t.data() } -> std::convertible_to<const void*>;
+    { t.size() } -> std::convertible_to<std::size_t>;
+    requires sizeof(typename std::remove_cvref_t<T>::value_type) == 1;
+};
+
+template <ByteBuffer T>
+class BufferModel : public AnyBuffer
+{
+    T m_value;
+
+public:
+    explicit BufferModel(T value) : m_value(std::move(value)) {}
+    [[nodiscard]] const char* data() const noexcept
+    {
+        return reinterpret_cast<const char*>(m_value.data());
+    }
+    [[nodiscard]] size_t size() const noexcept { return m_value.size(); }
+};
+
+template <ByteBuffer T>
+class SharedBufferModel : public AnyBuffer
+{
+    std::shared_ptr<T> m_ptr;
+
+public:
+    explicit SharedBufferModel(std::shared_ptr<T> ptr) : m_ptr(std::move(ptr)) {}
+    [[nodiscard]] const char* data() const noexcept
+    {
+        return reinterpret_cast<const char*>(m_ptr->data());
+    }
+    [[nodiscard]] size_t size() const noexcept { return m_ptr->size(); }
+};
+
+class LegacyEntry
+{
+public:
+    using Holder =
+        bcos::AnyHolder<AnyBuffer, INLINE_BUFFER_SIZE, true, true, AnyBufferVTableExt>;
+
+    LegacyEntry() = default;
+
+    LegacyEntry(const LegacyEntry& other)
+    {
+        if (other.m_buffer)
+            m_buffer = other.m_buffer;
+    }
+    LegacyEntry(LegacyEntry&&) noexcept = default;
+    LegacyEntry& operator=(const LegacyEntry& other)
+    {
+        if (this != &other)
+        {
+            m_buffer = {};
+            if (other.m_buffer)
+                m_buffer = other.m_buffer;
+        }
+        return *this;
+    }
+    LegacyEntry& operator=(LegacyEntry&&) noexcept = default;
+    ~LegacyEntry() noexcept = default;
+
+    std::string_view get() const&
+    {
+        if (!m_buffer) [[unlikely]]
+            return {};
+        return {m_buffer.vtableExt()->data(m_buffer.get()),
+            m_buffer.vtableExt()->size(m_buffer.get())};
+    }
+
+    int32_t size() const
+    {
+        return m_buffer ? static_cast<int32_t>(m_buffer.vtableExt()->size(m_buffer.get())) : 0;
+    }
+
+    void set(std::string_view value)
+    {
+        setImplCopy(value.data(), value.size());
+    }
+
+    template <ByteBuffer T>
+    void setObject(T&& value)
+    {
+        auto sz = value.size();
+        if (sz <= SMALL_SIZE)
+            m_buffer = Holder(bcos::InPlace<SmallBuffer>{},
+                reinterpret_cast<const char*>(value.data()), sz);
+        else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
+            m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{},
+                reinterpret_cast<const char*>(value.data()), sz);
+        else
+            m_buffer = Holder(bcos::InPlace<BufferModel<std::remove_cvref_t<T>>>{},
+                std::forward<T>(value));
+    }
+
+    template <ByteBuffer T>
+    void setShared(std::shared_ptr<T> value)
+    {
+        m_buffer =
+            Holder(bcos::InPlace<SharedBufferModel<T>>{}, std::move(value));
+    }
+
+private:
+    void setImplCopy(const char* data, size_t sz)
+    {
+        if (sz <= SMALL_SIZE)
+            m_buffer = Holder(bcos::InPlace<SmallBuffer>{}, data, sz);
+        else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+            m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{}, data, sz);
+        else
+            m_buffer = Holder(
+                bcos::InPlace<BufferModel<std::string>>{}, std::string(data, sz));
+    }
+
+    Holder m_buffer;
+};
+
+}  // namespace bcos::benchmark_legacy
+
+// ═══════════════════════════════════════════════════════════════════════
+// Benchmark helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+using namespace bcos;
+using namespace bcos::storage;
+
+// Pre-built test data at various sizes to hit all buffer models
+static const std::string kSmallStr(10, 'x');       // → SmallBuffer
+static const std::string kBoundaryStr(31, 'y');     // → SmallBuffer (max)
+static const std::string kFixed32Str(32, 'z');      // → Fixed32Buffer
+static const std::string kLargeStr(200, 'L');       // → BufferModel<std::string>
+static const std::string kVeryLargeStr(2048, 'B');  // → BufferModel<std::string> (big)
+
+static const std::vector<char> kSmallVec(10, 'v');  // → SmallBuffer
+
+// ═══════════════════════════════════════════════════════════════════════
+// Set benchmarks: create Entry with various data sizes
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_set_small(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kSmallStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_small);
+
+static void LegacyEntry_set_small(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kSmallStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_small);
+
+static void ProxyEntry_set_boundary31(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kBoundaryStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_boundary31);
+
+static void LegacyEntry_set_boundary31(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kBoundaryStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_boundary31);
+
+static void ProxyEntry_set_fixed32(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kFixed32Str);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_fixed32);
+
+static void LegacyEntry_set_fixed32(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kFixed32Str);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_fixed32);
+
+static void ProxyEntry_set_large(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kLargeStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_large);
+
+static void LegacyEntry_set_large(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kLargeStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_large);
+
+static void ProxyEntry_set_veryLarge(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kVeryLargeStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_veryLarge);
+
+static void LegacyEntry_set_veryLarge(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kVeryLargeStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_veryLarge);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Set benchmarks: vector<char> input
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_set_smallVec(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kSmallVec);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_smallVec);
+
+static void LegacyEntry_set_smallVec(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.setObject(kSmallVec);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_smallVec);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Get benchmarks: read data back
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_get_small(benchmark::State& state)
+{
+    Entry entry;
+    entry.set(kSmallStr);
+    for (auto _ : state)
+    {
+        auto view = entry.get();
+        benchmark::DoNotOptimize(view);
+    }
+}
+BENCHMARK(ProxyEntry_get_small);
+
+static void LegacyEntry_get_small(benchmark::State& state)
+{
+    bcos::benchmark_legacy::LegacyEntry entry;
+    entry.set(kSmallStr);
+    for (auto _ : state)
+    {
+        auto view = entry.get();
+        benchmark::DoNotOptimize(view);
+    }
+}
+BENCHMARK(LegacyEntry_get_small);
+
+static void ProxyEntry_get_large(benchmark::State& state)
+{
+    Entry entry;
+    entry.set(kLargeStr);
+    for (auto _ : state)
+    {
+        auto view = entry.get();
+        benchmark::DoNotOptimize(view);
+    }
+}
+BENCHMARK(ProxyEntry_get_large);
+
+static void LegacyEntry_get_large(benchmark::State& state)
+{
+    bcos::benchmark_legacy::LegacyEntry entry;
+    entry.set(kLargeStr);
+    for (auto _ : state)
+    {
+        auto view = entry.get();
+        benchmark::DoNotOptimize(view);
+    }
+}
+BENCHMARK(LegacyEntry_get_large);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Update benchmarks: overwrite existing data
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_update_smallToLarge(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kSmallStr);
+        entry.set(kLargeStr);  // overwrite SmallBuffer → BufferModel
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_update_smallToLarge);
+
+static void LegacyEntry_update_smallToLarge(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kSmallStr);
+        entry.set(kLargeStr);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_update_smallToLarge);
+
+static void ProxyEntry_update_sameSize(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(kLargeStr);
+        entry.set(std::string(200, 'M'));  // same size, different content
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_update_sameSize);
+
+static void LegacyEntry_update_sameSize(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.set(kLargeStr);
+        entry.set(std::string(200, 'M'));
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_update_sameSize);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Copy benchmarks
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_copy_small(benchmark::State& state)
+{
+    Entry src;
+    src.set(kSmallStr);
+    for (auto _ : state)
+    {
+        Entry copy(src);
+        benchmark::DoNotOptimize(copy);
+    }
+}
+BENCHMARK(ProxyEntry_copy_small);
+
+static void LegacyEntry_copy_small(benchmark::State& state)
+{
+    bcos::benchmark_legacy::LegacyEntry src;
+    src.set(kSmallStr);
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry copy(src);
+        benchmark::DoNotOptimize(copy);
+    }
+}
+BENCHMARK(LegacyEntry_copy_small);
+
+static void ProxyEntry_copy_large(benchmark::State& state)
+{
+    Entry src;
+    src.set(kLargeStr);
+    for (auto _ : state)
+    {
+        Entry copy(src);
+        benchmark::DoNotOptimize(copy);
+    }
+}
+BENCHMARK(ProxyEntry_copy_large);
+
+static void LegacyEntry_copy_large(benchmark::State& state)
+{
+    bcos::benchmark_legacy::LegacyEntry src;
+    src.set(kLargeStr);
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry copy(src);
+        benchmark::DoNotOptimize(copy);
+    }
+}
+BENCHMARK(LegacyEntry_copy_large);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Move benchmarks
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_move_small(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry src;
+        src.set(kSmallStr);
+        Entry dst(std::move(src));
+        benchmark::DoNotOptimize(dst);
+    }
+}
+BENCHMARK(ProxyEntry_move_small);
+
+static void LegacyEntry_move_small(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry src;
+        src.set(kSmallStr);
+        bcos::benchmark_legacy::LegacyEntry dst(std::move(src));
+        benchmark::DoNotOptimize(dst);
+    }
+}
+BENCHMARK(LegacyEntry_move_small);
+
+static void ProxyEntry_move_large(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        Entry src;
+        src.set(kLargeStr);
+        Entry dst(std::move(src));
+        benchmark::DoNotOptimize(dst);
+    }
+}
+BENCHMARK(ProxyEntry_move_large);
+
+static void LegacyEntry_move_large(benchmark::State& state)
+{
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry src;
+        src.set(kLargeStr);
+        bcos::benchmark_legacy::LegacyEntry dst(std::move(src));
+        benchmark::DoNotOptimize(dst);
+    }
+}
+BENCHMARK(LegacyEntry_move_large);
+
+// ═══════════════════════════════════════════════════════════════════════
+// SharedPtr set benchmarks
+// ═══════════════════════════════════════════════════════════════════════
+
+static void ProxyEntry_set_sharedPtr(benchmark::State& state)
+{
+    auto sp = std::make_shared<std::string>("shared data for benchmark");
+    for (auto _ : state)
+    {
+        Entry entry;
+        entry.set(sp);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(ProxyEntry_set_sharedPtr);
+
+static void LegacyEntry_set_sharedPtr(benchmark::State& state)
+{
+    auto sp = std::make_shared<std::string>("shared data for benchmark");
+    for (auto _ : state)
+    {
+        bcos::benchmark_legacy::LegacyEntry entry;
+        entry.setShared(sp);
+        benchmark::DoNotOptimize(entry);
+    }
+}
+BENCHMARK(LegacyEntry_set_sharedPtr);
+
+BENCHMARK_MAIN();

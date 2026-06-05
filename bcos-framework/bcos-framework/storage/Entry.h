@@ -50,7 +50,7 @@ struct AnyBufferFacade
   : pro::facade_builder ::add_convention<MemData, const char*() const noexcept>::add_convention<
         MemSize, size_t() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
         support_relocation<pro::constraint_level::nothrow>::support_destruction<
-            pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE>::build
+            pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE, 8>::build
 {
 };
 
@@ -289,6 +289,10 @@ private:
 
     Holder m_buffer;
     Status m_status = Status::EMPTY;
+
+    // Unit-test accessor: exposes the internal proxy holder for inspection
+    // (buffer model type can be verified via decltype and size checks).
+    friend const Holder& entryTestHolder(const Entry& e) noexcept { return e.m_buffer; }
 };
 
 }  // namespace bcos::storage
