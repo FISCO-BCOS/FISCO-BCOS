@@ -5,6 +5,7 @@
 #include <concepts>
 #include <cstddef>
 #include <memory>
+#include <type_traits>
 
 namespace bcos
 {
@@ -13,8 +14,17 @@ struct InPlace
 {
 };
 
+// ── Default (empty) VTable extension ──────────────────────────────
+// Users can define custom extensions with additional function-pointer
+// slots and a static fillSlots<HoldType>(Ext&) method that AnyHolder
+// calls during vtable construction.
+struct DefaultVTableExtension
+{
+};
 
-template <class Type, std::size_t maxSize, bool AllowMove = true, bool AllowCopy = false>
+
+template <class Type, std::size_t maxSize, bool AllowMove = true, bool AllowCopy = false,
+    typename VTableExt = DefaultVTableExtension>
 class AnyHolder
 {
 private:
@@ -29,7 +39,9 @@ private:
 
     // Single VTable — one pointer (8 B) replaces up to 4 separate pointers (32 B).
     // Slots for AllowMove / AllowCopy are zero-filled when the feature is disabled.
-    struct VTable
+    // Inherits from VTableExt so users can embed additional function-pointer slots
+    // (e.g. data() / size() for AnyBuffer-like type-erased byte-buffer access).
+    struct VTable : VTableExt
     {
         void (*destroy)(Type*) noexcept = nullptr;
 
@@ -80,6 +92,17 @@ private:
                 vtable.copyAssign = [](Type* dst, const Type* src) {
                     *static_cast<HoldType*>(dst) = *static_cast<const HoldType*>(src);
                 };
+            }
+
+            // ── VTableExt extension point ─────────────────────────
+            // If VTableExt provides fillSlots<HoldType>(Ext&), call it
+            // so user-defined slots (e.g. data / size) can be populated.
+            if constexpr (requires(VTableExt& ext) {
+                              VTableExt::template fillSlots<HoldType>(ext);
+                          })
+            {
+                VTableExt::template fillSlots<HoldType>(
+                    static_cast<VTableExt&>(vtable));
             }
 
             return vtable;
@@ -160,13 +183,23 @@ public:
     Type* operator->() & { return get(); }
     const Type* operator->() const& { return get(); }
 
+    // ── VTable extension access ────────────────────────────────────
+    // Returns the VTableExt portion of the vtable so callers can
+    // invoke any custom extension slots (data/size/clone/…).
+    // This keeps AnyHolder fully generic — it does not need to know
+    // what slots VTableExt defines.
+    const VTableExt* vtableExt() const noexcept
+    {
+        return static_cast<const VTableExt*>(m_vtable);
+    }
+
     std::unique_ptr<Type> toUnique() &&
-        requires AllowMove
+        requires(AllowMove&& std::has_virtual_destructor_v<Type>)
     {
         return m_vtable->moveToUnique(get());
     }
     std::shared_ptr<Type> toShared() &&
-        requires AllowMove
+        requires(AllowMove&& std::has_virtual_destructor_v<Type>)
     {
         return m_vtable->moveToShared(get());
     }

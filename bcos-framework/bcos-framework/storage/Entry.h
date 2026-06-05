@@ -35,19 +35,38 @@ constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
 
 // ─── Type-erased byte-buffer interface ───────────────────────────────
-// AnyBuffer is an abstract base that exposes data()/size()/clone().
-// Concrete models adapt different storage strategies:
-//   SmallBuffer    — SBO: ≤31 bytes, repurposes 1 byte for length (32B total)
-//   Fixed32Buffer  — SBO: exactly 32 bytes, size() hard-wired (32B total)
-//   BufferModel<T> — adapts any ByteBuffer type (heap, owns the value)
-//   SharedBufferModel<T> — adapts shared_ptr-wrapped ByteBuffer (zero-copy)
+// AnyBuffer is a non-virtual base tag-type. All dispatch (data/size/destroy)
+// goes through AnyHolder's VTable, extended via AnyBufferVTableExt below.
+// This eliminates one vtable pointer per Entry (AnyHolder and the buffer
+// model now share a single vtable pointer).
+
+// VTable extension that embeds data() / size() function pointers into
+// AnyHolder's vtable so AnyBuffer does not need its own virtual methods.
+struct AnyBufferVTableExt
+{
+    const char* (*data)(const void* obj) noexcept = nullptr;
+    size_t (*size)(const void* obj) noexcept = nullptr;
+
+    // Called by AnyHolder::getVTableFor<HoldType>() to fill these slots.
+    template <typename HoldType>
+    static void fillSlots(AnyBufferVTableExt& self)
+    {
+        self.data = [](const void* obj) noexcept -> const char* {
+            return static_cast<const HoldType*>(obj)->data();
+        };
+        self.size = [](const void* obj) noexcept -> size_t {
+            return static_cast<const HoldType*>(obj)->size();
+        };
+    }
+};
 
 class AnyBuffer
 {
 public:
-    virtual ~AnyBuffer() = default;
-    [[nodiscard]] virtual const char* data() const noexcept = 0;
-    [[nodiscard]] virtual size_t size() const noexcept = 0;
+    // Non-virtual destructor — safe because destruction is always routed
+    // through AnyHolder's VTable (which knows the concrete type).
+    ~AnyBuffer() = default;
+    // data() / size() are non-virtual — dispatch through AnyHolder VTable.
 };
 
 // Stores ≤31 bytes inline.  Repurposes 1 byte for the length so the
@@ -64,8 +83,8 @@ public:
     {
         std::memcpy(m_buffer.data(), data, size);
     }
-    [[nodiscard]] const char* data() const noexcept override { return m_buffer.data(); }
-    [[nodiscard]] size_t size() const noexcept override { return m_size; }
+    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
+    [[nodiscard]] size_t size() const noexcept { return m_size; }
 };
 
 // Stores exactly 32 bytes inline — no size field needed.
@@ -77,8 +96,8 @@ class Fixed32Buffer : public AnyBuffer
 public:
     Fixed32Buffer() = default;
     Fixed32Buffer(const char* data, size_t) { std::memcpy(m_buffer.data(), data, CAPACITY); }
-    [[nodiscard]] const char* data() const noexcept override { return m_buffer.data(); }
-    [[nodiscard]] size_t size() const noexcept override { return CAPACITY; }
+    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
+    [[nodiscard]] size_t size() const noexcept { return CAPACITY; }
 };
 
 // Adapts any ByteBuffer-conforming type T (std::string, std::vector<char>,
@@ -90,11 +109,11 @@ class BufferModel : public AnyBuffer
 
 public:
     explicit BufferModel(T value) : m_value(std::move(value)) {}
-    [[nodiscard]] const char* data() const noexcept override
+    [[nodiscard]] const char* data() const noexcept
     {
         return reinterpret_cast<const char*>(m_value.data());
     }
-    [[nodiscard]] size_t size() const noexcept override { return m_value.size(); }
+    [[nodiscard]] size_t size() const noexcept { return m_value.size(); }
 };
 
 // Adapts a shared_ptr-wrapped ByteBuffer type. Shares ownership of the
@@ -106,11 +125,11 @@ class SharedBufferModel : public AnyBuffer
 
 public:
     explicit SharedBufferModel(std::shared_ptr<T> ptr) : m_ptr(std::move(ptr)) {}
-    [[nodiscard]] const char* data() const noexcept override
+    [[nodiscard]] const char* data() const noexcept
     {
         return reinterpret_cast<const char*>(m_ptr->data());
     }
-    [[nodiscard]] size_t size() const noexcept override { return m_ptr->size(); }
+    [[nodiscard]] size_t size() const noexcept { return m_ptr->size(); }
 };
 
 class Entry
@@ -127,8 +146,7 @@ public:
     constexpr static int32_t SMALL_SIZE = 31;
     static constexpr size_t INLINE_BUFFER_SIZE = 40;
 
-    using ValueType = std::unique_ptr<AnyBuffer>;  // kept for backward compat
-    using Holder = bcos::AnyHolder<AnyBuffer, INLINE_BUFFER_SIZE, true, true>;
+    using Holder = bcos::AnyHolder<AnyBuffer, INLINE_BUFFER_SIZE, true, true, AnyBufferVTableExt>;
 
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
@@ -192,7 +210,8 @@ public:
     {
         if (!m_buffer) [[unlikely]]
             return {};
-        return {m_buffer->data(), m_buffer->size()};
+        return {m_buffer.vtableExt()->data(m_buffer.get()),
+            m_buffer.vtableExt()->size(m_buffer.get())};
     }
 
     std::string_view getField(size_t index) const&;
@@ -201,9 +220,12 @@ public:
     {
         if (!m_buffer) [[unlikely]]
             return "";
-        return m_buffer->data();
+        return m_buffer.vtableExt()->data(m_buffer.get());
     }
-    int32_t size() const { return m_buffer ? static_cast<int32_t>(m_buffer->size()) : 0; }
+    int32_t size() const
+    {
+        return m_buffer ? static_cast<int32_t>(m_buffer.vtableExt()->size(m_buffer.get())) : 0;
+    }
 
     // ── Mutators ───────────────────────────────────────────────────
 
@@ -277,14 +299,6 @@ public:
                 BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
         }
         setField(0, std::move(*values.begin()));
-    }
-
-    auto exportFields() const
-    {
-        if (!m_buffer)
-            return std::unique_ptr<AnyBuffer>{};
-        auto copy = m_buffer;
-        return std::move(copy).toUnique();
     }
 
     bool valid() const { return m_status == Status::NORMAL; }
