@@ -214,13 +214,13 @@ public:
         {
             auto sz = value.size();
             if (sz <= SMALL_SIZE)
-                m_buffer = pro::make_proxy<AnyBufferFacade>(
+                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
                     SmallBuffer{reinterpret_cast<const char*>(value.data()), sz});
             else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
-                m_buffer = pro::make_proxy<AnyBufferFacade>(
+                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
                     Fixed32Buffer{reinterpret_cast<const char*>(value.data()), sz});
             else
-                m_buffer = pro::make_proxy<AnyBufferFacade>(
+                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
                     BufferModel<RawType>{std::forward<decltype(value)>(value)});
         }
         m_status = MODIFIED;
@@ -236,7 +236,7 @@ public:
     template <ByteBuffer T>
     void set(std::shared_ptr<T> value)
     {
-        m_buffer = pro::make_proxy<AnyBufferFacade>(SharedBufferModel<T>{std::move(value)});
+        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SharedBufferModel<T>{std::move(value)});
         m_status = MODIFIED;
     }
 
@@ -279,12 +279,12 @@ private:
     void setImplCopy(const char* data, size_t sz)
     {
         if (sz <= SMALL_SIZE)
-            m_buffer = pro::make_proxy<AnyBufferFacade>(SmallBuffer{data, sz});
+            m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer{data, sz});
         else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-            m_buffer = pro::make_proxy<AnyBufferFacade>(Fixed32Buffer{data, sz});
+            m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer{data, sz});
         else
-            m_buffer =
-                pro::make_proxy<AnyBufferFacade>(BufferModel<std::string>{std::string(data, sz)});
+            m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+                BufferModel<std::string>{std::string(data, sz)});
     }
 
     Holder m_buffer;
