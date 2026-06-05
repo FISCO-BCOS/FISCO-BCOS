@@ -1873,8 +1873,7 @@ void TransactionExecutive::creatAuthTable(std::string_view _tableName, std::stri
                          << LOG_KV("admin", admin);
     auto table = m_storageWrapper->createTable(authTableName, std::string(STORAGE_VALUE));
     // FIB-83: if table already exists (e.g. squatting), open it and overwrite auth rows
-    if (!table &&
-        m_blockContext.features().get(ledger::Features::Flag::bugfix_auth_table_squatting))
+    if (!table && m_blockContext.features().get(ledger::Features::Flag::bugfix_auth_check))
     {
         table = m_storageWrapper->openTable(authTableName);
     }
@@ -1901,7 +1900,7 @@ bool TransactionExecutive::checkAuth(const CallParameters::UniquePtr& callParame
 {
     // FIB-81: cache flag to ensure auth failures always report EVMC_REVERT
     const bool fixRevertStatus =
-        m_blockContext.features().get(ledger::Features::Flag::bugfix_auth_check_revert_status);
+        m_blockContext.features().get(ledger::Features::Flag::bugfix_auth_check);
 
     auto revertAuth = [&](int32_t status, std::string_view message) {
         callParameters->status = status;

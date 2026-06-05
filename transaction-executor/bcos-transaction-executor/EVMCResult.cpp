@@ -170,7 +170,7 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::makeErrorEVMCResult(crypto::Has
     protocol::TransactionStatus status, evmc_status_code evmStatus, int64_t gas,
     const std::string& errorInfo, bool clampGasLeft)
 {
-    // FIB-78: when bugfix_clamp_gas_left_on_error is active, force gas_left to 0 for
+    // FIB-78: when bugfix_v1_error_handling is active, force gas_left to 0 for
     // fatal EVM error statuses so downstream gasUsed computations cannot under-charge,
     // and clamp any negative value to prevent signed-overflow in (gasLimit - gas_left).
     // Gated by a feature flag to preserve consensus with pre-fix nodes.

@@ -448,7 +448,7 @@ BOOST_AUTO_TEST_CASE(testResourceManagement)
     }
 }
 
-// FIB-78: gas_left clamping is gated by bugfix_clamp_gas_left_on_error.
+// FIB-78: gas_left clamping is gated by bugfix_v1_error_handling.
 BOOST_AUTO_TEST_CASE(makeErrorEVMCResult_clampDisabled_preservesGas)
 {
     auto result =

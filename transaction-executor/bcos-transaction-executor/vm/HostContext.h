@@ -407,9 +407,10 @@ public:
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
         std::optional<EVMCResult> evmResult;
-        // FIB-88/89/92: read once, gate receipt-affecting error paths for hard-fork compat
-        const bool fixErrorGas = m_ledgerConfig.get().features().get(
-            ledger::Features::Flag::bugfix_v1_exec_error_gas_used);
+        // FIB-76~92 (bugfix_v1_error_handling): read once, gates all receipt-affecting
+        // error paths below for hard-fork compat
+        const bool fixErrorHandling =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_v1_error_handling);
         try
         {
             // FIB-91: checkAuth() moved inside try block so exceptions
@@ -467,9 +468,7 @@ public:
             HOST_CONTEXT_LOG(DEBUG) << "OutOfGas exception: " << boost::diagnostic_information(e);
             // FIB-89: use 0 instead of potentially uninitialized evmResult->gas_left
             evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                EVMC_OUT_OF_GAS, 0, e.what(),
-                m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
+                EVMC_OUT_OF_GAS, 0, e.what(), fixErrorHandling));
         }
         catch (protocol::NotEnoughCashError& e)
         {
@@ -478,7 +477,7 @@ public:
             // FIB-88: fatal error consumes all gas when bugfix flag enabled
             evmResult.emplace(
                 makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::NotEnoughCash,
-                    EVMC_INSUFFICIENT_BALANCE, fixErrorGas ? 0 : ref->gas, e.what()));
+                    EVMC_INSUFFICIENT_BALANCE, fixErrorHandling ? 0 : ref->gas, e.what()));
         }
         catch (NotFoundCodeError& e)
         {
@@ -497,9 +496,7 @@ public:
                 // FIB-88: EVMC_REVERT preserves ref->gas per EVM spec
                 evmResult.emplace(
                     makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::RevertInstruction,
-                        EVMC_REVERT, ref->gas, "Call address error."s,
-                        m_ledgerConfig.get().features().get(
-                            ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
+                        EVMC_REVERT, ref->gas, "Call address error."s, fixErrorHandling));
             }
         }
         catch (std::exception& e)
@@ -508,11 +505,9 @@ public:
             // FIB-88: fatal error consumes all gas
             // FIB-92: use Unknown instead of OutOfGas for EVMC_INTERNAL_ERROR
             evmResult.emplace(makeErrorEVMCResult(m_hashImpl,
-                fixErrorGas ? protocol::TransactionStatus::Unknown :
-                              protocol::TransactionStatus::OutOfGas,
-                EVMC_INTERNAL_ERROR, fixErrorGas ? 0 : ref->gas, "",
-                m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
+                fixErrorHandling ? protocol::TransactionStatus::Unknown :
+                                   protocol::TransactionStatus::OutOfGas,
+                EVMC_INTERNAL_ERROR, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
         if (evmResult->gas_left < 0)
@@ -520,9 +515,7 @@ public:
             HOST_CONTEXT_LOG(DEBUG) << "Execute gas < 0: " << evmResult->gas_left;
             // FIB-88: fatal error consumes all gas when bugfix flag enabled
             evmResult.emplace(makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                EVMC_OUT_OF_GAS, fixErrorGas ? 0 : ref->gas, "",
-                m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::bugfix_clamp_gas_left_on_error)));
+                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
         if (evmResult->status_code != EVMC_SUCCESS)
@@ -580,8 +573,7 @@ private:
             // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a binary
             // path, but ContractAuthMgrPrecompiled always looks up auth tables using hex paths.
             // Force hex to match the lookup path.
-            if (m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::bugfix_auth_table_raw_address) &&
+            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_auth_check) &&
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address))
             {
                 authTablePath =

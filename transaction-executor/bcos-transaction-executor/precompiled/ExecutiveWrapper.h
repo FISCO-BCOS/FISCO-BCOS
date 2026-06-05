@@ -132,7 +132,7 @@ public:
         callResult->data.assign(result.output_data, result.output_data + result.output_size);
 
         const bool applyBugfix =
-            m_blockContext->features().get(ledger::Features::Flag::bugfix_v1_executive_wrapper);
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_v1_error_handling);
         if (applyBugfix)
         {
             callResult->status = static_cast<int32_t>(result.status);
