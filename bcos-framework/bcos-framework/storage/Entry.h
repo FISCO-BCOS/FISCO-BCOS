@@ -4,9 +4,9 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <bcos-framework/ledger/Features.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/AnyHolder.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
+#include <proxy/proxy.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
@@ -34,44 +34,33 @@ concept ByteBuffer = requires(const T& t) {
 constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
 
-// ─── Type-erased byte-buffer interface ───────────────────────────────
-// AnyBuffer is a non-virtual base tag-type. All dispatch (data/size/destroy)
-// goes through AnyHolder's VTable, extended via AnyBufferVTableExt below.
-// This eliminates one vtable pointer per Entry (AnyHolder and the buffer
-// model now share a single vtable pointer).
+// ─── Proxy-based type-erased byte-buffer facade ────────────────────
+// Replaces the previous AnyHolder + AnyBufferVTableExt hand-rolled vtable
+// with proxy's facade-builder, which achieves the same zero-virtual-overhead
+// dispatch (data/size) through its own vtable mechanism.
 
-// VTable extension that embeds data() / size() function pointers into
-// AnyHolder's vtable so AnyBuffer does not need its own virtual methods.
-struct AnyBufferVTableExt
+// Maximum inline buffer size for the proxy's small-buffer optimization.
+// Must accommodate the largest buffer model (currently BufferModel<T> / SmallBuffer etc.).
+inline constexpr size_t MAX_PROXY_BUFFER_SIZE = 32;
+
+PRO_DEF_MEM_DISPATCH(MemData, data);
+PRO_DEF_MEM_DISPATCH(MemSize, size);
+
+struct AnyBufferFacade
+  : pro::facade_builder ::add_convention<MemData, const char*() const noexcept>::add_convention<
+        MemSize, size_t() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
+        support_relocation<pro::constraint_level::nothrow>::support_destruction<
+            pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE>::build
 {
-    const char* (*data)(const void* obj) noexcept = nullptr;
-    size_t (*size)(const void* obj) noexcept = nullptr;
-
-    // Called by AnyHolder::getVTableFor<HoldType>() to fill these slots.
-    template <typename HoldType>
-    static void fillSlots(AnyBufferVTableExt& self)
-    {
-        self.data = [](const void* obj) noexcept -> const char* {
-            return static_cast<const HoldType*>(obj)->data();
-        };
-        self.size = [](const void* obj) noexcept -> size_t {
-            return static_cast<const HoldType*>(obj)->size();
-        };
-    }
 };
 
-class AnyBuffer
-{
-public:
-    // Non-virtual destructor — safe because destruction is always routed
-    // through AnyHolder's VTable (which knows the concrete type).
-    ~AnyBuffer() = default;
-    // data() / size() are non-virtual — dispatch through AnyHolder VTable.
-};
+// Buffer models no longer need a common base class — proxy dispatches
+// through the facade conventions above. Each model only needs data() and
+// size() member functions with the signatures declared in AnyBufferFacade.
 
 // Stores ≤31 bytes inline.  Repurposes 1 byte for the length so the
 // total data-member footprint stays at 32 bytes (saving 8 B vs size_t).
-class SmallBuffer : public AnyBuffer
+class SmallBuffer
 {
     static constexpr size_t CAPACITY = 31;
     std::array<char, CAPACITY> m_buffer{};
@@ -88,7 +77,7 @@ public:
 };
 
 // Stores exactly 32 bytes inline — no size field needed.
-class Fixed32Buffer : public AnyBuffer
+class Fixed32Buffer
 {
     static constexpr size_t CAPACITY = 32;
     std::array<char, CAPACITY> m_buffer{};
@@ -103,7 +92,8 @@ public:
 // Adapts any ByteBuffer-conforming type T (std::string, std::vector<char>,
 // std::array<char,N>, etc.). Owns the value by move/copy.
 template <ByteBuffer T>
-class BufferModel : public AnyBuffer
+    requires(sizeof(T) <= MAX_PROXY_BUFFER_SIZE)
+class BufferModel
 {
     T m_value;
 
@@ -119,7 +109,7 @@ public:
 // Adapts a shared_ptr-wrapped ByteBuffer type. Shares ownership of the
 // underlying buffer — no copy on clone().
 template <ByteBuffer T>
-class SharedBufferModel : public AnyBuffer
+class SharedBufferModel
 {
     std::shared_ptr<T> m_ptr;
 
@@ -146,25 +136,19 @@ public:
     constexpr static int32_t SMALL_SIZE = 31;
     static constexpr size_t INLINE_BUFFER_SIZE = 40;
 
-    using Holder = bcos::AnyHolder<AnyBuffer, INLINE_BUFFER_SIZE, true, true, AnyBufferVTableExt>;
+    using Holder = pro::proxy<AnyBufferFacade>;
 
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry& other) : m_status(other.m_status)
-    {
-        if (other.m_buffer)
-            m_buffer = other.m_buffer;
-    }
+    Entry(const Entry& other) : m_buffer(other.m_buffer), m_status(other.m_status) {}
     Entry(Entry&&) noexcept = default;
     bcos::storage::Entry& operator=(const Entry& other)
     {
         if (this != &other)
         {
-            m_buffer = {};
             m_status = other.m_status;
-            if (other.m_buffer)
-                m_buffer = other.m_buffer;
+            m_buffer = other.m_buffer;
         }
         return *this;
     }
@@ -208,23 +192,22 @@ public:
 
     std::string_view get() const&
     {
-        if (!m_buffer) [[unlikely]]
+        if (!m_buffer.has_value()) [[unlikely]]
             return {};
-        return {m_buffer.vtableExt()->data(m_buffer.get()),
-            m_buffer.vtableExt()->size(m_buffer.get())};
+        return {m_buffer->data(), m_buffer->size()};
     }
 
     std::string_view getField(size_t index) const&;
 
     const char* data() const&
     {
-        if (!m_buffer) [[unlikely]]
+        if (!m_buffer.has_value()) [[unlikely]]
             return "";
-        return m_buffer.vtableExt()->data(m_buffer.get());
+        return m_buffer->data();
     }
     int32_t size() const
     {
-        return m_buffer ? static_cast<int32_t>(m_buffer.vtableExt()->size(m_buffer.get())) : 0;
+        return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
     }
 
     // ── Mutators ───────────────────────────────────────────────────
@@ -252,14 +235,14 @@ public:
         {
             auto sz = value.size();
             if (sz <= SMALL_SIZE)
-                m_buffer = Holder(
-                    bcos::InPlace<SmallBuffer>{}, reinterpret_cast<const char*>(value.data()), sz);
+                m_buffer = pro::make_proxy<AnyBufferFacade>(
+                    SmallBuffer{reinterpret_cast<const char*>(value.data()), sz});
             else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
-                m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{},
-                    reinterpret_cast<const char*>(value.data()), sz);
+                m_buffer = pro::make_proxy<AnyBufferFacade>(
+                    Fixed32Buffer{reinterpret_cast<const char*>(value.data()), sz});
             else
-                m_buffer = Holder(
-                    bcos::InPlace<BufferModel<RawType>>{}, std::forward<decltype(value)>(value));
+                m_buffer = pro::make_proxy<AnyBufferFacade>(
+                    BufferModel<RawType>{std::forward<decltype(value)>(value)});
         }
         m_status = MODIFIED;
     }
@@ -274,7 +257,7 @@ public:
     template <ByteBuffer T>
     void set(std::shared_ptr<T> value)
     {
-        m_buffer = Holder(bcos::InPlace<SharedBufferModel<T>>{}, std::move(value));
+        m_buffer = pro::make_proxy<AnyBufferFacade>(SharedBufferModel<T>{std::move(value)});
         m_status = MODIFIED;
     }
 
@@ -317,11 +300,12 @@ private:
     void setImplCopy(const char* data, size_t sz)
     {
         if (sz <= SMALL_SIZE)
-            m_buffer = Holder(bcos::InPlace<SmallBuffer>{}, data, sz);
+            m_buffer = pro::make_proxy<AnyBufferFacade>(SmallBuffer{data, sz});
         else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-            m_buffer = Holder(bcos::InPlace<Fixed32Buffer>{}, data, sz);
+            m_buffer = pro::make_proxy<AnyBufferFacade>(Fixed32Buffer{data, sz});
         else
-            m_buffer = Holder(bcos::InPlace<BufferModel<std::string>>{}, std::string(data, sz));
+            m_buffer =
+                pro::make_proxy<AnyBufferFacade>(BufferModel<std::string>{std::string(data, sz)});
     }
 
     Holder m_buffer;
