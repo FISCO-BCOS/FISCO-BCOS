@@ -21,7 +21,7 @@
  * @date 2024-11-07
  */
 #include "AwsKmsWrapper.h"
-#include "bcos-utilities/FileUtility.h"
+#include "bcos-utilities/filesystem/FileUtility.h"
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/utils/Array.h>
 #include <aws/kms/model/DecryptRequest.h>

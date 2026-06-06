@@ -20,7 +20,7 @@
  */
 #include "NodeService.h"
 #include "Common.h"
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>

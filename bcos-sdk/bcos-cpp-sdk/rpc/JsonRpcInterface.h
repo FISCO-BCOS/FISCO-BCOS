@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <functional>
 #include <memory>
 

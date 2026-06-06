@@ -19,7 +19,7 @@
  * @date 2021-10-11
  */
 #pragma once
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>

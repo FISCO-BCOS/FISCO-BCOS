@@ -22,8 +22,8 @@
 
 #include "RPCInitializer.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "client/LedgerClientImpl.h"
 #include "client/P2PClientImpl.h"
 #include "client/SchedulerClientImpl.h"
@@ -35,8 +35,8 @@
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>

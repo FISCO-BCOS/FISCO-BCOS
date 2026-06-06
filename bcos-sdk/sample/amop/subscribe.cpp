@@ -23,8 +23,8 @@
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <memory>
 #include <set>

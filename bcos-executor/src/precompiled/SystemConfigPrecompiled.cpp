@@ -28,7 +28,7 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/data/VersionConverter.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <algorithm>

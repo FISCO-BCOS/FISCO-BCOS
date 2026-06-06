@@ -17,9 +17,9 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/data/VersionConverter.h"
 #include "bcos-transaction-executor/RollbackableStorage.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderImpl.h>

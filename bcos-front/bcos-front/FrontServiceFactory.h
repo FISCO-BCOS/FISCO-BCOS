@@ -23,7 +23,7 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-front/FrontService.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <utility>
 
 namespace bcos::front

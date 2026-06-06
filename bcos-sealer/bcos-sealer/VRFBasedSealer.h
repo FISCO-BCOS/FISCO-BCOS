@@ -24,7 +24,7 @@
 #include "SealingManager.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
-#include <bcos-utilities/Worker.h>
+#include <bcos-utilities/concurrency/Worker.h>
 #include <utility>
 
 namespace bcos::sealer

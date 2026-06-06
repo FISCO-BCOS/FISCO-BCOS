@@ -22,9 +22,9 @@
 #include "Common.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include "rocksdb/convenience.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>

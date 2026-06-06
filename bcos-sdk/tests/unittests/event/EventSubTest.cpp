@@ -22,8 +22,8 @@
 #include "../fake/WsSessionFake.h"
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>

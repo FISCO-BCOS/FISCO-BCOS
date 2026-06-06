@@ -23,7 +23,7 @@
 #include <bcos-framework/election/LeaderEntryPointInterface.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/rpc/RPCInterface.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 #include <memory>
 #include <utility>
 

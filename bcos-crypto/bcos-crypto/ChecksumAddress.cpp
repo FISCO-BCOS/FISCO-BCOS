@@ -19,7 +19,7 @@
 #include <bcos-codec/bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <fmt/format.h>

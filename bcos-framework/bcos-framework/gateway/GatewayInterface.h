@@ -26,8 +26,8 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <range/v3/view/any_view.hpp>
 
 namespace bcos

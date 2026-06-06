@@ -18,7 +18,7 @@
  * @date 2021-07-02
  */
 #pragma once
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <bcos-framework/Common.h>
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>

@@ -33,7 +33,7 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/topology/NodeTimeMaintenance.h>
 
 namespace bcos
 {

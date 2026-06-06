@@ -1,7 +1,7 @@
 #include "bcos-framework/storage/Entry.h"
 
 #include "bcos-framework/protocol/Protocol.h"
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 
 namespace bcos::storage

@@ -31,9 +31,9 @@
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-tool/NodeConfig.h"
-#include "bcos-tool/VersionConverter.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/config/NodeConfig.h"
+#include "bcos-utilities/data/VersionConverter.h"
+#include "bcos-utilities/core/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
@@ -49,9 +49,9 @@
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/storage/Table.h>
 #include <bcos-task/Wait.h>
-#include <bcos-tool/BfsFileFactory.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/config/BfsFileFactory.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <evmc/evmc.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/hex.hpp>

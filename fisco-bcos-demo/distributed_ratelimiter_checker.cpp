@@ -17,8 +17,8 @@
  * @author: octopuswang
  * @date 2022-10-12
  */
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/core/Common.h"
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-utilities/ratelimiter/DistributedRateLimiter.h>
 #include <algorithm>

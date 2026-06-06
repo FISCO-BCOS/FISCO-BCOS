@@ -27,11 +27,11 @@
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/FileUtility.h"
-#include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
+#include "bcos-utilities/filesystem/FileUtility.h"
+#include "bcos-utilities/concurrency/IOServicePool.h"
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <chrono>

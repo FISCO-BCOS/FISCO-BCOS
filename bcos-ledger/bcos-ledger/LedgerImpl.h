@@ -13,8 +13,8 @@
 #include <bcos-executor/src/Common.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-table/src/StateStorageFactory.h>
-#include <bcos-tool/VersionConverter.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/VersionConverter.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/traits.hpp>

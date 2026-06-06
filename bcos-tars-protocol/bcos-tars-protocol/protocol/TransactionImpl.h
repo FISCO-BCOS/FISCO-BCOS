@@ -29,7 +29,7 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 
 namespace bcostars::protocol
 {

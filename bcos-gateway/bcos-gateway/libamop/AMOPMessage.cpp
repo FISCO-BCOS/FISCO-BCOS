@@ -20,7 +20,7 @@
 
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libamop/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include <boost/asio.hpp>
 
 using namespace bcos;

@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "Exceptions.h"
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <wedpr-crypto/WedprUtilities.h>
 
 namespace bcos

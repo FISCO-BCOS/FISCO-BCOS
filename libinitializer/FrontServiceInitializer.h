@@ -20,8 +20,8 @@
  */
 #pragma once
 #include <bcos-framework/front/FrontServiceInterface.h>
-#include <bcos-utilities/IOServicePool.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
+#include <bcos-utilities/config/NodeConfig.h>
 #include <memory>
 
 namespace bcos

@@ -27,7 +27,7 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <json/json.h>
 #include <functional>
 #include <future>

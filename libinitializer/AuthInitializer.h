@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include "libinitializer/ProtocolInitializer.h"
 
 namespace bcos::initializer

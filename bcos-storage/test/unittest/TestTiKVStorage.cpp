@@ -2,7 +2,7 @@
 #include "bcos-storage/TiKVStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/archive/binary_iarchive.hpp>

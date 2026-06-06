@@ -7,9 +7,9 @@
 #include "bcos-rpc/groupmgr/NodeService.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/BucketMap.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/containers/BucketMap.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/timer/Timer.h"
 #include <boost/functional/hash.hpp>
 #include <functional>
 #include <memory>

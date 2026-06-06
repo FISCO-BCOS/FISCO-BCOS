@@ -22,7 +22,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>

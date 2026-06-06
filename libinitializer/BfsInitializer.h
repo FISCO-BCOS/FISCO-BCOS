@@ -24,7 +24,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Block.h"
 #include "libinitializer/ProtocolInitializer.h"
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 
 namespace bcos::initializer
 {

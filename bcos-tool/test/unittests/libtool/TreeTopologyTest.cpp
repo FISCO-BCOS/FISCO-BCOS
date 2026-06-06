@@ -23,7 +23,7 @@
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
 #include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-tool/TreeTopology.h>
+#include <bcos-utilities/topology/TreeTopology.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

@@ -18,8 +18,8 @@
  * @date: 2021-03-18
  */
 #pragma once
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <gsl/span>
 
 namespace bcos::protocol

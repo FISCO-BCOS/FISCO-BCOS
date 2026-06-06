@@ -20,7 +20,7 @@
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieNode.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::ledger::mpt::test

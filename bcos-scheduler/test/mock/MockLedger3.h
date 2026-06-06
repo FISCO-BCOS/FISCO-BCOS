@@ -13,7 +13,7 @@
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/BlockImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>
 #include <range/v3/algorithm/count.hpp>

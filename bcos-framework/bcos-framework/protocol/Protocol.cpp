@@ -1,6 +1,6 @@
 #include "bcos-framework/protocol/Protocol.h"
 
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <fmt/compile.h>
 #include <fmt/format.h>
 #include <boost/algorithm/string.hpp>

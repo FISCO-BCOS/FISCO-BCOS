@@ -18,8 +18,8 @@
  */
 #pragma once
 
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <string_view>
 
 namespace bcos::ledger::mpt

@@ -22,7 +22,7 @@
 
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-tars-protocol/tars/RpcService.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <servant/Application.h>
 #include <boost/core/ignore_unused.hpp>
 

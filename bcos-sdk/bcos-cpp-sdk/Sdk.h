@@ -26,7 +26,7 @@
 #include <bcos-cpp-sdk/event/EventSub.h>
 #include <bcos-cpp-sdk/rpc/JsonRpcImpl.h>
 #include <bcos-cpp-sdk/ws/Service.h>
-#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
 #include <memory>
 #include <utility>
 

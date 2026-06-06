@@ -19,7 +19,7 @@
  */
 
 #include "bcos-framework/protocol/GlobalConfig.h"
-#include "bcos-utilities/BoostLogInitializer.h"
+#include "bcos-utilities/logging/BoostLogInitializer.h"
 #include "fisco-bcos-air/Common.h"
 #include "libinitializer/CommandHelper.h"
 #include "libinitializer/Initializer.h"

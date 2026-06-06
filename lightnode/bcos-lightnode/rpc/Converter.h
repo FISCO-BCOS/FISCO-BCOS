@@ -3,7 +3,7 @@
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/protocol/Block.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <range/v3/range/access.hpp>

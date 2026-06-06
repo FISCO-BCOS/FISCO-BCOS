@@ -21,7 +21,7 @@
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 
 using namespace bcos;
 using namespace front;

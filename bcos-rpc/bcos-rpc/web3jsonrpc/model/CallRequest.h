@@ -23,8 +23,8 @@
 #include <bcos-framework/protocol/Transaction.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-scheduler/src/SchedulerFactory.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <json/json.h>
 
 namespace bcos::rpc

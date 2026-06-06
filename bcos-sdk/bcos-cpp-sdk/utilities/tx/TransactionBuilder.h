@@ -24,7 +24,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <memory>
 #include <mutex>
 

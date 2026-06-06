@@ -40,7 +40,7 @@
 #include "bcos-framework/testutils/faker/FakeBlockHeader.h"
 #include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
-#include "bcos-tool/BfsFileFactory.h"
+#include "bcos-utilities/config/BfsFileFactory.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"

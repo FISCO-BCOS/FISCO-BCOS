@@ -7,7 +7,7 @@
  */
 #pragma once
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/concurrency/IOServicePool.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>

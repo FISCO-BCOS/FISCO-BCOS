@@ -37,9 +37,9 @@
 #include <bcos-cpp-sdk/ws/Service.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <memory>
 #include <mutex>
 #include <utility>

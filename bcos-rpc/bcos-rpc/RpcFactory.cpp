@@ -36,9 +36,9 @@
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
 #include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
+#include <bcos-utilities/filesystem/FileUtility.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>

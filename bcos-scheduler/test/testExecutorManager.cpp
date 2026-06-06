@@ -1,7 +1,7 @@
 #include "ExecutorManager.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "mock/MockExecutor.h"
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 

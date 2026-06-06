@@ -1,8 +1,8 @@
 #pragma once
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-utilities/Error.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Error.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <rocksdb/db.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/options.h>

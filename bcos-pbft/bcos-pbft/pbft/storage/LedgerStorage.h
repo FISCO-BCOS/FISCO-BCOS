@@ -24,7 +24,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 
 #include <utility>
 

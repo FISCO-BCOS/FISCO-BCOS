@@ -16,8 +16,8 @@
  * @brief Unit tests for the Base64
  * @file Base64.cpp
  */
-#include "bcos-utilities/Base64.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/Base64.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <iostream>

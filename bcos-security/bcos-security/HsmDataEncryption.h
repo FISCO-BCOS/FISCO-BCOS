@@ -25,8 +25,8 @@
 #include "Common.h"
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
 #include <bcos-framework/security/StorageEncryptInterface.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/filesystem/FileUtility.h>
 #include <memory>
 
 namespace bcos

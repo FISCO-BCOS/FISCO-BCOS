@@ -21,7 +21,7 @@
 #include "bcos-gateway/libamop/TopicManager.h"
 #include "bcos-gateway/libamop/Common.h"
 #include "bcos-tars-protocol/client/RpcServiceClient.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <json/json.h>
 #include <servant/Application.h>

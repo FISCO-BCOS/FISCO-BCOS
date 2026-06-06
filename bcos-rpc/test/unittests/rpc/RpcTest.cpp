@@ -35,7 +35,7 @@
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-rpc/validator/CallValidator.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;

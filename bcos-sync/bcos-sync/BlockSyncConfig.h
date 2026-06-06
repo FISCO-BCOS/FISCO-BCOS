@@ -29,7 +29,7 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/sync/SyncConfig.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/topology/NodeTimeMaintenance.h>
 
 namespace bcos::sync
 {

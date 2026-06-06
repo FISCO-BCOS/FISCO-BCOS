@@ -22,7 +22,7 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <memory>
 #include <range/v3/range.hpp>
 

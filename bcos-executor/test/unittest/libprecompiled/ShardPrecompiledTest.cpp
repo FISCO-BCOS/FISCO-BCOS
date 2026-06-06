@@ -20,7 +20,7 @@
 
 #include "libprecompiled/PreCompiledFixture.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/data/VersionConverter.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <json/json.h>
 

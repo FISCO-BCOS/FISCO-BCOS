@@ -23,7 +23,7 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-pbft/pbft/config/PBFTConfig.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::crypto;

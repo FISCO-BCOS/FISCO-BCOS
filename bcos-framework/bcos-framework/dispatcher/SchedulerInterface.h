@@ -25,7 +25,7 @@
 #include "SchedulerTypeDef.h"
 #include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <functional>
 #include <memory>
 #include <string_view>

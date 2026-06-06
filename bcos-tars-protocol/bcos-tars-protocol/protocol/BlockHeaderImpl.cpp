@@ -23,8 +23,8 @@
 #include "../Common.h"
 #include "../impl/TarsHashable.h"
 #include "bcos-concepts/Hash.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <boost/endian/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 

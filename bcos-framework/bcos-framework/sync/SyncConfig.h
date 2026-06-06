@@ -22,7 +22,7 @@
 #include "bcos-framework/consensus/ConsensusNode.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-utilities/logging/Log.h>
 #include <mutex>
 #include <range/v3/view/filter.hpp>
 namespace bcos::sync

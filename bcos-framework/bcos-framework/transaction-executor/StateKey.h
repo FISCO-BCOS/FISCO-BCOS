@@ -1,7 +1,7 @@
 #pragma once
 #include "../storage/Entry.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/ThreeWay4Apple.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/core/ThreeWay4Apple.h"
 #include <boost/throw_exception.hpp>
 #include <compare>
 #include <functional>

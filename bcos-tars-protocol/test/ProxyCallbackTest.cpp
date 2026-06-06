@@ -24,7 +24,7 @@
 #include "bcos-tars-protocol/client/SchedulerServiceClient.h"
 #include "bcos-tars-protocol/client/TxPoolServiceClient.h"
 #include "bcos-tars-protocol/tars/GatewayService.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <servant/Communicator.h>

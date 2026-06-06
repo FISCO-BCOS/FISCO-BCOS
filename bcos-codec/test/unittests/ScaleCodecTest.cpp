@@ -16,8 +16,8 @@
 #include "bcos-codec/scale/Scale.h"
 #include "bcos-codec/scale/ScaleDecoderStream.h"
 #include "bcos-codec/scale/ScaleEncoderStream.h"
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 

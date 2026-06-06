@@ -17,7 +17,7 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-task/Task.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include <boost/asio.hpp>
 #include <optional>
 #include <range/v3/view/any_view.hpp>

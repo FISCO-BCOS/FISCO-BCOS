@@ -27,7 +27,7 @@
 #include "StateStorageInterface.h"
 #include "fmt/format.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <boost/core/ignore_unused.hpp>

@@ -32,8 +32,8 @@
 #include "bcos-rpc/jsonrpc/Common.h"
 #include "bcos-rpc/validator/CallValidator.h"
 #include "bcos-rpc/web3jsonrpc/model/Web3Transaction.h"
-#include "bcos-utilities/Base64.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/data/Base64.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/case_conv.hpp>

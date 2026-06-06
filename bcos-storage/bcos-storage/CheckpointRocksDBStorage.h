@@ -1,8 +1,8 @@
 #pragma once
 
 #include "bcos-storage/RocksDBStorage2.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <filesystem>

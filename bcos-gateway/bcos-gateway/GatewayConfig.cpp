@@ -8,10 +8,10 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-security/bcos-security/BcosKms.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/FileUtility.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/filesystem/FileUtility.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <json/json.h>
 #include <boost/regex.hpp>
 #include <boost/throw_exception.hpp>

@@ -21,7 +21,7 @@
 #include <bcos-cpp-sdk/Sdk.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/ws/Service.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <cstddef>
 #include <memory>
 

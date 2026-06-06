@@ -5,7 +5,7 @@
 #include "bcos-framework/executor/NativeExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-scheduler/src/DmcExecutor.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <boost/test/unit_test.hpp>
 
 

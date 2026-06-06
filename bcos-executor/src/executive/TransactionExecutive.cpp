@@ -35,7 +35,7 @@
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-table/src/ContractShardUtils.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <range/v3/view/reverse.hpp>
 
 #ifdef WITH_WASM
@@ -51,8 +51,8 @@
 #include "bcos-framework/protocol/Exceptions.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-tool/BfsFileFactory.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/config/BfsFileFactory.h"
+#include "bcos-utilities/core/Common.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>

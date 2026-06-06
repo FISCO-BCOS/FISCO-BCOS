@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <concepts/bcos-concepts/Basic.h>
 #include <utility>
 #include <vector>

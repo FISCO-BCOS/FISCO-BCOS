@@ -4,7 +4,7 @@
  */
 
 #include "bcos-rpc/web3jsonrpc/model/CallRequest.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include <json/json.h>
 #include <boost/test/unit_test.hpp>
 

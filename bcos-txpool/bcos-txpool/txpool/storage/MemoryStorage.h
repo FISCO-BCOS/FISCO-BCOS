@@ -26,10 +26,10 @@
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/txpool/utilities/Common.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
-#include <bcos-utilities/BucketMap.h>
-#include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/ThreadPool.h>
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/containers/BucketMap.h>
+#include <bcos-utilities/core/FixedBytes.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
+#include <bcos-utilities/timer/Timer.h>
 
 namespace bcos::txpool
 {

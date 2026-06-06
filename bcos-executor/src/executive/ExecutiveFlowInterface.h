@@ -22,7 +22,7 @@
 #pragma once
 
 #include "../CallParameters.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/concurrency/ThreadPool.h"
 
 namespace bcos
 {

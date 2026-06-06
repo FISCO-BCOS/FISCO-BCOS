@@ -25,7 +25,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <magic_enum/magic_enum.hpp>

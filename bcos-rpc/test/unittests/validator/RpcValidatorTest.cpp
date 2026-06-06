@@ -4,7 +4,7 @@
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include "unittests/common/RPCFixture.h"
 #include <bcos-framework/protocol/Transaction.h>
 #include <boost/test/tools/old/interface.hpp>

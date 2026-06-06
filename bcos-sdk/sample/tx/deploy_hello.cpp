@@ -21,7 +21,7 @@
 #include <bcos-cpp-sdk/utilities/crypto/KeyPairBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderService.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string/compare.hpp>
 #include <cstdlib>

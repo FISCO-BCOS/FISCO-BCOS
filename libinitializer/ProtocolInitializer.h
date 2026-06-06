@@ -25,7 +25,7 @@
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-framework/security/StorageEncryptInterface.h>
 #include <bcos-framework/security/KeyEncryptInterface.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 
 namespace bcos::initializer
 {

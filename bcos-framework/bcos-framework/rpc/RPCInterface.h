@@ -21,7 +21,7 @@
 
 #include "bcos-framework/multigroup/GroupInfo.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 
 namespace bcos
 {

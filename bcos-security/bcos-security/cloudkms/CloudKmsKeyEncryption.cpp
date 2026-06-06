@@ -24,10 +24,10 @@
 #include "../Common.h"
 #include "AwsKmsWrapper.h"
 #include "bcos-framework/security/CloudKmsType.h"
-#include "bcos-utilities/FileUtility.h"
+#include "bcos-utilities/filesystem/FileUtility.h"
 #include "utils.h"
 #include <aws/core/Aws.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-utilities/logging/Log.h>
 
 namespace bcos::security
 {

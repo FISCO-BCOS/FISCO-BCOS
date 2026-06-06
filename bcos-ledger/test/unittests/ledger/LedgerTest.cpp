@@ -37,9 +37,9 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
-#include "bcos-tool/BfsFileFactory.h"
-#include "bcos-tool/NodeConfig.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/config/BfsFileFactory.h"
+#include "bcos-utilities/config/NodeConfig.h"
+#include "bcos-utilities/data/VersionConverter.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -51,7 +51,7 @@
 #include <bcos-framework/storage/Table.h>
 #include <bcos-framework/testutils/faker/FakeBlock.h>
 #include <bcos-table/src/StateStorage.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/lexical_cast.hpp>

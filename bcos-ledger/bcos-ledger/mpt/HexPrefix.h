@@ -18,7 +18,7 @@
  */
 #pragma once
 
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <utility>
 
 namespace bcos::ledger::mpt

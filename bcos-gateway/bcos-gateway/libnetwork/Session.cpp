@@ -14,8 +14,8 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Overloaded.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/core/Overloaded.h"
 #include <boost/asio/buffer.hpp>
 #include <boost/container/container_fwd.hpp>
 #include <boost/throw_exception.hpp>

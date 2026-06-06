@@ -22,7 +22,7 @@
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/multigroup/GroupTypeDef.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <json/json.h>
 #include <memory>
 

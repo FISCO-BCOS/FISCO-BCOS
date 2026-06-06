@@ -16,7 +16,7 @@
  * @brief Unit tests for the NewTimer.cpp
  * @file NewTimerTest.cpp
  */
-#include "bcos-utilities/NewTimer.h"
+#include "bcos-utilities/timer/NewTimer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>

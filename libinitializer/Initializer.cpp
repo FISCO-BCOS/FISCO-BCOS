@@ -42,7 +42,7 @@
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-storage/StorageWrapperImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "libinitializer/BaselineSchedulerInitializer.h"
 #include "libinitializer/ProPBFTInitializer.h"
@@ -67,8 +67,8 @@
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/impl/TarsSerializable.h>
 #include <bcos-tars-protocol/protocol/ExecutionMessageImpl.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/topology/NodeTimeMaintenance.h>
 #include <bcos-transaction-executor/TransactionExecutorImpl.h>
 #include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>

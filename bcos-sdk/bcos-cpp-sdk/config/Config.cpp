@@ -22,9 +22,9 @@
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsTools.h>
 #include <bcos-cpp-sdk/config/Config.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <memory>
 

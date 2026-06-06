@@ -9,7 +9,7 @@
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/global_control.h>

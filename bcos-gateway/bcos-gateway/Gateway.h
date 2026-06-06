@@ -29,7 +29,7 @@
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libp2p/Service.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "filter/ReadOnlyFilter.h"
 #include <range/v3/range/concepts.hpp>
 

@@ -38,7 +38,7 @@
 #include "bcos-pbft/pbft/utilities/Common.h"
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <functional>

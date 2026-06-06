@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "GatewayNodeManager.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/timer/Timer.h"
 #include <boost/asio/io_context.hpp>
 namespace bcos
 {

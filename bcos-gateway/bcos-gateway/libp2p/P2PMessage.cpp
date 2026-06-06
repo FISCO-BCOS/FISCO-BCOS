@@ -24,7 +24,7 @@
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
 #include "bcos-gateway/libp2p/Common.h"
-#include "bcos-utilities/ZstdCompress.h"
+#include "bcos-utilities/compress/ZstdCompress.h"
 #include <boost/asio/detail/socket_ops.hpp>
 #include <utility>
 

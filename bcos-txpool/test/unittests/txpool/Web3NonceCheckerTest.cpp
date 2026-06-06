@@ -18,7 +18,7 @@
  * @date 2025/3/12
  */
 
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
 #include <boost/multiprecision/cpp_int.hpp>

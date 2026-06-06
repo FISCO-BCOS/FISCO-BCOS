@@ -22,7 +22,7 @@
 #include <bcos-crypto/signature/codec/SignatureDataWithPub.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPair.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <hsm-crypto/hsm/CryptoProvider.h>
 #include <hsm-crypto/hsm/SDFCryptoProvider.h>
 #include <algorithm>

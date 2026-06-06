@@ -20,7 +20,7 @@
  */
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/Exceptions.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <wedpr-crypto/WedprCrypto.h>
 
 using namespace bcos;

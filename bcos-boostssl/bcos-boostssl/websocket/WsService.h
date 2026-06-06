@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include "bcos-utilities/NewTimer.h"
+#include "bcos-utilities/timer/NewTimer.h"
 #include <bcos-boostssl/httpserver/HttpServer.h>
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/Common.h>
@@ -28,8 +28,8 @@
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-boostssl/websocket/WsStream.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>

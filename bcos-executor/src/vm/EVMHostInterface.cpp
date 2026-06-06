@@ -26,7 +26,7 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>

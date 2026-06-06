@@ -17,7 +17,7 @@
  */
 
 #include "EngineServiceImpl.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 
 namespace
 {

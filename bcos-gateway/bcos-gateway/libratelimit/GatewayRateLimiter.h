@@ -22,7 +22,7 @@
 
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 #include "bcos-gateway/libratelimit/RateLimiterStat.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 
 namespace bcos
 {

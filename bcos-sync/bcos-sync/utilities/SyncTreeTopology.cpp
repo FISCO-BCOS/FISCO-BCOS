@@ -19,7 +19,7 @@
  * @date 2023-03-22
  */
 #include "bcos-sync/bcos-sync/utilities/SyncTreeTopology.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <range/v3/view/enumerate.hpp>
 
 using namespace bcos;

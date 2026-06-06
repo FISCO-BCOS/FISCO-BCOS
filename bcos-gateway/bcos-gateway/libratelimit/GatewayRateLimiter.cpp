@@ -18,7 +18,7 @@
  * @date 2022-09-30
  */
 
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 
 using namespace bcos;

@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <atomic>
 #include <memory>
 #include <string>

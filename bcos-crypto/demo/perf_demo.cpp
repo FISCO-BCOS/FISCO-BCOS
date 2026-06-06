@@ -30,7 +30,7 @@
 #include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/core/ignore_unused.hpp>
 #include <cassert>
 #include <ethash/keccak.hpp>

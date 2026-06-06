@@ -27,8 +27,8 @@
 #include "sync/interfaces/TransactionSyncInterface.h"
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tool/TreeTopology.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/topology/TreeTopology.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 namespace bcos::txpool
 {
 class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>

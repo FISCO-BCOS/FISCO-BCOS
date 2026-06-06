@@ -1,10 +1,10 @@
 #include "../../Common/TarsUtils.h"
 #include "../GatewayInitializer.h"
 #include "../GatewayServiceServer.h"
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-gateway/GatewayConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
 #include <servant/Application.h>
 
 using namespace bcostars;

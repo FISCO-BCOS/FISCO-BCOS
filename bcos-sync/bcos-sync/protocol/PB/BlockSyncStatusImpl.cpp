@@ -21,7 +21,7 @@
 #include "BlockSyncStatusImpl.h"
 #include "bcos-sync/utilities/Common.h"
 #include <bcos-protocol/Common.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 
 using namespace bcos;
 using namespace bcos::sync;

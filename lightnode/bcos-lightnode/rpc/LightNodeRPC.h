@@ -8,7 +8,7 @@
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include <bcos-concepts/ledger/Ledger.h>
 #include <bcos-concepts/scheduler/Scheduler.h>
 #include <bcos-concepts/transaction-pool/TransactionPool.h>

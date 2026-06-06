@@ -21,7 +21,7 @@
 #include "bcos-framework/consensus/ConsensusInterface.h"
 #include "bcos-framework/protocol/BlockFactory.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
-#include "bcos-tool/NodeTimeMaintenance.h"
+#include "bcos-utilities/topology/NodeTimeMaintenance.h"
 
 namespace bcos::sealer
 {

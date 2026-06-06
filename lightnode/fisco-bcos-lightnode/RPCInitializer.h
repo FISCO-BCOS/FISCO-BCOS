@@ -15,7 +15,7 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-storage/RocksDBStorage.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 #include <json/forwards.h>
 #include <json/value.h>
 #include <libinitializer/ProtocolInitializer.h>

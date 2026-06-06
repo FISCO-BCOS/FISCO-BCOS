@@ -20,7 +20,7 @@
  */
 
 #include "WatcherConfig.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 
 using namespace bcos;
 using namespace bcos::election;

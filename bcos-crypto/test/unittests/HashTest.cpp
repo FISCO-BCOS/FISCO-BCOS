@@ -22,7 +22,7 @@
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

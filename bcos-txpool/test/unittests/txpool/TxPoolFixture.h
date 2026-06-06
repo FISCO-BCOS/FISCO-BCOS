@@ -32,13 +32,13 @@
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-task/Wait.h>
-#include <bcos-tool/TreeTopology.h>
+#include <bcos-utilities/topology/TreeTopology.h>
 #include <bcos-txpool/TxPoolConfig.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
 #include <bcos-txpool/txpool/validator/TxValidator.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>

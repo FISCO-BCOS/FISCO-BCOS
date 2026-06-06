@@ -20,7 +20,7 @@
  */
 #pragma once
 #include <bcos-framework/Common.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 #include <memory>
 
 #define GROUP_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("GROUP")

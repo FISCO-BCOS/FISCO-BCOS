@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "../../storage/KVStorageHelper.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 
 using namespace bcos;
 using namespace bcos::storage;

@@ -18,7 +18,7 @@
  * @date 2023/3/3
  */
 
-#include "bcos-utilities/BucketMap.h"
+#include "bcos-utilities/containers/BucketMap.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>

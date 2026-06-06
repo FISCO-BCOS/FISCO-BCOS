@@ -1,6 +1,7 @@
 #include "bcos-framework/ledger/Features.h"
 
-#include "bcos-tool/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/exceptions/ToolExceptions.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/throw_exception.hpp>
 

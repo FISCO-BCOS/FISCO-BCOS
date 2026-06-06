@@ -21,7 +21,7 @@
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/signature/Exceptions.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 
 namespace bcos::crypto
 {

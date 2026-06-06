@@ -20,7 +20,7 @@
 #pragma once
 #include "SealerConfig.h"
 #include "bcos-framework/protocol/TransactionMetaData.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 #include <atomic>
 #include <functional>
 

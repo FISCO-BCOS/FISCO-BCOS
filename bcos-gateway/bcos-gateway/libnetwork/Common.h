@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include <bcos-framework/Common.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <set>

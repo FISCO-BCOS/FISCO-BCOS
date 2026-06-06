@@ -20,8 +20,8 @@
 #include "bcos-cpp-sdk/utilities/abi/ContractABIDefinitionFactory.h"
 #include "bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h"
 #include <bcos-cpp-sdk/utilities/Common.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/core/Common.h>
 #include <cstring>
 #include <stdexcept>
 #include <type_traits>

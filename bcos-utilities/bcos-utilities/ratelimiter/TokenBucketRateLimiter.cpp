@@ -21,7 +21,7 @@
  * @date: 2020-04-15
  */
 #include "bcos-utilities/ratelimiter/TokenBucketRateLimiter.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <thread>
 
 using namespace bcos;

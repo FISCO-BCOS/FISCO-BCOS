@@ -20,7 +20,7 @@
 #include "ServiceV2.h"
 #include "Common.h"
 #include "P2PMessageV2.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <utility>
 
 using namespace bcos;

@@ -22,8 +22,8 @@
  */
 #pragma once
 
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/object/ObjectCounter.h"
 #include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
 #include <mutex>
 

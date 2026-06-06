@@ -24,11 +24,11 @@
 #include "bcos-sync/state/DownloadingQueue.h"
 #include "bcos-sync/state/SyncPeerStatus.h"
 #include "bcos-sync/utilities/SyncTreeTopology.h"
-#include "bcos-tool/NodeTimeMaintenance.h"
+#include "bcos-utilities/topology/NodeTimeMaintenance.h"
 #include <bcos-framework/sync/BlockSyncInterface.h>
-#include <bcos-utilities/ThreadPool.h>
-#include <bcos-utilities/Timer.h>
-#include <bcos-utilities/Worker.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
+#include <bcos-utilities/timer/Timer.h>
+#include <bcos-utilities/concurrency/Worker.h>
 namespace bcos::sync
 {
 class BlockSync : public BlockSyncInterface,

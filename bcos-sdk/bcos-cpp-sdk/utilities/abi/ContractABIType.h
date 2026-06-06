@@ -19,9 +19,9 @@
  */
 #pragma once
 
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <json/value.h>
 #include <json/writer.h>
 #include <boost/throw_exception.hpp>

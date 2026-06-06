@@ -3,7 +3,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-rpc/filter/Common.h"
 #include "bcos-rpc/filter/FilterRequest.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <boost/asio.hpp>
 #include <memory>
 

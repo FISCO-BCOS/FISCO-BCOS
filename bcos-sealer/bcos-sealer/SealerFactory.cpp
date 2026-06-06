@@ -20,7 +20,7 @@
 #include "SealerFactory.h"
 
 #include "Sealer.h"
-#include "bcos-tool/NodeTimeMaintenance.h"
+#include "bcos-utilities/topology/NodeTimeMaintenance.h"
 #include <utility>
 
 using namespace bcos;

@@ -18,7 +18,7 @@
  * @date 2021-08-23
  */
 #pragma once
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/asio/detail/socket_ops.hpp>
 
 // check offset length overflow when decode message

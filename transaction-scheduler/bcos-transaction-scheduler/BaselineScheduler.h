@@ -25,9 +25,9 @@
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Bloom.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/ITTAPI.h"
+#include "bcos-utilities/data/Bloom.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/object/ITTAPI.h"
 #include <fmt/format.h>
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_invoke.h>

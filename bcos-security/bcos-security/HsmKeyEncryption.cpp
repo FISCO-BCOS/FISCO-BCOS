@@ -22,9 +22,9 @@
 
 #include "HsmKeyEncryption.h"
 #include <bcos-crypto/encrypt/HsmSM4Crypto.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FileUtility.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/filesystem/FileUtility.h>
+#include <bcos-utilities/logging/Log.h>
 
 using namespace bcos;
 using namespace crypto;

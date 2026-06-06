@@ -46,8 +46,8 @@
 #include <bcos-txpool/sync/TransactionSync.h>
 #include <bcos-txpool/txpool/storage/MemoryStorage.h>
 #include <bcos-txpool/txpool/validator/TxValidator.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;

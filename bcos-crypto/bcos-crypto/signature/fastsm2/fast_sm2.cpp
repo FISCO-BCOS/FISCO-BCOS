@@ -20,8 +20,8 @@
  */
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/fastsm2/fast_sm2.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/evp.h>

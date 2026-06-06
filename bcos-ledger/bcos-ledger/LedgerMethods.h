@@ -20,7 +20,7 @@
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-task/AwaitableValue.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "generated/bcos-tars-protocol/tars/LedgerConfig.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>

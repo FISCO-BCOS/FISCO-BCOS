@@ -31,10 +31,10 @@
 #include "bcos-framework/transaction-scheduler/TransactionScheduler.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Task.h"
-#include "bcos-utilities/Bloom.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/data/Bloom.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <cstdint>
 #include <functional>
 #include <mutex>

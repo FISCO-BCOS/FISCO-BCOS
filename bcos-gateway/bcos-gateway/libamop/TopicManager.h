@@ -22,7 +22,7 @@
 #include "bcos-framework/rpc/RPCInterface.h"
 #include "bcos-gateway/libamop/Common.h"
 #include "bcos-gateway/libp2p/P2PInterface.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <servant/Application.h>
 #include <shared_mutex>
 

@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>

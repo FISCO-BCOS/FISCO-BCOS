@@ -21,8 +21,8 @@
  */
 
 
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>

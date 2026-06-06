@@ -6,7 +6,7 @@
 #include <bcos-concepts/transaction-pool/TransactionPool.h>
 #include <bcos-framework/protocol/TransactionSubmitResult.h>
 #include <bcos-tars-protocol/tars/LightNode.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <boost/throw_exception.hpp>
 
 namespace bcos::transaction_pool

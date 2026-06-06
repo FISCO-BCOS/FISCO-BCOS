@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "bcos-framework/gateway/GatewayTypeDef.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <memory>
 #include <set>
 

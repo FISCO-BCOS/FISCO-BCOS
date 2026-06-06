@@ -20,7 +20,7 @@
 #pragma once
 
 #include "bcos-framework/multigroup/GroupInfo.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include <json/json.h>
 #include <exception>
 

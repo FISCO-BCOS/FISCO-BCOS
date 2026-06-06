@@ -23,8 +23,8 @@
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
-#include <bcos-tool/NodeTimeMaintenance.h>
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/topology/NodeTimeMaintenance.h>
+#include <bcos-utilities/timer/Timer.h>
 #include <boost/asio/io_context.hpp>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 

@@ -10,7 +10,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/throw_exception.hpp>
 #include <memory>
 #include <utility>

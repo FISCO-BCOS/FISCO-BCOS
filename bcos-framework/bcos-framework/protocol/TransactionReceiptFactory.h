@@ -21,7 +21,7 @@
 #pragma once
 #include "Protocol.h"
 #include "TransactionReceipt.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 
 namespace bcos::protocol

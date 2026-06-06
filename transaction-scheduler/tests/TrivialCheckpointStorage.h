@@ -1,8 +1,8 @@
 #pragma once
 
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <optional>
 
 namespace bcos::storage2

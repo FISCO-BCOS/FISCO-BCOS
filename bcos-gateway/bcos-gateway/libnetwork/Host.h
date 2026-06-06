@@ -10,7 +10,7 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/PeerBlackWhitelistInterface.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <openssl/x509.h>
 #include <boost/asio/ssl/stream_base.hpp>
 #include <boost/asio/steady_timer.hpp>

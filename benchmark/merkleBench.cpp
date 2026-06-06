@@ -3,7 +3,7 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <boost/algorithm/hex.hpp>

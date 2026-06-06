@@ -19,8 +19,8 @@
  * @date 2021-04-01
  */
 #pragma once
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <range/v3/view/any_view.hpp>
 
 #define CRYPTO_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CRYPTO")

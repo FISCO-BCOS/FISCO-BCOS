@@ -21,8 +21,8 @@
 #include "../bcos-transaction-executor/EVMCResult.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>

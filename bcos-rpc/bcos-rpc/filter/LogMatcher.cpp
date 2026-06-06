@@ -1,7 +1,7 @@
 #include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/filter/LogMatcher.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 
 using namespace bcos;
 using namespace bcos::rpc;

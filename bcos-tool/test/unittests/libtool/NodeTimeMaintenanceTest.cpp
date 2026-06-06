@@ -2,8 +2,8 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1KeyPair.h>
-#include <bcos-tool/NodeTimeMaintenance.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/topology/NodeTimeMaintenance.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

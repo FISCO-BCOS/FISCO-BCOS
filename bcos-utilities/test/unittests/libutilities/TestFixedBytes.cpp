@@ -1,4 +1,4 @@
-#include "../../../bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iterator>

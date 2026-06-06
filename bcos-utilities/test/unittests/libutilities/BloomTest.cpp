@@ -19,7 +19,7 @@
  */
 
 
-#include "bcos-utilities/Bloom.h"
+#include "bcos-utilities/data/Bloom.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <string_view>

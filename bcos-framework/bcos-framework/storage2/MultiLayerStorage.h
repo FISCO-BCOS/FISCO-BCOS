@@ -3,9 +3,9 @@
 #include "Storage.h"
 #include "bcos-task/TBBWait.h"
 #include "bcos-task/Trait.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/ITTAPI.h"
-#include "bcos-utilities/Overloaded.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/object/ITTAPI.h"
+#include "bcos-utilities/core/Overloaded.h"
 #include <oneapi/tbb/parallel_invoke.h>
 #include <boost/throw_exception.hpp>
 #include <concepts>

@@ -21,9 +21,9 @@
 
 #pragma once
 #include "VMInstance.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Error.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/exceptions/Error.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <evmone/evmone.h>
 #include <boost/throw_exception.hpp>
 #include <memory>

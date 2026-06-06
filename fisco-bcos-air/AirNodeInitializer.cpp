@@ -29,8 +29,8 @@
 #include <bcos-rpc/groupmgr/NodeService.h>
 #include <bcos-rpc/tarsRPC/RPCServer.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <rocksdb/env.h>
 
 using namespace bcos::node;

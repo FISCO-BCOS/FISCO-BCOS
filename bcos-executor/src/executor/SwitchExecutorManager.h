@@ -5,7 +5,7 @@
 #include "bcos-framework/executor/ExecuteError.h"
 #include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/concurrency/ThreadPool.h"
 #include <thread>
 
 namespace bcos::executor

@@ -19,7 +19,7 @@
  * @date 2022-04-26
  */
 #include "ElectionConfig.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 
 using namespace bcos;
 using namespace bcos::election;

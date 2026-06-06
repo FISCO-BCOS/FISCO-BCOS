@@ -23,7 +23,7 @@
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/storage/Table.h"
 #include "tikv_client.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <atomic>

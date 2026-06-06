@@ -1,7 +1,7 @@
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/ledger/SystemConfigs.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/data/VersionConverter.h"
 #include <bcos-executor/src/Common.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>

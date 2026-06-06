@@ -21,7 +21,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-tool/VersionConverter.h"
+#include "bcos-utilities/data/VersionConverter.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 
 using namespace bcos;

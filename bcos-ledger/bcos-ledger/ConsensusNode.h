@@ -1,5 +1,5 @@
 #pragma once
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <string>
 #include <vector>
 

@@ -24,7 +24,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

@@ -31,8 +31,8 @@
 #include "bcos-rpc/groupmgr/AirGroupManager.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
-#include "bcos-tool/NodeConfig.h"
-#include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/config/NodeConfig.h"
+#include "bcos-utilities/concurrency/IOServicePool.h"
 #include "web3jsonrpc/Web3JsonRpcImpl.h"
 #include <utility>
 

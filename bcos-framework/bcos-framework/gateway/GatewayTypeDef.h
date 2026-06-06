@@ -19,8 +19,8 @@
  * @date 2021-04-19
  */
 #pragma once
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>

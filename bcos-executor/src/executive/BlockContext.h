@@ -30,7 +30,7 @@
 #include "bcos-framework/storage/EntryCache.h"
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-utilities/BucketMap.h"
+#include "bcos-utilities/containers/BucketMap.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <functional>
 #include <memory>

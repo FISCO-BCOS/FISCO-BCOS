@@ -22,7 +22,7 @@
 #include "vm/gas_meter/GasInjector.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <json/json.h>
 

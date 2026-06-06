@@ -23,8 +23,8 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/ITTAPI.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/object/ITTAPI.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_for.h>

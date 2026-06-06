@@ -5,7 +5,7 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <boost/multi_index/composite_key.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/mem_fun.hpp>

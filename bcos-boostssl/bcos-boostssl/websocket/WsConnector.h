@@ -19,8 +19,8 @@
  */
 #pragma once
 #include <bcos-boostssl/websocket/WsStream.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/ssl/ssl_stream.hpp>

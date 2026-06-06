@@ -1,7 +1,7 @@
 #include "GraphKeyLocks.h"
 #include "Common.h"
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>

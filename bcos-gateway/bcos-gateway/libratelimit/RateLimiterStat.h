@@ -21,7 +21,7 @@
 
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/timer/Timer.h"
 #include <boost/asio/io_context.hpp>
 #include <array>
 #include <memory>

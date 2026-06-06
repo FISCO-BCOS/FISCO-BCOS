@@ -1,7 +1,7 @@
 #include "BlockResponse.h"
 #include "Log.h"
 
-#include <bcos-utilities/Bloom.h>
+#include <bcos-utilities/data/Bloom.h>
 
 #include <range/v3/view/enumerate.hpp>
 

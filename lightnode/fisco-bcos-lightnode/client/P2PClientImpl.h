@@ -2,7 +2,7 @@
 
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-lightnode/Log.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/Serialize.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>

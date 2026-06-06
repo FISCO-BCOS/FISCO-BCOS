@@ -19,7 +19,7 @@
  */
 
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "bcos-gateway/libratelimit/RateLimiterManager.h"
 
 using namespace bcos;

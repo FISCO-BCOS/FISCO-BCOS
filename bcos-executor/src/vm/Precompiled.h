@@ -25,9 +25,9 @@
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/PrecompiledGas.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <functional>
 #include <unordered_map>
 #include <utility>

@@ -19,7 +19,7 @@
  */
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 namespace bcos::crypto
 {
 class KeyPairFactory

@@ -43,8 +43,8 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>

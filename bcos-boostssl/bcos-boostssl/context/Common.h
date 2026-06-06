@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 

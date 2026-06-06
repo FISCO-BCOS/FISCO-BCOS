@@ -20,7 +20,7 @@
 
 #include <bcos-rpc/event/Common.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 
 using namespace bcos;
 using namespace bcos::event;

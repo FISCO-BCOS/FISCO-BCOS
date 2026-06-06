@@ -22,7 +22,7 @@
 
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <cstdint>
 namespace bcos::precompiled
 {

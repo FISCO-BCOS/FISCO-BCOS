@@ -17,8 +17,8 @@
  */
 
 #include "bcos-utilities/ratelimiter/RateReporter.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/timer/Timer.h"
 
 using namespace bcos;
 

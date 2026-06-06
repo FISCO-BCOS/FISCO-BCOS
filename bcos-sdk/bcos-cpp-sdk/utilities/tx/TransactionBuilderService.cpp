@@ -19,7 +19,7 @@
  */
 #include <bcos-cpp-sdk/utilities/Common.h>
 #include <bcos-cpp-sdk/utilities/tx/TransactionBuilderService.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <memory>
 #include <string>
 

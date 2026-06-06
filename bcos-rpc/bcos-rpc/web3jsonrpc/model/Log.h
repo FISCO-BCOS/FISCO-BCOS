@@ -21,7 +21,7 @@
 #pragma once
 
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <json/json.h>
 
 namespace bcos::rpc

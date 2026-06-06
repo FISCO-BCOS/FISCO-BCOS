@@ -1,6 +1,6 @@
 #include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-security/bcos-security/cloudkms/AwsKmsWrapper.h"
-#include "bcos-utilities/FileUtility.h"
+#include "bcos-utilities/filesystem/FileUtility.h"
 #include <aws/core/Aws.h>
 #include <fstream>
 #include <iostream>

@@ -23,9 +23,9 @@
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
+#include <bcos-utilities/timer/Timer.h>
 #include <servant/Application.h>
 
 #define EXECUTOR_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("ExecutorServiceApp")

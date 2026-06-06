@@ -18,7 +18,7 @@
  * @date 2021-06-17
  */
 #pragma once
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 
 namespace bcos
 {

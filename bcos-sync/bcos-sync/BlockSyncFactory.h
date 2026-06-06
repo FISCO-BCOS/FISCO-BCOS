@@ -21,7 +21,7 @@
 #pragma once
 #include "bcos-sync/BlockSync.h"
 #include "bcos-sync/BlockSyncConfig.h"
-#include "bcos-tool/NodeTimeMaintenance.h"
+#include "bcos-utilities/topology/NodeTimeMaintenance.h"
 
 namespace bcos::sync
 {

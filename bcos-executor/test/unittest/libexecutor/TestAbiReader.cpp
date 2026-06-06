@@ -22,7 +22,7 @@
 #include "../src/dag/Abi.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>
 #include <string>
 

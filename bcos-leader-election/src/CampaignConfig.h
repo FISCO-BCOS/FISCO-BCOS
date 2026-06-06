@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "ElectionConfig.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 
 namespace bcos
 {

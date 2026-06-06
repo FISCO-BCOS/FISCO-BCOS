@@ -21,8 +21,8 @@
 #include "bcos-boostssl/websocket/Common.h"
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/ObjectCounter.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/object/ObjectCounter.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>

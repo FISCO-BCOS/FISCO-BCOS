@@ -18,7 +18,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-task/Wait.h"
 #include <bcos-framework/executor/ExecuteError.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>

@@ -22,7 +22,7 @@
 #pragma once
 
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <atomic>
 #include <memory>
 #include <utility>

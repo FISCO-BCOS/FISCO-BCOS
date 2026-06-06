@@ -21,8 +21,8 @@
 #pragma once
 #include "bcos-tars-protocol/tars/RpcService.h"
 #include <bcos-framework/protocol/Protocol.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
 #include <servant/Application.h>
 
 namespace bcos::initializer

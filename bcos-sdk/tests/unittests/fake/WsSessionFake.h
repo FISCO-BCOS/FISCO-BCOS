@@ -21,8 +21,8 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 
 namespace bcos
 {

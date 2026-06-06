@@ -12,7 +12,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <chrono>
 #include <utility>

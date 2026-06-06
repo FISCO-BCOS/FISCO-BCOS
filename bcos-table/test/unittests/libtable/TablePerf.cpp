@@ -1,6 +1,6 @@
 #include "Hash.h"
 #include "bcos-table/src/StateStorage.h"
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>

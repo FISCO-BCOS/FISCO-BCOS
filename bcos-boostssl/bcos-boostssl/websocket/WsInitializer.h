@@ -22,7 +22,7 @@
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <utility>
 
 namespace bcos::boostssl::ws

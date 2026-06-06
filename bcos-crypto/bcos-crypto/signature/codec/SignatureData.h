@@ -21,7 +21,7 @@
 
 #pragma once
 #include <bcos-crypto/signature/Exceptions.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/FixedBytes.h>
 namespace bcos
 {
 namespace crypto

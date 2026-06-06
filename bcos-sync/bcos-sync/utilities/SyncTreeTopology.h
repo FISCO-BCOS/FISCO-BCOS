@@ -19,7 +19,7 @@
  * @date 2023-03-22
  */
 #pragma once
-#include <bcos-tool/TreeTopology.h>
+#include <bcos-utilities/topology/TreeTopology.h>
 #include <utility>
 
 #define SYNCTREE_LOG(LEVEL)                                                      \

@@ -21,9 +21,9 @@
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 
 using namespace bcos;
 using namespace bcos::gateway;

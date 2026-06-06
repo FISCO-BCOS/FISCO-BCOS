@@ -22,7 +22,7 @@
 #include "../cache/PBFTCacheProcessor.h"
 #include "../config/PBFTConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 namespace bcos::consensus
 {
 class PBFTLogSync : public std::enable_shared_from_this<PBFTLogSync>

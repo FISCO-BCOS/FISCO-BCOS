@@ -23,8 +23,8 @@
 #include "bcos-txpool/txpool/validator/TxPoolNonceChecker.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
+#include "bcos-utilities/concurrency/IOServicePool.h"
 
 #include <sw/redis++/cxx_utils.h>
 #include <tbb/parallel_for.h>

@@ -10,7 +10,7 @@
 #include <bcos-framework/mempool/MemPool.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <iterator>
 #include <range/v3/all.hpp>

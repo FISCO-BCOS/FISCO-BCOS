@@ -11,7 +11,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 #include <list>
 
 namespace bcos::scheduler

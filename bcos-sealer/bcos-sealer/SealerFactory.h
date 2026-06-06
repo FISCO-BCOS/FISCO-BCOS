@@ -21,7 +21,7 @@
 #include "Sealer.h"
 #include "SealerConfig.h"
 #include "VRFBasedSealer.h"
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 namespace bcos
 {
 namespace sealer

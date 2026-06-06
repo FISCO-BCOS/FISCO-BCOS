@@ -40,7 +40,7 @@
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #endif
 #include <bcos-framework/protocol/ProtocolInfo.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <cstdint>
 #include <functional>
 #include <iterator>

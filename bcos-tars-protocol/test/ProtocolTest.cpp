@@ -18,7 +18,7 @@
 #include <bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/Block.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <gsl/span>

@@ -27,7 +27,7 @@
 #include <bcos-framework/ledger/LedgerInterface.h>
 #include <bcos-task/Task.h>
 #include <bcos-txpool/txpool/validator/Web3NonceChecker.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <algorithm>
 
 namespace bcos::txpool

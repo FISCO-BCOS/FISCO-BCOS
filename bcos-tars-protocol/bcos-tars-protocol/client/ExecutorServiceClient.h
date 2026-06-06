@@ -22,7 +22,7 @@
 
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 
 namespace bcostars
 {

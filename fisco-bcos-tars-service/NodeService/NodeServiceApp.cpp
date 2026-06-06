@@ -26,7 +26,7 @@
 #include "../SchedulerService/SchedulerServiceServer.h"
 #include "../TxPoolService/TxPoolServiceServer.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include "libinitializer/Initializer.h"
 #include <bcos-framework/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>

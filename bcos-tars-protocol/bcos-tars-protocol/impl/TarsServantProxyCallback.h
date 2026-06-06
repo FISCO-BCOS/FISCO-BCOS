@@ -20,8 +20,8 @@
  */
 #pragma once
 
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include "servant/ServantProxy.h"
 #include <util/tc_autoptr.h>
 #include <boost/exception/detail/type_info.hpp>

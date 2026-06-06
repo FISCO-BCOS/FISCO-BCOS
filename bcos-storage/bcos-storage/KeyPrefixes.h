@@ -19,7 +19,7 @@
  * @date: 2026-05-12
  */
 #pragma once
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <cstring>
 #include <optional>
 #include <string>

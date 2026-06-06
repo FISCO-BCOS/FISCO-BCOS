@@ -34,7 +34,7 @@
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "vm/EVMCWasm.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>

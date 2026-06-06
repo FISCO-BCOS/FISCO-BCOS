@@ -20,7 +20,7 @@
 
 #pragma once
 #include "bcos-framework/protocol/ProtocolInfo.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <fmt/format.h>
 #include <json/json.h>
 #include <memory>

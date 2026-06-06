@@ -22,9 +22,9 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h"
-#include "bcos-utilities/BoostLogInitializer.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/RateCollector.h"
+#include "bcos-utilities/logging/BoostLogInitializer.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/rate/RateCollector.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <chrono>
 #include <memory>

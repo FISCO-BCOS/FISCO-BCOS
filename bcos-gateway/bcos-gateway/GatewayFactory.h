@@ -11,7 +11,7 @@
 #include "bcos-gateway/GatewayConfig.h"
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
 

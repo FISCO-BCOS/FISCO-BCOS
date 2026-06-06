@@ -3,7 +3,7 @@
 #include "../RpcServiceServer.h"
 #include "libinitializer/CommandHelper.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
 #include <servant/Application.h>
 
 using namespace bcostars;

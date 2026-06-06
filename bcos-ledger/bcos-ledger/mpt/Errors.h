@@ -18,7 +18,7 @@
  */
 #pragma once
 
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 
 namespace bcos::ledger::mpt
 {

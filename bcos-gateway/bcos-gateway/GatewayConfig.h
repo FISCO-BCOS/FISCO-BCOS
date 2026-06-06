@@ -8,7 +8,7 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
+#include "bcos-utilities/object/ObjectCounter.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>

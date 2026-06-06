@@ -24,8 +24,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-front/FrontServiceFactory.h"
 #include "bcos-gateway/GatewayFactory.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/concurrency/ThreadPool.h"
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>

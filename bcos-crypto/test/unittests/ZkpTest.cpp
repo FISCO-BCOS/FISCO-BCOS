@@ -18,7 +18,7 @@
  * @date 2021.03.06
  */
 #include "bcos-crypto/zkp/discretezkp/DiscreteLogarithmZkp.h"
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 

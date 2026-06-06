@@ -22,7 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 namespace bcos
 {
 namespace crypto

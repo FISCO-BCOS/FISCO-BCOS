@@ -22,8 +22,8 @@
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/web3jsonrpc/model/TransactionResponse.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <json/json.h>
 
 namespace bcos::rpc

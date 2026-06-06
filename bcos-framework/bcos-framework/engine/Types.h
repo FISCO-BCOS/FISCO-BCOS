@@ -21,9 +21,9 @@
 
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-utilities/Bloom.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/data/Bloom.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <cstdint>
 #include <optional>
 #include <string>

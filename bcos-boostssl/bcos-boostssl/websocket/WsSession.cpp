@@ -20,10 +20,10 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <boost/asio/post.hpp>
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/stream.hpp>

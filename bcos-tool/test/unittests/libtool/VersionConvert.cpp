@@ -1,6 +1,6 @@
 
-#include <bcos-tool/VersionConverter.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/data/VersionConverter.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 

@@ -6,8 +6,8 @@
 #include "EVMCResult.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <cstdint>

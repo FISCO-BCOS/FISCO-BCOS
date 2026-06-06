@@ -36,7 +36,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorageFactory.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/concurrency/ThreadPool.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <tbb/concurrent_hash_map.h>
 #include <boost/function.hpp>

@@ -24,7 +24,7 @@
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "libinitializer/MultiVersionScheduler.h"
 #ifdef TOOLS
@@ -32,8 +32,8 @@
 #endif
 #include <bcos-executor/src/executor/SwitchExecutorManager.h>
 #include <bcos-scheduler/src/SchedulerManager.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
+#include <bcos-utilities/concurrency/IOServicePool.h>
 #include <memory>
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"

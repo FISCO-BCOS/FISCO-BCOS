@@ -2,7 +2,7 @@
 #include "../protocol/Protocol.h"
 #include "../storage2/Storage.h"
 #include "bcos-task/Task.h"
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 #include <array>
 #include <bitset>
 #include <magic_enum/magic_enum.hpp>

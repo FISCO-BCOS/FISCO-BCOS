@@ -25,8 +25,8 @@
 #include "bcos-cpp-sdk/utilities/abi/ContractABIType.h"
 #include <bcos-cpp-sdk/utilities/abi/ContractABITypeCodec.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <json/value.h>
 #include <memory>
 #include <string>

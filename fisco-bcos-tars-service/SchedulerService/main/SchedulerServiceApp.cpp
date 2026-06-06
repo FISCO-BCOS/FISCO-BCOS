@@ -21,7 +21,7 @@
 #include "SchedulerServiceApp.h"
 #include "Common/TarsUtils.h"
 #include "SchedulerService/SchedulerServiceServer.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include "generated/bcos-tars-protocol/tars/TxPoolService.h"
 #include "libinitializer/CommandHelper.h"

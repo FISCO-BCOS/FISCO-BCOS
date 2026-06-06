@@ -19,7 +19,7 @@
  * @date 2021-04-26
  */
 #pragma once
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/timer/Timer.h>
 namespace bcos::consensus
 {
 class PBFTTimer : public Timer

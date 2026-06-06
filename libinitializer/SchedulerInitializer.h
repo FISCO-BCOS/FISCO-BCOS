@@ -27,7 +27,7 @@
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-scheduler/src/SchedulerFactory.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 
 #include <utility>
 

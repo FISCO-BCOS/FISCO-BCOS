@@ -10,10 +10,10 @@
 #include "bcos-gateway/libnetwork/Message.h"
 #include "bcos-gateway/libnetwork/SessionCallback.h"
 #include "bcos-gateway/libnetwork/SessionFace.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
-#include "bcos-utilities/Overloaded.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/exceptions/Error.h"
+#include "bcos-utilities/core/Overloaded.h"
+#include "bcos-utilities/timer/Timer.h"
 #include <oneapi/tbb/concurrent_queue.h>
 #include <boost/asio/buffer.hpp>
 #include <boost/container/small_vector.hpp>

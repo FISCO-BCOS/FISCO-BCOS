@@ -23,11 +23,11 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
 #include <bcos-framework/protocol/CommonError.h>
-#include <bcos-utilities/ITTAPI.h>
+#include <bcos-utilities/object/ITTAPI.h>
 #include <oneapi/tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>

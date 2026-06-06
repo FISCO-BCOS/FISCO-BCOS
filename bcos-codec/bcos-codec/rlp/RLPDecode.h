@@ -20,9 +20,9 @@
 
 #pragma once
 #include "Common.h"
-#include "bcos-utilities/Error.h"
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-utilities/exceptions/Error.h"
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <utility>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git

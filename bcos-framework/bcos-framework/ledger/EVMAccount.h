@@ -4,7 +4,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
 #include "bcos-task/Task.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include <evmc/evmc.h>
 #include <boost/throw_exception.hpp>
 #include <range/v3/algorithm/copy.hpp>

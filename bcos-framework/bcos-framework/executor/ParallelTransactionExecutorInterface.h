@@ -28,8 +28,8 @@
 #include "bcos-task/Task.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/storage/Entry.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <memory>
 

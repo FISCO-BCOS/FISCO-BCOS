@@ -22,7 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/signature/hsmSM2/HsmSM2Crypto.h>
 #include <bcos-crypto/signature/key/KeyPair.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <memory>

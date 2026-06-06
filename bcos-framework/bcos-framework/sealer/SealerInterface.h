@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <functional>
 
 

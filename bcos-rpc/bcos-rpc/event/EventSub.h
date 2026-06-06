@@ -22,7 +22,7 @@
 
 #include "bcos-rpc/event/EventSubTask.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
-#include "bcos-utilities/Worker.h"
+#include "bcos-utilities/concurrency/Worker.h"
 #include <atomic>
 #include <functional>
 #include <memory>

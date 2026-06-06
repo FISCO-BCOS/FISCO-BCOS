@@ -1,6 +1,6 @@
 #include "bcos-framework/multigroup/GroupInfo.h"
 
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <sstream>
 
 namespace bcos::group

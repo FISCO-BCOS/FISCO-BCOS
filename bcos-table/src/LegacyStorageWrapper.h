@@ -6,7 +6,7 @@
 #include "bcos-table/src/StateStorageInterface.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-utilities/exceptions/Error.h"
 #include <boost/throw_exception.hpp>
 #include <exception>
 #include <functional>

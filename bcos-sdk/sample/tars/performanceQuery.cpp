@@ -2,7 +2,7 @@
 #include "bcos-cpp-sdk/tarsRPC/RPCClient.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/protocol/Transaction.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include "bcos-utilities/ratelimiter/TokenBucketRateLimiter.h"
 #include <bcos-codec/abi/ContractABICodec.h>

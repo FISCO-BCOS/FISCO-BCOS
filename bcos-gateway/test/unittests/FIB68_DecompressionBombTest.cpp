@@ -18,7 +18,7 @@
  * @date 2026-04-07
  */
 
-#include "bcos-utilities/ZstdCompress.h"
+#include "bcos-utilities/compress/ZstdCompress.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <cstdint>

@@ -21,7 +21,7 @@
 #include "ProPBFTInitializer.h"
 #include "Common.h"
 #include "bcos-framework/protocol/ServiceDesc.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-pbft/pbft/PBFTImpl.h>
 #include <bcos-sealer/Sealer.h>

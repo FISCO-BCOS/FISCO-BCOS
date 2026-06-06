@@ -19,7 +19,7 @@
  * @date 2021-04-26
  */
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/timer/Timer.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>

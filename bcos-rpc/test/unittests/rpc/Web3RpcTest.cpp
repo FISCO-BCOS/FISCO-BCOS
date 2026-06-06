@@ -20,7 +20,7 @@
 
 
 #include "../common/RPCFixture.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include <bcos-framework/engine/AnyEngineService.h>
 #include <bcos-codec/wrapper/CodecWrapper.h>
 #include <bcos-crypto/hash/Keccak256.h>
@@ -36,7 +36,7 @@
 #include <bcos-rpc/web3jsonrpc/model/Web3FilterRequest.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-task/Task.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <ostream>
 #include <string_view>

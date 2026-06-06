@@ -21,7 +21,7 @@
 #include <bcos-storage/KeyPrefixes.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <boost/filesystem.hpp>

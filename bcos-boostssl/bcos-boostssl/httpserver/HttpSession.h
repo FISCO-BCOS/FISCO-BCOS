@@ -21,7 +21,7 @@
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/httpserver/HttpQueue.h>
 #include <bcos-boostssl/httpserver/HttpStream.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/strand.hpp>

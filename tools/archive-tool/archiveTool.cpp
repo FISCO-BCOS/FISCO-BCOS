@@ -25,7 +25,7 @@
 #include "bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h"
 #include "bcos-storage/bcos-storage/TiKVStorage.h"
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionImpl.h"
-#include "bcos-utilities/BoostLogInitializer.h"
+#include "bcos-utilities/logging/BoostLogInitializer.h"
 #include "boost/filesystem.hpp"
 #include "libinitializer/LedgerInitializer.h"
 #include "libinitializer/ProtocolInitializer.h"

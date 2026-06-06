@@ -19,8 +19,8 @@
  * @author: tabsu
  */
 
-#include "bcos-utilities/Worker.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/concurrency/Worker.h"
+#include "bcos-utilities/timer/Timer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>

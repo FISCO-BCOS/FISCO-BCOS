@@ -23,7 +23,7 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/protocol/AMOPRequest.h>
 #include <bcos-framework/rpc/RPCInterface.h>
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/timer/Timer.h>
 #include <servant/Application.h>
 
 #include <utility>

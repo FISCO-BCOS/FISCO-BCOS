@@ -19,9 +19,9 @@
  */
 
 #include "EngineEndpoint.h"
-
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include "bcos-rpc/jsonrpc/Common.h"
+#include "bcos-rpc/web3jsonrpc/utils/util.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -33,8 +33,8 @@ constexpr int32_t kEngineNotAvailable = -32000;
 /// Build a JSON-RPC error response when the engine service is not available.
 void buildEngineNotAvailableError(const Json::Value& request, Json::Value& response)
 {
-    buildJsonError(request, kEngineNotAvailable,
-        "Engine service is not available on this node", response);
+    buildJsonError(
+        request, kEngineNotAvailable, "Engine service is not available on this node", response);
 }
 
 /// Parse a hex-prefixed string into h256.
@@ -43,8 +43,9 @@ h256 parseH256(std::string_view hex)
     auto bytes = fromHex(hex);
     if (bytes.size() != 32)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "Expected 32-byte hex string for h256, got " + std::to_string(bytes.size()) + " bytes"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Expected 32-byte hex string for h256, got " +
+                                                std::to_string(bytes.size()) + " bytes"));
     }
     h256 result;
     std::copy(bytes.begin(), bytes.end(), result.begin());
@@ -57,8 +58,9 @@ Address parseAddress(std::string_view hex)
     auto bytes = fromHex(hex);
     if (bytes.size() != 20)
     {
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            InvalidParams, "Expected 20-byte hex string for address, got " + std::to_string(bytes.size()) + " bytes"));
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(InvalidParams, "Expected 20-byte hex string for address, got " +
+                                                std::to_string(bytes.size()) + " bytes"));
     }
     Address result;
     std::copy(bytes.begin(), bytes.end(), result.begin());
@@ -148,9 +150,9 @@ engine::NewPayloadRequest parseNewPayloadRequest(
         auto bloomBytes = fromHex(ep["logsBloom"].asString());
         if (bloomBytes.size() != BloomBytesSize)
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams,
-                "Expected 256-byte hex string for logsBloom, got " +
-                    std::to_string(bloomBytes.size()) + " bytes"));
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(InvalidParams, "Expected 256-byte hex string for logsBloom, got " +
+                                                    std::to_string(bloomBytes.size()) + " bytes"));
         }
         std::copy(bloomBytes.begin(), bloomBytes.end(), payload.logsBloom.begin());
     }

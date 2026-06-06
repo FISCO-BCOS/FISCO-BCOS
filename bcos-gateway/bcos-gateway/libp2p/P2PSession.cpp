@@ -8,7 +8,7 @@
 #include "bcos-gateway/libp2p/Common.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/Service.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/core/Common.h"
 #include <boost/algorithm/string.hpp>
 
 using namespace bcos;

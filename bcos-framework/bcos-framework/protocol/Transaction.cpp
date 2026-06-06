@@ -1,12 +1,12 @@
 #include "bcos-framework/protocol/Transaction.h"
 
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/logging/BoostLog.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
 
 #if !ONLY_CPP_SDK
-#include <bcos-utilities/ITTAPI.h>
+#include <bcos-utilities/object/ITTAPI.h>
 #endif
 
 namespace bcos::protocol

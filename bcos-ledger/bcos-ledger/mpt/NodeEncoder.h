@@ -21,7 +21,7 @@
 #include "TrieNode.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <utility>
 
 namespace bcos::ledger::mpt

@@ -26,7 +26,7 @@
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 
 #include <bcos-rpc/jsonrpc/Common.h>
 

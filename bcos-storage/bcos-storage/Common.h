@@ -22,7 +22,7 @@
 #pragma once
 
 #include <bcos-framework/storage/StorageInterface.h>
-#include <bcos-utilities/ITTAPI.h>
+#include <bcos-utilities/object/ITTAPI.h>
 
 namespace bcos::storage
 {

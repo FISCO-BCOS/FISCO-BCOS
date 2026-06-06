@@ -27,7 +27,7 @@
 #include "bcos-crypto/signature/sm2/SM2Crypto.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/exceptions/Exceptions.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <json/json.h>
 #include <wedpr-crypto/WedprCrypto.h>

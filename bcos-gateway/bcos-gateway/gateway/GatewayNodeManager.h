@@ -26,7 +26,7 @@
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
 #include "bcos-gateway/protocol/GatewayNodeStatus.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/timer/Timer.h"
 #include <oneapi/tbb/concurrent_hash_map.h>
 
 namespace bcos::gateway

@@ -21,10 +21,10 @@
 
 #include "Common.h"
 #include <bcos-framework/security/KeyEncryptInterface.h>
-#include <bcos-tool/Exceptions.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
+#include <bcos-utilities/exceptions/ToolExceptions.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/filesystem/FileUtility.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/filesystem.hpp>

@@ -21,7 +21,7 @@
 #include "bcos-cpp-sdk/utilities/abi/ContractABIDefinition.h"
 #include "bcos-cpp-sdk/utilities/Common.h"
 #include "bcos-cpp-sdk/utilities/abi/ContractABIMethodDefinition.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <json/reader.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>

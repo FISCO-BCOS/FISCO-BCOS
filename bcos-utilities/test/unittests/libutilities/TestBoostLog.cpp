@@ -18,7 +18,7 @@
  * @date: 2021-01-18
  */
 
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>

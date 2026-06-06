@@ -24,9 +24,9 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/BoostLogInitializer.h>
-#include <bcos-utilities/Log.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
+#include <bcos-utilities/logging/Log.h>
 #include <servant/Application.h>
 
 #define SCHEDULER_SERVICE_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_DESC("SchedulerServiceApp")

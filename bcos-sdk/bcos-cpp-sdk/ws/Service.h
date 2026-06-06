@@ -24,8 +24,8 @@
 #include <bcos-framework/multigroup/GroupInfoCodec.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/protocol/GlobalConfig.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <functional>
 #include <set>
 #include <unordered_map>

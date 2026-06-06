@@ -1,7 +1,7 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>

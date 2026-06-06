@@ -22,7 +22,7 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/tars/FrontService.h"
-#include "bcos-utilities/ObjectCounter.h"
+#include "bcos-utilities/object/ObjectCounter.h"
 namespace bcos
 {
 namespace gateway

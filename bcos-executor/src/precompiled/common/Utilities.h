@@ -26,8 +26,8 @@
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/Features.h"
-#include "bcos-tool/BfsFileFactory.h"
-#include "bcos-utilities/Common.h"
+#include "bcos-utilities/config/BfsFileFactory.h"
+#include "bcos-utilities/core/Common.h"
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/string.hpp>

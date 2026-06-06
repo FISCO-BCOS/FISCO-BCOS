@@ -27,7 +27,7 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <range/v3/view/any_view.hpp>
 #include <memory>
 #include <optional>

@@ -17,7 +17,7 @@
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
 #include <bcos-framework/protocol/TransactionReceiptFactory.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 

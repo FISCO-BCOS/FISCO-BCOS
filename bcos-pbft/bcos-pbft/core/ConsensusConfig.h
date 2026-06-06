@@ -23,7 +23,7 @@
 #include "bcos-framework/consensus/ConsensusConfigInterface.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/core/Common.h>
 #include <shared_mutex>
 #include <optional>
 

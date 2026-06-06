@@ -1,7 +1,7 @@
 #pragma once
 
 #include "bcos-framework/storage2/Storage.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <concepts>
 #include <optional>
 

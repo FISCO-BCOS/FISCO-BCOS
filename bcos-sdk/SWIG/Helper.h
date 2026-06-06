@@ -1,8 +1,8 @@
 #pragma once
 
 #include "bcos-cpp-sdk/tarsRPC/Handle.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/core/Common.h"
+#include "bcos-utilities/core/FixedBytes.h"
 #include <oneapi/tbb/concurrent_queue.h>
 #include <memory>
 #include <string_view>

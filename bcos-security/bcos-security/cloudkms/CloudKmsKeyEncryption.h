@@ -23,7 +23,7 @@
 #pragma once
 #include "bcos-framework/security/CloudKmsType.h"
 #include "bcos-framework/security/KeyEncryptInterface.h"
-#include "bcos-tool/NodeConfig.h"
+#include "bcos-utilities/config/NodeConfig.h"
 #include <string>
 
 // only for nodes, client will shutdown after decrypt

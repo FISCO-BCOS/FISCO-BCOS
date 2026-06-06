@@ -22,13 +22,13 @@
 #include "bcos-scheduler/src/ExecutorManager.h"
 #include "bcos-tars-protocol/client/ExecutorServiceClient.h"
 #include "bcos-tars-protocol/tars/ExecutorService.h"
-#include "bcos-tool/NodeConfig.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/config/NodeConfig.h"
+#include "bcos-utilities/logging/BoostLog.h"
+#include "bcos-utilities/timer/Timer.h"
 
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
 #include <bcos-framework/protocol/ServiceDesc.h>
-#include <bcos-utilities/Worker.h>
+#include <bcos-utilities/concurrency/Worker.h>
 #include <atomic>
 #include <memory>
 #include <mutex>

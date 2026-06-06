@@ -37,7 +37,7 @@
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
-#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/filesystem/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
 

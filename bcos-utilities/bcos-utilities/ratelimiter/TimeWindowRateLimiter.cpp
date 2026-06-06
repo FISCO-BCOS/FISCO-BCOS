@@ -20,7 +20,7 @@
  * @author: octopuswang
  * @date: 2023-01-30
  */
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
 #include <chrono>
 #include <thread>

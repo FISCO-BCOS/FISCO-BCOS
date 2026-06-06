@@ -21,7 +21,7 @@
 #pragma once
 #include "Common.h"
 #include <bcos-framework/protocol/MemberInterface.h>
-#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/timer/Timer.h>
 #include <boost/asio/io_context.hpp>
 #include <etcd/Client.hpp>
 #include <etcd/Watcher.hpp>

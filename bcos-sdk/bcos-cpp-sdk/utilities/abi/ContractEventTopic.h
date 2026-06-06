@@ -21,8 +21,8 @@
 #pragma once
 #include <bcos-cpp-sdk/utilities/abi/ContractABICodec.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
 #include <sys/types.h>
 #include <string>
 #include <vector>

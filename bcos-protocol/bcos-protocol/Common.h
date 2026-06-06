@@ -20,8 +20,8 @@
 #pragma once
 
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
 #include <limits>
 #include <algorithm>
 #include <string>

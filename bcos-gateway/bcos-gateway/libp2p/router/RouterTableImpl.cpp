@@ -21,7 +21,7 @@
 #include "../Common.h"
 #include "../P2PSession.h"
 #include "bcos-tars-protocol/Common.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include <boost/algorithm/string/join.hpp>
 
 using namespace bcos;

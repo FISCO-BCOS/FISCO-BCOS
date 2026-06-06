@@ -24,8 +24,8 @@
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
-#include "bcos-utilities/ThreadPool.h"
-#include "bcos-utilities/Timer.h"
+#include "bcos-utilities/concurrency/ThreadPool.h"
+#include "bcos-utilities/timer/Timer.h"
 #include <boost/asio/io_context.hpp>
 namespace bcos
 {

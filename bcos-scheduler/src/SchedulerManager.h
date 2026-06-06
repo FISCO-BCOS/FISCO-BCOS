@@ -1,7 +1,7 @@
 #pragma once
 #include "bcos-scheduler/src/SchedulerFactory.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 
 namespace bcos::scheduler
 {

@@ -26,9 +26,9 @@
 #include <bcos-crypto/signature/hsmSM2/HsmSM2KeyPairFactory.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/DataConvertUtility.h>
-#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/data/DataConvertUtility.h>
+#include <bcos-utilities/filesystem/FileUtility.h>
 #include <openssl/bio.h>
 #include <openssl/ec.h>
 #include <openssl/ossl_typ.h>

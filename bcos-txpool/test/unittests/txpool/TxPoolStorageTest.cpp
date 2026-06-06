@@ -3,7 +3,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "bcos-utilities/IOServicePool.h"
+#include "bcos-utilities/concurrency/IOServicePool.h"
 #include <boost/test/unit_test.hpp>
 
 struct MockTxValidator : public bcos::txpool::TxValidator

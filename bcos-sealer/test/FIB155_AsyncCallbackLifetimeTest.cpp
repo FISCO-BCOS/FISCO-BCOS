@@ -29,7 +29,7 @@
 #include "bcos-sealer/SealingManager.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-utilities/Error.h>
+#include <bcos-utilities/exceptions/Error.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>

@@ -18,7 +18,7 @@
  * @date 2021-10-27
  */
 #pragma once
-#include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/logging/BoostLogInitializer.h>
 #include <exception>
 #include <mutex>
 #include <string>

@@ -18,7 +18,7 @@
  * @file DataConvertUtility.cpp
  * @author: yujiechen
  */
-#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/data/DataConvertUtility.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>

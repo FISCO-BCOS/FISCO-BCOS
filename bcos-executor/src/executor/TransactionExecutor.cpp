@@ -79,8 +79,8 @@
 #include "bcos-table/src/StateStorageFactory.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
-#include "bcos-utilities/Error.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/exceptions/Error.h"
+#include "bcos-utilities/concurrency/ThreadPool.h"
 #include "tbb/flow_graph.h"
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>

@@ -22,8 +22,8 @@
 #include "bcos-cpp-sdk/utilities/abi/ContractABIDefinition.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include <bcos-cpp-sdk/utilities/abi/ContractABIType.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/core/FixedBytes.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <memory>

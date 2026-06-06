@@ -26,10 +26,10 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-table/src/StateStorageFactory.h>
-#include <bcos-tool/NodeConfig.h>
-#include <bcos-utilities/Common.h>
-#include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/config/NodeConfig.h>
+#include <bcos-utilities/core/Common.h>
+#include <bcos-utilities/exceptions/Exceptions.h>
+#include <bcos-utilities/concurrency/ThreadPool.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
 

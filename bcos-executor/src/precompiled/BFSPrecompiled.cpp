@@ -26,7 +26,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/StorageInterface.h"
-#include "bcos-tool/BfsFileFactory.h"
+#include "bcos-utilities/config/BfsFileFactory.h"
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

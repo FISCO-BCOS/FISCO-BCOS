@@ -21,7 +21,7 @@
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/single.hpp>
 #include "AMOPImpl.h"
-#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/logging/BoostLog.h"
 #include "bcos-framework/protocol/CommonError.h"
 #include "bcos-gateway/libamop/AMOPMessage.h"
 #include "bcos-gateway/libnetwork/Common.h"

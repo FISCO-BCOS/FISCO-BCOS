@@ -31,7 +31,7 @@
 #endif
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
-#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/config/NodeConfig.h>
 // #include "bcos-framework/security/KeyEncryptionType.h"
 
 using namespace tars;

@@ -19,8 +19,8 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-utilities/BoostLog.h>
-#include <bcos-utilities/Common.h>
+#include <bcos-utilities/logging/BoostLog.h>
+#include <bcos-utilities/core/Common.h>
 #include <memory>
 
 #define INITIALIZER_LOG(LEVEL) BCOS_LOG(LEVEL) << "[INITIALIZER]"
