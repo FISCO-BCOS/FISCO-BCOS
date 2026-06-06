@@ -32,6 +32,10 @@ enum MessageDecodeStatus
     MESSAGE_INCOMPLETE = 1
 };
 
+// FIB-69: cap legitimate gateway payload size; reject larger frames to prevent resource-
+// exhaustion via 32 MB frames propagating into consensus/sync/txpool.
+constexpr std::size_t MAX_PAYLOAD_LENGTH = 8 * 1024 * 1024;  // 8 MB; << MAX_MESSAGE_LENGTH=32MB
+
 /// moduleID          :2 bytes
 /// UUID length       :1 bytes
 /// UUID              :UUID length bytes

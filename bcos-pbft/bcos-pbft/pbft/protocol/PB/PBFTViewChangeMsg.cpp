@@ -78,6 +78,24 @@ void PBFTViewChangeMsg::deserializeToObject()
 {
     PBFTBaseMessage::deserializeToObject();
     m_preparedProposalList->clear();
+    // FIB-121 / Issue #3 (DoS mitigation): reject oversized preparedProposals
+    // before allocating any wrappers, preventing memory-exhaustion attacks from
+    // malicious peers and shrinking the bad_alloc surface that Issue #1
+    // (partial-construct exception unwinding) depends on.
+    //
+    // A full structural fix for Issue #1 (release-then-wrap, or aliasing
+    // shared_ptrs throughout) requires consistently restructuring the encode
+    // path (setCommittedProposal / setPreparedProposals / PBFTNewViewMsg's
+    // viewchangemsglist AddAllocated) and the destructors of PBFTViewChangeMsg
+    // / PBFTNewViewMsg / PBFTMessage, all of which currently rely on a fragile
+    // dual-ownership + destructor-release protocol.  That refactor is deferred
+    // because (a) it crosses several files with subtle invariants, and (b) the
+    // size cap below reduces the bad_alloc trigger surface to near-zero for the
+    // realistic threat model (an attacker sending an oversized message — the
+    // primary CertiK concern in Issue #3).
+    validateRepeatedSize(
+        m_rawViewChange->preparedproposals(), MAX_PBFT_REPEATED_FIELD_SIZE, "preparedProposals");
+
     std::shared_ptr<PBFTRawProposal> rawCommittedProposal(
         m_rawViewChange->mutable_committedproposal());
     m_committedProposal = std::make_shared<PBFTProposal>(rawCommittedProposal);

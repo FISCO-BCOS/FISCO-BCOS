@@ -19,6 +19,7 @@
  * @date 2021-04-12
  */
 #include "PBFTConfig.h"
+#include <unordered_set>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -130,7 +131,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     }
 
     // the node is syncing, reset the timeout state to false for view recovery
-    if (m_syncingHighestNumber > _ledgerConfig->blockNumber())
+    if (syncingHighestNumber() > _ledgerConfig->blockNumber())
     {
         m_syncingState = true;
         // notify resetSealing(the syncing node should not seal block)
@@ -276,29 +277,44 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    // the leader is the current node
-    if (_leaderIndex == nodeIndex())
+    // FIB-115: replace unbounded recursion with a bounded iterative loop.
+    // Each iteration represents one leader candidate.  We must not iterate more
+    // than consensusNodesNum() times so that a sequence of consecutive faulty
+    // leaders (or a byzantine node that triggers the path repeatedly) cannot
+    // exhaust the call stack.
+    auto maxIterations = m_consensusNodeNum.load();
+    auto currentLeader = _leaderIndex;
+    bool triggered = false;
+    for (IndexType i = 0; i < maxIterations; ++i)
     {
-        return false;
+        // the leader is the current node — no view-change needed
+        if (currentLeader == nodeIndex())
+        {
+            break;
+        }
+        // FIB-125: getConsensusNodeByIndex() returns std::optional<ConsensusNode>.
+        auto leaderNodeInfo = getConsensusNodeByIndex(currentLeader);
+        if (!leaderNodeInfo)
+        {
+            break;
+        }
+        // Note: must register m_faultyDiscriminator before start the PBFTEngine.
+        // FIB-118: guard against an unregistered callback to avoid std::bad_function_call;
+        // a null discriminator (or a healthy next candidate) stops the iteration.
+        if (!m_faultyDiscriminator || !m_faultyDiscriminator(leaderNodeInfo->nodeID))
+        {
+            break;
+        }
+        PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
+                       << LOG_KV("leaderIndex", currentLeader)
+                       << LOG_KV("leader", leaderNodeInfo->nodeID->shortHex())
+                       << printCurrentState();
+        m_fastViewChangeHandler();
+        triggered = true;
+        // advance to the next candidate leader
+        currentLeader = leaderIndexInNewViewPeriod(m_toView);
     }
-    auto leaderNodeInfo = getConsensusNodeByIndex(_leaderIndex);
-    if (!leaderNodeInfo)
-    {
-        return false;
-    }
-    // Note: must register m_faultyDiscriminator before start the PBFTEngine.
-    // Guard against unregistered callback to avoid std::bad_function_call (FIB-118).
-    if (!m_faultyDiscriminator || !m_faultyDiscriminator(leaderNodeInfo->nodeID))
-    {
-        return false;
-    }
-    PBFT_LOG(INFO) << LOG_DESC("tryTriggerFastViewChange for the faulty leader")
-                   << LOG_KV("leaderIndex", _leaderIndex)
-                   << LOG_KV("leader", leaderNodeInfo->nodeID->shortHex()) << printCurrentState();
-    m_fastViewChangeHandler();
-    // check the newLeader connection
-    auto newLeader = leaderIndexInNewViewPeriod(m_toView);
-    return tryTriggerFastViewChange(newLeader);
+    return triggered;
 }
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
@@ -445,6 +461,45 @@ void PBFTConfig::asyncNotifySealProposal(
 uint64_t PBFTConfig::minRequiredQuorum() const
 {
     return m_minRequiredQuorum;
+}
+
+bool PBFTConfig::verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal)
+{
+    if (!_proposal)
+    {
+        return false;
+    }
+    auto proofSize = _proposal->signatureProofSize();
+    if (proofSize == 0)
+    {
+        return false;
+    }
+    std::unordered_set<int64_t> seenSealerIdx;
+    seenSealerIdx.reserve(proofSize);
+    uint64_t weight = 0;
+    for (size_t i = 0; i < proofSize; i++)
+    {
+        auto proof = _proposal->signatureProof(i);
+        if (!seenSealerIdx.insert(proof.first).second)
+        {
+            // Duplicate sealer index — honest paths build the proof list from a
+            // deduplicated std::map (see PBFTCache::intoPrecommit), so repeats here are a
+            // byzantine inflation attempt against minRequiredQuorum().
+            return false;
+        }
+        auto nodeInfo = getConsensusNodeByIndex(proof.first);
+        if (!nodeInfo)
+        {
+            return false;
+        }
+        if (!m_cryptoSuite->signatureImpl()->verify(
+                nodeInfo->nodeID, _proposal->hash(), proof.second))
+        {
+            return false;
+        }
+        weight += nodeInfo->voteWeight;
+    }
+    return weight >= m_minRequiredQuorum;
 }
 
 void PBFTConfig::updateQuorum()

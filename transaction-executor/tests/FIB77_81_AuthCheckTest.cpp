@@ -60,18 +60,16 @@ public:
 BOOST_FIXTURE_TEST_SUITE(FIB77_81_AuthCheckTest, AuthCheckBugfixFixture)
 
 // FIB-81: When auth check is enabled and deployment is denied, receipt should have
-// non-zero status (EVMC_REVERT) when bugfix_auth_check_revert_status is enabled.
+// non-zero status (EVMC_REVERT) when bugfix_auth_check is enabled.
 BOOST_AUTO_TEST_CASE(authFailureSetsRevertStatus)
 {
     task::syncWait([this]() mutable -> task::Task<void> {
         bcostars::protocol::BlockHeaderImpl blockHeader;
-        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_16_5_VERSION);
+        blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_17_0_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
         auto features = ledgerConfig.features();
-        features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION);
-        features.set(ledger::Features::Flag::bugfix_auth_check_revert_status);
-        features.set(ledger::Features::Flag::bugfix_auth_check_create2);
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
         ledgerConfig.setFeatures(features);
         // Enable auth checking
         ledgerConfig.setAuthCheckStatus(1);
@@ -107,7 +105,7 @@ BOOST_AUTO_TEST_CASE(authFailureWithoutBugfix)
 
         auto features = ledgerConfig.features();
         features.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_0_VERSION);
-        // Do NOT set bugfix_auth_check_revert_status
+        // Do NOT set bugfix_auth_check
         ledgerConfig.setFeatures(features);
         ledgerConfig.setAuthCheckStatus(1);
 
@@ -125,46 +123,33 @@ BOOST_AUTO_TEST_CASE(authFailureWithoutBugfix)
     }());
 }
 
-// FIB-77: Verify feature flag controls CREATE2 auth path
+// FIB-77: Verify the merged feature flag controls the CREATE2 auth path
 BOOST_AUTO_TEST_CASE(featureFlagCreate2)
 {
-    // Verify the feature flags can be set and read correctly
     ledger::Features features;
+    BOOST_CHECK(!features.get(ledger::Features::Flag::bugfix_auth_check));
+    features.set(ledger::Features::Flag::bugfix_auth_check);
+    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_check));
 
-    // Without bugfix_auth_check_create2
-    BOOST_CHECK(!features.get(ledger::Features::Flag::bugfix_auth_check_create2));
-
-    // With bugfix_auth_check_create2
-    features.set(ledger::Features::Flag::bugfix_auth_check_create2);
-    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_check_create2));
-
-    // Verify setGenesisFeatures at V3_16_5 includes the new flags
+    // Verify setGenesisFeatures at V3_17_0 includes the merged flag
     ledger::Features genesisFeatures;
-    genesisFeatures.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION);
-    BOOST_CHECK(genesisFeatures.get(ledger::Features::Flag::bugfix_auth_check_create2));
-    BOOST_CHECK(genesisFeatures.get(ledger::Features::Flag::bugfix_auth_check_revert_status));
-    BOOST_CHECK(genesisFeatures.get(ledger::Features::Flag::bugfix_auth_table_raw_address));
-    BOOST_CHECK(genesisFeatures.get(ledger::Features::Flag::bugfix_auth_table_squatting));
+    genesisFeatures.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    BOOST_CHECK(genesisFeatures.get(ledger::Features::Flag::bugfix_auth_check));
 }
 
-// FIB-77: Verify upgrade from V3_16_4 to V3_16_5 enables the new flags
+// FIB-77: Verify upgrade from V3_16_4 to V3_17_0 enables the merged flag
 BOOST_AUTO_TEST_CASE(upgradeEnablesAuthFlags)
 {
     ledger::Features features;
     features.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_4_VERSION,
-        bcos::protocol::BlockVersion::V3_16_5_VERSION);
-    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_check_create2));
-    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_check_revert_status));
-    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_table_raw_address));
-    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_table_squatting));
+        bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    BOOST_CHECK(features.get(ledger::Features::Flag::bugfix_auth_check));
 
-    // Should NOT have flags from before (only the diff)
-    // The upgrade from V3_16_4 to V3_16_5 should only add the new auth flags
+    // The upgrade path that stops at V3_16_4 must NOT enable it
     ledger::Features features2;
     features2.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_0_VERSION,
         bcos::protocol::BlockVersion::V3_16_4_VERSION);
-    BOOST_CHECK(!features2.get(ledger::Features::Flag::bugfix_auth_check_create2));
-    BOOST_CHECK(!features2.get(ledger::Features::Flag::bugfix_auth_check_revert_status));
+    BOOST_CHECK(!features2.get(ledger::Features::Flag::bugfix_auth_check));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

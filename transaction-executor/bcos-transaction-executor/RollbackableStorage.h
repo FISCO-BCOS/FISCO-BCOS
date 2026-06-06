@@ -132,6 +132,17 @@ public:
         co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
+    // DIRECT-tagged raw read that bypasses any tracking wrapper (e.g. RW-set or
+    // rollback-record creation). Used by callers that read a value for internal
+    // metadata only (e.g. computing evmc_storage_status) and must not participate
+    // in parallel conflict detection.
+    auto readOneRaw(auto key, storage2::DIRECT_TYPE direct) -> task::Task<
+        task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(std::move(key), direct))>>
+        requires HasReadOneRaw<Storage>
+    {
+        co_return co_await m_storage.get().readOneRaw(std::move(key), direct);
+    }
+
     auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ExistsOne, Storage&, decltype(key)>>>
     {

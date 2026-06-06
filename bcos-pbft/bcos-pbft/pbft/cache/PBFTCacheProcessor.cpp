@@ -70,6 +70,38 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
     // Note: to fetch the remote proposal(the from node hits all transactions)
     auto self = weak_from_this();
     auto block = m_config->blockFactory().createBlock(_proposal->data(), false, false);
+    // FIB-142 receiver-side: reject log-sync responses where the decoded block
+    // does not bind to the carried proposal hash; same-hash equivocation must
+    // be impossible at this trust boundary.
+    auto const& hashImpl = *m_config->blockFactory().cryptoSuite()->hashImpl();
+    block->blockHeader()->calculateHash(hashImpl);
+    if (block->blockHeader()->hash() != _proposal->hash())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "loadAndVerifyProposal: reject for decoded block hash "
+                                 "does not match proposal hash (FIB-142)")
+                          << LOG_KV("expected", _proposal->hash().abridged())
+                          << LOG_KV("decoded", block->blockHeader()->hash().abridged())
+                          << printPBFTProposal(_proposal);
+        m_onLoadAndVerifyProposalFinish(false, nullptr, _proposal);
+        return;
+    }
+    // FIB-142 receiver-side (defence-in-depth): the header-hash check above
+    // does not prove the body matches header.txsRoot. Recompute the body's
+    // Merkle root here and reject any mismatch so log-sync never caches a
+    // body that disagrees with the header's transaction commitment.
+    if (auto computedTxsRoot = block->calculateTransactionRoot(hashImpl);
+        computedTxsRoot != block->blockHeader()->txsRoot())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "loadAndVerifyProposal: reject for decoded body txsRoot "
+                                 "does not match header.txsRoot (FIB-142)")
+                          << LOG_KV("headerTxsRoot", block->blockHeader()->txsRoot().abridged())
+                          << LOG_KV("computedTxsRoot", computedTxsRoot.abridged())
+                          << printPBFTProposal(_proposal);
+        m_onLoadAndVerifyProposalFinish(false, nullptr, _proposal);
+        return;
+    }
     m_config->validator()->verifyProposal(_fromNode, _proposal->index(), block,
         [self, _fromNode, _proposal, _retryTime](Error::Ptr _error, bool _verifyResult) {
             try
@@ -321,6 +353,81 @@ void PBFTCacheProcessor::notifyCommittedProposalIndex(bcos::protocol::BlockNumbe
     });
 }
 
+bool PBFTCacheProcessor::verifyProposalParentConsistency(
+    PBFTProposalInterface::Ptr const& _proposal,
+    ProposalInterface::ConstPtr const& _lastAppliedProposal)
+{
+    // Decode the proposal's BlockHeader to inspect its timestamp.  An empty data() on
+    // either side (proposal stub or bootstrap committedProposal whose data is unset) means
+    // we have no header to compare — degrade gracefully and let the index +1 check above
+    // be the protocol-level minimum.
+    //
+    // Note: we intentionally do NOT compare proposalHeader->parentInfo() against
+    // _lastAppliedProposal.  In FISCO-BCOS the sealer fills parentInfo with the chain-tip
+    // at sealing time and StateMachine::apply() overwrites it with _lastAppliedProposal's
+    // info before execution, so during view-change recovery a precommitted proposal may
+    // legitimately carry parentInfo pointing to a stale ancestor (the tip when the proposal
+    // was originally sealed).  A strict comparison here would break the recovery path that
+    // PBFTViewChangeTest/testViewChangeWithPrecommitProposals exercises.
+    if (_proposal->data().empty() || _lastAppliedProposal->data().empty())
+    {
+        return true;
+    }
+    bcos::protocol::BlockHeader::Ptr proposalHeader;
+    try
+    {
+        auto block = m_config->blockFactory().createBlock(_proposal->data(), false, false);
+        if (block)
+        {
+            proposalHeader = block->blockHeader();
+        }
+    }
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "tryToApplyCommitQueue: failed to decode proposal block header, "
+                                 "skip timestamp monotonicity check")
+                          << LOG_KV("proposalIndex", _proposal->index())
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+        return true;
+    }
+    if (!proposalHeader)
+    {
+        return true;
+    }
+    bcos::protocol::BlockHeader::Ptr parentHeader;
+    try
+    {
+        parentHeader = m_config->blockFactory().blockHeaderFactory()->createBlockHeader(
+            _lastAppliedProposal->data());
+    }
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "tryToApplyCommitQueue: failed to decode parent block header, "
+                              "skip timestamp monotonicity check")
+                       << LOG_KV("parentIndex", _lastAppliedProposal->index())
+                       << LOG_KV("msg", boost::diagnostic_information(e));
+        return true;
+    }
+    if (!parentHeader)
+    {
+        return true;
+    }
+    if (proposalHeader->timestamp() < parentHeader->timestamp())
+    {
+        PBFT_LOG(WARNING)
+            << LOG_DESC("tryToApplyCommitQueue: reject proposal with non-monotonic timestamp")
+            << LOG_KV("proposalIndex", _proposal->index())
+            << LOG_KV("proposalTimestamp", proposalHeader->timestamp())
+            << LOG_KV("parentIndex", _lastAppliedProposal->index())
+            << LOG_KV("parentTimestamp", parentHeader->timestamp())
+            << m_config->printCurrentState();
+        return false;
+    }
+    return true;
+}
+
 ProposalInterface::ConstPtr PBFTCacheProcessor::getAppliedCheckPointProposal(
     bcos::protocol::BlockNumber _index)
 {
@@ -386,8 +493,34 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
                            << m_config->printCurrentState();
             return false;
         }
-        // TODO: use lastAppliedProposal to check the current proposal's parent block header info
-        // the number,hash and timestamp should be checked
+        // FIB-128: verify the proposal is consistent with the last applied block before reaching
+        // applyStateMachine(), where a mismatch would otherwise raise a FATAL assertion or let a
+        // byzantine timestamp leak into execution.
+        //
+        //   (1) parent index: proposal->index() must equal lastApplied->index()+1.
+        //   (2) timestamp monotonicity: proposal.timestamp >= parent.timestamp.  StateMachine
+        //       does NOT overwrite the proposal's timestamp before execution, so a byzantine
+        //       leader could otherwise inject a non-monotonic timestamp into the chain.  We can
+        //       only run this check when lastAppliedProposal->data() carries the encoded parent
+        //       header (true once the first checkpoint has been applied locally; not available
+        //       for the bootstrap committedProposal where data() is empty).
+        //
+        // We intentionally do NOT compare proposalHeader.parentInfo against lastApplied —
+        // see verifyProposalParentConsistency() for the rationale (view-change recovery).
+        if (proposal->index() != lastAppliedProposal->index() + 1)
+        {
+            PBFT_LOG(WARNING)
+                << LOG_DESC(
+                       "tryToApplyCommitQueue: reject proposal with non-consecutive parent index")
+                << LOG_KV("proposalIndex", proposal->index())
+                << LOG_KV("lastAppliedIndex", lastAppliedProposal->index())
+                << m_config->printCurrentState();
+            return false;
+        }
+        if (!verifyProposalParentConsistency(proposal, lastAppliedProposal))
+        {
+            return false;
+        }
         // commit the proposal
         m_committedQueue.pop();
         // in case of the same block execute more than once
@@ -798,30 +931,10 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
 
 bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg)
 {
-    auto precommitProposal = _precommitMsg->consensusProposal();
-    // check the signature
-    uint64_t weight = 0;
-    auto proofSize = precommitProposal->signatureProofSize();
-    for (size_t i = 0; i < proofSize; i++)
-    {
-        auto proof = precommitProposal->signatureProof(i);
-        // check the proof
-        auto nodeInfo = m_config->getConsensusNodeByIndex(proof.first);
-        if (!nodeInfo)
-        {
-            return false;
-        }
-        // verify the signature
-        auto ret = m_config->cryptoSuite()->signatureImpl()->verify(
-            nodeInfo->nodeID, precommitProposal->hash(), proof.second);
-        if (!ret)
-        {
-            return false;
-        }
-        weight += nodeInfo->voteWeight;
-    }
-    // check the quorum
-    return (weight >= m_config->minRequiredQuorum());
+    // Delegated to PBFTConfig::verifyProposalQuorumSignatures so both this path and the
+    // FIB-127 log-recovery path share one audited implementation (proof-list dedup +
+    // per-proof sig verify + quorum weight check).
+    return m_config->verifyProposalQuorumSignatures(_precommitMsg->consensusProposal());
 }
 
 ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(

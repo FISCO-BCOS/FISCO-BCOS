@@ -6,7 +6,7 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(VERSION "3.16.4")
+set(VERSION "3.17.0")
 set(VERSION_SUFFIX "")
 include(Options)
 configure_project()
@@ -97,6 +97,13 @@ if(FULLNODE)
         enable_testing()
         add_subdirectory(tests)
         add_subdirectory(benchmark)
+    endif()
+
+    # bcos-leader-election can also be built standalone (without the full Tars
+    # stack) when only WITH_LEDGER_ELECTION is set. Place this AFTER
+    # enable_testing() so that the module's UTs are visible to ctest.
+    if(NOT WITH_TARS_SERVICES AND WITH_LEDGER_ELECTION)
+        add_subdirectory(bcos-leader-election)
     endif()
 endif()
 

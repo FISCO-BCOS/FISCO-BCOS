@@ -1,12 +1,13 @@
+#include "TrivialCheckpointStorage.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
+#include "bcos-framework/storage2/MultiLayerStorage.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
-#include "bcos-framework/storage2/MultiLayerStorage.h"
-#include "TrivialCheckpointStorage.h"
 #include "bcos-transaction-scheduler/ReadWriteSetStorage.h"
 #include <fmt/format.h>
 #include <boost/test/unit_test.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/repeat.hpp>
 #include <variant>
 
@@ -24,8 +25,7 @@ public:
     using BackendStorage = memory_storage::MemoryStorage<StateKey, StateValue,
         memory_storage::Attribute(memory_storage::ORDERED | memory_storage::CONCURRENT),
         std::hash<StateKey>>;
-    using CheckpointBackend =
-        TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+    using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 
     TestMultiLayerStorageFixture()
       : checkpointBackend(backendStorage), multiLayerStorage(checkpointBackend)
@@ -148,8 +148,8 @@ BOOST_AUTO_TEST_CASE(rangeMulti)
         co_await storage2::writeSome(backendStorage,
             ::ranges::views::zip(::ranges::views::iota(0, 4), ::ranges::views::repeat(0)));
 
-        MultiLayerStorage<MutableStorage, void, CheckpointBackend>
-            myMultiLayerStorage(checkpointBackend);
+        MultiLayerStorage<MutableStorage, void, CheckpointBackend> myMultiLayerStorage(
+            checkpointBackend);
 
         auto view1 = myMultiLayerStorage.fork();
         view1.newMutable();

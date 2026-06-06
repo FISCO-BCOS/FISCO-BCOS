@@ -157,6 +157,11 @@ bool PBFTCache::collectEnoughCommitReq()
     {
         return false;
     }
+    // FIB-172: Commit votes are keyed by m_prePrepare->hash() intentionally.
+    // intoPrecommit() sets m_precommit = m_prePrepare (same object), so
+    // m_precommit->hash() == m_prePrepare->hash() is guaranteed as an invariant.
+    // Using m_prePrepare here is correct; the hash is the proposal identity that
+    // every phase (pre-prepare / prepare / commit) agrees upon.
     return collectEnoughQuorum(m_prePrepare->hash(), m_commitReqWeight);
 }
 

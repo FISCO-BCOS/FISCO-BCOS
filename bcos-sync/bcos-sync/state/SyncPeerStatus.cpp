@@ -230,10 +230,30 @@ void SyncPeerStatus::foreachPeerRandom(std::function<bool(PeerStatus::Ptr)> cons
 
 void SyncPeerStatus::foreachPeer(std::function<bool(PeerStatus::Ptr)> const& _f) const
 {
-    std::shared_lock lock(x_peersStatus);
-    for (const auto& [_, peerStatus] : m_peersStatus)
+    // FIB-171: do not hold x_peersStatus while invoking the external callback.
+    // A slow callback would stall add/delete; a reentrant callback that needs
+    // x_peersStatus exclusively (deletePeer / updatePeerStatus) deadlocks
+    // because std::shared_mutex is non-reentrant. Snapshot the peer list under
+    // the lock, release the lock, then iterate the snapshot lock-free. Same
+    // pattern is already used by foreachPeerRandom().
+    std::vector<PeerStatus::Ptr> peersStatusList{};
     {
-        if (peerStatus && !_f(peerStatus))
+        std::shared_lock lock(x_peersStatus);
+        peersStatusList.reserve(m_peersStatus.size());
+        for (const auto& [_, peerStatus] : m_peersStatus)
+        {
+            if (peerStatus)
+            {
+                peersStatusList.emplace_back(peerStatus);
+            }
+        }
+    }
+    for (auto const& peerStatus : peersStatusList)
+    {
+        auto current = this->peerStatus(peerStatus->nodeId());
+        if (!current || current.get() != peerStatus.get())
+            continue;
+        if (!_f(peerStatus))
         {
             break;
         }

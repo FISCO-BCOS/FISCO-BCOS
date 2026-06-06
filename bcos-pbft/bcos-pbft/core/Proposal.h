@@ -132,13 +132,17 @@ public:
 protected:
     void setRawProposal(std::shared_ptr<RawProposal> _rawProposal)
     {
-        m_rawProposal = _rawProposal;
+        m_rawProposal = std::move(_rawProposal);
         deserializeObject();
     }
     virtual void deserializeObject()
     {
         auto const& hashData = m_rawProposal->hash();
-        if (hashData.size() < bcos::crypto::HashType::SIZE)
+        // FIB-149: reject any non-canonical hash length (oversize OR undersize).
+        // Pre-fix used `<`, which silently truncated oversize input to the
+        // first 32 bytes — accepting non-canonical encodings as valid identity
+        // keys.
+        if (hashData.size() != bcos::crypto::HashType::SIZE)
         {
             return;
         }

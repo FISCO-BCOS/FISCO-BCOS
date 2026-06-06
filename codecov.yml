@@ -1,0 +1,44 @@
+# Codecov configuration for FISCO-BCOS unit-test line coverage.
+# Drives two things on every pull request:
+#   1. A sticky PR comment summarizing coverage (the "comment" block).
+#   2. Status checks shown in the PR checks list (the "status" block):
+#      - codecov/project : total line coverage vs the target floor
+#      - codecov/patch   : coverage of the lines changed by the PR (informational)
+# Coverage data is uploaded under the "unittests" flag by the coverage-comment
+# workflow_run job (on master) for pull requests, and directly by the Coverage
+# build job here for base-branch pushes.
+
+codecov:
+  require_ci_to_pass: false # don't block the Codecov status on unrelated matrix flakes
+  notify:
+    wait_for_ci: false
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...70" # red below 50%, green at 70%+ in the UI
+  status:
+    project:
+      default:
+        target: 55% # gcc-measured baseline ~59%; floor leaves headroom
+        threshold: 1% # tolerate a 1% drop before failing the check
+        flags:
+          - unittests
+    patch:
+      default:
+        informational: true # report changed-line coverage, never block on it
+
+comment:
+  layout: "header, diff, flags, files, footer"
+  behavior: default # update the same comment in place instead of posting new ones
+  require_changes: false # always comment, even if coverage is unchanged
+
+flags:
+  unittests:
+    paths:
+      - "!**/test/**"
+      - "!**/tests/**"
+    carryforward: true # reuse the last upload for a flag if a run didn't re-upload it
+
+github_checks:
+  annotations: true # inline coverage annotations on the PR diff

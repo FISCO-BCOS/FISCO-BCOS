@@ -224,8 +224,8 @@ public:
         }
         for (auto&& key : keys)
         {
-            values.emplace_back(
-                co_await readOneRaw(std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...));
+            values.emplace_back(co_await readOneRaw(
+                std::forward<decltype(key)>(key), std::forward<decltype(args)>(args)...));
         }
         co_return values;
     }
@@ -326,7 +326,8 @@ public:
     auto readSome(::ranges::input_range auto keys, auto&&... args)
         -> task::Task<std::vector<std::optional<Value>>>
     {
-        auto rawValues = co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
+        auto rawValues =
+            co_await readSomeRaw(std::move(keys), std::forward<decltype(args)>(args)...);
         std::vector<std::optional<Value>> values;
         values.reserve(rawValues.size());
         for (auto& value : rawValues)
@@ -345,7 +346,7 @@ public:
     auto existsOne(auto key, auto&&... args) -> task::Task<bool>
     {
         co_return toOptional(
-                      co_await readOneRaw(std::move(key), std::forward<decltype(args)>(args)...))
+            co_await readOneRaw(std::move(key), std::forward<decltype(args)>(args)...))
             .has_value();
     }
 
@@ -361,8 +362,7 @@ public:
     {
         auto& bucket = getBucket(key);
         Lock lock(bucket.mutex, true);
-        return {
-            writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
+        return {writeOne(bucket, std::move(key), std::move(value), false, /*insertOnly=*/true)};
     }
 
     task::AwaitableValue<bool> writeOneIf(
@@ -397,8 +397,8 @@ public:
         {
             auto& bucket = getBucket(key);
             Lock lock(bucket.mutex, true);
-            writeOne(
-                bucket, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value), false);
+            writeOne(bucket, std::forward<decltype(key)>(key), std::forward<decltype(value)>(value),
+                false);
         }
         co_return;
     }
@@ -407,6 +407,38 @@ public:
     {
         removeSome(::ranges::views::single(std::move(key)), false);
         return {};
+    }
+
+    // FIB-157: predicate-guarded remove. Atomically reads the existing value and removes it
+    // only if predicate(existing) is true. The read, predicate evaluation and remove all
+    // happen under the same bucket-level writer lock, so a concurrent writer cannot publish
+    // a fresher value between the read and the remove.
+    task::AwaitableValue<bool> removeOneIf(auto key, std::predicate<Value const&> auto predicate)
+    {
+        auto& bucket = getBucket(key);
+        [[maybe_unused]] Lock lock(bucket.mutex, true);
+
+        auto const& index = bucket.container.template get<0>();
+        auto it = index.find(key);
+        if (it == index.end())
+        {
+            return {false};
+        }
+        bool shouldRemove =
+            std::visit(bcos::overloaded{[](DELETED_TYPE) { return false; },
+                           [](NOT_EXISTS_TYPE) { return false; },
+                           [&](Value const& itValue) { return predicate(itValue); }},
+                it->value);
+
+        if (!shouldRemove)
+        {
+            return {false};
+        }
+
+        // Reuse the writeOne(deleteItem) path under the same lock to keep LRU bookkeeping
+        // and logical-deletion semantics consistent with removeSome().
+        writeOne(bucket, std::move(key), deleteItem, /*ignoreLogicalDeletion=*/false);
+        return {true};
     }
 
     task::AwaitableValue<void> removeOne(auto key, DIRECT_TYPE /*unused*/)
@@ -421,8 +453,7 @@ public:
         co_return;
     }
 
-    task::Task<void> removeSome(
-        ::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
+    task::Task<void> removeSome(::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
     {
         removeSome(std::move(keys), true);
         co_return;
@@ -431,8 +462,7 @@ public:
     task::AwaitableValue<void> merge(MemoryStorage& fromStorage)
         requires(!std::is_const_v<decltype(fromStorage)>)
     {
-        for (auto&& [bucket, fromBucket] :
-            ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
+        for (auto&& [bucket, fromBucket] : ::ranges::views::zip(m_buckets, fromStorage.m_buckets))
         {
             Lock toLock(bucket.mutex, true);
             Lock fromLock(fromBucket.mutex, true);
@@ -510,10 +540,7 @@ public:
         }
     };
 
-    auto range()
-    {
-        return task::AwaitableValue(Iterator(m_buckets));
-    }
+    auto range() { return task::AwaitableValue(Iterator(m_buckets)); }
 
     auto range(RANGE_SEEK_TYPE /*unused*/, const auto& key)
         // TODO: need !withConcurrent, fix benchmarkScheduler

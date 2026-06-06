@@ -24,8 +24,8 @@
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-utilities/Common.h>
-#include <shared_mutex>
 #include <optional>
+#include <shared_mutex>
 
 namespace bcos::consensus
 {
@@ -105,10 +105,27 @@ public:
         m_blockTxCountLimit = _blockTxCountLimit;
     }
     virtual uint64_t blockTxCountLimit() const { return m_blockTxCountLimit.load(); }
-    bcos::protocol::BlockNumber syncingHighestNumber() const { return m_syncingHighestNumber; }
+    // FIB-150: m_syncingHighestNumber is read by the consensus layer
+    // (executeWorker etc.) and written by the sync layer; without atomic
+    // semantics, concurrent r/w on a plain BlockNumber field is a data race
+    // (UB). Use explicit load/store on the atomic member.
+    bcos::protocol::BlockNumber syncingHighestNumber() const
+    {
+        return m_syncingHighestNumber.load();
+    }
+    // FIB-150: the syncing target only ever moves forward. Advance monotonically
+    // via a compare-exchange loop so the read-compare-write is a single atomic
+    // step: a concurrent writer can never clobber a larger value with a smaller
+    // one, and a stale/out-of-order notification can never regress the target.
+    // (C++20 has no std::atomic::fetch_max, so the CAS loop is written out.)
     void setSyncingHighestNumber(bcos::protocol::BlockNumber _number)
     {
-        m_syncingHighestNumber = _number;
+        auto current = m_syncingHighestNumber.load();
+        while (_number > current && !m_syncingHighestNumber.compare_exchange_weak(current, _number))
+        {
+            // compare_exchange_weak refreshed `current` with the latest value on
+            // failure (including spurious failure); re-check and retry.
+        }
     }
 
     IndexType consensusNodesNum() const { return m_consensusNodeNum.load(); }
@@ -185,7 +202,9 @@ protected:
     mutable bcos::SharedMutex x_committedProposal;
 
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
-    bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
+    // FIB-150: atomic to avoid data race between sync layer (writer) and
+    // consensus layer (reader)
+    std::atomic<bcos::protocol::BlockNumber> m_syncingHighestNumber = {0};
     std::function<void(uint32_t _version)> m_versionNotification;
 
     // FIB-160: protect m_features against concurrent reads from VRFBasedSealer
