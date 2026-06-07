@@ -36,6 +36,6 @@ enum class TxsSyncPacketType : int32_t
 
 // Maximum number of transaction hashes allowed in a single sync message.
 // No block can exceed the pool limit, so this is a safe upper bound.
-static constexpr const size_t MAX_SYNC_TXSHASH_COUNT = 100000;
+static constexpr const size_t MAX_SYNC_TXSHASH_COUNT = 2000;
 
 }  // namespace bcos::sync
