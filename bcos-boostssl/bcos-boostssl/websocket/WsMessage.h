@@ -22,7 +22,6 @@
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ObjectCounter.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -35,7 +34,7 @@ void CHECK_OFFSET(uint64_t offset, uint64_t length);
 namespace bcos::boostssl::ws
 {
 // the message format for ws protocol
-class WsMessage : public boostssl::MessageFace, public bcos::ObjectCounter<WsMessage>
+class WsMessage : public boostssl::MessageFace
 {
 public:
     // version(2) + type(2) + status(2) + seqLength(2) + ext(2) + payload(N)
