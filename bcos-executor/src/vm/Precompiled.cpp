@@ -249,24 +249,17 @@ ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in)
     if (modLen == 0)
         return {true, {}};
 
-    // Zero-pad inputs to declared lengths (EIP-198: missing bytes are right-padded
-    // with zeros). Track consumed bytes from the data section rather than using
-    // declared lengths as offsets — actual input may be shorter than declared.
-    size_t const dataStart = 96;
-    size_t const dataAvail = _in.size() > dataStart ? _in.size() - dataStart : 0;
-    size_t consumed = 0;
-    auto padded = [&](size_t len) -> bytes {
+    // Zero-pad inputs to declared lengths (EIP-198: missing bytes are right-padded with zeros)
+    auto padded = [&](size_t offset, size_t len) -> bytes {
         bytes buf(len, 0);
-        size_t const avail = consumed < dataAvail ? dataAvail - consumed : 0;
-        size_t const actual = std::min(len, avail);
-        if (actual > 0)
-            std::memcpy(buf.data(), _in.data() + dataStart + consumed, actual);
-        consumed += actual;
+        size_t const avail = _in.size() > offset ? _in.size() - offset : 0;
+        if (avail > 0)
+            std::memcpy(buf.data(), _in.data() + offset, std::min(len, avail));
         return buf;
     };
-    bytes const baseBuf = padded(baseLen);
-    bytes const expBuf = padded(expLen);
-    bytes const modBuf = padded(modLen);
+    bytes const baseBuf = padded(96, baseLen);
+    bytes const expBuf = padded(96 + baseLen, expLen);
+    bytes const modBuf = padded(96 + baseLen + expLen, modLen);
 
     // EIP-198: if mod is zero, return all-zero output
     bool const modZero =
