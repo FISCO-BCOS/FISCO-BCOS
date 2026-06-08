@@ -63,11 +63,39 @@ struct EVMHostInterface
         assert(!concepts::bytebuffer::equalTo(addr->bytes, executor::EMPTY_EVM_ADDRESS.bytes));
         auto& hostContext = static_cast<HostContextType&>(*context);
 
-        auto status = EVMC_STORAGE_MODIFIED;
-        if (concepts::bytebuffer::equalTo(value->bytes, executor::EMPTY_EVM_BYTES32.bytes))
+        bool newIsZero =
+            concepts::bytebuffer::equalTo(value->bytes, executor::EMPTY_EVM_BYTES32.bytes);
+
+        evmc_storage_status status;
+        if (hostContext.ledgerConfig().features().get(
+                ledger::Features::Flag::bugfix_evm_storage_status))
         {
-            status = EVMC_STORAGE_DELETED;
+            // TODO: full EIP-2200 support — also report the 5 dirty-slot statuses
+            // (DELETED_ADDED, MODIFIED_DELETED, DELETED_RESTORED, ADDED_DELETED,
+            // MODIFIED_RESTORED). Requires tracking the transaction-original value
+            // per slot to distinguish clean (o == c) from dirty (o != c) writes.
+            //
+            // DIRECT read: this lookup is for status metadata only and must not be
+            // registered in the parallel scheduler's read set, otherwise pure SSTORE
+            // writes would create false RAW edges against any earlier writer of the
+            // same slot.
+            auto existingValue = syncWait(hostContext.get(key, storage2::DIRECT));
+            const bool existingIsZero = concepts::bytebuffer::equalTo(
+                existingValue.bytes, executor::EMPTY_EVM_BYTES32.bytes);
+            if (newIsZero)
+            {
+                status = existingIsZero ? EVMC_STORAGE_ASSIGNED : EVMC_STORAGE_DELETED;
+            }
+            else
+            {
+                status = existingIsZero ? EVMC_STORAGE_ADDED : EVMC_STORAGE_MODIFIED;
+            }
         }
+        else
+        {
+            status = newIsZero ? EVMC_STORAGE_DELETED : EVMC_STORAGE_MODIFIED;
+        }
+
         syncWait(hostContext.set(key, value));
         return status;
     }

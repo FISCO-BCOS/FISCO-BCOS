@@ -5,6 +5,7 @@ find_package(Boost REQUIRED serialization unit_test_framework)
 find_package(FakeIt CONFIG REQUIRED)
 
 target_link_libraries(test-transaction-scheduler
+	transaction-executor
 	transaction-scheduler
 	executor
 	ledger

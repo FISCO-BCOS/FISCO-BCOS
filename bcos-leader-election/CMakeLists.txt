@@ -25,4 +25,8 @@ if(WITH_LEDGER_ELECTION)
     find_package(gRPC REQUIRED)
     add_library(leader_election ${SRCS})
     target_link_libraries(leader_election PUBLIC bcos-utilities bcos-framework etcd-cpp-api)
+
+    if(TESTS)
+        add_subdirectory(test)
+    endif()
 endif()

@@ -135,15 +135,19 @@ public:
 protected:
     virtual void deserializeToObject()
     {
+        // FIB-149: only accept canonical-length hash payloads. Pre-fix `>=`
+        // accepted oversize bytes too, silently truncating them to 32 bytes
+        // and corrupting hash-as-identity-key semantics. Strict equality leaves
+        // m_hash / m_dataHash default-constructed when the payload is malformed.
         auto const& hashData = m_baseMessage->hash();
-        if (hashData.size() >= bcos::crypto::HashType::SIZE)
+        if (hashData.size() == bcos::crypto::HashType::SIZE)
         {
             m_hash =
                 bcos::crypto::HashType((byte const*)hashData.c_str(), bcos::crypto::HashType::SIZE);
         }
 
         auto const& signatureDataHash = m_baseMessage->signaturehash();
-        if (signatureDataHash.size() >= bcos::crypto::HashType::SIZE)
+        if (signatureDataHash.size() == bcos::crypto::HashType::SIZE)
         {
             m_dataHash = bcos::crypto::HashType(
                 (byte const*)signatureDataHash.c_str(), bcos::crypto::HashType::SIZE);

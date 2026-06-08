@@ -1,10 +1,11 @@
+#include "../tests/TrivialCheckpointStorage.h"
 #include "bcos-codec/bcos-codec/abi/ContractABICodec.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/storage2/MultiLayerStorage.h"
-#include "../tests/TrivialCheckpointStorage.h"
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
@@ -34,8 +35,7 @@ constexpr static std::string_view transferMethod{"transfer(address,address,int25
 
 using MutableStorage = MemoryStorage<StateKey, StateValue, Attribute(ORDERED | LOGICAL_DELETION)>;
 using BackendStorage = MemoryStorage<StateKey, StateValue, ORDERED | LRU | CONCURRENT>;
-using CheckpointBackend =
-    TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
+using CheckpointBackend = TrivialCheckpointStorage<StateKey, StateValue, BackendStorage>;
 using MultiLayerStorageType = MultiLayerStorage<MutableStorage, void, CheckpointBackend>;
 using ReceiptFactory = bcostars::protocol::TransactionReceiptFactoryImpl;
 

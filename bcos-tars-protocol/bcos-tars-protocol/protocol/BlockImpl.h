@@ -70,6 +70,7 @@ public:
 
     void setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt) override;
     void appendReceipt(bcos::protocol::TransactionReceipt::Ptr _receipt) override;
+    void clearReceipts() override;
 
     void appendTransactionMetaData(bcos::protocol::TransactionMetaData::Ptr _txMetaData) override;
 

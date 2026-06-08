@@ -57,8 +57,10 @@ public:
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(std::string_view _address,
         uint32_t version, bool isAuth, const ledger::Features& features) const override
     {
-        auto evmcAddr = unhexAddress(_address);
-        const auto* precompiled = m_precompiledManager.getPrecompiled(evmcAddr);
+        auto addressBytes = fromHex(_address);
+        auto address = fromBigEndian<u160>(addressBytes);
+        const auto* precompiled =
+            m_precompiledManager.getPrecompiled(address.convert_to<unsigned long>(), features);
         if (precompiled == nullptr)
         {
             return nullptr;
@@ -132,7 +134,7 @@ public:
         callResult->data.assign(result.output_data, result.output_data + result.output_size);
 
         const bool applyBugfix =
-            m_blockContext->features().get(ledger::Features::Flag::bugfix_v1_executive_wrapper);
+            m_blockContext->features().get(ledger::Features::Flag::bugfix_v1_error_handling);
         if (applyBugfix)
         {
             callResult->status = static_cast<int32_t>(result.status);

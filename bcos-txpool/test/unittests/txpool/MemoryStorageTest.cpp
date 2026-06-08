@@ -28,13 +28,14 @@
 
 #include <sw/redis++/cxx_utils.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_invoke.h>
 
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
+#include <fakeit.hpp>
 #include <future>
 #include <thread>
-#include <fakeit.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;

@@ -304,6 +304,28 @@ inline constexpr struct RemoveOne
     }
 } removeOne;
 
+inline constexpr struct RemoveOneIf
+{
+    // Atomically reads existing value and removes it only if predicate(existing) is true.
+    // If no existing value, the call is a no-op and returns false.
+    // The read+predicate+remove sequence is performed under the same internal lock so that
+    // concurrent writers cannot publish a fresher value between read and remove (FIB-157).
+    // Predicate: (Value const&) -> bool
+    // Returns true if the remove was performed.
+    auto operator()(auto& storage, auto key, auto predicate, auto&&... args) const
+        -> task::Task<bool>
+        requires requires {
+            storage.removeOneIf(
+                std::move(key), std::move(predicate), std::forward<decltype(args)>(args)...);
+        } && std::is_same_v<task::AwaitableReturnType<decltype(storage.removeOneIf(std::move(key),
+                                std::move(predicate), std::forward<decltype(args)>(args)...))>,
+                 bool>
+    {
+        co_return co_await storage.removeOneIf(
+            std::move(key), std::move(predicate), std::forward<decltype(args)>(args)...);
+    }
+} removeOneIf;
+
 inline constexpr struct ExistsOne
 {
     auto operator()(auto& storage, auto key, auto&&... args) const -> task::Task<bool>

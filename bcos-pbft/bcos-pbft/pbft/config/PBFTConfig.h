@@ -28,6 +28,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
+#include "bcos-pbft/pbft/utilities/PBFTMsgVersion.h"
 #include "bcos-rpbft/rpbft/config/RPBFTConfigTools.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
@@ -89,6 +90,16 @@ public:
         bcos::ledger::LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock = false);
 
     uint64_t minRequiredQuorum() const override;
+
+    // FIB-127: verify a committed proposal's signature proofs carry quorum weight from
+    // distinct consensus nodes. Used by both log-sync recovery (untrusted peer data) and
+    // precommit weight checks. Returns false if:
+    //   * proposal is null or carries no proofs
+    //   * any (sealerIdx, signature) pair fails the cryptoSuite verify against proposal->hash()
+    //   * the same sealerIdx appears more than once (byzantine inflation signal — honest
+    //     paths build the proof list from a deduplicated map so duplicates never occur)
+    //   * accumulated vote weight is below minRequiredQuorum()
+    virtual bool verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal);
 
     virtual ViewType view() const { return m_view; }
     virtual void setView(ViewType _view) { m_view.store(_view); }
@@ -478,7 +489,10 @@ protected:
     std::atomic<int64_t> m_minSealTime = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
-    const unsigned c_pbftMsgDefaultVersion = 0;
+    // FIB-134: sender default, sourced from the single protocol-version knob so the
+    // sender default and the digest threshold can never drift apart.
+    const unsigned c_pbftMsgDefaultVersion =
+        static_cast<unsigned>(toWireVersion(c_currentPBFTMsgVersion));
     const unsigned c_networkTimeoutInterval = 1000;
     // state variable that identifies whether it has timed out
     std::atomic_bool m_timeoutState = {false};

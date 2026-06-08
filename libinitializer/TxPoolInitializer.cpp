@@ -49,6 +49,8 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
     m_txpool = m_txpoolFactory->createTxPool(_ioContext, m_nodeConfig->notifyWorkerNum(),
         m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
     m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
+    m_txpool->setPreStoreBackpressureEnabled(m_nodeConfig->preStoreBackpressureEnabled());
+    m_txpool->setPreStoreMaxInflight(m_nodeConfig->preStoreMaxInflight());
     if (m_nodeConfig->enableSendTxByTree())
     {
         INITIALIZER_LOG(INFO) << LOG_DESC("enableSendTxByTree");
