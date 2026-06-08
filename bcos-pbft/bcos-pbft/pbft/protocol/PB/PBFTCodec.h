@@ -42,8 +42,8 @@ public:
 
     ~PBFTCodec() override = default;
 
-    bytesPointer encode(
-        PBFTBaseMessageInterface::Ptr _pbftMessage, int32_t _version = 0) const override;
+    bytesPointer encode(PBFTBaseMessageInterface::Ptr _pbftMessage,
+        int32_t _version = toWireVersion(c_currentPBFTMsgVersion)) const override;
 
     PBFTBaseMessageInterface::Ptr decode(bytesConstRef _data) const override;
 

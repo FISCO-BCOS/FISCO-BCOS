@@ -80,12 +80,36 @@ evmc_storage_status setStorage(evmc_host_context* context,
     auto& hostContext = static_cast<HostContext&>(*context);
 
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
-    // TODO: use evmc_storage_status 5-8
-    auto status = EVMC_STORAGE_MODIFIED;
-    if (value == 0)  // TODO: Should use 32 bytes 0
+
+    evmc_storage_status status;
+    if (hostContext.features().get(ledger::Features::Flag::bugfix_evm_storage_status))
     {
-        status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+        // TODO: full EIP-2200 support — also report the 5 dirty-slot statuses
+        // (DELETED_ADDED, MODIFIED_DELETED, DELETED_RESTORED, ADDED_DELETED,
+        // MODIFIED_RESTORED). Requires tracking the transaction-original value
+        // per slot to distinguish clean (o == c) from dirty (o != c) writes.
+        const auto existingValue = hostContext.store(key);
+        const bool existingIsZero =
+            concepts::bytebuffer::equalTo(existingValue.bytes, EMPTY_EVM_BYTES32.bytes);
+        if (concepts::bytebuffer::equalTo(value->bytes, EMPTY_EVM_BYTES32.bytes))
+        {
+            status = existingIsZero ? EVMC_STORAGE_ASSIGNED : EVMC_STORAGE_DELETED;
+        }
+        else
+        {
+            status = existingIsZero ? EVMC_STORAGE_ADDED : EVMC_STORAGE_MODIFIED;
+        }
+        // evmone applies gas_refund from the returned status; no manual refund bookkeeping.
+    }
+    else
+    {
+        // Legacy behavior preserved verbatim for consensus compatibility.
+        status = EVMC_STORAGE_MODIFIED;
+        if (value == 0)  // historical: pointer compared against 0; effectively never true
+        {
+            status = EVMC_STORAGE_DELETED;
+            hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
+        }
     }
     hostContext.setStore(key, value);  // Interface uses native endianness
     return status;
@@ -182,6 +206,11 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     EXECUTIVE_LOG(DEBUG) << "selfdestruct successful";
 
     hostContext.suicide();  // FISCO BCOS has no _beneficiary
+    // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
+    // EIP-6780 (Cancun+): account deletion only when created in same tx;
+    //   no gas refund in either case ("Note that no refund is given since EIP-3529").
+    // Returning false (no refund) is the correct behavior for all cases.
+    // TODO(evmone-eip6780): implement same-tx creation tracking for account deletion.
     return false;
 }
 
@@ -198,23 +227,16 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
 {
-    // TODO(evmone-adaptation): enable HostContext::accessAccount when evmone/fork-specific
-    // EIP-2929 warm-set semantics are landed in the dedicated follow-up PR.
-    std::ignore = _context;
-    std::ignore = _addr;
-    return EVMC_ACCESS_COLD;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return hostContext.accessAccount(*_addr, hostContext.revision());
 }
 
 
 evmc_access_status access_storage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
-    // TODO(evmone-adaptation): enable HostContext::accessStorage together with the dedicated
-    // EIP-2929 adaptation PR to keep host callback semantics deterministic.
-    std::ignore = _context;
-    std::ignore = _addr;
-    std::ignore = _key;
-    return EVMC_ACCESS_COLD;
+    auto& hostContext = static_cast<HostContext&>(*_context);
+    return hostContext.accessStorage(*_addr, *_key, hostContext.revision());
 }
 
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept

@@ -26,6 +26,7 @@
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -165,6 +166,10 @@ protected:
     virtual bool handleNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual void reHandlePrePrepareProposals(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual bool isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
+    // FIB-124: verify every prePrepareList item carried by a NewView is exactly justified
+    // by the bundled viewChange evidence (mirrors PBFTCacheProcessor::generatePrePrepareMsg).
+    // Called from isValidNewViewMsg after viewChange signatures and quorum weight pass.
+    virtual bool isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
     virtual void reachNewView(ViewType _view);
 
     // handle the checkpoint message
@@ -247,6 +252,11 @@ protected:
     const unsigned c_PopWaitSeconds = 5;
     const std::set<PacketType> c_consensusPacket = {PrePreparePacket, PreparePacket, CommitPacket};
 
+    // FIB-126: Maximum allowed clock skew (ms) between the proposed block timestamp and the
+    // local wall-clock time.  Proposals more than this far in the future are rejected.
+    // 15 seconds matches common blockchain practice for BFT networks.
+    static constexpr int64_t c_maxAllowedFutureTimestampMs = 15'000;
+
     std::atomic_bool m_stopped = {false};
 
     // the timer used to resend checkPointProposal
@@ -271,6 +281,11 @@ protected:
 
     // FIB-145 / FIB-146: 3-stage admission pipeline applied before m_msgQueue.push().
     PBFTPipeline m_pipeline;
+    // FIB-131: per-peer consecutive invalid-pre-prepare counter used to suppress reseal storms.
+    // Key: node index (IndexType). Protected by m_mutex.
+    // Resets on any successful pre-prepare from the same peer.
+    static constexpr uint32_t c_maxInvalidPrePreparePerPeer = 3;
+    std::unordered_map<IndexType, uint32_t> m_invalidPrePrepareCount;
 };
 }  // namespace consensus
 }  // namespace bcos

@@ -175,6 +175,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         [&]() { receiptRoot = calculateReceiptRoot(receipts, block, hashImpl); },
         [&]() {
             size_t logIndex = 0;
+            block.clearReceipts();
             for (auto&& [index, receipt] : ::ranges::views::enumerate(receipts))
             {
                 receipt->setTransactionIndex(index);
@@ -185,14 +186,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                 totalGasUsed += receipt->gasUsed();
                 receipt->setCumulativeGasUsed(totalGasUsed.str());
 
-                if (index < block.receiptsSize())
-                {
-                    block.setReceipt(index, receipt);
-                }
-                else
-                {
-                    block.appendReceipt(receipt);
-                }
+                block.appendReceipt(receipt);
             }
         },
         [&]() {
@@ -249,9 +243,13 @@ private:
         m_transactionNotifier;
     std::reference_wrapper<crypto::Hash const> m_hashImpl;
 
-    int64_t m_lastExecutedBlockNumber = -1;
+    // FIB-101 / FIB-102: Each counter is owned by exactly one mutex and is read /
+    // written only while that mutex is held. Plain integers are sufficient — no
+    // atomics needed. m_lastExecutedBlockNumber is owned by m_executeMutex;
+    // m_lastCommittedBlockNumber is owned by m_commitMutex.
+    int64_t m_lastExecutedBlockNumber{-1};
     std::mutex m_executeMutex;
-    int64_t m_lastCommittedBlockNumber = -1;
+    int64_t m_lastCommittedBlockNumber{-1};
     std::mutex m_commitMutex;
     tbb::task_group m_asyncGroup;
 
@@ -263,7 +261,7 @@ private:
         protocol::Block::Ptr m_block;
         bool m_sysBlock{};
     };
-    std::deque<ExecuteResult> m_results;
+    std::deque<std::shared_ptr<ExecuteResult>> m_results;
     std::mutex m_resultsMutex;
 
     /**
@@ -287,32 +285,46 @@ private:
                 << "Execute block: " << blockHeader->number() << " | " << verify << " | "
                 << block->transactionsMetaDataSize() << " | " << block->transactionsSize();
 
-            std::unique_lock resultsLock(m_resultsMutex);
-            if (m_lastExecutedBlockNumber != -1 &&
-                blockHeader->number() - m_lastExecutedBlockNumber != 1)
+            // Fast path: if the block has already been executed (consensus and sync
+            // may both drive the same height), serve the cached result without
+            // taking m_executeMutex. m_results is owned by m_resultsMutex.
             {
-                // 如果区块已经执行过，则直接返回结果，不报错，用于共识和同步同时执行一个区块的场景
-                // If the block has been executed, the result will be returned directly without
-                // error, which is used for the scenario of consensus and synchronous execution of a
-                // block at the same time
+                std::unique_lock resultsLock(m_resultsMutex);
                 if (!m_results.empty())
                 {
                     auto number = blockHeader->number();
-                    auto frontNumber = m_results.front().m_executedBlockHeader->number();
-                    auto backNumber = m_results.back().m_executedBlockHeader->number();
+                    auto frontNumber = m_results.front()->m_executedBlockHeader->number();
+                    auto backNumber = m_results.back()->m_executedBlockHeader->number();
                     if (number <= frontNumber && number >= backNumber)
                     {
                         BASELINE_SCHEDULER_LOG(INFO)
                             << "Block has been executed, return result directly";
                         auto& result = m_results.at(frontNumber - number);
-                        co_return {nullptr, result.m_executedBlockHeader, result.m_sysBlock};
+                        co_return {nullptr, result->m_executedBlockHeader, result->m_sysBlock};
                     }
-
-                    BASELINE_SCHEDULER_LOG(INFO)
-                        << "Block number out of cache range! front: " << frontNumber
-                        << " back: " << backNumber << " input: " << blockHeader->number();
                 }
+            }
 
+            // FIB-102: m_lastExecutedBlockNumber is owned by m_executeMutex; the
+            // continuity check below must run while this lock is held to avoid
+            // the write-here / read-elsewhere race that the original code had.
+            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
+            if (!executeLock.owns_lock())
+            {
+                auto message = std::string{"Another block is executing!"};
+                BASELINE_SCHEDULER_LOG(INFO) << message;
+                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                    nullptr, false};
+            }
+
+            // FIB-102: TOCTOU re-check of the discontinuity condition under
+            // m_executeMutex. Reads of m_lastExecutedBlockNumber happen here only.
+            // Cache hits are already handled by the no-lock fast path above; this
+            // branch only logs the cache window for diagnostics before returning
+            // the discontinuity error.
+            if (m_lastExecutedBlockNumber != -1 &&
+                blockHeader->number() - m_lastExecutedBlockNumber != 1)
+            {
                 auto message =
                     fmt::format("Discontinuous execute block number! expect: {} input: {}",
                         m_lastExecutedBlockNumber + 1, blockHeader->number());
@@ -321,16 +333,22 @@ private:
                     BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
                     nullptr, false};
             }
-            resultsLock.unlock();
 
-            std::unique_lock executeLock(m_executeMutex, std::try_to_lock);
-            if (!executeLock.owns_lock())
+            // FIB-103: Backpressure — refuse new executions when the pending-result
+            // queue is at capacity, preventing unbounded growth of m_results /
+            // view stack when commits stall or never arrive.
+            static constexpr size_t MAX_PENDING_RESULTS = 16;
             {
-                auto message =
-                    fmt::format("Another block:{} is executing!", m_lastExecutedBlockNumber);
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
-                    nullptr, false};
+                std::unique_lock resultsLock(m_resultsMutex);
+                if (m_results.size() >= MAX_PENDING_RESULTS)
+                {
+                    auto message =
+                        fmt::format("Too many pending execution results: {}", m_results.size());
+                    BASELINE_SCHEDULER_LOG(WARNING) << message;
+                    co_return {
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
+                        nullptr, false};
+                }
             }
 
             auto now = current();
@@ -384,16 +402,40 @@ private:
                     nullptr, false};
             }
 
-            m_multiLayerStorage.get().pushView(std::move(view));
-            m_lastExecutedBlockNumber = blockHeader->number();
+            auto executeResult = std::make_shared<ExecuteResult>(
+                ExecuteResult{.m_transactions = std::make_shared<protocol::ConstTransactions>(
+                                  std::move(transactions)),
+                    .m_receipts = std::move(receipts),
+                    .m_executedBlockHeader = executedBlockHeader,
+                    .m_block = std::move(block),
+                    .m_sysBlock = sysBlock});
 
-            resultsLock.lock();
-            m_results.push_front({.m_transactions = std::make_shared<protocol::ConstTransactions>(
-                                      std::move(transactions)),
-                .m_receipts = std::move(receipts),
-                .m_executedBlockHeader = executedBlockHeader,
-                .m_block = std::move(block),
-                .m_sysBlock = sysBlock});
+            // FIB-103 / FIB-104: Commit the execution result in a strict order:
+            // push the view first (so we have a rollback target), then push the
+            // result; if push_front throws pop the view back. The view stack and
+            // m_results both belong to m_resultsMutex's invariant, so they share
+            // this critical section. The earlier backpressure check under
+            // m_resultsMutex is sufficient — m_executeMutex prevents any other
+            // execute from pushing in between, and commit can only shrink the
+            // queue, so the size cannot exceed MAX_PENDING_RESULTS here.
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
+                assert(m_results.size() < MAX_PENDING_RESULTS);
+
+                m_multiLayerStorage.get().pushView(std::move(view));
+                try
+                {
+                    m_results.push_front(std::move(executeResult));
+                }
+                catch (...)
+                {
+                    m_multiLayerStorage.get().popFrontStorage();
+                    throw;
+                }
+            }
+            // FIB-102: Update m_lastExecutedBlockNumber only after the queue write
+            // succeeds. Owned by m_executeMutex (still held via executeLock).
+            m_lastExecutedBlockNumber = blockHeader->number();
 
             BASELINE_SCHEDULER_LOG(INFO)
                 << "Execute block finished: " << executedBlockHeader->number() << " | "
@@ -435,72 +477,152 @@ private:
         {
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block: " << header->number();
 
+            // FIB-101: m_lastCommittedBlockNumber is owned by m_commitMutex; all
+            // reads and writes happen below while we hold this lock.
             std::unique_lock commitLock(m_commitMutex, std::try_to_lock);
             if (!commitLock.owns_lock())
             {
-                auto message =
-                    fmt::format("Another block:{} is committing!", m_lastCommittedBlockNumber);
+                auto message = std::string{"Another block is committing!"};
                 BASELINE_SCHEDULER_LOG(INFO) << message;
 
                 co_return {BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidStatus, message),
                     nullptr};
             }
 
-            if (m_lastCommittedBlockNumber != -1 &&
-                header->number() - m_lastCommittedBlockNumber != 1)
+            // FIB-101: The genesis system-contract deploy block (number 0) is
+            // committed exactly once, during initSysContract() at node startup.
+            // buildGenesisBlock() has already written current-number=0, so the
+            // ledger bootstrap below reads 0 and the already-committed / continuity
+            // checks would wrongly reject this legitimate genesis commit (0 <= 0,
+            // and 0 - 0 != 1). Block 0 only ever reaches here at init, so skip the
+            // bootstrap-anchored validation for it; m_lastCommittedBlockNumber is
+            // still advanced to 0 after the merge succeeds below.
+            if (!isSysContractDeploy(header->number()))
             {
-                auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
-                    header->number(), m_lastCommittedBlockNumber + 1);
+                // FIB-101: Bootstrap from the ledger on the very first commit so
+                // that continuity / already-committed checks are anchored correctly.
+                if (m_lastCommittedBlockNumber == -1)
+                {
+                    m_lastCommittedBlockNumber =
+                        co_await ledger::getCurrentBlockNumber(m_ledger.get());
+                }
 
-                BASELINE_SCHEDULER_LOG(INFO) << message;
-                co_return {
-                    BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::InvalidBlockNumber, message),
-                    nullptr};
+                // FIB-101: Reject blocks that have already been committed (out-of-order
+                // or duplicate commits from concurrent consensus / sync paths).
+                if (m_lastCommittedBlockNumber != -1 &&
+                    header->number() <= m_lastCommittedBlockNumber)
+                {
+                    auto message = fmt::format("Block already committed: {}! latest: {}",
+                        header->number(), m_lastCommittedBlockNumber);
+
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr};
+                }
+                if (m_lastCommittedBlockNumber != -1 &&
+                    header->number() - m_lastCommittedBlockNumber != 1)
+                {
+                    auto message = fmt::format("Discontinuous commit block number: {}! expect: {}",
+                        header->number(), m_lastCommittedBlockNumber + 1);
+
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr};
+                }
             }
 
-            std::unique_lock resultsLock(m_resultsMutex);
-            if (m_results.empty())
             {
-                BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
+                std::unique_lock resultsLock(m_resultsMutex);
+                if (m_results.empty())
+                {
+                    auto message = std::string{"Unexpected empty results!"};
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::UnknownError, message),
+                        nullptr};
+                }
+
+                auto resultBlockNumber = m_results.back()->m_executedBlockHeader->number();
+                if (resultBlockNumber != header->number())
+                {
+                    auto message = fmt::format(
+                        "Commit block does not match pending execution result: input: {} pending: "
+                        "{}",
+                        header->number(), resultBlockNumber);
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::InvalidBlockNumber, message),
+                        nullptr};
+                }
             }
 
             auto now = current();
-            auto result = std::move(m_results.back());
-            m_results.pop_back();
-            resultsLock.unlock();
+            std::shared_ptr<ExecuteResult> result;
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
+                result = m_results.back();
+            }
 
             Bloom logsBloom;
-            for (auto& receipt : result.m_receipts)
+            for (auto& receipt : result->m_receipts)
             {
                 orBloom(logsBloom, receipt->logsBloom());
             }
-            result.m_block->setBlockHeader(header);
-            result.m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
+            result->m_block->setBlockHeader(header);
+            result->m_block->setLogsBloom({logsBloom.data(), logsBloom.size()});
+
+            // FIB-104: Single unified prewrite — header, hash mappings, nonces,
+            // current block number, tx metadata, transactions, and receipts all
+            // flow into prewriteStorage. The subsequent mergeBackStorage commit is
+            // therefore atomic at the storage layer: either every piece of data
+            // is visible after the merge, or none is. Replaces the previous
+            // prewriteBlock + storeTransactionsAndReceipts pair (FIB-104.1).
             typename MultiLayerStorage::MutableStorage prewriteStorage;
-            if (result.m_block->blockHeader()->number() != 0)
+            if (result->m_block->blockHeader()->number() != 0)
             {
                 ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
                     ittapi::ITT_DOMAINS::instance().SET_BLOCK);
-                co_await ledger::prewriteBlock(
-                    m_ledger.get(), result.m_transactions, result.m_block, false, prewriteStorage);
+                co_await ledger::prewriteBlockToBuffer(
+                    m_ledger.get(), result->m_transactions, result->m_block, prewriteStorage);
             }
 
-            tbb::parallel_invoke(
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().MERGE_STATE);
-                    task::tbb::syncWait(
-                        m_multiLayerStorage.get().mergeBackStorage(prewriteStorage));
-                },
-                [&]() {
-                    ittapi::Report report(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
-                        ittapi::ITT_DOMAINS::instance().STORE_TRANSACTION_RECEIPTS);
-                    task::tbb::syncWait(ledger::storeTransactionsAndReceipts(
-                        m_ledger.get(), result.m_transactions, result.m_block));
-                });
+            // FIB-104: mergeBackStorage is a heavy IO step (RocksDB / cache
+            // write). Holding m_resultsMutex across it would needlessly serialize
+            // coExecuteBlock against commit IO. The pop_back must follow a
+            // successful merge so that on failure the pending entry is retained
+            // for retry, but it does not have to share the same critical section.
+            //
+            // During the brief gap between mergeBackStorage's internal
+            // m_storages.pop_back and our m_results.pop_back, coExecuteBlock may
+            // see m_results.size() one larger than m_storages.size(); this is
+            // harmless because (a) fork() snapshots m_storages directly under its
+            // own mutex, (b) backpressure is only over-conservative by one, and
+            // (c) m_results.back() cannot change here — m_commitMutex guarantees
+            // a single committer.
+            {
+                ittapi::Report mergeReport(ittapi::ITT_DOMAINS::instance().BASE_SCHEDULER,
+                    ittapi::ITT_DOMAINS::instance().MERGE_STATE);
+                co_await m_multiLayerStorage.get().mergeBackStorage(prewriteStorage);
+            }
+
+            {
+                std::unique_lock resultsLock(m_resultsMutex);
+                if (m_results.empty() ||
+                    m_results.back()->m_executedBlockHeader->number() != header->number())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        std::runtime_error("Pending execution result changed during commit!"));
+                }
+                m_results.pop_back();
+            }
 
             auto ledgerConfig = co_await ledger::getLedgerConfig(m_ledger.get());
             ledgerConfig->setHash(header->hash());
+
+            // FIB-101: Advance the committed counter only after the merge succeeds.
+            m_lastCommittedBlockNumber = header->number();
 
             BASELINE_SCHEDULER_LOG(INFO) << "Commit block finished: " << header->number()
                                          << " | elapsed: " << (current() - now) << "ms";
@@ -513,7 +635,7 @@ private:
 
                 auto submitResults =
                     ::ranges::views::zip(
-                        ::ranges::views::iota(0), *result.m_transactions, result.m_receipts) |
+                        ::ranges::views::iota(0), *result->m_transactions, result->m_receipts) |
                     ::ranges::views::transform(
                         [&](auto input) -> protocol::TransactionSubmitResult::Ptr {
                             auto&& [index, transaction, receipt] = input;
@@ -576,9 +698,9 @@ public:
         m_hashImpl(hashImpl)
     {}
     BaselineScheduler(const BaselineScheduler&) = delete;
-    BaselineScheduler(BaselineScheduler&&) noexcept = default;
+    BaselineScheduler(BaselineScheduler&&) = delete;
     BaselineScheduler& operator=(const BaselineScheduler&) = delete;
-    BaselineScheduler& operator=(BaselineScheduler&&) noexcept = default;
+    BaselineScheduler& operator=(BaselineScheduler&&) = delete;
     ~BaselineScheduler() noexcept override { m_asyncGroup.wait(); }
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,

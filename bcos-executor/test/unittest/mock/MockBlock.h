@@ -1,8 +1,8 @@
 #pragma once
 #include "MockBlockHeader.h"
+#include "bcos-framework/protocol/Block.h"
 #include "bcos-framework/protocol/BlockHeader.h"
 #include "bcos-utilities/AnyHolder.h"
-#include "bcos-framework/protocol/Block.h"
 
 namespace bcos::test
 {
@@ -44,6 +44,7 @@ public:
     void appendTransaction(protocol::Transaction::Ptr _transaction) override {}
     void setReceipt(uint64_t _index, protocol::TransactionReceipt::Ptr _receipt) override {}
     void appendReceipt(protocol::TransactionReceipt::Ptr _receipt) override {}
+    void clearReceipts() override {}
     void appendTransactionMetaData(protocol::TransactionMetaData::Ptr _txMetaData) override {}
     uint64_t transactionsSize() const override { return 0; }
     uint64_t transactionsMetaDataSize() const override { return 0; }

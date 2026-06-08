@@ -360,7 +360,7 @@ BOOST_AUTO_TEST_CASE(FIB88_NegativeGasFixupConsumesAllGas)
 }
 
 // ---------------------------------------------------------------------------
-// Flag-off backward compatibility: when bugfix_v1_exec_error_gas_used is
+// Flag-off backward compatibility: when bugfix_v1_error_handling is
 // disabled, error paths must preserve the old gas_left / status values so
 // that receipt hashes stay identical to older nodes.
 // ---------------------------------------------------------------------------
@@ -369,7 +369,7 @@ BOOST_AUTO_TEST_CASE(FIB88_NegativeGasFixupConsumesAllGas)
 BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
 {
     syncWait([this]() -> Task<void> {
-        // Use V3_16_3 which does NOT activate bugfix_v1_exec_error_gas_used
+        // Use V3_16_3 which does NOT activate bugfix_v1_error_handling
         bcostars::protocol::BlockHeaderImpl oldHeader;
         oldHeader.setVersion(static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_16_3_VERSION));
         oldHeader.setNumber(seq++);

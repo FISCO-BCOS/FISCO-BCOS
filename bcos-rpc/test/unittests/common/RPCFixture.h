@@ -122,7 +122,9 @@ public:
         txPool->start();
 
         nodeService = std::make_shared<rpc::NodeService>(
-            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory, nullptr);
+            m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory,
+            // EngineService not needed for existing RPC tests; pass nullptr as stub.
+            nullptr);
 
 
         groupInfo = std::make_shared<group::GroupInfo>();
@@ -135,6 +137,11 @@ public:
         groupInfo->setGroupID(groupId);
         groupInfo->setChainID(chainId);
     }
+    // ioServicePool MUST be declared before any member that creates Timer objects
+    // referencing its io_context, to ensure it outlives them during destruction.
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "rpcTest");
+
     bcos::tool::NodeConfig::Ptr nodeConfig;
     RPCInterface::Ptr rpc;
     Hash::Ptr hashImpl;
@@ -153,8 +160,6 @@ public:
 
     rpc::NodeService::Ptr nodeService;
     group::GroupInfo::Ptr groupInfo;
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "rpcTest");
     // clang-format off
     std::string configini = "[p2p]\n"
         "    listen_ip=0.0.0.0\n"

@@ -40,6 +40,24 @@ inline constexpr struct PrewriteBlock
     }
 } prewriteBlock{};
 
+// FIB-104: Routes the entire block (header, hash mappings, nonces, current number,
+// tx metadata, transactions, receipts) into the caller-provided storage buffer so
+// that a subsequent mergeBack/commit can persist all of it atomically.
+//
+// NOTE: This bypasses the m_blockStorage / m_stateStorage separation honored by
+// PrewriteBlock; transactions and receipts always go to the passed `storage`.
+// Only suitable for single-backend deployments (e.g. AIR mode). Archive-mode
+// callers that require a separate block-data backend must continue to use
+// PrewriteBlock + StoreTransactionsAndReceipts.
+inline constexpr struct PrewriteBlockToBuffer
+{
+    task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,
+        bcos::protocol::Block::ConstPtr block, auto& storage) const
+    {
+        co_await tag_invoke(*this, ledger, std::move(transactions), std::move(block), storage);
+    }
+} prewriteBlockToBuffer{};
+
 inline constexpr struct StoreTransactionsAndReceipts
 {
     task::Task<void> operator()(auto& ledger, bcos::protocol::ConstTransactionsPtr transactions,

@@ -58,6 +58,8 @@ public:
     void executeWorker() override { BlockSync::executeWorker(); }
     void maintainPeersConnection() override { BlockSync::maintainPeersConnection(); }
     SyncPeerStatus::Ptr syncStatus() { return m_syncStatus; }
+    // FIB-158: expose downloading queue for race regression test
+    DownloadingQueue::Ptr downloadingQueue() { return m_downloadingQueue; }
 };
 
 class FakeTxPoolForSync : public FakeTxPool
@@ -127,6 +129,22 @@ public:
             _fakeGateWay->addSync(m_keyPair->publicKey(), m_sync);
         }
         m_frontService->setGateWay(_fakeGateWay);
+    }
+
+    virtual ~SyncFixture()
+    {
+        if (m_sync)
+        {
+            m_sync->stop();
+        }
+        if (m_ledger)
+        {
+            m_ledger->stop();
+        }
+        if (m_frontService)
+        {
+            m_frontService->stop();
+        }
     }
 
     FakeFrontService::Ptr frontService() { return m_frontService; }
@@ -208,9 +226,11 @@ private:
     FakeLedger::Ptr m_ledger;
 
     FakeScheduler::Ptr m_scheduler;
+    // m_ioServicePool MUST be declared before m_sync to ensure it outlives
+    // Timer objects created by m_sync that reference its io_context.
+    IOServicePool::Ptr m_ioServicePool = std::make_shared<IOServicePool>(1, "syncTest");
     FakeBlockSync::Ptr m_sync;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
-    IOServicePool::Ptr m_ioServicePool = std::make_shared<IOServicePool>(1, "syncTest");
 };
 }  // namespace test
 }  // namespace bcos

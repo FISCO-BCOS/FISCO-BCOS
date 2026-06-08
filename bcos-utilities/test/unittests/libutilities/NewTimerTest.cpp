@@ -57,26 +57,26 @@ BOOST_AUTO_TEST_CASE(testTimer)
 
     {
         int count = 0;
-        auto timer = timerFactory.createTimer([&count] { count++; }, 1000, 0);
+        auto timer = timerFactory.createTimer([&count] { count++; }, 100, 0);
         timer->start();
 
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
         BOOST_CHECK_EQUAL(timer->delayMS(), 0);
-        BOOST_CHECK_EQUAL(timer->periodMS(), 1000);
+        BOOST_CHECK_EQUAL(timer->periodMS(), 100);
         BOOST_CHECK_GE(count, 2);
         timer->stop();
     }
 
     {
         int count = 0;
-        auto timer = timerFactory.createTimer([&count] { count++; }, 1000, 10000);
+        auto timer = timerFactory.createTimer([&count] { count++; }, 100, 200);
         timer->start();
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(12000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        BOOST_CHECK_EQUAL(timer->delayMS(), 10000);
-        BOOST_CHECK_EQUAL(timer->periodMS(), 1000);
+        BOOST_CHECK_EQUAL(timer->delayMS(), 200);
+        BOOST_CHECK_EQUAL(timer->periodMS(), 100);
         BOOST_CHECK_GE(count, 1);
         timer->stop();
     }

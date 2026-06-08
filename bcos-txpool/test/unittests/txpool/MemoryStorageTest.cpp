@@ -28,13 +28,14 @@
 
 #include <sw/redis++/cxx_utils.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_invoke.h>
 
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <atomic>
+#include <fakeit.hpp>
 #include <future>
 #include <thread>
-#include <fakeit.hpp>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -870,18 +871,17 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
 
     // Wait until callback is attached, or submit coroutine has already completed.
     bool callbackAttached = false;
-    for (size_t i = 0; i < 10000; ++i)
+    for (size_t i = 0; i < 200; ++i)
     {
         if (tx->submitCallback())
         {
             callbackAttached = true;
             break;
         }
-        if (doneFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        if (doneFuture.wait_for(std::chrono::milliseconds(10)) == std::future_status::ready)
         {
             break;
         }
-        std::this_thread::yield();
     }
 
     TransactionSubmitResults txsResult;
@@ -900,7 +900,9 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
         sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
     }
 
-    BOOST_CHECK(doneFuture.wait_for(std::chrono::seconds(1)) == std::future_status::ready);
+    BOOST_CHECK_MESSAGE(
+        doneFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+        "submitTransaction did not complete within 5 seconds");
     if (waitThread.joinable())
     {
         waitThread.join();

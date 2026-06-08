@@ -86,7 +86,8 @@ public:
 
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
-        bcos::protocol::BlockFactory::Ptr blockFactory, int64_t blockTxCountLimit = 1000)
+        bcos::protocol::BlockFactory::Ptr blockFactory,
+        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit)
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),

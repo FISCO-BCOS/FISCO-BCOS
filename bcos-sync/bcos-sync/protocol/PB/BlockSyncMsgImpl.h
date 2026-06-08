@@ -50,6 +50,20 @@ public:
                     ", limit: " + std::to_string(c_maxSyncMsgSize)));
         }
         bcos::protocol::decodePBObject(m_syncMessage, _data);
+
+        // FIB-18-new: BlockResponsePacket must contain at least one blocksData entry.
+        // PR #5063 added caller-side bounds checks at blockData(0) call sites; reject the
+        // malformed message at the decode boundary so the dispatch + factory overhead is
+        // not wasted on a packet that will never carry usable data. Other packet types
+        // (BlockStatusPacket, BlockRequestPacket) legitimately have an empty blocksData
+        // and are NOT affected by this check.
+        if (m_syncMessage->packettype() == BlockSyncPacketType::BlockResponsePacket &&
+            m_syncMessage->blocksdata_size() == 0)
+        {
+            BOOST_THROW_EXCEPTION(
+                bcos::protocol::PBObjectDecodeException()
+                << bcos::errinfo_comment("BlockResponsePacket with empty blocksData rejected"));
+        }
     }
 
     int32_t version() const override { return m_syncMessage->version(); }

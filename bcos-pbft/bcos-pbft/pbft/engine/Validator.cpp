@@ -19,6 +19,7 @@
  * @date 2021-04-21
  */
 #include "Validator.h"
+#include <bcos-framework/protocol/CommonError.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::crypto;
@@ -72,6 +73,29 @@ void TxsValidator::asyncResetTxsFlag(
     const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash)
 {
     auto blockHeader = proposal.blockHeader();
+    // FIB-141: build the tx-hash list FIRST so empty blocks and
+    // exception-throwing blocks bail out before m_resettingProposals is
+    // populated. Inserting the proposal hash up front would permanently strand
+    // it whenever the list build is empty or throws — PBFTConfig::notifySealer()
+    // gates sealing on resettingProposalSize() and would never unblock.
+    HashList txsHash;
+    try
+    {
+        for (size_t i = 0; i < proposal.transactionsHashSize(); i++)
+        {
+            txsHash.emplace_back(proposal.transactionHash(i));
+        }
+    }
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("asyncResetTxsFlag buildHashList exception")
+                          << LOG_KV("message", boost::diagnostic_information(e));
+        return;
+    }
+    if (txsHash.empty())
+    {
+        return;
+    }
     if (_flag)
     {
         // already has the reset request
@@ -80,26 +104,9 @@ void TxsValidator::asyncResetTxsFlag(
             return;
         }
     }
-    try
-    {
-        HashList txsHash;
-        for (size_t i = 0; i < proposal.transactionsHashSize(); i++)
-        {
-            txsHash.emplace_back(proposal.transactionHash(i));
-        }
-        if (txsHash.empty())
-        {
-            return;
-        }
-        PBFT_LOG(INFO) << LOG_DESC("asyncResetTxsFlag") << LOG_KV("index", blockHeader->number())
-                       << LOG_KV("hash", blockHeader->hash().abridged()) << LOG_KV("flag", _flag);
-        asyncResetTxsFlag(proposal, txsHash, _flag, _emptyTxBatchHash);
-    }
-    catch (std::exception const& e)
-    {
-        PBFT_LOG(WARNING) << LOG_DESC("asyncResetTxsFlag exception")
-                          << LOG_KV("message", boost::diagnostic_information(e));
-    }
+    PBFT_LOG(INFO) << LOG_DESC("asyncResetTxsFlag") << LOG_KV("index", blockHeader->number())
+                   << LOG_KV("hash", blockHeader->hash().abridged()) << LOG_KV("flag", _flag);
+    asyncResetTxsFlag(proposal, txsHash, _flag, _emptyTxBatchHash);
 }
 
 void TxsValidator::asyncResetTxsFlag(
@@ -123,26 +130,46 @@ void TxsValidator::asyncResetTxsFlag(
             {
                 return;
             }
-            // must ensure asyncResetTxsFlag success before seal new next blocks
+            // FIB-143: check _error FIRST. Erase the proposal from
+            // m_resettingProposals only on success. On failure, leave the hash
+            // in place so verifyCompletedHook does NOT fire and sealing stays
+            // gated on the unfinished reset.
+            if (_error != nullptr)
+            {
+                PBFT_LOG(WARNING) << LOG_DESC("asyncMarkTxs failed")
+                                  << LOG_KV("code", _error->errorCode())
+                                  << LOG_KV("msg", _error->errorMessage());
+                // FIB-144: TransactionsMissing is a transient / recoverable
+                // failure (txpool didn't have all referenced txs yet). Without
+                // a removal here insertResettingProposal in a later
+                // asyncResetTxsFlag would return false and suppress every
+                // retry — a byzantine leader could permanently halt sealing
+                // by submitting a proposal with unknown tx hashes. Removing
+                // the hash lets the next PrePrepare for the same proposal
+                // (e.g. via view change) re-trigger marking once the data
+                // arrives. Other errors keep the FIB-143 retain-on-failure
+                // semantics.
+                if (_flag &&
+                    _error->errorCode() == bcos::protocol::CommonError::TransactionsMissing)
+                {
+                    validator->eraseResettingProposal(proposalHash);
+                    PBFT_LOG(INFO) << LOG_DESC(
+                                          "FIB-144: TransactionsMissing - removed proposal from "
+                                          "resetting set, awaiting data arrival")
+                                   << LOG_KV("hash", proposalHash.abridged())
+                                   << LOG_KV("index", proposalNumber);
+                }
+                return;
+            }
+            // success: clear our reset request before sealing the next block
             if (_flag)
             {
                 validator->eraseResettingProposal(proposalHash);
             }
-            if (_error == nullptr)
-            {
-                PBFT_LOG(INFO) << LOG_DESC("asyncMarkTxs success") << LOG_KV("index", proposalNumber)
-                               << LOG_KV("hash", proposalHash.abridged()) << LOG_KV("flag", _flag)
-                               << LOG_KV("markT", utcSteadyTime() - startT)
-                               << LOG_KV("emptyTxBatchHash", _emptyTxBatchHash);
-                return;
-            }
-            PBFT_LOG(WARNING) << LOG_DESC("asyncMarkTxs failed")
-                              << LOG_KV("code", _error->errorCode())
-                              << LOG_KV("msg", _error->errorMessage());
-            if (_flag)
-            {
-                validator->insertResettingProposal(proposalHash);
-            }
+            PBFT_LOG(INFO) << LOG_DESC("asyncMarkTxs success") << LOG_KV("index", proposalNumber)
+                           << LOG_KV("hash", proposalHash.abridged()) << LOG_KV("flag", _flag)
+                           << LOG_KV("markT", utcSteadyTime() - startT)
+                           << LOG_KV("emptyTxBatchHash", _emptyTxBatchHash);
         });
 }
 

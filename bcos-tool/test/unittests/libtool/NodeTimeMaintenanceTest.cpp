@@ -14,6 +14,10 @@ namespace bcos
 {
 namespace test
 {
+// Small buffer added to peer times to stay above NodeTimeMaintenance::m_minInitOffset
+// (60000 ms), compensating for utcTime() jitter between call sites.
+static constexpr int64_t kTimeBuffer = 10;
+
 BOOST_AUTO_TEST_CASE(testNodeTimeMaintenance_doubleNode)
 {
     // create four node
@@ -38,13 +42,27 @@ BOOST_AUTO_TEST_CASE(testNodeTimeMaintenance_doubleNode)
     auto pub4 = secp256k1PriToPub(sec4);
 
     NodeTimeMaintenance nodeTimeMaintenance;
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub1, utcTime());
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub2, utcTime() + 1 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub3, utcTime() + 2 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub4, utcTime() + 3 * 60 * 1000);
+    // Capture utcTime once and add a small buffer to each offset so that
+    // the internal utcTime() jitter (±2ms) does not drop peer offsets below
+    // NodeTimeMaintenance::m_minInitOffset (60000ms), which would cause them
+    // to be clamped to 0 and skew the median.
+    auto now = utcTime();
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub1, now);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub2, now + 1 * 60 * 1000 + kTimeBuffer);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub3, now + 2 * 60 * 1000 + kTimeBuffer);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub4, now + 3 * 60 * 1000 + kTimeBuffer);
 
-    BOOST_CHECK_EQUAL(1.5 * 60 * 1000, nodeTimeMaintenance.medianTimeOffset());
-    BOOST_CHECK_EQUAL(utcTime() + 1.5 * 60 * 1000, nodeTimeMaintenance.getAlignedTime());
+    // With 4 peers the median is the average of the 2nd and 3rd offsets.
+    // Offsets ≈ [0, 60010, 120010, 180010] → median ≈ 90010.
+    auto actualMedian = nodeTimeMaintenance.medianTimeOffset();
+    BOOST_CHECK_MESSAGE(actualMedian >= 90000 && actualMedian <= 90020,
+        "medianTimeOffset out of range: actual=" << actualMedian);
+    auto expectedAligned = static_cast<int64_t>(utcTime()) + actualMedian;
+    auto actualAligned = nodeTimeMaintenance.getAlignedTime();
+    auto diffAligned = expectedAligned - actualAligned;
+    BOOST_CHECK_MESSAGE(diffAligned >= -5 && diffAligned <= 5,
+        "getAlignedTime off by " << diffAligned << "ms: expected="
+            << expectedAligned << " actual=" << actualAligned);
 }
 
 BOOST_AUTO_TEST_CASE(testNodeTimeMaintenance_singlarNode)
@@ -76,14 +94,24 @@ auto fixedSec1 = h256(
     auto pub5 = secp256k1PriToPub(sec5);
 
     NodeTimeMaintenance nodeTimeMaintenance;
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub1, utcTime());
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub2, utcTime() + 1 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub3, utcTime() + 2 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub4, utcTime() + 3 * 60 * 1000);
-    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub5, utcTime() + 4 * 60 * 1000);
+    // Same pattern as doubleNode test: capture once + buffer to stay above m_minInitOffset.
+    auto now2 = utcTime();
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub1, now2);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub2, now2 + 1 * 60 * 1000 + kTimeBuffer);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub3, now2 + 2 * 60 * 1000 + kTimeBuffer);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub4, now2 + 3 * 60 * 1000 + kTimeBuffer);
+    nodeTimeMaintenance.tryToUpdatePeerTimeInfo(pub5, now2 + 4 * 60 * 1000 + kTimeBuffer);
 
-    BOOST_CHECK_EQUAL(2 * 60 * 1000, nodeTimeMaintenance.medianTimeOffset());
-    BOOST_CHECK_EQUAL(utcTime() + 2 * 60 * 1000, nodeTimeMaintenance.getAlignedTime());
+    // With 5 peers the median is the 3rd offset ≈ 120010.
+    auto actualMedian2 = nodeTimeMaintenance.medianTimeOffset();
+    BOOST_CHECK_MESSAGE(actualMedian2 >= 120000 && actualMedian2 <= 120020,
+        "medianTimeOffset out of range: actual=" << actualMedian2);
+    auto expectedAligned2 = static_cast<int64_t>(utcTime()) + actualMedian2;
+    auto actualAligned2 = nodeTimeMaintenance.getAlignedTime();
+    auto diffAligned2 = expectedAligned2 - actualAligned2;
+    BOOST_CHECK_MESSAGE(diffAligned2 >= -5 && diffAligned2 <= 5,
+        "getAlignedTime off by " << diffAligned2 << "ms: expected="
+            << expectedAligned2 << " actual=" << actualAligned2);
 }
 }  // namespace test
 }  // namespace bcos

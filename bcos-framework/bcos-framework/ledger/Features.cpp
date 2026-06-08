@@ -194,22 +194,12 @@ void Features::setUpgradeFeatures(
                 .flags = {Flag::bugfix_delegatecall_transfer, Flag::bugfix_nonce_initialize,
                     Flag::bugfix_v1_timestamp}},
             {.to = protocol::BlockVersion::V3_16_4_VERSION, .flags = {Flag::bugfix_revert_logs}},
-            {.to = protocol::BlockVersion::V3_16_5_VERSION,
-                .flags =
-                    {
-                        Flag::bugfix_auth_check_create2,
-                        Flag::bugfix_auth_check_revert_status,
-                        Flag::bugfix_auth_table_raw_address,
-                        Flag::bugfix_auth_table_squatting,
-                        Flag::bugfix_v1_exec_error_gas_used,
-                        Flag::bugfix_v1_precompiled_error_gas,
-                    }},
             {.to = protocol::BlockVersion::V3_17_0_VERSION,
                 .flags = {
+                    Flag::bugfix_auth_check,
+                    Flag::bugfix_v1_error_handling,
                     Flag::bugfix_gas_payment_balance_precheck,
-                    Flag::bugfix_clamp_gas_left_on_error,
                     Flag::bugfix_precompiled_feature_gate,
-                    Flag::bugfix_v1_executive_wrapper,
                     Flag::bugfix_evm_storage_status,
                     Flag::bugfix_statestorage_hash_v3_17,
                 }}});

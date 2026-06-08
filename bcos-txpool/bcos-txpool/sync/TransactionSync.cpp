@@ -134,6 +134,20 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
 void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
     Block::ConstPtr _verifiedProposal, std::function<void(Error::Ptr, bool)> _onVerifyFinished)
 {
+    // FIB-114: short-circuit when the caller has nothing to fetch. The pre-fix path
+    // dispatched an empty hash list through asyncGetBatchTxsByHashList -> peer-fetch
+    // chain, wasting CPU on pointless ledger I/O and adding latency / lock contention
+    // to every "all transactions hit locally" verification. An empty input also has a
+    // trivially correct answer ("verified, no missing txs"), so signal completion
+    // directly.
+    if (!_missedTxs || _missedTxs->empty())
+    {
+        if (_onVerifyFinished)
+        {
+            _onVerifyFinished(nullptr, true);
+        }
+        return;
+    }
     auto missedTxsSet =
         std::make_shared<std::set<HashType>>(_missedTxs->begin(), _missedTxs->end());
     auto startT = utcTime();

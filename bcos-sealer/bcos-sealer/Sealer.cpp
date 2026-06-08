@@ -38,7 +38,11 @@ bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
     m_lastFetchTimepoint(std::chrono::steady_clock::now())
 {
     m_sealingManager = std::make_shared<SealingManager>(m_sealerConfig);
-    m_sealingManager->setOnReadyCallback([this]() { noteGenerateProposal(); });
+    // FIB-164: do NOT register the onReady callback here. weak_from_this() is
+    // not yet usable because Sealer is not under shared_ptr ownership during
+    // its constructor; capturing raw `this` would dangle if Sealer is
+    // destroyed before SealingManager fires the callback. Registration moves
+    // to Sealer::start() where the shared_ptr is already established.
     m_hashImpl = m_sealerConfig->blockFactory()->cryptoSuite()->hashImpl();
 }
 
@@ -50,6 +54,15 @@ void Sealer::start()
         return;
     }
     SEAL_LOG(INFO) << LOG_DESC("start the sealer");
+    // FIB-164: register the onReady callback now via weak_from_this() so the
+    // callback safely no-ops after Sealer is destroyed.
+    auto self = weak_from_this();
+    m_sealingManager->setOnReadyCallback([self]() {
+        if (auto sealer = self.lock())
+        {
+            sealer->noteGenerateProposal();
+        }
+    });
     startWorking();
     m_running = true;
 }
@@ -111,36 +124,60 @@ void Sealer::asyncNoteLatestBlockTimestamp(int64_t _timestamp)
 
 void Sealer::executeWorker()
 {
-    // try to fetch transactions
-    if (m_sealingManager->fetchTransactions() == SealingManager::FetchResult::NO_TRANSACTION)
+    // FIB-152: contain exceptions inside the worker iteration. Any throw from
+    // fetchTransactions / tryToSyncTxsFromPeers / generateProposal /
+    // hookWhenSealBlock / submitProposal would otherwise escape the Worker
+    // loop and halt block production until restart. A short backoff in the
+    // catch arm prevents a persistently-failing path from busy-looping.
+    try
     {
-        // 轮到本节点出块，且超过一定时间取不到交易，广播交易同步请求
-        // When it is this node's turn to mint a block, and no transactions can be obtained after a
-        // certain period of time, broadcast a transaction synchronization request.
-        if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
-            duration > std::chrono::seconds(m_fetchTimeout))
+        // try to fetch transactions
+        if (m_sealingManager->fetchTransactions() == SealingManager::FetchResult::NO_TRANSACTION)
+        {
+            // 轮到本节点出块，且超过一定时间取不到交易，广播交易同步请求
+            // When it is this node's turn to mint a block, and no transactions can be obtained
+            // after a certain period of time, broadcast a transaction synchronization request.
+            if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - m_lastFetchTimepoint.load());
+                duration > std::chrono::seconds(m_fetchTimeout))
+            {
+                increaseLastFetchTimepoint();
+                m_sealerConfig->txpool()->tryToSyncTxsFromPeers();
+            }
+        }
+        else
         {
             increaseLastFetchTimepoint();
-            m_sealerConfig->txpool()->tryToSyncTxsFromPeers();
+        }
+
+        // try to generateProposal
+        if (m_sealingManager->shouldGenerateProposal())
+        {
+            auto ret = m_sealingManager->generateProposal(
+                [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
+                    return hookWhenSealBlock(std::move(_block));
+                });
+            submitProposal(ret.first, std::move(ret.second));
+        }
+        else
+        {
+            boost::unique_lock<boost::mutex> lock(x_signalled);
+            m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
         }
     }
-    else
+    catch (std::exception const& e)
     {
-        increaseLastFetchTimepoint();
-    }
-
-    // try to generateProposal
-    if (m_sealingManager->shouldGenerateProposal())
-    {
-        auto ret = m_sealingManager->generateProposal(
-            [this](bcos::protocol::Block::Ptr _block) -> uint16_t {
-                return hookWhenSealBlock(std::move(_block));
-            });
-        submitProposal(ret.first, std::move(ret.second));
-    }
-    else
-    {
+        SEAL_LOG(ERROR) << LOG_DESC("executeWorker iteration threw, resetting sealing state")
+                        << LOG_KV("message", boost::diagnostic_information(e));
+        try
+        {
+            m_sealingManager->resetSealing();
+        }
+        catch (std::exception const& nested)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
+                            << LOG_KV("message", boost::diagnostic_information(nested));
+        }
         boost::unique_lock<boost::mutex> lock(x_signalled);
         m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
     }
@@ -184,6 +221,10 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     auto version = std::min(m_sealerConfig->consensus()->compatibilityVersion(),
         (uint32_t)g_BCOSConfig.maxSupportedVersion());
     _block->blockHeader()->setVersion(version);
+    // FIB-142: bind transaction commitment to proposal hash before hashing.
+    // Without this, byzantine leader can equivocate under same proposalHash.
+    auto txsRoot = _block->calculateTransactionRoot(*m_hashImpl);
+    _block->blockHeader()->setTxsRoot(txsRoot);
     _block->blockHeader()->calculateHash(*m_hashImpl);
 
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
@@ -193,14 +234,29 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
                    << LOG_KV("sysTxs", _containSysTxs)
                    << LOG_KV("txsSize", _block->transactionsHashSize())
                    << LOG_KV("version", version);
+    auto sealingManager = m_sealingManager;
     m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, *_block,
-        _block->blockHeader()->number(), _block->blockHeader()->hash(), [_block](auto&& _error) {
+        _block->blockHeader()->number(), _block->blockHeader()->hash(),
+        [_block, sealingManager](auto&& _error) {
             if (_error == nullptr)
             {
                 return;
             }
             SEAL_LOG(WARNING) << LOG_DESC("asyncSubmitProposal failed: put back the transactions")
                               << LOG_KV("txsSize", _block->transactionsHashSize());
+            // FIB-151: unseal — return the proposal's transactions to the pool
+            // so they remain selectable; otherwise repeated submit failures
+            // silently exhaust the sealer's effective txpool capacity.
+            try
+            {
+                auto hashes = ::ranges::to<std::vector>(_block->transactionHashes());
+                sealingManager->notifyResetTxsFlag(hashes, false);
+            }
+            catch (std::exception const& e)
+            {
+                SEAL_LOG(WARNING) << LOG_DESC("submitProposal failure unseal exception")
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
         });
 }
 
