@@ -82,7 +82,8 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
     m_address2Precompiled.emplace_back(
         0x100e, std::make_shared<precompiled::BFSPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x5003, std::make_shared<precompiled::PaillierPrecompiled>(m_hashImpl));
+        0x5003, Precompiled{std::make_shared<precompiled::PaillierPrecompiled>(m_hashImpl),
+                    ledger::Features::Flag::feature_paillier});
     m_address2Precompiled.emplace_back(
         0x5004, std::make_shared<precompiled::GroupSigPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
@@ -143,4 +144,45 @@ bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::get
     }
 
     return nullptr;
+}
+
+// FIB-84: feature-aware lookup, gated by bugfix_precompiled_feature_gate
+// When the bugfix flag is off, returns unconditionally (pre-fix behavior) to preserve
+// replay of historical blocks that ran with feature flags improperly enforced.
+bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
+    unsigned long contractAddress, const ledger::Features& features) const
+{
+    const auto* precompiled = getPrecompiled(contractAddress);
+    if (precompiled == nullptr)
+    {
+        return nullptr;
+    }
+    if (!features.get(ledger::Features::Flag::bugfix_precompiled_feature_gate))
+    {
+        return precompiled;
+    }
+    if (const auto flag = featureFlag(*precompiled); flag && !features.get(*flag))
+    {
+        return nullptr;
+    }
+    return precompiled;
+}
+
+bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
+    const evmc_address& address, const ledger::Features& features) const
+{
+    const auto* precompiled = getPrecompiled(address);
+    if (precompiled == nullptr)
+    {
+        return nullptr;
+    }
+    if (!features.get(ledger::Features::Flag::bugfix_precompiled_feature_gate))
+    {
+        return precompiled;
+    }
+    if (const auto flag = featureFlag(*precompiled); flag && !features.get(*flag))
+    {
+        return nullptr;
+    }
+    return precompiled;
 }

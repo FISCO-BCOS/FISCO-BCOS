@@ -154,6 +154,12 @@ public:
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
 
+    // FIB-167: receive the live chain blockTxCountLimit on every committed block so
+    // bound checks like fillBlock track consensus-governance changes instead of staying
+    // at the init-time snapshot. Default no-op keeps MAX-mode TARS clients untouched;
+    // AIR-mode TxPool overrides. PBFTInitializer wires this via registerNewBlockNotifier.
+    virtual void notifyBlockTxCountLimit(uint64_t /*_blockTxCountLimit*/) {}
+
     // determine to clean up txs periodically or not
     virtual void registerTxsCleanUpSwitch(std::function<bool()>) {}
 

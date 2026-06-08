@@ -120,5 +120,14 @@ function check_PR_limit() {
     LOG_INFO "Ok!"
 }
 
+function check_versionConsistency() {
+    if ! bash "${SHELL_FOLDER}/../version_sync.sh" --check; then
+        LOG_ERROR "version locations are inconsistent, run: bash tools/version_sync.sh  (then commit the changes)"
+        exit 1
+    fi
+    LOG_INFO "version consistency check Ok!"
+}
+
+check_versionConsistency
 check_codeFormat
 check_PR_limit

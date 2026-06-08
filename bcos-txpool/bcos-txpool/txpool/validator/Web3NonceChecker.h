@@ -140,16 +140,20 @@ public:
                 }
                 co_await storage2::writeOneIf(m_ledgerStateNonces, sender, maxNonce,
                     [&](u256 const& existing) { return maxNonce > existing; });
-                if (auto maxMemNonce = co_await storage2::readOne(m_maxNonces, sender);
-                    maxMemNonce.has_value() && maxNonce >= maxMemNonce.value())
+                // FIB-157: atomic predicate-guarded delete of m_maxNonces. The previous
+                // read-then-remove sequence had a TOCTOU window: a concurrent
+                // insertMemoryNonce() could publish a higher m_maxNonces value after the
+                // read but before the remove, and the unconditional remove would then drop
+                // the fresher value, causing getPendingNonce() to regress to the ledger
+                // nonce. removeOneIf evaluates the predicate and performs the remove under
+                // the same bucket lock so the value cannot change between the two.
+                bool removed = co_await storage2::removeOneIf(m_maxNonces, sender,
+                    [&](u256 const& existing) { return maxNonce >= existing; });
+                if (removed && c_fileLogLevel == TRACE) [[unlikely]]
                 {
-                    if (c_fileLogLevel == TRACE) [[unlikely]]
-                    {
-                        TXPOOL_LOG(TRACE)
-                            << LOG_DESC("Web3Nonce: rm max nonce cache")
-                            << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
-                    }
-                    co_await storage2::removeOne(m_maxNonces, sender);
+                    TXPOOL_LOG(TRACE)
+                        << LOG_DESC("Web3Nonce: rm max nonce cache")
+                        << LOG_KV("sender", toHex(sender)) << LOG_KV("nonce", maxNonce);
                 }
             }
             for (auto&& nonce : nonceSet)

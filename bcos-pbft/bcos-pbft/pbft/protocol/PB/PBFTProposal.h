@@ -20,32 +20,36 @@
  */
 #pragma once
 #include "bcos-pbft/core/Proposal.h"
+#include "bcos-pbft/pbft/interfaces/PBFTProposalInterface.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
-namespace bcos
-{
-namespace consensus
+
+namespace bcos::consensus
 {
 class PBFTProposal : public Proposal, virtual public PBFTProposalInterface
 {
 public:
     using Ptr = std::shared_ptr<PBFTProposal>;
-    PBFTProposal() : Proposal()
+    PBFTProposal()
     {
         m_pbftRawProposal = std::make_shared<PBFTRawProposal>();
-        m_pbftRawProposal->set_allocated_proposal(rawProposal().get());
+        // FIB-122: aliasing shared_ptr ties Proposal::m_rawProposal's lifetime to
+        // m_pbftRawProposal so we don't dual-own (or accidentally delete) protobuf-
+        // owned submessage memory.
+        setRawProposal(
+            std::shared_ptr<RawProposal>(m_pbftRawProposal, m_pbftRawProposal->mutable_proposal()));
     }
-    explicit PBFTProposal(bytesConstRef _data) : Proposal()
+    explicit PBFTProposal(bytesConstRef _data)
     {
         m_pbftRawProposal = std::make_shared<PBFTRawProposal>();
         decode(_data);
     }
     explicit PBFTProposal(std::shared_ptr<PBFTRawProposal> _pbftRawProposal)
-      : Proposal(std::shared_ptr<RawProposal>(_pbftRawProposal->mutable_proposal()))
-    {
-        m_pbftRawProposal = _pbftRawProposal;
-    }
+      : Proposal(
+            std::shared_ptr<RawProposal>(_pbftRawProposal, _pbftRawProposal->mutable_proposal())),
+        m_pbftRawProposal(_pbftRawProposal)
+    {}
 
-    ~PBFTProposal() override { m_pbftRawProposal->unsafe_arena_release_proposal(); }
+    ~PBFTProposal() override = default;
 
     std::shared_ptr<PBFTRawProposal> pbftRawProposal() { return m_pbftRawProposal; }
 
@@ -53,6 +57,20 @@ public:
 
     std::pair<int64_t, bytesConstRef> signatureProof(size_t _index) const override
     {
+        // FIB-120: defensive bounds check. decode() already enforces
+        // signatureList.size() == nodeList.size(), so this should never fire
+        // for objects built via decode(); it catches programming errors when
+        // a PBFTProposal is constructed by other means (e.g. setRawProposal).
+        if (_index >= static_cast<size_t>(m_pbftRawProposal->signaturelist_size()) ||
+            _index >= static_cast<size_t>(m_pbftRawProposal->nodelist_size()))
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidPBFTMessage() << errinfo_comment(
+                    "PBFTProposal::signatureProof index out of bounds: index=" +
+                    std::to_string(_index) +
+                    " signatureList=" + std::to_string(m_pbftRawProposal->signaturelist_size()) +
+                    " nodeList=" + std::to_string(m_pbftRawProposal->nodelist_size())));
+        }
         auto const& signatureData = m_pbftRawProposal->signaturelist(_index);
         auto signatureDataRef =
             bytesConstRef((byte const*)signatureData.c_str(), signatureData.size());
@@ -105,11 +123,32 @@ public:
     void decode(bytesConstRef _data) override
     {
         bcos::protocol::decodePBObject(m_pbftRawProposal, _data);
-        setRawProposal(std::shared_ptr<RawProposal>(m_pbftRawProposal->mutable_proposal()));
+        // FIB-123: reject excessive signatureList / nodeList to prevent memory exhaustion
+        validateRepeatedSize(
+            m_pbftRawProposal->signaturelist(), MAX_PBFT_REPEATED_FIELD_SIZE, "signatureList");
+        validateRepeatedSize(
+            m_pbftRawProposal->nodelist(), MAX_PBFT_REPEATED_FIELD_SIZE, "nodeList");
+        // FIB-120: signatureProof(i) indexes signaturelist(i) AND nodelist(i) in lockstep;
+        // a malicious peer can send size(signatureList) != size(nodeList) to drive OOB
+        // reads at downstream call sites (PBFTCacheProcessor::checkPrecommitWeight,
+        // LedgerStorage::asyncCommitStableCheckPoint, PBFTMessageFactory::populateFrom).
+        // Require strict 1:1 correspondence before exposing this object.
+        if (m_pbftRawProposal->signaturelist_size() != m_pbftRawProposal->nodelist_size())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidPBFTMessage() << errinfo_comment(
+                    "PBFTProposal::decode signatureList/nodeList size mismatch: signatureList=" +
+                    std::to_string(m_pbftRawProposal->signaturelist_size()) +
+                    " nodeList=" + std::to_string(m_pbftRawProposal->nodelist_size())));
+        }
+        // FIB-122: aliasing shared_ptr instead of owning shared_ptr to prevent
+        // double-free when m_pbftRawProposal's proposal field is replaced (e.g. by
+        // a subsequent decode call's ParseFromArray).
+        setRawProposal(
+            std::shared_ptr<RawProposal>(m_pbftRawProposal, m_pbftRawProposal->mutable_proposal()));
     }
 
 private:
     std::shared_ptr<PBFTRawProposal> m_pbftRawProposal;
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

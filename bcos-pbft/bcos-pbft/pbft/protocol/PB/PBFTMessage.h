@@ -108,6 +108,16 @@ public:
     void encodeHashFields() const;
     void deserializeToObject() override;
 
+    // FIB-134: re-derive the inner signature digest using the current packetType.
+    // Required after PBFTCodec::decode sets the wire packetType, because the digest
+    // formula under wire-version >= 1 binds packetType into the hash.
+    // Takes CryptoSuite by const& because the codec keeps ownership of m_cryptoSuite;
+    // a by-value param would copy the shared_ptr at every call without enabling a move.
+    virtual void refreshSignatureDataHash(bcos::crypto::CryptoSuite::Ptr const& _cryptoSuite)
+    {
+        m_signatureDataHash = getHashFieldsDataHash(_cryptoSuite);
+    }
+
     std::string toDebugString() const override
     {
         std::stringstream stringstream;

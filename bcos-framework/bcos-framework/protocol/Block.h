@@ -78,6 +78,7 @@ public:
     // set receipts
     virtual void setReceipt(uint64_t _index, TransactionReceipt::Ptr _receipt) = 0;
     virtual void appendReceipt(TransactionReceipt::Ptr _receipt) = 0;
+    virtual void clearReceipts() = 0;
     // set transaction metaData
     // FIXME: appendTransactionMetaData will create, parameter should be object instead of pointer
     virtual void appendTransactionMetaData(TransactionMetaData::Ptr _txMetaData) = 0;

@@ -3,6 +3,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/evmc.h>
@@ -189,6 +190,22 @@ public:
         {
             co_return {};
         }
+    }
+
+    // DIRECT-tagged storage read: bypasses any read-set tracking on the storage
+    // wrapper. Use for metadata-only reads (e.g. computing evmc_storage_status)
+    // that must not register as a semantic read for parallel conflict detection.
+    task::Task<evmc_bytes32> storage(const evmc_bytes32& key, storage2::DIRECT_TYPE direct)
+    {
+        auto rawValue = co_await m_storage.get().readOneRaw(
+            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, direct);
+        evmc_bytes32 value{};
+        if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
+        {
+            auto field = entry->get();
+            std::uninitialized_copy_n(field.data(), sizeof(value), value.bytes);
+        }
+        co_return value;
     }
 
     task::Task<void> setStorage(const evmc_bytes32& key, const evmc_bytes32& value)

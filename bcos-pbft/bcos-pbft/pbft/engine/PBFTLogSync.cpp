@@ -140,10 +140,30 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
         return;
     }
     auto proposalResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(response);
-    // TODO: check the proposal to ensure security
-    // load the fetched checkpoint proposal into the cache
+    // FIB-127: verify signature proofs on each recovered proposal before loading into cache.
+    // An untrusted peer could otherwise inject arbitrary committed-proposal data, or repeat
+    // the same (sealerIdx, sig) pair to inflate vote weight past minRequiredQuorum().
+    // PBFTConfig::verifyProposalQuorumSignatures performs all required checks (non-empty
+    // proof list, per-sealer dedup, signature verify, quorum weight).
     auto proposals = proposalResponse->proposals();
-    m_pbftCache->initState(proposals, _nodeID);
+    PBFTProposalList validProposals;
+    for (const auto& proposal : proposals)
+    {
+        if (!m_config->verifyProposalQuorumSignatures(proposal))
+        {
+            PBFT_LOG(WARNING) << LOG_DESC(
+                                     "onRecvCommittedProposalsResponse: drop proposal failing "
+                                     "quorum-signature verification (FIB-127)")
+                              << LOG_KV("from", _nodeID->shortHex())
+                              << LOG_KV("index", proposal->index())
+                              << LOG_KV("hash", proposal->hash().abridged())
+                              << LOG_KV("required", m_config->minRequiredQuorum());
+            continue;
+        }
+        validProposals.push_back(proposal);
+    }
+    // load the fetched checkpoint proposals into the cache
+    m_pbftCache->initState(validProposals, _nodeID);
     PBFT_LOG(INFO) << LOG_DESC("onRecvCommittedProposalsResponse")
                    << LOG_KV("from", _nodeID->shortHex())
                    << LOG_KV("proposalSize", proposals.size());
@@ -167,7 +187,14 @@ void PBFTLogSync::onRecvPrecommitResponse(Error::Ptr _error, bcos::crypto::NodeI
     }
     PBFT_LOG(INFO) << LOG_DESC("onRecvPrecommitResponse") << printPBFTMsgInfo(response);
     auto pbftMessage = std::dynamic_pointer_cast<ViewChangeMsgInterface>(response);
-    assert(pbftMessage->preparedProposals().size() == 1);
+    if (pbftMessage->preparedProposals().size() != 1)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("onRecvPrecommitResponse: invalid preparedProposals size")
+                          << LOG_KV("expected", 1)
+                          << LOG_KV("actual", pbftMessage->preparedProposals().size())
+                          << LOG_KV("from", _nodeID->shortHex());
+        return;
+    }
     auto precommitMsg = (pbftMessage->preparedProposals())[0];
     if (!precommitMsg->consensusProposal())
     {

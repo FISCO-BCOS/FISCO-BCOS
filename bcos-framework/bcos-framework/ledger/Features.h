@@ -74,17 +74,14 @@ public:
         bugfix_nonce_initialize,
         bugfix_v1_timestamp,
         bugfix_revert_logs,
-        bugfix_auth_check_create2,
-        bugfix_auth_check_revert_status,
-        bugfix_auth_table_raw_address,
-        bugfix_auth_table_squatting,
-        bugfix_v1_exec_error_gas_used,
-        bugfix_v1_precompiled_error_gas,      // FIB-76/79/80: precompiled gas overflow check,
-                                              // exception safety, and use remaining gas on revert
+        bugfix_auth_check,         // FIB-77/81/82/83: CREATE2 deploy auth check, auth failure
+                                   // revert status, auth table raw-address path, auth table
+                                   // squatting (merged, all activate at V3_17_0)
+        bugfix_v1_error_handling,  // FIB-76/78/79/80/85~92: v1 executor error-path gas
+                                   // accounting, gas_left clamp on fatal error, executive
+                                   // wrapper status/message marshaling (merged)
         bugfix_gas_payment_balance_precheck,  // FIB-75
-        bugfix_clamp_gas_left_on_error,       // FIB-78
         bugfix_precompiled_feature_gate,      // FIB-84
-        bugfix_v1_executive_wrapper,          // FIB-85/86/87
         bugfix_evm_storage_status,            // FIB-94
         bugfix_statestorage_hash_v3_17,       // FIB-99/105
         feature_dmc2serial,
