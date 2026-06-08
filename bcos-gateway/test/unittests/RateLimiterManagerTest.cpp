@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter_allowExceedMaxPermitSize)
 {
     {
         uint64_t maxPermitsSize = 10000;
-        uint64_t timeWindowMS = 3000;
+        uint64_t timeWindowMS = 100;
         auto allowExceedMaxPermitSize = false;
         auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
             maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter_allowExceedMaxPermitSize)
 
     {
         uint64_t maxPermitsSize = 10000;
-        uint64_t timeWindowMS = 3000;
+        uint64_t timeWindowMS = 100;
         auto allowExceedMaxPermitSize = true;
         auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
             maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter_allowExceedMaxPermitSize)
 BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
 {
     uint64_t maxPermitsSize = 2000;
-    uint64_t timeWindowMS = 2000;
+    uint64_t timeWindowMS = 100;
     auto allowExceedMaxPermitSize = false;
     auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
         maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);

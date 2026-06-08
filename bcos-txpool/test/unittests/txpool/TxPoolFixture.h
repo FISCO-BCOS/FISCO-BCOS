@@ -337,10 +337,12 @@ public:
     FakeLedger::Ptr m_ledger;
     FakeFrontService::Ptr m_frontService;
     FakeGateWay::Ptr m_fakeGateWay;
-    TxPool::Ptr m_txpool;
-    TransactionSync::Ptr m_sync;
+    // ioServicePool MUST be declared before m_txpool and m_sync to ensure it
+    // outlives Timer objects they create that reference its io_context.
     bcos::IOServicePool::Ptr ioServicePool =
         std::make_shared<bcos::IOServicePool>(1, "txpoolTest");
+    TxPool::Ptr m_txpool;
+    TransactionSync::Ptr m_sync;
 
     NodeIDs m_nodeIdList;
 };

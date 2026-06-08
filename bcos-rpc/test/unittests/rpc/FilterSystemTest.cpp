@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
     request->setFromBlock(0);
     request->setToBlock(100);
 
-    auto timeout = 2;
+    auto timeout = 200;
     filterSystem =
         std::make_shared<Web3FilterSystem>(rpc->groupManager(), "test-group", timeout, 10);
 

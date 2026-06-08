@@ -103,11 +103,30 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     BOOST_CHECK(futureCache->index() == futureBlockIndex);
     BOOST_CHECK(futureCache->prePrepare());
 
-    for (auto const& otherNode : fakerMap)
+    // Poll until all nodes reach preCommit (2 caches each), with timeout
+    auto precommitStartT = std::chrono::steady_clock::now();
+    bool allInPrecommit = false;
+    while (!allInPrecommit &&
+           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(3))
     {
-        otherNode.second->pbftEngine()->executeWorker();
+        for (auto const& otherNode : fakerMap)
+        {
+            otherNode.second->pbftEngine()->executeWorker();
+        }
+        allInPrecommit = true;
+        for (auto const& otherNode : fakerMap)
+        {
+            auto cacheProc = std::dynamic_pointer_cast<FakeCacheProcessor>(
+                otherNode.second->pbftEngine()->cacheProcessor());
+            if (cacheProc->caches().size() < 2)
+            {
+                allInPrecommit = false;
+                break;
+            }
+        }
+        if (!allInPrecommit)
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    std::this_thread::sleep_for(std::chrono::seconds(5));
     // assume five nodes into preCommit
     size_t precommitSize = 5;
     for (size_t i = 0; i < std::min(precommitSize, fakerMap.size()); i++)
