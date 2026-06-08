@@ -21,6 +21,7 @@
 
 #pragma once
 #include "../Common.h"
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-utilities/Common.h"
 #include <evmc/evmc.hpp>
 #include <evmone/baseline.hpp>
@@ -55,6 +56,7 @@ public:
 
 /// Translate the VMSchedule to EVMC revision (Ethereum fork ladder).
 evmc_revision toRevision(VMSchedule const& _schedule);
+evmc_revision toRevision(ledger::Features const& features, uint32_t blockVersion);
 
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance

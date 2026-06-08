@@ -1,8 +1,8 @@
 /*
  *  Copyright (C) 2026 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
- *  @brief EVM precompile address helpers (BLS / p256verify gating).
  *  @file EvmPrecompiledAddress.h
+ *  @brief Ethereum-style precompile address helpers for evmone HostContext.
  */
 #pragma once
 
@@ -11,8 +11,7 @@
 
 namespace bcos::executor
 {
-namespace
-{
+
 /// @return 40-nibble lowercase hex body without 0x prefix, or empty view if length is invalid.
 /// @details Incoming contract addresses are normalized to lowercase before this helper runs.
 inline std::string_view normalizeHexAddressBody(std::string_view addr)
@@ -27,7 +26,6 @@ inline std::string_view normalizeHexAddressBody(std::string_view addr)
     }
     return addr;
 }
-}  // namespace
 
 inline constexpr std::string_view P256VERIFY_PRECOMPILED_ADDRESS =
     "0000000000000000000000000000000000000100";
@@ -56,6 +54,7 @@ inline bool isBLSPrecompileAddress(std::string_view addr)
     {
         return true;
     }
+
     if (hi == '1' && lo >= '0' && lo <= '1')
     {
         return true;
@@ -68,4 +67,5 @@ inline bool isP256verifyPrecompileAddress(std::string_view addr)
     const auto body = normalizeHexAddressBody(addr);
     return !body.empty() && body == P256VERIFY_PRECOMPILED_ADDRESS;
 }
+
 }  // namespace bcos::executor

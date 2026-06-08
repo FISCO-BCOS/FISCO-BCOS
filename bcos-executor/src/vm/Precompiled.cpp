@@ -25,12 +25,16 @@
 #include "wedpr-crypto/WedprCrypto.h"
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <evmone_precompiles/blake2b.hpp>
+#include <evmone_precompiles/bls.hpp>
 #include <evmone_precompiles/bn254.hpp>
 #include <evmone_precompiles/kzg.hpp>
+#include <evmone_precompiles/modexp.hpp>
 #include <evmone_precompiles/ripemd160.hpp>
+#include <evmone_precompiles/secp256r1.hpp>
 #include <evmone_precompiles/sha256.hpp>
 #include <intx/intx.hpp>
 #include <span>
@@ -41,15 +45,10 @@ using namespace bcos::crypto;
 
 namespace bcos::executor
 {
-PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
-
 PrecompiledRegistrar* PrecompiledRegistrar::get()
 {
-    if (s_this == nullptr)
-    {
-        s_this = new PrecompiledRegistrar;
-    }
-    return s_this;
+    static PrecompiledRegistrar instance;
+    return &instance;
 }
 
 PrecompiledExecutor PrecompiledRegistrar::registerExecutor(
@@ -228,31 +227,57 @@ bigint parseBigEndianRightPadded(bytesConstRef _in, bigint const& _begin, bigint
 
 ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in)
 {
-    // This is a protocol of bignumber modular
-    // Described here:
+    // EIP-198: big-number modular exponentiation (base^exp) % mod.
     // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-198.md
-    bigint const baseLength(parseBigEndianRightPadded(_in, 0, 32));
-    bigint const expLength(parseBigEndianRightPadded(_in, 32, 32));
-    bigint const modLength(parseBigEndianRightPadded(_in, 64, 32));
-    assert(modLength <= numeric_limits<size_t>::max() / 8);   // Otherwise gas should be too
-                                                              // expensive.
-    assert(baseLength <= numeric_limits<size_t>::max() / 8);  // Otherwise, gas should be too
-                                                              // expensive.
-    if (modLength == 0 && baseLength == 0)
-        return {true, bytes{}};  // This is a special case where expLength can be very big.
-    assert(expLength <= numeric_limits<size_t>::max() / 8);
+    auto parseLen = [&](size_t offset) -> size_t {
+        if (_in.size() < offset + 32)
+            return 0;
+        bigint v(parseBigEndianRightPadded(_in, offset, 32));
+        return v > std::numeric_limits<size_t>::max() ? 0 : static_cast<size_t>(v);
+    };
+    size_t const baseLen = parseLen(0);
+    size_t const expLen = parseLen(32);
+    size_t const modLen = parseLen(64);
 
-    bigint const base(parseBigEndianRightPadded(_in, 96, baseLength));
-    bigint const exp(parseBigEndianRightPadded(_in, 96 + baseLength, expLength));
-    bigint const mod(parseBigEndianRightPadded(_in, 96 + baseLength + expLength, modLength));
+    // Safety net: gas pricer should prevent lengths beyond size_t::max()/8.
+    // If these fire, the gas schedule has a bug and let an impossibly large
+    // modexp through. See EIP-198 gas formula.
+    assert(baseLen <= std::numeric_limits<size_t>::max() / 8);
+    assert(expLen <= std::numeric_limits<size_t>::max() / 8);
+    assert(modLen <= std::numeric_limits<size_t>::max() / 8);
 
-    bigint const result = mod != 0 ? boost::multiprecision::powm(base, exp, mod) : bigint{0};
+    if (modLen == 0)
+        return {true, {}};
 
-    size_t const retLength(modLength);
-    bytes ret(retLength);
-    toBigEndian(result, ret);
+    // Zero-pad inputs to declared lengths (EIP-198: missing bytes are right-padded
+    // with zeros). Track consumed bytes from the data section rather than using
+    // declared lengths as offsets — actual input may be shorter than declared.
+    size_t const dataStart = 96;
+    size_t const dataAvail = _in.size() > dataStart ? _in.size() - dataStart : 0;
+    size_t consumed = 0;
+    auto padded = [&](size_t len) -> bytes {
+        bytes buf(len, 0);
+        size_t const avail = consumed < dataAvail ? dataAvail - consumed : 0;
+        size_t const actual = std::min(len, avail);
+        if (actual > 0)
+            std::memcpy(buf.data(), _in.data() + dataStart + consumed, actual);
+        consumed += actual;
+        return buf;
+    };
+    bytes const baseBuf = padded(baseLen);
+    bytes const expBuf = padded(expLen);
+    bytes const modBuf = padded(modLen);
 
-    return {true, ret};
+    // EIP-198: if mod is zero, return all-zero output
+    bool const modZero =
+        std::all_of(modBuf.begin(), modBuf.end(), [](uint8_t b) { return b == 0; });
+    if (modZero)
+        return {true, bytes(modLen, 0)};
+
+    bytes output(modLen, 0);
+    evmone::crypto::modexp(std::span<const uint8_t>{baseBuf}, std::span<const uint8_t>{expBuf},
+        std::span<const uint8_t>{modBuf}, output.data());
+    return {true, std::move(output)};
 }
 
 namespace
@@ -458,6 +483,207 @@ ETH_REGISTER_PRECOMPILED(point_evaluation)(bytesConstRef _in)
 ETH_REGISTER_PRECOMPILED_PRICER(point_evaluation)(bytesConstRef _in)
 {
     return 50000;
+}
+
+// EIP-2537 BLS12-381 precompiles (Prague-gated via HostContext)
+
+ETH_REGISTER_PRECOMPILED(bls12_g1add)(bytesConstRef _in)
+{
+    constexpr size_t INPUT_SIZE = 256;
+    if (_in.size() != INPUT_SIZE)
+        return {false, {}};
+    std::array<uint8_t, INPUT_SIZE> in{};
+    std::copy_n(_in.data(), INPUT_SIZE, in.data());
+    std::array<uint8_t, 128> out{};
+    bool const ok = evmone::crypto::bls::g1_add(
+        out.data(), out.data() + 64, in.data(), in.data() + 64, in.data() + 128, in.data() + 192);
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_g1add)(bytesConstRef)
+{
+    return u256(375);
+}
+
+ETH_REGISTER_PRECOMPILED(bls12_g1msm)(bytesConstRef _in)
+{
+    constexpr size_t PAIR_SIZE = 160;
+    if (_in.empty() || _in.size() % PAIR_SIZE != 0)
+        return {false, {}};
+    std::array<uint8_t, 128> out{};
+    bool const ok =
+        evmone::crypto::bls::g1_msm(out.data(), out.data() + 64, _in.data(), _in.size());
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_g1msm)(bytesConstRef _in)
+{
+    constexpr size_t PAIR_SIZE = 160;
+    // EIP-2537: k = floor(len(input) / PAIR_SIZE). Only k == 0 (empty or too short for one pair)
+    // returns zero gas. For k >= 1 the formula charges gas even if the input length is not
+    // divisible — the precompile execution will reject malformed input, but gas is already
+    // charged (matching go-ethereum behaviour).
+    auto const k = _in.size() / PAIR_SIZE;
+    if (k == 0)
+        return u256(0);
+    static constexpr uint16_t DISCOUNTS[] = {1000, 949, 848, 797, 764, 750, 738, 728, 719, 712, 705,
+        698, 692, 687, 682, 677, 673, 669, 665, 661, 658, 654, 651, 648, 645, 642, 640, 637, 635,
+        632, 630, 627, 625, 623, 621, 619, 617, 615, 613, 611, 609, 608, 606, 604, 603, 601, 599,
+        598, 596, 595, 593, 592, 591, 589, 588, 586, 585, 584, 582, 581, 580, 579, 577, 576, 575,
+        574, 573, 572, 570, 569, 568, 567, 566, 565, 564, 563, 562, 561, 560, 559, 558, 557, 556,
+        555, 554, 553, 552, 551, 550, 549, 548, 547, 547, 546, 545, 544, 543, 542, 541, 540, 540,
+        539, 538, 537, 536, 536, 535, 534, 533, 532, 532, 531, 530, 529, 528, 528, 527, 526, 525,
+        525, 524, 523, 522, 522, 521, 520, 520, 519};
+    // evmone caps MSM at 128 pairs; larger k means the gas pricer let through an invalid input.
+    assert(k <= std::size(DISCOUNTS) && "BLS G1MSM: too many pairs for discount table");
+    auto const discount = DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
+    return u256(12000 * static_cast<int64_t>(discount) * static_cast<int64_t>(k) / 1000);
+}
+
+ETH_REGISTER_PRECOMPILED(bls12_g2add)(bytesConstRef _in)
+{
+    constexpr size_t INPUT_SIZE = 512;
+    if (_in.size() != INPUT_SIZE)
+        return {false, {}};
+    std::array<uint8_t, INPUT_SIZE> in{};
+    std::copy_n(_in.data(), INPUT_SIZE, in.data());
+    std::array<uint8_t, 256> out{};
+    bool const ok = evmone::crypto::bls::g2_add(
+        out.data(), out.data() + 128, in.data(), in.data() + 128, in.data() + 256, in.data() + 384);
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_g2add)(bytesConstRef)
+{
+    return u256(600);
+}
+
+ETH_REGISTER_PRECOMPILED(bls12_g2msm)(bytesConstRef _in)
+{
+    constexpr size_t PAIR_SIZE = 288;
+    if (_in.empty() || _in.size() % PAIR_SIZE != 0)
+        return {false, {}};
+    std::array<uint8_t, 256> out{};
+    bool const ok =
+        evmone::crypto::bls::g2_msm(out.data(), out.data() + 128, _in.data(), _in.size());
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_g2msm)(bytesConstRef _in)
+{
+    constexpr size_t PAIR_SIZE = 288;
+    // EIP-2537: k = floor(len(input) / PAIR_SIZE). Only k == 0 (empty or too short for one pair)
+    // returns zero gas. For k >= 1 the formula charges gas even if the input length is not
+    // divisible — the precompile execution will reject malformed input, but gas is already
+    // charged (matching go-ethereum behaviour).
+    auto const k = _in.size() / PAIR_SIZE;
+    if (k == 0)
+        return u256(0);
+    static constexpr uint16_t DISCOUNTS[] = {1000, 1000, 923, 884, 855, 832, 812, 796, 782, 770,
+        759, 749, 740, 732, 724, 717, 711, 704, 699, 693, 688, 683, 679, 674, 670, 666, 663, 659,
+        655, 652, 649, 646, 643, 640, 637, 634, 632, 629, 627, 624, 622, 620, 618, 615, 613, 611,
+        609, 607, 606, 604, 602, 600, 598, 597, 595, 593, 592, 590, 589, 587, 586, 584, 583, 582,
+        580, 579, 578, 576, 575, 574, 573, 571, 570, 569, 568, 567, 566, 565, 563, 562, 561, 560,
+        559, 558, 557, 556, 555, 554, 553, 552, 552, 551, 550, 549, 548, 547, 546, 545, 545, 544,
+        543, 542, 541, 541, 540, 539, 538, 537, 537, 536, 535, 535, 534, 533, 532, 532, 531, 530,
+        530, 529, 528, 528, 527, 526, 526, 525, 524, 524};
+    // evmone caps MSM at 128 pairs; larger k means the gas pricer let through an invalid input.
+    assert(k <= std::size(DISCOUNTS) && "BLS G2MSM: too many pairs for discount table");
+    auto const discount = DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
+    return u256(22500 * static_cast<int64_t>(discount) * static_cast<int64_t>(k) / 1000);
+}
+
+ETH_REGISTER_PRECOMPILED(bls12_pairing_check)(bytesConstRef _in)
+{
+    constexpr size_t PAIR_SIZE = 384;
+    if (_in.empty() || _in.size() % PAIR_SIZE != 0)
+        return {false, {}};
+    std::array<uint8_t, 32> out{};
+    bool const ok = evmone::crypto::bls::pairing_check(out.data(), _in.data(), _in.size());
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_pairing_check)(bytesConstRef _in)
+{
+    constexpr size_t PAIR_SIZE = 384;
+    // EIP-2537: k = floor(len(input) / PAIR_SIZE). Only k == 0 (empty or too short for one pair)
+    // returns zero gas. For k >= 1 the formula charges gas even if the input length is not
+    // divisible — the precompile execution will reject malformed input, but gas is already
+    // charged (matching go-ethereum behaviour).
+    auto const k = static_cast<int64_t>(_in.size() / PAIR_SIZE);
+    if (k == 0)
+        return u256(0);
+    return u256(37700 + 32600 * k);
+}
+
+ETH_REGISTER_PRECOMPILED(bls12_map_fp_to_g1)(bytesConstRef _in)
+{
+    constexpr size_t INPUT_SIZE = 64;
+    if (_in.size() != INPUT_SIZE)
+        return {false, {}};
+    std::array<uint8_t, INPUT_SIZE> in{};
+    std::copy_n(_in.data(), INPUT_SIZE, in.data());
+    std::array<uint8_t, 128> out{};
+    bool const ok = evmone::crypto::bls::map_fp_to_g1(out.data(), out.data() + 64, in.data());
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_map_fp_to_g1)(bytesConstRef)
+{
+    return u256(5500);
+}
+
+ETH_REGISTER_PRECOMPILED(bls12_map_fp2_to_g2)(bytesConstRef _in)
+{
+    constexpr size_t INPUT_SIZE = 128;
+    if (_in.size() != INPUT_SIZE)
+        return {false, {}};
+    std::array<uint8_t, INPUT_SIZE> in{};
+    std::copy_n(_in.data(), INPUT_SIZE, in.data());
+    std::array<uint8_t, 256> out{};
+    bool const ok = evmone::crypto::bls::map_fp2_to_g2(out.data(), out.data() + 128, in.data());
+    if (!ok)
+        return {false, {}};
+    return {true, bytes(out.begin(), out.end())};
+}
+ETH_REGISTER_PRECOMPILED_PRICER(bls12_map_fp2_to_g2)(bytesConstRef)
+{
+    return u256(23800);
+}
+
+// EIP-7212 / RIP-7212: secp256r1 (P-256) signature verification
+// Input: 160 bytes = msg_hash(32) ++ r(32) ++ s(32) ++ x(32) ++ y(32)
+// Output: 32 bytes with last byte 0x01 on success, empty on wrong-size or failed verify
+// Address: 0x0100 (Osaka-gated via callBuiltInPrecompiled guard)
+ETH_REGISTER_PRECOMPILED(p256verify)(bytesConstRef _in)
+{
+    static constexpr size_t INPUT_SIZE = 160;
+    if (_in.size() != INPUT_SIZE)
+        return {true, {}};  // EIP-7212: wrong size → success with empty output
+    const auto* d = _in.data();
+    ethash::hash256 h{};
+    std::memcpy(h.bytes, d, 32);
+    const auto r = intx::be::unsafe::load<intx::uint256>(d + 32);
+    const auto s = intx::be::unsafe::load<intx::uint256>(d + 64);
+    const auto qx = intx::be::unsafe::load<intx::uint256>(d + 96);
+    const auto qy = intx::be::unsafe::load<intx::uint256>(d + 128);
+    bool ok = evmmax::secp256r1::verify(h, r, s, qx, qy);
+    if (!ok)
+        return {true, {}};  // EIP-7212: invalid signature → success with empty output
+    bytes output(32, 0);
+    output[31] = 1;
+    return {true, std::move(output)};
+}
+
+ETH_REGISTER_PRECOMPILED_PRICER(p256verify)(bytesConstRef)
+{
+    return u256(6900);  // EIP-7212 / evmone 0.21 gas cost
 }
 
 }  // namespace

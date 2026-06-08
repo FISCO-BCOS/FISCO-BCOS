@@ -54,6 +54,7 @@ BOOST_AUTO_TEST_CASE(execute)
         blockHeader.setVersion((uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
         blockHeader.calculateHash(*cryptoSuite->hashImpl());
 
+
         bcos::bytes helloworldBytecodeBinary;
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(helloworldBytecodeBinary));
         // First deploy
@@ -455,8 +456,7 @@ BOOST_AUTO_TEST_CASE(web3Nonce)
 
         for (auto i : ::ranges::views::iota(1, 11))
         {
-            auto rawAddr =
-                newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
+            auto rawAddr = newLegacyEVMAddress(bytesConstRef{address1.data(), address1.size()}, i);
             evmc_address expectAddress;
             std::copy(rawAddr.begin(), rawAddr.end(), expectAddress.bytes);
             ledger::account::EVMAccount account(storage, expectAddress, false);

@@ -24,13 +24,14 @@
 
 #include <tbb/concurrent_hash_map.h>
 #include <atomic>
-#include <boost/container_hash/hash.hpp>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <mutex>
 #include <vector>
+
+#include <boost/functional/hash.hpp>
 
 namespace bcos
 {
