@@ -63,14 +63,16 @@ struct TestSealerFixture
     }
 
     ~TestSealerFixture() = default;
+    // ioServicePool MUST be declared before txpool to ensure it outlives
+    // Timer objects created by txpool that reference its io_context.
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "vrfTest");
     crypto::Hash::Ptr hashImpl;
     txpool::TxPool::Ptr txpool;
     protocol::BlockFactory::Ptr blockFactory;
     crypto::CryptoSuite::Ptr cryptoSuite = nullptr;
     bcos::tool::NodeConfig::Ptr nodeConfig;
     crypto::KeyPairInterface::Ptr keyPair;
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "vrfTest");
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFixture)

@@ -80,14 +80,16 @@ struct Fib147SealerFixture
     }
 
     ~Fib147SealerFixture() = default;
+    // ioServicePool MUST be declared before txpool to ensure it outlives
+    // Timer objects created by txpool that reference its io_context.
+    bcos::IOServicePool::Ptr ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "fibTest");
     crypto::Hash::Ptr hashImpl;
     txpool::TxPool::Ptr txpool;
     protocol::BlockFactory::Ptr blockFactory;
     crypto::CryptoSuite::Ptr cryptoSuite;
     bcos::tool::NodeConfig::Ptr nodeConfig;
     crypto::KeyPairInterface::Ptr keyPair;
-    bcos::IOServicePool::Ptr ioServicePool =
-        std::make_shared<bcos::IOServicePool>(1, "fibTest");
 };
 
 BOOST_FIXTURE_TEST_SUITE(FIB147VrfShadowingTest, Fib147SealerFixture)

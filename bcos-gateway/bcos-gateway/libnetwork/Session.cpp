@@ -355,6 +355,12 @@ void Session::drop(DisconnectReason _reason)
     SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
                       << LOG_KV("this", this) << LOG_KV("endpoint", nodeIPEndpoint());
 
+    // Guard against null m_socket (e.g. test sets it to nullptr before destructor)
+    if (!m_socket)
+    {
+        return;
+    }
+
     if (m_messageHandler)
     {
         boost::asio::post(m_socket->ioService(),
