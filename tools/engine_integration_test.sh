@@ -444,7 +444,7 @@ if [ "${RUN_LODESTAR:-0}" = "1" ]; then
         log_test "Lodestar dev mode (60s timeout)"
 
         LODESTAR_OUT="${WORK_DIR}/lodestar_out.log"
-        timeout 60 pnpm dlx --yes @chainsafe/lodestar dev \
+        timeout 60 pnpm dlx @chainsafe/lodestar dev \
             --execution.urls "${RPC_URL}" \
             --execution.engineMock false \
             --jwtSecret "${JWT_FILE}" \
