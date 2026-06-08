@@ -22,7 +22,13 @@ import json
 import sys
 from typing import Any, Dict, List, Optional
 
-import requests
+try:
+    import requests
+except ImportError:
+    print("ERROR: 'requests' module is required. Install with:", file=sys.stderr)
+    print("  pip3 install requests", file=sys.stderr)
+    print("  pip3 install --break-system-packages requests  # macOS", file=sys.stderr)
+    sys.exit(1)
 
 # ---- Configuration ----
 

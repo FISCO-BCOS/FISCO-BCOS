@@ -238,6 +238,19 @@ if [ "${CERT_FOUND}" -eq 0 ]; then
     rm -f "${WORK_DIR}/conf/node.csr"
     # Generate node.pem (P-256 keypair for consensus signing)
     openssl ecparam -name prime256v1 -genkey -noout -out "${WORK_DIR}/conf/node.pem" 2>/dev/null
+
+    # Verify all required cert files were created
+    CERT_MISSING=0
+    for f in ca.crt ca.key ssl.crt ssl.key node.pem; do
+        if [ ! -f "${WORK_DIR}/conf/${f}" ]; then
+            log_info "ERROR: Missing cert file: ${f}"
+            CERT_MISSING=1
+        fi
+    done
+    if [ "${CERT_MISSING}" -eq 1 ]; then
+        log_fail "Certificate generation failed (macOS may use LibreSSL; check openssl compatibility)"
+        exit 1
+    fi
     log_info "Self-signed certs generated"
 fi
 
@@ -420,7 +433,6 @@ if [ "${RUN_LODESTAR:-0}" = "1" ]; then
 
     # Setup pnpm if needed
     if [ "${LODESTAR_SKIP}" -eq 0 ]; then
-        export HOME="${HOME:-/root}"
         export PNPM_HOME="${PNPM_HOME:-${HOME}/.local/share/pnpm}"
         export PATH="${PATH}:${PNPM_HOME}"
 
