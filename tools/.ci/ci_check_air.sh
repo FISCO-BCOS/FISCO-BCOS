@@ -70,8 +70,8 @@ init()
     ${fisco_bcos_path} -v
     clear_node
     bash ${build_chain_path} -l "127.0.0.1:3" -e ${fisco_bcos_path} "${sm_option}"
-    # sed change node0 config.ini to change web3 rpc enable
-    sed -e 's/^enable_web3_rpc = false/enable_web3_rpc = true/' -i nodes/
+    # enable web3_rpc on node0 config.ini
+    perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node0/config.ini
     cd nodes/127.0.0.1 && wait_and_start
 }
 
