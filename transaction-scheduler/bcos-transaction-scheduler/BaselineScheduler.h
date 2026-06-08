@@ -537,7 +537,11 @@ private:
                 std::unique_lock resultsLock(m_resultsMutex);
                 if (m_results.empty())
                 {
-                    BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected empty results!"));
+                    auto message = std::string{"Unexpected empty results!"};
+                    BASELINE_SCHEDULER_LOG(INFO) << message;
+                    co_return {BCOS_ERROR_UNIQUE_PTR(
+                                   scheduler::SchedulerError::UnknownError, message),
+                        nullptr};
                 }
 
                 auto resultBlockNumber = m_results.back()->m_executedBlockHeader->number();
