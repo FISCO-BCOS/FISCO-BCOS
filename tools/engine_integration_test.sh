@@ -173,7 +173,7 @@ thread_count=2
 
 [p2p]
 listen_ip=0.0.0.0
-listen_port=30300
+listen_port=31300
 sm_ssl=false
 nodes_path=./
 nodes_file=nodes.json
@@ -259,7 +259,7 @@ cp "${WORK_DIR}/conf/"* "${WORK_DIR}/" 2>/dev/null || true
 
 # Generate nodes.json - it's just a list of IP:port peers for this node
 cat > "${WORK_DIR}/nodes.json" << 'NODES_EOF'
-{"nodes":["127.0.0.1:30300"]}
+{"nodes":["127.0.0.1:31300"]}
 NODES_EOF
 
 log_info "Workspace prepared"
