@@ -5,12 +5,18 @@
  *  @file CompatHostContextTest.cpp
  */
 
+// TE EIP-2929 test scope (CompatHostContextTest):
+// - Revision floor: CANCUN (toRevision never returns < EVMC_CANCUN for TE paths).
+// - Pre-Berlin / London cold-access behavior: bcos-executor CompatEip2929Test.cpp.
+// - EthTxGasSettlementHost suite disabled below (#if 0) — needs TE gas-settlement / EIP-7702 APIs.
+
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "Eip2929TestHelpers.h"
 #include "TestMemoryStorage.h"
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/VMInstance.h"
+#include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-task/Wait.h"
@@ -71,15 +77,20 @@ public:
         evmc_address originIn = {}, evmc_address recipientIn = {},
         evmc_call_kind kindIn = EVMC_CALL,
         std::shared_ptr<const bcos::executor::Eip2930AccessList> eip2930AccessList = {},
-        uint8_t web3TypedTxKindForAccessList = 0)
+        uint8_t web3TypedTxKindForAccessList = 0, int64_t gas = 1'000'000,
+        std::shared_ptr<bcos::executor::Eip2929AccessState> eip2929Access = nullptr)
     {
+        if (!eip2929Access)
+        {
+            eip2929Access = std::make_shared<bcos::executor::Eip2929AccessState>();
+        }
         ledgerConfig.setFeatures(features);
         blockHeader.setVersion(blockHeaderVersion);
         blockHeader.calculateHash(*hashImpl);
         evmc_message message = {.kind = kindIn,
             .flags = 0,
             .depth = 0,
-            .gas = 1'000'000,
+            .gas = gas,
             .recipient = recipientIn,
             .sender = {},
             .input_data = nullptr,
@@ -96,7 +107,39 @@ public:
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
             rollbackableStorage, rollbackableTransientStorage, blockHeader, message, originIn, "",
             0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait,
-            std::move(eip2930AccessList), web3TypedTxKindForAccessList);
+            std::move(eip2930AccessList), web3TypedTxKindForAccessList, std::move(eip2929Access));
+    }
+
+    /// Feature profiles for EIP-2929 matrix tests (see eip2929::makeFeatures*).
+    bcos::ledger::Features pragueEip2929Features() const
+    {
+        return eip2929::makeFeaturesPragueEip2929();
+    }
+    bcos::ledger::Features cancunEip2929Features() const
+    {
+        return eip2929::makeFeaturesCancunEip2929();
+    }
+    bcos::ledger::Features shanghaiEip2929Features() const
+    {
+        return eip2929::makeFeaturesShanghaiEip2929();
+    }
+    bcos::ledger::Features osakaEip2929Features() const
+    {
+        return eip2929::makeFeaturesOsakaEip2929();
+    }
+
+    int64_t measureDoubleExtCodeSizeGas(bcos::ledger::Features const& features,
+        evmc_address const& target, int64_t startGas = 2'000'000, uint8_t runnerTag = 0x71)
+    {
+        return eip2929::measureDoubleExtCodeSizeGas(*this, features, target, startGas, runnerTag);
+    }
+
+    int64_t measureTwoAccountsExtCodeSizeGas(bcos::ledger::Features const& features,
+        evmc_address const& target1, evmc_address const& target2, int64_t startGas = 2'000'000,
+        uint8_t runnerTag = 0x72)
+    {
+        return eip2929::measureTwoAccountsExtCodeSizeGas(
+            *this, features, target1, target2, startGas, runnerTag);
     }
 };
 
@@ -158,6 +201,37 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_shanghai_without_cancun)
 
     auto revision = bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version());
     BOOST_CHECK_EQUAL(revision, EVMC_PARIS);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_helpers_smoke)
+{
+    (void)pragueEip2929Features();
+    (void)cancunEip2929Features();
+    (void)shanghaiEip2929Features();
+    (void)osakaEip2929Features();
+
+    evmc_address sender{};
+    sender.bytes[19] = 0x01;
+    evmc_bytes32 salt{};
+    auto const initcode = eip2929::revertInitcode();
+    auto const msg = eip2929::makeCreate2Message(
+        sender, salt, bcos::bytesConstRef(initcode.data(), initcode.size()), 1'000'000);
+    BOOST_CHECK_EQUAL(msg.kind, EVMC_CREATE2);
+    BOOST_CHECK_EQUAL(msg.input_size, initcode.size());
+    BOOST_CHECK(msg.input_data == initcode.data());
+
+    auto const accessList = eip2929::makeAccessListSingleAccountMultiSlot(
+        "00000000000000000000000000000000deadbeef", {h256(1), h256(2)});
+    BOOST_CHECK_EQUAL(accessList.size(), 1U);
+    BOOST_CHECK_EQUAL(accessList[0].first, "00000000000000000000000000000000deadbeef");
+    BOOST_CHECK_EQUAL(accessList[0].second.size(), 2U);
+
+    auto const multiList = eip2929::makeAccessListMultiAccount(
+        {{"00000000000000000000000000000000000000aa", {h256(3)}},
+            {"00000000000000000000000000000000000000bb", {h256(4), h256(5)}}});
+    BOOST_CHECK_EQUAL(multiList.size(), 2U);
+
+    BOOST_CHECK(!shanghaiEip2929Features().get(bcos::ledger::Features::Flag::feature_evm_cancun));
 }
 
 BOOST_AUTO_TEST_CASE(TE_FC_7_calldata_floor)
@@ -239,10 +313,29 @@ BOOST_AUTO_TEST_CASE(TE_FC_eip2929_access_account)
     BOOST_CHECK_EQUAL(host2.accessAccount(addr), EVMC_ACCESS_COLD);
 }
 
-BOOST_AUTO_TEST_CASE(TE_FC_revision_gate_eip2929_on_below_berlin_always_cold)
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_cold_warm_gas_extcodesize)
 {
-    // toRevision(...) for supported chains is >= London (> Berlin); the rev gate is exercised via
-    // explicit evmc_revision the same way bcos-executor HostContext(access, rev) does.
+    // EIP-2929 EXTCODESIZE: cold ~2600, warm ~100. Full tx gas is ~21k+ (not comparable
+    // to raw opcode costs); contrast double-probe on same addr (cold+warm) vs two addrs
+    // (cold+cold): expect ~2500 gas delta from the second account access alone.
+    auto const features = pragueEip2929Features();
+    evmc_address target{};
+    target.bytes[19] = 0x42;
+    evmc_address target2{};
+    target2.bytes[19] = 0x43;
+
+    auto const doubleSameGas = measureDoubleExtCodeSizeGas(features, target, 2'000'000, 0x71);
+    auto const twoColdGas =
+        measureTwoAccountsExtCodeSizeGas(features, target, target2, 2'000'000, 0x72);
+    BOOST_REQUIRE(doubleSameGas >= 0);
+    BOOST_REQUIRE(twoColdGas >= 0);
+    BOOST_CHECK(twoColdGas > doubleSameGas + 2000);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_flag_on_cold_warm_cycle)
+{
+    // TE m_revision is floored at CANCUN; pre-Berlin rev-gate is covered by executor
+    // CompatEip2929Test (FC_A_revision_gate_eip2929_on_prefork_evmc_rev_always_cold).
     bcos::ledger::Features features;
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
@@ -258,13 +351,60 @@ BOOST_AUTO_TEST_CASE(TE_FC_revision_gate_eip2929_on_below_berlin_always_cold)
     evmc_bytes32 key{};
     std::memset(key.bytes, 0xed, sizeof(key.bytes));
 
-    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(addr), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(addr), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key), EVMC_ACCESS_WARM);
+}
 
-    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_WARM);
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_flag_off_never_mutates_warm_set)
+{
+    bcos::ledger::Features features;
+    features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+    features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
+    features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+
+    auto access = std::make_shared<bcos::executor::Eip2929AccessState>();
+    evmc_address origin{};
+    origin.bytes[19] = 0x01;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x02;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, {}, 0, 1'000'000, access);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address addr{};
+    addr.bytes[19] = 0x42;
+    BOOST_CHECK(!access->containsAddress(addr));
+
+    BOOST_CHECK_EQUAL(host.accessAccount(addr), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessAccount(addr), EVMC_ACCESS_COLD);
+    BOOST_CHECK(!access->containsAddress(addr));
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_legacy_kind_ignores_access_list)
+{
+    auto const features = pragueEip2929Features();
+    evmc_address origin{};
+    origin.bytes[19] = 0x11;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x22;
+    h256 const storageKey(0x42424242);
+    auto accessList = std::make_shared<const bcos::executor::Eip2930AccessList>(
+        eip2929::makeAccessListSingleAccountMultiSlot(
+            "00000000000000000000000000000000deadbeef", {storageKey}));
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, accessList, 0);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address const listAddr = unhexAddress("00000000000000000000000000000000deadbeef");
+    BOOST_CHECK_EQUAL(host.accessAccount(listAddr), EVMC_ACCESS_COLD);
 }
 
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
@@ -335,6 +475,25 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_origin_consistency)
         co_return;
     }());
 
+    BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_double_prepare_idempotent)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x12;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x34;
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_await host.prepare();
+    }());
+
+    BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_WARM);
     BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_WARM);
 }
 
@@ -412,6 +571,53 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_initial_prewarm_prague_includes_0x0a_and_bls)
     bls0b.bytes[19] = 0x0b;
     BOOST_CHECK_EQUAL(host.accessAccount(pre0a), EVMC_ACCESS_WARM);
     BOOST_CHECK_EQUAL(host.accessAccount(bls0b), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_initial_prewarm_cancun_includes_0x0a_excludes_bls)
+{
+    auto host = makeHost(cancunEip2929Features());
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address pre0a{};
+    pre0a.bytes[19] = 0x0a;
+    evmc_address bls0b{};
+    bls0b.bytes[19] = 0x0b;
+    BOOST_CHECK_EQUAL(host.accessAccount(pre0a), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessAccount(bls0b), EVMC_ACCESS_COLD);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_initial_prewarm_shanghai_te_revision_floor_warms_0x0a)
+{
+    // TE HostContext floors m_revision at EVMC_CANCUN (see HostContext.h). Even with
+    // shanghaiEip2929Features() (no feature_evm_cancun), warmUpActivePrecompiles uses
+    // m_revision >= CANCUN and pre-warms 0x0a. Executor path can still exclude 0x0a at
+    // SHANGHAI — see CompatEip2929Test FC_A_initial_prewarm_shanghai_excludes_0x0a.
+    auto host = makeHost(shanghaiEip2929Features());
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address pre0a{};
+    pre0a.bytes[19] = 0x0a;
+    BOOST_CHECK_EQUAL(host.accessAccount(pre0a), EVMC_ACCESS_WARM);
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_initial_prewarm_osaka_includes_p256verify)
+{
+    auto host = makeHost(osakaEip2929Features());
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address p256{};
+    p256.bytes[18] = 0x01;
+    p256.bytes[19] = 0x00;
+    BOOST_CHECK_EQUAL(host.accessAccount(p256), EVMC_ACCESS_WARM);
 }
 
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_create_skips_to)
@@ -550,6 +756,111 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_empty_access_list_no_extra_warm)
     BOOST_CHECK_EQUAL(host.accessAccount(extra), EVMC_ACCESS_COLD);
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_slot)
+{
+    auto const features = pragueEip2929Features();
+    evmc_address origin{};
+    origin.bytes[19] = 0x11;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x22;
+    evmc_address childContract{};
+    childContract.bytes[19] = 0x73;
+    evmc_address coldTarget{};
+    coldTarget.bytes[19] = 0x74;
+
+    h256 const key1(1);
+    h256 const key2(2);
+    h256 const key3(3);
+    auto accessList = std::make_shared<const bcos::executor::Eip2930AccessList>(
+        eip2929::makeAccessListSingleAccountMultiSlot(
+            "00000000000000000000000000000000c0ffee04", {key1, key2, key3}));
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
+            rollbackableStorage, childContract, false);
+        co_await childAcc.create();
+        auto const code = eip2929::warmAccountThenRevertBytecode(coldTarget);
+        auto const hash = hashImpl->hash(bcos::bytesConstRef(code.data(), code.size()));
+        co_await childAcc.setCode(code, "", hash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, recipient, EVMC_CALL, accessList, 1);
+        co_await host.prepare();
+
+        evmc_address const listAddr = unhexAddress("00000000000000000000000000000000c0ffee04");
+        auto toEvmcKey = [](h256 const& h) {
+            evmc_bytes32 key{};
+            std::memcpy(key.bytes, h.data(), h256::SIZE);
+            return key;
+        };
+
+        BOOST_CHECK_EQUAL(host.accessAccount(listAddr), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessStorage(listAddr, toEvmcKey(key1)), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessStorage(listAddr, toEvmcKey(key2)), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessStorage(listAddr, toEvmcKey(key3)), EVMC_ACCESS_WARM);
+
+        evmc_message nested{.kind = EVMC_CALL,
+            .flags = 0,
+            .depth = host.message().depth + 1,
+            .gas = 1'000'000,
+            .recipient = childContract,
+            .sender = host.message().recipient,
+            .input_data = nullptr,
+            .input_size = 0,
+            .value = {},
+            .create2_salt = {},
+            .code_address = childContract,
+            .code = nullptr,
+            .code_size = 0};
+        auto out = co_await host.externalCall(nested);
+        BOOST_REQUIRE_EQUAL(out.status_code, EVMC_REVERT);
+
+        // Access-list warmth is not journaled (W2): survives child REVERT.
+        BOOST_CHECK_EQUAL(host.accessAccount(listAddr), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessStorage(listAddr, toEvmcKey(key1)), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessStorage(listAddr, toEvmcKey(key2)), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessStorage(listAddr, toEvmcKey(key3)), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessAccount(coldTarget), EVMC_ACCESS_COLD);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_account)
+{
+    auto const features = pragueEip2929Features();
+    evmc_address origin{};
+    origin.bytes[19] = 0x33;
+    evmc_address recipient{};
+    recipient.bytes[19] = 0x44;
+
+    h256 const key1(0x11);
+    h256 const key2(0x22);
+    auto accessList = std::make_shared<const bcos::executor::Eip2930AccessList>(
+        eip2929::makeAccessListMultiAccount({
+            {"00000000000000000000000000000000c0ffee05", {key1}},
+            {"00000000000000000000000000000000c0ffee06", {key2}},
+        }));
+
+    auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+        origin, recipient, EVMC_CALL, accessList, 1);
+    syncWait([&host]() -> task::Task<void> {
+        co_await host.prepare();
+        co_return;
+    }());
+
+    evmc_address const listAddr1 = unhexAddress("00000000000000000000000000000000c0ffee05");
+    evmc_address const listAddr2 = unhexAddress("00000000000000000000000000000000c0ffee06");
+    evmc_bytes32 evmKey1{};
+    std::memcpy(evmKey1.bytes, key1.data(), h256::SIZE);
+    evmc_bytes32 evmKey2{};
+    std::memcpy(evmKey2.bytes, key2.data(), h256::SIZE);
+
+    BOOST_CHECK_EQUAL(host.accessAccount(listAddr1), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessStorage(listAddr1, evmKey1), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessAccount(listAddr2), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.accessStorage(listAddr2, evmKey2), EVMC_ACCESS_WARM);
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
 {
     bcos::ledger::Features features;
@@ -568,7 +879,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
     coldTarget.bytes[19] = 0x74;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenRevertBytecode(coldTarget);
@@ -624,7 +935,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_success_commits_child_warm)
     coldTarget.bytes[19] = 0x84;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenStopBytecode(coldTarget);
@@ -676,14 +987,16 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
     outer.bytes[19] = 0x82;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> innerAcc(rollbackableStorage, inner, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
+            rollbackableStorage, inner, false);
         co_await innerAcc.create();
         auto const innerCode = eip2929::warmAccountThenRevertBytecode(bAddr);
         auto const innerHash =
             hashImpl->hash(bcos::bytesConstRef(innerCode.data(), innerCode.size()));
         co_await innerAcc.setCode(innerCode, "", innerHash);
 
-        EVMAccount<decltype(rollbackableStorage)> outerAcc(rollbackableStorage, outer, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> outerAcc(
+            rollbackableStorage, outer, false);
         co_await outerAcc.create();
         auto const outerCode = eip2929::callThenRevertBytecode(inner);
         auto const outerHash =
@@ -739,14 +1052,15 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_parent_call_nested_revert_rolls_back_child_
     coldTarget.bytes[19] = 0x6b;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAcc(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
         }
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         auto const childCode = eip2929::warmAccountThenRevertBytecode(coldTarget);
@@ -754,7 +1068,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_parent_call_nested_revert_rolls_back_child_
             hashImpl->hash(bcos::bytesConstRef(childCode.data(), childCode.size()));
         co_await childAcc.setCode(childCode, "", childHash);
 
-        EVMAccount<decltype(rollbackableStorage)> parentAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
             rollbackableStorage, parentContract, false);
         co_await parentAcc.create();
         auto const parentCode = eip2929::callThenRevertBytecode(childContract);
@@ -796,14 +1110,16 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
     warmFromChild2.bytes[19] = 0x55;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> child1Acc(rollbackableStorage, child1, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> child1Acc(
+            rollbackableStorage, child1, false);
         co_await child1Acc.create();
         auto const child1Code = eip2929::warmAccountThenRevertBytecode(warmFromChild1);
         auto const child1Hash =
             hashImpl->hash(bcos::bytesConstRef(child1Code.data(), child1Code.size()));
         co_await child1Acc.setCode(child1Code, "", child1Hash);
 
-        EVMAccount<decltype(rollbackableStorage)> child2Acc(rollbackableStorage, child2, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> child2Acc(
+            rollbackableStorage, child2, false);
         co_await child2Acc.create();
         auto const child2Code = eip2929::warmAccountThenStopBytecode(warmFromChild2);
         auto const child2Hash =
@@ -861,14 +1177,15 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
     sharedAddr.bytes[19] = 0x5b;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAcc(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
         }
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         auto const childCode = eip2929::warmAccountThenRevertBytecode(sharedAddr);
@@ -876,7 +1193,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
             hashImpl->hash(bcos::bytesConstRef(childCode.data(), childCode.size()));
         co_await childAcc.setCode(childCode, "", childHash);
 
-        EVMAccount<decltype(rollbackableStorage)> parentAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
             rollbackableStorage, parentContract, false);
         co_await parentAcc.create();
         auto const parentCode = eip2929::warmAddressThenCallBytecode(sharedAddr, childContract);
@@ -893,6 +1210,106 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
         BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
 
         BOOST_CHECK_EQUAL(host.accessAccount(sharedAddr), EVMC_ACCESS_WARM);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_staticcall_child_revert_rollback)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x7c;
+    evmc_address parentContract{};
+    parentContract.bytes[19] = 0x7d;
+    evmc_address innerContract{};
+    innerContract.bytes[19] = 0x7e;
+    evmc_address coldTarget{};
+    coldTarget.bytes[19] = 0x7f;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(bcos::u256(1) << 96);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
+            rollbackableStorage, innerContract, false);
+        co_await innerAcc.create();
+        auto const innerCode = eip2929::warmAccountThenRevertBytecode(coldTarget);
+        auto const innerHash =
+            hashImpl->hash(bcos::bytesConstRef(innerCode.data(), innerCode.size()));
+        co_await innerAcc.setCode(innerCode, "", innerHash);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
+            rollbackableStorage, parentContract, false);
+        co_await parentAcc.create();
+        auto const parentCode = eip2929::staticCallThenRevertBytecode(innerContract);
+        auto const parentHash =
+            hashImpl->hash(bcos::bytesConstRef(parentCode.data(), parentCode.size()));
+        co_await parentAcc.setCode(parentCode, "", parentHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, parentContract, EVMC_CALL, {}, 0, 2'000'000);
+        host.mutableMessage().code_address = parentContract;
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_REVERT);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(coldTarget), EVMC_ACCESS_COLD);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_delegatecall_shares_warm_set)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x8c;
+    evmc_address parentContract{};
+    parentContract.bytes[19] = 0x8d;
+    evmc_address delegateCallee{};
+    delegateCallee.bytes[19] = 0x8e;
+    evmc_address warmAddr{};
+    warmAddr.bytes[19] = 0x8f;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(bcos::u256(1) << 96);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> calleeAcc(
+            rollbackableStorage, delegateCallee, false);
+        co_await calleeAcc.create();
+        auto const calleeCode = eip2929::warmAccountThenStopBytecode(warmAddr);
+        auto const calleeHash =
+            hashImpl->hash(bcos::bytesConstRef(calleeCode.data(), calleeCode.size()));
+        co_await calleeAcc.setCode(calleeCode, "", calleeHash);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> parentAcc(
+            rollbackableStorage, parentContract, false);
+        co_await parentAcc.create();
+        auto const parentCode = eip2929::delegateCallThenStopBytecode(delegateCallee);
+        auto const parentHash =
+            hashImpl->hash(bcos::bytesConstRef(parentCode.data(), parentCode.size()));
+        co_await parentAcc.setCode(parentCode, "", parentHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, parentContract, EVMC_CALL, {}, 0, 2'000'000);
+        host.mutableMessage().code_address = parentContract;
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(warmAddr), EVMC_ACCESS_WARM);
     }());
 }
 
@@ -914,21 +1331,24 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_ok_outer_fail)
     runner.bytes[19] = 0x92;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAcc(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
         if (!co_await originAcc.exists())
         {
             co_await originAcc.create();
         }
         co_await originAcc.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> innerAcc(rollbackableStorage, inner, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
+            rollbackableStorage, inner, false);
         co_await innerAcc.create();
         auto const innerCode = eip2929::warmAccountThenStopBytecode(xAddr);
         auto const innerHash =
             hashImpl->hash(bcos::bytesConstRef(innerCode.data(), innerCode.size()));
         co_await innerAcc.setCode(innerCode, "", innerHash);
 
-        EVMAccount<decltype(rollbackableStorage)> runnerAcc(rollbackableStorage, runner, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> runnerAcc(
+            rollbackableStorage, runner, false);
         co_await runnerAcc.create();
         auto const runnerCode = eip2929::callThenRevertBytecode(inner);
         auto const runnerHash =
@@ -965,7 +1385,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_oog_rolls_back_child_warm)
     coldTarget.bytes[19] = 0x89;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         evmc_address coldTarget2{};
@@ -1022,7 +1442,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
             {"00000000000000000000000000000000c0ffee03", {listStorageKey}}});
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenRevertBytecode(coldTarget);
@@ -1082,10 +1502,10 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
     childContract.bytes[19] = 0x85;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
-        auto code = eip7702::storageWriterBytecode();
+        auto code = eip2929::storageWriterBytecode();
         code.pop_back();  // remove STOP
         code.push_back(0x60);
         code.push_back(0x00);
@@ -1142,7 +1562,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
                 origin, parentRecipient, EVMC_CALL, {}, 0, 2'000'000);
         co_await host.prepare();
 
-        EVMAccount<decltype(rollbackableStorage)> senderAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
             rollbackableStorage, host.message().recipient, false);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
@@ -1193,7 +1613,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
                 origin, parentRecipient, EVMC_CALL, {}, 0, 2'000'000);
         co_await host.prepare();
 
-        EVMAccount<decltype(rollbackableStorage)> senderAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
             rollbackableStorage, host.message().recipient, false);
         auto const nonceStr = co_await senderAcc.nonce();
         u256 const nonce(nonceStr.value_or(std::string("0")));
@@ -1224,6 +1644,137 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create2_fail_keeps_contract_warm)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x66;
+    evmc_address parentRecipient{};
+    parentRecipient.bytes[19] = 0x67;
+    evmc_address other{};
+    other.bytes[19] = 0x68;
+
+    syncWait([&]() -> task::Task<void> {
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, parentRecipient, EVMC_CALL, {}, 0, 2'000'000);
+        co_await host.prepare();
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> senderAcc(
+            rollbackableStorage, host.message().recipient, false);
+        auto const nonceStr = co_await senderAcc.nonce();
+        u256 const nonce(nonceStr.value_or(std::string("0")));
+
+        evmc_bytes32 salt{};
+        salt.bytes[31] = 0x42;
+        auto const initCode = eip2929::revertInitcodeAfterWarmOtherBytecode(other);
+        auto nested = eip2929::makeCreate2Message(host.message().recipient, salt,
+            bcos::bytesConstRef(initCode.data(), initCode.size()), 1'000'000);
+        nested.depth = host.message().depth + 1;
+        int64_t const childSeq = seq + 1;
+        auto const resolved =
+            getMessage(false, nested, blockHeader.number(), 0, childSeq, nonce, *hashImpl);
+        evmc_address const create2Addr = resolved.code_address;
+        auto out = co_await host.externalCall(nested);
+        BOOST_REQUIRE_NE(out.status_code, EVMC_SUCCESS);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(create2Addr), EVMC_ACCESS_WARM);
+        BOOST_CHECK_EQUAL(host.accessAccount(other), EVMC_ACCESS_COLD);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_revert_rolls_back_runtime_warm)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x69;
+    evmc_address runner{};
+    runner.bytes[19] = 0x6a;
+    evmc_address runtimeTarget{};
+    runtimeTarget.bytes[19] = 0x6b;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(bcos::u256(1) << 96);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> runnerAcc(
+            rollbackableStorage, runner, false);
+        co_await runnerAcc.create();
+        auto const runnerCode = eip2929::warmAccountThenRevertBytecode(runtimeTarget);
+        auto const runnerHash =
+            hashImpl->hash(bcos::bytesConstRef(runnerCode.data(), runnerCode.size()));
+        co_await runnerAcc.setCode(runnerCode, "", runnerHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, runner, EVMC_CALL, {}, 0, 2'000'000);
+        host.mutableMessage().code_address = runner;
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_REVERT);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(runtimeTarget), EVMC_ACCESS_COLD);
+        BOOST_CHECK_EQUAL(host.accessAccount(origin), EVMC_ACCESS_WARM);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_commit_then_parent_revert)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x6c;
+    evmc_address inner{};
+    inner.bytes[19] = 0x6d;
+    evmc_address xAddr{};
+    xAddr.bytes[19] = 0x6e;
+    evmc_address runner{};
+    runner.bytes[19] = 0x6f;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(bcos::u256(1) << 96);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> innerAcc(
+            rollbackableStorage, inner, false);
+        co_await innerAcc.create();
+        auto const innerCode = eip2929::warmAccountThenStopBytecode(xAddr);
+        auto const innerHash =
+            hashImpl->hash(bcos::bytesConstRef(innerCode.data(), innerCode.size()));
+        co_await innerAcc.setCode(innerCode, "", innerHash);
+
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> runnerAcc(
+            rollbackableStorage, runner, false);
+        co_await runnerAcc.create();
+        auto const runnerCode = eip2929::callThenRevertBytecode(inner);
+        auto const runnerHash =
+            hashImpl->hash(bcos::bytesConstRef(runnerCode.data(), runnerCode.size()));
+        co_await runnerAcc.setCode(runnerCode, "", runnerHash);
+
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, runner, EVMC_CALL, {}, 0, 2'000'000);
+        host.mutableMessage().code_address = runner;
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_REVERT);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(xAddr), EVMC_ACCESS_COLD);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
 {
     bcos::ledger::Features features;
@@ -1241,7 +1792,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
     coldTarget.bytes[19] = 0x87;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> childAcc(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(
             rollbackableStorage, childContract, false);
         co_await childAcc.create();
         auto const code = eip2929::warmAccountThenStopBytecode(coldTarget);
@@ -1274,6 +1825,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
     }());
 }
 
+#if 0  // Requires TE HostContext gas-settlement / EIP-7702 APIs not on release-3.18.0 base.
 BOOST_AUTO_TEST_SUITE(EthTxGasSettlementHost)
 
 BOOST_AUTO_TEST_CASE(Web3_stop_debitsIntrinsicOnce_notTransfer21000)
@@ -1291,14 +1843,14 @@ BOOST_AUTO_TEST_CASE(Web3_stop_debitsIntrinsicOnce_notTransfer21000)
     constexpr int64_t startGas = 500'000;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1354,14 +1906,14 @@ BOOST_AUTO_TEST_CASE(Web3_mixedCalldata_finalizeUsesFloor)
     constexpr int64_t startGas = 500'000;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1412,14 +1964,14 @@ BOOST_AUTO_TEST_CASE(Web3_intrinsicOOG_beforeEvm_stillReportsIntrinsicGas)
     constexpr int64_t startGas = 20'000;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1464,14 +2016,14 @@ BOOST_AUTO_TEST_CASE(Web3_revert_executionBurnIncludedInFinalize)
     constexpr int64_t startGas = 500'000;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1526,14 +2078,14 @@ BOOST_AUTO_TEST_CASE(Web3_valueTransfer_noDouble21000OnFinalize)
         ledgerConfig.setFeatures(features);
         ledgerConfig.setBalanceTransfer(true);
 
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1586,14 +2138,14 @@ BOOST_AUTO_TEST_CASE(Legacy_nonWeb3_stillDebits7702IntrinsicBeforeEvm)
     int64_t const authCost = executor_v1::EIP_7702_PER_EMPTY_ACCOUNT_COST;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1638,14 +2190,14 @@ BOOST_AUTO_TEST_CASE(IntrinsicGasAddedPerTuple)
         static_cast<int64_t>(authList->size()) * executor_v1::EIP_7702_PER_EMPTY_ACCOUNT_COST;
 
     syncWait([&, authList]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         if (!co_await originAccount.exists())
         {
             co_await originAccount.create();
         }
         co_await originAccount.setBalance(bcos::u256(1) << 96);
 
-        EVMAccount<decltype(rollbackableStorage)> recipientAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> recipientAccount(
             rollbackableStorage, recipient, false);
         if (!co_await recipientAccount.exists())
         {
@@ -1722,7 +2274,7 @@ BOOST_AUTO_TEST_CASE(CallFollowsIndicator)
     origin.bytes[19] = 0x93;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> targetAccount(rollbackableStorage, target, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> targetAccount(rollbackableStorage, target, false);
         co_await targetAccount.create();
         auto const writer = eip7702::storageWriterBytecode();
         auto const writerHash = hashImpl->hash(bcos::bytesConstRef(writer.data(), writer.size()));
@@ -1741,7 +2293,7 @@ BOOST_AUTO_TEST_CASE(CallFollowsIndicator)
         auto const result = co_await host.execute();
         BOOST_REQUIRE_EQUAL(result.status_code, EVMC_SUCCESS);
 
-        EVMAccount<decltype(rollbackableStorage)> authorityAccount(
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> authorityAccount(
             rollbackableStorage, authority, false);
         evmc_bytes32 key{};
         auto const authoritySlot = co_await authorityAccount.storage(key);
@@ -1768,7 +2320,7 @@ BOOST_AUTO_TEST_CASE(DelegatecallFollowsIndicator)
     origin.bytes[19] = 0xa3;
 
     syncWait([&]() -> task::Task<void> {
-        EVMAccount<decltype(rollbackableStorage)> targetAccount(rollbackableStorage, target, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> targetAccount(rollbackableStorage, target, false);
         co_await targetAccount.create();
         auto const writer = eip7702::storageWriterBytecode();
         auto const writerHash = hashImpl->hash(bcos::bytesConstRef(writer.data(), writer.size()));
@@ -1779,7 +2331,7 @@ BOOST_AUTO_TEST_CASE(DelegatecallFollowsIndicator)
         co_await eip7702::setDelegationIndicator(
             rollbackableStorage, hashImpl, authority, targetAddr, false);
 
-        EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAccount(rollbackableStorage, origin, false);
         co_await originAccount.create();
         bcos::bytes const stopCode{0x00};
         auto const stopHash = hashImpl->hash(bcos::bytesConstRef(stopCode.data(), stopCode.size()));
@@ -1841,6 +2393,7 @@ BOOST_AUTO_TEST_CASE(ExtcodeOpsReturnIndicator)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+#endif
 
 BOOST_AUTO_TEST_SUITE_END()
 

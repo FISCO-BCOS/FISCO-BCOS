@@ -44,6 +44,28 @@ BOOST_AUTO_TEST_CASE(commit_merges_child_warm_then_parent_rollback_clears_all)
     BOOST_CHECK(!st.containsAddress(x));
 }
 
+/// Committed child journals merge into parent; parent rollback erases all merged warms.
+BOOST_AUTO_TEST_CASE(nested_commit_checkpoint_merges_journal)
+{
+    Eip2929AccessState st;
+    auto a = addrByte(0xb1);
+    auto b = addrByte(0xb2);
+
+    st.pushCheckpoint();  // parent CP
+    st.pushCheckpoint();  // child CP
+    BOOST_CHECK(st.warmUpAddress(a));
+    st.commitCheckpoint();  // merge A into parent journal
+    BOOST_REQUIRE(st.hasActiveCheckpoint());
+    BOOST_CHECK(st.containsAddress(a));
+
+    st.pushCheckpoint();  // second child CP
+    BOOST_CHECK(st.warmUpAddress(b));
+    st.commitCheckpoint();    // merge B into parent journal
+    st.rollbackCheckpoint();  // parent fails — merged A and B rolled back
+    BOOST_CHECK(!st.containsAddress(a));
+    BOOST_CHECK(!st.containsAddress(b));
+}
+
 BOOST_AUTO_TEST_CASE(parent_warm_survives_child_rollback_erases_child_only)
 {
     Eip2929AccessState st;
@@ -111,6 +133,18 @@ BOOST_AUTO_TEST_CASE(create_pin_keeps_address_when_only_journal_warm_would_be_er
     Eip2929AccessState st;
     st.pushCheckpoint();
     auto contract = addrByte(0x56);
+    st.setCreateRollbackPin(contract);
+    st.rollbackCheckpoint();
+    BOOST_CHECK(st.containsAddress(contract));
+}
+
+/// Pin protects journal warmth from warmUpAddress even when pin itself adds no journal entry.
+BOOST_AUTO_TEST_CASE(create_pin_without_journal_entry)
+{
+    Eip2929AccessState st;
+    st.pushCheckpoint();
+    auto contract = addrByte(0x57);
+    BOOST_CHECK(st.warmUpAddress(contract));
     st.setCreateRollbackPin(contract);
     st.rollbackCheckpoint();
     BOOST_CHECK(st.containsAddress(contract));

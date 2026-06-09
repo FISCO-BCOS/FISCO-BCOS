@@ -68,7 +68,6 @@
 #include <range/v3/algorithm/fill.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <string_view>
-#include <unordered_set>
 
 namespace bcos::executor_v1::hostcontext
 {
@@ -190,32 +189,7 @@ private:
     int64_t m_level;
     bool m_web3Tx;
 
-    // EIP-2929 cold/warm access tracking (revision-gated, see accessAccount/accessStorage)
-    struct EVMCPairHash
-    {
-        size_t operator()(const std::pair<evmc_address, evmc_bytes32>& p) const noexcept
-        {
-            size_t h = 0;
-            boost::hash_combine(h, boost::hash_range(p.first.bytes, p.first.bytes + 20));
-            boost::hash_combine(h, boost::hash_range(p.second.bytes, p.second.bytes + 32));
-            return h;
-        }
-    };
-    struct EVMCPairEqual
-    {
-        bool operator()(const std::pair<evmc_address, evmc_bytes32>& a,
-            const std::pair<evmc_address, evmc_bytes32>& b) const noexcept
-        {
-            return std::memcmp(a.first.bytes, b.first.bytes, 20) == 0 &&
-                   std::memcmp(a.second.bytes, b.second.bytes, 32) == 0;
-        }
-    };
-    std::unordered_set<evmc_address> m_warmAccounts;  // uses std::hash<evmc_address> from
-                                                      // VMInstance.h
-    std::unordered_set<std::pair<evmc_address, evmc_bytes32>, EVMCPairHash, EVMCPairEqual>
-        m_warmStorage;
-
-    // EIP-2929/2930 access tracking
+    // EIP-2929/2930 access tracking (shared Eip2929AccessState; see accessAccount/accessStorage)
     std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
     std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
     uint8_t m_web3TypedTxKindForAccessList = 0;
@@ -299,7 +273,11 @@ private:
         m_eip2929Access(std::move(eip2929Access)),
         m_eip2930AccessList(std::move(accessList)),
         m_web3TypedTxKindForAccessList(web3TypedTxKind)
-    {}
+    {
+        // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
+        // prepare() handles prepareCall/Create only; see TransactionExecutorImpl executeStep<0>.
+        warmEip2929AtTransactionEntry();
+    }
 
 public:
     HostContext(Storage& storage, TransientStorage& transientStorage,
@@ -482,41 +460,12 @@ public:
     {
         auto const& ref = message();
 
-        // EIP-2929 (W1): transaction-entry accesses before execution starts.
-        if (m_level == 0 && m_revision >= EVMC_BERLIN &&
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
-        {
-            std::optional<evmc_address> callee;
-            if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
-            {
-                callee = ref.recipient;
-            }
-            m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
-
-            // EIP-2929: contract address is accessed at CREATE/CREATE2 entry (even if init fails).
-            if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
-            {
-                (void)m_eip2929Access->warmUpAddressNoJournal(ref.code_address);
-            }
-
-            // EIP-2929 W2: warm access_list entries for any typed tx (kind != 0).
-            // EIP-2930 (kind=1), EIP-1559 (kind=2), EIP-4844 (kind=3) all support accessList.
-            if (m_web3TypedTxKindForAccessList != 0 && m_eip2930AccessList &&
-                !m_eip2930AccessList->empty())
-            {
-                m_eip2929Access->warmUpAccessList(
-                    *m_eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
-            }
-        }
-
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
             prepareCreate();
+            co_return;
         }
-        else
-        {
-            co_await prepareCall();
-        }
+        co_await prepareCall();
     }
 
     task::Task<EVMCResult> execute()
@@ -733,20 +682,59 @@ public:
     evmc_access_status accessAccount(const evmc_address& addr) noexcept
     {
         if (m_revision < EVMC_BERLIN ||
-            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
+            !m_eip2929Access)
+        {
             return EVMC_ACCESS_COLD;
-        return m_warmAccounts.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        }
+        return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
     evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
     {
         if (m_revision < EVMC_BERLIN ||
-            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929))
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
+            !m_eip2929Access)
+        {
             return EVMC_ACCESS_COLD;
-        return m_warmStorage.insert({addr, key}).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+        }
+        return m_eip2929Access->warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
 private:
+    void warmEip2929AtTransactionEntry() noexcept
+    {
+        auto const& ref = message();
+        if (m_level != 0 || m_revision < EVMC_BERLIN ||
+            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
+            !m_eip2929Access)
+        {
+            return;
+        }
+
+        // EIP-2929 (W1): transaction-entry accesses before execution starts.
+        std::optional<evmc_address> callee;
+        if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
+        {
+            callee = ref.recipient;
+        }
+        m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
+
+        // EIP-2929: contract address is accessed at CREATE/CREATE2 entry (even if init fails).
+        if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
+        {
+            (void)m_eip2929Access->warmUpAddressNoJournal(ref.code_address);
+        }
+
+        // EIP-2929 W2: warm access_list entries for any typed tx (kind != 0).
+        if (m_web3TypedTxKindForAccessList != 0 && m_eip2930AccessList &&
+            !m_eip2930AccessList->empty())
+        {
+            m_eip2929Access->warmUpAccessList(
+                *m_eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
+        }
+    }
+
     void prepareCreate()
     {
         auto& ref = message();
