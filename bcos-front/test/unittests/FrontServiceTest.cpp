@@ -134,18 +134,24 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
             }
         });
 
-    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID) !=
-                frontService->module2GroupNodeInfoNotifier().end());
-    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID + 1) ==
-                frontService->module2GroupNodeInfoNotifier().end());
+    auto notifierMap = frontService->module2GroupNodeInfoNotifier();
+    BOOST_CHECK(notifierMap.find(moduleID) != notifierMap.end());
+    BOOST_CHECK(notifierMap.find(moduleID + 1) == notifierMap.end());
 
     auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setNodeIDList(std::move(expectedNodeIDList));
     frontService->onReceiveGroupNodeInfo(
         "1", groupNodeInfo, [](Error::Ptr _error) { BOOST_CHECK(_error == nullptr); });
 
-    f.get();
-    BOOST_CHECK(nodeIDs0.size() == orgExpectedNodeIDList.size());
+    // Use wait_for with timeout to avoid hanging indefinitely on CI
+    auto status = f.wait_for(std::chrono::seconds(10));
+    BOOST_CHECK_MESSAGE(status == std::future_status::ready,
+        "Timed out waiting for group node info notification");
+    if (status == std::future_status::ready)
+    {
+        f.get();
+        BOOST_CHECK(nodeIDs0.size() == orgExpectedNodeIDList.size());
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_callback)
