@@ -21,7 +21,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${1:-${ROOT_DIR}/build}"
-RPC_PORT="${2:-8545}"
+RPC_PORT="${2:-8645}"
 RPC_URL="http://127.0.0.1:${RPC_PORT}"
 BINARY="${BUILD_DIR}/fisco-bcos-air/fisco-bcos"
 WORK_DIR="${BUILD_DIR}/engine_integration_test"
@@ -160,7 +160,7 @@ leader_period=1
 node.0=9418c37b060ecc49dc558d858a3e313a45e504ee7601034f657ed23ec8cce2aa2ef93c55e04b17f40bf98337c8c8acdf2af982929834a0bb2e3633b37ee9be5f3:1
 [rpc]
 listen_ip=0.0.0.0
-listen_port=20200
+listen_port=21200
 thread_count=2
 disable_ssl=true
 sm_ssl=false
