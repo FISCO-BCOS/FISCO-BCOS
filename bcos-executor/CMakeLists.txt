@@ -22,7 +22,7 @@ else()
     target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
             Boost::context evmone::evmone GroupSig Paillier blst)
 endif()
-# Web3Eip2930Fill decodes extraTransactionBytes via rpc::Web3Transaction RLP.
+# Web3AccessListResolver decodes extraTransactionBytes via rpc::Web3Transaction RLP.
 # TODO: move typed-tx RLP decode to bcos-codec to drop executor -> rpc dependency.
 target_link_libraries(executor PRIVATE rpc)
 

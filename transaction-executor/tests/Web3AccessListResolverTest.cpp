@@ -1,9 +1,9 @@
 /**
- * @file Web3Eip2930FillTest.cpp
- * @brief End-to-end: parse typed Web3 tx → HostContext prepare() → access list warm.
+ * @file Web3AccessListResolverTest.cpp
+ * @brief End-to-end: resolve typed Web3 tx → HostContext prepare() → access list warm.
  */
 
-#include "bcos-executor/src/Web3Eip2930Fill.h"
+#include "bcos-executor/src/Web3AccessListResolver.h"
 #include "../bcos-transaction-executor/vm/HostContext.h"
 #include "Eip2929TestHelpers.h"
 #include "TestMemoryStorage.h"
@@ -31,7 +31,7 @@ using namespace bcos::executor_v1::hostcontext;
 namespace bcos::test
 {
 
-class Web3Eip2930FillTEFixture
+class Web3AccessListResolverTEFixture
 {
 public:
     bcos::crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();
@@ -50,7 +50,7 @@ public:
     bcostars::protocol::BlockHeaderImpl blockHeader;
     int64_t seq = 0;
 
-    Web3Eip2930FillTEFixture()
+    Web3AccessListResolverTEFixture()
       : rollbackableStorage(storage), rollbackableTransientStorage(transientStorage)
     {
         bcos::executor::GlobalHashImpl::g_hashImpl = hashImpl;
@@ -98,9 +98,9 @@ public:
     }
 };
 
-BOOST_FIXTURE_TEST_SUITE(Web3Eip2930FillTE, Web3Eip2930FillTEFixture)
+BOOST_FIXTURE_TEST_SUITE(Web3AccessListResolverTE, Web3AccessListResolverTEFixture)
 
-BOOST_AUTO_TEST_CASE(Web3Eip2930Fill_end_to_end_warm)
+BOOST_AUTO_TEST_CASE(Web3AccessListResolver_end_to_end_warm)
 {
     // Same EIP-2930 fixture as bcos-rpc Web3TypeTest::testEIP2930Transaction
     constexpr std::string_view rawTx =
@@ -121,14 +121,14 @@ BOOST_AUTO_TEST_CASE(Web3Eip2930Fill_end_to_end_warm)
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
     bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
 
-    auto const parsed = bcos::executor::parseEip2930FromWeb3Transaction(txImpl);
+    auto const resolved = bcos::executor::resolveWeb3AccessList(txImpl);
     BOOST_CHECK_EQUAL(
-        parsed.web3TypedTxKind, static_cast<uint8_t>(bcos::rpc::TransactionType::EIP2930));
-    BOOST_REQUIRE(parsed.accessList);
-    BOOST_CHECK_EQUAL(parsed.accessList->size(), 2U);
+        resolved.web3TypedTxKind, static_cast<uint8_t>(bcos::rpc::TransactionType::EIP2930));
+    BOOST_REQUIRE(resolved.accessList);
+    BOOST_CHECK_EQUAL(resolved.accessList->size(), 2U);
 
     auto const features = eip2929::makeFeaturesPragueEip2929();
-    auto host = makeHost(features, parsed.accessList, parsed.web3TypedTxKind);
+    auto host = makeHost(features, resolved.accessList, resolved.web3TypedTxKind);
     syncWait([&host]() -> task::Task<void> {
         co_await host.prepare();
         co_return;

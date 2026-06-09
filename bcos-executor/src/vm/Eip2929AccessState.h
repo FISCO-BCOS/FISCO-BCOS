@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "Eip2929PrecompileWarm.h"
 #include <evmc/evmc.h>
 #include <boost/container_hash/hash.hpp>
 #include <cstring>
@@ -182,42 +183,12 @@ struct Eip2929AccessState
     /// Warm all precompiles active at @p revision (EIP-2929: "the set of all precompiles").
     void warmUpActivePrecompiles(evmc_revision revision)
     {
-        static constexpr unsigned precompile_hi = sizeof(evmc_address) - 1;
-        for (uint8_t i = 1; i <= 9; ++i)
-        {
-            evmc_address p{};
-            p.bytes[precompile_hi] = i;
-            (void)warmUpAddressImpl(p, false);
-        }
-        if (revision >= EVMC_CANCUN)
-        {
-            evmc_address p{};
-            p.bytes[precompile_hi] = 0x0a;
-            (void)warmUpAddressImpl(p, false);
-        }
-        if (revision >= EVMC_PRAGUE)
-        {
-            for (uint8_t i = 0x0b; i <= 0x11; ++i)
-            {
-                evmc_address p{};
-                p.bytes[precompile_hi] = i;
-                (void)warmUpAddressImpl(p, false);
-            }
-        }
-        if (revision >= EVMC_OSAKA)
-        {
-            evmc_address p{};
-            p.bytes[18] = 0x01;
-            p.bytes[19] = 0x00;
-            (void)warmUpAddressImpl(p, false);
-        }
+        forEachActivePrecompileAddress(revision,
+            [this](evmc_address const& precompile) { (void)warmUpAddressImpl(precompile, false); });
     }
 
     /// EIP-2929 transaction-entry warm accesses: caller (origin/sender),
     /// optional recipient (omit for CREATE/CREATE2), and active precompiles at @p revision.
-    /// TODO(EIP-3651): when @p revision >= EVMC_SHANGHAI, also warmUpAddressNoJournal(coinbase)
-    /// derived from block sealer (keccak256(sealerList[sealer]) right 160; genesis => zero
-    /// address).
     void warmUpInitialTxSet(const evmc_address& origin,
         std::optional<evmc_address> transactionToEVMC, evmc_revision revision)
     {

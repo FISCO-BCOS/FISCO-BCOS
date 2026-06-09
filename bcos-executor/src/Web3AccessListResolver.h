@@ -8,8 +8,8 @@
 namespace bcos::executor
 {
 
-/// Parsed EIP-2930 metadata from `protocol::Transaction::extraTransactionBytes` (Web3 typed tx).
-struct Web3Eip2930Parsed
+/// Resolved Web3 typed-tx metadata from protocol fields and/or extraTransactionBytes.
+struct Web3AccessListResolved
 {
     /// EIP-2718 envelope / typed kind (1 = EIP-2930). 0 = unset / not applicable.
     uint8_t web3TypedTxKind = 0;
@@ -17,8 +17,8 @@ struct Web3Eip2930Parsed
     std::shared_ptr<const Eip2930AccessList> accessList;
 };
 
-/// Read EIP-2930 metadata from protocol fields (scheme B); fall back to extraTransactionBytes for
-/// legacy txs.
-Web3Eip2930Parsed parseEip2930FromWeb3Transaction(protocol::Transaction const& tx);
+/// Resolve Web3 access list from protocol fields (Tars fast path); fall back to
+/// extraTransactionBytes RLP for legacy or stripped txs.
+Web3AccessListResolved resolveWeb3AccessList(protocol::Transaction const& tx);
 
 }  // namespace bcos::executor

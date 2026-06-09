@@ -1,9 +1,9 @@
 /**
- * @file Web3Eip2930FillTest.cpp
- * @brief Protocol-field and extra-bytes parsing for Web3 access lists (EIP-2930 / 1559).
+ * @file Web3AccessListResolverTest.cpp
+ * @brief Protocol-field and extra-bytes resolution for Web3 access lists (EIP-2930 / 1559).
  */
 
-#include "../src/Web3Eip2930Fill.h"
+#include "../src/Web3AccessListResolver.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-rpc/web3jsonrpc/model/Web3Transaction.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
@@ -14,7 +14,7 @@ using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::rpc;
 
-BOOST_AUTO_TEST_SUITE(Web3Eip2930Fill)
+BOOST_AUTO_TEST_SUITE(Web3AccessListResolver)
 
 BOOST_AUTO_TEST_CASE(parse_eip1559_from_tars_structured_access_list)
 {
@@ -38,10 +38,10 @@ BOOST_AUTO_TEST_CASE(parse_eip1559_from_tars_structured_access_list)
     tarsHolder->extraTransactionHash.assign(txHash.begin(), txHash.end());
     bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
 
-    auto const parsed = parseEip2930FromWeb3Transaction(txImpl);
-    BOOST_CHECK_EQUAL(parsed.web3TypedTxKind, static_cast<uint8_t>(TransactionType::EIP1559));
-    BOOST_REQUIRE(parsed.accessList);
-    BOOST_CHECK_EQUAL(parsed.accessList->size(), w3.accessList.size());
+    auto const resolved = resolveWeb3AccessList(txImpl);
+    BOOST_CHECK_EQUAL(resolved.web3TypedTxKind, static_cast<uint8_t>(TransactionType::EIP1559));
+    BOOST_REQUIRE(resolved.accessList);
+    BOOST_CHECK_EQUAL(resolved.accessList->size(), w3.accessList.size());
     BOOST_CHECK_EQUAL(txImpl.web3AccessList().size(), w3.accessList.size());
 }
 
@@ -66,10 +66,10 @@ BOOST_AUTO_TEST_CASE(parse_eip1559_access_list_from_extra_when_tars_list_empty)
     bcostars::protocol::TransactionImpl txImpl([tarsHolder]() { return tarsHolder.get(); });
     BOOST_CHECK(txImpl.web3AccessList().empty());
 
-    auto const parsed = parseEip2930FromWeb3Transaction(txImpl);
-    BOOST_CHECK_EQUAL(parsed.web3TypedTxKind, static_cast<uint8_t>(TransactionType::EIP1559));
-    BOOST_REQUIRE(parsed.accessList);
-    BOOST_CHECK(!parsed.accessList->empty());
+    auto const resolved = resolveWeb3AccessList(txImpl);
+    BOOST_CHECK_EQUAL(resolved.web3TypedTxKind, static_cast<uint8_t>(TransactionType::EIP1559));
+    BOOST_REQUIRE(resolved.accessList);
+    BOOST_CHECK(!resolved.accessList->empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -2871,11 +2871,11 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     // TODO(C2): EIP-2930 accessList pre-warm is NOT wired in the bcos-executor path.
     // The transaction-executor path (TransactionExecutorImpl + HostContext) already handles W2
-    // correctly via parseEip2930FromWeb3Transaction() + warmUpAccessList().
+    // correctly via resolveWeb3AccessList() + warmUpAccessList().
     // This path must be fixed before bcos-executor can support EIP-2930/1559 access lists:
-    //   1. Call parseEip2930FromWeb3Transaction(tx) here to obtain Eip2930AccessList.
-    //   2. Assign parsed.web3TypedTxKind → callParameters->web3TypedTxKind.
-    //   3. Assign parsed.accessList       → callParameters->eip2930AccessList.
+    //   1. Call resolveWeb3AccessList(tx) here to obtain Eip2930AccessList.
+    //   2. Assign resolved.web3TypedTxKind → callParameters->web3TypedTxKind.
+    //   3. Assign resolved.accessList      → callParameters->eip2930AccessList.
     //   4. In TransactionExecutive::execute(), call warmUpEip2930AccessList(*callParameters)
     //      right after warmUpEip2929InitialSet(*callParameters) (see ~line 478).
 

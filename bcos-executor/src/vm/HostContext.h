@@ -25,6 +25,7 @@
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
 #include "Eip2929AccessState.h"
+#include "Eip2929Util.h"
 #include "VMInstance.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include <evmc/evmc.h>
@@ -155,8 +156,7 @@ public:
 
     evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
     {
-        if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
-                                     ledger::Features::Flag::feature_evm_eip2929))
+        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
         {
             return EVMC_ACCESS_COLD;
         }
@@ -167,8 +167,7 @@ public:
     evmc_access_status accessStorage(
         const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
     {
-        if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
-                                     ledger::Features::Flag::feature_evm_eip2929))
+        if (!eip2929Enabled(rev, m_executive->blockContext().features()))
         {
             return EVMC_ACCESS_COLD;
         }

@@ -26,6 +26,8 @@
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/DelegateHostContext.h"
 #include "../vm/EVMHostInterface.h"
+#include "../vm/Eip2929TransactionPrewarm.h"
+#include "../vm/Eip2929Util.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
 #include "../vm/VMFactory.h"
@@ -2229,45 +2231,38 @@ std::shared_ptr<Eip2929AccessState> TransactionExecutive::getEip2929AccessState(
 
 void TransactionExecutive::warmUpEip2929InitialSet(CallParameters const& params)
 {
-    if (!blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
-    {
-        return;
-    }
-    if (toRevision(blockContext().vmSchedule()) < EVMC_BERLIN)
+    auto const revision = toRevision(blockContext().vmSchedule());
+    if (!eip2929Enabled(revision, blockContext().features()))
     {
         return;
     }
 
     auto const originSv = params.origin.empty() ? std::string_view{params.senderAddress} :
                                                   std::string_view{params.origin};
-    auto const originAddr = unhexAddress(originSv);
 
-    std::optional<evmc_address> callee;
+    Eip2929TxPrewarmInput input;
+    input.revision = revision;
+    input.origin = unhexAddress(originSv);
     if (!params.create && !params.receiveAddress.empty())
     {
-        callee.emplace(unhexAddress(std::string_view{params.receiveAddress}));
+        input.callee = unhexAddress(std::string_view{params.receiveAddress});
     }
+    // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
+    input.web3TypedTxKind = params.web3TypedTxKind;
+    input.accessList = &params.eip2930AccessList;
 
-    getEip2929AccessState(m_contextID)
-        ->warmUpInitialTxSet(originAddr, callee, toRevision(blockContext().vmSchedule()));
-    // TODO(EIP-3651): warm block coinbase in accessed_addresses at Shanghai+ (same address as
-    // COINBASE opcode / BlockResponse miner field).
+    warmEip2929AtTransactionEntry(*getEip2929AccessState(m_contextID), input,
+        [](std::string const& hex) { return unhexAddress(hex); });
 }
 
 void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)
 {
-    // EIP-2930/1559/4844 all carry an accessList; pre-warm whenever kind != 0 (not legacy).
-    if (params.web3TypedTxKind == 0 || params.eip2930AccessList.empty())
-    {
-        return;
-    }
-    if (!blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
-        toRevision(blockContext().vmSchedule()) < EVMC_BERLIN)
+    auto const revision = toRevision(blockContext().vmSchedule());
+    if (!eip2929Enabled(revision, blockContext().features()))
     {
         return;
     }
 
-    getEip2929AccessState(m_contextID)
-        ->warmUpAccessList(
-            params.eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
+    warmEip2930AccessListOnly(*getEip2929AccessState(m_contextID), params.web3TypedTxKind,
+        params.eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
 }

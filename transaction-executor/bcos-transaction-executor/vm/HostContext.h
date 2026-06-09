@@ -31,6 +31,9 @@
 #include "bcos-executor/src/CallParameters.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
+#include "bcos-executor/src/vm/Eip2929CheckpointGuard.h"
+#include "bcos-executor/src/vm/Eip2929TransactionPrewarm.h"
+#include "bcos-executor/src/vm/Eip2929Util.h"
 #include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -121,48 +124,6 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
     }
     co_return {};
 }
-
-namespace
-{
-struct Eip2929CheckpointGuard
-{
-    std::shared_ptr<bcos::executor::Eip2929AccessState> state;
-    bool committed{false};
-
-    explicit Eip2929CheckpointGuard(std::shared_ptr<bcos::executor::Eip2929AccessState> accessState)
-      : state(std::move(accessState))
-    {
-        if (state)
-        {
-            state->pushCheckpoint();
-        }
-    }
-
-    void commit()
-    {
-        if (state && !committed)
-        {
-            state->commitCheckpoint();
-            committed = true;
-        }
-    }
-
-    ~Eip2929CheckpointGuard()
-    {
-        if (state && !committed)
-        {
-            state->rollbackCheckpoint();
-        }
-    }
-};
-
-inline bool eip2929CheckpointEnabled(
-    evmc_revision revision, bcos::ledger::LedgerConfig const& ledgerConfig) noexcept
-{
-    return revision >= EVMC_BERLIN &&
-           ledgerConfig.features().get(bcos::ledger::Features::Flag::feature_evm_eip2929);
-}
-}  // namespace
 
 template <class Storage, class TransientStorage>
 class HostContext : public evmc_host_context
@@ -278,7 +239,7 @@ private:
         // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
         // prepare() handles prepareCall/Create only; see TransactionExecutorImpl executeStep<0>.
         warmEip2929AtTransactionEntry();
-        assert(!eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
+        assert(!executor::eip2929Enabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
     }
 
 public:
@@ -478,9 +439,9 @@ public:
         auto savepoint = m_rollbackableStorage.get().current();
         auto transientSavepoint = m_rollbackableTransientStorage.get().current();
 
-        std::optional<Eip2929CheckpointGuard> topCheckpointGuard;
+        std::optional<bcos::executor::Eip2929CheckpointGuard> topCheckpointGuard;
         if (m_level == 0 && m_eip2929Access &&
-            eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()))
+            executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
         {
             topCheckpointGuard.emplace(m_eip2929Access);
         }
@@ -643,8 +604,8 @@ public:
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
 
-        std::optional<Eip2929CheckpointGuard> checkpointGuard;
-        if (m_eip2929Access && eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()))
+        std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
+        if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
         {
             checkpointGuard.emplace(m_eip2929Access);
             if (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2)
@@ -683,9 +644,8 @@ public:
 
     evmc_access_status accessAccount(const evmc_address& addr) noexcept
     {
-        if (m_revision < EVMC_BERLIN ||
-            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
-            !m_eip2929Access)
+        if (!m_eip2929Access ||
+            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
         {
             return EVMC_ACCESS_COLD;
         }
@@ -694,9 +654,8 @@ public:
 
     evmc_access_status accessStorage(const evmc_address& addr, const evmc_bytes32& key) noexcept
     {
-        if (m_revision < EVMC_BERLIN ||
-            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
-            !m_eip2929Access)
+        if (!m_eip2929Access ||
+            !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
         {
             return EVMC_ACCESS_COLD;
         }
@@ -707,37 +666,28 @@ private:
     void warmEip2929AtTransactionEntry() noexcept
     {
         auto const& ref = message();
-        if (m_level != 0 || m_revision < EVMC_BERLIN ||
-            !m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_evm_eip2929) ||
-            !m_eip2929Access)
+        if (!executor::eip2929TransactionEntryWarmEnabled(
+                m_level, m_revision, m_ledgerConfig.get().features(), m_eip2929Access.get()))
         {
             return;
         }
 
-        // EIP-2929 (W1): transaction-entry accesses before execution starts.
-        std::optional<evmc_address> callee;
+        executor::Eip2929TxPrewarmInput input;
+        input.revision = m_revision;
+        input.origin = m_origin;
         if (ref.kind != EVMC_CREATE && ref.kind != EVMC_CREATE2)
         {
-            callee = ref.recipient;
+            input.callee = ref.recipient;
         }
-        m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
-        // TODO(EIP-3651): pass block coinbase into warmUpInitialTxSet (or warm here) at
-        // revision >= EVMC_SHANGHAI; must match getTxContext().block_coinbase (see TE
-        // EVMHostInterface).
-
-        // EIP-2929: contract address is accessed at CREATE/CREATE2 entry (even if init fails).
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)
         {
-            (void)m_eip2929Access->warmUpAddressNoJournal(ref.code_address);
+            input.createCodeAddress = ref.code_address;
         }
-
-        // EIP-2929 W2: warm access_list entries for any typed tx (kind != 0).
-        if (m_web3TypedTxKindForAccessList != 0 && m_eip2930AccessList &&
-            !m_eip2930AccessList->empty())
-        {
-            m_eip2929Access->warmUpAccessList(
-                *m_eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
-        }
+        // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
+        input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
+        input.accessList = m_eip2930AccessList.get();
+        executor::warmEip2929AtTransactionEntry(
+            *m_eip2929Access, input, [](std::string const& hex) { return unhexAddress(hex); });
     }
 
     void prepareCreate()

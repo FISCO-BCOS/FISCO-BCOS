@@ -1,4 +1,4 @@
-#include "Web3Eip2930Fill.h"
+#include "Web3AccessListResolver.h"
 #include "bcos-codec/rlp/Common.h"
 #include "bcos-codec/rlp/RLPDecode.h"
 #include "bcos-framework/protocol/Transaction.h"
@@ -11,9 +11,9 @@ namespace bcos::executor
 {
 namespace
 {
-#define WEB3_EIP2930_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_EIP2930")
+#define WEB3_ACCESS_LIST_RESOLVER_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
-void fillAccessListFromWeb3(bcos::rpc::Web3Transaction const& w3, Web3Eip2930Parsed& out)
+void buildAccessListFromWeb3(bcos::rpc::Web3Transaction const& w3, Web3AccessListResolved& out)
 {
     out.web3TypedTxKind = static_cast<uint8_t>(w3.type);
     if (w3.accessList.empty())
@@ -31,7 +31,8 @@ void fillAccessListFromWeb3(bcos::rpc::Web3Transaction const& w3, Web3Eip2930Par
     out.accessList = std::move(list);
 }
 
-void fillAccessListFromProtocol(bcos::protocol::Web3AccessList const& src, Web3Eip2930Parsed& out)
+void buildAccessListFromProtocol(
+    bcos::protocol::Web3AccessList const& src, Web3AccessListResolved& out)
 {
     auto list = std::make_shared<Eip2930AccessList>();
     list->reserve(src.size());
@@ -73,7 +74,7 @@ bool accessListsEqual(
 }
 
 void warnIfProtocolAccessListMismatch(protocol::Transaction const& tx,
-    bcos::protocol::Web3AccessList const& protocol, Web3Eip2930Parsed const& fromExtra)
+    bcos::protocol::Web3AccessList const& protocol, Web3AccessListResolved const& fromExtra)
 {
     if (protocol.empty() || !fromExtra.accessList || fromExtra.accessList->empty())
     {
@@ -83,15 +84,15 @@ void warnIfProtocolAccessListMismatch(protocol::Transaction const& tx,
     {
         return;
     }
-    WEB3_EIP2930_LOG(WARNING)
+    WEB3_ACCESS_LIST_RESOLVER_LOG(WARNING)
         << LOG_DESC("Tars data.accessList disagrees with extraTransactionBytes RLP; using Tars")
         << LOG_KV("tarsEntries", protocol.size())
         << LOG_KV("extraEntries", fromExtra.accessList->size());
 }
 
-Web3Eip2930Parsed parseEip2930FromExtraBytes(protocol::Transaction const& tx)
+Web3AccessListResolved resolveWeb3AccessListFromExtraBytes(protocol::Transaction const& tx)
 {
-    Web3Eip2930Parsed out;
+    Web3AccessListResolved out;
     auto const extra = tx.extraTransactionBytes();
     if (extra.empty())
     {
@@ -118,19 +119,19 @@ Web3Eip2930Parsed parseEip2930FromExtraBytes(protocol::Transaction const& tx)
     if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(ref, w3);
         decodeError != nullptr)
     {
-        WEB3_EIP2930_LOG(WARNING)
+        WEB3_ACCESS_LIST_RESOLVER_LOG(WARNING)
             << LOG_DESC("Failed to decode Web3 extraTransactionBytes for access list")
             << LOG_KV("extraLen", extra.size()) << LOG_KV("msg", decodeError->errorMessage());
         return out;
     }
-    fillAccessListFromWeb3(w3, out);
+    buildAccessListFromWeb3(w3, out);
     return out;
 }
 }  // namespace
 
-Web3Eip2930Parsed parseEip2930FromWeb3Transaction(protocol::Transaction const& tx)
+Web3AccessListResolved resolveWeb3AccessList(protocol::Transaction const& tx)
 {
-    Web3Eip2930Parsed out;
+    Web3AccessListResolved out;
     if (tx.type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
         return out;
@@ -145,8 +146,8 @@ Web3Eip2930Parsed parseEip2930FromWeb3Transaction(protocol::Transaction const& t
         {
             // Path A: Tars has both kind and access list — fast path, no extra-bytes fallback
             // needed.
-            fillAccessListFromProtocol(list, out);
-            auto const fromExtra = parseEip2930FromExtraBytes(tx);
+            buildAccessListFromProtocol(list, out);
+            auto const fromExtra = resolveWeb3AccessListFromExtraBytes(tx);
             warnIfProtocolAccessListMismatch(tx, list, fromExtra);
             return out;
         }
@@ -157,7 +158,7 @@ Web3Eip2930Parsed parseEip2930FromWeb3Transaction(protocol::Transaction const& t
         //   2. An older peer stripped the Tars accessList field — recover it from
         //   extraTransactionBytes.
         // Either way, keep the kind we already know and supplement with extra bytes if available.
-        auto fromExtra = parseEip2930FromExtraBytes(tx);
+        auto fromExtra = resolveWeb3AccessListFromExtraBytes(tx);
         if (fromExtra.accessList && !fromExtra.accessList->empty())
         {
             out.accessList = std::move(fromExtra.accessList);
@@ -167,7 +168,7 @@ Web3Eip2930Parsed parseEip2930FromWeb3Transaction(protocol::Transaction const& t
 
     // Path C: kind == 0 means Tars fields were not populated (older node / missing field).
     // Fall back entirely to extraTransactionBytes RLP decoding.
-    return parseEip2930FromExtraBytes(tx);
+    return resolveWeb3AccessListFromExtraBytes(tx);
 }
 
 }  // namespace bcos::executor
