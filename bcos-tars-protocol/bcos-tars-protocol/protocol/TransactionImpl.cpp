@@ -225,10 +225,15 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
     {
         return;
     }
-    m_web3AccessListCacheBuilt = true;
+    std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
+    if (m_web3AccessListCacheBuilt)
+    {
+        return;
+    }
     m_web3AccessListCache.clear();
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
     {
+        m_web3AccessListCacheBuilt = true;
         return;
     }
     auto const& entries = m_inner()->data.accessList;
@@ -254,6 +259,7 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
         }
         m_web3AccessListCache.emplace_back(std::move(out));
     }
+    m_web3AccessListCacheBuilt = true;
 }
 
 bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3AccessList() const

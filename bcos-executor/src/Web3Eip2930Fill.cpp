@@ -98,6 +98,11 @@ Web3Eip2930Parsed parseEip2930FromExtraBytes(protocol::Transaction const& tx)
         return out;
     }
     auto const envelope = static_cast<uint8_t>(extra[0]);
+    // NOTE: Only typed tx kinds 1 (EIP-2930), 2 (EIP-1559), and 3 (EIP-4844) carry an
+    // EIP-2930 access list and need RLP decoding below. Unknown kinds in (0,
+    // BYTES_HEAD_BASE) that do NOT carry access lists (or whose RLP format is unknown)
+    // return with kind-only. If a future EIP adds a new typed tx WITH an access list
+    // (kind >= 4), add its kind to the exclusion list below.
     if (envelope > 0 && envelope < bcos::codec::rlp::BYTES_HEAD_BASE &&
         envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP2930) &&
         envelope != static_cast<uint8_t>(bcos::rpc::TransactionType::EIP1559) &&
@@ -107,7 +112,8 @@ Web3Eip2930Parsed parseEip2930FromExtraBytes(protocol::Transaction const& tx)
         return out;
     }
 
-    bcos::bytesRef ref(const_cast<bcos::byte*>(extra.data()), static_cast<size_t>(extra.size()));
+    bcos::bytes extraCopy(extra.begin(), extra.end());
+    bcos::bytesRef ref(extraCopy.data(), extraCopy.size());
     bcos::rpc::Web3Transaction w3{};
     if (auto const decodeError = bcos::codec::rlp::decodeFromPayload(ref, w3);
         decodeError != nullptr)

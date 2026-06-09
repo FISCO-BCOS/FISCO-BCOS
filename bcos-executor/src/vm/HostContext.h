@@ -153,8 +153,6 @@ public:
 
     evmc_revision revision() const { return toRevision(m_executive->blockContext().vmSchedule()); }
 
-    // Reserved for dedicated EIP-2929 PR. Callback wiring remains disabled in EVMHostInterface
-    // until tx-scope lifecycle and pre-warm semantics are finalized.
     evmc_access_status accessAccount(const evmc_address& addr, evmc_revision rev)
     {
         if (rev < EVMC_BERLIN || !m_executive->blockContext().features().get(
@@ -162,11 +160,10 @@ public:
         {
             return EVMC_ACCESS_COLD;
         }
-        auto& accessState = *m_executive->getEip2929AccessState(m_executive->contextID());
+        auto& accessState = eip2929AccessState();
         return accessState.warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
-    // Reserved for dedicated EIP-2929 PR. See accessAccount note above.
     evmc_access_status accessStorage(
         const evmc_address& addr, const evmc_bytes32& key, evmc_revision rev)
     {
@@ -175,7 +172,7 @@ public:
         {
             return EVMC_ACCESS_COLD;
         }
-        auto& accessState = *m_executive->getEip2929AccessState(m_executive->contextID());
+        auto& accessState = eip2929AccessState();
         return accessState.warmUpStorage(addr, key) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
 
@@ -200,8 +197,18 @@ private:
 
     std::list<CallParameters::UniquePtr> m_responseStore;
 
-    // EIP-2929 warm-set storage is reserved for the dedicated adaptation PR.
-    // Keep fields in place to minimize follow-up churn.
+    /// Per-transaction warm set; cached at construction to avoid BucketMap lookup on every
+    /// accessAccount/accessStorage (same pattern as TE HostContext::m_eip2929Access).
+    std::shared_ptr<Eip2929AccessState> m_eip2929Access;
+
+    Eip2929AccessState& eip2929AccessState()
+    {
+        if (!m_eip2929Access)
+        {
+            m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
+        }
+        return *m_eip2929Access;
+    }
     struct EVMCAddrHash
     {
         size_t operator()(const evmc_address& a) const noexcept

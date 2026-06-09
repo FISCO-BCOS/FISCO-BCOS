@@ -1543,6 +1543,75 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_create_execute_revert_keeps_contract_warm)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x7a;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(bcos::u256(1) << 96);
+
+        auto const initCode = eip2929::revertInitcode();
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, {}, EVMC_CREATE, {}, 0, 2'000'000);
+        evmc_address const createAddr = host.message().code_address;
+        host.mutableMessage().input_data = initCode.data();
+        host.mutableMessage().input_size = initCode.size();
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_NE(result.status_code, EVMC_SUCCESS);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(createAddr), EVMC_ACCESS_WARM);
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_top_level_create_execute_oog_keeps_contract_warm)
+{
+    auto const features = pragueEip2929Features();
+
+    evmc_address origin{};
+    origin.bytes[19] = 0x7b;
+
+    syncWait([&]() -> task::Task<void> {
+        bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> originAcc(
+            rollbackableStorage, origin, false);
+        if (!co_await originAcc.exists())
+        {
+            co_await originAcc.create();
+        }
+        co_await originAcc.setBalance(bcos::u256(1) << 96);
+
+        // Gas-burning initcode (PUSH0/POP unroll) — top-level execute() ends with OOG.
+        bcos::bytes initCode;
+        initCode.reserve(20'000);
+        for (int i = 0; i < 10'000; ++i)
+        {
+            initCode.push_back(0x5f);  // PUSH0
+            initCode.push_back(0x50);  // POP
+        }
+        auto host =
+            makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
+                origin, {}, EVMC_CREATE, {}, 0, 15'000);
+        evmc_address const createAddr = host.message().code_address;
+        host.mutableMessage().input_data = initCode.data();
+        host.mutableMessage().input_size = initCode.size();
+        co_await host.prepare();
+        auto const result = co_await host.execute();
+        BOOST_REQUIRE_EQUAL(result.status_code, EVMC_OUT_OF_GAS);
+
+        BOOST_CHECK_EQUAL(host.accessAccount(createAddr), EVMC_ACCESS_WARM);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
 {
     bcos::ledger::Features features;

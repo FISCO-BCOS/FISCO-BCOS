@@ -31,6 +31,8 @@
 #include "bcos-framework/protocol/Web3AccessList.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
+#include <memory>
+#include <mutex>
 
 namespace bcostars::protocol
 {
@@ -104,6 +106,7 @@ private:
 
     std::function<bcostars::Transaction*()> m_inner;
     mutable bcos::protocol::Web3AccessList m_web3AccessListCache;
+    mutable std::unique_ptr<std::mutex> m_web3AccessListCacheMutex{std::make_unique<std::mutex>()};
     mutable bool m_web3AccessListCacheBuilt = false;
 };
 
