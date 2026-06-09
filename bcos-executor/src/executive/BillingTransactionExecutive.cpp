@@ -23,7 +23,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
     {
         CallParameters::UniquePtr callParam4AccountPre =
             std::make_unique<CallParameters>(CallParameters::MESSAGE);
-        auto codec = bcos::codec::CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
+        auto codec = bcos::CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
         callParam4AccountPre->origin = BALANCE_PRECOMPILED_ADDRESS;
         callParam4AccountPre->senderAddress =
             contractAddress();  // because seq = 0, not delegatecall
