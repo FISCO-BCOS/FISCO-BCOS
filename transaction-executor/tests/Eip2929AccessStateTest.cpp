@@ -170,4 +170,40 @@ BOOST_AUTO_TEST_CASE(create_address_survives_failed_child_scope_rollback)
     BOOST_CHECK(!st.containsAddress(inner));
 }
 
+/// Child CREATE succeeds (commit) but parent scope later rolls back — pin must propagate.
+BOOST_AUTO_TEST_CASE(create_pin_survives_commit_then_parent_rollback)
+{
+    Eip2929AccessState st;
+    st.pushCheckpoint();
+    auto contract = addrByte(0x58);
+    st.pushCheckpoint();
+    st.setCreateRollbackPin(contract);
+    st.commitCheckpoint();
+    BOOST_REQUIRE(st.hasActiveCheckpoint());
+    BOOST_CHECK(st.containsAddress(contract));
+    st.rollbackCheckpoint();
+    BOOST_CHECK(st.containsAddress(contract));
+}
+
+/// Multiple successful child CREATE commits in one parent scope keep all pinned addresses warm.
+BOOST_AUTO_TEST_CASE(multiple_create_pins_survive_commit_then_parent_rollback)
+{
+    Eip2929AccessState st;
+    st.pushCheckpoint();
+    auto contract1 = addrByte(0x59);
+    auto contract2 = addrByte(0x5a);
+
+    st.pushCheckpoint();
+    st.setCreateRollbackPin(contract1);
+    st.commitCheckpoint();
+
+    st.pushCheckpoint();
+    st.setCreateRollbackPin(contract2);
+    st.commitCheckpoint();
+
+    st.rollbackCheckpoint();
+    BOOST_CHECK(st.containsAddress(contract1));
+    BOOST_CHECK(st.containsAddress(contract2));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

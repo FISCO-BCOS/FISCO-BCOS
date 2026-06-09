@@ -71,8 +71,8 @@ struct Eip2929Checkpoint
 {
     std::vector<evmc_address> newAccounts;
     std::vector<std::pair<evmc_address, evmc_bytes32>> newStorage;
-    /// EIP-2929: CREATE/CREATE2 failure keeps contract address in accessed_addresses.
-    std::optional<evmc_address> pinnedCreateAddress;
+    /// EIP-2929: CREATE/CREATE2 contract addresses that stay warm across scope rollback.
+    std::vector<evmc_address> pinnedCreateAddresses;
 };
 
 /// Warm account/storage sets for one transaction (contextID). Shared by all HostContext depths.
@@ -96,7 +96,7 @@ struct Eip2929AccessState
             return;
         }
         auto& cp = m_checkpointStack.back();
-        cp.pinnedCreateAddress = address;
+        recordPinnedCreateAddress(cp, address);
         if (warmAccounts.insert(address).second)
         {
             cp.newAccounts.push_back(address);
@@ -116,8 +116,7 @@ struct Eip2929AccessState
         }
         for (auto const& addr : cp.newAccounts)
         {
-            if (cp.pinnedCreateAddress.has_value() &&
-                std::memcmp(addr.bytes, cp.pinnedCreateAddress->bytes, sizeof(addr.bytes)) == 0)
+            if (isPinnedCreateAddress(cp, addr))
             {
                 continue;
             }
@@ -143,6 +142,10 @@ struct Eip2929AccessState
             parent.newStorage.insert(parent.newStorage.end(),
                 std::make_move_iterator(top.newStorage.begin()),
                 std::make_move_iterator(top.newStorage.end()));
+            for (auto const& pinned : top.pinnedCreateAddresses)
+            {
+                recordPinnedCreateAddress(parent, pinned);
+            }
         }
         else
         {
@@ -243,6 +246,37 @@ struct Eip2929AccessState
     }
 
 private:
+    static bool addressesEqual(evmc_address const& a, evmc_address const& b) noexcept
+    {
+        return std::memcmp(a.bytes, b.bytes, sizeof(a.bytes)) == 0;
+    }
+
+    static bool isPinnedCreateAddress(
+        Eip2929Checkpoint const& checkpoint, evmc_address const& address) noexcept
+    {
+        for (auto const& pinned : checkpoint.pinnedCreateAddresses)
+        {
+            if (addressesEqual(pinned, address))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static void recordPinnedCreateAddress(
+        Eip2929Checkpoint& checkpoint, evmc_address const& address)
+    {
+        for (auto const& pinned : checkpoint.pinnedCreateAddresses)
+        {
+            if (addressesEqual(pinned, address))
+            {
+                return;
+            }
+        }
+        checkpoint.pinnedCreateAddresses.push_back(address);
+    }
+
     bool warmUpAddressImpl(const evmc_address& address, bool recordJournal)
     {
         auto const inserted = warmAccounts.insert(address).second;
