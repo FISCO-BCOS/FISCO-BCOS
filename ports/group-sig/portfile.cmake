@@ -15,6 +15,11 @@ vcpkg_execute_build_process(
     LOGNAME "patch-${TARGET_TRIPLET}"
 )
 
+# ProjectPbc.cmake uses PREFIX ${CMAKE_SOURCE_DIR}/deps, so CMake 3.30's
+# ExternalProject configure_file writes to deps/tmp/ before it exists.
+# Pre-create it so both parallel debug/release configure passes succeed.
+file(MAKE_DIRECTORY "${SOURCE_PATH}/deps/tmp")
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS

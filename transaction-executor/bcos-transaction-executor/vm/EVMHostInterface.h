@@ -151,6 +151,11 @@ struct EVMHostInterface
     {
         auto& hostContext = static_cast<HostContextType&>(*context);
         hostContext.suicide();  // FISCO BCOS has no _beneficiary
+        // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
+        // EIP-6780 (Cancun+): account deletion only when created in same tx;
+        //   no gas refund in either case ("Note that no refund is given since EIP-3529").
+        // Returning false (no refund) is the correct behavior for all cases.
+        // TODO(evmone-eip6780): implement same-tx creation tracking for account deletion.
         return false;
     }
 
@@ -167,17 +172,18 @@ struct EVMHostInterface
         hostContext.log(*addr, std::move(hashTopics), bytesConstRef{data, dataSize});
     }
 
-    static evmc_access_status accessAccount([[maybe_unused]] evmc_host_context* context,
-        [[maybe_unused]] const evmc_address* addr) noexcept
+    static evmc_access_status accessAccount(
+        evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        return EVMC_ACCESS_COLD;
+        auto& hostContext = static_cast<HostContextType&>(*context);
+        return hostContext.accessAccount(*addr);
     }
 
-    static evmc_access_status accessStorage([[maybe_unused]] evmc_host_context* context,
-        [[maybe_unused]] const evmc_address* addr,
-        [[maybe_unused]] const evmc_bytes32* key) noexcept
+    static evmc_access_status accessStorage(
+        evmc_host_context* context, const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
-        return EVMC_ACCESS_COLD;
+        auto& hostContext = static_cast<HostContextType&>(*context);
+        return hostContext.accessStorage(*addr, *key);
     }
 
     static evmc_tx_context getTxContext(evmc_host_context* context) noexcept

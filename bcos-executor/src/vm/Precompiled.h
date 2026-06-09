@@ -69,7 +69,6 @@ private:
 
     std::unordered_map<std::string, PrecompiledExecutor> m_execs;
     std::unordered_map<std::string, PrecompiledPricer> m_pricers;
-    static PrecompiledRegistrar* s_this;
 };
 
 #define ETH_REGISTER_PRECOMPILED(Name)                                                        \
@@ -91,15 +90,15 @@ public:
     typedef std::shared_ptr<PrecompiledContract> Ptr;
     PrecompiledContract() = default;
     PrecompiledContract(PrecompiledPricer const& _cost, PrecompiledExecutor const& _exec,
-                u256 const& _startingBlock = 0);
+        u256 const& _startingBlock = 0);
 
     PrecompiledContract(unsigned _base, unsigned _word, PrecompiledExecutor const& _exec,
-                u256 const& _startingBlock = 0);
+        u256 const& _startingBlock = 0);
 
-        bigint cost(bytesConstRef _in) const;
-        std::pair<bool, bytes> execute(bytesConstRef _in) const;
+    bigint cost(bytesConstRef _in) const;
+    std::pair<bool, bytes> execute(bytesConstRef _in) const;
 
-        u256 const& startingBlock() const;
+    u256 const& startingBlock() const;
 
 private:
     PrecompiledPricer m_cost;
@@ -133,7 +132,8 @@ public:
 protected:
     std::map<std::string, uint32_t, std::less<>> name2Selector;
     [[no_unique_address]] std::unordered_map<uint32_t,
-        std::pair<protocol::BlockVersion, PrecompiledParams>> selector2Func;
+        std::pair<protocol::BlockVersion, PrecompiledParams>>
+        selector2Func;
     crypto::Hash::Ptr m_hashImpl;
 
     void registerFunc(uint32_t _selector, PrecompiledParams _func,

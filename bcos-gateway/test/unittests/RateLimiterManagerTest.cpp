@@ -84,8 +84,12 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter_allowExceedMaxPermitSize)
 
 BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
 {
+    // Use a larger time window (500ms instead of 100ms) to avoid CI flakiness
+    // caused by std::this_thread::sleep_for imprecision under high system load.
+    // With 100ms window, a 50ms sleep can occasionally take >100ms on CI,
+    // causing the rate limiter window to reset unexpectedly.
     uint64_t maxPermitsSize = 2000;
-    uint64_t timeWindowMS = 100;
+    uint64_t timeWindowMS = 500;
     auto allowExceedMaxPermitSize = false;
     auto rateLimiter = std::make_shared<bcos::ratelimiter::TimeWindowRateLimiter>(
         maxPermitsSize, timeWindowMS, allowExceedMaxPermitSize);
@@ -112,12 +116,15 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
 
     {
         int64_t permitsSize = 2000;
+        // Sleep for half the time window; tryAcquire should still fail
+        // because the window has not yet reset
         std::this_thread::sleep_for(std::chrono::milliseconds(timeWindowMS / 2));
         BOOST_CHECK(!rateLimiter->tryAcquire(permitsSize));
         BOOST_CHECK(rateLimiter->currentPermitsSize() == 0);
         BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
         BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
 
+        // Sleep for a full window; permits should now be replenished
         std::this_thread::sleep_for(std::chrono::milliseconds(timeWindowMS));
         BOOST_CHECK(rateLimiter->timeWindowMS() == timeWindowMS);
         BOOST_CHECK(rateLimiter->maxPermitsSize() == maxPermitsSize);
@@ -132,6 +139,7 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
         BOOST_CHECK(rateLimiter->currentPermitsSize() == (uint64_t)permitsSize);
         BOOST_CHECK(rateLimiter->tryAcquire(permitsSize));
 
+        // Wait for window reset, then test incremental acquires
         std::this_thread::sleep_for(std::chrono::milliseconds(timeWindowMS));
         BOOST_CHECK(rateLimiter->tryAcquire(200));
         BOOST_CHECK(rateLimiter->tryAcquire(400));
