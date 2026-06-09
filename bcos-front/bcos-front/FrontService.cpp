@@ -134,6 +134,7 @@ void FrontService::registerGroupNodeInfoNotification(int _moduleID,
         bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)>
         _dispatcher)
 {
+    Guard l(x_notifierLock);
     m_module2GroupNodeInfoNotifier[_moduleID] = _dispatcher;
 }
 
