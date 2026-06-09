@@ -111,8 +111,9 @@ void HttpServer::stop()
 
 void HttpServer::accept()
 {
-    // The new connection gets its own strand
-    m_acceptor->async_accept(*(m_ioservicePool->getIOService()),
+    // Use acceptor's own executor instead of IOServicePool round-robin to avoid
+    // cross-io_context reactor access on macOS/kqueue.
+    m_acceptor->async_accept(
         boost::beast::bind_front_handler(&HttpServer::onAccept, shared_from_this()));
 }
 
