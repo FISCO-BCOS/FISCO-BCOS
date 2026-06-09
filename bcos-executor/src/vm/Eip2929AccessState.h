@@ -215,6 +215,9 @@ struct Eip2929AccessState
 
     /// EIP-2929 transaction-entry warm accesses: caller (origin/sender),
     /// optional recipient (omit for CREATE/CREATE2), and active precompiles at @p revision.
+    /// TODO(EIP-3651): when @p revision >= EVMC_SHANGHAI, also warmUpAddressNoJournal(coinbase)
+    /// derived from block sealer (keccak256(sealerList[sealer]) right 160; genesis => zero
+    /// address).
     void warmUpInitialTxSet(const evmc_address& origin,
         std::optional<evmc_address> transactionToEVMC, evmc_revision revision)
     {

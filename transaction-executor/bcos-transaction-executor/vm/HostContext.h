@@ -59,6 +59,7 @@
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
+#include <cassert>
 #include <functional>
 #include <intx/intx.hpp>
 #include <iterator>
@@ -277,6 +278,7 @@ private:
         // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
         // prepare() handles prepareCall/Create only; see TransactionExecutorImpl executeStep<0>.
         warmEip2929AtTransactionEntry();
+        assert(!eip2929CheckpointEnabled(m_revision, m_ledgerConfig.get()) || m_eip2929Access);
     }
 
 public:
@@ -719,6 +721,9 @@ private:
             callee = ref.recipient;
         }
         m_eip2929Access->warmUpInitialTxSet(m_origin, callee, m_revision);
+        // TODO(EIP-3651): pass block coinbase into warmUpInitialTxSet (or warm here) at
+        // revision >= EVMC_SHANGHAI; must match getTxContext().block_coinbase (see TE
+        // EVMHostInterface).
 
         // EIP-2929: contract address is accessed at CREATE/CREATE2 entry (even if init fails).
         if (ref.kind == EVMC_CREATE || ref.kind == EVMC_CREATE2)

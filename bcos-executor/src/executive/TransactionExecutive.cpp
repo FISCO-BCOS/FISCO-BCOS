@@ -2250,6 +2250,8 @@ void TransactionExecutive::warmUpEip2929InitialSet(CallParameters const& params)
 
     getEip2929AccessState(m_contextID)
         ->warmUpInitialTxSet(originAddr, callee, toRevision(blockContext().vmSchedule()));
+    // TODO(EIP-3651): warm block coinbase in accessed_addresses at Shanghai+ (same address as
+    // COINBASE opcode / BlockResponse miner field).
 }
 
 void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)

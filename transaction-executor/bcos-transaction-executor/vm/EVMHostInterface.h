@@ -192,6 +192,8 @@ struct EVMHostInterface
         evmc_tx_context result = {
             .tx_gas_price = toEvmC(hostContext.gasPrice()),
             .tx_origin = hostContext.origin(),
+            // TODO(EIP-3651): block_coinbase from HostContext (sealer-derived); must match W1 warm
+            // set.
             .block_coinbase = {},
             .block_number = hostContext.blockNumber(),
             .block_timestamp = hostContext.timestamp(),
