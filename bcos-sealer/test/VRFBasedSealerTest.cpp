@@ -75,7 +75,7 @@ struct TestSealerFixture
     crypto::KeyPairInterface::Ptr keyPair;
 };
 
-BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFixture)
+BOOST_FIXTURE_TEST_SUITE(TestVRFSealerFactory, TestSealerFixture)
 BOOST_AUTO_TEST_CASE(testVRFSealer)
 {
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
