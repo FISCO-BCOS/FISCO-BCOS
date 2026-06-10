@@ -22,6 +22,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstring>
+#include <range/v3/view/facade.hpp>
 #include <string>
 #include <vector>
 
@@ -29,9 +30,11 @@ namespace bcos
 {
 
 template <typename T>
-class RefDataContainer
+class RefDataContainer : public ::ranges::view_base
 {
 public:
+    using value_type = T;
+
     RefDataContainer() = default;
     RefDataContainer(const RefDataContainer&) = default;
     RefDataContainer(RefDataContainer&&) noexcept = default;

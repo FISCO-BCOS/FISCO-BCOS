@@ -21,6 +21,8 @@
 #include <memory>
 #include <optional>
 #include <type_traits>
+#include <range/v3/range/concepts.hpp>
+
 namespace bcos::storage
 {
 
@@ -30,6 +32,13 @@ concept ByteBuffer = requires(const T& t) {
     { t.size() } -> std::convertible_to<std::size_t>;
     requires sizeof(typename std::remove_cvref_t<T>::value_type) == 1;
 };
+
+// ─── View detection ────────────────────────────────────────────────
+// Delegates to std::ranges::view which covers string_view, span, and any
+// other standard or user-defined view that opts in via view_interface.
+// Non-owning views → deep-copied; owning types → stored directly.
+template <typename T>
+constexpr bool IsByteBufferViewV = ::ranges::view_<std::remove_cvref_t<T>>;
 
 constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
@@ -253,12 +262,14 @@ public:
     void set(ByteBuffer auto value)
     {
         using RawType = std::remove_cvref_t<decltype(value)>;
-        if constexpr (std::same_as<RawType, std::string_view>)
+        if constexpr (IsByteBufferViewV<RawType>)
         {
-            setImplCopy(value.data(), value.size());
+            // Non-owning views (string_view, span, etc.): deep-copy the content
+            setImplCopy(reinterpret_cast<const char*>(value.data()), value.size());
         }
         else
         {
+            // Owning types (string, vector, etc.): store the value directly
             auto sz = value.size();
             if (sz <= SMALL_SIZE)
                 m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
@@ -284,12 +295,6 @@ public:
     {
         m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
-    }
-
-    template <typename T>
-    void setPointer(std::shared_ptr<T>&& value)
-    {
-        set(std::move(value));
     }
 
     // ── Status ─────────────────────────────────────────────────────

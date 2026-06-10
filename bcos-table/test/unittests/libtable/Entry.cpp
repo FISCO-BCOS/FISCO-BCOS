@@ -30,6 +30,7 @@
 #include <boost/test/unit_test.hpp>
 #include <array>
 #include <iostream>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -498,6 +499,104 @@ BOOST_AUTO_TEST_CASE(bufferModel_copyAndMove)
         BOOST_TEST(entryTestHolder(e2).has_value());
         BOOST_TEST(entryTestHolder(e3).has_value());
     }
+}
+
+// ── View deep-copy verification ───────────────────────────────────
+// Non-owning views (string_view, span, bytesConstRef) must be
+// deep-copied into the Entry: after the original data container is
+// destroyed, the Entry must still hold the correct value.
+
+BOOST_AUTO_TEST_CASE(viewDeepCopy_stringView)
+{
+    std::string original = "string_view deep copy - entry owns its data after source destroyed";
+    std::string_view sv(original);
+
+    Entry entry;
+    entry.set(sv);
+
+    BOOST_CHECK_EQUAL(entry.get(), sv);
+    BOOST_CHECK_EQUAL(entry.size(), static_cast<int32_t>(sv.size()));
+
+    // Destroy the original — Entry must still hold the value
+    original.clear();
+    original.shrink_to_fit();
+
+    BOOST_CHECK_EQUAL(entry.get(), "string_view deep copy - entry owns its data after source destroyed");
+    BOOST_CHECK_EQUAL(entry.size(), 66);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(viewDeepCopy_spanConstChar)
+{
+    std::vector<char> original = {'s', 'p', 'a', 'n', '_', 'd', 'e', 'e', 'p', '_',
+                                  'c', 'o', 'p', 'y', '_', 't', 'e', 's', 't'};
+    std::span<const char> sp(original.data(), original.size());
+
+    Entry entry;
+    entry.set(sp);
+
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("span_deep_copy_test"));
+    BOOST_CHECK_EQUAL(entry.size(), static_cast<int32_t>(sp.size()));
+
+    original.clear();
+    original.shrink_to_fit();
+
+    BOOST_CHECK_EQUAL(entry.get(), "span_deep_copy_test");
+    BOOST_CHECK_EQUAL(entry.size(), 19);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(viewDeepCopy_spanChar)
+{
+    std::string original = "span<char> deep copy test";
+    std::span sp(original.data(), original.size());  // span<char>, non-const
+
+    Entry entry;
+    entry.set(sp);
+
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view("span<char> deep copy test"));
+
+    original.clear();
+    original.shrink_to_fit();
+
+    BOOST_CHECK_EQUAL(entry.get(), "span<char> deep copy test");
+    BOOST_CHECK_EQUAL(entry.size(), 25);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(viewDeepCopy_bytesConstRef)
+{
+    std::string original = "bytesConstRef deep copy test";
+    auto ref =
+        bytesConstRef(reinterpret_cast<const bcos::byte*>(original.data()), original.size());
+
+    Entry entry;
+    entry.set(ref);
+
+    BOOST_CHECK_EQUAL(entry.get(), std::string_view(original));
+
+    original.clear();
+    original.shrink_to_fit();
+
+    BOOST_CHECK_EQUAL(entry.get(), "bytesConstRef deep copy test");
+    BOOST_CHECK_EQUAL(entry.size(), 28);
+    BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(viewDeepCopy_constructFromView)
+{
+    // Entry(auto) constructor must also deep-copy views
+    std::string original = "constructed from string_view";
+    std::string_view sv(original);
+
+    Entry entry(sv);
+
+    original.clear();
+    original.shrink_to_fit();
+
+    BOOST_CHECK_EQUAL(entry.get(), "constructed from string_view");
+    BOOST_CHECK_EQUAL(entry.size(), 28);
+    BOOST_TEST(entryTestHolder(entry).has_value());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

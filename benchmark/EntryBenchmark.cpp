@@ -27,10 +27,7 @@
 #include <vector>
 
 // ═══════════════════════════════════════════════════════════════════════
-// LegacyEntry — replicates the pre-proxy AnyHolder-based Entry (commit c6ed3e5c0)
-// sharing the same SmallBuffer / Fixed32Buffer / BufferModel<T> /
-// SharedBufferModel<T> buffer models but dispatching through AnyHolder's
-// vtable extension instead of proxy.
+// LegacyEntry
 // ═══════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -183,7 +180,7 @@ static void LegacyEntry_set_smallVec(benchmark::State& state)
     for (auto _ : state)
     {
         bcos::benchmark_legacy::LegacyEntry entry;
-        entry.setObject(kSmallVec);
+        entry.set(kSmallVec);
         benchmark::DoNotOptimize(entry);
     }
 }
