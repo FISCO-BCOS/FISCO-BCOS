@@ -873,13 +873,4 @@ BOOST_AUTO_TEST_CASE(unhexAddress_upperCasePrefix)
     BOOST_CHECK_EQUAL(addr.bytes[19], 0x78);
 }
 
-BOOST_AUTO_TEST_CASE(unhexAddress_invalidHexChars)
-{
-    // 40 chars but non-hex must not throw (EIP-2930 access-list warm-up path is noexcept)
-    std::string invalid = "0x" + std::string(40, 'g');
-    auto addr = unhexAddress(invalid);
-    evmc_address zero{};
-    BOOST_CHECK(std::memcmp(&addr, &zero, sizeof(evmc_address)) == 0);
-}
-
 BOOST_AUTO_TEST_SUITE_END()

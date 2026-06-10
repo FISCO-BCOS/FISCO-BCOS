@@ -376,7 +376,7 @@ inline std::string getContractTableName(
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data);
-evmc_address unhexAddress(std::string_view view) noexcept;
+evmc_address unhexAddress(std::string_view view);
 std::string addressBytesStr2HexString(std::string_view receiveAddressBytes);
 std::string address2HexString(const evmc_address& address);
 std::array<char, sizeof(evmc_address) * 2> address2HexArray(const evmc_address& address);
