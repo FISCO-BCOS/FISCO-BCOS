@@ -91,6 +91,7 @@ public:
         gateway = std::make_shared<FakeGateWayWrapper>();
         factory =
             std::make_shared<bcos::rpc::RpcFactory>(chainId, gateway, cryptoSuite->keyFactory());
+        factory->setIOServicePool(ioServicePool);
         nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
 
         nodeConfig->loadConfigFromString(configini);

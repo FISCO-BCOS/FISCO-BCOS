@@ -204,9 +204,10 @@ struct FIB151Fixture
     std::shared_ptr<UnsealRecordingTxPool> txpool;
     std::shared_ptr<FailingConsensus> consensus;
     bcos::sealer::SealerConfig::Ptr sealerConfig;
-    std::shared_ptr<FIB151TestableSealer> sealer;
+    // Must be before sealer to outlive the Worker's timer
     bcos::IOServicePool::Ptr m_ioServicePool =
         std::make_shared<bcos::IOServicePool>(1, "fib151");
+    std::shared_ptr<FIB151TestableSealer> sealer;
 };
 
 }  // namespace

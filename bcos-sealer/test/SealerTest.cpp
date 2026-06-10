@@ -96,9 +96,10 @@ struct TestSealerFixture2
     crypto::CryptoSuite::Ptr cryptoSuite = nullptr;
     std::shared_ptr<MockTxPool> txpool;
     sealer::SealerConfig::Ptr sealerConfig;
-    sealer::Sealer::Ptr sealer;
+    // Must be before sealer to outlive the Worker's timer
     bcos::IOServicePool::Ptr m_ioServicePool =
         std::make_shared<bcos::IOServicePool>(1, "sealerTest");
+    sealer::Sealer::Ptr sealer;
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSealer, TestSealerFixture2)

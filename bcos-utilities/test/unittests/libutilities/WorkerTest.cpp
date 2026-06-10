@@ -20,9 +20,10 @@
  */
 
 #include "bcos-utilities/Worker.h"
-#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/executor_work_guard.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -62,11 +63,18 @@ BOOST_FIXTURE_TEST_SUITE(Worker, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(testWorker)
 {
-    auto ioServicePool = std::make_shared<IOServicePool>(1, "workerTest");
-    TestWorkerImpl workerImpl(*ioServicePool->getIOService());
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
+    TestWorkerImpl workerImpl(ioContext);
     workerImpl.run();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     workerImpl.stop();
+
+    work.reset();
+    ioContext.stop();
+    ioThread.join();
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

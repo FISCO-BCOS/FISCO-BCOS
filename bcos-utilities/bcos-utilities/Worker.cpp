@@ -69,7 +69,9 @@ void Worker::stopWorking()
         return;
     }
     m_workerState = WorkerState::Stopping;
-    // Cancel the timer to stop the loop
+    // Cancel the timer — the handler will see operation_aborted and skip.
+    // The io_context must still be alive when this is called (owned by the
+    // same thread that runs the io_context, or the io_context outlives us).
     m_timer.cancel();
     try
     {
@@ -91,8 +93,13 @@ void Worker::terminate()
     {
         return;  // Already terminating
     }
+    // Mark as Killing so the timer handler (if any) will skip scheduling
+    // the next tick when it fires. We deliberately do NOT call
+    // m_timer.cancel() here because terminate() can be called from the
+    // destructor on an arbitrary thread, which would race with the
+    // io_context's timer queue. The steady_timer destructor handles
+    // internal cleanup safely.
     m_workerState = WorkerState::Killing;
-    m_timer.cancel();
 }
 
 void Worker::workerProcessLoop()

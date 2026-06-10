@@ -116,10 +116,11 @@ public:
     FakeLedger::Ptr m_ledger;
     FakeTxPool::Ptr m_txpool;
     FakeScheduler::Ptr m_scheduler;
-    PBFTImpl::Ptr m_rpbft;
-    RPBFTConfig::Ptr m_rpbftConfig;
+    // Must be before m_rpbft to outlive the Worker's timer inside PBFTEngine
     bcos::IOServicePool::Ptr m_ioServicePool =
         std::make_shared<bcos::IOServicePool>(1, "rpbftCfg");
+    PBFTImpl::Ptr m_rpbft;
+    RPBFTConfig::Ptr m_rpbftConfig;
 };
 BOOST_FIXTURE_TEST_SUITE(RPBFTConfigTest, RPBFTConfigFixture)
 BOOST_AUTO_TEST_CASE(testRPBFTConfig)

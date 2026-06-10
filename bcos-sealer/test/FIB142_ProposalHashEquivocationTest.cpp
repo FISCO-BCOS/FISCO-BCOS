@@ -190,9 +190,10 @@ struct Fixture
     std::shared_ptr<StubTxPool> txpool;
     std::shared_ptr<StubConsensus> consensus;
     bcos::sealer::SealerConfig::Ptr sealerConfig;
-    std::shared_ptr<TestableSealer> sealer;
+    // Must be before sealer to outlive the Worker's timer
     bcos::IOServicePool::Ptr m_ioServicePool =
         std::make_shared<bcos::IOServicePool>(1, "fib142");
+    std::shared_ptr<TestableSealer> sealer;
 };
 
 }  // namespace

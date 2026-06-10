@@ -403,6 +403,7 @@ public:
     }
 
     BlockFactory::Ptr blockFactory() { return m_blockFactory; }
+    boost::asio::io_context& ioContext() { return *m_ioServicePool->getIOService(); }
 
 private:
     // Must be declared first so io_context outlives all Workers using it

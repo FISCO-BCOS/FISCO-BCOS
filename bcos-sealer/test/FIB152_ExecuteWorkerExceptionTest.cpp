@@ -31,10 +31,13 @@
 #include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Worker.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/executor_work_guard.hpp>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
 #include <stdexcept>
+#include <thread>
 
 namespace bcos::test
 {
@@ -200,6 +203,10 @@ BOOST_AUTO_TEST_CASE(executeWorker_swallows_fetch_exception_and_resets_sealing)
     // operation in executeWorker(). With the FIB-152 try block extended to
     // wrap the fetch path, a throw from fetchTransactions() must be contained
     // and the worker must remain ready for the next iteration.
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto cryptoSuite =
@@ -213,7 +220,7 @@ BOOST_AUTO_TEST_CASE(executeWorker_swallows_fetch_exception_and_resets_sealing)
     auto cfg = std::make_shared<bcos::sealer::SealerConfig>(blockFactory, txpool, nodeTime);
 
     auto mgr = std::make_shared<ThrowingFetchSealingManager>(cfg);
-    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg);
+    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg, ioContext);
     sealer->setSealingManager(mgr);
     sealer->setFetchTimeout(60);
 
@@ -224,6 +231,13 @@ BOOST_AUTO_TEST_CASE(executeWorker_swallows_fetch_exception_and_resets_sealing)
     // Worker must survive a second iteration even though fetch keeps throwing.
     BOOST_CHECK_NO_THROW(sealer->executeWorker());
     BOOST_CHECK_GE(mgr->fetchInvocations.load(), 2);
+
+    // Manually reset sealer while io_context is alive
+    sealer.reset();
+    // Stop io_context after sealer is destroyed
+    work.reset();
+    ioContext.stop();
+    ioThread.join();
 }
 
 BOOST_AUTO_TEST_CASE(executeWorker_normal_path_does_not_throw)
@@ -231,6 +245,10 @@ BOOST_AUTO_TEST_CASE(executeWorker_normal_path_does_not_throw)
     // Smoke check on the no-proposal path: with no pending txs and a
     // SealingManager that returns NO_TRANSACTION, executeWorker must not throw
     // (the try/catch wrapper does not change the happy-path behavior).
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto cryptoSuite =
@@ -240,12 +258,19 @@ BOOST_AUTO_TEST_CASE(executeWorker_normal_path_does_not_throw)
     auto txpool = std::make_shared<StubTxPoolForFIB152>();
     auto cfg = std::make_shared<bcos::sealer::SealerConfig>(blockFactory, txpool, nullptr);
 
-    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg);
+    auto sealer = std::make_shared<bcos::sealer::Sealer>(cfg, ioContext);
     sealer->setSealingManager(std::make_shared<bcos::sealer::SealingManager>(cfg));
     sealer->setFetchTimeout(60);
 
     BOOST_CHECK_NO_THROW(sealer->executeWorker());
     BOOST_CHECK_NO_THROW(sealer->executeWorker());
+
+    // Manually reset sealer while io_context is alive to allow clean
+    // timer cancellation, then stop the io_context.
+    sealer.reset();
+    work.reset();
+    ioContext.stop();
+    ioThread.join();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
