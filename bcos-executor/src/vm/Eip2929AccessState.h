@@ -159,7 +159,7 @@ struct Eip2929AccessState
         return warmUpAddressImpl(address, /*recordJournal=*/true);
     }
 
-    /// Warm without checkpoint journal (EIP-7702 W3, initial tx set, access list).
+    /// Warm without checkpoint journal (tx-entry warmth: CREATE pin, access list).
     bool warmUpAddressNoJournal(const evmc_address& address)
     {
         return warmUpAddressImpl(address, /*recordJournal=*/false);

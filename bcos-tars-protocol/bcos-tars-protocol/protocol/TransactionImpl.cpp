@@ -221,10 +221,6 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
 
 void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
 {
-    if (m_web3AccessListCacheBuilt)
-    {
-        return;
-    }
     std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
     if (m_web3AccessListCacheBuilt)
     {

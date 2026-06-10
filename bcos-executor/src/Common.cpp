@@ -117,7 +117,27 @@ bytes getComponentBytes(size_t index, const std::string& typeName, const bytesCo
     }
     return {data.begin() + indexOffset, data.begin() + indexOffset + slotSize};
 }
-evmc_address unhexAddress(std::string_view view)
+namespace
+{
+int hexNibble(char c) noexcept
+{
+    if (c >= '0' && c <= '9')
+    {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f')
+    {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F')
+    {
+        return c - 'A' + 10;
+    }
+    return -1;
+}
+}  // namespace
+
+evmc_address unhexAddress(std::string_view view) noexcept
 {
     if (view.empty())
     {
@@ -133,8 +153,17 @@ evmc_address unhexAddress(std::string_view view)
     {
         return {};
     }
-    evmc_address address;
-    boost::algorithm::unhex(view, address.bytes);
+    evmc_address address{};
+    for (size_t i = 0; i < sizeof(address.bytes); ++i)
+    {
+        int const hi = hexNibble(view[i * 2]);
+        int const lo = hexNibble(view[i * 2 + 1]);
+        if (hi < 0 || lo < 0) [[unlikely]]
+        {
+            return {};
+        }
+        address.bytes[i] = static_cast<uint8_t>((hi << 4) | lo);
+    }
     return address;
 }
 std::string addressBytesStr2HexString(std::string_view receiveAddressBytes)

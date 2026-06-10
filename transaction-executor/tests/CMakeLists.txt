@@ -1,6 +1,4 @@
 file(GLOB_RECURSE SOURCES "*.cpp")
-# CompatHostContextTest wraps these in #if 0 (not compiled); exclude from CTest registration.
-set(EXCLUDE_SUITES "EthTxGasSettlementHost;Eip7702")
 add_executable(test-transaction-executor ${SOURCES})
 
 find_package(Boost REQUIRED serialization unit_test_framework)
@@ -14,4 +12,4 @@ set_source_files_properties("Eip2929HelperTest.cpp" PROPERTIES SKIP_UNITY_BUILD_
 set_source_files_properties("Web3AccessListResolverTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(test-transaction-executor PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-transaction-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-transaction-executor)
-config_test_cases("" "${SOURCES}" "test-transaction-executor" "${EXCLUDE_SUITES}" "")
+config_test_cases("" "${SOURCES}" "test-transaction-executor" "" "")

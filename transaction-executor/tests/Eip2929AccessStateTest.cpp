@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(access_list_warm_bypasses_journal)
     BOOST_CHECK(st.containsStorage(listAddr, slot));
 }
 
-BOOST_AUTO_TEST_CASE(eip7702_warm_bypasses_journal)
+BOOST_AUTO_TEST_CASE(warmUpAddressNoJournal_survives_checkpoint_rollback)
 {
     Eip2929AccessState st;
     st.pushCheckpoint();
