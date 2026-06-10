@@ -34,6 +34,7 @@
     "fakeit",
     "tbb",
     "jsoncpp",
+    "jwt-cpp",
     "gmp",
     "curl",
     "tomlplusplus",
