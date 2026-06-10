@@ -152,7 +152,7 @@ rm -rf "${WORK_DIR}"
 mkdir -p "${WORK_DIR}"
 
 # Generate genesis config
-cat > "${WORK_DIR}/config.genesis" << 'GENESIS_EOF'
+cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
 [consensus]
 consensus_type=pbft
 block_tx_count_limit=1000
@@ -270,18 +270,21 @@ log_section "Step 2: Start FISCO-BCOS node"
 
 cd "${WORK_DIR}"
 nohup "${ABS_BINARY}" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+NODE_PID=$!
+# Allow the process a moment to settle (binary may daemonize)
+sleep 1
+# Verify with pgrep in case the binary daemonized
+VERIFY_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
+if [ -n "${VERIFY_PID}" ]; then
+    NODE_PID="${VERIFY_PID}"
+fi
+log_info "Node PID: ${NODE_PID}"
 
 # Wait for node to be ready (up to 60s)
-# The binary may daemonize, so we use pgrep to find the actual PID in the loop
 READY=0
-NODE_PID=""
 for i in $(seq 1 30); do
     sleep 2
-    # Try to find the actual PID of the fisco-bcos binary if not yet found
-    if [ -z "${NODE_PID}" ]; then
-        NODE_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
-    fi
-    if [ -n "${NODE_PID}" ] && kill -0 "${NODE_PID}" 2>/dev/null; then
+    if kill -0 "${NODE_PID}" 2>/dev/null; then
         RESP=$(rpc_call "eth_chainId" "[]" 2>/dev/null || echo "")
         if echo "${RESP}" | grep -q '"result"'; then
             READY=1
@@ -289,9 +292,10 @@ for i in $(seq 1 30); do
             log_info "Node ready, PID=${NODE_PID}, chainId=${CHAIN_ID}"
             break
         fi
-    elif [ -n "${NODE_PID}" ]; then
-        # PID was found but process died; reset and retry finding
-        NODE_PID=""
+    else
+        log_fail "Node process died unexpectedly"
+        cat nohup.out 2>/dev/null | tail -30
+        exit 1
     fi
     echo -n "."
 done
