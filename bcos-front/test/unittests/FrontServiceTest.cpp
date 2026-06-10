@@ -218,7 +218,12 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
 
         BOOST_CHECK(frontService->callback().size() == 1);
         std::future<void> barrier_future = barrier.get_future();
-        barrier_future.wait();
+        // Use wait_for with a generous timeout (10 s, 5× the msg timeout) so that
+        // a stuck IO thread or a dropped timer does not hang the test indefinitely.
+        // Similar guard already present in testFrontService_onRecieveNodeIDsAnd.
+        auto status = barrier_future.wait_for(std::chrono::seconds(10));
+        BOOST_CHECK_MESSAGE(status == std::future_status::ready,
+            "Timed out waiting for asyncSendMessageByNodeID timeout callback");
         BOOST_CHECK(frontService->callback().empty());
     }
 }
