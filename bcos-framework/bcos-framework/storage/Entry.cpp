@@ -1,12 +1,11 @@
 #include "bcos-framework/storage/Entry.h"
-
 #include "bcos-framework/protocol/Protocol.h"
 #include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 
 namespace bcos::storage
 {
-Entry::Entry(const Entry& other) : m_buffer(other.m_buffer) {}
+Entry::Entry(const Entry& other) = default;
 
 bcos::storage::Entry& Entry::operator=(const Entry& other)
 {
@@ -21,19 +20,19 @@ std::string_view Entry::get() const&
 {
     if (!m_buffer.has_value()) [[unlikely]]
         return {};
-    return {m_buffer.invoke(MemData{}), m_buffer.invoke(MemSize{})};
+    return {m_buffer->data(), m_buffer->size()};
 }
 
 const char* Entry::data() const&
 {
     if (!m_buffer.has_value()) [[unlikely]]
         return "";
-    return m_buffer.invoke(MemData{});
+    return m_buffer->data();
 }
 
 int32_t Entry::size() const
 {
-    return m_buffer.has_value() ? static_cast<int32_t>(m_buffer.invoke(MemSize{})) : 0;
+    return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
 }
 
 std::string_view Entry::getField(size_t index) const&
@@ -46,6 +45,13 @@ std::string_view Entry::getField(size_t index) const&
     }
 
     return get();
+}
+
+Entry::Status Entry::status() const
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return Status::EMPTY;
+    return static_cast<Status>(m_buffer->status());
 }
 
 void Entry::setStatus(Status status)
@@ -75,6 +81,47 @@ void Entry::setStatus(Status status)
         {
             m_buffer = makeBuffer(static_cast<EntryStatus>(status), "", 0);
         }
+    }
+}
+
+bool Entry::dirty() const
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return false;
+    auto s = m_buffer->status();
+
+    return s == ENTRY_MODIFIED || s == ENTRY_DELETED;
+}
+
+bool Entry::valid() const
+{
+    if (!m_buffer.has_value()) [[unlikely]]
+        return false;
+    return m_buffer->status() == ENTRY_NORMAL;
+}
+
+void Entry::setImplCopy(const char* data, size_t sz)
+{
+    if (sz <= SMALL_SIZE)
+        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
+    else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+        m_buffer =
+            pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
+    else
+        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+            BufferModel<std::string, ENTRY_MODIFIED>{std::string(data, sz)});
+}
+
+Entry::Holder Entry::makeBuffer(EntryStatus es, const char* data, size_t sz)
+{
+    switch (es)
+    {
+    case ENTRY_NORMAL:
+        return makeBufferImpl<ENTRY_NORMAL>(data, sz);
+    case ENTRY_MODIFIED:
+        return makeBufferImpl<ENTRY_MODIFIED>(data, sz);
+    default:
+        return Holder{};
     }
 }
 

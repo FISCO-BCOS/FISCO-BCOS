@@ -294,20 +294,9 @@ public:
 
     // ── Status ─────────────────────────────────────────────────────
 
-    Status status() const
-    {
-        if (!m_buffer.has_value()) [[unlikely]]
-            return Status::EMPTY;
-        return static_cast<Status>(m_buffer.invoke(MemStatus{}));
-    }
+    Status status() const;
     void setStatus(Status status);
-    bool dirty() const
-    {
-        if (!m_buffer.has_value()) [[unlikely]]
-            return false;
-        auto s = m_buffer.invoke(MemStatus{});
-        return s == ENTRY_MODIFIED || s == ENTRY_DELETED;
-    }
+    bool dirty() const;
 
     template <typename Input>
     void importFields(std::initializer_list<Input> values)
@@ -320,12 +309,7 @@ public:
         setField(0, std::move(*values.begin()));
     }
 
-    bool valid() const
-    {
-        if (!m_buffer.has_value()) [[unlikely]]
-            return false;
-        return m_buffer.invoke(MemStatus{}) == ENTRY_NORMAL;
-    }
+    bool valid() const;
 
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
@@ -338,33 +322,11 @@ public:
         std::optional<bcos::ledger::Features> const& features) const;
 
 private:
-    void setImplCopy(const char* data, size_t sz)
-    {
-        if (sz <= SMALL_SIZE)
-            m_buffer =
-                pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
-        else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-            m_buffer =
-                pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
-        else
-            m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                BufferModel<std::string, ENTRY_MODIFIED>{std::string(data, sz)});
-    }
+    void setImplCopy(const char* data, size_t sz);
 
     // Helper: construct a buffer with the given status, preserving data.
     // Used by setStatus() for NORMAL ↔ MODIFIED transitions.
-    static Holder makeBuffer(EntryStatus es, const char* data, size_t sz)
-    {
-        switch (es)
-        {
-        case ENTRY_NORMAL:
-            return makeBufferImpl<ENTRY_NORMAL>(data, sz);
-        case ENTRY_MODIFIED:
-            return makeBufferImpl<ENTRY_MODIFIED>(data, sz);
-        default:
-            return Holder{};
-        }
-    }
+    static Holder makeBuffer(EntryStatus es, const char* data, size_t sz);
 
     template <EntryStatus S>
     static Holder makeBufferImpl(const char* data, size_t sz)
