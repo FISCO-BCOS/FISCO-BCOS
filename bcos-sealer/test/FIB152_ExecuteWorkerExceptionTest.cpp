@@ -28,6 +28,8 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Worker.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -133,8 +135,9 @@ struct ThrowingHookSealer : public bcos::sealer::Sealer
 {
     std::atomic<int> hookInvocations{0};
 
-    explicit ThrowingHookSealer(bcos::sealer::SealerConfig::Ptr cfg)
-      : bcos::sealer::Sealer(std::move(cfg))
+    explicit ThrowingHookSealer(bcos::sealer::SealerConfig::Ptr cfg,
+        boost::asio::io_context& io)
+      : bcos::sealer::Sealer(std::move(cfg), io)
     {}
 
     uint16_t hookWhenSealBlock(bcos::protocol::Block::Ptr /*_block*/) override
@@ -150,6 +153,7 @@ BOOST_AUTO_TEST_SUITE(FIB152_ExecuteWorkerException)
 
 BOOST_AUTO_TEST_CASE(executeWorker_swallows_hook_exception_and_resets_sealing)
 {
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "fib152");
     auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     auto signatureImpl = std::make_shared<bcos::crypto::Secp256k1Crypto>();
     auto cryptoSuite =
@@ -175,7 +179,7 @@ BOOST_AUTO_TEST_CASE(executeWorker_swallows_hook_exception_and_resets_sealing)
     mgr->testOnlySeedPendingTxs(
         {blockFactory->createTransactionMetaData(seedHash, seedHash.abridged())});
 
-    auto sealer = std::make_shared<ThrowingHookSealer>(cfg);
+    auto sealer = std::make_shared<ThrowingHookSealer>(cfg, *ioServicePool->getIOService());
     sealer->setSealingManager(mgr);
     sealer->setFetchTimeout(60);  // do not trigger the syncTxs branch
 

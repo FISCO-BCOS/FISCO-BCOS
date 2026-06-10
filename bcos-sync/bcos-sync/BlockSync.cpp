@@ -40,7 +40,7 @@ using namespace bcos::tool;
 
 BlockSync::BlockSync(
     BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext, unsigned _idleWaitMs)
-  : Worker("syncWorker", _idleWaitMs),
+  : Worker(_ioContext, "syncWorker", _idleWaitMs),
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
     m_downloadingQueue(std::make_shared<DownloadingQueue>(_config))
@@ -62,7 +62,7 @@ BlockSync::BlockSync(
     m_downloadingQueue->registerApplyFinishedHandler([this](bool _isNotify) {
         if (_isNotify)
         {
-            m_signalled.notify_all();
+            notify();
         }
     });
     initSendResponseHandler();
@@ -261,27 +261,6 @@ void BlockSync::executeWorker()
                                << LOG_KV("message", boost::diagnostic_information(e));
         }
     });
-}
-
-void BlockSync::workerProcessLoop()
-{
-    while (workerState() == WorkerState::Started)
-    {
-        try
-        {
-            executeWorker();
-            if (idleWaitMs() != 0U)
-            {
-                boost::unique_lock<boost::mutex> lock(x_signalled);
-                m_signalled.wait_for(lock, boost::chrono::milliseconds(idleWaitMs()));
-            }
-        }
-        catch (std::exception const& e)
-        {
-            BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync executeWorker exception")
-                               << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    }
 }
 
 bool BlockSync::shouldSyncing()
@@ -535,7 +514,7 @@ void BlockSync::onPeerBlocks(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _sync
                        << LOG_DESC("Receive peer block packet")
                        << LOG_KV("peer", _nodeID->shortHex());
     m_downloadingQueue->push(blockMsg);
-    m_signalled.notify_all();
+    notify();
 }
 
 void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg)
@@ -565,7 +544,7 @@ void BlockSync::onPeerBlocksRequest(NodeIDPtr _nodeID, BlockSyncMsgInterface::Pt
     {
         peerStatus->downloadRequests()->push(blockRequest->number(), blockRequest->size(),
             blockRequest->blockInterval(), blockRequest->blockDataFlag());
-        m_signalled.notify_all();
+        notify();
         return;
     }
     BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("onPeerBlocksRequest")
@@ -865,7 +844,7 @@ void BlockSync::maintainBlockRequest()
             }
 #endif
         }
-        m_signalled.notify_all();
+        notify();
         return true;
     });
 }

@@ -22,6 +22,7 @@
 #include "SealerConfig.h"
 #include "VRFBasedSealer.h"
 #include <bcos-tool/NodeConfig.h>
+#include <boost/asio/io_context.hpp>
 namespace bcos
 {
 namespace sealer
@@ -33,7 +34,7 @@ public:
     SealerFactory(bcos::tool::NodeConfig::Ptr _nodeConfig,
         bcos::protocol::BlockFactory::Ptr _blockFactory, bcos::txpool::TxPoolInterface::Ptr _txpool,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        bcos::crypto::KeyPairInterface::Ptr _key);
+        bcos::crypto::KeyPairInterface::Ptr _key, boost::asio::io_context& _ioContext);
 
     virtual ~SealerFactory() = default;
     Sealer::Ptr createSealer();
@@ -47,6 +48,7 @@ protected:
     unsigned m_minSealTime;
     bcos::tool::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
+    boost::asio::io_context* m_ioContext;
 };
 }  // namespace sealer
 }  // namespace bcos

@@ -79,7 +79,7 @@ BOOST_FIXTURE_TEST_SUITE(TestSealerFactory, TestSealerFixture)
 BOOST_AUTO_TEST_CASE(testVRFSealer)
 {
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
-        nodeConfig, blockFactory, txpool, nullptr, keyPair);
+        nodeConfig, blockFactory, txpool, nullptr, keyPair, *ioServicePool->getIOService());
 
     auto sealer = factory->createVRFBasedSealer();
     auto block = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);

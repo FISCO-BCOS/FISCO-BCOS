@@ -17,130 +17,156 @@
  */
 #include "Worker.h"
 
-#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
-#include <stdio.h>
-#else
-#include <pthread.h>
-#endif
-
 #include "BoostLog.h"
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <chrono>
-#include <thread>
-using namespace std;
-using namespace bcos;
+#include <boost/asio/post.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <exception>
+#include <functional>
 
-void setThreadName(const char* _threadName)
-{
-#if defined(__GLIBC__)
-    pthread_setname_np(pthread_self(), _threadName);
-#elif defined(__APPLE__)
-    pthread_setname_np(_threadName);
-#endif
-}
+using namespace bcos;
 
 void Worker::startWorking()
 {
     boost::unique_lock<boost::mutex> l(x_work);
-    if (m_workerThread)
+    if (m_workerState == WorkerState::Started)
     {
-        WorkerState workerState = WorkerState::Stopped;
-        m_workerState.compare_exchange_strong(workerState, WorkerState::Starting);
-        m_workerStateNotifier.notify_all();
+        // Already running
+        return;
     }
-    else
-    {
-        m_workerState = WorkerState::Starting;
-        m_workerStateNotifier.notify_all();
-        m_workerThread.reset(new thread([&]() {
-            setThreadName(m_threadName.c_str());
-            while (m_workerState != WorkerState::Killing)
-            {
-                WorkerState ex = WorkerState::Starting;
-                {
-                    // the condition variable-related lock
-                    boost::unique_lock<boost::mutex> l(x_work);
-                    m_workerState = WorkerState::Started;
-                }
+    // Transition to Starting, then schedule the first tick
+    m_workerState = WorkerState::Starting;
 
-                m_workerStateNotifier.notify_all();
+    // Capture a weak reference to this in case the Worker is destroyed
+    // before the timer fires. Use a raw pointer with a shareable flag.
+    boost::asio::post(m_ioContext, [this]() {
+        if (m_workerState != WorkerState::Starting)
+        {
+            return;  // was stopped before the post ran
+        }
+        try
+        {
+            initWorker();
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker initWorker")
+                              << LOG_KV("threadName", m_threadName)
+                              << LOG_KV("msg", boost::diagnostic_information(e));
+        }
 
-                try
-                {
-                    initWorker();
-                    workerProcessLoop();
-                    finishWorker();
-                }
-                catch (std::exception const& e)
-                {
-                    BCOS_LOG(WARNING) << LOG_DESC("Exception thrown in Worker thread")
-                                      << LOG_KV("threadName", m_threadName)
-                                      << LOG_KV("msg", boost::diagnostic_information(e));
-                }
+        m_workerState = WorkerState::Started;
 
-                {
-                    // the condition variable-related lock
-                    boost::unique_lock<boost::mutex> l(x_work);
-                    ex = m_workerState.exchange(WorkerState::Stopped);
-                    if (ex == WorkerState::Killing || ex == WorkerState::Starting)
-                        m_workerState.exchange(ex);
-                }
-                m_workerStateNotifier.notify_all();
-
-                {
-                    boost::unique_lock<boost::mutex> l(x_work);
-                    while (m_workerState == WorkerState::Stopped)
-                        m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
-                }
-            }
-        }));
-    }
-
-    while (m_workerState == WorkerState::Starting)
-        m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
+        // Schedule the first tick
+        scheduleNext();
+    });
 }
 
 void Worker::stopWorking()
 {
     boost::unique_lock<boost::mutex> l(x_work);
-    if (m_workerThread)
+    if (m_workerState != WorkerState::Started)
     {
-        WorkerState ex = WorkerState::Started;
-        if (!m_workerState.compare_exchange_strong(ex, WorkerState::Stopping))
-            return;
-        m_workerStateNotifier.notify_all();
-        while (m_workerState != WorkerState::Stopped)
-        {
-            m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
-        }
+        return;
     }
+    m_workerState = WorkerState::Stopping;
+    // Cancel the timer to stop the loop
+    m_timer.cancel();
+    try
+    {
+        finishWorker();
+    }
+    catch (std::exception const& e)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker finishWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+    m_workerState = WorkerState::Stopped;
 }
 
 void Worker::terminate()
 {
     boost::unique_lock<boost::mutex> l(x_work);
-    if (m_workerThread)
+    if (m_workerState == WorkerState::Killing)
     {
-        if (m_workerState.exchange(WorkerState::Killing) == WorkerState::Killing)
-        {
-            return;  // Somebody else is doing this
-        }
-        l.unlock();
-        m_workerStateNotifier.notify_all();
-        m_workerThread->join();
-
-        l.lock();
-        m_workerThread.reset();
+        return;  // Already terminating
     }
+    m_workerState = WorkerState::Killing;
+    m_timer.cancel();
 }
 
 void Worker::workerProcessLoop()
 {
-    while (m_workerState == WorkerState::Started)
+    // Default: just call executeWorker once per tick
+    executeWorker();
+}
+
+void Worker::scheduleNext()
+{
+    if (m_workerState != WorkerState::Started)
     {
-        if (m_idleWaitMs)
-            this_thread::sleep_for(chrono::milliseconds(m_idleWaitMs));
-        executeWorker();
+        return;
+    }
+
+    auto self = this;
+    std::function<void(boost::system::error_code const&)> doTick;
+    doTick = [self, &doTick](boost::system::error_code const& ec) {
+            if (ec == boost::asio::error::operation_aborted)
+            {
+                return;  // Timer was cancelled
+            }
+            if (self->m_workerState != WorkerState::Started)
+            {
+                return;
+            }
+            bool hasException = false;
+            try
+            {
+                self->workerProcessLoop();
+            }
+            catch (std::exception const& e)
+            {
+                hasException = true;
+                BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker workerProcessLoop")
+                                  << LOG_KV("threadName", self->m_threadName)
+                                  << LOG_KV("msg", boost::diagnostic_information(e));
+            }
+            // FIB-111: backoff after exceptions to prevent tight CPU spin
+            if (hasException && self->m_idleWaitMs == 0)
+            {
+                // Use a small backoff to avoid busy-looping on persistent exceptions
+                self->m_timer.expires_after(boost::asio::chrono::milliseconds(10));
+                self->m_timer.async_wait(doTick);
+            }
+            else
+            {
+                self->scheduleNext();
+            }
+        };
+
+    if (m_idleWaitMs > 0)
+    {
+        m_timer.expires_after(boost::asio::chrono::milliseconds(m_idleWaitMs));
+    }
+    else
+    {
+        m_timer.expires_after(boost::asio::chrono::milliseconds(0));
+    }
+    m_timer.async_wait(doTick);
+}
+
+void Worker::notify()
+{
+    if (m_workerState == WorkerState::Started)
+    {
+        m_timer.cancel();
+        // scheduleNext will be called from the cancelled timer's handler
+        // (with ec == operation_aborted), so we need to reschedule here
+        boost::asio::post(m_ioContext, [this]() {
+            if (m_workerState == WorkerState::Started)
+            {
+                scheduleNext();
+            }
+        });
     }
 }

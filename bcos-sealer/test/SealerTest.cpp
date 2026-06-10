@@ -4,6 +4,8 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Worker.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
@@ -85,7 +87,7 @@ struct TestSealerFixture2
         auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             cryptoSuite, nullptr, nullptr, nullptr);
         sealerConfig = std::make_shared<sealer::SealerConfig>(blockFactory, txpool, nullptr);
-        sealer = std::make_shared<sealer::Sealer>(sealerConfig);
+        sealer = std::make_shared<sealer::Sealer>(sealerConfig, *m_ioServicePool->getIOService());
     }
 
     crypto::Hash::Ptr hashImpl;
@@ -95,6 +97,8 @@ struct TestSealerFixture2
     std::shared_ptr<MockTxPool> txpool;
     sealer::SealerConfig::Ptr sealerConfig;
     sealer::Sealer::Ptr sealer;
+    bcos::IOServicePool::Ptr m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "sealerTest");
 };
 
 BOOST_FIXTURE_TEST_SUITE(TestSealer, TestSealerFixture2)

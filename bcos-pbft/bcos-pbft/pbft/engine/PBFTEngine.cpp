@@ -42,8 +42,8 @@ using namespace bcos::front;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
-  : ConsensusEngine("pbft", 0), m_config(_config), m_ledgerConfig(std::make_shared<LedgerConfig>())
+PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext)
+  : ConsensusEngine(_ioContext, "pbft", 20), m_config(_config), m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -271,8 +271,7 @@ void PBFTEngine::onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
-        // retry after 20ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // Re-push for retry; Worker timer provides natural backoff.
         m_cacheProcessor->updateCommitQueue(_proposal);
         return;
     }
@@ -586,7 +585,7 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
             return;
         }
         m_msgQueue.push(pbftMsg);
-        m_signalled.notify_all();
+        notify();
     }
     catch (std::exception const& _e)
     {
@@ -627,13 +626,11 @@ void PBFTEngine::executeWorker()
     // the node is not the consensusNode
     if (!m_config->isConsensusNode())
     {
-        waitSignal();
         return;
     }
     // when the node is syncing, not handle the PBFT message
     if (isSyncingHigher())
     {
-        waitSignal();
         return;
     }
     // handle the PBFT message(here will wait when the msgQueue is empty)
@@ -656,21 +653,11 @@ void PBFTEngine::executeWorker()
                             << m_config->printCurrentState();
 #endif
             m_msgQueue.push(pbftMsg);
-            if (empty)
-            {
-                // only one pbft msg, and cannot handle proposal
-                // re-push msg to queue and wait for signal try to re-handle
-                waitSignal();
-            }
             return;
         }
         // FIB-145: notify pipeline that a message was consumed (decrements per-peer counter)
         m_pipeline.consumed(pbftMsg);
         handleMsg(pbftMsg);
-    }
-    else
-    {
-        waitSignal();
     }
 }
 
@@ -2091,8 +2078,7 @@ void PBFTEngine::onStableCheckPointCommitFailed(
                                  "onStableCheckPointCommitFailed for BlockIsCommitting: "
                                  "retry to commit again")
                           << m_config->printCurrentState() << printPBFTProposal(_stableProposal);
-        // retry after 20ms
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        // Re-push for retry; Worker timer provides natural backoff.
         RecursiveGuard l(m_mutex);
         m_cacheProcessor->updateStableCheckPointQueue(_stableProposal);
         return;
