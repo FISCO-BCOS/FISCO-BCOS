@@ -34,10 +34,23 @@ concept ByteBuffer = requires(const T& t) {
 constexpr static int32_t ARCHIVE_FLAG =
     boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
 
+// ─── Status enum at namespace scope ────────────────────────────────
+// Defined before buffer models and facade so they can use it as a
+// non-type template parameter and convention return type.  Values MUST
+// match Entry::Status (kept for backward compatibility).
+
+enum EntryStatus : int8_t
+{
+    ENTRY_NORMAL = 0,
+    ENTRY_DELETED = 1,
+    ENTRY_EMPTY = 2,
+    ENTRY_MODIFIED = 3,  // dirty() can use status
+};
+
 // ─── Proxy-based type-erased byte-buffer facade ────────────────────
 // Replaces the previous AnyHolder + AnyBufferVTableExt hand-rolled vtable
 // with proxy's facade-builder, which achieves the same zero-virtual-overhead
-// dispatch (data/size) through its own vtable mechanism.
+// dispatch (data/size/status) through its own vtable mechanism.
 
 // Maximum inline buffer size for the proxy's small-buffer optimization.
 // Must accommodate the largest buffer model (currently BufferModel<T> / SmallBuffer etc.).
@@ -45,21 +58,31 @@ inline constexpr size_t MAX_PROXY_BUFFER_SIZE = 32;
 
 PRO_DEF_MEM_DISPATCH(MemData, data);
 PRO_DEF_MEM_DISPATCH(MemSize, size);
+PRO_DEF_MEM_DISPATCH(MemStatus, status);
 
 struct AnyBufferFacade
   : pro::facade_builder ::add_convention<MemData, const char*() const noexcept>::add_convention<
-        MemSize, size_t() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
+        MemSize, size_t() const noexcept>::add_convention<MemStatus,
+        EntryStatus() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
         support_relocation<pro::constraint_level::nothrow>::support_destruction<
             pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE, 8>::build
 {
 };
 
 // Buffer models no longer need a common base class — proxy dispatches
-// through the facade conventions above. Each model only needs data() and
-// size() member functions with the signatures declared in AnyBufferFacade.
+// through the facade conventions above. Each model only needs data(),
+// size() and status() member functions with the signatures declared in
+// AnyBufferFacade.
+//
+// Every buffer model is templated on EntryStatus so the status is
+// encoded in the *type* rather than stored as a runtime field.  This
+// removes the 8-byte m_status member from Entry (reducing sizeof(Entry)
+// from 48 → 40).  Status transitions reconstruct the proxy with a
+// different template argument.
 
 // Stores ≤31 bytes inline.  Repurposes 1 byte for the length so the
 // total data-member footprint stays at 32 bytes (saving 8 B vs size_t).
+template <EntryStatus S>
 class SmallBuffer
 {
     static constexpr size_t CAPACITY = 31;
@@ -74,9 +97,11 @@ public:
     }
     [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
     [[nodiscard]] size_t size() const noexcept { return m_size; }
+    [[nodiscard]] EntryStatus status() const noexcept { return S; }
 };
 
 // Stores exactly 32 bytes inline — no size field needed.
+template <EntryStatus S>
 class Fixed32Buffer
 {
     static constexpr size_t CAPACITY = 32;
@@ -87,11 +112,12 @@ public:
     Fixed32Buffer(const char* data, size_t) { std::memcpy(m_buffer.data(), data, CAPACITY); }
     [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
     [[nodiscard]] size_t size() const noexcept { return CAPACITY; }
+    [[nodiscard]] EntryStatus status() const noexcept { return S; }
 };
 
 // Adapts any ByteBuffer-conforming type T (std::string, std::vector<char>,
 // std::array<char,N>, etc.). Owns the value by move/copy.
-template <ByteBuffer T>
+template <ByteBuffer T, EntryStatus S>
     requires(sizeof(T) <= MAX_PROXY_BUFFER_SIZE)
 class BufferModel
 {
@@ -104,11 +130,12 @@ public:
         return reinterpret_cast<const char*>(m_value.data());
     }
     [[nodiscard]] size_t size() const noexcept { return m_value.size(); }
+    [[nodiscard]] EntryStatus status() const noexcept { return S; }
 };
 
 // Adapts a shared_ptr-wrapped ByteBuffer type. Shares ownership of the
 // underlying buffer — no copy on clone().
-template <ByteBuffer T>
+template <ByteBuffer T, EntryStatus S>
 class SharedBufferModel
 {
     std::shared_ptr<T> m_ptr;
@@ -120,17 +147,37 @@ public:
         return reinterpret_cast<const char*>(m_ptr->data());
     }
     [[nodiscard]] size_t size() const noexcept { return m_ptr->size(); }
+    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+};
+
+// ─── Deleted sentinel model ────────────────────────────────────────
+// Encodes the DELETED status purely as a type tag — no data is stored.
+// This avoids the value copy/move that the old setStatus(DELETED) path
+// incurred.  The proxy still satisfies has_value()==true, but data()
+// returns a pointer to an empty string and size() returns 0, so the
+// observable behaviour is identical to the previous DELETED state.
+class DeletedModel
+{
+public:
+    [[nodiscard]] const char* data() const noexcept
+    {
+        static constexpr const char* empty = "";
+        return empty;
+    }
+    [[nodiscard]] size_t size() const noexcept { return 0; }
+    [[nodiscard]] EntryStatus status() const noexcept { return ENTRY_DELETED; }
 };
 
 class Entry
 {
 public:
+    // Backward-compatible nested Status enum (values match EntryStatus)
     enum Status : int8_t
     {
-        NORMAL = 0,
-        DELETED = 1,
-        EMPTY = 2,
-        MODIFIED = 3,  // dirty() can use status
+        NORMAL = ENTRY_NORMAL,
+        DELETED = ENTRY_DELETED,
+        EMPTY = ENTRY_EMPTY,
+        MODIFIED = ENTRY_MODIFIED,
     };
 
     constexpr static int32_t SMALL_SIZE = 31;
@@ -215,15 +262,14 @@ public:
             auto sz = value.size();
             if (sz <= SMALL_SIZE)
                 m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                    SmallBuffer{reinterpret_cast<const char*>(value.data()), sz});
+                    SmallBuffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
             else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
                 m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                    Fixed32Buffer{reinterpret_cast<const char*>(value.data()), sz});
+                    Fixed32Buffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
             else
                 m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                    BufferModel<RawType>{std::forward<decltype(value)>(value)});
+                    BufferModel<RawType, ENTRY_MODIFIED>{std::forward<decltype(value)>(value)});
         }
-        m_status = MODIFIED;
     }
 
     template <typename T>
@@ -236,8 +282,8 @@ public:
     template <ByteBuffer T>
     void set(std::shared_ptr<T> value)
     {
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SharedBufferModel<T>{std::move(value)});
-        m_status = MODIFIED;
+        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+            SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
     }
 
     template <typename T>
@@ -248,9 +294,20 @@ public:
 
     // ── Status ─────────────────────────────────────────────────────
 
-    Status status() const { return m_status; }
+    Status status() const
+    {
+        if (!m_buffer.has_value()) [[unlikely]]
+            return Status::EMPTY;
+        return static_cast<Status>(m_buffer.invoke(MemStatus{}));
+    }
     void setStatus(Status status);
-    bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
+    bool dirty() const
+    {
+        if (!m_buffer.has_value()) [[unlikely]]
+            return false;
+        auto s = m_buffer.invoke(MemStatus{});
+        return s == ENTRY_MODIFIED || s == ENTRY_DELETED;
+    }
 
     template <typename Input>
     void importFields(std::initializer_list<Input> values)
@@ -263,7 +320,12 @@ public:
         setField(0, std::move(*values.begin()));
     }
 
-    bool valid() const { return m_status == Status::NORMAL; }
+    bool valid() const
+    {
+        if (!m_buffer.has_value()) [[unlikely]]
+            return false;
+        return m_buffer.invoke(MemStatus{}) == ENTRY_NORMAL;
+    }
 
     crypto::HashType hash(std::string_view table, std::string_view key,
         const bcos::crypto::Hash& hashImpl, uint32_t blockVersion) const
@@ -279,16 +341,44 @@ private:
     void setImplCopy(const char* data, size_t sz)
     {
         if (sz <= SMALL_SIZE)
-            m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer{data, sz});
+            m_buffer =
+                pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
         else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-            m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer{data, sz});
+            m_buffer =
+                pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
         else
             m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                BufferModel<std::string>{std::string(data, sz)});
+                BufferModel<std::string, ENTRY_MODIFIED>{std::string(data, sz)});
+    }
+
+    // Helper: construct a buffer with the given status, preserving data.
+    // Used by setStatus() for NORMAL ↔ MODIFIED transitions.
+    static Holder makeBuffer(EntryStatus es, const char* data, size_t sz)
+    {
+        switch (es)
+        {
+        case ENTRY_NORMAL:
+            return makeBufferImpl<ENTRY_NORMAL>(data, sz);
+        case ENTRY_MODIFIED:
+            return makeBufferImpl<ENTRY_MODIFIED>(data, sz);
+        default:
+            return Holder{};
+        }
+    }
+
+    template <EntryStatus S>
+    static Holder makeBufferImpl(const char* data, size_t sz)
+    {
+        if (sz <= SMALL_SIZE)
+            return pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<S>{data, sz});
+        else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+            return pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<S>{data, sz});
+        else
+            return pro::make_proxy_inplace<AnyBufferFacade>(
+                BufferModel<std::string, S>{std::string(data, sz)});
     }
 
     Holder m_buffer;
-    Status m_status = Status::EMPTY;
 
     // Unit-test accessor: exposes the internal proxy holder for inspection
     // (buffer model type can be verified via decltype and size checks).

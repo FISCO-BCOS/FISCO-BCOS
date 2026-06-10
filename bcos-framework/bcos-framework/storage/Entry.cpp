@@ -6,13 +6,12 @@
 
 namespace bcos::storage
 {
-Entry::Entry(const Entry& other) : m_buffer(other.m_buffer), m_status(other.m_status) {}
+Entry::Entry(const Entry& other) : m_buffer(other.m_buffer) {}
 
 bcos::storage::Entry& Entry::operator=(const Entry& other)
 {
     if (this != &other)
     {
-        m_status = other.m_status;
         m_buffer = other.m_buffer;
     }
     return *this;
@@ -22,19 +21,19 @@ std::string_view Entry::get() const&
 {
     if (!m_buffer.has_value()) [[unlikely]]
         return {};
-    return {m_buffer->data(), m_buffer->size()};
+    return {m_buffer.invoke(MemData{}), m_buffer.invoke(MemSize{})};
 }
 
 const char* Entry::data() const&
 {
     if (!m_buffer.has_value()) [[unlikely]]
         return "";
-    return m_buffer->data();
+    return m_buffer.invoke(MemData{});
 }
 
 int32_t Entry::size() const
 {
-    return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
+    return m_buffer.has_value() ? static_cast<int32_t>(m_buffer.invoke(MemSize{})) : 0;
 }
 
 std::string_view Entry::getField(size_t index) const&
@@ -51,10 +50,31 @@ std::string_view Entry::getField(size_t index) const&
 
 void Entry::setStatus(Status status)
 {
-    m_status = status;
-    if (m_status == DELETED)
+    auto cur = this->status();
+    if (cur == status)
+        return;
+
+    if (status == DELETED)
     {
-        m_buffer = {};
+        // Encode DELETED purely as a type tag — no data stored.
+        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(DeletedModel{});
+    }
+    else if (status == EMPTY)
+    {
+        m_buffer = Holder{};
+    }
+    else
+    {
+        // NORMAL or MODIFIED: preserve existing data, change status tag.
+        if (m_buffer.has_value())
+        {
+            auto view = get();
+            m_buffer = makeBuffer(static_cast<EntryStatus>(status), view.data(), view.size());
+        }
+        else
+        {
+            m_buffer = makeBuffer(static_cast<EntryStatus>(status), "", 0);
+        }
     }
 }
 
@@ -67,6 +87,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         features->get(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
 
     bcos::crypto::HashType entryHash(0);
+    const auto s = status();
     if (enableHashCollisionFix)
     {
         // FIB-99: Length-prefixed, status-aware hashing to prevent boundary
@@ -88,9 +109,9 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         hasher.update(key);
         // Entry status (int8_t) distinguishes DELETED from MODIFIED-with-empty-value;
         // single-byte field, no endianness conversion needed.
-        hasher.update(m_status);
+        hasher.update(static_cast<int8_t>(s));
 
-        switch (m_status)
+        switch (s)
         {
         case MODIFIED:
         {
@@ -118,7 +139,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         default:
         {
             STORAGE_LOG(DEBUG) << "Entry hash v3.17+, clean entry: " << table << " | " << toHex(key)
-                               << " | " << static_cast<int>(m_status);
+                               << " | " << static_cast<int>(s);
             break;
         }
         }
@@ -129,7 +150,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         hasher.update(table);
         hasher.update(key);
 
-        switch (m_status)
+        switch (s)
         {
         case MODIFIED:
         {
@@ -157,14 +178,14 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
         default:
         {
             STORAGE_LOG(DEBUG) << "Entry hash, clean entry: " << table << " | " << toHex(key)
-                               << " | " << (int)m_status;
+                               << " | " << static_cast<int>(s);
             break;
         }
         }
     }
     else
     {
-        if (m_status == Entry::MODIFIED)
+        if (s == Entry::MODIFIED)
         {
             auto value = get();
             bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
@@ -176,7 +197,7 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
                     << toHex(value) << LOG_KV("hash", entryHash.abridged());
             }
         }
-        else if (m_status == Entry::DELETED)
+        else if (s == Entry::DELETED)
         {
             entryHash = bcos::crypto::HashType(0x1);
             if (c_fileLogLevel == TRACE) [[unlikely]]
