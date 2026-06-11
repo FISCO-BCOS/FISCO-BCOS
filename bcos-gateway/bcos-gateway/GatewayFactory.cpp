@@ -363,8 +363,8 @@ boost::asio::ssl::context GatewayFactory::buildSSLContext(
     if (_smCertConfig.nodeCert)
     {
         /* Load the server certificate into the SSL_CTX structure */
-        if (SSL_CTX_use_certificate_file(sslContext.native_handle(),
-                _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
+        if (SSL_CTX_use_certificate_file(
+                sslContext.native_handle(), _smCertConfig.nodeCert->c_str(), SSL_FILETYPE_PEM) <= 0)
         {
             ERR_print_errors_fp(stderr);
             BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_certificate_file failed"));
@@ -497,8 +497,8 @@ std::shared_ptr<gateway::ratelimiter::GatewayRateLimiter> GatewayFactory::buildG
     const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
     const GatewayConfig::RedisConfig& _redisConfig)
 {
-    auto rateLimiterStat = std::make_shared<ratelimiter::RateLimiterStat>(
-        *m_ioServicePool->getIOService());
+    auto rateLimiterStat =
+        std::make_shared<ratelimiter::RateLimiterStat>(*m_ioServicePool->getIOService());
     rateLimiterStat->setStatInterval(_rateLimiterConfig.statInterval);
     rateLimiterStat->setEnableConnectDebugInfo(_rateLimiterConfig.enableConnectDebugInfo);
 
@@ -600,10 +600,9 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
-    auto srvCtx =
-        (_config->smSSL() ?
-                buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
-                buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
+    auto srvCtx = (_config->smSSL() ?
+                       buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
+                       buildSSLContext(true, _config->sslServerMode(), _config->certConfig()));
 
     auto clientCtx =
         (_config->smSSL() ?
@@ -613,8 +612,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // init ASIOInterface
     if (!m_ioServicePool)
     {
-        m_ioServicePool = std::make_shared<IOServicePool>(
-            std::thread::hardware_concurrency() + 1, "gateway");
+        m_ioServicePool =
+            std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "gateway");
     }
     auto ioServicePool = m_ioServicePool;
     auto asioInterface =
@@ -709,10 +708,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         AMOPImpl::Ptr amop;
         if (_airVersion)
         {
-            gatewayNodeManager =
-                std::make_shared<GatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service,
-                    *m_ioServicePool->getIOService());
+            gatewayNodeManager = std::make_shared<GatewayNodeManager>(
+                _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
             if (!_config->readonly())
             {
                 amop = buildLocalAMOP(service, pubHex);
@@ -724,14 +721,12 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             if (_entryPoint)
             {
                 gatewayNodeManager = std::make_shared<GatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service,
-                    *m_ioServicePool->getIOService());
+                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
             }
             else
             {
                 gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
-                    _config->uuid(), pubHex, keyFactory, service,
-                    *m_ioServicePool->getIOService());
+                    _config->uuid(), pubHex, keyFactory, service, *m_ioServicePool->getIOService());
             }
 
             if (!_config->readonly())
@@ -858,7 +853,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
     {
         GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("GatewayFactory::init")
                                    << LOG_KV("message", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(e);
+        boost::rethrow_exception(boost::current_exception());
     }
 }
 
@@ -1011,9 +1006,8 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     auto service = std::dynamic_pointer_cast<Service>(_network);
     registerAMOPHandlers(service, topicManager);
 
-    return std::make_shared<AMOPImpl>(
-        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID,
-        *m_ioServicePool->getIOService());
+    return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
+        _p2pNodeID, *m_ioServicePool->getIOService());
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
@@ -1027,9 +1021,8 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     auto service = std::dynamic_pointer_cast<Service>(_network);
     registerAMOPHandlers(service, topicManager);
 
-    return std::make_shared<AMOPImpl>(
-        topicManager, amopMessageFactory, requestFactory, _network, _p2pNodeID,
-        *m_ioServicePool->getIOService());
+    return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
+        _p2pNodeID, *m_ioServicePool->getIOService());
 }
 
 void GatewayFactory::registerAMOPHandlers(
