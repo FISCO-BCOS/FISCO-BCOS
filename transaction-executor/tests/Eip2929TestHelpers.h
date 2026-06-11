@@ -232,14 +232,32 @@ inline bcos::ledger::Features makeFeaturesOsakaEip2929()
 
 // --- EIP-2930 access list builders ---
 
+inline bcos::Address addressFromHex40(std::string_view hex40)
+{
+    return bcos::toAddress(std::string(hex40));
+}
+
+inline bcos::Address addressFromEvmc(evmc_address const& addr)
+{
+    bcos::Address out;
+    std::memcpy(out.data(), addr.bytes, bcos::Address::SIZE);
+    return out;
+}
+
+inline bcos::executor::Eip2930AccessList makeAccessListSingleAccountMultiSlot(
+    bcos::Address account, std::vector<bcos::h256> const& keys)
+{
+    return {{std::move(account), keys}};
+}
+
 inline bcos::executor::Eip2930AccessList makeAccessListSingleAccountMultiSlot(
     std::string_view addrHex, std::vector<bcos::h256> const& keys)
 {
-    return {{std::string(addrHex), keys}};
+    return makeAccessListSingleAccountMultiSlot(addressFromHex40(addrHex), keys);
 }
 
 inline bcos::executor::Eip2930AccessList makeAccessListMultiAccount(
-    std::vector<std::pair<std::string, std::vector<bcos::h256>>> entries)
+    std::vector<std::pair<bcos::Address, std::vector<bcos::h256>>> entries)
 {
     return bcos::executor::Eip2930AccessList{std::move(entries)};
 }

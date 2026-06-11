@@ -2,7 +2,9 @@
  * EIP-2929 checkpoint journal unit tests (TE scope revert warm rollback).
  */
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
+#include "Eip2929TestHelpers.h"
 #include "bcos-executor/src/CallParameters.h"
+#include "bcos-executor/src/Common.h"
 #include <boost/test/unit_test.hpp>
 #include <cstring>
 
@@ -108,8 +110,9 @@ BOOST_AUTO_TEST_CASE(access_list_warm_bypasses_journal)
     evmc_address listAddr = addrByte(0x44);
     evmc_bytes32 slot{};
     slot.bytes[31] = 0x07;
-    bcos::executor::Eip2930AccessList list{{"ignored", {bcos::h256(slot.bytes, bcos::h256::SIZE)}}};
-    st.warmUpAccessList(list, [&](std::string const&) { return listAddr; });
+    bcos::executor::Eip2930AccessList list{{bcos::test::eip2929::addressFromEvmc(listAddr),
+        {bcos::h256(slot.bytes, bcos::h256::SIZE)}}};
+    st.warmUpAccessList(list, [](bcos::Address const& addr) { return bcos::toEvmC(addr); });
     st.rollbackCheckpoint();
     BOOST_CHECK(st.containsAddress(listAddr));
     BOOST_CHECK(st.containsStorage(listAddr, slot));

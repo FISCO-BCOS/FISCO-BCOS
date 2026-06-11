@@ -320,6 +320,14 @@ inline evmc_bytes32 toEvmC(h256 const& hash)
     ::ranges::copy(hash, evmBytes.bytes);
     return evmBytes;
 }
+/// Convert a 20-byte bcos::Address to evmc_address (binary copy, no hex encoding).
+inline evmc_address toEvmC(bcos::Address const& address)
+{
+    evmc_address out{};
+    static_assert(sizeof(out.bytes) == bcos::Address::SIZE, "Address size mismatch!");
+    ::ranges::copy(address, out.bytes);
+    return out;
+}
 /**
  * @brief : trans uint256 number of evm-represented to u256
  * @param _n : the uint256 number that can parsed by evm

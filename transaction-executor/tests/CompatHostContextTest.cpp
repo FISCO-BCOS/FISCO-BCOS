@@ -222,12 +222,14 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_helpers_smoke)
     auto const accessList = eip2929::makeAccessListSingleAccountMultiSlot(
         "00000000000000000000000000000000deadbeef", {h256(1), h256(2)});
     BOOST_CHECK_EQUAL(accessList.size(), 1U);
-    BOOST_CHECK_EQUAL(accessList[0].first, "00000000000000000000000000000000deadbeef");
+    BOOST_CHECK_EQUAL(
+        accessList[0].first, eip2929::addressFromHex40("00000000000000000000000000000000deadbeef"));
     BOOST_CHECK_EQUAL(accessList[0].second.size(), 2U);
 
     auto const multiList = eip2929::makeAccessListMultiAccount(
-        {{"00000000000000000000000000000000000000aa", {h256(3)}},
-            {"00000000000000000000000000000000000000bb", {h256(4), h256(5)}}});
+        {{eip2929::addressFromHex40("00000000000000000000000000000000000000aa"), {h256(3)}},
+            {eip2929::addressFromHex40("00000000000000000000000000000000000000bb"),
+                {h256(4), h256(5)}}});
     BOOST_CHECK_EQUAL(multiList.size(), 2U);
 
     BOOST_CHECK(!shanghaiEip2929Features().get(bcos::ledger::Features::Flag::feature_evm_cancun));
@@ -685,7 +687,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_prepare_warms_account_and_storage)
     h256 const storageKey(0x42424242);
     auto accessList =
         std::make_shared<const bcos::executor::Eip2930AccessList>(bcos::executor::Eip2930AccessList{
-            {"00000000000000000000000000000000c0ffee01", {storageKey}}});
+            {eip2929::addressFromHex40("00000000000000000000000000000000c0ffee01"), {storageKey}}});
     auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
         origin, recipient, EVMC_CALL, accessList, 1);
     syncWait([&host]() -> task::Task<void> {
@@ -716,7 +718,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_eip1559_access_list_warms)
     h256 const storageKey(0x55);
     auto accessList =
         std::make_shared<const bcos::executor::Eip2930AccessList>(bcos::executor::Eip2930AccessList{
-            {"00000000000000000000000000000000c0ffee02", {storageKey}}});
+            {eip2929::addressFromHex40("00000000000000000000000000000000c0ffee02"), {storageKey}}});
     auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
         origin, recipient, EVMC_CALL, accessList, 2);
     syncWait([&host]() -> task::Task<void> {
@@ -840,8 +842,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_account)
     h256 const key2(0x22);
     auto accessList = std::make_shared<const bcos::executor::Eip2930AccessList>(
         eip2929::makeAccessListMultiAccount({
-            {"00000000000000000000000000000000c0ffee05", {key1}},
-            {"00000000000000000000000000000000c0ffee06", {key2}},
+            {eip2929::addressFromHex40("00000000000000000000000000000000c0ffee05"), {key1}},
+            {eip2929::addressFromHex40("00000000000000000000000000000000c0ffee06"), {key2}},
         }));
 
     auto host = makeHost(features, static_cast<uint32_t>(bcos::protocol::BlockVersion::MAX_VERSION),
@@ -1464,7 +1466,8 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
     h256 const listStorageKey(0x29292929);
     auto accessList =
         std::make_shared<const bcos::executor::Eip2930AccessList>(bcos::executor::Eip2930AccessList{
-            {"00000000000000000000000000000000c0ffee03", {listStorageKey}}});
+            {eip2929::addressFromHex40("00000000000000000000000000000000c0ffee03"),
+                {listStorageKey}}});
 
     syncWait([&]() -> task::Task<void> {
         bcos::ledger::account::EVMAccount<decltype(rollbackableStorage)> childAcc(

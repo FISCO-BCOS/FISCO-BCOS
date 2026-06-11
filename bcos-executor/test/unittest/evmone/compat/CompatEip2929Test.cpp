@@ -288,7 +288,8 @@ BOOST_AUTO_TEST_CASE(FC_EIP2930_access_list_warms_account_and_storage)
 
     h256 storageKey = h256(0x42424242);
     warmParams.web3TypedTxKind = 1;
-    warmParams.eip2930AccessList = {{"00000000000000000000000000000000c0ffee01", {storageKey}}};
+    warmParams.eip2930AccessList = {
+        {toAddress("00000000000000000000000000000000c0ffee01"), {storageKey}}};
     compatExecutorEip2930WarmAccessList(host, warmParams);
 
     evmc_address const listAddr = unhexAddress("00000000000000000000000000000000c0ffee01");
@@ -309,7 +310,8 @@ BOOST_AUTO_TEST_CASE(FC_EIP2930_eip1559_access_list_warms)
 
     h256 storageKey = h256(0x55);
     warmParams.web3TypedTxKind = 2;  // EIP-1559
-    warmParams.eip2930AccessList = {{"00000000000000000000000000000000c0ffee02", {storageKey}}};
+    warmParams.eip2930AccessList = {
+        {toAddress("00000000000000000000000000000000c0ffee02"), {storageKey}}};
     compatExecutorEip2930WarmAccessList(host, warmParams);
 
     evmc_address const listAddr = unhexAddress("00000000000000000000000000000000c0ffee02");

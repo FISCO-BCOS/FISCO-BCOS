@@ -201,13 +201,13 @@ struct Eip2929AccessState
     }
 
     /// EIP-2930: warm all accounts and storage slots from a typed-transaction access list.
-    /// AddrConverter: std::string const& -> evmc_address (e.g. unhexAddress).
+    /// AddrConverter: bcos::Address const& -> evmc_address (e.g. toEvmC).
     template <typename AccessList, typename AddrConverter>
     void warmUpAccessList(AccessList const& list, AddrConverter&& toAddr)
     {
-        for (auto const& [addrHex, keys] : list)
+        for (auto const& [account, keys] : list)
         {
-            auto const addr = toAddr(addrHex);
+            auto const addr = toAddr(account);
             (void)warmUpAddressImpl(addr, false);
             for (auto const& k : keys)
             {

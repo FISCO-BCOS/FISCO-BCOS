@@ -1,6 +1,8 @@
 /*
  * Unit tests for Eip2929Util, Eip2929PrecompileWarm, and Eip2929TransactionPrewarm.
  */
+#include "Eip2929TestHelpers.h"
+#include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-executor/src/vm/Eip2929PrecompileWarm.h"
 #include "bcos-executor/src/vm/Eip2929TransactionPrewarm.h"
@@ -142,8 +144,8 @@ BOOST_AUTO_TEST_CASE(warm_at_transaction_entry_covers_w1_create_coinbase_and_w2)
     evmc_address const listAddr = addrByte(0x55);
     evmc_bytes32 slot{};
     slot.bytes[31] = 0x09;
-    bcos::executor::Eip2930AccessList accessList{
-        {"ignored", {bcos::h256(slot.bytes, bcos::h256::SIZE)}}};
+    bcos::executor::Eip2930AccessList accessList{{bcos::test::eip2929::addressFromEvmc(listAddr),
+        {bcos::h256(slot.bytes, bcos::h256::SIZE)}}};
 
     Eip2929TxPrewarmInput input;
     input.revision = EVMC_CANCUN;
@@ -154,7 +156,8 @@ BOOST_AUTO_TEST_CASE(warm_at_transaction_entry_covers_w1_create_coinbase_and_w2)
     input.web3TypedTxKind = 2;
     input.accessList = &accessList;
 
-    warmEip2929AtTransactionEntry(state, input, [&](std::string const&) { return listAddr; });
+    warmEip2929AtTransactionEntry(
+        state, input, [](bcos::Address const& addr) { return bcos::toEvmC(addr); });
 
     state.rollbackCheckpoint();
     BOOST_CHECK(state.containsAddress(input.origin));
@@ -175,7 +178,7 @@ BOOST_AUTO_TEST_CASE(create_entry_omits_callee_but_warms_code_address)
     input.origin = addrByte(0x10);
     input.createCodeAddress = addrByte(0x20);
 
-    warmEip2929AtTransactionEntry(state, input, [](std::string const&) {
+    warmEip2929AtTransactionEntry(state, input, [](bcos::Address const&) {
         BOOST_FAIL("access list converter must not run without W2 input");
         return addrByte(0);
     });
@@ -187,11 +190,14 @@ BOOST_AUTO_TEST_CASE(create_entry_omits_callee_but_warms_code_address)
 BOOST_AUTO_TEST_CASE(warm_eip2930_access_list_only_skips_legacy_kind)
 {
     Eip2929AccessState state;
-    bcos::executor::Eip2930AccessList list{{"ignored", {}}};
-    warmEip2930AccessListOnly(state, 0, list, [&](std::string const&) { return addrByte(0x77); });
+    bcos::executor::Eip2930AccessList list{
+        {bcos::test::eip2929::addressFromEvmc(addrByte(0x77)), {}}};
+    warmEip2930AccessListOnly(
+        state, 0, list, [](bcos::Address const& addr) { return bcos::toEvmC(addr); });
     BOOST_CHECK(!state.containsAddress(addrByte(0x77)));
 
-    warmEip2930AccessListOnly(state, 1, list, [&](std::string const&) { return addrByte(0x77); });
+    warmEip2930AccessListOnly(
+        state, 1, list, [](bcos::Address const& addr) { return bcos::toEvmC(addr); });
     BOOST_CHECK(state.containsAddress(addrByte(0x77)));
 }
 

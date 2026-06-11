@@ -2252,7 +2252,7 @@ void TransactionExecutive::warmUpEip2929InitialSet(CallParameters const& params)
     input.accessList = &params.eip2930AccessList;
 
     warmEip2929AtTransactionEntry(*getEip2929AccessState(m_contextID), input,
-        [](std::string const& hex) { return unhexAddress(hex); });
+        [](bcos::Address const& addr) { return toEvmC(addr); });
 }
 
 void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)
@@ -2264,5 +2264,5 @@ void TransactionExecutive::warmUpEip2930AccessList(CallParameters const& params)
     }
 
     warmEip2930AccessListOnly(*getEip2929AccessState(m_contextID), params.web3TypedTxKind,
-        params.eip2930AccessList, [](std::string const& hex) { return unhexAddress(hex); });
+        params.eip2930AccessList, [](bcos::Address const& addr) { return toEvmC(addr); });
 }

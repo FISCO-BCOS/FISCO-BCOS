@@ -29,6 +29,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstring>
+#include <exception>
 #include <range/v3/view/any_view.hpp>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
@@ -237,7 +238,17 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
     for (auto const& entry : entries)
     {
         bcos::protocol::Web3AccessListEntry out;
-        out.accountHex = entry.account;
+        try
+        {
+            out.account = bcos::toAddress(entry.account);
+        }
+        catch (std::exception const&)
+        {
+            WEB3_ACCESS_LIST_LOG(WARNING)
+                << LOG_DESC("Skip access list entry with invalid account address")
+                << LOG_KV("account", entry.account);
+            continue;
+        }
         out.storageKeys.reserve(entry.storageKeys.size());
         for (auto const& keyBytes : entry.storageKeys)
         {

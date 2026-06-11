@@ -26,7 +26,7 @@ void buildAccessListFromWeb3(bcos::rpc::Web3Transaction const& w3, Web3AccessLis
     for (auto const& e : w3.accessList)
     {
         std::vector<h256> keys = e.storageKeys;
-        list->emplace_back(e.account.hex(), std::move(keys));
+        list->emplace_back(e.account, std::move(keys));
     }
     out.accessList = std::move(list);
 }
@@ -38,7 +38,7 @@ void buildAccessListFromProtocol(
     list->reserve(src.size());
     for (auto const& e : src)
     {
-        list->emplace_back(e.accountHex, e.storageKeys);
+        list->emplace_back(e.account, e.storageKeys);
     }
     out.accessList = std::move(list);
 }
@@ -54,7 +54,7 @@ bool accessListsEqual(
     {
         auto const& p = protocol[i];
         auto const& d = decoded[i];
-        if (p.accountHex != d.first)
+        if (p.account != d.first)
         {
             return false;
         }

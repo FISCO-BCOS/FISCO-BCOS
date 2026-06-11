@@ -61,7 +61,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 #include <boost/throw_exception.hpp>
-#include <algorithm>
 #include <cassert>
 #include <functional>
 #include <intx/intx.hpp>
@@ -687,7 +686,7 @@ private:
         input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
         input.accessList = m_eip2930AccessList.get();
         executor::warmEip2929AtTransactionEntry(
-            *m_eip2929Access, input, [](std::string const& hex) { return unhexAddress(hex); });
+            *m_eip2929Access, input, [](bcos::Address const& addr) { return toEvmC(addr); });
     }
 
     void prepareCreate()
