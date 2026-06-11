@@ -23,11 +23,8 @@ namespace boost::asio::ssl
 {
 class verify_context;
 }  // namespace boost::asio::ssl
-namespace bcos
-{
-class ThreadPool;
 
-namespace gateway
+namespace bcos::gateway
 {
 class SessionFactory;
 class SessionFace;
@@ -163,6 +160,4 @@ protected:
     PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
     PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
 };
-}  // namespace gateway
-
-}  // namespace bcos
+}  // namespace bcos::gateway

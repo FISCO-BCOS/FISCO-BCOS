@@ -52,6 +52,7 @@
     "wedprcrypto",
     "range-v3",
     "rapidhash",
+    "proxy",
     "hsm-crypto",
     {
       "name": "tarscpp",

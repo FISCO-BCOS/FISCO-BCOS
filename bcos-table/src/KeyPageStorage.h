@@ -108,9 +108,9 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
     void asyncGetRows(std::string_view tableView,
-        ::ranges::any_view<std::string_view,
-            ::ranges::category::input | ::ranges::category::random_access |
-                ::ranges::category::sized>
+        ::ranges::any_view<std::string_view, ::ranges::category::input |
+                                                 ::ranges::category::random_access |
+                                                 ::ranges::category::sized>
             keys,
         std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
         override;
@@ -1044,7 +1044,7 @@ public:
                 auto value = std::make_shared<std::vector<uint8_t>>(len, 0);
                 ar.load_binary(value->data(), value->size());
                 Entry e;
-                e.setPointer(std::move(value));
+                e.set(std::move(value));
                 e.setStatus(Entry::Status::NORMAL);
                 iter = entries.emplace_hint(iter, std::move(key), std::move(e));
             }
