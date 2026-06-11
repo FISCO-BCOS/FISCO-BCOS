@@ -70,9 +70,5 @@ public:
 
 protected:
     std::atomic_bool m_started = {false};
-
-    // Backoff delay (ms) applied after each exception in workerProcessLoop().
-    // Prevents tight CPU spin when executeWorker() repeatedly throws.
-    static constexpr unsigned c_exceptionBackoffMs = 50;
 };
 }  // namespace bcos::consensus

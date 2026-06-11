@@ -110,12 +110,6 @@ void Worker::terminate()
     m_timer.cancel();
 }
 
-void Worker::workerProcessLoop()
-{
-    // Default: just call executeWorker once per tick
-    executeWorker();
-}
-
 void Worker::scheduleNext()
 {
     if (m_workerState != WorkerState::Started)
@@ -153,12 +147,12 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
     bool hasException = false;
     try
     {
-        workerProcessLoop();
+        executeWorker();
     }
     catch (std::exception const& e)
     {
         hasException = true;
-        BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker workerProcessLoop")
+        BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker executeWorker")
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }

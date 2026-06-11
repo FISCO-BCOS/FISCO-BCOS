@@ -74,8 +74,6 @@ protected:
     // worker execute logic (Called per timer tick)
     virtual void executeWorker() {}
 
-    // Called once per timer tick (default: just calls executeWorker)
-    virtual void workerProcessLoop();
     bool shouldStop() const { return m_workerState != WorkerState::Started; }
 
     // Called when is to be stopped
