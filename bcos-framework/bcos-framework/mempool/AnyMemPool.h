@@ -14,33 +14,58 @@
  *  limitations under the License.
  *
  * @file AnyMemPool.h
- * @brief Type-erased wrapper around any type satisfying MemPool concept
+ * @brief Type-erased wrapper around any type satisfying MemPool concept,
+ *        using Microsoft proxy library's facade for zero-overhead dispatch.
  */
 
 #pragma once
 
 #include "bcos-framework/mempool/MemPool.h"
 #include "bcos-framework/protocol/Transaction.h"
+#include <proxy/proxy.h>
 #include <cassert>
 #include <cstdint>
-#include <functional>
 #include <iterator>
-#include <memory>
 #include <type_traits>
 #include <vector>
 
 namespace bcos::mempool
 {
 
-/// Type-erased wrapper around any type satisfying MemPool<StateStorage>.
-///
-/// Uses the "PIMPL with virtual Concept/Model" pattern to erase the concrete
-/// MemPool implementation type while still providing the full MemPool API.
-/// The stored implementation must satisfy MemPool<T, StateStorage> and is
-/// held via reference_wrapper — the caller is responsible for ensuring the
-/// referenced object outlives this wrapper.
+/// Dispatch structs — each maps to a member function of the underlying
+/// MemPool implementation.  Two dispatch structs both target ::remove so
+/// that overload resolution can distinguish remove(StateStorage&) from
+/// remove(vector<HashType>).
+PRO_DEF_MEM_DISPATCH(MemAdd, add);
+PRO_DEF_MEM_DISPATCH(MemSeal, seal);
+PRO_DEF_MEM_DISPATCH(MemRemoveState, remove);
+PRO_DEF_MEM_DISPATCH(MemRemoveHashes, remove);
+PRO_DEF_MEM_DISPATCH(MemGet, get);
+
+/// Facade declaring the MemPool<StateStorage> interface for proxy.
 ///
 /// @tparam StateStorage  The state storage type used by seal/remove.
+template <class StateStorage>
+struct AnyMemPoolFacade
+  : pro::facade_builder ::add_convention<MemAdd,
+        void(std::vector<protocol::Transaction::Ptr>)>::add_convention<MemSeal,
+        void(int64_t, StateStorage&,
+            std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>>)>::
+        template add_convention<MemRemoveState,
+            void(StateStorage&)>::template add_convention<MemRemoveHashes,
+            void(std::vector<bcos::crypto::HashType>)>::template add_convention<MemGet,
+            std::vector<protocol::Transaction::Ptr>(std::vector<bcos::crypto::HashType>)>::
+            template support_copy<pro::constraint_level::nontrivial>::template support_relocation<
+                pro::constraint_level::nothrow>::
+                template support_destruction<pro::constraint_level::nothrow>::build
+{
+};
+
+/// Type-erased owning wrapper around any type satisfying MemPool<StateStorage>.
+///
+/// Backed by pro::proxy<AnyMemPoolFacade<StateStorage>>.  This thin wrapper
+/// adapts proxy's operator-> dispatch style to the direct-call style required
+/// by the MemPool concept.
 ///
 /// Usage:
 /// @code
@@ -52,122 +77,52 @@ namespace bcos::mempool
 template <class StateStorage>
 class AnyMemPool
 {
-private:
-    /// Virtual interface for type-erased mempool operations.
-    struct Concept
-    {
-        virtual ~Concept() = default;
-        virtual void add(std::vector<protocol::Transaction::Ptr> transactions) = 0;
-        virtual void seal(int64_t limit, StateStorage& state,
-            std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out) = 0;
-        virtual void remove(StateStorage& state) = 0;
-        virtual void remove(std::vector<bcos::crypto::HashType> hashes) = 0;
-        virtual std::vector<protocol::Transaction::Ptr> get(
-            std::vector<bcos::crypto::HashType> hashes) = 0;
-    };
-
-    /// Concrete model wrapping a type-erased MemPool implementation.
-    /// Uses reference_wrapper — the caller must ensure the referenced
-    /// object outlives this Model.
-    template <class T>
-        requires MemPool<T, StateStorage>
-    struct Model final : Concept
-    {
-        std::reference_wrapper<T> m_mempool;
-
-        explicit Model(T& mempool) : m_mempool(mempool) {}
-
-        void add(std::vector<protocol::Transaction::Ptr> transactions) override
-        {
-            m_mempool.get().add(std::move(transactions));
-        }
-
-        void seal(int64_t limit, StateStorage& state,
-            std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out) override
-        {
-            m_mempool.get().seal(limit, state, out);
-        }
-
-        void remove(StateStorage& state) override { m_mempool.get().remove(state); }
-
-        void remove(std::vector<bcos::crypto::HashType> hashes) override
-        {
-            m_mempool.get().remove(std::move(hashes));
-        }
-
-        std::vector<protocol::Transaction::Ptr> get(
-            std::vector<bcos::crypto::HashType> hashes) override
-        {
-            return m_mempool.get().get(std::move(hashes));
-        }
-    };
-
-    std::unique_ptr<Concept> m_impl;
-
 public:
-    AnyMemPool() = delete;
+    using ProxyType = pro::proxy<AnyMemPoolFacade<StateStorage>>;
+    using OutIter = std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>>;
+    using TxVec = std::vector<protocol::Transaction::Ptr>;
+    using HashVec = std::vector<bcos::crypto::HashType>;
+
+    AnyMemPool() = default;
     ~AnyMemPool() = default;
 
-    AnyMemPool(const AnyMemPool&) = delete;
-    AnyMemPool& operator=(const AnyMemPool&) = delete;
+    AnyMemPool(const AnyMemPool&) = default;
+    AnyMemPool& operator=(const AnyMemPool&) = default;
 
-    AnyMemPool(AnyMemPool&& other) noexcept : m_impl(std::move(other.m_impl)) {}
-    AnyMemPool& operator=(AnyMemPool&& other) noexcept
-    {
-        if (this != &other)
-        {
-            m_impl = std::move(other.m_impl);
-        }
-        return *this;
-    }
+    AnyMemPool(AnyMemPool&&) noexcept = default;
+    AnyMemPool& operator=(AnyMemPool&&) noexcept = default;
 
-    /// Construct from a reference to any type satisfying MemPool<T, StateStorage>.
-    /// The referenced object must outlive this AnyMemPool.
+    /// Construct from any type satisfying MemPool<T, StateStorage>.
+    /// The value is copied/moved into the proxy (owning semantics).
     template <class T>
         requires MemPool<std::remove_cvref_t<T>, StateStorage> &&
                  (!std::same_as<std::remove_cvref_t<T>, AnyMemPool>)
-    explicit AnyMemPool(T& mempool)
-      : m_impl(std::make_unique<Model<std::remove_cvref_t<T>>>(mempool))
+    explicit AnyMemPool(T&& mempool)
+      : m_impl(pro::make_proxy<AnyMemPoolFacade<StateStorage>, std::remove_cvref_t<T>>(
+            std::forward<T>(mempool)))
     {}
 
     /// Returns true if this wrapper holds a mempool implementation.
-    [[nodiscard]] explicit operator bool() const noexcept { return m_impl != nullptr; }
+    [[nodiscard]] explicit operator bool() const noexcept { return m_impl.has_value(); }
 
-    void add(std::vector<protocol::Transaction::Ptr> transactions)
-    {
-        assert(m_impl && "AnyMemPool must be initialized before use");
-        m_impl->add(std::move(transactions));
-    }
-
-    void seal(int64_t limit, StateStorage& state,
-        std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out)
-    {
-        assert(m_impl && "AnyMemPool must be initialized before use");
-        m_impl->seal(limit, state, out);
-    }
-
+    void add(TxVec transactions) { m_impl->add(std::move(transactions)); }
+    void seal(int64_t limit, StateStorage& state, OutIter out) { m_impl->seal(limit, state, out); }
     void remove(StateStorage& state)
     {
-        assert(m_impl && "AnyMemPool must be initialized before use");
-        m_impl->remove(state);
+        pro::proxy_invoke<false, MemRemoveState, void(StateStorage&)>(m_impl, state);
     }
-
-    void remove(std::vector<bcos::crypto::HashType> hashes)
+    void remove(HashVec hashes)
     {
-        assert(m_impl && "AnyMemPool must be initialized before use");
-        m_impl->remove(std::move(hashes));
+        pro::proxy_invoke<false, MemRemoveHashes, void(HashVec)>(m_impl, std::move(hashes));
     }
+    TxVec get(HashVec hashes) { return m_impl->get(std::move(hashes)); }
 
-    std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> hashes)
-    {
-        assert(m_impl && "AnyMemPool must be initialized before use");
-        return m_impl->get(std::move(hashes));
-    }
+    /// Access the underlying proxy for advanced operations (e.g. proxy_cast).
+    [[nodiscard]] ProxyType& proxy() noexcept { return m_impl; }
+    [[nodiscard]] const ProxyType& proxy() const noexcept { return m_impl; }
+
+private:
+    ProxyType m_impl;
 };
-
-/// AnyMemPool itself satisfies the MemPool concept (reflexive check).
-/// This is verified at compile-time when AnyMemPool is instantiated with a
-/// concrete StateStorage type, e.g.:
-///   static_assert(MemPool<AnyMemPool<MyStorage>, MyStorage>);
 
 }  // namespace bcos::mempool
