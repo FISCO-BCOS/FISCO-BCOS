@@ -18,11 +18,12 @@
  */
 #pragma once
 #include "TransactionSubmitResult.h"
+#include "Web3AccessList.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include "bcos-utilities/AnyHolder.h"
 #include <atomic>
 #include <concepts>
 #include <functional>
@@ -33,7 +34,7 @@ namespace bcostars::protocol
 {
 class TransactionImpl;
 class TransactionFactoryImpl;
-}
+}  // namespace bcostars::protocol
 
 namespace bcos::protocol
 {
@@ -85,6 +86,12 @@ public:
     virtual void encode(bcos::bytes& txData) const = 0;
     virtual bcos::crypto::HashType hash() const = 0;
     virtual bcos::bytesConstRef extraTransactionBytes() const = 0;
+
+    /// EIP-2718 typed tx kind when type()==Web3Transaction (see bcos::rpc::TransactionType). 0 if
+    /// unset.
+    virtual uint8_t web3TypedTxKind() const { return 0; }
+    /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
+    virtual Web3AccessList const& web3AccessList() const;
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl);
 
@@ -187,6 +194,8 @@ private:
     mutable bool m_tainted = {true};
     // the transaction has been stored to the storage or not
     mutable bool m_storeToBackend = {false};
+
+    static Web3AccessList const& emptyWeb3AccessList();
 };
 
 // FIB-75: Return the effective gas price for a transaction.
@@ -222,7 +231,7 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 using AnyTransaction =
-    AnyHolder<bcos::protocol::Transaction, 184>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
+    AnyHolder<bcos::protocol::Transaction, 224>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
                                                   // TransactinImpl across platforms)
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);

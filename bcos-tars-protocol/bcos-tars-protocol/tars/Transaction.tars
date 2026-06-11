@@ -1,4 +1,11 @@
 module bcostars {
+    /// EIP-2930 access list entry (derived from Web3 RLP at submission; optional on chain).
+    struct Web3AccessListEntry
+    {
+        0 optional string account;              // 40-char hex address, no 0x prefix
+        1 optional vector<vector<byte>> storageKeys;  // each key is 32 bytes (h256)
+    };
+
     struct TransactionData {
         1  optional int          version;
         2  optional string       chainID;
@@ -14,6 +21,7 @@ module bcostars {
         12 optional string       maxFeePerGas;
         13 optional string       maxPriorityFeePerGas;
         14 optional vector<byte> extension;
+        15 optional vector<Web3AccessListEntry> accessList;
     };
 
     struct Transaction
@@ -29,5 +37,7 @@ module bcostars {
         9  optional byte            type;
         10 optional vector<byte>    extraTransactionBytes;
         11 optional vector<byte>    extraTransactionHash; // hash(rlp(10|3)); real transaction hash
+        /// bcos::rpc::TransactionType (0=Legacy, 1=EIP2930, 2=EIP1559, 3=EIP4844); only when type==1 (Web3)
+        12 optional byte            web3TypedTxKind;
     };
 };

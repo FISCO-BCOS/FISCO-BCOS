@@ -11,6 +11,17 @@
 
 namespace bcos::protocol
 {
+Web3AccessList const& Transaction::emptyWeb3AccessList()
+{
+    static Web3AccessList const empty;
+    return empty;
+}
+
+Web3AccessList const& Transaction::web3AccessList() const
+{
+    return emptyWeb3AccessList();
+}
+
 Transaction::Transaction(const Transaction& other)
   : m_submitCallback(other.m_submitCallback),
     m_batchHash(other.m_batchHash),
@@ -100,7 +111,8 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
     {
         BCOS_LOG(INFO) << LOG_DESC("recover sender address failed")
                        << LOG_KV("hash", hashResult.abridged());
-        BOOST_THROW_EXCEPTION(std::invalid_argument("recover sender address from signature failed"));
+        BOOST_THROW_EXCEPTION(
+            std::invalid_argument("recover sender address from signature failed"));
     }
 
     forceSender(sender);
@@ -109,24 +121,29 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 {
-    stream << "Transaction{" << "hash=" << transaction.hash() << ", "
-           << "version=" << transaction.version() << ", " << "chainId=" << transaction.chainId()
-           << ", " << "groupId=" << transaction.groupId() << ", "
-           << "blockLimit=" << transaction.blockLimit() << ", " << "nonce=" << transaction.nonce()
-           << ", " << "to=" << transaction.to() << ", " << "abi=" << transaction.abi() << ", "
-           << "value=" << transaction.value() << ", " << "gasPrice=" << transaction.gasPrice()
-           << ", " << "gasLimit=" << transaction.gasLimit() << ", "
+    stream << "Transaction{"
+           << "hash=" << transaction.hash() << ", "
+           << "version=" << transaction.version() << ", "
+           << "chainId=" << transaction.chainId() << ", "
+           << "groupId=" << transaction.groupId() << ", "
+           << "blockLimit=" << transaction.blockLimit() << ", "
+           << "nonce=" << transaction.nonce() << ", "
+           << "to=" << transaction.to() << ", "
+           << "abi=" << transaction.abi() << ", "
+           << "value=" << transaction.value() << ", "
+           << "gasPrice=" << transaction.gasPrice() << ", "
+           << "gasLimit=" << transaction.gasLimit() << ", "
            << "maxFeePerGas=" << transaction.maxFeePerGas() << ", "
            << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas() << ", "
            << "extension=" << toHex(transaction.extension()) << ", "
            << "extraData=" << transaction.extraData() << ", "
-           << "sender="
-           << [&]() {
-                  auto view = transaction.sender();
-                  return bcos::bytesConstRef{
-                      reinterpret_cast<const bcos::byte*>(view.data()), view.size()};
-              }()
-           << ", " << "input=" << toHex(transaction.input()) << ", "
+           << "sender=" <<
+        [&]() {
+            auto view = transaction.sender();
+            return bcos::bytesConstRef{
+                reinterpret_cast<const bcos::byte*>(view.data()), view.size()};
+        }() << ", "
+           << "input=" << toHex(transaction.input()) << ", "
            << "importTime=" << transaction.importTime() << ", "
            << "type=" << static_cast<int>(transaction.type()) << ", "
            << "attribute=" << transaction.attribute() << ", "

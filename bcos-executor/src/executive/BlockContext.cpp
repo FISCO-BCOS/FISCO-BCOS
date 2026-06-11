@@ -50,6 +50,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
     m_transientStorageMap(std::make_shared<transientStorageMap>(10)),
+    m_eip2929AccessMap(std::make_shared<Eip2929AccessMap>(10)),
     m_hashImpl(std::move(_hashImpl)),
     m_ledgerCache(std::move(ledgerCache)),
     m_backendStorage(std::move(backendStorage))

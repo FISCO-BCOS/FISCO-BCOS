@@ -259,6 +259,8 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     result.tx_gas_price = toEvmC(hostContext.gasPrice());
     result.chain_id = hostContext.chainId();
 
+    // TODO(EIP-3651): set block_coinbase from blockHeader sealer (not zero); keep in sync with
+    // Eip2929AccessState W1 warm-up. Ref: bcos-rpc/.../BlockResponse.cpp "miner" mapping.
     memset(result.block_coinbase.bytes, 0, 20);
     memset(result.block_prev_randao.bytes, 0, 32);
     memset(result.block_base_fee.bytes, 0, 32);
