@@ -18,7 +18,6 @@
 
 #pragma once
 
-#include "Common.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <atomic>
@@ -93,6 +92,8 @@ protected:
 private:
     // Schedule the next timer tick
     void scheduleNext();
+    // Timer completion handler (body of the former doTick lambda)
+    void handleTimerTick(boost::system::error_code const& _ec);
 
     boost::asio::io_context& m_ioContext;
     boost::asio::steady_timer m_timer;
@@ -101,8 +102,13 @@ private:
 
     unsigned m_idleWaitMs = 0;
 
-    boost::mutex x_work;
+    std::mutex x_work;
     std::atomic<WorkerState> m_workerState = {WorkerState::Starting};
+
+    // Shared alive flag captured by all async handlers. terminate() sets it to
+    // false; handlers check it before accessing `this`, so they can safely bail
+    // even if the handler was already posted before Worker destruction.
+    std::shared_ptr<std::atomic<bool>> m_aliveFlag = std::make_shared<std::atomic<bool>>(true);
 };
 
 }  // namespace bcos
