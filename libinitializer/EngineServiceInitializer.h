@@ -60,7 +60,7 @@ private:
             m_scheduler(std::move(scheduler)),
             m_engine(m_memPool, m_storageInitializer->storage(), *m_transactionExecutor,
                 *m_scheduler, std::move(blockFactory), blockTxCountLimit),
-            m_any(m_engine)
+            m_any(std::move(m_engine))
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
