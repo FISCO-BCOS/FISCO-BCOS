@@ -268,6 +268,9 @@ log_pass
 # ---- Step 2: Start FISCO-BCOS node ----
 log_section "Step 2: Start FISCO-BCOS node"
 
+# Enable core dumps for crash diagnostics
+ulimit -c unlimited 2>/dev/null || true
+
 cd "${WORK_DIR}"
 nohup "${ABS_BINARY}" -c config.genesis -g config.genesis > nohup.out 2>&1 &
 NODE_PID=$!
@@ -294,6 +297,19 @@ for i in $(seq 1 30); do
         fi
     else
         log_fail "Node process died unexpectedly"
+        # Capture exit code
+        set +e
+        wait "${NODE_PID}" 2>/dev/null
+        NODE_EXIT_CODE=$?
+        set -e
+        log_info "Exit code: ${NODE_EXIT_CODE}"
+        # Check for core dumps
+        if [ -f core ]; then
+            log_info "Core dump found: $(ls -lh core 2>/dev/null)"
+        fi
+        # Check dmesg for OOM killer (requires sudo, may fail silently)
+        dmesg 2>/dev/null | grep -i "killed process.*fisco" | tail -5 || true
+        log_info "--- nohup.out ---"
         cat nohup.out 2>/dev/null | tail -30
         exit 1
     fi
