@@ -78,8 +78,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config)
     m_config->setTimeoutState(true);
 
     // Timer is used to manage checkpoint timeout
-    m_timer =
-        std::make_shared<PBFTTimer>(m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
+    m_timer = std::make_shared<PBFTTimer>(
+        m_config->ioService(), m_config->checkPointTimeoutInterval(), "checkPointResendTimer");
 
     // Configure the admission pipeline from PBFTConfig (originally from node.ini).
     // Safe to call here because the worker thread has not yet been started.

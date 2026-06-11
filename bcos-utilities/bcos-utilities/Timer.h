@@ -31,7 +31,6 @@ class Timer : public std::enable_shared_from_this<Timer>
 {
 public:
     Timer(boost::asio::io_context& ioService, int64_t timeout, std::string threadName);
-    Timer(int64_t _timeout, std::string _threadName);
 
     virtual ~Timer() noexcept;
 

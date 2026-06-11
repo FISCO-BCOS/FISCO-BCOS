@@ -69,8 +69,9 @@ public:
 
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_cryptoSuite, m_keyPair, m_frontService,
-            m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory);
+        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_ioService, m_cryptoSuite, m_keyPair,
+            m_frontService, m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory,
+            txResultFactory);
         m_rpbft = rpbftFactory->createRPBFT();
         m_rpbftConfig = std::dynamic_pointer_cast<RPBFTConfig>(m_rpbft->pbftEngine()->pbftConfig());
     }
@@ -103,6 +104,7 @@ public:
         return ledgerConfig;
     }
 
+    boost::asio::io_context m_ioService;
     CryptoSuite::Ptr m_cryptoSuite;
     KeyPairInterface::Ptr m_keyPair;
     PublicPtr m_nodeId;

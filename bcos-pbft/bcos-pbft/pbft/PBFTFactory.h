@@ -30,7 +30,8 @@ class PBFTFactory : public std::enable_shared_from_this<PBFTFactory>
 {
 public:
     using Ptr = std::shared_ptr<PBFTFactory>;
-    PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    PBFTFactory(boost::asio::io_context& _ioService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
@@ -43,6 +44,7 @@ public:
     virtual PBFTImpl::Ptr createPBFT();
 
 protected:
+    boost::asio::io_context& m_ioService;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;

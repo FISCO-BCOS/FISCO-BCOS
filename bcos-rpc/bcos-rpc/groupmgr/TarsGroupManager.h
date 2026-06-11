@@ -28,12 +28,14 @@ class TarsGroupManager : public GroupManager
 {
 public:
     using Ptr = std::shared_ptr<TarsGroupManager>;
-    TarsGroupManager(std::string _rpcServiceName, std::string const& _chainID,
-        NodeServiceFactory::Ptr _nodeServiceFactory, bcos::tool::NodeConfig::Ptr _nodeConfig)
+    TarsGroupManager(boost::asio::io_context& _ioService, std::string _rpcServiceName,
+        std::string const& _chainID, NodeServiceFactory::Ptr _nodeServiceFactory,
+        bcos::tool::NodeConfig::Ptr _nodeConfig)
       : GroupManager(std::move(_rpcServiceName), _chainID, std::move(_nodeServiceFactory),
             std::move(_nodeConfig))
     {
-        m_groupStatusUpdater = std::make_shared<Timer>(c_tarsAdminRefreshTime, "gmrTimer");
+        m_groupStatusUpdater =
+            std::make_shared<Timer>(_ioService, c_tarsAdminRefreshTime, "gmrTimer");
         m_groupStatusUpdater->start();
         m_groupStatusUpdater->registerTimeoutHandler([this] { updateGroupStatus(); });
     }

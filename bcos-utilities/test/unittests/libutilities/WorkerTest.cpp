@@ -37,7 +37,7 @@ class TestWorkerImpl : public Worker
 public:
     TestWorkerImpl() : Worker("TestWorkerImpl", 1)
     {
-        m_timer = std::make_shared<Timer>(1, "testTimer");
+        m_timer = std::make_shared<Timer>(m_ioService, 1, "testTimer");
         m_timer->registerTimeoutHandler([]() { std::cout << "#### call timer" << std::endl; });
     }
     void run() { startWorking(); }
@@ -53,6 +53,7 @@ protected:
     virtual void finishWorker() { cout << "finishWorker..." << endl; }
 
 private:
+    boost::asio::io_context m_ioService;
     int count = 0;
     std::shared_ptr<Timer> m_timer;
 };

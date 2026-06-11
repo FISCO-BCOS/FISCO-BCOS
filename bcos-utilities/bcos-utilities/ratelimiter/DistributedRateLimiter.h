@@ -23,6 +23,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
+#include <boost/asio/io_context.hpp>
 #include <sw/redis++/redis++.h>
 #include <mutex>
 #include <utility>
@@ -47,7 +48,8 @@ public:
     const static std::string LUA_SCRIPT;
     const static int32_t DEFAULT_LOCAL_CACHE_PERCENT = 15;
 
-    DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis, std::string _rateLimiterKey,
+    DistributedRateLimiter(boost::asio::io_context& _ioService,
+        std::shared_ptr<sw::redis::Redis>& _redis, std::string _rateLimiterKey,
         int64_t _maxPermitsSize, bool _allowExceedMaxPermitSize = false, int32_t _intervalSec = 1,
         bool _enableLocalCache = true, int32_t _localCachePercent = DEFAULT_LOCAL_CACHE_PERCENT);
 

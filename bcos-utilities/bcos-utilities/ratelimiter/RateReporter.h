@@ -21,6 +21,7 @@
 
 #include "bcos-utilities/Common.h"
 #include <atomic>
+#include <boost/asio/io_context.hpp>
 #include <memory>
 #include <string>
 #include <utility>
@@ -48,7 +49,8 @@ public:
     using Ptr = std::shared_ptr<RateReporter>;
     using ConstPtr = std::shared_ptr<const RateReporter>;
 
-    RateReporter(std::string _moduleName, uint64_t _intervalMS);
+    RateReporter(
+        boost::asio::io_context& _ioService, std::string _moduleName, uint64_t _intervalMS);
 
     ~RateReporter();
 
@@ -77,7 +79,8 @@ private:
 class RateReporterFactory
 {
 public:
-    static RateReporter::Ptr build(std::string _moduleName, uint64_t _intervalMS);
+    static RateReporter::Ptr build(
+        boost::asio::io_context& _ioService, std::string _moduleName, uint64_t _intervalMS);
 };
 
 }  // namespace bcos

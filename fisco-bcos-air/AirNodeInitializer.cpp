@@ -102,7 +102,8 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     }
     m_nodeInitializer->initNotificationHandlers(m_rpc);
 
-    m_objMonitor = std::make_shared<bcos::ObjectAllocatorMonitor>();
+    m_objMonitor =
+        std::make_shared<bcos::ObjectAllocatorMonitor>(*ioServicePool->getIOService());
 
     // NOTE: this should be last called
     m_nodeInitializer->initSysContract();

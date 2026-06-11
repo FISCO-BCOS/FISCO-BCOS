@@ -390,8 +390,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
-    auto filterSystem =
-        std::make_shared<JsonRpcFilterSystem>(_groupManager, m_nodeConfig->groupId(),
+    auto filterSystem = std::make_shared<JsonRpcFilterSystem>(
+        *m_ioServicePool->getIOService(), _groupManager, m_nodeConfig->groupId(),
             m_nodeConfig->rpcFilterTimeout(), m_nodeConfig->rpcMaxProcessBlock());
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
         _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
@@ -409,8 +409,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager)
 {
-    auto web3FilterSystem =
-        std::make_shared<Web3FilterSystem>(_groupManager, m_nodeConfig->groupId(),
+    auto web3FilterSystem = std::make_shared<Web3FilterSystem>(
+        *m_ioServicePool->getIOService(), _groupManager, m_nodeConfig->groupId(),
             m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
         m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager), m_gateway, _wsService,
@@ -562,7 +562,7 @@ GroupManager::Ptr RpcFactory::buildGroupManager(
     if (!_entryPoint)
     {
         RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-        return std::make_shared<TarsGroupManager>(
+        return std::make_shared<TarsGroupManager>(*m_ioServicePool->getIOService(),
             _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
     }
     RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
@@ -606,7 +606,7 @@ AMOPClient::Ptr RpcFactory::buildAMOPClient(
 {
     auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
-    return std::make_shared<AMOPClient>(
+    return std::make_shared<AMOPClient>(*m_ioServicePool->getIOService(),
         _wsService, wsFactory, requestFactory, m_gateway, _gatewayServiceName);
 }
 
@@ -614,5 +614,6 @@ AMOPClient::Ptr RpcFactory::buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsS
 {
     auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
-    return std::make_shared<AirAMOPClient>(_wsService, wsFactory, requestFactory, m_gateway);
+    return std::make_shared<AirAMOPClient>(
+        *m_ioServicePool->getIOService(), _wsService, wsFactory, requestFactory, m_gateway);
 }

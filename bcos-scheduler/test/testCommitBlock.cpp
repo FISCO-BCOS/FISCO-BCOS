@@ -39,7 +39,7 @@ struct BlockExecutiveFixture
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
 
         ledger = std::make_shared<MockLedger2>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>();
+        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -81,6 +81,7 @@ struct BlockExecutiveFixture
         }
     }
 
+    boost::asio::io_context ioService;
     ledger::LedgerInterface::Ptr ledger;
     scheduler::ExecutorManager::Ptr executorManager;
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory;

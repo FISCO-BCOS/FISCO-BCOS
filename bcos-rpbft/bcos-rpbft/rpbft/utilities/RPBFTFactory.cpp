@@ -49,7 +49,7 @@ PBFTImpl::Ptr RPBFTFactory::createRPBFT()
 
     PBFT_LOG(INFO) << LOG_DESC("create rPBFTConfig");
     PBFTConfig::Ptr rpbftConfig =
-        std::make_shared<RPBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
+        std::make_shared<RPBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
             validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create rPBFTEngine");

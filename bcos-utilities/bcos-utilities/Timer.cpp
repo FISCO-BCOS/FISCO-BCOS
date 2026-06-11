@@ -34,35 +34,6 @@ bcos::Timer::Timer(boost::asio::io_context& ioService, int64_t timeout, std::str
     m_threadName(std::move(threadName))
 {}
 
-bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
-  : m_timeout(_timeout),
-    m_working(true),
-    m_ioService(std::in_place_index_t<1>{}),
-    m_timer(this->ioService()),
-    m_threadName(std::move(_threadName)),
-    m_worker(std::make_unique<std::thread>([&]() {
-        bcos::pthread_setThreadName(m_threadName);
-        while (m_working)
-        {
-            auto& ioContext = ioService();
-            if (ioContext.stopped())
-            {
-                ioContext.restart();
-            }
-            try
-            {
-                auto work = boost::asio::make_work_guard(ioContext);
-                ioContext.run();
-            }
-            catch (std::exception const& e)
-            {
-                BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker Thread of timer")
-                                  << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        }
-    }))
-{}
-
 void Timer::start()
 {
     if (!m_working)

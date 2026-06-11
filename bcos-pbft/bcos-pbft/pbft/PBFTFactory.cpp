@@ -32,7 +32,8 @@ using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 
-PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+PBFTFactory::PBFTFactory(boost::asio::io_context& _ioService,
+    bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     bcos::crypto::KeyPairInterface::Ptr _keyPair,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
     std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
@@ -40,7 +41,8 @@ PBFTFactory::PBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
     bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-  : m_cryptoSuite(std::move(_cryptoSuite)),
+  : m_ioService(_ioService),
+    m_cryptoSuite(std::move(_cryptoSuite)),
     m_keyPair(std::move(_keyPair)),
     m_frontService(std::move(_frontService)),
     m_storage(std::move(_storage)),
@@ -69,7 +71,7 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
 
     PBFT_LOG(INFO) << LOG_DESC("create pbftConfig");
     PBFTConfig::Ptr pbftConfig =
-        std::make_shared<PBFTConfig>(m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
+        std::make_shared<PBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair, pbftMessageFactory, pbftCodec,
             validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");

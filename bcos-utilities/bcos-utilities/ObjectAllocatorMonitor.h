@@ -70,7 +70,7 @@ public:
     using Ptr = std::shared_ptr<ObjectAllocatorMonitor>;
     using ConstPtr = std::shared_ptr<const ObjectAllocatorMonitor>;
 
-    ObjectAllocatorMonitor() = default;
+    ObjectAllocatorMonitor(boost::asio::io_context& _ioService) : m_ioService(&_ioService) {}
     ~ObjectAllocatorMonitor() { stopMonitor(); }
 
     ObjectAllocatorMonitor(const ObjectAllocatorMonitor&) = default;
@@ -88,7 +88,7 @@ public:
         m_run = true;
 
         constexpr uint32_t MIN_OBJ_ALLOC_MONITOR_PERIOD_MS = 60000;
-        m_timer = std::make_shared<Timer>(
+        m_timer = std::make_shared<Timer>(*m_ioService,
             std::max(_monitorPeriodMS, MIN_OBJ_ALLOC_MONITOR_PERIOD_MS), "objMonitor");
 
         auto weakPtrTimer = std::weak_ptr<Timer>(m_timer);
@@ -126,6 +126,7 @@ public:
     }
 
 private:
+    boost::asio::io_context* m_ioService;
     bool m_run{false};
     std::shared_ptr<Timer> m_timer;
 };

@@ -22,6 +22,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ObjectCounter.h"
 #include <atomic>
+#include <boost/asio/io_context.hpp>
 #include <memory>
 #include <string>
 #include <utility>
@@ -49,7 +50,8 @@ public:
     using Ptr = std::shared_ptr<RateCollector>;
     using ConstPtr = std::shared_ptr<const RateCollector>;
 
-    RateCollector(std::string _moduleName, uint64_t _intervalMS);
+    RateCollector(boost::asio::io_context& _ioService, std::string _moduleName,
+        uint64_t _intervalMS);
 
     ~RateCollector();
 
@@ -82,9 +84,10 @@ private:
 class RateCollectorFactory
 {
 public:
-    static RateCollector::Ptr build(std::string _moduleName, uint64_t _intervalMS)
+    static RateCollector::Ptr build(
+        boost::asio::io_context& _ioService, std::string _moduleName, uint64_t _intervalMS)
     {
-        return std::make_shared<RateCollector>(_moduleName, _intervalMS);
+        return std::make_shared<RateCollector>(_ioService, _moduleName, _intervalMS);
     }
 };
 

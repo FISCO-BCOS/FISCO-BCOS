@@ -33,7 +33,8 @@ namespace bcos::test
 class FakeTimer : public Timer
 {
 public:
-    explicit FakeTimer(uint64_t _timeout) : Timer(_timeout, "fakeTimer") {}
+    explicit FakeTimer(boost::asio::io_context& _ioService, uint64_t _timeout)
+      : Timer(_ioService, _timeout, "fakeTimer") {}
     ~FakeTimer() override {}
     void setTriggerTimeout(bool _triggerTimeout) { m_triggerTimeout = _triggerTimeout; }
     bool triggerTimeout() { return m_triggerTimeout; }
@@ -56,7 +57,8 @@ BOOST_FIXTURE_TEST_SUITE(TimerTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testTimer)
 {
     uint64_t timeoutInterval = 200;
-    auto timer = std::make_shared<FakeTimer>(timeoutInterval);
+    boost::asio::io_context ioService;
+    auto timer = std::make_shared<FakeTimer>(ioService, timeoutInterval);
     auto startT = utcTime();
     for (size_t i = 0; i < 4; i++)
     {
@@ -109,7 +111,8 @@ BOOST_AUTO_TEST_CASE(testTimer)
 BOOST_AUTO_TEST_CASE(testPBFTTimer)
 {
     uint64_t timeoutInterval = 100;
-    auto timer = std::make_shared<PBFTTimer>(timeoutInterval);
+    boost::asio::io_context ioService;
+    auto timer = std::make_shared<PBFTTimer>(ioService, timeoutInterval);
     timer->start();
 }
 
