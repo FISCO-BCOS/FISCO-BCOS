@@ -36,8 +36,9 @@ constexpr static const uint16_t secp256k1VRFProofSize = 97;
 class VRFBasedSealer : public bcos::sealer::Sealer
 {
 public:
-    explicit VRFBasedSealer(bcos::sealer::SealerConfig::Ptr _config)
-      : bcos::sealer::Sealer(std::move(_config))
+    explicit VRFBasedSealer(bcos::sealer::SealerConfig::Ptr _config,
+        boost::asio::io_context& _ioContext)
+      : bcos::sealer::Sealer(std::move(_config), _ioContext)
     {}
     ~VRFBasedSealer() override = default;
     VRFBasedSealer(const VRFBasedSealer&) = delete;

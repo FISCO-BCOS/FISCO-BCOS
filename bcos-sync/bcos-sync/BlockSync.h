@@ -103,7 +103,6 @@ protected:
 
     void initSendResponseHandler();
     void executeWorker() override;
-    void workerProcessLoop() override;
     /// for message handle
     // call when receive BlockStatusPacket, update peers status
     virtual void onPeerStatus(bcos::crypto::NodeIDPtr _nodeID, BlockSyncMsgInterface::Ptr _syncMsg);
@@ -160,8 +159,6 @@ protected:
     std::atomic<SyncState> m_state = {SyncState::Idle};
     std::atomic<bcos::protocol::BlockNumber> m_maxRequestNumber = {0};
 
-    boost::condition_variable m_signalled;
-    boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
 

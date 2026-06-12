@@ -172,15 +172,31 @@ public:
 
 // A FakeSocket backed by a real SSL context and stream so that drop() can safely
 // call sslref().async_shutdown() without crashing.
+// We create a connected TCP socket-pair (accept → connect) so the underlying TCP
+// socket is in a valid ESTABLISHED state. Without this, async_shutdown on an
+// unconnected SSL stream triggers a null-pointer dereference in some SSL
+// implementations (e.g. Apple's SecureTransport / LibreSSL on macOS).
 class FakeSocket_FIB : public SocketFace
 {
 public:
     FakeSocket_FIB()
       : SocketFace(),
         m_ioContext(std::make_shared<ba::io_context>()),
-        m_sslContext(ba::ssl::context::tlsv12),
-        m_sslSocket(std::make_shared<ba::ssl::stream<bi::tcp::socket>>(*m_ioContext, m_sslContext))
-    {}
+        m_sslContext(ba::ssl::context::tlsv12)
+    {
+        // Create a connected TCP socket pair so the SSL stream has a valid transport.
+        bi::tcp::acceptor acceptor(*m_ioContext, bi::tcp::endpoint(bi::tcp::v4(), 0));
+        auto endpoint = acceptor.local_endpoint();
+        bi::tcp::socket clientSocket(*m_ioContext);
+        clientSocket.connect(endpoint);
+        bi::tcp::socket serverSocket(*m_ioContext);
+        acceptor.accept(serverSocket);
+        // clientSocket is now in ESTABLISHED state; serverSocket is the
+        // acceptor-side and will close when it goes out of scope.
+
+        m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
+            std::move(clientSocket), m_sslContext);
+    }
     ~FakeSocket_FIB() override = default;
 
     bool isConnected() const override { return m_connected; }

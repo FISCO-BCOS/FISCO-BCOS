@@ -17,130 +17,183 @@
  */
 #include "Worker.h"
 
-#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
-#include <stdio.h>
-#else
-#include <pthread.h>
-#endif
-
 #include "BoostLog.h"
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <chrono>
-#include <thread>
-using namespace std;
-using namespace bcos;
+#include <boost/asio/post.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <exception>
 
-void setThreadName(const char* _threadName)
-{
-#if defined(__GLIBC__)
-    pthread_setname_np(pthread_self(), _threadName);
-#elif defined(__APPLE__)
-    pthread_setname_np(_threadName);
-#endif
-}
+using namespace bcos;
 
 void Worker::startWorking()
 {
-    boost::unique_lock<boost::mutex> l(x_work);
-    if (m_workerThread)
+    std::unique_lock l(x_work);
+    if (m_workerState == WorkerState::Started)
     {
-        WorkerState workerState = WorkerState::Stopped;
-        m_workerState.compare_exchange_strong(workerState, WorkerState::Starting);
-        m_workerStateNotifier.notify_all();
+        // Already running
+        return;
     }
-    else
-    {
-        m_workerState = WorkerState::Starting;
-        m_workerStateNotifier.notify_all();
-        m_workerThread.reset(new thread([&]() {
-            setThreadName(m_threadName.c_str());
-            while (m_workerState != WorkerState::Killing)
-            {
-                WorkerState ex = WorkerState::Starting;
-                {
-                    // the condition variable-related lock
-                    boost::unique_lock<boost::mutex> l(x_work);
-                    m_workerState = WorkerState::Started;
-                }
+    // Transition to Starting, then schedule the first tick
+    m_workerState = WorkerState::Starting;
 
-                m_workerStateNotifier.notify_all();
+    auto aliveFlag = m_aliveFlag;
+    boost::asio::post(m_ioContext, [this, aliveFlag]() {
+        if (!*aliveFlag)
+        {
+            return;  // Worker was destroyed before the post ran
+        }
+        if (m_workerState != WorkerState::Starting)
+        {
+            return;  // was stopped before the post ran
+        }
+        try
+        {
+            initWorker();
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker initWorker")
+                              << LOG_KV("threadName", m_threadName)
+                              << LOG_KV("msg", boost::diagnostic_information(e));
+        }
 
-                try
-                {
-                    initWorker();
-                    workerProcessLoop();
-                    finishWorker();
-                }
-                catch (std::exception const& e)
-                {
-                    BCOS_LOG(WARNING) << LOG_DESC("Exception thrown in Worker thread")
-                                      << LOG_KV("threadName", m_threadName)
-                                      << LOG_KV("msg", boost::diagnostic_information(e));
-                }
+        m_workerState = WorkerState::Started;
 
-                {
-                    // the condition variable-related lock
-                    boost::unique_lock<boost::mutex> l(x_work);
-                    ex = m_workerState.exchange(WorkerState::Stopped);
-                    if (ex == WorkerState::Killing || ex == WorkerState::Starting)
-                        m_workerState.exchange(ex);
-                }
-                m_workerStateNotifier.notify_all();
-
-                {
-                    boost::unique_lock<boost::mutex> l(x_work);
-                    while (m_workerState == WorkerState::Stopped)
-                        m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
-                }
-            }
-        }));
-    }
-
-    while (m_workerState == WorkerState::Starting)
-        m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
+        // Schedule the first tick
+        scheduleNext();
+    });
 }
 
 void Worker::stopWorking()
 {
-    boost::unique_lock<boost::mutex> l(x_work);
-    if (m_workerThread)
     {
-        WorkerState ex = WorkerState::Started;
-        if (!m_workerState.compare_exchange_strong(ex, WorkerState::Stopping))
-            return;
-        m_workerStateNotifier.notify_all();
-        while (m_workerState != WorkerState::Stopped)
+        std::unique_lock l(x_work);
+        if (m_workerState != WorkerState::Started)
         {
-            m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
+            return;
         }
+        m_workerState = WorkerState::Stopping;
+        // Cancel the timer — cancel() returns immediately and is non-throwing.
+        m_timer.cancel();
     }
+    // Call finishWorker() outside the lock: subclasses may acquire other
+    // locks or call back into Worker APIs, which could deadlock if x_work
+    // were still held.
+    try
+    {
+        finishWorker();
+    }
+    catch (std::exception const& e)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker finishWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+    m_workerState = WorkerState::Stopped;
 }
 
 void Worker::terminate()
 {
-    boost::unique_lock<boost::mutex> l(x_work);
-    if (m_workerThread)
+    std::unique_lock l(x_work);
+    if (m_workerState == WorkerState::Killing)
     {
-        if (m_workerState.exchange(WorkerState::Killing) == WorkerState::Killing)
-        {
-            return;  // Somebody else is doing this
-        }
-        l.unlock();
-        m_workerStateNotifier.notify_all();
-        m_workerThread->join();
+        return;  // Already terminating
+    }
+    m_workerState = WorkerState::Killing;
 
-        l.lock();
-        m_workerThread.reset();
+    // Signal all in-flight handlers to bail out before accessing `this`.
+    // The shared_ptr guarantees the atomic<bool> outlives the Worker even
+    // if a handler was already posted to the io_context queue.
+    *m_aliveFlag = false;
+
+    // Cancel any pending timer operation. cancel() is non-throwing and
+    // thread-safe. Handlers already queued will see !*m_aliveFlag and bail.
+    m_timer.cancel();
+}
+
+void Worker::scheduleNext()
+{
+    if (m_workerState != WorkerState::Started)
+    {
+        return;
+    }
+
+    m_timer.expires_after(boost::asio::chrono::milliseconds(m_idleWaitMs));
+    auto aliveFlag = m_aliveFlag;
+    m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
+        if (!*aliveFlag)
+        {
+            return;
+        }
+        handleTimerTick(ec);
+    });
+}
+
+void Worker::handleTimerTick(boost::system::error_code const& ec)
+{
+    // aliveFlag check is performed by the wrapping lambda in scheduleNext()
+    // and the backoff path below; kept here for defense-in-depth.
+    if (!*m_aliveFlag)
+    {
+        return;
+    }
+    if (ec == boost::asio::error::operation_aborted)
+    {
+        return;  // Timer was cancelled
+    }
+    if (m_workerState != WorkerState::Started)
+    {
+        return;
+    }
+    bool hasException = false;
+    try
+    {
+        executeWorker();
+    }
+    catch (std::exception const& e)
+    {
+        hasException = true;
+        BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker executeWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+    // FIB-111: backoff after exceptions to prevent tight CPU spin
+    if (hasException && m_idleWaitMs == 0)
+    {
+        // Use a small backoff to avoid busy-looping on persistent exceptions
+        m_timer.expires_after(boost::asio::chrono::milliseconds(10));
+        auto aliveFlag = m_aliveFlag;
+        m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
+            if (!*aliveFlag)
+            {
+                return;
+            }
+            handleTimerTick(ec);
+        });
+    }
+    else
+    {
+        scheduleNext();
     }
 }
 
-void Worker::workerProcessLoop()
+void Worker::notify()
 {
-    while (m_workerState == WorkerState::Started)
+    if (m_workerState == WorkerState::Started)
     {
-        if (m_idleWaitMs)
-            this_thread::sleep_for(chrono::milliseconds(m_idleWaitMs));
-        executeWorker();
+        m_timer.cancel();
+        // The cancelled timer's handler will receive operation_aborted and
+        // return without rescheduling, so we explicitly post a fresh
+        // scheduleNext() to wake the worker.
+        auto aliveFlag = m_aliveFlag;
+        boost::asio::post(m_ioContext, [this, aliveFlag]() {
+            if (!*aliveFlag)
+            {
+                return;
+            }
+            if (m_workerState == WorkerState::Started)
+            {
+                scheduleNext();
+            }
+        });
     }
 }
