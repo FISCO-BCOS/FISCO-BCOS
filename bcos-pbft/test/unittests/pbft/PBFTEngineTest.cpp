@@ -283,6 +283,14 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     BOOST_CHECK(nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
+    // Reset changeCycle and lower minSealTime so resetTimeoutState (called from
+    // onTimeout) does not silently bump consensusTimeout from 200 ms back to
+    // max(200, minSealTime+1) = 3001 ms. In slow CI this causes the timer to
+    // re-fire mid-viewchange and produces a flaky timeout loop.
+    nonLeaderFaker->pbftConfig()->timer()->resetChangeCycle();
+    leaderFaker->pbftConfig()->timer()->resetChangeCycle();
+    nonLeaderFaker->pbftConfig()->setMinSealTime(0);
+    leaderFaker->pbftConfig()->setMinSealTime(0);
     nonLeaderFaker->pbftConfig()->setConsensusTimeout(200);
     leaderFaker->pbftConfig()->setConsensusTimeout(200);
     leaderFaker->pbftConfig()->timer()->start();

@@ -27,6 +27,8 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Worker.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 #include <memory>
@@ -141,8 +143,9 @@ struct FailingConsensus : public bcos::consensus::ConsensusInterface
 struct FIB151TestableSealer : public bcos::sealer::Sealer
 {
     using bcos::sealer::Sealer::submitProposal;  // expose
-    explicit FIB151TestableSealer(bcos::sealer::SealerConfig::Ptr cfg)
-      : bcos::sealer::Sealer(std::move(cfg))
+    explicit FIB151TestableSealer(bcos::sealer::SealerConfig::Ptr cfg,
+        boost::asio::io_context& io)
+      : bcos::sealer::Sealer(std::move(cfg), io)
     {}
 };
 
@@ -169,7 +172,7 @@ struct FIB151Fixture
         consensus = std::make_shared<FailingConsensus>();
         sealerConfig = std::make_shared<bcos::sealer::SealerConfig>(blockFactory, txpool, nullptr);
         sealerConfig->setConsensusInterface(consensus);
-        sealer = std::make_shared<FIB151TestableSealer>(sealerConfig);
+        sealer = std::make_shared<FIB151TestableSealer>(sealerConfig, *m_ioServicePool->getIOService());
         sealer->setSealingManager(std::make_shared<FIB151TestableSealingManager>(sealerConfig));
     }
 
@@ -201,6 +204,9 @@ struct FIB151Fixture
     std::shared_ptr<UnsealRecordingTxPool> txpool;
     std::shared_ptr<FailingConsensus> consensus;
     bcos::sealer::SealerConfig::Ptr sealerConfig;
+    // Must be before sealer to outlive the Worker's timer
+    bcos::IOServicePool::Ptr m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(1, "fib151");
     std::shared_ptr<FIB151TestableSealer> sealer;
 };
 

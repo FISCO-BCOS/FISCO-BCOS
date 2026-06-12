@@ -22,7 +22,6 @@
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ObjectCounter.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -31,7 +30,7 @@
 
 namespace bcos::boostssl::ws
 {
-class RawWsMessage : public boostssl::MessageFace, public bcos::ObjectCounter<RawWsMessage>
+class RawWsMessage : public boostssl::MessageFace
 {
 public:
     using Ptr = std::shared_ptr<RawWsMessage>;

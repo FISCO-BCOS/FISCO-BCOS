@@ -103,7 +103,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB147VrfShadowingTest, Fib147SealerFixture)
 BOOST_AUTO_TEST_CASE(curve25519_default_path_returns_success_after_shadow_fix)
 {
     auto factory = std::make_shared<bcos::sealer::SealerFactory>(
-        nodeConfig, blockFactory, txpool, nullptr, keyPair);
+        nodeConfig, blockFactory, txpool, nullptr, keyPair, *ioServicePool->getIOService());
 
     auto sealer = factory->createVRFBasedSealer();
     auto block = fakeAndCheckBlock(cryptoSuite, blockFactory, 0, 0, 10, true, false);

@@ -20,6 +20,8 @@
  * @date 2026-05-07
  */
 #include "bcos-pbft/core/ConsensusEngine.h"
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Worker.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -39,7 +41,9 @@ public:
     std::atomic<bool> stopped{false};
 
     // Use 5 ms idle wait so the worker is not entirely sleeping by default
-    ThrowingConsensusEngine() : ConsensusEngine("FIB111TestEngine", 5) {}
+    ThrowingConsensusEngine(boost::asio::io_context& io)
+      : ConsensusEngine(io, "FIB111TestEngine", 5)
+    {}
 
     void executeWorker() override
     {
@@ -66,7 +70,8 @@ BOOST_FIXTURE_TEST_SUITE(FIB111Test, TestPromptFixture)
 // substantially lower than without (upper bound).
 BOOST_AUTO_TEST_CASE(exception_loop_has_backoff)
 {
-    auto engine = std::make_shared<ThrowingConsensusEngine>();
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "fib111");
+    auto engine = std::make_shared<ThrowingConsensusEngine>(*ioServicePool->getIOService());
 
     // Start the worker thread
     engine->start();

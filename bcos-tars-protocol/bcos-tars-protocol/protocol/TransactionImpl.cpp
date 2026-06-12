@@ -24,12 +24,17 @@
 #include "../impl/TarsSerializable.h"
 #include <bcos-concepts/Hash.h>
 #include <bcos-concepts/Serialize.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
+#include <cstring>
+#include <exception>
 #include <range/v3/view/any_view.hpp>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
+
+#define WEB3_ACCESS_LIST_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("WEB3_ACCESS_LIST")
 
 bcostars::protocol::TransactionImpl::TransactionImpl(std::function<bcostars::Transaction*()> inner)
   : m_inner(std::move(inner))
@@ -206,6 +211,70 @@ bcos::bytesConstRef bcostars::protocol::TransactionImpl::extraTransactionBytes()
         m_inner()->extraTransactionBytes.size()};
 }
 
+uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
+{
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        return 0;
+    }
+    return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
+}
+
+void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
+{
+    std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
+    if (m_web3AccessListCacheBuilt)
+    {
+        return;
+    }
+    m_web3AccessListCache.clear();
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        m_web3AccessListCacheBuilt = true;
+        return;
+    }
+    auto const& entries = m_inner()->data.accessList;
+    m_web3AccessListCache.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::protocol::Web3AccessListEntry out;
+        try
+        {
+            out.account = bcos::toAddress(entry.account);
+        }
+        catch (std::exception const&)
+        {
+            WEB3_ACCESS_LIST_LOG(WARNING)
+                << LOG_DESC("Skip access list entry with invalid account address")
+                << LOG_KV("account", entry.account);
+            continue;
+        }
+        out.storageKeys.reserve(entry.storageKeys.size());
+        for (auto const& keyBytes : entry.storageKeys)
+        {
+            if (keyBytes.size() != bcos::h256::SIZE)
+            {
+                WEB3_ACCESS_LIST_LOG(WARNING)
+                    << LOG_DESC("Skip access list storage key with invalid length")
+                    << LOG_KV("account", entry.account) << LOG_KV("keySize", keyBytes.size())
+                    << LOG_KV("expected", bcos::h256::SIZE);
+                continue;
+            }
+            bcos::h256 key;
+            std::memcpy(key.data(), keyBytes.data(), bcos::h256::SIZE);
+            out.storageKeys.emplace_back(key);
+        }
+        m_web3AccessListCache.emplace_back(std::move(out));
+    }
+    m_web3AccessListCacheBuilt = true;
+}
+
+bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3AccessList() const
+{
+    ensureWeb3AccessListCache();
+    return m_web3AccessListCache;
+}
+
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
 {
     return *m_inner();
@@ -231,6 +300,14 @@ size_t bcostars::protocol::TransactionImpl::size() const
     size += m_inner()->data.maxFeePerGas.size();
     size += m_inner()->data.maxPriorityFeePerGas.size();
     size += m_inner()->data.extension.size();
+    for (auto const& entry : m_inner()->data.accessList)
+    {
+        size += entry.account.size();
+        for (auto const& key : entry.storageKeys)
+        {
+            size += key.size();
+        }
+    }
     size += m_inner()->signature.size();
     size += m_inner()->sender.size();
     size += m_inner()->extraData.size();

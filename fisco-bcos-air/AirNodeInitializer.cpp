@@ -102,8 +102,6 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     }
     m_nodeInitializer->initNotificationHandlers(m_rpc);
 
-    m_objMonitor = std::make_shared<bcos::ObjectAllocatorMonitor>();
-
     // NOTE: this should be last called
     m_nodeInitializer->initSysContract();
 
@@ -132,18 +130,6 @@ void AirNodeInitializer::start()
     if (m_rpc)
     {
         m_rpc->start();
-    }
-
-    if (m_objMonitor)
-    {
-        // start monitor object alloc
-        m_objMonitor->startMonitor</*boostssl start*/ bcos::boostssl::ws::WsMessage,
-            bcos::boostssl::ws::RawWsMessage, bcos::boostssl::ws::WsSession,
-            bcos::boostssl::ws::RawWsStream, bcos::boostssl::ws::SslWsStream,
-            bcos::boostssl::ws::WsSession::CallBack, bcos::boostssl::ws::WsSession::Message,
-            bcos::boostssl::ws::WsStreamDelegate /*boostssl end*/, bcos::gateway::FrontServiceInfo,
-            bcos::ratelimiter::TimeWindowRateLimiter,
-            bcos::ratelimiter::DistributedRateLimiter /*gateway end*/>(4);
     }
 
     if (m_tarsApplication && m_tarsConfig)
@@ -182,10 +168,6 @@ void AirNodeInitializer::stop()
             m_tarsThread->join();
         }
 
-        if (m_objMonitor)
-        {
-            m_objMonitor->stopMonitor();
-        }
     }
     catch (std::exception const& e)
     {

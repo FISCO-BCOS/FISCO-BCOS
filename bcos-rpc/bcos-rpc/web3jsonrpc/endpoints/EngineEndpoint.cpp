@@ -245,7 +245,8 @@ Json::Value serializePayloadStatus(const engine::PayloadStatus& status)
 /// Serialize ForkchoiceUpdatedResult to JSON.
 Json::Value serializForkchoiceUpdatedResult(const engine::ForkchoiceUpdatedResult& result)
 {
-    auto json = serializePayloadStatus(result.payloadStatus);
+    Json::Value json(Json::objectValue);
+    json["payloadStatus"] = serializePayloadStatus(result.payloadStatus);
     if (result.payloadId.has_value())
     {
         json["payloadId"] = *result.payloadId;
@@ -320,7 +321,9 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     }
 
     std::vector<std::string> remoteCaps;
-    for (auto const& cap : request)
+    // Ethereum Engine API spec: params[0] is the capabilities array
+    auto const& capsArray = request[0u];
+    for (auto const& cap : capsArray)
     {
         remoteCaps.push_back(cap.asString());
     }

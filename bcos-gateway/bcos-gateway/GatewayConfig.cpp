@@ -461,7 +461,7 @@ void GatewayConfig::parseConnectedJson(
     {
         GATEWAY_CONFIG_LOG(ERROR) << LOG_KV(
             "parseConnectedJson error: ", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(e);
+        boost::rethrow_exception(boost::current_exception());
     }
 }
 

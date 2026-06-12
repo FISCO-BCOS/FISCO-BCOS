@@ -4,9 +4,14 @@
 #include "bcos-utilities/Common.h"
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace bcos::executor
 {
+/// EIP-2930 access list (execution layer): 20-byte address + storage keys (h256).
+using Eip2930AccessList = std::vector<std::pair<bcos::Address, std::vector<h256>>>;
+
 struct CallParameters
 {
     using UniquePtr = std::unique_ptr<CallParameters>;
@@ -44,6 +49,11 @@ struct CallParameters
 
     u256 nonce = 0;  // for create
     uint8_t transactionType = 0;
+    /// EIP-2718 envelope byte for Web3 typed tx payload in extraTransactionBytes (0 = unset).
+    /// 1 = EIP-2930; other values reserved (EIP-1559, etc.).
+    uint8_t web3TypedTxKind = 0;
+    /// Decoded EIP-2930 access list (only meaningful when web3TypedTxKind == 1).
+    Eip2930AccessList eip2930AccessList;
     // balance
     u256 value = 0;
     u256 gasPrice = 0;

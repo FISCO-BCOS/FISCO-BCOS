@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(inflight_key_uniqueness_and_dedup)
     msg2->setConsensusProposal(pbftProposal2);
 
     // Create an InspectablePBFTEngine backed by leaderFaker's config
-    auto engine = std::make_shared<InspectablePBFTEngine>(leaderFaker->pbftConfig());
+    auto engine = std::make_shared<InspectablePBFTEngine>(leaderFaker->pbftConfig(), leaderFaker->ioContext());
 
     auto key1 = engine->testInFlightKey(msg1);
     auto key1b = engine->testInFlightKey(msg1);
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(inflight_set_capped_under_flood)
     BlockNumber currentBlockNumber = 10;
     auto fakerMap = createFakers(cryptoSuite, 4, currentBlockNumber, 4);
     auto leaderFaker = fakerMap[0];
-    auto engine = std::make_shared<InspectablePBFTEngine>(leaderFaker->pbftConfig());
+    auto engine = std::make_shared<InspectablePBFTEngine>(leaderFaker->pbftConfig(), leaderFaker->ioContext());
 
     // The cap constant must exist and equal 1024.
     BOOST_CHECK_EQUAL(PBFTEngine::c_maxInFlightProposals, 1024U);

@@ -39,6 +39,7 @@
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/view/drop.hpp>
@@ -235,6 +236,14 @@ constexpr static int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;  // EIP-7623 floor cos
 /// EIP-7623 calldata floor: max(standard calldata gas, tokens * 10).
 inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
 {
+    constexpr auto maxSafeBytes =
+        static_cast<size_t>(std::numeric_limits<int64_t>::max() /
+                            (TOKENS_PER_NONZERO_BYTE * TOTAL_COST_FLOOR_PER_TOKEN));
+    if (data.size() > maxSafeBytes)
+    {
+        return std::numeric_limits<int64_t>::max();
+    }
+
     int64_t normalDataCost = 0;
     int64_t numTokens = 0;
     for (auto byte : data)
@@ -310,6 +319,14 @@ inline evmc_bytes32 toEvmC(h256 const& hash)
     static_assert(sizeof(evmBytes) == h256::SIZE, "Hash size mismatch!");
     ::ranges::copy(hash, evmBytes.bytes);
     return evmBytes;
+}
+/// Convert a 20-byte bcos::Address to evmc_address (binary copy, no hex encoding).
+inline evmc_address toEvmC(bcos::Address const& address)
+{
+    evmc_address out{};
+    static_assert(sizeof(out.bytes) == bcos::Address::SIZE, "Address size mismatch!");
+    ::ranges::copy(address, out.bytes);
+    return out;
 }
 /**
  * @brief : trans uint256 number of evm-represented to u256

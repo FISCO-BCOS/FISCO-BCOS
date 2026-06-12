@@ -8,7 +8,6 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-framework/gateway/GatewayTypeDef.h"
 #include "bcos-gateway/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/asio/ssl/context.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -17,7 +16,7 @@
 
 namespace bcos::gateway
 {
-class GatewayConfig : public bcos::ObjectCounter<GatewayConfig>
+class GatewayConfig
 {
 public:
     using Ptr = std::shared_ptr<GatewayConfig>;

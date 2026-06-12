@@ -450,7 +450,7 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
 {
     auto eventSubFactory = std::make_shared<event::EventSubFactory>();
-    auto eventSub = eventSubFactory->buildEventSub(_wsService);
+    auto eventSub = eventSubFactory->buildEventSub(_wsService, *m_ioServicePool->getIOService());
 
     auto matcher = std::make_shared<event::EventSubMatcher>();
     eventSub->setGroupManager(std::move(_groupManager));
