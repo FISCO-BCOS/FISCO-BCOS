@@ -19,7 +19,6 @@
  */
 #pragma once
 
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsTools.h>
@@ -48,7 +47,7 @@ using WsStreamRWHandler = std::function<void(boost::system::error_code, std::siz
 using WsStreamHandshakeHandler = std::function<void(boost::system::error_code)>;
 
 template <typename STREAM>
-class WsStream : public bcos::ObjectCounter<WsStream<STREAM>>
+class WsStream
 {
 public:
     using Ptr = std::shared_ptr<WsStream>;
@@ -222,7 +221,7 @@ private:
 using RawWsStream = WsStream<boost::beast::tcp_stream>;
 using SslWsStream = WsStream<boost::beast::ssl_stream<boost::beast::tcp_stream>>;
 
-class WsStreamDelegate : public bcos::ObjectCounter<WsStreamDelegate>
+class WsStreamDelegate
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegate>;
@@ -262,7 +261,7 @@ private:
     SslWsStream::Ptr m_sslStream;
 };
 
-class WsStreamDelegateBuilder : public bcos::ObjectCounter<WsStreamDelegate>
+class WsStreamDelegateBuilder
 {
 public:
     using Ptr = std::shared_ptr<WsStreamDelegateBuilder>;

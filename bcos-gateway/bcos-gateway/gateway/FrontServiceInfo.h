@@ -22,12 +22,11 @@
 #include "bcos-framework/protocol/ProtocolInfo.h"
 #include "bcos-tars-protocol/impl/TarsServantProxyCallback.h"
 #include "bcos-tars-protocol/tars/FrontService.h"
-#include "bcos-utilities/ObjectCounter.h"
 namespace bcos
 {
 namespace gateway
 {
-class FrontServiceInfo : public ObjectCounter<FrontServiceInfo>
+class FrontServiceInfo
 {
 public:
     using Ptr = std::shared_ptr<FrontServiceInfo>;
