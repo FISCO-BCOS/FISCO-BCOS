@@ -18,10 +18,10 @@
 
 #pragma once
 
-#include "Common.h"
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <atomic>
 #include <string>
-#include <thread>
 #include <utility>
 
 namespace bcos
@@ -38,8 +38,12 @@ enum class WorkerState
 class Worker
 {
 protected:
-    Worker(std::string _threadName = "worker", unsigned _idleWaitMs = 30)
-      : m_threadName(std::move(_threadName)), m_idleWaitMs(_idleWaitMs)
+    Worker(boost::asio::io_context& _ioContext, std::string _threadName = "worker",
+        unsigned _idleWaitMs = 30)
+      : m_ioContext(_ioContext),
+        m_timer(_ioContext),
+        m_threadName(std::move(_threadName)),
+        m_idleWaitMs(_idleWaitMs)
     {}
     virtual ~Worker() { terminate(); }
 
@@ -55,48 +59,54 @@ protected:
 
     std::string const& threadName() const { return m_threadName; }
 
-    // Starts worker thread by calling startedWorking
+    // Starts worker by scheduling the first timer tick
     void startWorking();
 
-    // Stop worker thread
+    // Stop worker by cancelling the timer
     void stopWorking();
 
-    // Return true if the worker thread is working
-    bool isWorking() const
-    {
-        boost::unique_lock<boost::mutex> l(x_work);
-        return m_workerState == WorkerState::Started;
-    }
+    // Return true if the worker is actively running
+    bool isWorking() const { return m_workerState == WorkerState::Started; }
 
-    // Called after thread is started from startWorking to init the worker
+    // Called after startWorking to init the worker (one-shot)
     virtual void initWorker() {}
 
-    // worker execute logic (Called continuously following sleep for m_idleWaitMs)
+    // worker execute logic (Called per timer tick)
     virtual void executeWorker() {}
 
-    // schedule the task inner a loop before stop the worker thread
-    virtual void workerProcessLoop();
     bool shouldStop() const { return m_workerState != WorkerState::Started; }
 
-    // Called when is to be stopped, just prior to thread being joined.
+    // Called when is to be stopped
     virtual void finishWorker() {}
-    // stop the worker
+    // stop the worker and cancel the timer
     void terminate();
+
+    // Wake up the worker immediately (cancel current timer, re-schedule)
+    void notify();
 
     std::atomic<WorkerState>& workerState() { return m_workerState; }
     unsigned idleWaitMs() const { return m_idleWaitMs; }
 
 private:
+    // Schedule the next timer tick
+    void scheduleNext();
+    // Timer completion handler (body of the former doTick lambda)
+    void handleTimerTick(boost::system::error_code const& _ec);
+
+    boost::asio::io_context& m_ioContext;
+    boost::asio::steady_timer m_timer;
+
     std::string m_threadName;
 
     unsigned m_idleWaitMs = 0;
 
-    mutable boost::mutex x_work;
-    // the worker thread
-    std::unique_ptr<std::thread> m_workerThread;
-    // Notification when m_workerState changes
-    mutable boost::condition_variable m_workerStateNotifier;
+    std::mutex x_work;
     std::atomic<WorkerState> m_workerState = {WorkerState::Starting};
+
+    // Shared alive flag captured by all async handlers. terminate() sets it to
+    // false; handlers check it before accessing `this`, so they can safely bail
+    // even if the handler was already posted before Worker destruction.
+    std::shared_ptr<std::atomic<bool>> m_aliveFlag = std::make_shared<std::atomic<bool>>(true);
 };
 
 }  // namespace bcos

@@ -18,6 +18,7 @@
  * @date: 2021-01-18
  */
 
+#include "bcos-utilities/Common.h"
 #include "bcos-utilities/BoostLog.h"
 #include <boost/test/unit_test.hpp>
 #include <chrono>

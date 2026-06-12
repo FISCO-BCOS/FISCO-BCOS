@@ -20,7 +20,6 @@
 #pragma once
 
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include <atomic>
 #include <boost/asio/io_context.hpp>
 #include <memory>
@@ -44,7 +43,7 @@ struct RateCollectorStat
     std::atomic<uint64_t> lastFailedCount{0};
 };
 
-class RateCollector : bcos::ObjectCounter<RateCollector>
+class RateCollector
 {
 public:
     using Ptr = std::shared_ptr<RateCollector>;

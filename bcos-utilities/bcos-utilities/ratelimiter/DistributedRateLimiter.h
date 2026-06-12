@@ -21,7 +21,6 @@
 #pragma once
 
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include "bcos-utilities/ratelimiter/RateLimiterInterface.h"
 #include <boost/asio/io_context.hpp>
 #include <sw/redis++/redis++.h>
@@ -37,8 +36,7 @@ namespace bcos::ratelimiter
 {
 
 class DistributedRateLimiter : public RateLimiterInterface,
-                               public std::enable_shared_from_this<DistributedRateLimiter>,
-                               public bcos::ObjectCounter<DistributedRateLimiter>
+                               public std::enable_shared_from_this<DistributedRateLimiter>
 {
 public:
     using Ptr = std::shared_ptr<DistributedRateLimiter>;

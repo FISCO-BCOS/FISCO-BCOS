@@ -32,8 +32,8 @@ using namespace bcos;
 using namespace bcos::sealer;
 using namespace bcos::protocol;
 
-bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig)
-  : Worker("Sealer", 0),
+bcos::sealer::Sealer::Sealer(SealerConfig::Ptr _sealerConfig, boost::asio::io_context& _ioContext)
+  : Worker(_ioContext, "Sealer", 100),
     m_sealerConfig(std::move(_sealerConfig)),
     m_lastFetchTimepoint(std::chrono::steady_clock::now())
 {
@@ -161,8 +161,8 @@ void Sealer::executeWorker()
         }
         else
         {
-            boost::unique_lock<boost::mutex> lock(x_signalled);
-            m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
+            // No proposal to generate; let Worker timer handle the delay.
+            // noteGenerateProposal() will call notify() to wake us early.
         }
     }
     catch (std::exception const& e)
@@ -178,8 +178,7 @@ void Sealer::executeWorker()
             SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
                             << LOG_KV("message", boost::diagnostic_information(nested));
         }
-        boost::unique_lock<boost::mutex> lock(x_signalled);
-        m_signalled.wait_for(lock, boost::chrono::milliseconds(100));
+        // Let Worker timer handle the delay after exception.
     }
 }
 
@@ -309,5 +308,5 @@ bcos::sealer::SealingManager::Ptr bcos::sealer::Sealer::sealingManager() const
 }
 void bcos::sealer::Sealer::noteGenerateProposal()
 {
-    m_signalled.notify_one();
+    notify();
 }

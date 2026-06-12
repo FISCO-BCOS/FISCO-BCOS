@@ -24,6 +24,7 @@
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
+#include <boost/asio/io_context.hpp>
 
 #include <utility>
 
@@ -33,19 +34,18 @@ class RPBFTFactory : public PBFTFactory
 {
 public:
     using Ptr = std::shared_ptr<RPBFTFactory>;
-    RPBFTFactory(boost::asio::io_context& _ioService,
-        bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    RPBFTFactory(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
-      : PBFTFactory(_ioService, std::move(_cryptoSuite), std::move(_keyPair),
-            std::move(_frontService), std::move(_storage), std::move(_ledger),
-            std::move(_scheduler), std::move(_txpool), std::move(_blockFactory),
-            std::move(_txResultFactory))
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
+        boost::asio::io_context& _ioContext)
+      : PBFTFactory(std::move(_cryptoSuite), std::move(_keyPair), std::move(_frontService),
+            std::move(_storage), std::move(_ledger), std::move(_scheduler), std::move(_txpool),
+            std::move(_blockFactory), std::move(_txResultFactory), _ioContext)
     {}
     RPBFTFactory& operator=(const RPBFTFactory&) = delete;
     RPBFTFactory(const RPBFTFactory&) = delete;

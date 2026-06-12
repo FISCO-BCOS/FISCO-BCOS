@@ -27,6 +27,8 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-utilities/IOServicePool.h>
+#include <bcos-utilities/Worker.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -69,9 +71,9 @@ public:
 
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_ioService, m_cryptoSuite, m_keyPair,
-            m_frontService, m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory,
-            txResultFactory);
+        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_cryptoSuite, m_keyPair, m_frontService,
+            m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory,
+            *m_ioServicePool->getIOService());
         m_rpbft = rpbftFactory->createRPBFT();
         m_rpbftConfig = std::dynamic_pointer_cast<RPBFTConfig>(m_rpbft->pbftEngine()->pbftConfig());
     }
@@ -115,6 +117,8 @@ public:
     FakeLedger::Ptr m_ledger;
     FakeTxPool::Ptr m_txpool;
     FakeScheduler::Ptr m_scheduler;
+    // Must be before m_rpbft to outlive the Worker's timer inside PBFTEngine
+    bcos::IOServicePool::Ptr m_ioServicePool = std::make_shared<bcos::IOServicePool>(1, "rpbftCfg");
     PBFTImpl::Ptr m_rpbft;
     RPBFTConfig::Ptr m_rpbftConfig;
 };

@@ -20,7 +20,6 @@
 #pragma once
 #include "bcos-boostssl/interfaces/MessageFace.h"
 #include "bcos-boostssl/websocket/WsError.h"
-#include "bcos-utilities/ObjectCounter.h"
 #include <bcos-boostssl/httpserver/Common.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
@@ -46,8 +45,7 @@ namespace bcos::boostssl::ws
 {
 class WsService;
 // The websocket session for connection
-class WsSession : public std::enable_shared_from_this<WsSession>,
-                  public bcos::ObjectCounter<WsSession>
+class WsSession : public std::enable_shared_from_this<WsSession>
 {
 public:
     using Ptr = std::shared_ptr<WsSession>;
@@ -120,7 +118,7 @@ public:
     bool needCheckRspPacket() const;
     void setNeedCheckRspPacket(bool _needCheckRespPacket);
 
-    struct CallBack : public bcos::ObjectCounter<CallBack>
+    struct CallBack
     {
         using Ptr = std::shared_ptr<CallBack>;
         RespCallBack respCallBack;
@@ -142,7 +140,7 @@ public:
     virtual void onReadPacket();
     void onWritePacket();
 
-    struct Message : public bcos::ObjectCounter<Message>
+    struct Message
     {
         std::shared_ptr<bcos::bytes> buffer;
     };

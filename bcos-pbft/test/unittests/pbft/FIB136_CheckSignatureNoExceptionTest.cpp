@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(throwing_signature_backend_returns_invalid)
     auto leaderFaker = fakerMap[leaderIndex];
 
     // Build an engine with the leader's config
-    auto engine = std::make_shared<CheckSignatureEngine>(leaderFaker->pbftConfig());
+    auto engine = std::make_shared<CheckSignatureEngine>(leaderFaker->pbftConfig(), leaderFaker->ioContext());
 
     // Create a ThrowingPBFTMessage whose verifySignature() throws.
     // Set generatedFrom=0 so that the leader node is found in the consensus node list.

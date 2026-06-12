@@ -22,6 +22,8 @@
 #include "bcos-utilities/Worker.h"
 #include "bcos-utilities/Timer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>
@@ -35,9 +37,9 @@ namespace test
 class TestWorkerImpl : public Worker
 {
 public:
-    TestWorkerImpl() : Worker("TestWorkerImpl", 1)
+    TestWorkerImpl(boost::asio::io_context& io) : Worker(io, "TestWorkerImpl", 1)
     {
-        m_timer = std::make_shared<Timer>(m_ioService, 1, "testTimer");
+        m_timer = std::make_shared<Timer>(io, 1, "testTimer");
         m_timer->registerTimeoutHandler([]() { std::cout << "#### call timer" << std::endl; });
     }
     void run() { startWorking(); }
@@ -62,10 +64,18 @@ BOOST_FIXTURE_TEST_SUITE(Worker, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(testWorker)
 {
-    TestWorkerImpl workerImpl;
+    boost::asio::io_context ioContext;
+    auto work = boost::asio::make_work_guard(ioContext);
+    std::thread ioThread([&]() { ioContext.run(); });
+
+    TestWorkerImpl workerImpl(ioContext);
     workerImpl.run();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
     workerImpl.stop();
+
+    work.reset();
+    ioContext.stop();
+    ioThread.join();
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -20,6 +20,7 @@
  */
 #pragma once
 #include "PBFTImpl.h"
+#include <boost/asio/io_context.hpp>
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
@@ -38,7 +39,8 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory);
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
+        boost::asio::io_context& _ioContext);
 
     virtual ~PBFTFactory() = default;
     virtual PBFTImpl::Ptr createPBFT();
@@ -54,5 +56,6 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
+    boost::asio::io_context* m_ioContext;
 };
 }  // namespace bcos::consensus
