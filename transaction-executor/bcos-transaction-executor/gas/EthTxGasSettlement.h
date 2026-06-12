@@ -115,11 +115,15 @@ inline int64_t effectiveRefundEip3529(int64_t evmGasRefund, int64_t gasUsedBefor
 inline int64_t finalizeEthereumGasUsed(TxGasSettlementContext const& ctx) noexcept
 {
     int64_t const executionBurn = ctx.gasBeforeEvm - ctx.evmGasLeft;
+    // CREATE intrinsic is debited inside evmone from gasBeforeEvm when execution runs; when
+    // executionBurn already covers createTerm, do not add it again (avoids double-count).
+    int64_t const createExtra =
+        (ctx.createTerm > 0 && executionBurn < ctx.createTerm) ? ctx.createTerm - executionBurn : 0;
     int64_t const gasUsedBeforeRefund =
-        ctx.fixedIntrinsic + ctx.calldata.normalCost + executionBurn + ctx.createTerm;
+        ctx.fixedIntrinsic + ctx.calldata.normalCost + executionBurn + createExtra;
     int64_t const effectiveRefund = effectiveRefundEip3529(ctx.evmGasRefund, gasUsedBeforeRefund);
     int64_t const dataExec =
-        ctx.calldata.normalCost + executionBurn - effectiveRefund + ctx.createTerm;
+        ctx.calldata.normalCost + executionBurn - effectiveRefund + createExtra;
     int64_t const dataComponent = std::max(dataExec, ctx.calldata.floorCost);
     return ctx.fixedIntrinsic + dataComponent;
 }

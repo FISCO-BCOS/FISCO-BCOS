@@ -205,6 +205,17 @@ public:
         co_await account.setCode(stopCode, "", codeHash);
     }
 
+    task::Task<void> deployBytecode(evmc_address const& addr, bcos::bytes const& code)
+    {
+        EVMAccount<decltype(storage)> account(storage, addr, false);
+        if (!co_await account.exists())
+        {
+            co_await account.create();
+        }
+        auto const codeHash = cryptoSuite->hashImpl()->hash(ref(code));
+        co_await account.setCode(code, "", codeHash);
+    }
+
     task::Task<void> fundSender(evmc_address const& sender, u256 balance = u256(1) << 96)
     {
         EVMAccount<decltype(storage)> account(storage, sender, false);
@@ -522,10 +533,37 @@ BOOST_AUTO_TEST_CASE(type2_contractCreate_floorDominatesReceiptGasUsed)
 
         BOOST_REQUIRE(receipt);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        // Create settlement includes create intrinsic; execution may add a small amount above
-        // floor.
-        BOOST_CHECK_GE(receipt->gasUsed(), u256(expectedGasUsed));
+        BOOST_CHECK_EQUAL(receipt->gasUsed(), u256(expectedGasUsed));
         BOOST_CHECK(!receipt->contractAddress().empty());
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(type2_mixedCalldata_postEvmOOG_receiptGasUsed_isGasLimit)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        evmc_address sender{};
+        sender.bytes[19] = 0xf7;
+        evmc_address target{};
+        target.bytes[19] = 0xf8;
+        co_await fundSender(sender);
+        // JUMPDEST PUSH0 PUSH0 JUMP — burns remaining EVM gas until OOG.
+        bcos::bytes const loopCode{0x5b, 0x60, 0x00, 0x60, 0x00, 0x56};
+        co_await deployBytecode(target, loopCode);
+
+        Address toAddr{};
+        std::memcpy(toAddr.data(), target.bytes, sizeof(target.bytes));
+        auto const data = mixedCalldata100();
+        constexpr int64_t expectedGasUsed = gas::TX_BASE_GAS + 2500;
+
+        auto tx =
+            makeWeb3Type2Transaction(sender, toAddr, data, static_cast<uint64_t>(expectedGasUsed));
+        auto receipt = co_await executor.executeTransaction(
+            storage, blockHeader, *tx, contextId++, ledgerConfig, false);
+
+        BOOST_REQUIRE(receipt);
+        BOOST_CHECK_EQUAL(
+            receipt->status(), static_cast<int32_t>(protocol::TransactionStatus::OutOfGas));
+        BOOST_CHECK_EQUAL(receipt->gasUsed(), u256(expectedGasUsed));
     }());
 }
 

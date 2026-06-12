@@ -176,8 +176,10 @@ BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_highIntrinsicRefundSubjectTo3529Cap
     ctx.evmGasRefund = 50'000;
 
     int64_t const executionBurn = ctx.gasBeforeEvm - ctx.evmGasLeft;
+    int64_t const createExtra =
+        (ctx.createTerm > 0 && executionBurn < ctx.createTerm) ? ctx.createTerm - executionBurn : 0;
     int64_t const gasUsedBeforeRefund =
-        ctx.fixedIntrinsic + ctx.calldata.normalCost + executionBurn + ctx.createTerm;
+        ctx.fixedIntrinsic + ctx.calldata.normalCost + executionBurn + createExtra;
     int64_t const cap = effectiveRefundEip3529(ctx.evmGasRefund, gasUsedBeforeRefund);
     BOOST_CHECK_EQUAL(cap, gasUsedBeforeRefund / 5);
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), ctx.fixedIntrinsic);
@@ -199,6 +201,58 @@ BOOST_AUTO_TEST_CASE(FinalizeWithoutEvmStart_intrinsicOOG_vector)
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsedWithoutEvmStart(ctx, debit, 0, false), 20'000);
     ctx.gasLimit = 500'000;
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsedWithoutEvmStart(ctx, debit, 0, true), debit);
+}
+
+BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_create_noDoubleCount)
+{
+    bytes initcode(10, 0x42);
+    evmc_message msg{};
+    msg.kind = EVMC_CREATE;
+    msg.input_data = initcode.data();
+    msg.input_size = initcode.size();
+    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 2);
+
+    TxGasSettlementContext ctx;
+    ctx.fixedIntrinsic = intrinsic.fixedCost();
+    ctx.calldata.normalCost = intrinsic.normalCalldata;
+    ctx.calldata.floorCost = intrinsic.floorReserve;
+    ctx.createTerm = intrinsic.createIntrinsic;
+    ctx.gasBeforeEvm = 50'000;
+    // evmone debited full CREATE intrinsic from the execution gas pool.
+    ctx.evmGasLeft = ctx.gasBeforeEvm - intrinsic.createIntrinsic;
+    ctx.evmGasRefund = 0;
+
+    BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), intrinsic.gasLimitMinimum());
+
+    // When executionBurn already includes createTerm, adding createTerm again must not inflate.
+    ctx.gasBeforeEvm =
+        intrinsic.gasLimitMinimum() - intrinsic.fixedCost() - intrinsic.normalCalldata;
+    constexpr int64_t extraOpcodeGas = 38;
+    ctx.evmGasLeft = ctx.gasBeforeEvm - intrinsic.createIntrinsic - extraOpcodeGas;
+    BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), intrinsic.gasLimitMinimum() + extraOpcodeGas);
+}
+
+BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_postEvmOOG_chargesFullGasLimit)
+{
+    auto const mixed = mixedCalldata100();
+    auto const components = calcEip7623Components(ref(mixed));
+
+    evmc_message msg{};
+    msg.kind = EVMC_CALL;
+    msg.input_data = mixed.data();
+    msg.input_size = mixed.size();
+    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 2);
+    auto const gasLimit = intrinsic.gasLimitMinimum();
+
+    TxGasSettlementContext ctx;
+    ctx.gasLimit = gasLimit;
+    ctx.fixedIntrinsic = intrinsic.fixedCost();
+    ctx.calldata = components;
+    ctx.gasBeforeEvm = gasLimit - intrinsic.fixedCost() - intrinsic.normalCalldata;
+    ctx.evmGasLeft = 0;
+    ctx.evmGasRefund = 0;
+
+    BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), gasLimit);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

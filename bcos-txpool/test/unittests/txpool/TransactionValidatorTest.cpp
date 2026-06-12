@@ -29,6 +29,7 @@
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 
+#include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-task/Wait.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -354,6 +355,53 @@ BOOST_AUTO_TEST_CASE(testSubmitEip7623GasFloorRejected)
     BOOST_CHECK_EQUAL(txpoolStorage->size(), poolSizeBefore);
 
     std::cout << "#### testSubmitEip7623GasFloorRejected finish" << std::endl;
+}
+
+BOOST_AUTO_TEST_CASE(testEnforceSubmitEip7623GasFloorRejected)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    auto keyPair = signatureImpl->generateKeyPair();
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(
+        keyPair->publicKey(), cryptoSuite, "groupId", "chainId", 100000000, fakeGateWay, false);
+    faker->init();
+
+    auto txpoolStorage = faker->txpool()->txpoolStorage();
+    auto ledger = faker->ledger();
+    ledger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
+
+    bcos::ledger::Features pragueFeatures;
+    pragueFeatures.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    ledger->setTestFeatures(pragueFeatures);
+
+    auto const eoaKey = cryptoSuite->signatureImpl()->generateKeyPair();
+    faker->ledger()->initEoaContext(eoaKey->address(cryptoSuite->hashImpl()).hex(), "0");
+    StorageState state{.nonce = "0", .balance = "1000000000000000000"};
+    faker->ledger()->setStorageState(
+        eoaKey->address(cryptoSuite->hashImpl()).hex(), std::move(state));
+
+    bcos::bytes mixedCalldata(100);
+    std::fill(mixedCalldata.begin(), mixedCalldata.begin() + 50, 0x00);
+    std::fill(mixedCalldata.begin() + 50, mixedCalldata.end(), 0x42);
+    std::string mixedInput(mixedCalldata.begin(), mixedCalldata.end());
+
+    auto const poolSizeBefore = txpoolStorage->size();
+    auto tx = fakeWeb3Tx(cryptoSuite, "0", eoaKey, mixedInput);
+    auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+    txImpl->mutableInner().data.gasLimit = 23499;
+    tx->setSealed(true);
+
+    auto blockHeader = std::make_shared<bcostars::protocol::BlockHeaderImpl>();
+    blockHeader->calculateHash(*hashImpl);
+    auto txs = std::make_shared<bcos::protocol::Transactions>();
+    txs->push_back(tx);
+
+    BOOST_CHECK(!txpoolStorage->batchVerifyAndSubmitTransaction(blockHeader, txs));
+    BOOST_CHECK_EQUAL(txpoolStorage->size(), poolSizeBefore);
+
+    std::cout << "#### testEnforceSubmitEip7623GasFloorRejected finish" << std::endl;
 }
 
 BOOST_AUTO_TEST_SUITE_END()

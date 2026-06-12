@@ -273,6 +273,17 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
 TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
     auto txHash = _tx->hash();
+    if (_tx->type() == static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        if (auto const status = task::syncWait(
+                m_config->txValidator()->validateEip7623GasFloor(*_tx, m_config->ledger()));
+            status != TransactionStatus::None)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("enforce submit rejected: EIP-7623 gasLimit floor")
+                                << LOG_KV("tx", txHash.abridged()) << LOG_KV("status", status);
+            return status;
+        }
+    }
     // the transaction has already onChain, reject it
     // check ledger tx
     // check web3 tx

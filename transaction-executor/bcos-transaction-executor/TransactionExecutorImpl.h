@@ -291,19 +291,7 @@ public:
                 auto ctx = *snapOpt;
                 ctx.evmGasLeft = evmcResult.gas_left;
                 ctx.evmGasRefund = evmcResult.gas_refund;
-
-                if (evmcResult.status_code == EVMC_OUT_OF_GAS && evmcResult.gas_left == 0)
-                {
-                    const bool fixAll =
-                        features.get(ledger::Features::Flag::bugfix_evm_exception_gas_used);
-                    m_data->m_gasUsed = executor_v1::gas::finalizeEthereumGasUsedWithoutEvmStart(
-                        ctx, m_data->m_hostContext.preExecutionDebitForSettlement(),
-                        evmcResult.gas_left, fixAll);
-                }
-                else
-                {
-                    m_data->m_gasUsed = executor_v1::gas::finalizeEthereumGasUsed(ctx);
-                }
+                m_data->m_gasUsed = executor_v1::gas::finalizeEthereumGasUsed(ctx);
             }
             else
             {
