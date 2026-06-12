@@ -69,11 +69,8 @@ inline bcos::bigint builtinPrecompileGasCost(
     executor::PrecompiledContract const& precompiledContract, bytesConstRef input,
     evmc_message const& message, evmc_revision revision)
 {
-    if (executor::isModexpPrecompileEvmcAddress(message.code_address))
-    {
-        return executor::calcModexpGas(input, revision);
-    }
-    return precompiledContract.cost(input);
+    (void)message;
+    return precompiledContract.cost(input, revision);
 }
 
 // Execute an EVM built-in precompiled contract (sha256, ecrecover, etc.).

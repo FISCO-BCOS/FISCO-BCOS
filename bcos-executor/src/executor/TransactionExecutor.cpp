@@ -251,8 +251,8 @@ void TransactionExecutor::initEvmEnvironment()
     m_evmPrecompiled->insert(std::make_pair(fillZero(4),
         make_shared<PrecompiledContract>(15, 3, PrecompiledRegistrar::executor("identity"))));
     m_evmPrecompiled->insert(
-        {fillZero(5), make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("modexp"),
-                          PrecompiledRegistrar::executor("modexp"))});
+        {fillZero(5), make_shared<PrecompiledContract>(
+                          PrecompiledContract::modexp(PrecompiledRegistrar::executor("modexp")))});
     m_evmPrecompiled->insert(
         {fillZero(6), make_shared<PrecompiledContract>(
                           150, 0, PrecompiledRegistrar::executor("alt_bn128_G1_add"))});

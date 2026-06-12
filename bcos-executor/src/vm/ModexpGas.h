@@ -29,7 +29,8 @@ bool validateModexpEip7823(bcos::bytesConstRef input, evmc_revision revision);
 /// EIP-198 (< Berlin), EIP-2565 (Berlin..Osaka-1), EIP-7883 (Osaka+).
 bcos::bigint calcModexpGas(bcos::bytesConstRef input, evmc_revision revision);
 
-/// Registrar / legacy pricer path (always EIP-198).
+/// Legacy EIP-198 pricing for PrecompiledRegistrar::pricer("modexp") and unit tests only.
+/// Production uses PrecompiledContract::modexp() -> calcModexpGas(input, revision).
 bcos::bigint calcModexpGasEip198Public(bcos::bytesConstRef input);
 
 }  // namespace bcos::executor

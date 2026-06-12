@@ -91,8 +91,34 @@ PrecompiledContract::PrecompiledContract(
         _exec, _startingBlock)
 {}
 
+PrecompiledContract PrecompiledContract::modexp(
+    PrecompiledExecutor const& exec, u256 const& startingBlock)
+{
+    PrecompiledContract contract;
+    contract.m_execute = exec;
+    contract.m_startingBlock = startingBlock;
+    contract.m_revisionAwareCost = [](bytesConstRef input, evmc_revision revision) {
+        return calcModexpGas(input, revision);
+    };
+    return contract;
+}
+
 bigint PrecompiledContract::cost(bytesConstRef _in) const
 {
+    if (m_revisionAwareCost)
+    {
+        // Fallback for callers without revision; Berlin/EIP-2565 minimum post-fork pricing.
+        return m_revisionAwareCost(_in, EVMC_BERLIN);
+    }
+    return m_cost(_in);
+}
+
+bigint PrecompiledContract::cost(bytesConstRef _in, evmc_revision revision) const
+{
+    if (m_revisionAwareCost)
+    {
+        return m_revisionAwareCost(_in, revision);
+    }
     return m_cost(_in);
 }
 
@@ -239,6 +265,8 @@ ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in)
     return {true, std::move(output)};
 }
 
+// Legacy EIP-198 pricer for EvmPrecompiledTest::modexp_pricer_* and direct registrar use.
+// Production modexp gas uses PrecompiledContract::modexp() -> calcModexpGas(revision).
 ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 {
     return bcos::executor::calcModexpGasEip198Public(_in);

@@ -42,10 +42,10 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
         4, Precompiled{executor::PrecompiledContract(
                            15, 3, executor::PrecompiledRegistrar::executor("identity")),
                0});
-    m_address2Precompiled.emplace_back(5,
-        Precompiled{executor::PrecompiledContract(executor::PrecompiledRegistrar::pricer("modexp"),
-                        executor::PrecompiledRegistrar::executor("modexp")),
-            0});
+    m_address2Precompiled.emplace_back(
+        5, Precompiled{executor::PrecompiledContract::modexp(
+                           executor::PrecompiledRegistrar::executor("modexp")),
+               0});
     m_address2Precompiled.emplace_back(
         6, Precompiled{executor::PrecompiledContract(
                            150, 0, executor::PrecompiledRegistrar::executor("alt_bn128_G1_add")),

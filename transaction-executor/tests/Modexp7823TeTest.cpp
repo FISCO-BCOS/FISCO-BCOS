@@ -46,8 +46,8 @@ BOOST_AUTO_TEST_SUITE(Modexp7823Te)
 BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka)
 {
     executor::GlobalHashImpl::g_hashImpl = std::make_shared<crypto::Keccak256>();
-    executor::PrecompiledContract const contract(executor::PrecompiledRegistrar::pricer("modexp"),
-        executor::PrecompiledRegistrar::executor("modexp"));
+    executor::PrecompiledContract const contract(
+        executor::PrecompiledContract::modexp(executor::PrecompiledRegistrar::executor("modexp")));
 
     auto const input = modexpHeaderBaseLen1025();
     evmc_address modexpAddr{};
@@ -72,8 +72,8 @@ BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka)
 BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka_legacyPath_burnsAllGas)
 {
     executor::GlobalHashImpl::g_hashImpl = std::make_shared<crypto::Keccak256>();
-    executor::PrecompiledContract const contract(executor::PrecompiledRegistrar::pricer("modexp"),
-        executor::PrecompiledRegistrar::executor("modexp"));
+    executor::PrecompiledContract const contract(
+        executor::PrecompiledContract::modexp(executor::PrecompiledRegistrar::executor("modexp")));
 
     auto const input = modexpHeaderBaseLen1025();
     evmc_address modexpAddr{};

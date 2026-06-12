@@ -121,9 +121,9 @@ inline void compatAttachModexpEvmPrecompile(std::shared_ptr<CompatHostTestExecut
 {
     auto m =
         std::make_shared<std::map<std::string, std::shared_ptr<executor::PrecompiledContract>>>();
-    m->insert({compatFillZeroAddr(5), std::make_shared<executor::PrecompiledContract>(
-                                          executor::PrecompiledRegistrar::pricer("modexp"),
-                                          executor::PrecompiledRegistrar::executor("modexp"))});
+    m->insert({compatFillZeroAddr(5),
+        std::make_shared<executor::PrecompiledContract>(executor::PrecompiledContract::modexp(
+            executor::PrecompiledRegistrar::executor("modexp")))});
     exe->setEVMPrecompiled(std::move(m));
 }
 

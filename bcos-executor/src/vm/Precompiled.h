@@ -28,6 +28,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"
+#include <evmc/evmc.h>
 #include <functional>
 #include <unordered_map>
 #include <utility>
@@ -39,6 +40,7 @@ namespace executor
 class BlockContext;
 using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef)>;
+using RevisionAwarePricer = std::function<bigint(bytesConstRef, evmc_revision)>;
 
 DERIVE_BCOS_EXCEPTION(ExecutorNotFound);
 DERIVE_BCOS_EXCEPTION(PricerNotFound);
@@ -95,13 +97,19 @@ public:
     PrecompiledContract(unsigned _base, unsigned _word, PrecompiledExecutor const& _exec,
         u256 const& _startingBlock = 0);
 
+    /// modexp (0x05): revision-aware gas via calcModexpGas (EIP-198/2565/7883).
+    static PrecompiledContract modexp(
+        PrecompiledExecutor const& exec, u256 const& startingBlock = 0);
+
     bigint cost(bytesConstRef _in) const;
+    bigint cost(bytesConstRef _in, evmc_revision revision) const;
     std::pair<bool, bytes> execute(bytesConstRef _in) const;
 
     u256 const& startingBlock() const;
 
 private:
     PrecompiledPricer m_cost;
+    RevisionAwarePricer m_revisionAwareCost;
     PrecompiledExecutor m_execute;
     u256 m_startingBlock = 0;
 };

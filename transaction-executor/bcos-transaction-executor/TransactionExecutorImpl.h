@@ -4,6 +4,7 @@
 #include "bcos-executor/src/Web3AccessListResolver.h"
 #include "bcos-executor/src/vm/Eip2929AccessState.h"
 #include "bcos-framework/protocol/BlockHeader.h"
+#include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/Wait.h"
@@ -146,7 +147,8 @@ public:
 
                 if (const auto gasPrice =
                         u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
-                    m_data->m_transaction.get().type() == 1 &&  // web3Tx
+                    m_data->m_transaction.get().type() ==
+                        protocol::TransactionType::Web3Transaction &&
                     m_data->m_ledgerConfig.get().features().get(
                         ledger::Features::Flag::bugfix_gas_payment_balance_precheck) &&
                     gasPrice > 0)
@@ -179,8 +181,7 @@ public:
         task::Task<bool> updateNonce()
         {
             if (const auto& transaction = m_data->m_transaction.get();
-                transaction.type() == 1)  // 1 = web3
-                                          // transaction
+                transaction.type() == protocol::TransactionType::Web3Transaction)
             {
                 auto& callNonce = m_data->m_nonce;
                 ledger::account::EVMAccount account(m_data->m_rollbackableStorage, m_data->m_origin,
@@ -284,9 +285,10 @@ public:
             auto const& features = m_data->m_ledgerConfig.get().features();
             auto const& snapOpt = m_data->m_hostContext.gasSettlementSnapshot();
 
-            if (snapOpt &&
-                executor_v1::gas::ethGasSettlementEnabled(features,
-                    m_data->m_hostContext.revision(), 0, m_data->m_transaction.get().type() == 1))
+            if (snapOpt && executor_v1::gas::ethGasSettlementEnabled(features,
+                               m_data->m_hostContext.revision(), 0,
+                               m_data->m_transaction.get().type() ==
+                                   protocol::TransactionType::Web3Transaction))
             {
                 auto ctx = *snapOpt;
                 ctx.evmGasLeft = evmcResult.gas_left;

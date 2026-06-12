@@ -1564,11 +1564,7 @@ std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
 int64_t TransactionExecutive::costOfPrecompiled(const string& _a, bytesConstRef _in) const
 {
     auto const revision = toRevision(m_blockContext.features(), m_blockContext.blockVersion());
-    if (isModexpPrecompileAddress(_a))
-    {
-        return calcModexpGas(_in, revision).convert_to<int64_t>();
-    }
-    return m_evmPrecompiled->at(_a)->cost(_in).convert_to<int64_t>();
+    return m_evmPrecompiled->at(_a)->cost(_in, revision).convert_to<int64_t>();
 }
 
 void TransactionExecutive::setEVMPrecompiled(
