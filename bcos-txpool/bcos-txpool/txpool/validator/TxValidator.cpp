@@ -318,10 +318,6 @@ task::Task<protocol::TransactionStatus> TxValidator::validateEip7623GasFloor(
     {
         co_return TransactionStatus::None;
     }
-    if (_tx.gasLimit() == 0)
-    {
-        co_return TransactionStatus::None;
-    }
     auto const minGas = web3Eip7623GasLimitMinimum(_tx);
     if (static_cast<int64_t>(_tx.gasLimit()) < minGas)
     {

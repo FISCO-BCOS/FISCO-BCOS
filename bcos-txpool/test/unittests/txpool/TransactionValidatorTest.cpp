@@ -238,6 +238,16 @@ BOOST_AUTO_TEST_CASE(testValidateEip7623GasFloor)
     pragueFeatures.set(bcos::ledger::Features::Flag::feature_evm_prague);
     ledger->setTestFeatures(pragueFeatures);
 
+    // gasLimit zero is below EIP-7623 minimum (≥21000) → Malformed.
+    {
+        auto tx = fakeWeb3Tx(cryptoSuite, "0z", eoaKey, mixedInput);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().data.gasLimit = 0;
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateEip7623GasFloor(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::Malformed);
+    }
+
     // gasLimit below EIP-7623 floor (23500 for 100-byte mixed calldata) → Malformed.
     {
         auto tx = fakeWeb3Tx(cryptoSuite, "1", eoaKey, mixedInput);
