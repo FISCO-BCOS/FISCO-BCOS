@@ -58,16 +58,15 @@ private:
             m_memPool(memPool),
             m_transactionExecutor(std::move(transactionExecutor)),
             m_scheduler(std::move(scheduler)),
-            m_engine(m_memPool, m_storageInitializer->storage(), *m_transactionExecutor,
-                *m_scheduler, std::move(blockFactory), blockTxCountLimit),
-            m_any(std::move(m_engine))
+            m_any(std::in_place_type<ConcreteEngineService>, m_memPool,
+                m_storageInitializer->storage(), *m_transactionExecutor, *m_scheduler,
+                std::move(blockFactory), blockTxCountLimit)
         {}
 
         std::shared_ptr<GlobalStateStorageInitializer> m_storageInitializer;
         std::reference_wrapper<bcos::txpool::MemPoolImpl> m_memPool;
         std::shared_ptr<executor_v1::TransactionExecutorImpl> m_transactionExecutor;
         std::shared_ptr<SchedulerType> m_scheduler;
-        ConcreteEngineService m_engine;
         bcos::engine::AnyEngineService m_any;
     };
 

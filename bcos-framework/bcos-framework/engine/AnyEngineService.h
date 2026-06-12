@@ -27,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace bcos::engine
@@ -53,8 +54,7 @@ struct AnyEngineServiceFacade
         task::Task<PayloadStatus>(
             const NewPayloadRequest&, std::uint32_t)>::add_convention<MemGetSafeBlockNumber,
         std::optional<bcos::protocol::BlockNumber>()>::add_convention<MemGetFinalizedBlockNumber,
-        std::optional<bcos::protocol::BlockNumber>()>::support_copy<pro::constraint_level::
-            nontrivial>::support_relocation<pro::constraint_level::nothrow>::
+        std::optional<bcos::protocol::BlockNumber>()>::support_relocation<pro::constraint_level::nothrow>::
         support_destruction<pro::constraint_level::nothrow>::build
 {
 };
@@ -79,8 +79,8 @@ public:
     AnyEngineService() = default;
     ~AnyEngineService() = default;
 
-    AnyEngineService(const AnyEngineService&) = default;
-    AnyEngineService& operator=(const AnyEngineService&) = default;
+    AnyEngineService(const AnyEngineService&) = delete;
+    AnyEngineService& operator=(const AnyEngineService&) = delete;
 
     AnyEngineService(AnyEngineService&&) noexcept = default;
     AnyEngineService& operator=(AnyEngineService&&) noexcept = default;
@@ -93,6 +93,14 @@ public:
     explicit AnyEngineService(T&& engine)
       : m_impl(pro::make_proxy<AnyEngineServiceFacade, std::remove_cvref_t<T>>(
             std::forward<T>(engine)))
+    {}
+
+    /// Construct in-place from constructor arguments (for non-movable types).
+    template <class T, class... Args>
+        requires EngineServiceConcept<T> &&
+                 std::is_constructible_v<T, Args...>
+    explicit AnyEngineService(std::in_place_type_t<T>, Args&&... args)
+      : m_impl(pro::make_proxy<AnyEngineServiceFacade, T>(std::forward<Args>(args)...))
     {}
 
     /// Returns true if this wrapper holds an engine implementation.
