@@ -562,6 +562,17 @@ public:
         return m_fakeStorage;
     }
 
+    void setTestFeatures(bcos::ledger::Features features) { m_testFeatures = std::move(features); }
+
+    task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override
+    {
+        if (m_testFeatures.has_value())
+        {
+            co_return *m_testFeatures;
+        }
+        co_return bcos::ledger::Features{};
+    }
+
 private:
     BlockFactory::Ptr m_blockFactory;
     std::vector<KeyPairInterface::Ptr> m_keyPairVec;
@@ -586,6 +597,7 @@ private:
     std::shared_ptr<FakeStorage> m_fakeStorage;
     std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
+    std::optional<bcos::ledger::Features> m_testFeatures;
 };
 }  // namespace test
 }  // namespace bcos

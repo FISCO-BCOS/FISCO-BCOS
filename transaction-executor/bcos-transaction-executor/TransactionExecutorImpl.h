@@ -8,6 +8,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/Wait.h"
 #include "bcos-transaction-executor/EVMCResult.h"
+#include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Exceptions.h"
 #include "precompiled/PrecompiledManager.h"
@@ -155,12 +156,14 @@ public:
                     {
                         co_return {};
                     }
+                    m_data->m_hostContext.setGasSettlementGasLimit(m_data->m_gasLimit);
                     m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
                     co_await refundGas();
                 }
                 else
                 {
-                    // Legacy path
+                    // Legacy path (precheck OFF): still need gasLimit on settlement snapshot.
+                    m_data->m_hostContext.setGasSettlementGasLimit(m_data->m_gasLimit);
                     m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
                     co_await consumeBalance();
                 }
@@ -275,6 +278,39 @@ public:
             co_return true;
         }
 
+        void settleGasUsedFromEvmResult()
+        {
+            auto& evmcResult = *m_data->m_evmcResult;
+            auto const& features = m_data->m_ledgerConfig.get().features();
+            auto const& snapOpt = m_data->m_hostContext.gasSettlementSnapshot();
+
+            if (snapOpt &&
+                executor_v1::gas::ethGasSettlementEnabled(features,
+                    m_data->m_hostContext.revision(), 0, m_data->m_transaction.get().type() == 1))
+            {
+                auto ctx = *snapOpt;
+                ctx.evmGasLeft = evmcResult.gas_left;
+                ctx.evmGasRefund = evmcResult.gas_refund;
+
+                if (evmcResult.status_code == EVMC_OUT_OF_GAS && evmcResult.gas_left == 0)
+                {
+                    const bool fixAll =
+                        features.get(ledger::Features::Flag::bugfix_evm_exception_gas_used);
+                    m_data->m_gasUsed = executor_v1::gas::finalizeEthereumGasUsedWithoutEvmStart(
+                        ctx, m_data->m_hostContext.preExecutionDebitForSettlement(),
+                        evmcResult.gas_left, fixAll);
+                }
+                else
+                {
+                    m_data->m_gasUsed = executor_v1::gas::finalizeEthereumGasUsed(ctx);
+                }
+            }
+            else
+            {
+                m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
+            }
+        }
+
         // FIB-75 (geth-style): After EVM execution, refund (gasLimit - gasUsed) * gasPrice.
         // If EVM failed (non-SUCCESS, non-REVERT), roll back state changes while preserving
         // the pre-deducted gas cost. gasUsed <= gasLimit is guaranteed because the EVM's
@@ -282,7 +318,7 @@ public:
         task::Task<void> refundGas()
         {
             auto& evmcResult = *m_data->m_evmcResult;
-            m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
+            settleGasUsedFromEvmResult();
 
             if (m_data->m_call)
             {
@@ -303,10 +339,12 @@ public:
                 co_await m_data->m_rollbackableStorage.rollback(m_data->m_afterBuyGasSavepoint);
             }
 
-            // Refund unused gas
-            if (evmcResult.gas_left > 0)
+            // Refund unused gas (settled gasUsed when EIP-7623 path active)
+            const int64_t refundGasUnits =
+                std::max<int64_t>(0, m_data->m_gasLimit - m_data->m_gasUsed);
+            if (refundGasUnits > 0)
             {
-                auto refund = u256(evmcResult.gas_left) * gasPrice;
+                auto refund = u256(refundGasUnits) * gasPrice;
                 auto& evmcMessage = m_data->m_hostContext.message();
                 auto senderAccount = getAccount(m_data->m_hostContext, evmcMessage.sender);
                 auto balance = co_await senderAccount.balance();
@@ -320,7 +358,7 @@ public:
         task::Task<void> consumeBalance()
         {
             auto& evmcResult = *m_data->m_evmcResult;
-            m_data->m_gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
+            settleGasUsedFromEvmResult();
             if (!m_data->m_call)
             {
                 auto& evmcMessage = m_data->m_hostContext.message();

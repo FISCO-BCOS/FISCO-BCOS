@@ -23,13 +23,16 @@ include_directories(./sync/)
 aux_source_directory(./sync/protocol/PB SRC_LIST)
 include_directories(./sync/protocol/PB)
 
-add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS})
+add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS}
+    ${CMAKE_SOURCE_DIR}/bcos-executor/src/Web3AccessListResolver.cpp)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
 target_include_directories(txpool PUBLIC .
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_BINARY_DIR}/bcos-txpool
-    ${CMAKE_CURRENT_BINARY_DIR}/..)
+    ${CMAKE_CURRENT_BINARY_DIR}/..
+    ${CMAKE_SOURCE_DIR}/transaction-executor
+    ${CMAKE_SOURCE_DIR}/bcos-executor/src)
 target_link_libraries(txpool PUBLIC ledger rpc TBB::tbb protobuf::libprotobuf bcos-protocol bcos-utilities tool)
 set_target_properties(txpool PROPERTIES UNITY_BUILD "ON")

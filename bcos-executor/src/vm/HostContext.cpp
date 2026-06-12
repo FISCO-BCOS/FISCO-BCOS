@@ -24,6 +24,8 @@
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
 #include "EvmPrecompiledAddress.h"
+#include "ModexpGas.h"
+#include "VMInstance.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/bcos-framework/ledger/LedgerTypeDef.h"
@@ -380,6 +382,21 @@ evmc_result HostContext::callBuiltInPrecompiled(
             preResult.gas_left = _request->gas;
             m_responseStore.emplace_back(std::move(callResults));
             return preResult;
+        }
+
+        if (isModexpPrecompileAddress(_request->receiveAddress))
+        {
+            auto const revision =
+                toRevision(features(), m_executive->blockContext().blockVersion());
+            if (revision >= EVMC_OSAKA && !validateModexpEip7823(ref(_request->data), revision))
+            {
+                callResults->status = (int32_t)TransactionStatus::RevertInstruction;
+                callResults->gas = 0;
+                preResult.status_code = EVMC_FAILURE;
+                preResult.gas_left = 0;
+                m_responseStore.emplace_back(std::move(callResults));
+                return preResult;
+            }
         }
 
         auto gasUsed =

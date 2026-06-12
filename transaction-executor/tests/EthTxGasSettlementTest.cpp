@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_emptyCalldata)
 {
     evmc_message msg{};
     msg.kind = EVMC_CALL;
-    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 0, nullptr);
+    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 0);
     BOOST_CHECK_EQUAL(intrinsic.normalCalldata, 0);
     BOOST_CHECK_EQUAL(intrinsic.floorReserve, 0);
     BOOST_CHECK_EQUAL(intrinsic.preExecutionDebit(), TX_BASE_GAS);
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_mixedCalldata_preExecutionUsesNormalN
     msg.kind = EVMC_CALL;
     msg.input_data = mixed.data();
     msg.input_size = mixed.size();
-    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 0, nullptr);
+    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 0);
     BOOST_CHECK_EQUAL(intrinsic.normalCalldata, 1000);
     BOOST_CHECK_EQUAL(intrinsic.floorReserve, 2500);
     BOOST_CHECK_EQUAL(intrinsic.preExecutionDebit(), TX_BASE_GAS + 1000);
@@ -96,22 +96,10 @@ BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_accessList_cost)
         "0x00000000000000000000000000000000000000aa", std::vector<h256>{h256(1), h256(2)});
     evmc_message msg{};
     msg.kind = EVMC_CALL;
-    auto const intrinsic = computeTxIntrinsicGas(msg, std::addressof(list), 2, nullptr);
+    auto const intrinsic = computeTxIntrinsicGas(msg, std::addressof(list), 2);
     BOOST_CHECK_EQUAL(
         intrinsic.accessListCost, ACCESS_LIST_ADDRESS_COST + 2 * ACCESS_LIST_STORAGE_KEY_COST);
     BOOST_CHECK_EQUAL(intrinsic.preExecutionDebit(), TX_BASE_GAS + ACCESS_LIST_ADDRESS_COST + 3800);
-}
-
-BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_eip7702_only_type4)
-{
-    evmc_message msg{};
-    msg.kind = EVMC_CALL;
-
-    executor::Eip7702AuthorizationList authList(2);
-    auto const type4Intrinsic = computeTxIntrinsicGas(msg, nullptr, 4, std::addressof(authList));
-    auto const type2Intrinsic = computeTxIntrinsicGas(msg, nullptr, 2, std::addressof(authList));
-    BOOST_CHECK_EQUAL(type4Intrinsic.eip7702AuthCost, 50000);
-    BOOST_CHECK_EQUAL(type2Intrinsic.eip7702AuthCost, 0);
 }
 
 BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_createIntrinsic_words)
@@ -121,7 +109,7 @@ BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_createIntrinsic_words)
     msg.kind = EVMC_CREATE;
     msg.input_data = initcode.data();
     msg.input_size = initcode.size();
-    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 0, nullptr);
+    auto const intrinsic = computeTxIntrinsicGas(msg, nullptr, 0);
     BOOST_CHECK_EQUAL(intrinsic.createIntrinsic, CREATE_BASE_GAS + INITCODE_WORD_GAS * 2);
     BOOST_CHECK_EQUAL(intrinsic.normalCalldata, 132);
     BOOST_CHECK_EQUAL(intrinsic.preExecutionDebit(), TX_BASE_GAS + 132 + CREATE_BASE_GAS + 4);
@@ -177,10 +165,10 @@ BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_task0SstoreClear_vector)
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), TX_BASE_GAS);
 }
 
-BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_7702RefundSubjectTo3529Cap)
+BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_highIntrinsicRefundSubjectTo3529Cap)
 {
     TxGasSettlementContext ctx;
-    ctx.fixedIntrinsic = TX_BASE_GAS + 2 * executor_v1::EIP_7702_PER_EMPTY_ACCOUNT_COST;
+    ctx.fixedIntrinsic = TX_BASE_GAS + ACCESS_LIST_ADDRESS_COST + 2 * ACCESS_LIST_STORAGE_KEY_COST;
     ctx.calldata.normalCost = 0;
     ctx.calldata.floorCost = 0;
     ctx.gasBeforeEvm = 400'000;

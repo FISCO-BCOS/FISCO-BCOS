@@ -26,14 +26,17 @@ bytes modexpHeaderBaseLen1025()
     return input;
 }
 
-ledger::Features osakaFeatures()
+ledger::Features osakaFeatures(bool bugfixErrorHandling = true)
 {
     ledger::Features features;
     features.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
     features.set(ledger::Features::Flag::feature_evm_cancun);
     features.set(ledger::Features::Flag::feature_evm_prague);
     features.set(ledger::Features::Flag::feature_evm_osaka);
-    features.set(ledger::Features::Flag::bugfix_v1_error_handling);
+    if (bugfixErrorHandling)
+    {
+        features.set(ledger::Features::Flag::bugfix_v1_error_handling);
+    }
     return features;
 }
 }  // namespace
@@ -58,6 +61,32 @@ BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka)
     message.input_size = input.size();
 
     auto const features = osakaFeatures();
+    auto const result =
+        executor_v1::callBuiltinPrecompiled(contract, message, features, EVMC_OSAKA);
+
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_FAILURE);
+    // geth/evmone: EIP-7823 rejection happens before execution; all call gas is consumed.
+    BOOST_CHECK_EQUAL(result.gas_left, 0);
+}
+
+BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka_legacyPath_burnsAllGas)
+{
+    executor::GlobalHashImpl::g_hashImpl = std::make_shared<crypto::Keccak256>();
+    executor::PrecompiledContract const contract(executor::PrecompiledRegistrar::pricer("modexp"),
+        executor::PrecompiledRegistrar::executor("modexp"));
+
+    auto const input = modexpHeaderBaseLen1025();
+    evmc_address modexpAddr{};
+    modexpAddr.bytes[19] = 0x05;
+
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    message.code_address = modexpAddr;
+    message.gas = 500'000;
+    message.input_data = input.data();
+    message.input_size = input.size();
+
+    auto const features = osakaFeatures(false);
     auto const result =
         executor_v1::callBuiltinPrecompiled(contract, message, features, EVMC_OSAKA);
 

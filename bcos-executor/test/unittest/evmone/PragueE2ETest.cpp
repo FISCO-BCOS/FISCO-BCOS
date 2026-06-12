@@ -161,17 +161,6 @@ BOOST_AUTO_TEST_CASE(prague_blob_transactions_stub)
     BOOST_CHECK(true);
 }
 
-// ===== EIP-7702 type-4 transaction stub =====================================
-// EIP-7702 type-4 transactions require an authorization_list field that is
-// not yet present in bcos-protocol transaction types.
-
-BOOST_AUTO_TEST_CASE(eip7702_type4_transactions_stub)
-{
-    BOOST_TEST_MESSAGE(
-        "SKIP: EIP-7702 type-4 transactions — deferred until protocol layer adds support");
-    BOOST_CHECK(true);
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::test

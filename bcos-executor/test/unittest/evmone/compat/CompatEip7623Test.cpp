@@ -102,8 +102,8 @@ BOOST_AUTO_TEST_CASE(FC_7_executive_deduct_seq0_oog)
 BOOST_AUTO_TEST_CASE(FC_7_executive_skipped_when_seq_nonzero)
 {
     BOOST_TEST_MESSAGE(
-        "EIP-7623 floor in TransactionExecutive::execute is gated by callParameters->seq == 0. "
-        "seq>0 internal calls skip the branch. Verified in transaction-executor path.");
+        "EIP-7623: TE HostContext pre-debits normal calldata; TransactionExecutorImpl finalize "
+        "settlement. seq>0 internal calls skip 7623. Executor 7623 path still TBD.");
     executor::CallParameters params{executor::CallParameters::MESSAGE};
     params.seq = 1;
     BOOST_CHECK(params.seq != 0);

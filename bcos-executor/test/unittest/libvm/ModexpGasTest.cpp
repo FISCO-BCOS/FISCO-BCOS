@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 2024 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
- *  @brief EIP-2565 modexp gas vectors (geth modexp_eip2565.json / nagydani suite).
+ *  @brief EIP-2565 / EIP-7883 modexp gas vectors (geth modexp_eip2565.json, modexp_eip7883.json).
  *  @file ModexpGasTest.cpp
  */
 
@@ -118,6 +118,15 @@ static ModexpGasVector const kNagydaniEip2565[] = {
         21845},
 };
 
+// Expected Osaka (EIP-7883) gas for kNagydaniEip2565 inputs — geth modexp_eip7883.json
+static int64_t const kNagydaniEip7883ExpectedGas[] = {
+    500,     // nagydani-1-square
+    500,     // nagydani-1-qube
+    2048,    // nagydani-1-pow0x10001
+    8192,    // nagydani-2-pow0x10001
+    131072,  // nagydani-4-pow0x10001
+};
+
 BOOST_AUTO_TEST_SUITE(ModexpGasTest)
 
 BOOST_AUTO_TEST_CASE(nagydani_eip2565_gas_vectors)
@@ -173,7 +182,48 @@ static Modexp7883Vector const kEip7883[] = {
         "0100000000000000000000000000000000000000000000000000000000000000"
         "0100000000000000000000000000000000000000000000000000000000000000",
         500},
+    {"marius-1-even",
+        "0000000000000000000000000000000000000000000000000000000000000003"
+        "00000000000000000000000000000000000000000000000000000000000000c1"
+        "000000000000000000000000000000000000000000000000000000000000000c"
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0"
+        "00007d7d7d83828282348286877d7d827d407d797d7d7d7d7d7d7d7d7d7d7d5b"
+        "0000000000000000000000000000000000000000000000000000000000000003"
+        "0000000000000000000000000000000000000000000000000000000000000021"
+        "000000000000000000000000000000000000000000000000000000000000000c"
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff40"
+        "00007d7d7d83828282348286877d7d82",
+        45296},
+    {"guido-1-even",
+        "0000000000000000000000000000000000000000000000000000000000000010"
+        "00000000000000000000000000000000000000000000000000000000000000d8"
+        "0000000000000000000000000000000000000000000000000000000000000010"
+        "ffffffffffffffff76ffffffffffffff1cffffffffffffffffffffffffffffff"
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        "ffffffffffffffffc7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c76ec7"
+        "c7c7c7ffffffffffffffc7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7"
+        "ffffffffffffc7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c76ec7c7c7"
+        "c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7"
+        "c7c7c7c7c7c7ffffffffff3f000000000000000000000000",
+        51136},
 };
+
+BOOST_AUTO_TEST_CASE(nagydani_eip7883_gas_vectors)
+{
+    static_assert(sizeof(kNagydaniEip2565) / sizeof(kNagydaniEip2565[0]) ==
+                      sizeof(kNagydaniEip7883ExpectedGas) / sizeof(kNagydaniEip7883ExpectedGas[0]),
+        "7883 gas table must match nagydani input table");
+    for (size_t i = 0; i < sizeof(kNagydaniEip2565) / sizeof(kNagydaniEip2565[0]); ++i)
+    {
+        auto const& vec = kNagydaniEip2565[i];
+        auto const input = bcos::fromHex(vec.inputHex);
+        auto const gas = executor::calcModexpGas(ref(input), EVMC_OSAKA).convert_to<int64_t>();
+        auto const expected = kNagydaniEip7883ExpectedGas[i];
+        BOOST_CHECK_MESSAGE(
+            gas == expected, vec.name << " expected gas " << expected << " got " << gas);
+    }
+}
 
 BOOST_AUTO_TEST_CASE(eip7883_gas_vectors)
 {

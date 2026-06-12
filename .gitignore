@@ -76,3 +76,4 @@ test/*
 CLAUDE.local.md
 .claude/worktrees
 .claude/agents
+.worktrees/

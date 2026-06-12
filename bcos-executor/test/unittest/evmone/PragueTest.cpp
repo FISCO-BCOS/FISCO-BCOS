@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief Unit tests for Prague EVM features: EIP-7623 calldata floor cost,
- *        EIP-7702 placeholder, BLS12-381 precompile gas costs, p256verify gas cost.
+ *        BLS12-381 precompile gas costs, p256verify gas cost.
  * @file PragueTest.cpp
  */
 
@@ -70,21 +70,6 @@ BOOST_AUTO_TEST_CASE(eip7623_calldata_cost)
 
     // Single zero byte: normalDataCost=4, numTokens=1, floor=10 → gas=10
     BOOST_CHECK_EQUAL(calcCalldataGas({0x00}), 10);
-}
-
-// ===== EIP-7702: authorization list ==========================================
-// EIP-7702 type-4 transactions introduce an authorization_list field.
-// BLOCKED: bcos-framework/bcos-protocol has no authorization_list in its
-// transaction types.  Implementation is deferred until the protocol layer
-// adds support.  This placeholder ensures the suite compiles and that the
-// gap is visible in CI output.
-
-BOOST_AUTO_TEST_CASE(eip7702_authorization_list_skipped)
-{
-    // No authorization_list field available in bcos-protocol transaction types.
-    // Full EIP-7702 testing is deferred until protocol support lands.
-    BOOST_TEST_MESSAGE("SKIP: EIP-7702 deferred — no authorization_list in bcos-protocol");
-    BOOST_CHECK(true);
 }
 
 // ===== BLS12-381 precompile gas costs ========================================

@@ -49,6 +49,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-transaction-executor/EVMCResult.h"
+#include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-task/Wait.h>
@@ -154,6 +155,33 @@ private:
     std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
     std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
     uint8_t m_web3TypedTxKindForAccessList = 0;
+
+    std::optional<executor_v1::gas::TxGasSettlementContext> m_gasSettlementSnapshot;
+    int64_t m_gasSettlementGasLimit = 0;
+    int64_t m_preExecutionDebitForSettlement = 0;
+
+    void captureGasSettlementSnapshotBeforeEvm()
+    {
+        if (!executor_v1::gas::ethGasSettlementEnabled(
+                m_ledgerConfig.get().features(), m_revision, m_level, m_web3Tx))
+        {
+            return;
+        }
+        auto const& msg = message();
+        auto const components =
+            executor::calcEip7623Components(bcos::bytesConstRef(msg.input_data, msg.input_size));
+        auto const intrinsic = executor_v1::gas::computeTxIntrinsicGas(
+            msg, m_eip2930AccessList.get(), m_web3TypedTxKindForAccessList);
+
+        executor_v1::gas::TxGasSettlementContext snap{};
+        snap.gasLimit = m_gasSettlementGasLimit;
+        snap.gasBeforeEvm = msg.gas;
+        snap.calldata = components;
+        snap.fixedIntrinsic = intrinsic.fixedCost();
+        snap.createTerm = intrinsic.createIntrinsic;
+        m_gasSettlementSnapshot = snap;
+        m_preExecutionDebitForSettlement = intrinsic.preExecutionDebit();
+    }
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -405,6 +433,17 @@ public:
         return m_ledgerConfig.get().chainId().value_or(evmc_uint256be{});
     }
 
+    evmc_revision revision() const { return m_revision; }
+
+    void setGasSettlementGasLimit(int64_t gasLimit) { m_gasSettlementGasLimit = gasLimit; }
+
+    std::optional<executor_v1::gas::TxGasSettlementContext> const& gasSettlementSnapshot() const
+    {
+        return m_gasSettlementSnapshot;
+    }
+
+    int64_t preExecutionDebitForSettlement() const { return m_preExecutionDebitForSettlement; }
+
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)
     {
@@ -471,24 +510,26 @@ public:
 
             if (!evmResult)
             {
-                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
-                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
-                // The 21000 base cost sits outside this formula and is handled separately.
-                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
+                // EIP-7623 (Prague+): debit normal calldata (4/16) upfront; floor applied at
+                // finalize in TransactionExecutorImpl. 21000 base via consumeTransferGas.
+                if (m_level == 0 &&
+                    executor_v1::gas::ethGasSettlementEnabled(
+                        m_ledgerConfig.get().features(), m_revision, m_level, m_web3Tx))
                 {
                     auto& msg = mutableMessage();
-                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
+                    auto const components = executor::calcEip7623Components(
                         bcos::bytesConstRef(msg.input_data, msg.input_size));
-                    if (msg.gas < calldataGas)
+                    const int64_t normalCalldata = components.normalCost;
+                    if (msg.gas < normalCalldata)
                     {
                         evmResult.emplace(
                             makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
                                 EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
-                                "EIP-7623 calldata floor OOG", fixErrorHandling));
+                                "EIP-7623 calldata OOG", fixErrorHandling));
                     }
                     else
                     {
-                        msg.gas -= calldataGas;
+                        msg.gas -= normalCalldata;
                     }
                 }
 
@@ -698,7 +739,10 @@ private:
 
     task::Task<EVMCResult> executeCreate()
     {
-        auto& ref = message();
+        auto& ref = mutableMessage();
+        consumeTransferGas(ref);
+        captureGasSettlementSnapshotBeforeEvm();
+
         if (m_blockHeader.get().number() != 0)
         {
             std::string authTablePath;
@@ -845,13 +889,15 @@ private:
         // 先扣除BALANCE_TRANSFER_GAS
         // First deduct the BALANCE_TRANSFER_GAS.
         consumeTransferGas(ref);
+        captureGasSettlementSnapshotBeforeEvm();
 
         if (m_preparedPrecompiled != nullptr)
         {
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features(),
+                m_revision);
         }
 
         if (m_executable = co_await getExecutable(m_rollbackableStorage.get(), ref.code_address,
@@ -881,7 +927,8 @@ private:
             co_return executor_v1::callPrecompiled(*m_preparedPrecompiled,
                 m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
                 buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID, m_seq,
-                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
+                m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features(),
+                m_revision);
         }
 
         co_return m_executable->m_vmInstance.execute(interface, this, m_revision,

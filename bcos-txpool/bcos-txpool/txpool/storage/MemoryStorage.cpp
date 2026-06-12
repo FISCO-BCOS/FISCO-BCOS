@@ -36,8 +36,8 @@
 #include <memory>
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/remove_if.hpp>
-#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <variant>
@@ -50,8 +50,7 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(
-    TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
+MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, boost::asio::io_context& _ioContext,
     size_t _notifyWorkerNum, uint64_t _txsExpirationTime)
   : m_config(std::move(_config)),
     m_bcosTransactions(BcosTransactions(BUCKET_SIZE)),
@@ -138,7 +137,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             // This lambda may outlive the Awaitable (e.g. stored in a Transaction callback),
             // so it must NOT capture 'this'.
             auto completeOnce = [state = m_state, handle](Error::Ptr error,
-                                     bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                                    bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
                 bool expected = false;
                 if (!state->m_resumed.compare_exchange_strong(
                         expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
@@ -162,8 +161,8 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
             try
             {
-                auto result = m_self->verifyAndSubmitTransaction(
-                    m_transaction, completeOnce, true, true);
+                auto result =
+                    m_self->verifyAndSubmitTransaction(m_transaction, completeOnce, true, true);
 
                 if (result != TransactionStatus::None)
                 {
@@ -172,8 +171,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
                         << LOG_KV("result", result);
                     completeOnce(
-                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)),
-                        nullptr);
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)), nullptr);
                 }
             }
             catch (std::exception& e)
@@ -426,6 +424,16 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             // Step 5: Check chain Id
             return task::syncWait(
                 m_config->txValidator()->validateChainId(*transaction, m_config->ledger()));
+        },
+        [this, transaction]() {
+            // Step 6: EIP-7623 gasLimit floor (Prague+ Web3)
+            if (transaction->type() ==
+                static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+            {
+                return task::syncWait(m_config->txValidator()->validateEip7623GasFloor(
+                    *transaction, m_config->ledger()));
+            }
+            return bcos::protocol::TransactionStatus::None;
         },
     };
 
@@ -951,7 +959,7 @@ bool MemoryStorage::batchMarkTxs(crypto::HashListView _txsHashList, BlockNumber 
                     foundInFromMap = true;
                 }
                 else if (TxsMap::ReadAccessor toAccessor;
-                    toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
+                         toMap->find<TxsMap::ReadAccessor>(toAccessor, hash))
                 {
                     transaction = toAccessor.value();
                 }

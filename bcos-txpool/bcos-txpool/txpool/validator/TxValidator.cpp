@@ -19,6 +19,8 @@
  * @date 2021-05-11
  */
 #include "TxValidator.h"
+#include "bcos-executor/src/Common.h"
+#include "bcos-executor/src/Web3AccessListResolver.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -26,6 +28,7 @@
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
+#include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
 #include <bcos-rpc/jsonrpc/Common.h>
@@ -281,6 +284,51 @@ task::Task<protocol::TransactionStatus> TxValidator::validateChainId(
                 co_return TransactionStatus::InvalidChainId;
             }
         }
+    }
+    co_return TransactionStatus::None;
+}
+
+namespace
+{
+int64_t web3Eip7623GasLimitMinimum(protocol::Transaction const& tx)
+{
+    evmc_message msg{};
+    msg.kind = tx.to().empty() ? EVMC_CREATE : EVMC_CALL;
+    msg.input_data = tx.input().data();
+    msg.input_size = tx.input().size();
+
+    auto const resolved = executor::resolveWeb3AccessList(tx);
+    executor::Eip2930AccessList const* accessListPtr =
+        resolved.accessList ? resolved.accessList.get() : nullptr;
+    auto const intrinsic =
+        executor_v1::gas::computeTxIntrinsicGas(msg, accessListPtr, resolved.web3TypedTxKind);
+    return intrinsic.gasLimitMinimum();
+}
+}  // namespace
+
+task::Task<protocol::TransactionStatus> TxValidator::validateEip7623GasFloor(
+    const bcos::protocol::Transaction& _tx, std::shared_ptr<bcos::ledger::LedgerInterface> _ledger)
+{
+    if (_tx.type() != TransactionType::Web3Transaction)
+    {
+        co_return TransactionStatus::None;
+    }
+    auto const features = co_await ledger::getFeatures(*_ledger);
+    if (!features.get(ledger::Features::Flag::feature_evm_prague))
+    {
+        co_return TransactionStatus::None;
+    }
+    if (_tx.gasLimit() == 0)
+    {
+        co_return TransactionStatus::None;
+    }
+    auto const minGas = web3Eip7623GasLimitMinimum(_tx);
+    if (static_cast<int64_t>(_tx.gasLimit()) < minGas)
+    {
+        TX_VALIDATOR_CHECKER_LOG(TRACE)
+            << LOG_BADGE("validateEip7623GasFloor") << LOG_DESC("gasLimit below EIP-7623 floor")
+            << LOG_KV("gasLimit", _tx.gasLimit()) << LOG_KV("minGas", minGas);
+        co_return TransactionStatus::Malformed;
     }
     co_return TransactionStatus::None;
 }
