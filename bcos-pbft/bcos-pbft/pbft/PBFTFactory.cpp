@@ -39,9 +39,9 @@ PBFTFactory::PBFTFactory(boost::asio::io_context& _ioService,
     std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler, bcos::txpool::TxPoolInterface::Ptr _txpool,
     bcos::protocol::BlockFactory::Ptr _blockFactory,
-    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-    boost::asio::io_context& _ioContext)
-  : m_cryptoSuite(std::move(_cryptoSuite)),
+    bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
+  : m_ioService(_ioService),
+    m_cryptoSuite(std::move(_cryptoSuite)),
     m_keyPair(std::move(_keyPair)),
     m_frontService(std::move(_frontService)),
     m_storage(std::move(_storage)),
@@ -49,8 +49,7 @@ PBFTFactory::PBFTFactory(boost::asio::io_context& _ioService,
     m_scheduler(std::move(_scheduler)),
     m_txpool(std::move(_txpool)),
     m_blockFactory(std::move(_blockFactory)),
-    m_txResultFactory(std::move(_txResultFactory)),
-    m_ioContext(&_ioContext)
+    m_txResultFactory(std::move(_txResultFactory))
 {}
 
 PBFTImpl::Ptr PBFTFactory::createPBFT()
@@ -75,7 +74,7 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
             pbftCodec, validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFTEngine");
-    auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig, *m_ioContext);
+    auto pbftEngine = std::make_shared<PBFTEngine>(pbftConfig, m_ioService);
 
     PBFT_LOG(INFO) << LOG_DESC("create PBFT");
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);

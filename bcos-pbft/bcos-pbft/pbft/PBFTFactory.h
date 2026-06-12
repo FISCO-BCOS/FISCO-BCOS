@@ -24,6 +24,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
+#include <functional>
 
 namespace bcos::consensus
 {
@@ -39,14 +40,13 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        boost::asio::io_context& _ioContext);
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory);
 
     virtual ~PBFTFactory() = default;
     virtual PBFTImpl::Ptr createPBFT();
 
 protected:
-    boost::asio::io_context& m_ioService;
+    std::reference_wrapper<boost::asio::io_context> m_ioService;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     bcos::crypto::KeyPairInterface::Ptr m_keyPair;
     std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
@@ -56,6 +56,5 @@ protected:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_txResultFactory;
-    boost::asio::io_context* m_ioContext;
 };
 }  // namespace bcos::consensus

@@ -250,10 +250,9 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        boost::asio::io_context& _ioContext)
-      : PBFTFactory(_cryptoSuite, _keyPair, _frontService, _storage, _ledger, _scheduler, _txpool,
-            _blockFactory, _txResultFactory, _ioContext)
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
+      : PBFTFactory(_ioService, _cryptoSuite, _keyPair, _frontService, _storage, _ledger,
+            _scheduler, _txpool, _blockFactory, _txResultFactory)
     {}
 
     PBFTImpl::Ptr createPBFT() override
@@ -270,7 +269,7 @@ public:
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
             orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
-        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, *m_ioContext);
+        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService);
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
         auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine);
@@ -322,9 +321,9 @@ public:
 
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-        auto pbftFactory = std::make_shared<FakePBFTFactory>(_cryptoSuite, _keyPair, m_frontService,
-            m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory,
-            *m_ioServicePool->getIOService());
+        auto pbftFactory = std::make_shared<FakePBFTFactory>(*m_ioServicePool->getIOService(),
+            _cryptoSuite, _keyPair, m_frontService, m_storage, m_ledger, m_scheduler, m_txpool,
+            m_blockFactory, txResultFactory);
         m_pbft = pbftFactory->createPBFT();
         m_pbftEngine = std::dynamic_pointer_cast<FakePBFTEngine>(m_pbft->pbftEngine());
         m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });

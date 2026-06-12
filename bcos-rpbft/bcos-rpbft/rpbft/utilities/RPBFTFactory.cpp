@@ -53,7 +53,7 @@ PBFTImpl::Ptr RPBFTFactory::createRPBFT()
             validator, m_frontService, stateMachine, pbftStorage, m_blockFactory);
 
     PBFT_LOG(INFO) << LOG_DESC("create rPBFTEngine");
-    auto pbftEngine = std::make_shared<PBFTEngine>(rpbftConfig, *m_ioContext);
+    auto pbftEngine = std::make_shared<PBFTEngine>(rpbftConfig, m_ioService);
 
     PBFT_LOG(INFO) << LOG_DESC("create rPBFT");
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
