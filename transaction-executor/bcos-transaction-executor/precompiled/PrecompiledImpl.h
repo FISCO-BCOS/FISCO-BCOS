@@ -4,7 +4,16 @@
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
+#include "bcos-executor/src/vm/EvmPrecompiledAddress.h"
 #include "bcos-executor/src/vm/Precompiled.h"
+
+// Forward-declared; defined in bcos-executor/src/vm/ModexpGas.h (avoid pulling executor HostContext
+// here).
+namespace bcos::executor
+{
+bcos::bigint calcModexpGas(bcos::bytesConstRef input, evmc_revision revision);
+bool validateModexpEip7823(bcos::bytesConstRef input, evmc_revision revision);
+}  // namespace bcos::executor
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Overloaded.h"
@@ -56,14 +65,33 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
                   protocol::TransactionStatus::RevertInstruction};
 }
 
+inline bcos::bigint builtinPrecompileGasCost(
+    executor::PrecompiledContract const& precompiledContract, bytesConstRef input,
+    evmc_message const& message, evmc_revision revision)
+{
+    if (executor::isModexpPrecompileEvmcAddress(message.code_address))
+    {
+        return executor::calcModexpGas(input, revision);
+    }
+    return precompiledContract.cost(input);
+}
+
 // Execute an EVM built-in precompiled contract (sha256, ecrecover, etc.).
 inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& precompiledContract,
-    evmc_message const& message, ledger::Features const& features)
+    evmc_message const& message, ledger::Features const& features, evmc_revision revision)
 {
+    bytesConstRef const input{message.input_data, message.input_size};
+    if (executor::isModexpPrecompileEvmcAddress(message.code_address) &&
+        !executor::validateModexpEip7823(input, revision))
+    {
+        return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+            protocol::TransactionStatus::RevertInstruction, EVMC_FAILURE, 0,
+            "modexp EIP-7823 input limit exceeded");
+    }
     if (features.get(ledger::Features::Flag::bugfix_v1_error_handling))
     {
         // FIB-76: validate cost BEFORE execute to guard against overflow / insufficient gas.
-        const auto gas = precompiledContract.cost({message.input_data, message.input_size});
+        const auto gas = builtinPrecompileGasCost(precompiledContract, input, message, revision);
         if (gas > std::numeric_limits<int64_t>::max() || gas < 0)
         {
             return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
@@ -79,14 +107,13 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
                 "Precompiled contract out of gas",
                 features.get(ledger::Features::Flag::bugfix_v1_error_handling));
         }
-        auto [success, output] =
-            precompiledContract.execute({message.input_data, message.input_size});
+        auto [success, output] = precompiledContract.execute(input);
         return buildBuiltinPrecompiledResult(success, output, message.gas - gasCost);
     }
 
     // Legacy path: execute first, then compute cost (no validation).
-    auto [success, output] = precompiledContract.execute({message.input_data, message.input_size});
-    const auto gas = precompiledContract.cost({message.input_data, message.input_size});
+    auto [success, output] = precompiledContract.execute(input);
+    const auto gas = builtinPrecompileGasCost(precompiledContract, input, message, revision);
     return buildBuiltinPrecompiledResult(
         success, output, message.gas - gas.template convert_to<int64_t>());
 }
@@ -171,22 +198,23 @@ inline constexpr struct
         protocol::BlockHeader const& blockHeader, evmc_message const& message,
         evmc_address const& origin, ExternalCaller auto&& externalCaller,
         auto const& precompiledManager, int64_t contextID, int64_t seq, bool authCheck,
-        ledger::Features const& features) const
+        ledger::Features const& features, evmc_revision revision) const
     {
         const bool bugfixPrecompiled =
             features.get(ledger::Features::Flag::bugfix_v1_error_handling);
 
         try
         {
-            return std::visit(
-                bcos::overloaded{[&](executor::PrecompiledContract const& contract) {
-                                     return callBuiltinPrecompiled(contract, message, features);
-                                 },
-                    [&](std::shared_ptr<precompiled::Precompiled> const& contract) {
-                        return callBcosPrecompiled(contract, storage, blockHeader, message, origin,
-                            std::forward<decltype(externalCaller)>(externalCaller),
-                            precompiledManager, contextID, seq, authCheck, features);
-                    }},
+            return std::visit(bcos::overloaded{[&](executor::PrecompiledContract const& contract) {
+                                                   return callBuiltinPrecompiled(
+                                                       contract, message, features, revision);
+                                               },
+                                  [&](std::shared_ptr<precompiled::Precompiled> const& contract) {
+                                      return callBcosPrecompiled(contract, storage, blockHeader,
+                                          message, origin,
+                                          std::forward<decltype(externalCaller)>(externalCaller),
+                                          precompiledManager, contextID, seq, authCheck, features);
+                                  }},
                 precompiled.m_precompiled);
         }
         catch (std::exception& e)
