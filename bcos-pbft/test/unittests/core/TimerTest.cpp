@@ -19,6 +19,7 @@
  * @date 2021-04-26
  */
 #include "bcos-pbft/pbft/engine/PBFTTimer.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -57,15 +58,15 @@ BOOST_FIXTURE_TEST_SUITE(TimerTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testTimer)
 {
     uint64_t timeoutInterval = 200;
-    boost::asio::io_context ioService;
-    auto timer = std::make_shared<FakeTimer>(ioService, timeoutInterval);
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "testTimer");
+    auto timer = std::make_shared<FakeTimer>(*ioServicePool->getIOService(), timeoutInterval);
     auto startT = utcTime();
     for (size_t i = 0; i < 4; i++)
     {
         timer->setTriggerTimeout(false);
         // start the timer
         timer->start();
-        // sleep
+        // sleep longer than the timeout to ensure the timer expires
         startT = utcTime();
         std::this_thread::sleep_for(std::chrono::milliseconds(timeoutInterval + 200));
         std::cout << "#### sleep eclipse:" << utcTime() - startT;
@@ -111,8 +112,8 @@ BOOST_AUTO_TEST_CASE(testTimer)
 BOOST_AUTO_TEST_CASE(testPBFTTimer)
 {
     uint64_t timeoutInterval = 100;
-    boost::asio::io_context ioService;
-    auto timer = std::make_shared<PBFTTimer>(ioService, timeoutInterval);
+    auto ioServicePool = std::make_shared<IOServicePool>(1, "testPBFTTimer");
+    auto timer = std::make_shared<PBFTTimer>(*ioServicePool->getIOService(), timeoutInterval);
     timer->start();
 }
 
