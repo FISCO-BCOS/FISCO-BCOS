@@ -113,8 +113,8 @@ private:
 // Guard: TransactionImpl must fit inside the AnyTransaction fixed-size buffer.
 // If this assertion fires, update the size constant in
 // bcos-framework/bcos-framework/protocol/Transaction.h  (using AnyTransaction = AnyHolder<..., N>).
-static_assert(sizeof(TransactionImpl) <= 224,
-    "TransactionImpl exceeds AnyTransaction buffer (224 bytes); "
+static_assert(sizeof(TransactionImpl) <= 1024,
+    "TransactionImpl exceeds AnyTransaction buffer (1024 bytes); "
     "update the size constant in bcos-framework/protocol/Transaction.h");
 
 }  // namespace bcostars::protocol

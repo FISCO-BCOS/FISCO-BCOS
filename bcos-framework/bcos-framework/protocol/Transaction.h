@@ -36,12 +36,18 @@ class TransactionImpl;
 class TransactionFactoryImpl;
 }  // namespace bcostars::protocol
 
+namespace bcos::rlp
+{
+class RLPTransactionFactory;
+}  // namespace bcos::rlp
+
 namespace bcos::protocol
 {
 enum class TransactionType : uint8_t
 {
     BCOSTransaction = 0,
-    Web3Transaction = 1,
+    Web3Transaction = 1,     // TARS-encoded Web3 (legacy, deprecated)
+    RLPWeb3Transaction = 2,  // RLP-encoded Web3 (RLPTransaction)
 };
 
 constexpr auto operator<=>(bcos::protocol::TransactionType const& _lhs, auto _rhs)
@@ -173,6 +179,7 @@ protected:
 private:
     friend class bcostars::protocol::TransactionImpl;
     friend class bcostars::protocol::TransactionFactoryImpl;
+    friend class bcos::rlp::RLPTransactionFactory;
 
     TxSubmitCallback m_submitCallback;
     // the tx has been synced or not
@@ -231,8 +238,8 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 using AnyTransaction =
-    AnyHolder<bcos::protocol::Transaction, 224>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
-                                                  // TransactinImpl across platforms)
+    AnyHolder<bcos::protocol::Transaction, 1024>;  // Maximum size across TransactionImpl (TARS) and
+                                                   // RLPTransaction (RLP) implementations
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);
 
