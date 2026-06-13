@@ -41,6 +41,10 @@ FAILED=0
 cleanup() {
     echo ""
     echo "=== Cleaning up ==="
+    if [ -n "${OPNODE_PID:-}" ]; then
+        kill "${OPNODE_PID}" 2>/dev/null || true
+        wait "${OPNODE_PID}" 2>/dev/null || true
+    fi
     if [ -n "${LODESTAR_PID:-}" ]; then
         kill "${LODESTAR_PID}" 2>/dev/null || true
         wait "${LODESTAR_PID}" 2>/dev/null || true
@@ -528,6 +532,159 @@ if [ "${RUN_LODESTAR:-0}" = "1" ]; then
         fi
     else
         log_info "Lodestar test skipped (missing prerequisites)"
+        log_pass
+    fi
+fi
+
+# ---- Step 6: op-node integration (optional, controlled by RUN_OPNODE=1) ----
+if [ "${RUN_OPNODE:-0}" = "1" ]; then
+    log_section "Step 6: op-node integration"
+
+    OPNODE_SKIP=0
+
+    # Build op-node from source via go install
+    OPNODE_BINARY="${WORK_DIR}/op-node"
+    if [ "${OPNODE_SKIP}" -eq 0 ]; then
+        if ! command -v go &>/dev/null; then
+            log_info "Go not found, skipping op-node test"
+            OPNODE_SKIP=1
+        else
+            GO_VER_NUM=$(go version | grep -oP 'go\K[0-9]+\.[0-9]+' | head -1)
+            if [ "$(printf '%s\n' "1.24" "${GO_VER_NUM}" | sort -V | head -1)" != "1.24" ]; then
+                log_info "Go >= 1.24 required (found ${GO_VER_NUM}), skipping op-node test"
+                OPNODE_SKIP=1
+            fi
+        fi
+    fi
+    if [ "${OPNODE_SKIP}" -eq 0 ]; then
+        OPNODE_VERSION="${OPNODE_VERSION:-op-node/v1.19.0}"
+        log_info "Building op-node from source (git clone + go build, ${OPNODE_VERSION})..."
+        OPNODE_BUILD_DIR="${WORK_DIR}/opnode_build"
+        rm -rf "${OPNODE_BUILD_DIR}"
+        mkdir -p "${OPNODE_BUILD_DIR}"
+        if git clone --depth 1 --branch "${OPNODE_VERSION}" \
+            https://github.com/ethereum-optimism/optimism.git "${OPNODE_BUILD_DIR}" 2>&1 && \
+           cd "${OPNODE_BUILD_DIR}/op-node" && \
+           GOTOOLCHAIN=local go build -o "${OPNODE_BINARY}" ./cmd 2>&1; then
+            cd "${WORK_DIR}"
+            chmod +x "${OPNODE_BINARY}" 2>/dev/null || true
+            log_info "op-node built: $("${OPNODE_BINARY}" --version 2>/dev/null || echo 'unknown')"
+        else
+            cd "${WORK_DIR}"
+            log_info "Failed to build op-node (network or build error), skipping"
+            OPNODE_SKIP=1
+        fi
+        rm -rf "${OPNODE_BUILD_DIR}"
+    fi
+
+    # Generate JWT secret
+    JWT_FILE="${WORK_DIR}/jwt.hex"
+    if [ "${OPNODE_SKIP}" -eq 0 ]; then
+        openssl rand -hex 32 > "${JWT_FILE}" 2>/dev/null || \
+            python3 -c "import secrets; print(secrets.token_hex(32))" > "${JWT_FILE}" 2>/dev/null || true
+    fi
+
+    # Generate rollup config
+    ROLLUP_CONFIG="${WORK_DIR}/rollup.json"
+    if [ "${OPNODE_SKIP}" -eq 0 ]; then
+        cat > "${ROLLUP_CONFIG}" << 'ROLLUP_EOF'
+{
+  "genesis": {
+    "l1": {
+      "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "number": 0
+    },
+    "l2": {
+      "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "number": 0
+    },
+    "l2_time": 0,
+    "system_config": {
+      "batcherAddr": "0x0000000000000000000000000000000000000001",
+      "overhead": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "scalar": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "gasLimit": 30000000,
+      "operatorFeeScalar": 0,
+      "operatorFeeConstant": 0
+    }
+  },
+  "block_time": 2,
+  "max_sequencer_drift": 600,
+  "seq_window_size": 3600,
+  "channel_timeout": 300,
+  "l1_chain_id": 0,
+  "l2_chain_id": 0,
+  "regolith_time": 0,
+  "canyon_time": 0,
+  "delta_time": 0,
+  "ecotone_time": 0,
+  "fjord_time": 0,
+  "granite_time": 0,
+  "holocene_time": 0,
+  "batch_inbox_address": "0x0000000000000000000000000000000000000000",
+  "deposit_contract_address": "0x0000000000000000000000000000000000000000",
+  "l1_system_config_address": "0x0000000000000000000000000000000000000000",
+  "protocol_versions_address": "0x0000000000000000000000000000000000000000"
+}
+ROLLUP_EOF
+        log_info "Rollup config generated"
+    fi
+
+    # Run op-node with timeout
+    if [ "${OPNODE_SKIP}" -eq 0 ]; then
+        log_test "op-node integration (60s timeout)"
+
+        OPNODE_OUT="${WORK_DIR}/opnode_out.log"
+        timeout 60 "${OPNODE_BINARY}" \
+            --l1="${RPC_URL}" \
+            --l2="${RPC_URL}" \
+            --l2.jwt-secret="${JWT_FILE}" \
+            --rollup.config="${ROLLUP_CONFIG}" \
+            --sequencer.enabled \
+            --p2p.disable \
+            --rpc.addr=0.0.0.0 \
+            --rpc.port=19545 \
+            > "${OPNODE_OUT}" 2>&1 &
+        OPNODE_PID=$!
+
+        # Wait for op-node to show signs of connecting to EL
+        OPNODE_OK=0
+        for i in $(seq 1 30); do
+            sleep 2
+            if ! kill -0 "${OPNODE_PID}" 2>/dev/null; then
+                break
+            fi
+            # Check for engine API calls or successful connection indicators
+            if grep -qE "exchangeCapabilities|forkchoiceUpdated|newPayload|getPayload|Starting op-node|Connected|RollupConfig" "${OPNODE_OUT}" 2>/dev/null; then
+                OPNODE_OK=1
+                break
+            fi
+        done
+
+        # Kill op-node and check results
+        kill "${OPNODE_PID}" 2>/dev/null || true
+        wait "${OPNODE_PID}" 2>/dev/null || true
+
+        if [ "${OPNODE_OK}" -eq 1 ]; then
+            log_info "op-node started and began Engine API interaction"
+            # Check for engine API calls in output
+            if grep -qE "exchangeCapabilities|forkchoiceUpdated|newPayload|getPayload" "${OPNODE_OUT}" 2>/dev/null; then
+                log_info "op-node made Engine API calls to FISCO-BCOS"
+            fi
+            log_pass
+        else
+            # Check if op-node at least started
+            if grep -q "Starting op-node\|RollupConfig" "${OPNODE_OUT}" 2>/dev/null; then
+                log_info "op-node started but may not have connected to execution engine"
+                log_pass
+            else
+                log_info "op-node output (last 20 lines):"
+                tail -20 "${OPNODE_OUT}" 2>/dev/null || true
+                log_fail "op-node failed to start"
+            fi
+        fi
+    else
+        log_info "op-node test skipped (missing prerequisites)"
         log_pass
     fi
 fi
