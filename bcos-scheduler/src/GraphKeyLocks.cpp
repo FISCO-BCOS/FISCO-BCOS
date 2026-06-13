@@ -31,6 +31,8 @@ bool GraphKeyLocks::Vertex::operator==(const KeyLockView& rhs) const
     return view == rhs;
 }
 
+namespace bcos::scheduler
+{
 bool operator<(const GraphKeyLocks::Vertex& lhs,
     const GraphKeyLocks::KeyLockView& rhs)
 {
@@ -56,7 +58,6 @@ bool operator<(const GraphKeyLocks::KeyLockView& lhs,
         std::string_view(std::get<1>(std::get<1>(rhs))));
     return lhs < view;
 }
-
 }  // namespace bcos::scheduler
 
 bool GraphKeyLocks::batchAcquireKeyLock(

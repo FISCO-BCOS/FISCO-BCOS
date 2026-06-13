@@ -127,11 +127,15 @@ void pthread_setThreadName(std::string const& _n);
 std::string const& pthread_getThreadNameRef();
 std::string pthread_getThreadName();
 
+}  // namespace bcos
+
+namespace std
+{
 template <class BytesType>
     requires std::same_as<BytesType, bcos::bytesConstRef> ||
              (std::constructible_from<bcos::bytesConstRef, std::add_pointer_t<BytesType>> &&
                  (!std::same_as<BytesType, std::string>) && (!std::same_as<BytesType, char>))
-inline std::ostream& operator<<(std::ostream& stream, const BytesType& bytes)
+inline ostream& operator<<(ostream& stream, const BytesType& bytes)
 {
     bcos::bytesConstRef ref;
     if constexpr (std::same_as<BytesType, bcos::bytesConstRef>)
@@ -148,5 +152,4 @@ inline std::ostream& operator<<(std::ostream& stream, const BytesType& bytes)
     stream << "0x" << hex;
     return stream;
 }
-
-}  // namespace bcos
+}  // namespace std
