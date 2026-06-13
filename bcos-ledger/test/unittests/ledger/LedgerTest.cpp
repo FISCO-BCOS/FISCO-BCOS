@@ -67,26 +67,29 @@ using namespace bcos::crypto;
 using namespace bcos::tool;
 using namespace std::string_literals;
 
-namespace std
+namespace bcos::storage
 {
-inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Entry>& entry)
 {
     os << entry.has_value();
     return os;
 }
 
-inline ostream& operator<<(ostream& os, const std::optional<Table>& table)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Table>& table)
 {
     os << table.has_value();
     return os;
 }
+}  // namespace bcos::storage
 
-inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
+namespace bcos
+{
+inline std::ostream& operator<<(std::ostream& os, const std::unique_ptr<Error>& error)
 {
     os << error->what();
     return os;
 }
-}  // namespace std
+}  // namespace bcos
 
 namespace bcos::test
 {

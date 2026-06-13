@@ -87,18 +87,6 @@ using UpgradableGuard = boost::upgrade_lock<boost::shared_mutex>;
 using UpgradeGuard = boost::upgrade_to_unique_lock<boost::shared_mutex>;
 using WriteGuard = boost::unique_lock<boost::shared_mutex>;
 
-template <size_t n>
-inline u256 exp10()
-{
-    return exp10<n - 1>() * u256(10);
-}
-
-template <>
-inline u256 exp10<0>()
-{
-    return u256{1};
-}
-
 //------------ Type interprets and Convertions----------------
 /// Interprets @a _u as a two's complement signed number and returns the resulting s256.
 s256 u2s(u256 _u);
@@ -139,15 +127,11 @@ void pthread_setThreadName(std::string const& _n);
 std::string const& pthread_getThreadNameRef();
 std::string pthread_getThreadName();
 
-}  // namespace bcos
-
-namespace std
-{
 template <class BytesType>
     requires std::same_as<BytesType, bcos::bytesConstRef> ||
              (std::constructible_from<bcos::bytesConstRef, std::add_pointer_t<BytesType>> &&
                  (!std::same_as<BytesType, std::string>) && (!std::same_as<BytesType, char>))
-inline ostream& operator<<(ostream& stream, const BytesType& bytes)
+inline std::ostream& operator<<(std::ostream& stream, const BytesType& bytes)
 {
     bcos::bytesConstRef ref;
     if constexpr (std::same_as<BytesType, bcos::bytesConstRef>)
@@ -164,4 +148,5 @@ inline ostream& operator<<(ostream& stream, const BytesType& bytes)
     stream << "0x" << hex;
     return stream;
 }
-}  // namespace std
+
+}  // namespace bcos

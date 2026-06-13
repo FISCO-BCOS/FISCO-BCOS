@@ -24,24 +24,32 @@
 
 using namespace bcos::ledger;
 
-namespace std
+namespace tars
 {
-ostream& operator<<(ostream& os, std::vector<tars::Char> const& buffer)
+inline std::ostream& operator<<(std::ostream& os, std::vector<Char> const& buffer)
 {
     auto hexBuffer = boost::algorithm::hex_lower(buffer);
-    os << string_view{(const char*)hexBuffer.data(), hexBuffer.size()};
+    os << std::string_view{(const char*)hexBuffer.data(), hexBuffer.size()};
     return os;
 }
+}  // namespace tars
 
-ostream& operator<<(
-    ostream& os, std::pair<std::tuple<std::string, std::string>, bcos::storage::Entry> const& value)
+namespace bcos::storage
+{
+inline std::ostream& operator<<(
+    std::ostream& os, std::pair<std::tuple<std::string, std::string>, Entry> const& value)
 {
     auto hexBuffer = boost::algorithm::hex_lower(std::string(value.second.get()));
     os << std::get<0>(value.first) << ":" << std::get<1>(value.first) << " - " << hexBuffer;
     return os;
 }
+}  // namespace bcos::storage
 
-ostream& operator<<(ostream& os, std::array<std::byte, 32> const& buffer)
+// Note: std::array<std::byte, 32> has no bcos type in its arguments,
+// ADL cannot find it outside std. Consider using a wrapper or helper function.
+namespace std
+{
+inline ostream& operator<<(ostream& os, std::array<std::byte, 32> const& buffer)
 {
     std::string hex;
     boost::algorithm::hex_lower((const char*)buffer.data(),

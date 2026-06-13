@@ -52,10 +52,6 @@ BOOST_AUTO_TEST_CASE(testArithCal)
     BOOST_CHECK(s2u(s_bigint) == s_bigint);
     s_bigint = s256("0xf170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c6");
     BOOST_CHECK(s2u(s_bigint) == u256(c_end + s_bigint));
-    ///=========test exp10==================
-    BOOST_CHECK(exp10<1>() == u256(10));
-    BOOST_CHECK(exp10<9>() == u256(1000000000));
-    BOOST_CHECK(exp10<0>() == u256(1));
 }
 /// test utcTime
 BOOST_AUTO_TEST_CASE(testUtcTime)
