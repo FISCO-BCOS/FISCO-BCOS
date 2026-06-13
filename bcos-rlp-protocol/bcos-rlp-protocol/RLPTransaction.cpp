@@ -28,7 +28,7 @@ inline bytes toCompactBigEndian(byte _val, unsigned _min)
     if (_val == 0 && _min == 0)
         return {};
     bytes ret((std::max)(_min, 1U), 0);
-    toBigEndian(_val, ret);
+    toBigEndian(static_cast<unsigned>(_val), ret);
     return ret;
 }
 }  // namespace bcos
