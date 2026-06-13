@@ -151,13 +151,8 @@ log_info "Work dir: ${WORK_DIR}"
 rm -rf "${WORK_DIR}"
 mkdir -p "${WORK_DIR}"
 
-# Generate genesis config
-cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
-[consensus]
-consensus_type=pbft
-block_tx_count_limit=1000
-leader_period=1
-node.0=9418c37b060ecc49dc558d858a3e313a45e504ee7601034f657ed23ec8cce2aa2ef93c55e04b17f40bf98337c8c8acdf2af982929834a0bb2e3633b37ee9be5f3:1
+# Generate config.ini (runtime/node config)
+cat > "${WORK_DIR}/config.ini" << CONFIG_INI_EOF
 [rpc]
 listen_ip=0.0.0.0
 listen_port=21200
@@ -188,18 +183,6 @@ multi_ca_path=multiCaPath
 [certificate_blacklist]
 [certificate_whitelist]
 
-[executor]
-is_wasm=false
-is_auth_check=false
-auth_admin_account=0x3443d6866e757893e6862f451f5d1b7976c54594
-is_serial_execute=true
-epoch_sealer_num=4
-epoch_block_num=1000
-notify_rotate_flag=false
-
-[tx]
-gas_limit=3000000000
-
 [storage]
 type=RocksDB
 
@@ -207,6 +190,25 @@ type=RocksDB
 enable=true
 log_path=./
 level=info
+CONFIG_INI_EOF
+
+# Generate config.genesis (chain/genesis config)
+cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
+[consensus]
+consensus_type=pbft
+block_tx_count_limit=1000
+leader_period=1
+node.0=9418c37b060ecc49dc558d858a3e313a45e504ee7601034f657ed23ec8cce2aa2ef93c55e04b17f40bf98337c8c8acdf2af982929834a0bb2e3633b37ee9be5f3:1
+
+[executor]
+is_wasm=false
+is_auth_check=false
+auth_admin_account=0x3443d6866e757893e6862f451f5d1b7976c54594
+is_serial_execute=true
+version=1
+
+[tx]
+gas_limit=3000000000
 GENESIS_EOF
 
 # Generate minimal certs (use existing from repo if available, otherwise generate self-signed)
@@ -272,7 +274,7 @@ log_section "Step 2: Start FISCO-BCOS node"
 ulimit -c unlimited 2>/dev/null || true
 
 cd "${WORK_DIR}"
-nohup "${ABS_BINARY}" -c config.genesis -g config.genesis > nohup.out 2>&1 &
+nohup "${ABS_BINARY}" -c config.ini -g config.genesis > nohup.out 2>&1 &
 NODE_PID=$!
 # Allow the process a moment to settle (binary may daemonize)
 sleep 1
