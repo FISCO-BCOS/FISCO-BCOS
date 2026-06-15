@@ -26,17 +26,20 @@ namespace bcos::test
 
 /// A minimal mock that satisfies EngineServiceConcept.
 /// Used to verify that AnyEngineService correctly delegates through type erasure.
+/// Note: AnyEngineService stores the implementation by value (owning semantics),
+/// so tests verify delegation via return values rather than internal mock state.
 struct MockEngineService
 {
     std::vector<std::string> m_capabilities;
     ForkchoiceUpdatedResult m_forkchoiceResult{
         .payloadStatus = PayloadStatus{.status = PayloadValidationStatus::Valid,
-                           .latestValidHash = std::nullopt, .validationError = std::nullopt},
+            .latestValidHash = std::nullopt,
+            .validationError = std::nullopt},
         .payloadId = std::nullopt};
     GetPayloadResult m_getPayloadResult;
-    PayloadStatus m_payloadStatus{
-        .status = PayloadValidationStatus::Valid,
-        .latestValidHash = std::nullopt, .validationError = std::nullopt};
+    PayloadStatus m_payloadStatus{.status = PayloadValidationStatus::Valid,
+        .latestValidHash = std::nullopt,
+        .validationError = std::nullopt};
     std::optional<BlockNumber> m_safeBlockNumber{42};
     std::optional<BlockNumber> m_finalizedBlockNumber{21};
 
@@ -115,7 +118,8 @@ struct NonCopyableEngineService
     {
         co_return ForkchoiceUpdatedResult{
             .payloadStatus = PayloadStatus{.status = PayloadValidationStatus::Valid,
-                               .latestValidHash = std::nullopt, .validationError = std::nullopt},
+                .latestValidHash = std::nullopt,
+                .validationError = std::nullopt},
             .payloadId = std::nullopt};
     }
 
@@ -127,7 +131,8 @@ struct NonCopyableEngineService
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest&, std::uint32_t)
     {
         co_return PayloadStatus{.status = PayloadValidationStatus::Valid,
-            .latestValidHash = std::nullopt, .validationError = std::nullopt};
+            .latestValidHash = std::nullopt,
+            .validationError = std::nullopt};
     }
 
     std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }
@@ -136,22 +141,22 @@ struct NonCopyableEngineService
 };
 
 /// Compile-time verification that mocks satisfy the EngineServiceConcept.
-static_assert(EngineServiceConcept<MockEngineService>,
-    "MockEngineService must satisfy EngineServiceConcept");
+static_assert(
+    EngineServiceConcept<MockEngineService>, "MockEngineService must satisfy EngineServiceConcept");
 static_assert(EngineServiceConcept<NonCopyableEngineService>,
     "NonCopyableEngineService must satisfy EngineServiceConcept");
 
 /// Compile-time verification: AnyEngineService is correctly constrained.
-static_assert(EngineServiceConcept<AnyEngineService>,
-    "AnyEngineService must satisfy EngineServiceConcept");
+static_assert(
+    EngineServiceConcept<AnyEngineService>, "AnyEngineService must satisfy EngineServiceConcept");
 static_assert(!std::is_copy_constructible_v<AnyEngineService>,
     "AnyEngineService must not be copy-constructible");
-static_assert(!std::is_copy_assignable_v<AnyEngineService>,
-    "AnyEngineService must not be copy-assignable");
-static_assert(std::is_move_constructible_v<AnyEngineService>,
-    "AnyEngineService must be move-constructible");
-static_assert(std::is_move_assignable_v<AnyEngineService>,
-    "AnyEngineService must be move-assignable");
+static_assert(
+    !std::is_copy_assignable_v<AnyEngineService>, "AnyEngineService must not be copy-assignable");
+static_assert(
+    std::is_move_constructible_v<AnyEngineService>, "AnyEngineService must be move-constructible");
+static_assert(
+    std::is_move_assignable_v<AnyEngineService>, "AnyEngineService must be move-assignable");
 
 }  // namespace bcos::test
 
@@ -172,10 +177,9 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilitiesDelegates)
     bcos::test::MockEngineService mock;
     AnyEngineService any(mock);
 
-    auto result = task::syncWait(
-        any.exchangeCapabilities(std::vector<std::string>{"cap1", "cap2"}));
+    auto result =
+        task::syncWait(any.exchangeCapabilities(std::vector<std::string>{"cap1", "cap2"}));
 
-    BOOST_CHECK(mock.m_exchangeCapabilitiesCalled);
     BOOST_CHECK_EQUAL(result.size(), 2);
     BOOST_CHECK_EQUAL(result[0], "cap1");
     BOOST_CHECK_EQUAL(result[1], "cap2");
@@ -239,8 +243,7 @@ BOOST_AUTO_TEST_CASE(getFinalizedBlockNumberOnConst)
 /// This is the critical path for wrapping real EngineServiceImpl.
 BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
 {
-    auto any = AnyEngineService(
-        std::in_place_type<bcos::test::NonCopyableEngineService>);
+    auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>);
 
     BOOST_CHECK(static_cast<bool>(any));
 
@@ -256,8 +259,7 @@ BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
 /// Verify in_place_type with extra constructor arguments (variadic forwarding).
 BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
 {
-    auto any = AnyEngineService(
-        std::in_place_type<bcos::test::NonCopyableEngineService>,
+    auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>,
         std::optional<BlockNumber>{300}, std::optional<BlockNumber>{400});
 
     BOOST_CHECK(static_cast<bool>(any));
@@ -274,11 +276,9 @@ BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
 /// Verify exchangeCapabilities through an in_place_type-constructed AnyEngineService.
 BOOST_AUTO_TEST_CASE(exchangeCapabilitiesNonCopyableInPlace)
 {
-    auto any = AnyEngineService(
-        std::in_place_type<bcos::test::NonCopyableEngineService>);
+    auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>);
 
-    auto result = task::syncWait(
-        any.exchangeCapabilities(std::vector<std::string>{"a", "b", "c"}));
+    auto result = task::syncWait(any.exchangeCapabilities(std::vector<std::string>{"a", "b", "c"}));
 
     BOOST_CHECK_EQUAL(result.size(), 3);
 }
@@ -286,8 +286,7 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilitiesNonCopyableInPlace)
 /// Verify that const methods work on an in_place_type-constructed AnyEngineService.
 BOOST_AUTO_TEST_CASE(constMethodsOnNonCopyableInPlace)
 {
-    const auto any = AnyEngineService(
-        std::in_place_type<bcos::test::NonCopyableEngineService>,
+    const auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>,
         std::optional<BlockNumber>{500}, std::optional<BlockNumber>{600});
 
     auto safe = any.getSafeBlockNumber();
