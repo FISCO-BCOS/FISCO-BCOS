@@ -1,0 +1,48 @@
+#include "Transaction.tars"
+
+module bcostars {
+    struct EthWithdrawal {
+        1 optional long index;
+        2 optional long validatorIndex;
+        3 optional vector<byte> address;
+        4 optional long amount;
+    };
+
+    struct EthHeaderData {
+        1 optional vector<byte> parentHash;
+        2 optional vector<byte> uncleHash;
+        3 optional vector<byte> coinbase;
+        4 optional vector<byte> stateRoot;
+        5 optional vector<byte> txHash;
+        6 optional vector<byte> receiptHash;
+        7 optional vector<byte> bloom;
+        8 optional string difficulty;
+        9 optional long number;
+        10 optional long gasLimit;
+        11 optional long gasUsed;
+        12 optional long time;
+        13 optional vector<byte> extraData;
+        14 optional vector<byte> mixDigest;
+        15 optional vector<byte> nonce;
+        16 optional string baseFee;
+        17 optional vector<byte> withdrawalsHash;
+        18 optional long blobGasUsed;
+        19 optional long excessBlobGas;
+        20 optional vector<byte> parentBeaconRoot;
+        21 optional vector<byte> requestsHash;
+        22 optional vector<byte> blockAccessListHash;
+        23 optional long slotNumber;
+    };
+
+    struct EthHeader {
+        1 optional EthHeaderData data;
+        2 optional vector<byte> dataHash;
+    };
+
+    struct EthBlock {
+        1 optional EthHeader header;
+        2 optional vector<Transaction> transactions;
+        3 optional vector<EthHeader> uncles;
+        4 optional vector<EthWithdrawal> withdrawals;
+    };
+};
