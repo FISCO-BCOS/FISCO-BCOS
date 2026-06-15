@@ -28,6 +28,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
+#include <memory>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
 #include <bcos-rpc/filter/LogMatcher.h>

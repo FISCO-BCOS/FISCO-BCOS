@@ -67,12 +67,17 @@ struct AnyMemPoolFacade
 /// adapts proxy's operator-> dispatch style to the direct-call style required
 /// by the MemPool concept.
 ///
-/// Usage:
+/// Usage (for copyable/movable types):
 /// @code
-///   MemPoolImpl impl;
-///   AnyMemPool<MapStateStorage> any(impl);
+///   MockMemPool mock;
+///   AnyMemPool<MockStateStorage> any(mock);
 ///   any.add(myTransactions);
-///   any.seal(100, state, std::back_inserter(output));
+/// @endcode
+///
+/// Usage (for non-movable types, using in-place construction):
+/// @code
+///   AnyMemPool<StateStorage> any(std::in_place_type<MemPoolImpl>, ...);
+///   any.add(myTransactions);
 /// @endcode
 template <class StateStorage>
 class AnyMemPool
@@ -102,20 +107,42 @@ public:
             std::forward<T>(mempool)))
     {}
 
+    /// Construct in-place from constructor arguments (for non-movable types).
+    template <class T, class... Args>
+        requires MemPool<T, StateStorage> &&
+                 std::is_constructible_v<T, Args...>
+    explicit AnyMemPool(std::in_place_type_t<T>, Args&&... args)
+      : m_impl(pro::make_proxy<AnyMemPoolFacade<StateStorage>, T>(std::forward<Args>(args)...))
+    {}
+
     /// Returns true if this wrapper holds a mempool implementation.
     [[nodiscard]] explicit operator bool() const noexcept { return m_impl.has_value(); }
 
-    void add(TxVec transactions) { m_impl->add(std::move(transactions)); }
-    void seal(int64_t limit, StateStorage& state, OutIter out) { m_impl->seal(limit, state, out); }
+    void add(TxVec transactions)
+    {
+        assert(m_impl.has_value() && "AnyMemPool must be initialized before use");
+        m_impl->add(std::move(transactions));
+    }
+    void seal(int64_t limit, StateStorage& state, OutIter out)
+    {
+        assert(m_impl.has_value() && "AnyMemPool must be initialized before use");
+        m_impl->seal(limit, state, out);
+    }
     void remove(StateStorage& state)
     {
+        assert(m_impl.has_value() && "AnyMemPool must be initialized before use");
         pro::proxy_invoke<false, MemRemoveState, void(StateStorage&)>(m_impl, state);
     }
     void remove(HashVec hashes)
     {
+        assert(m_impl.has_value() && "AnyMemPool must be initialized before use");
         pro::proxy_invoke<false, MemRemoveHashes, void(HashVec)>(m_impl, std::move(hashes));
     }
-    TxVec get(HashVec hashes) { return m_impl->get(std::move(hashes)); }
+    TxVec get(HashVec hashes)
+    {
+        assert(m_impl.has_value() && "AnyMemPool must be initialized before use");
+        return m_impl->get(std::move(hashes));
+    }
 
     /// Access the underlying proxy for advanced operations (e.g. proxy_cast).
     [[nodiscard]] ProxyType& proxy() noexcept { return m_impl; }

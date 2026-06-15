@@ -67,8 +67,8 @@ struct AnyEngineServiceFacade
 ///
 /// Usage:
 /// @code
-///   EngineServiceImpl<...> concrete{...};
-///   AnyEngineService any(concrete);
+///   // For non-movable types (recommended):
+///   AnyEngineService any(std::in_place_type<EngineServiceImpl<...>>, memPool, storage, ...);
 ///   auto result = co_await any.updateForkchoice(state, nullptr, 1);
 /// @endcode
 class AnyEngineService

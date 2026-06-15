@@ -56,14 +56,6 @@ FrontService::FrontService()
 FrontService::~FrontService() noexcept
 {
     stop();
-    // Stop the IO service to drain any pending completion handlers that
-    // might hold weak_ptrs to this FrontService.  This prevents the pool
-    // destructor from running on a worker thread (which would cause a
-    // self-join deadlock in IOServicePool::~IOServicePool).
-    if (m_ioService)
-    {
-        m_ioService->stop();
-    }
     FRONT_LOG(INFO) << LOG_DESC("~FrontService") << LOG_KV("this", this);
 }
 

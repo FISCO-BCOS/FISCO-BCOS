@@ -158,7 +158,8 @@ BOOST_AUTO_TEST_CASE(addAndGetRoundtrip)
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
 
-    // Verify that get() recorded the requested hash
+    // Second get() call: the mock always returns m_addedTransactions
+    // (which still has the single tx), regardless of the hash argument.
     auto result2 = any.get({bcos::crypto::HashType{0xbb}});
     BOOST_CHECK_EQUAL(result2.size(), 1);
 }
