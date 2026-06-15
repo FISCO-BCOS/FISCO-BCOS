@@ -6,7 +6,7 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
-#include "bcos-framework/ledger/LedgerInterface.h"
+#include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
@@ -25,6 +25,7 @@
 #include "bcos-txpool/txpool/validator/Web3NonceChecker.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/IOServicePool.h"
+#include <bcos-framework/testutils/faker/FakeLedger.h>
 
 #include <sw/redis++/cxx_utils.h>
 #include <tbb/parallel_for.h>
@@ -456,6 +457,19 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
     std::string groupId = "group_test";
     std::string chainId = "chain_test";
 
+    auto blockHeaderFactory =
+        std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
+    auto txFactory = std::make_shared<bcostars::protocol::TransactionFactoryImpl>(cryptoSuite);
+    auto receiptFactory =
+        std::make_shared<bcostars::protocol::TransactionReceiptFactoryImpl>(cryptoSuite);
+    auto blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
+        cryptoSuite, blockHeaderFactory, txFactory, receiptFactory);
+    // FakeLedger implements async ledger APIs used by validateBalance / validateChainId /
+    // validateEip7623GasFloor. The fixture's FakeIt mock never invokes callbacks and hangs.
+    auto validationLedger = std::make_shared<bcos::test::FakeLedger>(blockFactory, 20, 10, 10);
+    validationLedger->setTestFeatures(bcos::ledger::Features{});
+    validationLedger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
+
     fakeit::Mock<bcos::txpool::Web3NonceChecker> mockWeb3NonceChecker;
     fakeit::When(Method(mockWeb3NonceChecker, insertMemoryNonce))
         .AlwaysDo([](auto, auto) -> task::Task<bool> { co_return true; });
@@ -479,14 +493,14 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         cryptoSuite, groupId, chainId, std::weak_ptr<bcos::scheduler::SchedulerInterface>{});
 
     // Create config with signature check enabled
-    auto configWithSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
-        txPoolNonceChecker, /*blockLimit*/ 1000,
+    auto configWithSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr,
+        validationLedger, txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ true);
     MemoryStorage storageWithSig(configWithSig, *ioServicePool->getIOService());
 
     // Create config with signature check disabled
-    auto configNoSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr, ledger,
-        txPoolNonceChecker, /*blockLimit*/ 1000,
+    auto configNoSig = std::make_shared<TxPoolConfig>(txValidator, nullptr, nullptr,
+        validationLedger, txPoolNonceChecker, /*blockLimit*/ 1000,
         /*poolLimit*/ 1024, /*checkSig*/ false);
     MemoryStorage storageNoSig(configNoSig, *ioServicePool->getIOService());
 
@@ -542,19 +556,11 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             tx6Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
         }
 
-        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-            .AlwaysDo(
-                [](auto const&,
-                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    callback(nullptr, "0x1234", 0);
-                });
-
-        fakeit::When(Method(mockLedger, asyncGetBlockNumber)).AlwaysDo([](auto) -> long long {
-            return 0;
-        });
+        validationLedger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0x1234");
 
         auto result = storageNoSig.verifyAndSubmitTransaction(tx6, nullptr, false, false);
         BOOST_CHECK(result == TransactionStatus::InsufficientFunds);
+        validationLedger->setSystemConfig(ledger::SYSTEM_KEY_TX_GAS_PRICE, "0");
     }
 
     // Test 7: Step 5 - InvalidChainId (for Web3Transaction)
@@ -570,21 +576,10 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             tx7Impl->mutableInner().data.chainID = invalidChainId;
         }
 
-        fakeit::When(Method(mockLedger, asyncGetSystemConfigByKey))
-            .AlwaysDo(
-                [](auto const& key,
-                    std::function<void(Error::Ptr, std::string, protocol::BlockNumber)> callback) {
-                    if (key == ledger::SYSTEM_KEY_WEB3_CHAIN_ID)
-                    {
-                        callback(nullptr, "321", 0);
-                    }
-                    else if (key == ledger::SYSTEM_KEY_TX_GAS_PRICE)
-                    {
-                        callback(nullptr, "0", 0);
-                    }
-                });
+        validationLedger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "321");
         auto result = storageNoSig.verifyAndSubmitTransaction(tx7, nullptr, false, false);
         BOOST_CHECK(result == TransactionStatus::InvalidChainId);
+        validationLedger->setSystemConfig(ledger::SYSTEM_KEY_WEB3_CHAIN_ID, "");
     }
 
     // Test 8: Success case - All validations pass
@@ -600,10 +595,8 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
             tx8Impl->mutableInner().data.value.assign(smallValue.begin(), smallValue.end());
             // Set valid chainId (empty or matching)
             tx8Impl->mutableInner().data.chainID = "";
+            tx8Impl->mutableInner().data.gasLimit = 21000;
         }
-
-        // Mock ledger to return nullptr (simplified test)
-        fakeit::When(Method(mockLedger, getStateStorage)).AlwaysReturn(nullptr);
 
         // Setup validator to pass all checks
         auto ledgerNonceChecker = std::make_shared<LedgerNonceChecker>(
@@ -900,8 +893,7 @@ BOOST_AUTO_TEST_CASE(FIB48_SubmitTransactionResumesOnce)
         sharedStorage->batchRemoveSealedTxs(/*batchId*/ 1, txsResult);
     }
 
-    BOOST_CHECK_MESSAGE(
-        doneFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+    BOOST_CHECK_MESSAGE(doneFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
         "submitTransaction did not complete within 5 seconds");
     if (waitThread.joinable())
     {
