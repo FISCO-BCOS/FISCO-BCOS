@@ -107,6 +107,11 @@ public:
         m_self->encode(m_leaderValue);
     }
 
+    // FIB-173: exposed so the election layer can drop the stale self-leader
+    // pointer when the keepAlive heartbeat dies (the etcd lease is gone, so
+    // node-self is no longer the leader).
+    void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
+
 protected:
     virtual void fetchLeaderInfoFromEtcd();
     virtual void onLeaderKeyChanged(etcd::Response _response);
@@ -125,8 +130,6 @@ protected:
                 self->onLeaderKeyChanged(std::move(response));
             });
     }
-
-    void resetLeader(bcos::protocol::MemberInterface::Ptr _leader);
 
 protected:
     // the leader key that multiple workers compete for, eg: "/consensus"

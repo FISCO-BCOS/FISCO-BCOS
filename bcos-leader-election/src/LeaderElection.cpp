@@ -241,6 +241,27 @@ void LeaderElection::onKeepAliveException(std::exception_ptr _exception)
         ELECTION_LOG(WARNING) << LOG_DESC("onKeepAliveException, restart campaign")
                               << LOG_KV("message", boost::diagnostic_information(e));
     }
+    // FIB-173: the keepAlive heartbeat is dead, so the etcd lease that made
+    // node-self the leader is gone. Drop our reference to the dead keepAlive and
+    // the stale self-leader pointer, and notify the upper layer to leave master
+    // mode BEFORE restarting the campaign. Otherwise node-self keeps believing
+    // it is the leader (and stays in master mode) even though etcd no longer
+    // holds its key, which can produce two masters once another node wins.
+    //
+    // Do NOT call Cancel() on this keepAlive here: this handler runs ON the
+    // keepAlive's own refresh thread, and etcd::KeepAlive::Cancel() joins that
+    // thread — calling it here would self-join and deadlock. The thread is
+    // already terminating (it just raised this exception); moving the shared_ptr
+    // out releases our reference and lets it tear down.
+    {
+        RecursiveGuard l(m_mutex);
+        m_keepAlive.reset();
+    }
+    m_config->resetLeader(nullptr);
+    if (m_onCampaignHandler)
+    {
+        m_onCampaignHandler(false, nullptr);
+    }
     if (m_campaignTimer)
     {
         m_campaignTimer->restart();
