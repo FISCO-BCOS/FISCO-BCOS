@@ -383,6 +383,9 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
                 m_prePrepare = nullptr;
                 break;
             }
+            // FIB-181: erase() already advanced; continue so the post-branch ++
+            // does not skip the next entry.
+            continue;
         }
         exceptionPrePrepare++;
     }
