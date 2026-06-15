@@ -96,8 +96,8 @@ public:
         co_return m_state->payloadStatusResult;
     }
 
-    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() { return std::nullopt; }
-    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
 };
 
 class Web3TestFixture : public RPCFixture

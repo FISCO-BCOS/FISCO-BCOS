@@ -77,9 +77,9 @@ struct MockEngineService
         co_return m_payloadStatus;
     }
 
-    std::optional<BlockNumber> getSafeBlockNumber() { return m_safeBlockNumber; }
+    std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }
 
-    std::optional<BlockNumber> getFinalizedBlockNumber() { return m_finalizedBlockNumber; }
+    std::optional<BlockNumber> getFinalizedBlockNumber() const { return m_finalizedBlockNumber; }
 };
 
 /// A non-copyable, non-movable mock that mimics the constraints of the real
@@ -130,9 +130,9 @@ struct NonCopyableEngineService
             .latestValidHash = std::nullopt, .validationError = std::nullopt};
     }
 
-    std::optional<BlockNumber> getSafeBlockNumber() { return m_safeBlockNumber; }
+    std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }
 
-    std::optional<BlockNumber> getFinalizedBlockNumber() { return m_finalizedBlockNumber; }
+    std::optional<BlockNumber> getFinalizedBlockNumber() const { return m_finalizedBlockNumber; }
 };
 
 /// Compile-time verification that mocks satisfy the EngineServiceConcept.
