@@ -13,9 +13,11 @@
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -121,6 +123,70 @@ struct MockStateStorage
 static_assert(MemPool<MockMemPool, MockStateStorage>, "MockMemPool must satisfy MemPool concept");
 static_assert(MemPool<AnyMemPool<MockStateStorage>, MockStateStorage>,
     "AnyMemPool must satisfy MemPool concept");
+
+/// A non-copyable, non-movable mock that mimics the constraints of the real
+/// MemPoolImpl (which contains std::mutex).  Used to verify that AnyMemPool's
+/// in_place_type constructor correctly stores types that are neither copyable
+/// nor movable.
+struct NonCopyableMemPool
+{
+    std::mutex m_mutex;  // makes this type non-copyable and non-movable
+    std::vector<protocol::Transaction::Ptr> m_addedTransactions;
+    bool m_addCalled{false};
+
+    NonCopyableMemPool() = default;
+    NonCopyableMemPool(const NonCopyableMemPool&) = delete;
+    NonCopyableMemPool& operator=(const NonCopyableMemPool&) = delete;
+    NonCopyableMemPool(NonCopyableMemPool&&) = delete;
+    NonCopyableMemPool& operator=(NonCopyableMemPool&&) = delete;
+
+    void add(std::vector<protocol::Transaction::Ptr> transactions)
+    {
+        m_addCalled = true;
+        m_addedTransactions = std::move(transactions);
+    }
+
+    template <class StateStorage>
+    void seal(int64_t /*limit*/, StateStorage& /*state*/,
+        std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out)
+    {
+        for (auto& tx : m_addedTransactions)
+        {
+            *out++ = tx;
+        }
+        m_addedTransactions.clear();
+    }
+
+    template <class StateStorage>
+    void remove(StateStorage& /*state*/)
+    {
+        m_addedTransactions.clear();
+    }
+
+    void remove(std::vector<bcos::crypto::HashType> /*hashes*/)
+    {
+        m_addedTransactions.clear();
+    }
+
+    std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> /*hashes*/)
+    {
+        return m_addedTransactions;
+    }
+};
+
+/// Ensure NonCopyableMemPool satisfies the MemPool concept.
+static_assert(
+    MemPool<NonCopyableMemPool, MockStateStorage>, "NonCopyableMemPool must satisfy MemPool");
+
+/// Compile-time verification: AnyMemPool is move-only (copy deleted).
+static_assert(!std::is_copy_constructible_v<AnyMemPool<MockStateStorage>>,
+    "AnyMemPool must not be copy-constructible");
+static_assert(!std::is_copy_assignable_v<AnyMemPool<MockStateStorage>>,
+    "AnyMemPool must not be copy-assignable");
+static_assert(std::is_move_constructible_v<AnyMemPool<MockStateStorage>>,
+    "AnyMemPool must be move-constructible");
+static_assert(std::is_move_assignable_v<AnyMemPool<MockStateStorage>>,
+    "AnyMemPool must be move-assignable");
 
 }  // namespace bcos::test
 
@@ -272,6 +338,81 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
     auto result = any2.get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
+}
+
+/// Verify in_place_type construction with a non-copyable, non-movable type.
+/// This is the critical path for wrapping real MemPoolImpl (which contains
+/// std::mutex and is therefore neither copyable nor movable).
+BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
+{
+    // Construct AnyMemPool with a non-copyable mempool via in_place_type.
+    auto any = AnyMemPool<bcos::test::MockStateStorage>(
+        std::in_place_type<bcos::test::NonCopyableMemPool>);
+
+    BOOST_CHECK(static_cast<bool>(any));
+
+    // Verify add() and get() round-trip
+    fakeit::Mock<protocol::Transaction> mockTx;
+    auto tx = bcos::test::makeMockTx(mockTx);
+    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+
+    auto result = any.get({bcos::crypto::HashType{0x01}});
+    BOOST_CHECK_EQUAL(result.size(), 1);
+    BOOST_CHECK(result[0] == tx);
+}
+
+/// Verify in_place_type with extra constructor arguments.
+BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
+{
+    // NonCopyableMemPool takes no extra args, but this validates the variadic
+    // forwarding path through std::in_place_type.
+    auto any = AnyMemPool<bcos::test::MockStateStorage>(
+        std::in_place_type<bcos::test::NonCopyableMemPool>);
+
+    BOOST_CHECK(static_cast<bool>(any));
+
+    fakeit::Mock<protocol::Transaction> mockTx;
+    auto tx = bcos::test::makeMockTx(mockTx);
+    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+
+    auto result = any.get({bcos::crypto::HashType{0x02}});
+    BOOST_CHECK_EQUAL(result.size(), 1);
+    BOOST_CHECK(result[0] == tx);
+}
+
+/// Verify seal() through an in_place_type-constructed AnyMemPool works.
+BOOST_AUTO_TEST_CASE(sealNonCopyableInPlace)
+{
+    auto any = AnyMemPool<bcos::test::MockStateStorage>(
+        std::in_place_type<bcos::test::NonCopyableMemPool>);
+    bcos::test::MockStateStorage state;
+
+    fakeit::Mock<protocol::Transaction> mockTx;
+    auto tx = bcos::test::makeMockTx(mockTx);
+    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+
+    std::vector<protocol::Transaction::Ptr> out;
+    any.seal(100, state, std::back_inserter(out));
+
+    BOOST_CHECK_EQUAL(out.size(), 1);
+    BOOST_CHECK(out[0] == tx);
+}
+
+/// Verify remove(StateStorage) through an in_place_type-constructed AnyMemPool.
+BOOST_AUTO_TEST_CASE(removeByStateNonCopyableInPlace)
+{
+    auto any = AnyMemPool<bcos::test::MockStateStorage>(
+        std::in_place_type<bcos::test::NonCopyableMemPool>);
+    bcos::test::MockStateStorage state;
+
+    fakeit::Mock<protocol::Transaction> mockTx;
+    auto tx = bcos::test::makeMockTx(mockTx);
+    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+
+    any.remove(state);
+
+    auto result = any.get({bcos::crypto::HashType{0x01}});
+    BOOST_CHECK(result.empty());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

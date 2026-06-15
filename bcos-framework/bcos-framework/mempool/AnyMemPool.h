@@ -55,7 +55,7 @@ struct AnyMemPoolFacade
             void(StateStorage&)>::template add_convention<MemRemoveHashes,
             void(std::vector<bcos::crypto::HashType>)>::template add_convention<MemGet,
             std::vector<protocol::Transaction::Ptr>(std::vector<bcos::crypto::HashType>)>::
-            template support_copy<pro::constraint_level::nontrivial>::template support_relocation<
+            template support_relocation<
                 pro::constraint_level::nothrow>::
                 template support_destruction<pro::constraint_level::nothrow>::build
 {
@@ -67,18 +67,15 @@ struct AnyMemPoolFacade
 /// adapts proxy's operator-> dispatch style to the direct-call style required
 /// by the MemPool concept.
 ///
-/// Usage (for copyable/movable types):
-/// @code
-///   MockMemPool mock;
-///   AnyMemPool<MockStateStorage> any(mock);
-///   any.add(myTransactions);
-/// @endcode
-///
 /// Usage (for non-movable types, using in-place construction):
 /// @code
 ///   AnyMemPool<StateStorage> any(std::in_place_type<MemPoolImpl>, ...);
 ///   any.add(myTransactions);
 /// @endcode
+///
+/// Note: AnyMemPool is move-only (copy is deleted) because the facade does
+/// not require copyability from stored types — this allows wrapping
+/// non-copyable implementations like MemPoolImpl (which contains std::mutex).
 template <class StateStorage>
 class AnyMemPool
 {
@@ -91,8 +88,8 @@ public:
     AnyMemPool() = default;
     ~AnyMemPool() = default;
 
-    AnyMemPool(const AnyMemPool&) = default;
-    AnyMemPool& operator=(const AnyMemPool&) = default;
+    AnyMemPool(const AnyMemPool&) = delete;
+    AnyMemPool& operator=(const AnyMemPool&) = delete;
 
     AnyMemPool(AnyMemPool&&) noexcept = default;
     AnyMemPool& operator=(AnyMemPool&&) noexcept = default;

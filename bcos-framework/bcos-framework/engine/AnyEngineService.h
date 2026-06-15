@@ -53,8 +53,8 @@ struct AnyEngineServiceFacade
             const PayloadID&, std::uint32_t)>::add_convention<MemNewPayload,
         task::Task<PayloadStatus>(
             const NewPayloadRequest&, std::uint32_t)>::add_convention<MemGetSafeBlockNumber,
-        std::optional<bcos::protocol::BlockNumber>()>::add_convention<MemGetFinalizedBlockNumber,
-        std::optional<bcos::protocol::BlockNumber>()>::support_relocation<pro::constraint_level::nothrow>::
+        std::optional<bcos::protocol::BlockNumber>() const>::add_convention<MemGetFinalizedBlockNumber,
+        std::optional<bcos::protocol::BlockNumber>() const>::support_relocation<pro::constraint_level::nothrow>::
         support_destruction<pro::constraint_level::nothrow>::build
 {
 };
@@ -132,13 +132,13 @@ public:
         co_return co_await m_impl->newPayload(request, version);
     }
 
-    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber()
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
     {
         assert(m_impl.has_value() && "AnyEngineService must be initialized before use");
         return m_impl->getSafeBlockNumber();
     }
 
-    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber()
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
     {
         assert(m_impl.has_value() && "AnyEngineService must be initialized before use");
         return m_impl->getFinalizedBlockNumber();
