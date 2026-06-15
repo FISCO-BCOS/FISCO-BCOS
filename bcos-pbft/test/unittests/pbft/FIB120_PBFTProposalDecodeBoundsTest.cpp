@@ -43,9 +43,13 @@ namespace test
 static bytes makePBFTProposalBytes(int sigCount, int nodeCount)
 {
     PBFTRawProposal raw;
-    // fill a minimal inner proposal so decodePBObject succeeds
+    // fill a minimal inner proposal so decodePBObject succeeds. Use a canonical
+    // HashType::SIZE hash so the decode path under test exercises only the
+    // signatureList/nodeList bounds — a non-canonical hash length is now rejected
+    // at decode (FIB-174) and would mask the bounds check.
     raw.mutable_proposal()->set_index(1);
-    raw.mutable_proposal()->set_hash("hash");
+    std::string canonicalHash(bcos::crypto::HashType::SIZE, '\x11');
+    raw.mutable_proposal()->set_hash(canonicalHash.data(), canonicalHash.size());
 
     for (int i = 0; i < sigCount; ++i)
     {
@@ -136,7 +140,10 @@ BOOST_AUTO_TEST_CASE(signatureProof_throws_on_out_of_bounds_FIB120)
 {
     auto raw = std::make_shared<PBFTRawProposal>();
     raw->mutable_proposal()->set_index(1);
-    raw->mutable_proposal()->set_hash("hash");
+    // Canonical hash so the constructor's deserializeObject does not reject the
+    // proposal on hash length (FIB-174) before we reach the signatureProof check.
+    std::string canonicalHash(bcos::crypto::HashType::SIZE, '\x11');
+    raw->mutable_proposal()->set_hash(canonicalHash.data(), canonicalHash.size());
     // signature is set but nodelist is empty — index 0 is OOB on nodelist.
     raw->add_signaturelist("sig");
 
