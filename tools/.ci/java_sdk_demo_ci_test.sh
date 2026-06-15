@@ -16,6 +16,15 @@ download_console()
 {
     cd ${current_path}
 
+    # SKIP_BUILD 模式下跳过下载和 git 操作（已由主脚本预构建）
+    if [ "${SKIP_BUILD}" == "true" ]; then
+        LOG_INFO "SKIP_BUILD=true, skip console download"
+        if [ -d "console" ]; then
+            cd console
+            return 0
+        fi
+    fi
+
     LOG_INFO "Pull console, branch: ${console_branch} ..."
     console_file=console
     if [ -d ${console_file} ] && [ -d "${console_file}/.git" ]; then
@@ -50,6 +59,16 @@ download_console()
 download_java_sdk_demo()
 {
     cd ${current_path}
+
+    # SKIP_BUILD 模式下跳过下载和 git 操作（已由主脚本预构建）
+    if [ "${SKIP_BUILD}" == "true" ]; then
+        LOG_INFO "SKIP_BUILD=true, skip java-sdk-demo download"
+        if [ -d "java-sdk-demo" ]; then
+            cd java-sdk-demo
+            return 0
+        fi
+    fi
+
     local demo_branch=${console_branch}
 
     LOG_INFO "Pull java-sdk-demo, branch: ${demo_branch} ..."
@@ -95,12 +114,15 @@ config_console()
     rm -rf dist
     # use 0.6 solc
     ${sed_cmd} "s/org.fisco-bcos:solcJ:0.8.11.1/org.fisco-bcos:solcJ:0.6.10.1/g" build.gradle
-    bash gradlew ass
+    if [ "${SKIP_BUILD}" != "true" ]; then
+        bash gradlew ass
+    fi
     git reset --hard # modify back
 
     cp -r ${node_path}/sdk/* ./dist/conf/
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
-    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./dist/conf/config.toml
+    # 单节点模式：peer指向node0(20200)
+    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20200\"\]/g" ./dist/conf/config.toml
     ${sed_cmd} "s/messageTimeout = \"10000\"/messageTimeout = \"10000000\"/g" ./dist/conf/config.toml
 
     # config test contract
@@ -133,11 +155,14 @@ config_java_sdk_demo()
     fi
 
     rm -rf dist
-    bash gradlew ass
+    if [ "${SKIP_BUILD}" != "true" ]; then
+        bash gradlew ass
+    fi
 
     cp -r ${node_path}/sdk/* ./dist/conf/
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
-    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./dist/conf/config.toml
+    # 单节点模式：peer指向node0(20200)
+    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20200\"\]/g" ./dist/conf/config.toml
     ${sed_cmd} "s/messageTimeout = \"10000\"/messageTimeout = \"10000000\"/g" ./dist/conf/config.toml
 
     # config admin
@@ -242,4 +267,10 @@ download_console
 config_console "${2}" "${3}"
 config_java_sdk_demo "${2}" "${3}"
 contract_test
-check_all_dmc_transfer
+# DMC 转账测试仅在 RUN_DMC=true 时运行（non-sm 轮）
+if [ "${RUN_DMC}" == "true" ]; then
+    LOG_INFO "RUN_DMC=true, running DMC transfer tests..."
+    check_all_dmc_transfer
+else
+    LOG_INFO "RUN_DMC=false, skip DMC transfer tests"
+fi

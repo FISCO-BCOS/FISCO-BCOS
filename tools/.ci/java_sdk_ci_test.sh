@@ -15,6 +15,15 @@ LOG_INFO() {
 download_java_sdk()
 {
     cd ${current_path}
+
+    # SKIP_BUILD 模式下跳过下载和 git 操作（已由主脚本预构建）
+    if [ "${SKIP_BUILD}" == "true" ]; then
+        LOG_INFO "SKIP_BUILD=true, skip java-sdk download"
+        if [ -d "java-sdk" ]; then
+            cd java-sdk
+            return 0
+        fi
+    fi
     
     LOG_INFO "Pull java sdk, branch: ${java_sdk_branch} ..."
     local java_sdk_file=java-sdk
