@@ -230,6 +230,16 @@ bool LeaderElection::campaignLeader()
                                << LOG_KV("leaderKey", m_config->leaderKey());
             keepAlive->Cancel();
         }
+        // FIB-178: the non-exception failure paths above all re-arm local
+        // recovery (tryToSwitchToBackup + campaign timer restart). The catch-all
+        // previously just returned, leaving the node stuck: no campaign retry is
+        // scheduled and the upper layer is never told to drop master mode. Mirror
+        // the normal failure path so a transient exception self-heals.
+        tryToSwitchToBackup();
+        if (m_campaignTimer)
+        {
+            m_campaignTimer->restart();
+        }
     }
     return false;
 }
