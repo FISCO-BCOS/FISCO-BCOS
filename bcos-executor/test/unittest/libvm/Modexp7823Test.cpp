@@ -7,10 +7,33 @@
 
 #include "vm/ModexpGas.h"
 #include "vm/Precompiled.h"
+#include <bcos-framework/ledger/Features.h>
+#include <bcos-framework/protocol/Protocol.h>
 #include <boost/test/unit_test.hpp>
 
 namespace bcos::test
 {
+
+namespace
+{
+ledger::Features osakaFeatures()
+{
+    ledger::Features features;
+    features.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+    features.set(ledger::Features::Flag::feature_evm_cancun);
+    features.set(ledger::Features::Flag::feature_evm_prague);
+    features.set(ledger::Features::Flag::feature_evm_osaka);
+    return features;
+}
+
+bytes modexpHeaderBaseLen1025()
+{
+    bytes input(96, 0);
+    input[30] = 4;
+    input[31] = 1;
+    return input;
+}
+}  // namespace
 
 BOOST_AUTO_TEST_SUITE(Modexp7823Test)
 
@@ -73,6 +96,46 @@ BOOST_AUTO_TEST_CASE(validate_1025_ok_prague)
     input[30] = 4;
     input[31] = 1;
     BOOST_CHECK(executor::validateModexpEip7823(ref(input), EVMC_PRAGUE));
+}
+
+BOOST_AUTO_TEST_CASE(modexpEip7823Enabled_gateMatrix)
+{
+    auto const features = osakaFeatures();
+    BOOST_CHECK(executor::modexpEip7823Enabled(features, EVMC_OSAKA));
+    BOOST_CHECK(!executor::modexpEip7823Enabled(features, EVMC_PRAGUE));
+
+    ledger::Features noOsaka;
+    noOsaka.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+    noOsaka.set(ledger::Features::Flag::feature_evm_prague);
+    BOOST_CHECK(!executor::modexpEip7823Enabled(noOsaka, EVMC_OSAKA));
+}
+
+BOOST_AUTO_TEST_CASE(shouldRejectModexpEip7823_boundaries)
+{
+    auto const features = osakaFeatures();
+    auto const oversize = modexpHeaderBaseLen1025();
+    bytes inputOk(96, 0);
+    inputOk[30] = 4;
+
+    evmc_address modexpAddr{};
+    modexpAddr.bytes[19] = 0x05;
+    evmc_address otherAddr{};
+    otherAddr.bytes[19] = 0x01;
+
+    BOOST_CHECK(
+        executor::shouldRejectModexpEip7823(modexpAddr, ref(oversize), features, EVMC_OSAKA));
+    BOOST_CHECK(
+        !executor::shouldRejectModexpEip7823(modexpAddr, ref(inputOk), features, EVMC_OSAKA));
+    BOOST_CHECK(
+        !executor::shouldRejectModexpEip7823(otherAddr, ref(oversize), features, EVMC_OSAKA));
+    BOOST_CHECK(
+        !executor::shouldRejectModexpEip7823(modexpAddr, ref(oversize), features, EVMC_PRAGUE));
+
+    ledger::Features noOsaka;
+    noOsaka.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
+    noOsaka.set(ledger::Features::Flag::feature_evm_prague);
+    BOOST_CHECK(
+        !executor::shouldRejectModexpEip7823(modexpAddr, ref(oversize), noOsaka, EVMC_OSAKA));
 }
 
 BOOST_AUTO_TEST_CASE(modexp_executor_does_not_enforce_7823)

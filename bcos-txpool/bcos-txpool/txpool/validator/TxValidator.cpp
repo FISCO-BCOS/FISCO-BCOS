@@ -21,6 +21,7 @@
 #include "TxValidator.h"
 #include "bcos-executor/src/Common.h"
 #include "bcos-executor/src/Web3AccessListResolver.h"
+#include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
@@ -28,6 +29,7 @@
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-task/Wait.h"
+#include "bcos-tool/VersionConverter.h"
 #include "bcos-transaction-executor/gas/EthTxGasSettlement.h"
 #include "bcos-utilities/DataConvertUtility.h"
 
@@ -314,7 +316,14 @@ task::Task<protocol::TransactionStatus> TxValidator::validateEip7623GasFloor(
         co_return TransactionStatus::None;
     }
     auto const features = co_await ledger::getFeatures(*_ledger);
-    if (!features.get(ledger::Features::Flag::feature_evm_prague))
+    uint32_t blockVersion = static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION);
+    if (auto const versionConfig =
+            co_await ledger::getSystemConfig(*_ledger, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION))
+    {
+        blockVersion = tool::toVersionNumber(std::get<0>(*versionConfig));
+    }
+    auto const revision = executor::toRevision(features, blockVersion);
+    if (!executor_v1::gas::eip7623TxpoolValidationEnabled(features, revision, true))
     {
         co_return TransactionStatus::None;
     }

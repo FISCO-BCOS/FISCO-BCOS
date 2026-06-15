@@ -9,9 +9,6 @@
 #include <evmc/evmc.h>
 #include <cstdint>
 #include <cstring>
-#include <iomanip>
-#include <sstream>
-#include <string>
 #include <string_view>
 
 namespace bcos::executor
@@ -72,14 +69,6 @@ inline constexpr uint32_t P256VERIFY_PRECOMPILE_INDEX = 0x100;
 
 // Backward-compat alias for callers still using the old spelling.
 inline constexpr std::string_view P256VERIFY_PRECOMPILED_ADDRESS = P256VERIFY_PRECOMPILE_ADDRESS;
-
-/// @return 40-nibble lowercase hex address body (no 0x prefix), same layout as legacy fillZero().
-inline std::string formatEvmPrecompiledAddress(uint32_t index)
-{
-    std::stringstream stream;
-    stream << std::setfill('0') << std::setw(40) << std::hex << index;
-    return stream.str();
-}
 
 inline constexpr std::string_view BLS_ADDRESS_ZERO_PREFIX =
     "00000000000000000000000000000000000000";

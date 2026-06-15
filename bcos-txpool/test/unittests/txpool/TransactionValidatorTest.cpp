@@ -302,6 +302,40 @@ BOOST_AUTO_TEST_CASE(testValidateEip7623GasFloor)
         BOOST_CHECK(result == TransactionStatus::None);
     }
 
+    // geth-aligned: data-heavy calldata + access list → minGas = intrinsic (28200), not
+    // floor+access.
+    {
+        auto tx = fakeWeb3Tx(cryptoSuite, "4", eoaKey, mixedInput);
+        auto txImpl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
+        txImpl->mutableInner().web3TypedTxKind =
+            static_cast<tars::Char>(bcos::rpc::TransactionType::EIP2930);
+        bcostars::Web3AccessListEntry entry;
+        entry.account = eoaKey->address(cryptoSuite->hashImpl()).hexPrefixed().substr(2);
+        entry.storageKeys.emplace_back(std::vector<tars::Char>(32, 0x01));
+        entry.storageKeys.emplace_back(std::vector<tars::Char>(32, 0x02));
+        txImpl->mutableInner().data.accessList.emplace_back(std::move(entry));
+
+        evmc_message msg{};
+        msg.kind = EVMC_CALL;
+        msg.input_data = mixedCalldata.data();
+        msg.input_size = mixedCalldata.size();
+        executor::Eip2930AccessList list{
+            {eoaKey->address(cryptoSuite->hashImpl()), {h256(0x01), h256(0x02)}}};
+        auto const intrinsic =
+            executor_v1::gas::computeTxIntrinsicGas(msg, std::addressof(list), 1);
+        constexpr int64_t gethMinGas = 28200;
+        BOOST_CHECK_EQUAL(intrinsic.gasLimitMinimum(), gethMinGas);
+
+        txImpl->mutableInner().data.gasLimit = gethMinGas - 1;
+        auto result =
+            task::syncWait(txpoolConfig->txValidator()->validateEip7623GasFloor(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::Malformed);
+
+        txImpl->mutableInner().data.gasLimit = gethMinGas;
+        result = task::syncWait(txpoolConfig->txValidator()->validateEip7623GasFloor(*tx, ledger));
+        BOOST_CHECK(result == TransactionStatus::None);
+    }
+
     // Non-Web3 transactions skip the floor check.
     {
         auto tx = fakeInvalidateTransacton("legacyInput", 0);

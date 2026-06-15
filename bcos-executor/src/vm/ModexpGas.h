@@ -6,9 +6,11 @@
  */
 #pragma once
 
+#include "bcos-framework/ledger/Features.h"
 #include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
 #include <cstddef>
+#include <string_view>
 
 namespace bcos::executor
 {
@@ -24,7 +26,19 @@ struct ModexpLengths
 constexpr size_t MODEXP_MAX_FIELD_LEN_EIP7823 = 1024;
 
 ModexpLengths parseModexpLengths(bcos::bytesConstRef input);
+
+inline bool modexpEip7823Enabled(ledger::Features const& features, evmc_revision revision) noexcept
+{
+    return revision >= EVMC_OSAKA && features.get(ledger::Features::Flag::feature_evm_osaka);
+}
+
 bool validateModexpEip7823(bcos::bytesConstRef input, evmc_revision revision);
+
+bool shouldRejectModexpEip7823(evmc_address const& addr, bcos::bytesConstRef input,
+    ledger::Features const& features, evmc_revision revision) noexcept;
+
+bool shouldRejectModexpEip7823(std::string_view addr, bcos::bytesConstRef input,
+    ledger::Features const& features, evmc_revision revision) noexcept;
 
 /// EIP-198 (< Berlin), EIP-2565 (Berlin..Osaka-1), EIP-7883 (Osaka+).
 bcos::bigint calcModexpGas(bcos::bytesConstRef input, evmc_revision revision);

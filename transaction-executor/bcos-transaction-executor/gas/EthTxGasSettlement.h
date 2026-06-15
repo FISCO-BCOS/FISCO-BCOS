@@ -35,9 +35,12 @@ struct TxIntrinsicGas
 
     int64_t preExecutionDebit() const { return fixedCost() + normalCalldata + createIntrinsic; }
 
+    /// EIP-7623: max(21000 + floor, intrinsic) where intrinsic includes access list + CREATE.
     int64_t gasLimitMinimum() const
     {
-        return fixedCost() + std::max(floorReserve, normalCalldata + createIntrinsic);
+        int64_t const intrinsic = preExecutionDebit();
+        int64_t const floorTotal = txBase + floorReserve;
+        return std::max(intrinsic, floorTotal);
     }
 };
 
@@ -52,11 +55,21 @@ struct TxGasSettlementContext
     int64_t evmGasRefund = 0;
 };
 
+inline bool eip7623Active(ledger::Features const& features, evmc_revision revision) noexcept
+{
+    return revision >= EVMC_PRAGUE && features.get(ledger::Features::Flag::feature_evm_prague);
+}
+
 inline bool ethGasSettlementEnabled(
     ledger::Features const& features, evmc_revision revision, int64_t level, bool web3Tx) noexcept
 {
-    return web3Tx && level == 0 && revision >= EVMC_PRAGUE &&
-           features.get(ledger::Features::Flag::feature_evm_prague);
+    return web3Tx && level == 0 && eip7623Active(features, revision);
+}
+
+inline bool eip7623TxpoolValidationEnabled(
+    ledger::Features const& features, evmc_revision revision, bool web3Tx) noexcept
+{
+    return web3Tx && eip7623Active(features, revision);
 }
 
 inline int64_t calcAccessListCost(executor::Eip2930AccessList const* accessList) noexcept
@@ -126,17 +139,6 @@ inline int64_t finalizeEthereumGasUsed(TxGasSettlementContext const& ctx) noexce
         ctx.calldata.normalCost + executionBurn - effectiveRefund + createExtra;
     int64_t const dataComponent = std::max(dataExec, ctx.calldata.floorCost);
     return ctx.fixedIntrinsic + dataComponent;
-}
-
-/// EVM returned but intrinsic debit never ran (e.g. preExecutionDebit OOG). Spec §4.3.1.
-inline int64_t finalizeEthereumGasUsedWithoutEvmStart(TxGasSettlementContext const& ctx,
-    int64_t preExecutionDebit, int64_t evmGasLeft, bool fixErrorGasConsumesAllGas) noexcept
-{
-    if (fixErrorGasConsumesAllGas && evmGasLeft == 0)
-    {
-        return std::min(ctx.gasLimit, preExecutionDebit);
-    }
-    return ctx.gasLimit - evmGasLeft;
 }
 
 }  // namespace gas

@@ -495,17 +495,22 @@ BOOST_AUTO_TEST_CASE(type2_accessList_floorDominatesReceiptGasUsed)
         msg.input_data = data.data();
         msg.input_size = data.size();
         auto const intrinsic = gas::computeTxIntrinsicGas(msg, std::addressof(list), 1);
-        auto const expectedGasUsed = intrinsic.gasLimitMinimum();
-        BOOST_REQUIRE_GT(expectedGasUsed, gas::TX_BASE_GAS);
+        constexpr int64_t accessListCost =
+            gas::ACCESS_LIST_ADDRESS_COST + 2 * gas::ACCESS_LIST_STORAGE_KEY_COST;
+        constexpr int64_t gethMinGasLimit = gas::TX_BASE_GAS + accessListCost + 16;
+        BOOST_CHECK_EQUAL(intrinsic.gasLimitMinimum(), gethMinGasLimit);
+        // Receipt: fixedIntrinsic (base+access) + max(normal, floor) on calldata data component.
+        constexpr int64_t expectedReceiptGasUsed = gas::TX_BASE_GAS + accessListCost + 40;
+        BOOST_REQUIRE_GT(expectedReceiptGasUsed, gethMinGasLimit);
 
         auto tx = makeWeb3Type2930Transaction(sender, toAddr, data,
-            static_cast<uint64_t>(expectedGasUsed), accessAddr, {h256(0x01), h256(0x02)});
+            static_cast<uint64_t>(expectedReceiptGasUsed), accessAddr, {h256(0x01), h256(0x02)});
         auto receipt = co_await executor.executeTransaction(
             storage, blockHeader, *tx, contextId++, ledgerConfig, false);
 
         BOOST_REQUIRE(receipt);
         BOOST_CHECK_EQUAL(receipt->status(), 0);
-        BOOST_CHECK_EQUAL(receipt->gasUsed(), u256(expectedGasUsed));
+        BOOST_CHECK_EQUAL(receipt->gasUsed(), u256(expectedReceiptGasUsed));
     }());
 }
 

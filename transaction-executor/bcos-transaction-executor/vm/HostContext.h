@@ -158,7 +158,6 @@ private:
 
     std::optional<executor_v1::gas::TxGasSettlementContext> m_gasSettlementSnapshot;
     int64_t m_gasSettlementGasLimit = 0;
-    int64_t m_preExecutionDebitForSettlement = 0;
 
     void captureGasSettlementSnapshotBeforeEvm()
     {
@@ -180,7 +179,6 @@ private:
         snap.fixedIntrinsic = intrinsic.fixedCost();
         snap.createTerm = intrinsic.createIntrinsic;
         m_gasSettlementSnapshot = snap;
-        m_preExecutionDebitForSettlement = intrinsic.preExecutionDebit();
     }
 
     constexpr auto buildLegacyExternalCaller()
@@ -441,8 +439,6 @@ public:
     {
         return m_gasSettlementSnapshot;
     }
-
-    int64_t preExecutionDebitForSettlement() const { return m_preExecutionDebitForSettlement; }
 
     /// Revert any changes made (by any of the other calls).
     void log(const evmc_address& address, h256s topics, bytesConstRef data)

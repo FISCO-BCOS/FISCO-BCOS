@@ -384,19 +384,15 @@ evmc_result HostContext::callBuiltInPrecompiled(
             return preResult;
         }
 
-        if (isModexpPrecompileAddress(_request->receiveAddress))
+        if (shouldRejectModexpEip7823(_request->receiveAddress, ref(_request->data), features(),
+                toRevision(features(), m_executive->blockContext().blockVersion())))
         {
-            auto const revision =
-                toRevision(features(), m_executive->blockContext().blockVersion());
-            if (revision >= EVMC_OSAKA && !validateModexpEip7823(ref(_request->data), revision))
-            {
-                callResults->status = (int32_t)TransactionStatus::RevertInstruction;
-                callResults->gas = 0;
-                preResult.status_code = EVMC_FAILURE;
-                preResult.gas_left = 0;
-                m_responseStore.emplace_back(std::move(callResults));
-                return preResult;
-            }
+            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            callResults->gas = 0;
+            preResult.status_code = EVMC_FAILURE;
+            preResult.gas_left = 0;
+            m_responseStore.emplace_back(std::move(callResults));
+            return preResult;
         }
 
         auto gasUsed =

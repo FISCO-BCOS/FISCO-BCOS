@@ -53,6 +53,12 @@ BOOST_AUTO_TEST_CASE(EthGasSettlementEnabled_gateMatrix)
     auto const revision = bcos::executor::toRevision(
         features, static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION));
 
+    BOOST_CHECK(eip7623Active(features, revision));
+    BOOST_CHECK(!eip7623Active(features, EVMC_CANCUN));
+    BOOST_CHECK(eip7623TxpoolValidationEnabled(features, revision, true));
+    BOOST_CHECK(!eip7623TxpoolValidationEnabled(features, revision, false));
+    BOOST_CHECK(!eip7623TxpoolValidationEnabled(features, EVMC_CANCUN, true));
+
     BOOST_CHECK(ethGasSettlementEnabled(features, revision, 0, true));
     BOOST_CHECK(!ethGasSettlementEnabled(features, revision, 0, false));
     BOOST_CHECK(!ethGasSettlementEnabled(features, revision, 1, true));
@@ -61,6 +67,7 @@ BOOST_AUTO_TEST_CASE(EthGasSettlementEnabled_gateMatrix)
     ledger::Features noPrague;
     noPrague.setGenesisFeatures(protocol::BlockVersion::MAX_VERSION);
     noPrague.set(ledger::Features::Flag::feature_evm_cancun);
+    BOOST_CHECK(!eip7623Active(noPrague, revision));
     BOOST_CHECK(!ethGasSettlementEnabled(noPrague, revision, 0, true));
 }
 
@@ -100,6 +107,50 @@ BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_accessList_cost)
     BOOST_CHECK_EQUAL(
         intrinsic.accessListCost, ACCESS_LIST_ADDRESS_COST + 2 * ACCESS_LIST_STORAGE_KEY_COST);
     BOOST_CHECK_EQUAL(intrinsic.preExecutionDebit(), TX_BASE_GAS + ACCESS_LIST_ADDRESS_COST + 3800);
+}
+
+BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_gasLimitMinimum_gethAligned_accessList)
+{
+    // geth: max(21000+floor, 21000+access+normal). Single non-zero byte "x": floor=40, normal=16.
+    executor::Eip2930AccessList list;
+    list.emplace_back(
+        Address("0x00000000000000000000000000000000000000aa"), std::vector<h256>{h256(1), h256(2)});
+    bcos::bytes const input = bcos::asBytes("x");
+    evmc_message msg{};
+    msg.kind = EVMC_CALL;
+    msg.input_data = input.data();
+    msg.input_size = input.size();
+    auto const intrinsic = computeTxIntrinsicGas(msg, std::addressof(list), 1);
+
+    constexpr int64_t accessListCost = ACCESS_LIST_ADDRESS_COST + 2 * ACCESS_LIST_STORAGE_KEY_COST;
+    constexpr int64_t floorTotal = TX_BASE_GAS + 40;
+    constexpr int64_t intrinsicTotal = TX_BASE_GAS + accessListCost + 16;
+    BOOST_CHECK_EQUAL(intrinsicTotal, 27216);
+    BOOST_CHECK_EQUAL(floorTotal, 21040);
+    BOOST_CHECK_EQUAL(intrinsic.gasLimitMinimum(), intrinsicTotal);
+    BOOST_CHECK_NE(intrinsic.gasLimitMinimum(), TX_BASE_GAS + accessListCost + 40);
+}
+
+BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_gasLimitMinimum_gethAligned_dataHeavyWithAccessList)
+{
+    // 100-byte mixed calldata: normal=1000, floor=2500; access list adds 6200 to intrinsic only.
+    auto const mixed = mixedCalldata100();
+    executor::Eip2930AccessList list;
+    list.emplace_back(
+        Address("0x00000000000000000000000000000000000000aa"), std::vector<h256>{h256(1), h256(2)});
+    evmc_message msg{};
+    msg.kind = EVMC_CALL;
+    msg.input_data = mixed.data();
+    msg.input_size = mixed.size();
+    auto const intrinsic = computeTxIntrinsicGas(msg, std::addressof(list), 1);
+
+    constexpr int64_t accessListCost = ACCESS_LIST_ADDRESS_COST + 2 * ACCESS_LIST_STORAGE_KEY_COST;
+    constexpr int64_t floorTotal = TX_BASE_GAS + 2500;
+    constexpr int64_t intrinsicTotal = TX_BASE_GAS + accessListCost + 1000;
+    BOOST_CHECK_EQUAL(intrinsicTotal, 28200);
+    BOOST_CHECK_EQUAL(floorTotal, 23500);
+    BOOST_CHECK_EQUAL(intrinsic.gasLimitMinimum(), intrinsicTotal);
+    BOOST_CHECK_NE(intrinsic.gasLimitMinimum(), TX_BASE_GAS + accessListCost + 2500);
 }
 
 BOOST_AUTO_TEST_CASE(ComputeTxIntrinsicGas_createIntrinsic_words)
@@ -190,17 +241,6 @@ BOOST_AUTO_TEST_CASE(EffectiveRefundEip3529_cap)
     BOOST_CHECK_EQUAL(effectiveRefundEip3529(10000, 1000), 200);
     BOOST_CHECK_EQUAL(effectiveRefundEip3529(100, 1000), 100);
     BOOST_CHECK_EQUAL(effectiveRefundEip3529(100, 0), 0);
-}
-
-BOOST_AUTO_TEST_CASE(FinalizeWithoutEvmStart_intrinsicOOG_vector)
-{
-    TxGasSettlementContext ctx;
-    ctx.gasLimit = 20'000;
-    auto const debit = TX_BASE_GAS;
-    BOOST_CHECK_EQUAL(finalizeEthereumGasUsedWithoutEvmStart(ctx, debit, 0, true), 20'000);
-    BOOST_CHECK_EQUAL(finalizeEthereumGasUsedWithoutEvmStart(ctx, debit, 0, false), 20'000);
-    ctx.gasLimit = 500'000;
-    BOOST_CHECK_EQUAL(finalizeEthereumGasUsedWithoutEvmStart(ctx, debit, 0, true), debit);
 }
 
 BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_create_noDoubleCount)

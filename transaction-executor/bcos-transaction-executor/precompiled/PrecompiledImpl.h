@@ -12,7 +12,8 @@
 namespace bcos::executor
 {
 bcos::bigint calcModexpGas(bcos::bytesConstRef input, evmc_revision revision);
-bool validateModexpEip7823(bcos::bytesConstRef input, evmc_revision revision);
+bool shouldRejectModexpEip7823(evmc_address const& addr, bcos::bytesConstRef input,
+    ledger::Features const& features, evmc_revision revision) noexcept;
 }  // namespace bcos::executor
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -78,8 +79,7 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
     evmc_message const& message, ledger::Features const& features, evmc_revision revision)
 {
     bytesConstRef const input{message.input_data, message.input_size};
-    if (executor::isModexpPrecompileEvmcAddress(message.code_address) &&
-        !executor::validateModexpEip7823(input, revision))
+    if (executor::shouldRejectModexpEip7823(message.code_address, input, features, revision))
     {
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
             protocol::TransactionStatus::RevertInstruction, EVMC_FAILURE, 0,

@@ -7,6 +7,7 @@
 
 #include "ModexpGas.h"
 #include "../Common.h"
+#include "EvmPrecompiledAddress.h"
 #include <evmc/evmc.h>
 #include <algorithm>
 #include <limits>
@@ -172,7 +173,6 @@ bool validateModexpEip7823(bytesConstRef input, evmc_revision revision)
     {
         return true;
     }
-
     auto const lens = parseModexpLengths(input);
     if (lens.overflow)
     {
@@ -191,6 +191,34 @@ bool validateModexpEip7823(bytesConstRef input, evmc_revision revision)
         return false;
     }
     return true;
+}
+
+bool shouldRejectModexpEip7823(evmc_address const& addr, bytesConstRef input,
+    ledger::Features const& features, evmc_revision revision) noexcept
+{
+    if (!isModexpPrecompileEvmcAddress(addr))
+    {
+        return false;
+    }
+    if (!modexpEip7823Enabled(features, revision))
+    {
+        return false;
+    }
+    return !validateModexpEip7823(input, revision);
+}
+
+bool shouldRejectModexpEip7823(std::string_view addr, bytesConstRef input,
+    ledger::Features const& features, evmc_revision revision) noexcept
+{
+    if (!isModexpPrecompileAddress(addr))
+    {
+        return false;
+    }
+    if (!modexpEip7823Enabled(features, revision))
+    {
+        return false;
+    }
+    return !validateModexpEip7823(input, revision);
 }
 
 bigint calcModexpGas(bytesConstRef input, evmc_revision revision)
