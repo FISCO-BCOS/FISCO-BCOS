@@ -17,7 +17,10 @@
 #include <boost/asio/deadline_timer.hpp>
 #include <boost/asio/ssl/stream_base.hpp>
 #include <boost/system/error_code.hpp>
+#include <atomic>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -104,6 +107,29 @@ public:
 
     void setEnableSslVerify(bool _enableSSLVerify);
 
+    // FIB-184: caps on concurrent inbound sessions to bound memory under TLS connect/close
+    // churn. With no cap, an authenticated peer can open sessions faster than they tear down
+    // and exhaust the heap (each session allocates a recv buffer). These are defaults; see
+    // TODO below about plumbing them through GatewayConfig.
+    // TODO(FIB-184): plumb these limits through GatewayConfig
+    // (p2p.max_concurrent_sessions / p2p.max_sessions_per_ip) instead of hardcoding.
+    constexpr static std::size_t DEFAULT_MAX_CONCURRENT_SESSIONS = 1024;
+    constexpr static std::size_t DEFAULT_MAX_SESSIONS_PER_IP = 32;
+
+    std::size_t maxConcurrentSessions() const { return m_maxConcurrentSessions; }
+    void setMaxConcurrentSessions(std::size_t _limit) { m_maxConcurrentSessions = _limit; }
+    std::size_t maxSessionsPerIP() const { return m_maxSessionsPerIP; }
+    void setMaxSessionsPerIP(std::size_t _limit) { m_maxSessionsPerIP = _limit; }
+    std::size_t currentSessionCount() const { return m_sessionCount.load(); }
+
+    // FIB-184: try to reserve a session slot for the given remote address. Returns true and
+    // increments the global / per-IP counters if both caps allow; returns false (caller must
+    // close the socket) otherwise. The matching releaseSessionSlot() runs from the session's
+    // lifetime guard when the session object is destroyed. Public so the lifetime guard can
+    // release the slot.
+    bool tryAcquireSessionSlot(std::string const& _address);
+    void releaseSessionSlot(std::string const& _address);
+
 protected:
     /// obtain the common name from the subject:
     /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
@@ -173,6 +199,13 @@ protected:
     // Peer black list
     PeerBlackWhitelistInterface::Ptr m_peerBlacklist{nullptr};
     PeerBlackWhitelistInterface::Ptr m_peerWhitelist{nullptr};
+
+    // FIB-184: session-cap accounting.
+    std::size_t m_maxConcurrentSessions{DEFAULT_MAX_CONCURRENT_SESSIONS};
+    std::size_t m_maxSessionsPerIP{DEFAULT_MAX_SESSIONS_PER_IP};
+    std::atomic<std::size_t> m_sessionCount{0};
+    std::map<std::string, std::size_t> m_sessionCountPerIP;
+    std::mutex x_sessionCountPerIP;
 };
 }  // namespace gateway
 

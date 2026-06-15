@@ -98,10 +98,18 @@ struct Payload
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
+    // Grow ceiling: the recv buffer never grows beyond this (see Session::doRead grow path).
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
+    // FIB-184: initial recv-buffer size for a freshly created session. Previously every
+    // session unconditionally allocated MIN_SESSION_RECV_BUFFER_SIZE (512KB) up front, so a
+    // flood of unauthenticated/short-lived sessions caused heap exhaustion. Start small and
+    // rely on the existing grow path (doRead grows up to m_maxRecvBufferSize) to expand only
+    // for sessions that actually carry large messages. Must stay well above the message
+    // header length so the first read can always make forward progress.
+    constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 
     Session(std::shared_ptr<SocketFace> socket, Host& server,
-        size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
+        size_t _recvBufferSize = INITIAL_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;
@@ -152,6 +160,15 @@ public:
         std::function<std::optional<bcos::Error>(SessionFace&, Message&)> handler) override;
 
     void setHostInfo(P2PInfo _hostInfo);
+
+    // FIB-184: attach an opaque object whose lifetime is bound to this session. It is destroyed
+    // exactly when the session object is destroyed, which Host uses to release a session-cap
+    // slot (the guard's destructor decrements the Host counters). Kept opaque so libnetwork
+    // does not depend on the accounting type.
+    void setLifetimeGuard(std::shared_ptr<void> _guard) override
+    {
+        m_lifetimeGuard = std::move(_guard);
+    }
 
     uint32_t maxReadDataSize() const;
     void setMaxReadDataSize(uint32_t _maxReadDataSize);
@@ -244,6 +261,10 @@ public:
     // actual teardown body runs exactly once; all subsequent callers no-op.
     std::atomic_bool m_dropped{false};
     P2PInfo m_hostInfo;
+
+    // FIB-184: opaque guard whose destructor releases the Host session-cap slot. Destroyed with
+    // the session, so the slot is freed exactly once on session teardown.
+    std::shared_ptr<void> m_lifetimeGuard;
 
     struct Writings
     {
