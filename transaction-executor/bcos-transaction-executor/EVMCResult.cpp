@@ -40,6 +40,8 @@ bcos::executor_v1::EVMCResult::EVMCResult(EVMCResult&& from) noexcept
 bcos::executor_v1::EVMCResult& bcos::executor_v1::EVMCResult::operator=(EVMCResult&& from) noexcept
 {
     evmc_result::operator=(from);
+    // FIB-179: keep cached TransactionStatus in sync with the moved-from result
+    status = from.status;
     cleanEVMCResult(from);
     return *this;
 }
