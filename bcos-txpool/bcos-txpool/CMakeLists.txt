@@ -23,8 +23,7 @@ include_directories(./sync/)
 aux_source_directory(./sync/protocol/PB SRC_LIST)
 include_directories(./sync/protocol/PB)
 
-add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS}
-    ${CMAKE_SOURCE_DIR}/bcos-executor/src/Web3AccessListResolver.cpp)
+add_library(txpool ${SRC_LIST} ${PROTO_SRCS} ${HEADERS} ${PROTO_HDRS})
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
@@ -34,5 +33,7 @@ target_include_directories(txpool PUBLIC .
     ${CMAKE_CURRENT_BINARY_DIR}/..
     ${CMAKE_SOURCE_DIR}/transaction-executor
     ${CMAKE_SOURCE_DIR}/bcos-executor/src)
-target_link_libraries(txpool PUBLIC ledger rpc TBB::tbb protobuf::libprotobuf bcos-protocol bcos-utilities tool)
+# resolveWeb3AccessList lives in executor; do not compile Web3AccessListResolver.cpp here
+# (duplicate symbol with libexecutor when linking fisco-bcos).
+target_link_libraries(txpool PUBLIC ledger rpc executor TBB::tbb protobuf::libprotobuf bcos-protocol bcos-utilities tool)
 set_target_properties(txpool PROPERTIES UNITY_BUILD "ON")
