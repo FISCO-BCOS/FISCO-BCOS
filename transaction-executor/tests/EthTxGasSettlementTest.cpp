@@ -177,13 +177,14 @@ BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_cases)
     ctx.gasBeforeEvm = 100000;
     ctx.evmGasRefund = 0;
 
-    ctx.evmGasLeft = 99500;
+    // gasBeforeEvm is post-normal-debit; executionBurn is EVM-only.
+    ctx.evmGasLeft = 100000 - 500;
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), 22300);
 
-    ctx.evmGasLeft = 99800;
+    ctx.evmGasLeft = 100000 - 200;
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), 22000);
 
-    ctx.evmGasLeft = 99950;
+    ctx.evmGasLeft = 100000 - 50;
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), 22000);
 }
 
@@ -196,7 +197,7 @@ BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_floorDominatesLowExecution)
     ctx.fixedIntrinsic = TX_BASE_GAS;
     ctx.calldata = components;
     ctx.gasBeforeEvm = 100000;
-    ctx.evmGasLeft = 99950;
+    ctx.evmGasLeft = 100000 - 50;
     ctx.evmGasRefund = 0;
 
     BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), TX_BASE_GAS + components.floorCost);
@@ -233,7 +234,23 @@ BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_highIntrinsicRefundSubjectTo3529Cap
         ctx.fixedIntrinsic + ctx.calldata.normalCost + executionBurn + createExtra;
     int64_t const cap = effectiveRefundEip3529(ctx.evmGasRefund, gasUsedBeforeRefund);
     BOOST_CHECK_EQUAL(cap, gasUsedBeforeRefund / 5);
-    BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), ctx.fixedIntrinsic);
+    // geth: intrinsic + execution - capped refund; floorDataGas = 21000 when floorCost = 0.
+    BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), gasUsedBeforeRefund - cap);
+}
+
+BOOST_AUTO_TEST_CASE(FinalizeEthereumGasUsed_gethAligned_accessListLightCalldata)
+{
+    constexpr int64_t accessListCost = ACCESS_LIST_ADDRESS_COST + 2 * ACCESS_LIST_STORAGE_KEY_COST;
+    TxGasSettlementContext ctx;
+    ctx.fixedIntrinsic = TX_BASE_GAS + accessListCost;
+    ctx.calldata.normalCost = 16;
+    ctx.calldata.floorCost = 40;
+    ctx.gasBeforeEvm = 100'000;
+    ctx.evmGasLeft = 100'000;
+    ctx.evmGasRefund = 0;
+
+    // Minimal execution (16 burn): receipt = intrinsic + normal calldata, not floor uplift.
+    BOOST_CHECK_EQUAL(finalizeEthereumGasUsed(ctx), TX_BASE_GAS + accessListCost + 16);
 }
 
 BOOST_AUTO_TEST_CASE(EffectiveRefundEip3529_cap)

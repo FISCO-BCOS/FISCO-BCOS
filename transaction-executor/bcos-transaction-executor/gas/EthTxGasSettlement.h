@@ -132,13 +132,15 @@ inline int64_t finalizeEthereumGasUsed(TxGasSettlementContext const& ctx) noexce
     // executionBurn already covers createTerm, do not add it again (avoids double-count).
     int64_t const createExtra =
         (ctx.createTerm > 0 && executionBurn < ctx.createTerm) ? ctx.createTerm - executionBurn : 0;
+    // Snapshot is taken after normal calldata pre-debit and 21000 base; executionBurn is EVM-only.
     int64_t const gasUsedBeforeRefund =
         ctx.fixedIntrinsic + ctx.calldata.normalCost + executionBurn + createExtra;
     int64_t const effectiveRefund = effectiveRefundEip3529(ctx.evmGasRefund, gasUsedBeforeRefund);
-    int64_t const dataExec =
-        ctx.calldata.normalCost + executionBurn - effectiveRefund + createExtra;
-    int64_t const dataComponent = std::max(dataExec, ctx.calldata.floorCost);
-    return ctx.fixedIntrinsic + dataComponent;
+    // geth (Prague+): after refund, top up only when total used is below FloorDataGas
+    // (21000 + floor tokens; access list excluded from floor).
+    int64_t const gasUsedAfterRefund = gasUsedBeforeRefund - effectiveRefund;
+    int64_t const floorDataGas = TX_BASE_GAS + ctx.calldata.floorCost;
+    return std::max(gasUsedAfterRefund, floorDataGas);
 }
 
 }  // namespace gas
