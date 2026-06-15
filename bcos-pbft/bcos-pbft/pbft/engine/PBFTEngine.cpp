@@ -158,7 +158,41 @@ void PBFTEngine::tryToResendCheckPoint()
         RecursiveGuard l(m_mutex);
         m_cacheProcessor->tryToResendCheckPoint();
     }
+    // FIB-185: run the consensus-timer watchdog on this periodic path.
+    checkConsensusTimerWatchdog();
     m_timer->restart();
+}
+
+void PBFTEngine::checkConsensusTimerWatchdog()
+{
+    // FIB-185: under adversarial consensus input concurrent with session-teardown churn, a node
+    // can commit its last block, emit a single view-change, and then never re-arm its consensus
+    // timer (an inferred race between session-teardown callbacks and the consensus worker/timer).
+    // The wedge signature is: consensus node, in timeout state (a view-change is pending), but the
+    // view-change timer is not running. Detect that and re-arm the timer. restart() only re-arms
+    // the timer; onTimeout (which actually drives the view-change) fires later, so this watchdog
+    // cannot itself emit a view-change or perturb the view-change cache.
+    if (m_stopped.load())
+    {
+        return;
+    }
+    if (!m_config->isConsensusNode())
+    {
+        return;
+    }
+    auto consensusTimer = m_config->timer();
+    if (!consensusTimer)
+    {
+        return;
+    }
+    if (m_config->timeout() && !consensusTimer->running())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "checkConsensusTimerWatchdog: consensus timer stalled while in "
+                                 "timeout state, re-arm the timer")
+                          << m_config->printCurrentState();
+        consensusTimer->restart();
+    }
 }
 
 void PBFTEngine::restart()
@@ -1495,6 +1529,19 @@ void PBFTEngine::broadcastViewChangeReq()
     // only broadcast to the consensus nodes
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
                    << LOG_KV("packetSize", encodedData->size());
+    // FIB-185 (Fix 1, deferred): this runs under m_mutex (onTimeout -> triggerTimeout holds it).
+    // task::wait here is already fire-and-forget (it starts the coroutine and returns without
+    // blocking to completion), so it does NOT block the worker on the network round-trip. The
+    // residual coupling is that the coroutine's inline prefix (up to its first suspension inside
+    // FrontService::broadcastMessage) executes on this thread while m_mutex is held; if that
+    // prefix contends a gateway/session lock during teardown churn it can briefly stall the
+    // worker. Fully moving the send off-lock would require dispatching it onto a dedicated
+    // executor, which touches consensus-thread/lifetime ordering near the view-change cache; the
+    // watchdog (checkConsensusTimerWatchdog) recovers a stalled timer without that risk. Splitting
+    // the send off-lock is left as a follow-up so the view-change cache invariants below are not
+    // disturbed.
+    // TODO(FIB-185): move the network broadcast fully off the m_mutex critical section (dedicated
+    // executor) once the consensus-thread ordering around the view-change cache is verified safe.
     task::wait([](FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
         co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
             ::ranges::views::single(ref(*encodedData)));
