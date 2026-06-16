@@ -48,7 +48,14 @@ protected:
      * @brief Set thread name for the worker
      * @param _threadName: the thread name
      */
-    void setName(std::string _threadName) { m_threadName = std::move(_threadName); }
+    void setName(std::string const& _threadName)
+    {
+        // m_threadName is read by the io_context thread in every log line
+        // (LOG_KV("threadName", m_threadName)).  Only allow writes while
+        // the worker is not running to avoid a data race on std::string.
+        if (!isWorking())
+            m_threadName = _threadName;
+    }
 
     std::string const& threadName() const { return m_threadName; }
 

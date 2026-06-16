@@ -23,6 +23,7 @@
 #include <csignal>
 #include <cstring>
 #include <ctime>
+#include <unistd.h>
 
 
 namespace bcos::node
@@ -30,7 +31,16 @@ namespace bcos::node
 class ExitHandler
 {
 public:
-    static void exit() { exitHandler(0); }
+    static void exit()
+    {
+        // Normal (non-signal) exit path — do NOT chain-call old handlers
+        // because signal number 0 is not a real signal and can trigger
+        // undefined behaviour in the previously installed handler.
+        const char* msg = "[ExitHandler] normal exit requested...\n";
+        [[maybe_unused]] auto _ret = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        ExitHandler::c_shouldExit.store(true);
+        ExitHandler::c_shouldExit.notify_all();
+    }
 
     /// Signal handler: sets the exit flag first so that main() can proceed,
     /// then chains to the previously registered handler (if any) so that
@@ -43,7 +53,7 @@ public:
         const char* msg = "[ExitHandler] received signal, exiting...\n";
         // write() is tagged warn_unused_result on Linux; a void-cast does
         // not suppress the warning, but a real use (assignment) does.
-        [[maybe_unused]] auto _ret = write(STDERR_FILENO, msg, std::strlen(msg));
+        [[maybe_unused]] auto _ret = write(STDERR_FILENO, msg, sizeof(msg) - 1);
 
         // Set the flag first — this is the critical path that unblocks main().
         ExitHandler::c_shouldExit.store(true);
@@ -52,8 +62,12 @@ public:
         // Chain to the previously registered handler so that frameworks
         // such as TARS can perform their own internal graceful shutdown.
         auto& old = getOldHandler(signal);
-        if (old.sa_handler != nullptr && old.sa_handler != SIG_DFL && old.sa_handler != SIG_IGN &&
-            old.sa_handler != &ExitHandler::exitHandler)
+        if ((old.sa_flags & SA_SIGINFO) && old.sa_sigaction != nullptr)
+        {
+            old.sa_sigaction(signal, nullptr, nullptr);
+        }
+        else if (old.sa_handler != nullptr && old.sa_handler != SIG_DFL &&
+                 old.sa_handler != SIG_IGN && old.sa_handler != &ExitHandler::exitHandler)
         {
             old.sa_handler(signal);
         }

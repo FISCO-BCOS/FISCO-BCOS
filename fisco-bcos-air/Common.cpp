@@ -20,6 +20,7 @@
 
 #include "Common.h"
 #include <clocale>
+#include <cstdlib>
 
 namespace bcos::node
 {

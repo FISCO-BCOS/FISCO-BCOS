@@ -18,6 +18,7 @@
 #include "Worker.h"
 
 #include "BoostLog.h"
+#include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
 
@@ -31,9 +32,11 @@ void Worker::startWorking()
         return;  // Already running, or lost the race
     }
 
-    // Start the timer synchronously. This guarantees that after start()
-    // returns the timer is active, so stopWorking() can always call cancel()
-    // safely.
+    // Reset the alive flag so that async handlers from a previous stop
+    // cycle don't prematurely bail out of a restarted worker.
+    *m_aliveFlag = true;
+
+    // initWorker() is safe to call synchronously — subclasses only log.
     try
     {
         initWorker();
@@ -44,7 +47,16 @@ void Worker::startWorking()
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }
-    scheduleNext();
+
+    // scheduleNext() mutates m_timer (expires_after / async_wait), which
+    // must only happen on the io_context thread.  Post it there so that
+    // callers from arbitrary threads (e.g. Sealer::start()) are safe.
+    boost::asio::post(m_ioContext, [this]() {
+        if (m_workerState == WorkerState::Started)
+        {
+            scheduleNext();
+        }
+    });
 }
 
 void Worker::stopWorking()
@@ -56,8 +68,13 @@ void Worker::stopWorking()
     }
 
     // Signal all in-flight handlers to bail out before accessing `this`.
+    // The CAS above already changed m_workerState to Stopped, and
+    // m_aliveFlag=false makes every captured handler return immediately.
     *m_aliveFlag = false;
-    m_timer.cancel();
+
+    // Route cancel through the io_context thread so that it doesn't race
+    // with handleTimerTick / scheduleNext executing on the io_context.
+    boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
 
     try
     {
@@ -141,11 +158,15 @@ void Worker::notify()
 {
     if (m_workerState == WorkerState::Started)
     {
-        // Cancel the current timer wait and immediately schedule the next
-        // tick to wake the worker. scheduleNext() uses expires_after() which
-        // implicitly cancels any pending async_wait, so the old handler fires
-        // with operation_aborted and returns harmlessly.
-        m_timer.cancel();
-        scheduleNext();
+        // Post the re-schedule to the io_context thread because
+        // scheduleNext() mutates m_timer (expires_after / async_wait).
+        // The explicit cancel is not needed — expires_after() inside
+        // scheduleNext() implicitly cancels any pending async_wait.
+        boost::asio::post(m_ioContext, [this]() {
+            if (m_workerState == WorkerState::Started)
+            {
+                scheduleNext();
+            }
+        });
     }
 }

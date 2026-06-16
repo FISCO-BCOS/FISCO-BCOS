@@ -125,13 +125,17 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
     if (ec)
     {
         // operation_aborted is expected during shutdown (m_acceptor->cancel());
-        // other errors (e.g. bad_file_descriptor) mean the acceptor is gone —
-        // do NOT re-queue accept to avoid an infinite error loop.
-        if (ec != boost::asio::error::operation_aborted)
+        // bad_descriptor means the acceptor was already closed — in both
+        // cases do NOT re-queue accept to avoid an infinite error loop.
+        if (ec == boost::asio::error::operation_aborted ||
+            ec == boost::asio::error::bad_descriptor)
         {
-            HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("failed", ec)
-                                 << LOG_KV("message", ec.message());
+            return;
         }
+        // Transient errors (e.g. EMFILE) — log and retry.
+        HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("failed", ec)
+                             << LOG_KV("message", ec.message());
+        accept();
         return;
     }
 

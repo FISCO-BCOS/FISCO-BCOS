@@ -58,7 +58,7 @@ public:
         }
         CONSENSUS_LOG(INFO) << LOG_DESC("Stop consensusEngine");
         m_started = false;
-        finishWorker();
+        // stopWorking() already calls finishWorker() internally.
         if (isWorking())
         {
             // stop the worker thread

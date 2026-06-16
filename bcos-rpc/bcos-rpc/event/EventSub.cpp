@@ -71,7 +71,7 @@ void EventSub::stop()
     }
     m_running.store(false);
 
-    finishWorker();
+    // stopWorking() already calls finishWorker() internally.
     stopWorking();
 
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
