@@ -248,20 +248,14 @@ LOG_INFO "======== check non-sm case ========"
 export RUN_DMC="true"
 init ""
 expand_node ""
-# 并行运行 console 和 java-sdk 测试（互不依赖）
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1" &
-console_pid=$!
-bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1" &
-java_sdk_pid=$!
-
-wait ${console_pid}
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"
     exit 1
 fi
 LOG_INFO "console_integrationTest success"
 
-wait ${java_sdk_pid}
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "java_sdk_integrationTest error"
     exit 1
@@ -282,20 +276,14 @@ clear_node
 LOG_INFO "======== check sm case ========"
 export RUN_DMC="false"
 init "-s"
-# 并行运行 console 和 java-sdk 测试
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1" &
-console_pid=$!
-bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1" &
-java_sdk_pid=$!
-
-wait ${console_pid}
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"
     exit 1
 fi
 LOG_INFO "console_integrationTest success"
 
-wait ${java_sdk_pid}
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "java_sdk_integrationTest error"
     exit 1
@@ -315,20 +303,14 @@ clear_node
 LOG_INFO "======== check baseline cases ========"
 export RUN_DMC="false"
 init_baseline ""
-# 并行运行 console 和 java-sdk 测试
-bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1" &
-console_pid=$!
-bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1" &
-java_sdk_pid=$!
-
-wait ${console_pid}
+bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"
     exit 1
 fi
 LOG_INFO "console_integrationTest success"
 
-wait ${java_sdk_pid}
+bash ${current_path}/.ci/java_sdk_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "java_sdk_integrationTest error"
     exit 1
