@@ -25,7 +25,8 @@ set(SOURCES unittests/storage2/TestMemoryStorage.cpp
     unittests/interfaces/ExecutorTest.cpp
     unittests/interfaces/FeaturesTest.cpp
     unittests/interfaces/TestTransactionExecutor.cpp
-    unittests/mempool/TestAnyMemPool.cpp)
+    unittests/mempool/TestAnyMemPool.cpp
+    unittests/engine/TestAnyEngineService.cpp)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 
