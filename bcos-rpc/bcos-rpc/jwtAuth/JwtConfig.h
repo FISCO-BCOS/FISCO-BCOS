@@ -31,11 +31,9 @@ public:
     using Ptr = std::shared_ptr<JwtConfig>;
     using ConstPtr = std::shared_ptr<const JwtConfig>;
 
-public:
     JwtConfig() = default;
     ~JwtConfig() = default;
 
-public:
     const std::string& secretFile() const { return m_secretFile; }
     void setSecretFile(std::string _secretFile) { m_secretFile = std::move(_secretFile); }
 

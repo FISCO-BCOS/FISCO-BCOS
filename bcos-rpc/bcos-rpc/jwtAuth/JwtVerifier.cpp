@@ -19,6 +19,7 @@
  */
 
 #include "JwtVerifier.h"
+#include <bcos-rpc/Common.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FileUtility.h>
 #include <jwt-cpp/traits/kazuho-picojson/defaults.h>
@@ -26,6 +27,7 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <algorithm>
 #include <cctype>
+#include <climits>
 #include <vector>
 
 namespace bcos::rpc
@@ -58,16 +60,27 @@ JwtVerifyResult JwtVerifier::verify(std::string_view _authorizationHeader) const
 
 JwtVerifyResult JwtVerifier::verifyToken(std::string_view _jwtCompact) const
 {
-    JwtToken token;
+    std::optional<::jwt::decoded_jwt<::jwt::traits::kazuho_picojson>> decoded;
     try
     {
-        token = JwtToken::decode(_jwtCompact);
+        decoded.emplace(::jwt::decode(std::string(_jwtCompact)));
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        RPC_LOG(WARNING) << "JWT decode failed: " << e.what();
         return makeError(
             JwtError::InvalidTokenFormat, std::string(toString(JwtError::InvalidTokenFormat)));
     }
+
+    auto secret = readSecretRaw();
+    if (secret.empty())
+    {
+        return makeError(
+            JwtError::SecretReadFailed, std::string(toString(JwtError::SecretReadFailed)));
+    }
+
+
+    auto token = JwtToken::decode(*decoded);
 
     if (token.header().alg.empty() || !verifyAlgorithm(token.header().alg))
     {
@@ -81,22 +94,16 @@ JwtVerifyResult JwtVerifier::verifyToken(std::string_view _jwtCompact) const
             JwtError::InvalidIssuedAt, std::string(toString(JwtError::InvalidIssuedAt)));
     }
 
-    auto secret = readSecretRaw();
-    if (secret.empty())
-    {
-        return makeError(
-            JwtError::SecretReadFailed, std::string(toString(JwtError::SecretReadFailed)));
-    }
-
     try
     {
-        auto decoded = ::jwt::decode(std::string(_jwtCompact));
+        // TODO: support dynamic algorithm selection based on token header alg
+        // Currently only HS256 is supported per Ethereum Engine API spec
         auto verifier = ::jwt::verify().allow_algorithm(::jwt::algorithm::hs256{secret});
-        verifier.verify(decoded);
+        verifier.verify(*decoded);
     }
     catch (std::exception const& e)
     {
-        (void)e;
+        RPC_LOG(WARNING) << "JWT signature verification failed: " << e.what();
         return makeError(
             JwtError::InvalidSignature, std::string(toString(JwtError::InvalidSignature)));
     }
@@ -130,7 +137,7 @@ bool JwtVerifier::verifyAlgorithm(std::string_view _alg) const
         {
             continue;
         }
-        if (algorithm == "*" || algorithm == _alg)
+        if (algorithm == _alg)
         {
             return true;
         }
@@ -143,12 +150,10 @@ bool JwtVerifier::verifyIat(int64_t _iat) const
     // JWT iat follows NumericDate in seconds, while utcTime() returns milliseconds.
     auto now = static_cast<int64_t>(utcTime() / 1000);
     auto skew = m_config ? m_config->clockSkewSecs() : 0;
-    return (_iat >= (now - skew)) && (_iat <= (now + skew));
-}
-
-std::string JwtVerifier::readSecret() const
-{
-    return readSecretRaw();
+    // Defensive overflow/underflow protection
+    auto lower = (skew > now) ? INT64_MIN : (now - skew);
+    auto upper = (skew > INT64_MAX - now) ? INT64_MAX : (now + skew);
+    return (_iat >= lower) && (_iat <= upper);
 }
 
 bool JwtVerifier::validateSecret(std::string_view _secret) const
@@ -170,7 +175,16 @@ std::string JwtVerifier::readSecretRaw() const
         return {};
     }
 
-    auto secretContent = readContentsToString(m_config->secretFile());
+    std::shared_ptr<std::string> secretContent;
+    try
+    {
+        secretContent = readContentsToString(m_config->secretFile());
+    }
+    catch (std::exception const& e)
+    {
+        RPC_LOG(WARNING) << "Failed to read JWT secret file: " << e.what();
+        return {};
+    }
     if (!secretContent || secretContent->empty())
     {
         return {};
@@ -198,8 +212,9 @@ std::string JwtVerifier::readSecretRaw() const
     {
         boost::algorithm::unhex(secret.begin(), secret.end(), decoded.begin());
     }
-    catch (...)
+    catch (std::exception const& e)
     {
+        RPC_LOG(WARNING) << "JWT secret hex decode failed: " << e.what();
         return {};
     }
     return decoded;

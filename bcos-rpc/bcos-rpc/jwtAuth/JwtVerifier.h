@@ -24,7 +24,6 @@
 #include "JwtErrors.h"
 #include "JwtToken.h"
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -49,14 +48,12 @@ public:
 
     ~JwtVerifier() = default;
 
-    const JwtConfig& config() const { return *m_config; }
     JwtVerifyResult verify(std::string_view authorizationHeader) const;
     JwtVerifyResult verifyToken(std::string_view jwtCompact) const;
 
     bool verifyAlgorithm(std::string_view alg) const;
     bool verifyIat(int64_t iat) const;
 
-    std::string readSecret() const;
     std::string readSecretRaw() const;
     bool validateSecret(std::string_view secret) const;
 

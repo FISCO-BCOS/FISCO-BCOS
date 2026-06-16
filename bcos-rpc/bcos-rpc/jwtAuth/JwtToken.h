@@ -58,10 +58,9 @@ public:
         m_claims(std::move(_claims)),
         m_signature(std::move(_signature))
     {}
-    static JwtToken decode(std::string_view _jwtCompact)
+    static JwtToken decode(
+        const ::jwt::decoded_jwt<::jwt::traits::kazuho_picojson>& decoded)
     {
-        auto decoded = ::jwt::decode(std::string(_jwtCompact));
-
         JwtHeader header;
         if (decoded.has_algorithm())
         {
@@ -101,3 +100,4 @@ private:
     std::string m_signature;
 };
 }  // namespace bcos::rpc
+
