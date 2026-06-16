@@ -228,9 +228,7 @@ BOOST_AUTO_TEST_CASE(modexp_mod_zero_returns_zero)
 
 BOOST_AUTO_TEST_CASE(modexp_modlen_zero_baselen_nonzero)
 {
-    // modLen=0 but baseLen≠0: does NOT hit the early-return shortcut
-    // (which requires BOTH modLen==0 AND baseLen==0).
-    // Falls through the full path: mod parsed as 0 → result=0, retLength=0 → {true, bytes{}}
+    // modLen=0: EIP-198 output length is zero; early-return without padded() allocation.
     bytes input(96, 0);
     input[31] = 1;  // baseLen = 1
     input[63] = 1;  // expLen  = 1

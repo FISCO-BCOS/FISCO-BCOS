@@ -238,8 +238,11 @@ ETH_REGISTER_PRECOMPILED(modexp)(bytesConstRef _in)
     size_t const expLen = lens.expLen;
     size_t const modLen = lens.modLen;
 
-    if (baseLen == 0 && modLen == 0)
+    if (modLen == 0)
+    {
+        // EIP-198: output length is modLen; skip padded() allocations when mod is absent.
         return {true, {}};
+    }
 
     // Zero-pad inputs to declared lengths (EIP-198: missing bytes are right-padded with zeros)
     auto padded = [&](size_t offset, size_t len) -> bytes {

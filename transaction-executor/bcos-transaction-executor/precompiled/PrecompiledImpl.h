@@ -79,7 +79,7 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
     evmc_message const& message, ledger::Features const& features, evmc_revision revision)
 {
     bytesConstRef const input{message.input_data, message.input_size};
-    if (executor::shouldRejectModexpEip7823(message.code_address, input, features, revision))
+    if (executor::shouldRejectModexpEip7823(message.recipient, input, features, revision))
     {
         return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
             protocol::TransactionStatus::RevertInstruction, EVMC_FAILURE, 0,

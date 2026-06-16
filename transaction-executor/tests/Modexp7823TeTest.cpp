@@ -55,6 +55,7 @@ BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka)
 
     evmc_message message{};
     message.kind = EVMC_CALL;
+    message.recipient = modexpAddr;
     message.code_address = modexpAddr;
     message.gas = 1'000'000;
     message.input_data = input.data();
@@ -81,12 +82,42 @@ BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_osaka_legacyPath_bu
 
     evmc_message message{};
     message.kind = EVMC_CALL;
+    message.recipient = modexpAddr;
     message.code_address = modexpAddr;
     message.gas = 500'000;
     message.input_data = input.data();
     message.input_size = input.size();
 
     auto const features = osakaFeatures(false);
+    auto const result =
+        executor_v1::callBuiltinPrecompiled(contract, message, features, EVMC_OSAKA);
+
+    BOOST_CHECK_EQUAL(result.status_code, EVMC_FAILURE);
+    BOOST_CHECK_EQUAL(result.gas_left, 0);
+}
+
+BOOST_AUTO_TEST_CASE(callBuiltinPrecompiled_rejects_oversize_dynamicPrecompiledRecipient)
+{
+    executor::GlobalHashImpl::g_hashImpl = std::make_shared<crypto::Keccak256>();
+    executor::PrecompiledContract const contract(
+        executor::PrecompiledContract::modexp(executor::PrecompiledRegistrar::executor("modexp")));
+
+    auto const input = modexpHeaderBaseLen1025();
+    evmc_address modexpAddr{};
+    modexpAddr.bytes[19] = 0x05;
+    evmc_address wrapperAddr{};
+    wrapperAddr.bytes[19] = 0x42;
+
+    evmc_message message{};
+    message.kind = EVMC_CALL;
+    // processDynamicPrecompiled() keeps wrapper in code_address and routes recipient to 0x05.
+    message.recipient = modexpAddr;
+    message.code_address = wrapperAddr;
+    message.gas = 1'000'000;
+    message.input_data = input.data();
+    message.input_size = input.size();
+
+    auto const features = osakaFeatures();
     auto const result =
         executor_v1::callBuiltinPrecompiled(contract, message, features, EVMC_OSAKA);
 
