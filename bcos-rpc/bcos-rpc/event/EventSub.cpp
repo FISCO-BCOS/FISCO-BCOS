@@ -73,8 +73,6 @@ void EventSub::stop()
 
     finishWorker();
     stopWorking();
-    // will not restart worker, so terminate it
-    terminate();
 
     EVENT_SUB(INFO) << LOG_BADGE("stop") << LOG_DESC("stop event sub successfully");
 }

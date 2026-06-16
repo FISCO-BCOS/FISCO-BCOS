@@ -32,8 +32,8 @@ void Worker::startWorking()
     }
 
     // Start the timer synchronously. This guarantees that after start()
-    // returns the timer is active, so stopWorking()/terminate() can always
-    // call cancel() safely.
+    // returns the timer is active, so stopWorking() can always call cancel()
+    // safely.
     try
     {
         initWorker();
@@ -55,6 +55,8 @@ void Worker::stopWorking()
         return;  // Not running, or another thread is already stopping
     }
 
+    // Signal all in-flight handlers to bail out before accessing `this`.
+    *m_aliveFlag = false;
     m_timer.cancel();
 
     try
@@ -67,16 +69,6 @@ void Worker::stopWorking()
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }
-}
-
-void Worker::terminate()
-{
-    // Signal all in-flight handlers to bail out before accessing `this`.
-    *m_aliveFlag = false;
-
-    // Cancel any pending timer operation. Safe to call regardless of state
-    // because startWorking() always starts the timer synchronously.
-    m_timer.cancel();
 }
 
 void Worker::scheduleNext()

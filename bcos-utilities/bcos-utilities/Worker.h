@@ -42,7 +42,7 @@ protected:
         m_threadName(std::move(_threadName)),
         m_idleWaitMs(_idleWaitMs)
     {}
-    virtual ~Worker() { terminate(); }
+    virtual ~Worker() { stopWorking(); }
 
     /**
      * @brief Set thread name for the worker
@@ -71,8 +71,6 @@ protected:
 
     // Called when is to be stopped
     virtual void finishWorker() {}
-    // stop the worker and cancel the timer
-    void terminate();
 
     // Wake up the worker immediately (cancel current timer, re-schedule)
     void notify();

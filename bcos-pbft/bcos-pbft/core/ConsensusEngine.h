@@ -63,7 +63,6 @@ public:
         {
             // stop the worker thread
             stopWorking();
-            terminate();
         }
         CONSENSUS_LOG(INFO) << LOG_DESC("ConsensusEngine stopped");
     }
