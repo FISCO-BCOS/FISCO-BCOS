@@ -77,7 +77,9 @@ void BlockValidator::asyncCheckBlock(
         }
         catch (...)
         {
-            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock unknown exception");
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock unknown exception")
+                              << LOG_KV(
+                                     "message", boost::current_exception_diagnostic_information());
             verifyResult = false;
         }
         // Invoke the callback exactly once; catch any exception it may throw so that
@@ -93,7 +95,9 @@ void BlockValidator::asyncCheckBlock(
         }
         catch (...)
         {
-            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish unknown exception");
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish unknown exception")
+                              << LOG_KV(
+                                     "message", boost::current_exception_diagnostic_information());
         }
     });
 }
