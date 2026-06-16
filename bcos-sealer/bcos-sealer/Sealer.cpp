@@ -80,9 +80,18 @@ void Sealer::stop()
     if (isWorking())
     {
         stopWorking();
-        // will not restart worker, so terminate it
-        terminate();
     }
+    // Always call terminate() regardless of isWorking().
+    // startWorking() transitions to WorkerState::Started asynchronously via
+    // boost::asio::post. If stop() is called before that post executes,
+    // isWorking() returns false and the old code skipped terminate(), leaving
+    // m_aliveFlag==true and the timer uncancelled. The late-arriving post
+    // would then set up the timer, which outlives the Sealer and causes
+    // bad_executor when the steady_timer destructor runs.
+    // By always calling terminate(), we set m_aliveFlag=false so the
+    // startWorking post checks the flag and bails without scheduling the
+    // timer, and cancel any timer that may already be pending.
+    terminate();
 }
 
 void Sealer::init(bcos::consensus::ConsensusInterface::Ptr _consensus)
