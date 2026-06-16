@@ -179,6 +179,11 @@ void SealingManager::clearPendingTxs()
         SEAL_LOG(WARNING) << LOG_DESC("clearPendingTxs: return back the unhandled txs exception")
                           << LOG_KV("message", boost::diagnostic_information(e));
     }
+    catch (...)
+    {
+        SEAL_LOG(WARNING) << LOG_DESC(
+            "clearPendingTxs: return back the unhandled txs unknown exception");
+    }
 }
 
 void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag, size_t _retryTime)

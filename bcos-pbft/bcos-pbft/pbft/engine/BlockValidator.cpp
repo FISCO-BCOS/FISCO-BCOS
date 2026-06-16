@@ -75,6 +75,11 @@ void BlockValidator::asyncCheckBlock(
                               << LOG_KV("message", boost::diagnostic_information(e));
             verifyResult = false;
         }
+        catch (...)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock unknown exception");
+            verifyResult = false;
+        }
         // Invoke the callback exactly once; catch any exception it may throw so that
         // the worker thread is not terminated and the callback is not double-fired.
         try
@@ -85,6 +90,10 @@ void BlockValidator::asyncCheckBlock(
         {
             PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish exception")
                               << LOG_KV("message", boost::diagnostic_information(e));
+        }
+        catch (...)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish unknown exception");
         }
     });
 }

@@ -187,6 +187,24 @@ void Sealer::executeWorker()
             SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
                             << LOG_KV("message", boost::diagnostic_information(nested));
         }
+        catch (...)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw unknown exception");
+        }
+        // Let Worker timer handle the delay after exception.
+    }
+    catch (...)
+    {
+        SEAL_LOG(ERROR) << LOG_DESC(
+            "executeWorker iteration threw unknown exception, resetting sealing state");
+        try
+        {
+            m_sealingManager->resetSealing();
+        }
+        catch (...)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw unknown exception");
+        }
         // Let Worker timer handle the delay after exception.
     }
 }

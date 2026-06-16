@@ -157,6 +157,12 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }
+    catch (...)
+    {
+        hasException = true;
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker executeWorker")
+                          << LOG_KV("threadName", m_threadName);
+    }
     // FIB-111: backoff after exceptions to prevent tight CPU spin
     if (hasException && m_idleWaitMs == 0)
     {
