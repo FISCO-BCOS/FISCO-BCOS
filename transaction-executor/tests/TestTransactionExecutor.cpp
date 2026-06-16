@@ -196,7 +196,7 @@ BOOST_AUTO_TEST_CASE(costBalance)
 
         ledger::account::EVMAccount senderAccount(storage, senderAddress, false);
 
-        constexpr static int64_t initBalance = 149586;
+        constexpr static int64_t initBalance = 170586;
         co_await senderAccount.setBalance(initBalance);
 
         receipt = co_await executor.executeTransaction(

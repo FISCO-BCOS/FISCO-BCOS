@@ -115,10 +115,10 @@ BOOST_AUTO_TEST_CASE(decode_uses_input_when_data_missing)
 BOOST_AUTO_TEST_CASE(decode_invalid_gas_string)
 {
     Json::Value root(Json::objectValue);
-    root["gas"] = "zz";  // invalid hex with no leading valid digit -> stoull throws -> terminate
-    // Call function; expected to abort. If not aborted, exit(0) to mark failure in parent.
-    BOOST_CHECK_THROW(auto resultTuple = decodeCallRequest(root), std::invalid_argument);
-    int status = 0;
+    root["gas"] = "zz";
+    auto [ok, req] = decodeCallRequest(root);
+    BOOST_TEST(!ok);
+    BOOST_TEST(!req.gas.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(decode_numeric_gas_treated_as_hex)
