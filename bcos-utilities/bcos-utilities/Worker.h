@@ -28,11 +28,8 @@ namespace bcos
 {
 enum class WorkerState
 {
-    Starting,
-    Started,
-    Stopping,
     Stopped,
-    Killing
+    Started
 };
 
 class Worker
@@ -51,11 +48,7 @@ protected:
      * @brief Set thread name for the worker
      * @param _threadName: the thread name
      */
-    void setName(std::string const& _threadName)
-    {
-        if (!isWorking())
-            m_threadName = _threadName;
-    }
+    void setName(std::string _threadName) { m_threadName = std::move(_threadName); }
 
     std::string const& threadName() const { return m_threadName; }
 
@@ -100,8 +93,7 @@ private:
 
     unsigned m_idleWaitMs = 0;
 
-    std::mutex x_work;
-    std::atomic<WorkerState> m_workerState = {WorkerState::Starting};
+    std::atomic<WorkerState> m_workerState = {WorkerState::Stopped};
 
     // Shared alive flag captured by all async handlers. terminate() sets it to
     // false; handlers check it before accessing `this`, so they can safely bail

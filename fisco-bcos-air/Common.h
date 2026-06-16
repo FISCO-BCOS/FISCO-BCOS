@@ -41,7 +41,9 @@ public:
         // because std::cout is not async-signal-safe and could deadlock
         // if the logging / IO threads are stuck.
         const char* msg = "[ExitHandler] received signal, exiting...\n";
-        write(STDERR_FILENO, msg, std::strlen(msg));
+        // write() is tagged warn_unused_result on Linux; a void-cast does
+        // not suppress the warning, but a real use (assignment) does.
+        [[maybe_unused]] auto _ret = write(STDERR_FILENO, msg, std::strlen(msg));
 
         // Set the flag first — this is the critical path that unblocks main().
         ExitHandler::c_shouldExit.store(true);
