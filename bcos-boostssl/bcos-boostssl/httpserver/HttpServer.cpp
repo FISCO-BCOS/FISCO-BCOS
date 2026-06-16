@@ -102,9 +102,13 @@ void HttpServer::stop()
 {
     if (m_acceptor && m_acceptor->is_open())
     {
-        m_acceptor->close();
+        // Cancel pending async_accept before closing so that completion
+        // handlers receive operation_aborted rather than bad_file_descriptor,
+        // avoiding a flood of EBADF warnings in the log.
+        boost::system::error_code ec;
+        m_acceptor->cancel(ec);
+        m_acceptor->close(ec);
     }
-
 
     HTTP_SERVER(INFO) << LOG_BADGE("stop") << LOG_DESC("http server");
 }
@@ -120,6 +124,15 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
 {
     if (ec)
     {
+        // operation_aborted is expected during shutdown (m_acceptor->cancel());
+        // bad_descriptor means the acceptor was already closed — in both
+        // cases do NOT re-queue accept to avoid an infinite error loop.
+        if (ec == boost::asio::error::operation_aborted ||
+            ec == boost::asio::error::bad_descriptor)
+        {
+            return;
+        }
+        // Transient errors (e.g. EMFILE) — log and retry.
         HTTP_SERVER(WARNING) << LOG_BADGE("accept") << LOG_KV("failed", ec)
                              << LOG_KV("message", ec.message());
         accept();
