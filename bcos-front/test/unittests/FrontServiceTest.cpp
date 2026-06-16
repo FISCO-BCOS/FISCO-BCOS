@@ -199,25 +199,26 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeIDcmak_timeout)
 
     BOOST_CHECK(frontService->callback().empty());
 
+    // Use shared_ptr for barrier so it stays alive even if the lambda
+    // outlives this scope (defensive against delayed dispatch).
+    auto barrier = std::make_shared<std::promise<void>>();
+    std::future<void> barrier_future = barrier->get_future();
     {
-        std::promise<void> barrier;
-        Error::Ptr _error;
-        auto callback = [&](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
-                            const std::string& _uuid,
+        auto callback = [barrier](Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
+                            bytesConstRef _data, const std::string& _uuid,
                             std::function<void(bytesConstRef _respData)> _respFunc) {
             (void)_nodeID;
             (void)_data;
             (void)_respFunc;
             (void)_uuid;
             BOOST_CHECK_EQUAL(_error->errorCode(), bcos::protocol::CommonError::TIMEOUT);
-            barrier.set_value();
+            barrier->set_value();
         };
 
         frontService->asyncSendMessageByNodeID(moduleID, dstNodeID,
             bytesConstRef((unsigned char*)data.data(), data.size()), 2000, callback);
 
         BOOST_CHECK(frontService->callback().size() == 1);
-        std::future<void> barrier_future = barrier.get_future();
         // Use wait_for with a generous timeout (10 s, 5× the msg timeout) so that
         // a stuck IO thread or a dropped timer does not hang the test indefinitely.
         // Similar guard already present in testFrontService_onRecieveNodeIDsAnd.
