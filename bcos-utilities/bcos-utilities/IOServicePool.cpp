@@ -45,7 +45,20 @@ IOServicePool::~IOServicePool()
     {
         if (ctx.thread.joinable())
         {
-            ctx.thread.join();
+            // Handle the edge case where the pool is destroyed on its own
+            // worker thread (e.g. when FrontService destruction is triggered
+            // by a temporary shared_ptr held by a completion handler).
+            // Joining self would cause pthread_join EDEADLK.
+            if (ctx.thread.get_id() == std::this_thread::get_id())
+            {
+                // The io_context has already been stopped, so run() will
+                // return shortly.  Detach so the thread can exit cleanly.
+                ctx.thread.detach();
+            }
+            else
+            {
+                ctx.thread.join();
+            }
         }
     }
 }

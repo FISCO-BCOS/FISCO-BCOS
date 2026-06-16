@@ -32,8 +32,11 @@ void Worker::startWorking()
         // Already running
         return;
     }
-    // Transition to Starting, then schedule the first tick
-    m_workerState = WorkerState::Starting;
+    // Set Started synchronously so that isWorking() immediately reflects
+    // the intent. The actual timer scheduling still happens asynchronously
+    // via post(), but callers of stop() / terminate() / notify() can rely
+    // on the state being consistent without racing the io_context thread.
+    m_workerState = WorkerState::Started;
 
     auto aliveFlag = m_aliveFlag;
     boost::asio::post(m_ioContext, [this, aliveFlag]() {
@@ -41,7 +44,7 @@ void Worker::startWorking()
         {
             return;  // Worker was destroyed before the post ran
         }
-        if (m_workerState != WorkerState::Starting)
+        if (m_workerState != WorkerState::Started)
         {
             return;  // was stopped before the post ran
         }
@@ -55,8 +58,6 @@ void Worker::startWorking()
                               << LOG_KV("threadName", m_threadName)
                               << LOG_KV("msg", boost::diagnostic_information(e));
         }
-
-        m_workerState = WorkerState::Started;
 
         // Schedule the first tick
         scheduleNext();
