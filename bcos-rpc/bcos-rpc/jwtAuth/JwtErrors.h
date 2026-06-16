@@ -23,7 +23,6 @@
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <magic_enum/magic_enum.hpp>
 
-#include <cctype>
 #include <cstdint>
 #include <ostream>
 #include <string>
@@ -37,12 +36,9 @@ enum class JwtError
     MissingAuthorization,
     InvalidBearerFormat,
     InvalidTokenFormat,
-    InvalidBase64Url,
-    InvalidJson,
     UnsupportedAlgorithm,
     InvalidSignature,
     InvalidIssuedAt,
-    Expired,
     SecretReadFailed
 };
 
@@ -61,17 +57,14 @@ inline int32_t toJsonRpcJwtErrorCode(JwtError _error)
     switch (_error)
     {
     case JwtError::UnsupportedAlgorithm:
-    case JwtError::Expired:
-    case JwtError::SecretReadFailed:
         return JwtForbidden;
     case JwtError::MissingAuthorization:
     case JwtError::InvalidBearerFormat:
     case JwtError::InvalidTokenFormat:
-    case JwtError::InvalidBase64Url:
-    case JwtError::InvalidJson:
     case JwtError::InvalidSignature:
     case JwtError::InvalidIssuedAt:
         return JwtUnauthorized;
+    case JwtError::SecretReadFailed:
     case JwtError::Ok:
     default:
         return InternalError;

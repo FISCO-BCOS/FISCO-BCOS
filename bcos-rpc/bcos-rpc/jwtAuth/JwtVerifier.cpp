@@ -34,24 +34,26 @@ namespace bcos::rpc
 {
 namespace
 {
-JwtVerifyResult makeError(JwtError _error, std::string _message)
+JwtVerifyResult makeError(JwtError _error)
 {
-    return JwtVerifyResult{false, _error, std::move(_message), {}};
-}
+    return JwtVerifyResult{
+        .ok = false,
+        .error = _error,
+        .errorMessage = std::string(toString(_error)),
+        .token = {}  
+    };}
 }
 
 JwtVerifyResult JwtVerifier::verify(std::string_view _authorizationHeader) const
 {
     if (_authorizationHeader.empty())
     {
-        return makeError(
-            JwtError::MissingAuthorization, std::string(toString(JwtError::MissingAuthorization)));
+        return makeError(JwtError::MissingAuthorization);
     }
 
     if (!boost::istarts_with(_authorizationHeader, "Bearer "))
     {
-        return makeError(
-            JwtError::InvalidBearerFormat, std::string(toString(JwtError::InvalidBearerFormat)));
+        return makeError(JwtError::InvalidBearerFormat);
     }
 
     auto jwtCompact = _authorizationHeader.substr(std::string_view("Bearer ").size());
@@ -68,15 +70,13 @@ JwtVerifyResult JwtVerifier::verifyToken(std::string_view _jwtCompact) const
     catch (std::exception const& e)
     {
         RPC_LOG(WARNING) << "JWT decode failed: " << e.what();
-        return makeError(
-            JwtError::InvalidTokenFormat, std::string(toString(JwtError::InvalidTokenFormat)));
+        return makeError(JwtError::InvalidTokenFormat);
     }
 
     auto secret = readSecretRaw();
     if (secret.empty())
     {
-        return makeError(
-            JwtError::SecretReadFailed, std::string(toString(JwtError::SecretReadFailed)));
+        return makeError(JwtError::SecretReadFailed);
     }
 
 
@@ -84,28 +84,31 @@ JwtVerifyResult JwtVerifier::verifyToken(std::string_view _jwtCompact) const
 
     if (token.header().alg.empty() || !verifyAlgorithm(token.header().alg))
     {
-        return makeError(
-            JwtError::UnsupportedAlgorithm, std::string(toString(JwtError::UnsupportedAlgorithm)));
+        return makeError(JwtError::UnsupportedAlgorithm);
     }
 
     if (token.claims().iat == 0 || !verifyIat(token.claims().iat))
     {
-        return makeError(
-            JwtError::InvalidIssuedAt, std::string(toString(JwtError::InvalidIssuedAt)));
+        return makeError(JwtError::InvalidIssuedAt);
     }
 
     try
     {
+        // Only verify the signature via jwt-cpp; skip default claim checks (iat/exp/nbf)
+        // since we do those ourselves (algorithm + iat validation above).
         // TODO: support dynamic algorithm selection based on token header alg
         // Currently only HS256 is supported per Ethereum Engine API spec
-        auto verifier = ::jwt::verify().allow_algorithm(::jwt::algorithm::hs256{secret});
+        auto verifier = ::jwt::verify()
+                            .allow_algorithm(::jwt::algorithm::hs256{secret})
+                            .with_claim("iat", [](const auto&, std::error_code&) {})
+                            .with_claim("exp", [](const auto&, std::error_code&) {})
+                            .with_claim("nbf", [](const auto&, std::error_code&) {});
         verifier.verify(*decoded);
     }
     catch (std::exception const& e)
     {
         RPC_LOG(WARNING) << "JWT signature verification failed: " << e.what();
-        return makeError(
-            JwtError::InvalidSignature, std::string(toString(JwtError::InvalidSignature)));
+        return makeError(JwtError::InvalidSignature);
     }
 
     JwtVerifyResult result;
@@ -123,10 +126,6 @@ bool JwtVerifier::verifyAlgorithm(std::string_view _alg) const
     }
 
     auto allowedAlgorithms = m_config ? m_config->allowedAlgorithms() : std::string();
-    if (allowedAlgorithms.empty())
-    {
-        return true;
-    }
 
     std::vector<std::string> algorithms;
     boost::split(algorithms, allowedAlgorithms, boost::is_any_of(","));
