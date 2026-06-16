@@ -18,6 +18,7 @@
 
 #include "DataConvertUtility.h"
 #include <boost/regex.hpp>
+#include <charconv>
 
 using namespace std;
 using namespace bcos;
@@ -106,6 +107,27 @@ uint64_t bcos::fromQuantity(std::string const& quantity)
 {
     return std::stoull(quantity, nullptr, 16);
 }
+
+std::optional<uint64_t> bcos::safeFromQuantity(std::string_view quantity)
+{
+    if (isHexStrWithPrefix(quantity))
+    {
+        quantity.remove_prefix(2);
+    }
+    if (quantity.empty())
+    {
+        return std::nullopt;
+    }
+    uint64_t value = 0;
+    auto const [ptr, ec] =
+        std::from_chars(quantity.data(), quantity.data() + quantity.size(), value, 16);
+    if (ec != std::errc{} || ptr != quantity.data() + quantity.size())
+    {
+        return std::nullopt;
+    }
+    return value;
+}
+
 bcos::u256 bcos::fromBigQuantity(std::string_view quantity)
 {
     return hex2u(quantity);

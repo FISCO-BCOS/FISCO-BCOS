@@ -22,7 +22,6 @@
 #include "bcos-crypto/ChecksumAddress.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-task/Wait.h"
-#include <charconv>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -87,15 +86,14 @@ std::tuple<bool, CallRequest> rpc::decodeCallRequest(Json::Value const& _root)
     }
     if (const auto* value = _root.find("gas"))
     {
-        auto const gasStr = value->asString();
-        uint64_t gasVal = 0;
-        auto const [ptr, ec] =
-            std::from_chars(gasStr.data(), gasStr.data() + gasStr.size(), gasVal, 16);
-        if (ec != std::errc{} || ptr != gasStr.data() + gasStr.size())
+        if (auto const gasVal = safeFromQuantity(value->asString()))
+        {
+            _request.gas = *gasVal;
+        }
+        else
         {
             return {false, _request};
         }
-        _request.gas = gasVal;
     }
     if (const auto* value = _root.find("gasPrice"))
     {

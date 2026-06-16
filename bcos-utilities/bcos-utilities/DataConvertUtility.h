@@ -192,6 +192,9 @@ Out fromHexWithPrefix(const Hex& hex)
 
 uint64_t fromQuantity(std::string const& quantity);
 
+/// Parse Ethereum JSON-RPC quantity (hex, optional 0x prefix) without throwing.
+std::optional<uint64_t> safeFromQuantity(std::string_view quantity);
+
 u256 fromBigQuantity(std::string_view quantity);
 
 /**
