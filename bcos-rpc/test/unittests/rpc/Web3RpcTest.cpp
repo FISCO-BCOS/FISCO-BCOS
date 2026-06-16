@@ -38,6 +38,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <memory>
 #include <ostream>
 #include <string_view>
 
@@ -51,6 +52,21 @@ namespace bcos::test
 class TestEngineService
 {
 public:
+    /// Shared mutable state — both the original TestEngineService and copies
+    /// inside AnyEngineService's proxy share the same state via this pointer.
+    struct State
+    {
+        engine::PayloadStatus payloadStatusResult{
+            .status = engine::PayloadValidationStatus::Valid,
+            .latestValidHash = std::nullopt, .validationError = std::nullopt};
+        engine::GetPayloadResult getPayloadResult;
+        std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
+        std::optional<std::uint32_t> capturedNewPayloadVersion;
+        std::optional<engine::PayloadID> capturedPayloadId;
+        std::optional<std::uint32_t> capturedGetPayloadVersion;
+    };
+    std::shared_ptr<State> m_state = std::make_shared<State>();
+
     task::Task<std::vector<std::string>> exchangeCapabilities(
         std::vector<std::string> remoteCapabilities)
     {
@@ -61,35 +77,27 @@ public:
         const engine::ForkchoiceState&, const engine::PayloadAttributes*, std::uint32_t)
     {
         co_return engine::ForkchoiceUpdatedResult{
-            .payloadStatus = payloadStatusResult, .payloadId = std::nullopt};
+            .payloadStatus = m_state->payloadStatusResult, .payloadId = std::nullopt};
     }
 
     task::Task<engine::GetPayloadResult> getPayload(
         const engine::PayloadID& payloadId, std::uint32_t version)
     {
-        capturedPayloadId = payloadId;
-        capturedGetPayloadVersion = version;
-        co_return getPayloadResult;
+        m_state->capturedPayloadId = payloadId;
+        m_state->capturedGetPayloadVersion = version;
+        co_return m_state->getPayloadResult;
     }
 
     task::Task<engine::PayloadStatus> newPayload(
         const engine::NewPayloadRequest& request, std::uint32_t version)
     {
-        capturedNewPayloadRequest = request;
-        capturedNewPayloadVersion = version;
-        co_return payloadStatusResult;
+        m_state->capturedNewPayloadRequest = request;
+        m_state->capturedNewPayloadVersion = version;
+        co_return m_state->payloadStatusResult;
     }
 
-    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() { return std::nullopt; }
-    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() { return std::nullopt; }
-
-    engine::PayloadStatus payloadStatusResult{.status = engine::PayloadValidationStatus::Valid,
-        .latestValidHash = std::nullopt, .validationError = std::nullopt};
-    engine::GetPayloadResult getPayloadResult;
-    std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
-    std::optional<std::uint32_t> capturedNewPayloadVersion;
-    std::optional<engine::PayloadID> capturedPayloadId;
-    std::optional<std::uint32_t> capturedGetPayloadVersion;
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
 };
 
 class Web3TestFixture : public RPCFixture
@@ -560,37 +568,37 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     auto newPayloadResponse = onRPCRequestWrapper(newPayloadRequest);
     validRespCheck(newPayloadResponse);
     BOOST_TEST(newPayloadResponse["result"]["status"].asString() == "VALID");
-    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest.has_value());
-    BOOST_REQUIRE(testEngineService.capturedNewPayloadVersion.has_value());
-    BOOST_TEST(*testEngineService.capturedNewPayloadVersion == 2);
-    BOOST_TEST(testEngineService.capturedNewPayloadRequest->executionPayload.transactions.size() == 1);
-    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest->executionPayload.withdrawals.has_value());
-    BOOST_TEST(testEngineService.capturedNewPayloadRequest->executionPayload.withdrawals->front().amount ==
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest.has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadVersion == 2);
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions.size() == 1);
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals.has_value());
+    BOOST_TEST(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front().amount ==
                expectedLargeValue);
-    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest->executionPayload.blobGasUsed.has_value());
-    BOOST_REQUIRE(testEngineService.capturedNewPayloadRequest->executionPayload.excessBlobGas.has_value());
-    BOOST_TEST(*testEngineService.capturedNewPayloadRequest->executionPayload.blobGasUsed ==
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed.has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed ==
                expectedLargeValue);
-    BOOST_TEST(*testEngineService.capturedNewPayloadRequest->executionPayload.excessBlobGas ==
+    BOOST_TEST(*testEngineService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas ==
                expectedLargeValue);
 
     bytes decodedEncodedTx;
-    testEngineService.capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
+    testEngineService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
         decodedEncodedTx);
     BOOST_TEST(toHexStringWithPrefix(decodedEncodedTx) == encodedTxHex);
 
-    testEngineService.getPayloadResult.executionPayload =
-        testEngineService.capturedNewPayloadRequest->executionPayload;
-    testEngineService.getPayloadResult.blockValue = expectedLargeValue;
+    testEngineService.m_state->getPayloadResult.executionPayload =
+        testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
+    testEngineService.m_state->getPayloadResult.blockValue = expectedLargeValue;
 
     const auto getPayloadRequest =
         R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
     auto getPayloadResponse = onRPCRequestWrapper(getPayloadRequest);
     validRespCheck(getPayloadResponse);
-    BOOST_REQUIRE(testEngineService.capturedPayloadId.has_value());
-    BOOST_REQUIRE(testEngineService.capturedGetPayloadVersion.has_value());
-    BOOST_TEST(*testEngineService.capturedPayloadId == "payload-id-1");
-    BOOST_TEST(*testEngineService.capturedGetPayloadVersion == 2);
+    BOOST_REQUIRE(testEngineService.m_state->capturedPayloadId.has_value());
+    BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
+    BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
     BOOST_TEST(getPayloadResponse["result"]["transactions"].size() == 1);
     BOOST_TEST(getPayloadResponse["result"]["transactions"][0].asString() == encodedTxHex);
     BOOST_TEST(getPayloadResponse["result"]["withdrawals"][0]["amount"].asString() ==
