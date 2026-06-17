@@ -179,6 +179,12 @@ void SealingManager::clearPendingTxs()
         SEAL_LOG(WARNING) << LOG_DESC("clearPendingTxs: return back the unhandled txs exception")
                           << LOG_KV("message", boost::diagnostic_information(e));
     }
+    catch (...)
+    {
+        SEAL_LOG(WARNING) << LOG_DESC(
+                                 "clearPendingTxs: return back the unhandled txs unknown exception")
+                          << LOG_KV("message", boost::current_exception_diagnostic_information());
+    }
 }
 
 void SealingManager::notifyResetTxsFlag(const HashList& _txsHashList, bool _flag, size_t _retryTime)
@@ -423,6 +429,11 @@ bcos::sealer::SealingManager::FetchResult SealingManager::fetchTransactions()
     {
         SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs failed")
                           << LOG_KV("message", boost::diagnostic_information(e));
+    }
+    catch (...)
+    {
+        SEAL_LOG(WARNING) << LOG_DESC("fetchTransactions: onRecv sealed txs unknown exception")
+                          << LOG_KV("message", boost::current_exception_diagnostic_information());
     }
     return FetchResult::SUCCESS;
 }

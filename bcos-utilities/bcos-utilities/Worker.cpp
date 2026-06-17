@@ -26,59 +26,62 @@ using namespace bcos;
 
 void Worker::startWorking()
 {
-    std::unique_lock l(x_work);
-    if (m_workerState == WorkerState::Started)
+    WorkerState expected = WorkerState::Stopped;
+    if (!m_workerState.compare_exchange_strong(expected, WorkerState::Started))
     {
-        // Already running
-        return;
+        return;  // Already running, or lost the race
     }
-    // Set Started synchronously so that isWorking() immediately reflects
-    // the intent. The actual timer scheduling still happens asynchronously
-    // via post(), but callers of stop() / terminate() / notify() can rely
-    // on the state being consistent without racing the io_context thread.
-    m_workerState = WorkerState::Started;
 
-    auto aliveFlag = m_aliveFlag;
-    boost::asio::post(m_ioContext, [this, aliveFlag]() {
-        if (!*aliveFlag)
-        {
-            return;  // Worker was destroyed before the post ran
-        }
-        if (m_workerState != WorkerState::Started)
-        {
-            return;  // was stopped before the post ran
-        }
-        try
-        {
-            initWorker();
-        }
-        catch (std::exception const& e)
-        {
-            BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker initWorker")
-                              << LOG_KV("threadName", m_threadName)
-                              << LOG_KV("msg", boost::diagnostic_information(e));
-        }
+    // Reset the alive flag so that async handlers from a previous stop
+    // cycle don't prematurely bail out of a restarted worker.
+    *m_aliveFlag = true;
 
-        // Schedule the first tick
-        scheduleNext();
+    // initWorker() is safe to call synchronously — subclasses only log.
+    try
+    {
+        initWorker();
+    }
+    catch (std::exception const& e)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker initWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+    catch (...)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker initWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::current_exception_diagnostic_information());
+    }
+
+    // scheduleNext() mutates m_timer (expires_after / async_wait), which
+    // must only happen on the io_context thread.  Post it there so that
+    // callers from arbitrary threads (e.g. Sealer::start()) are safe.
+    boost::asio::post(m_ioContext, [this]() {
+        if (m_workerState == WorkerState::Started)
+        {
+            scheduleNext();
+        }
     });
 }
 
 void Worker::stopWorking()
 {
+    WorkerState expected = WorkerState::Started;
+    if (!m_workerState.compare_exchange_strong(expected, WorkerState::Stopped))
     {
-        std::unique_lock l(x_work);
-        if (m_workerState != WorkerState::Started)
-        {
-            return;
-        }
-        m_workerState = WorkerState::Stopping;
-        // Cancel the timer — cancel() returns immediately and is non-throwing.
-        m_timer.cancel();
+        return;  // Not running, or another thread is already stopping
     }
-    // Call finishWorker() outside the lock: subclasses may acquire other
-    // locks or call back into Worker APIs, which could deadlock if x_work
-    // were still held.
+
+    // Signal all in-flight handlers to bail out before accessing `this`.
+    // The CAS above already changed m_workerState to Stopped, and
+    // m_aliveFlag=false makes every captured handler return immediately.
+    *m_aliveFlag = false;
+
+    // Route cancel through the io_context thread so that it doesn't race
+    // with handleTimerTick / scheduleNext executing on the io_context.
+    boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
+
     try
     {
         finishWorker();
@@ -89,26 +92,12 @@ void Worker::stopWorking()
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }
-    m_workerState = WorkerState::Stopped;
-}
-
-void Worker::terminate()
-{
-    std::unique_lock l(x_work);
-    if (m_workerState == WorkerState::Killing)
+    catch (...)
     {
-        return;  // Already terminating
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker finishWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::current_exception_diagnostic_information());
     }
-    m_workerState = WorkerState::Killing;
-
-    // Signal all in-flight handlers to bail out before accessing `this`.
-    // The shared_ptr guarantees the atomic<bool> outlives the Worker even
-    // if a handler was already posted to the io_context queue.
-    *m_aliveFlag = false;
-
-    // Cancel any pending timer operation. cancel() is non-throwing and
-    // thread-safe. Handlers already queued will see !*m_aliveFlag and bail.
-    m_timer.cancel();
 }
 
 void Worker::scheduleNext()
@@ -157,6 +146,13 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }
+    catch (...)
+    {
+        hasException = true;
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker executeWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::current_exception_diagnostic_information());
+    }
     // FIB-111: backoff after exceptions to prevent tight CPU spin
     if (hasException && m_idleWaitMs == 0)
     {
@@ -181,16 +177,11 @@ void Worker::notify()
 {
     if (m_workerState == WorkerState::Started)
     {
-        m_timer.cancel();
-        // The cancelled timer's handler will receive operation_aborted and
-        // return without rescheduling, so we explicitly post a fresh
-        // scheduleNext() to wake the worker.
-        auto aliveFlag = m_aliveFlag;
-        boost::asio::post(m_ioContext, [this, aliveFlag]() {
-            if (!*aliveFlag)
-            {
-                return;
-            }
+        // Post the re-schedule to the io_context thread because
+        // scheduleNext() mutates m_timer (expires_after / async_wait).
+        // The explicit cancel is not needed — expires_after() inside
+        // scheduleNext() implicitly cancels any pending async_wait.
+        boost::asio::post(m_ioContext, [this]() {
             if (m_workerState == WorkerState::Started)
             {
                 scheduleNext();

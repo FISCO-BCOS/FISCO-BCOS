@@ -124,13 +124,23 @@ int main(int argc, const char* argv[])
 
         // Register signal handlers BEFORE start() so that crashes during
         // start() are properly logged instead of killing the process silently.
-        ExitHandler exitHandler;
-        signal(SIGTERM, &ExitHandler::exitHandler);
-        signal(SIGABRT, &ExitHandler::exitHandler);
-        signal(SIGINT, &ExitHandler::exitHandler);
-        signal(SIGSEGV, &ExitHandler::exitHandler);
+        ExitHandler::registerSignalHandlers();
 
         initializer->start();
+
+        // Re-register signal handlers AFTER start() because sub-components
+        // (e.g., the TARS RPC framework via tars::Application::main()) may
+        // have installed their own handlers in the meantime.
+        //
+        // registerSignalHandlers() uses sigaction() to save the previously
+        // installed handler.  When a signal arrives, ExitHandler::exitHandler()
+        // sets c_shouldExit (unblocking main()) and then chain-calls the
+        // saved handler so that TARS can also perform its graceful shutdown.
+        ExitHandler::registerSignalHandlers();
+
+        // If a signal was already received during start() (before the
+        // re-registration above), c_shouldExit is already true and the
+        // wait(false) below returns immediately.
     }
     catch (std::exception const& e)
     {

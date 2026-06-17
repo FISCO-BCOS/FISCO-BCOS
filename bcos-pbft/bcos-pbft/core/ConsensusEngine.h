@@ -21,8 +21,8 @@
 #pragma once
 #include "Common.h"
 #include "bcos-framework/consensus/ConsensusEngineInterface.h"
-#include <boost/asio/io_context.hpp>
 #include <bcos-utilities/Worker.h>
+#include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <thread>
 
@@ -58,12 +58,11 @@ public:
         }
         CONSENSUS_LOG(INFO) << LOG_DESC("Stop consensusEngine");
         m_started = false;
-        finishWorker();
+        // stopWorking() already calls finishWorker() internally.
         if (isWorking())
         {
             // stop the worker thread
             stopWorking();
-            terminate();
         }
         CONSENSUS_LOG(INFO) << LOG_DESC("ConsensusEngine stopped");
     }

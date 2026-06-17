@@ -595,6 +595,17 @@ void Session::doRead()
                         session->drop(UserReason);
                         break;
                     }
+                    catch (...)
+                    {
+                        SESSION_LOG(ERROR)
+                            << LOG_DESC("Decode message exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
+                        session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                               "ProtocolError(decode msg exception)"),
+                            message);
+                        session->drop(UserReason);
+                        break;
+                    }
                 }
             }
         };
