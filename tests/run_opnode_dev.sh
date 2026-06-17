@@ -164,6 +164,38 @@ cat > "${ROLLUP_CONFIG}" << ROLLUP_EOF
 ROLLUP_EOF
 echo "  Rollup config written to ${ROLLUP_CONFIG}"
 
+# ---- Step 4b: Generate L1 chain config ----
+echo "[4b/5] Generating L1 chain config..."
+
+L1_CHAIN_CONFIG="${SCRIPT_DIR}/l1_chain_config.json"
+cat > "${L1_CHAIN_CONFIG}" << 'L1CHAIN_EOF'
+{
+  "config": {
+    "chainId": 0,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "berlinBlock": 0,
+    "londonBlock": 0,
+    "mergeNetsplitBlock": 0,
+    "shanghaiTime": 0,
+    "cancunTime": 0,
+    "pragueTime": 0,
+    "terminalTotalDifficulty": 0,
+    "optimism": {
+      "eip1559Elasticity": 6,
+      "eip1559Denominator": 50
+    }
+  }
+}
+L1CHAIN_EOF
+echo "  L1 chain config written to ${L1_CHAIN_CONFIG}"
+
 # ---- Step 5: Run op-node ----
 echo "[5/5] Starting op-node..."
 echo ""
@@ -203,6 +235,7 @@ exec "${OP_NODE_BINARY}" \
     --l2="${ENGINE_URL}" \
     --l2.jwt-secret="${JWT_FILE}" \
     --rollup.config="${ROLLUP_CONFIG}" \
+    --rollup.l1-chain-config="${L1_CHAIN_CONFIG}" \
     --sequencer.enabled \
     --p2p.disable \
     --rpc.addr=0.0.0.0 \

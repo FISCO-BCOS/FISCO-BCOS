@@ -628,6 +628,36 @@ if [ "${RUN_OPNODE:-0}" = "1" ]; then
 }
 ROLLUP_EOF
         log_info "Rollup config generated"
+
+        # Generate L1 chain config (required for non-standard L1 chain IDs)
+        L1_CHAIN_CONFIG="${WORK_DIR}/l1_chain_config.json"
+        cat > "${L1_CHAIN_CONFIG}" << 'L1CHAIN_EOF'
+{
+  "config": {
+    "chainId": 0,
+    "homesteadBlock": 0,
+    "eip150Block": 0,
+    "eip155Block": 0,
+    "eip158Block": 0,
+    "byzantiumBlock": 0,
+    "constantinopleBlock": 0,
+    "petersburgBlock": 0,
+    "istanbulBlock": 0,
+    "berlinBlock": 0,
+    "londonBlock": 0,
+    "mergeNetsplitBlock": 0,
+    "shanghaiTime": 0,
+    "cancunTime": 0,
+    "pragueTime": 0,
+    "terminalTotalDifficulty": 0,
+    "optimism": {
+      "eip1559Elasticity": 6,
+      "eip1559Denominator": 50
+    }
+  }
+}
+L1CHAIN_EOF
+        log_info "L1 chain config generated"
     fi
 
     # Run op-node with timeout
@@ -640,6 +670,7 @@ ROLLUP_EOF
             --l2="${RPC_URL}" \
             --l2.jwt-secret="${JWT_FILE}" \
             --rollup.config="${ROLLUP_CONFIG}" \
+            --rollup.l1-chain-config="${L1_CHAIN_CONFIG}" \
             --sequencer.enabled \
             --p2p.disable \
             --rpc.addr=0.0.0.0 \
