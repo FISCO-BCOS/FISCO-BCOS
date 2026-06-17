@@ -77,12 +77,9 @@ void Sealer::stop()
     SEAL_LOG(INFO) << LOG_DESC("stop the sealer");
     m_running = false;
     finishWorker();
-    if (isWorking())
-    {
-        stopWorking();
-        // will not restart worker, so terminate it
-        terminate();
-    }
+    // stopWorking() uses CAS Started→Stopped so it is safe to call
+    // unconditionally; if already stopped the CAS fails harmlessly.
+    stopWorking();
 }
 
 void Sealer::init(bcos::consensus::ConsensusInterface::Ptr _consensus)

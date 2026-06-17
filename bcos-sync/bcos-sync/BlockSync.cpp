@@ -180,7 +180,6 @@ void BlockSync::stop()
     {
         // stop the worker thread
         stopWorking();
-        terminate();
     }
 }
 
