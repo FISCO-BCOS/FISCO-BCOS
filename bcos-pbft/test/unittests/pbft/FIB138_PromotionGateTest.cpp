@@ -138,7 +138,10 @@ BOOST_AUTO_TEST_CASE(init_failure_rolls_back_master_flag)
     BOOST_REQUIRE(!pbftConfig->asMasterNode());
 
     promotionPbft->m_throwOnInit = true;
-    BOOST_CHECK_THROW(promotionPbft->enableAsMasterNode(true), std::exception);
+    // Use std::runtime_error (the actual throw type) — on Apple libc++,
+    // BOOST_CHECK_THROW(..., std::exception) may not match a derived type
+    // thrown from a different translation unit.
+    BOOST_CHECK_THROW(promotionPbft->enableAsMasterNode(true), std::runtime_error);
 
     // Both flags MUST be FALSE after the failed promotion.
     BOOST_CHECK_MESSAGE(!promotionPbft->masterNode(),

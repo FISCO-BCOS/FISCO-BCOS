@@ -175,6 +175,27 @@ void Sealer::executeWorker()
             SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw")
                             << LOG_KV("message", boost::diagnostic_information(nested));
         }
+        catch (...)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw unknown exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
+        }
+        // Let Worker timer handle the delay after exception.
+    }
+    catch (...)
+    {
+        SEAL_LOG(ERROR)
+            << LOG_DESC("executeWorker iteration threw unknown exception, resetting sealing state")
+            << LOG_KV("message", boost::current_exception_diagnostic_information());
+        try
+        {
+            m_sealingManager->resetSealing();
+        }
+        catch (...)
+        {
+            SEAL_LOG(ERROR) << LOG_DESC("resetSealing also threw unknown exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
+        }
         // Let Worker timer handle the delay after exception.
     }
 }
@@ -252,6 +273,12 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
             {
                 SEAL_LOG(WARNING) << LOG_DESC("submitProposal failure unseal exception")
                                   << LOG_KV("message", boost::diagnostic_information(e));
+            }
+            catch (...)
+            {
+                SEAL_LOG(WARNING) << LOG_DESC("submitProposal failure unseal unknown exception")
+                                  << LOG_KV("message",
+                                         boost::current_exception_diagnostic_information());
             }
         });
 }

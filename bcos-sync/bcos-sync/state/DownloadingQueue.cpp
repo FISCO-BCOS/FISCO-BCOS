@@ -817,4 +817,9 @@ void DownloadingQueue::fetchAndUpdateLedgerConfig()
         BLKSYNC_LOG(WARNING) << LOG_DESC("fetchAndUpdateLedgerConfig exception")
                              << LOG_KV("msg", boost::diagnostic_information(e));
     }
+    catch (...)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_DESC("fetchAndUpdateLedgerConfig unknown exception")
+                             << LOG_KV("msg", boost::current_exception_diagnostic_information());
+    }
 }
