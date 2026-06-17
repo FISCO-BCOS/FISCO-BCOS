@@ -22,6 +22,7 @@
 #include <bcos-rpc/Common.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FileUtility.h>
+#include <jwt-cpp/jwt.h>
 #include <jwt-cpp/traits/kazuho-picojson/defaults.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -32,16 +33,14 @@
 
 namespace bcos::rpc
 {
-namespace
-{
-JwtVerifyResult makeError(JwtError _error)
+inline JwtVerifyResult makeError(JwtError _error)
 {
     return JwtVerifyResult{
         .ok = false,
         .error = _error,
         .errorMessage = std::string(toString(_error)),
-        .token = {}  
-    };}
+        .token = {}
+    };
 }
 
 JwtVerifyResult JwtVerifier::verify(std::string_view _authorizationHeader) const
@@ -62,60 +61,55 @@ JwtVerifyResult JwtVerifier::verify(std::string_view _authorizationHeader) const
 
 JwtVerifyResult JwtVerifier::verifyToken(std::string_view _jwtCompact) const
 {
-    std::optional<::jwt::decoded_jwt<::jwt::traits::kazuho_picojson>> decoded;
+    auto secret = readSecret();
+    if (!secret.has_value())
+    {
+        return makeError(JwtError::SecretReadFailed);
+    }
+
     try
     {
-        decoded.emplace(::jwt::decode(std::string(_jwtCompact)));
+        auto decoded = ::jwt::decode(std::string(_jwtCompact));
+
+        auto token = JwtToken::decode(decoded);
+
+        if (token.header().alg.empty() || !verifyAlgorithm(token.header().alg))
+        {
+            return makeError(JwtError::UnsupportedAlgorithm);
+        }
+
+        if (token.claims().iat == 0 || !verifyIat(token.claims().iat))
+        {
+            return makeError(JwtError::InvalidIssuedAt);
+        }
+
+        // Only verify the signature via jwt-cpp; skip default claim checks (iat/exp/nbf)
+        // since we do those ourselves (algorithm + iat validation above).
+        // TODO: support dynamic algorithm selection based on token header alg
+        // Currently only HS256 is supported per Ethereum Engine API spec
+        auto verifier = ::jwt::verify()
+                            .allow_algorithm(::jwt::algorithm::hs256{*secret})
+                            .with_claim("iat", [](const auto&, std::error_code&) {})
+                            .with_claim("exp", [](const auto&, std::error_code&) {})
+                            .with_claim("nbf", [](const auto&, std::error_code&) {});
+        verifier.verify(decoded);
+
+        JwtVerifyResult result;
+        result.ok = true;
+        result.error = JwtError::Ok;
+        result.token = std::move(token);
+        return result;
+    }
+    catch (::jwt::error::signature_verification_exception const& e)
+    {
+        RPC_LOG(WARNING) << "JWT signature verification failed: " << e.what();
+        return makeError(JwtError::InvalidSignature);
     }
     catch (std::exception const& e)
     {
         RPC_LOG(WARNING) << "JWT decode failed: " << e.what();
         return makeError(JwtError::InvalidTokenFormat);
     }
-
-    auto secret = readSecretRaw();
-    if (secret.empty())
-    {
-        return makeError(JwtError::SecretReadFailed);
-    }
-
-
-    auto token = JwtToken::decode(*decoded);
-
-    if (token.header().alg.empty() || !verifyAlgorithm(token.header().alg))
-    {
-        return makeError(JwtError::UnsupportedAlgorithm);
-    }
-
-    if (token.claims().iat == 0 || !verifyIat(token.claims().iat))
-    {
-        return makeError(JwtError::InvalidIssuedAt);
-    }
-
-    try
-    {
-        // Only verify the signature via jwt-cpp; skip default claim checks (iat/exp/nbf)
-        // since we do those ourselves (algorithm + iat validation above).
-        // TODO: support dynamic algorithm selection based on token header alg
-        // Currently only HS256 is supported per Ethereum Engine API spec
-        auto verifier = ::jwt::verify()
-                            .allow_algorithm(::jwt::algorithm::hs256{secret})
-                            .with_claim("iat", [](const auto&, std::error_code&) {})
-                            .with_claim("exp", [](const auto&, std::error_code&) {})
-                            .with_claim("nbf", [](const auto&, std::error_code&) {});
-        verifier.verify(*decoded);
-    }
-    catch (std::exception const& e)
-    {
-        RPC_LOG(WARNING) << "JWT signature verification failed: " << e.what();
-        return makeError(JwtError::InvalidSignature);
-    }
-
-    JwtVerifyResult result;
-    result.ok = true;
-    result.error = JwtError::Ok;
-    result.token = std::move(token);
-    return result;
 }
 
 bool JwtVerifier::verifyAlgorithm(std::string_view _alg) const
@@ -167,11 +161,16 @@ bool JwtVerifier::validateSecret(std::string_view _secret) const
     });
 }
 
-std::string JwtVerifier::readSecretRaw() const
+std::optional<std::string> JwtVerifier::readSecret() const
 {
+    if (m_secret.has_value())
+    {
+        return m_secret;
+    }
+
     if (!m_config || m_config->secretFile().empty())
     {
-        return {};
+        return std::nullopt;
     }
 
     std::shared_ptr<std::string> secretContent;
@@ -182,27 +181,28 @@ std::string JwtVerifier::readSecretRaw() const
     catch (std::exception const& e)
     {
         RPC_LOG(WARNING) << "Failed to read JWT secret file: " << e.what();
-        return {};
+        return std::nullopt;
     }
     if (!secretContent || secretContent->empty())
     {
-        return {};
+        // File not ready yet; retry next time
+        return std::nullopt;
     }
 
     auto secret = boost::algorithm::trim_copy(*secretContent);
     if (secret.empty())
     {
-        return {};
+        return std::nullopt;
     }
 
-    if (boost::algorithm::starts_with(secret, "0x") || boost::algorithm::starts_with(secret, "0X"))
+    if (secret.starts_with("0x") || secret.starts_with("0X"))
     {
         secret = secret.substr(2);
     }
 
     if (!validateSecret(secret))
     {
-        return {};
+        return std::nullopt;
     }
 
     std::string decoded;
@@ -214,8 +214,10 @@ std::string JwtVerifier::readSecretRaw() const
     catch (std::exception const& e)
     {
         RPC_LOG(WARNING) << "JWT secret hex decode failed: " << e.what();
-        return {};
+        return std::nullopt;
     }
+
+    m_secret = decoded;
     return decoded;
 }
 }  // namespace bcos::rpc

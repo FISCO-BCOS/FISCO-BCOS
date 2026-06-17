@@ -24,6 +24,7 @@
 #include "JwtErrors.h"
 #include "JwtToken.h"
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -54,10 +55,12 @@ public:
     bool verifyAlgorithm(std::string_view alg) const;
     bool verifyIat(int64_t iat) const;
 
-    std::string readSecretRaw() const;
     bool validateSecret(std::string_view secret) const;
 
 private:
+    std::optional<std::string> readSecret() const;
+
     JwtConfig::Ptr m_config;
+    mutable std::optional<std::string> m_secret;
 };
 }  // namespace bcos::rpc

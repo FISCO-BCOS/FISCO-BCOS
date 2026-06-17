@@ -68,7 +68,7 @@ std::string buildJwt(std::string_view _alg, std::optional<std::string> _typ,
 
 // Build a JWT with alg=none by manually constructing the compact format.
 // This helper is used to test that the verifier rejects alg:none tokens.
-std::string buildJwtNone(std::string_view _payload)
+std::string buildJwtNone()
 {
     auto header = ::jwt::builder<::jwt::traits::kazuho_picojson>()
                       .set_algorithm("none")
@@ -223,11 +223,11 @@ BOOST_AUTO_TEST_CASE(testJwtVerifierNoneAlg)
     config->setAllowedAlgorithms("HS256");
 
     JwtVerifier verifier(config);
-    auto jwt = buildJwtNone("test");
+    auto jwt = buildJwtNone();
 
     auto result = verifier.verify("Bearer " + jwt);
     BOOST_CHECK(!result);
-    // alg:none tokens fail at signature verification (HS256 verifier rejects missing signature)
+    // alg:none is rejected by verifyAlgorithm() because "none" is not in the allowedAlgorithms list
     BOOST_CHECK_EQUAL(result.error, JwtError::UnsupportedAlgorithm);
 }
 
