@@ -20,10 +20,12 @@
 
 #pragma once
 #include "bcos-utilities/Common.h"
-#include <unistd.h>
+// clang-format off
 #include <csignal>
 #include <cstring>
 #include <ctime>
+#include <unistd.h>
+// clang-format on
 
 
 namespace bcos::node
@@ -81,9 +83,9 @@ public:
     /// RPC, etc.) may have installed their own handlers in the meantime.
     static void registerSignalHandlers()
     {
-        struct sigaction sa
-        {
-        };
+        // clang-format off
+        struct sigaction sa{};
+        // clang-format on
         sa.sa_handler = &ExitHandler::exitHandler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = SA_RESTART;
