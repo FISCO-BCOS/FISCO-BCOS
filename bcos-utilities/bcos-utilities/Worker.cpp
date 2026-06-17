@@ -181,14 +181,16 @@ void Worker::notify()
 {
     if (m_workerState == WorkerState::Started)
     {
-        // scheduleNext() mutates m_timer (expires_after / async_wait), which
-        // must only happen on the io_context thread.  dispatch() runs the
-        // handler synchronously if we are already on the io_context thread;
-        // otherwise it behaves like post() and queues it for later execution.
+        // Cancel any pending timer and immediately trigger one worker cycle
+        // via handleTimerTick, which already contains executeWorker(),
+        // exception handling, FIB-111 backoff, and scheduleNext().
+        // Must run on the io_context thread; dispatch() runs synchronously
+        // if we are already on it, otherwise posts.
         boost::asio::dispatch(m_ioContext, [this]() {
             if (m_workerState == WorkerState::Started)
             {
-                scheduleNext();
+                m_timer.cancel();
+                handleTimerTick(boost::system::error_code());
             }
         });
     }
