@@ -14,8 +14,8 @@ contract L2ValidatorSetTest is Test {
     function setUp() public {
         IL2ValidatorSet.Validator[] memory initial = new IL2ValidatorSet.Validator[](1);
         initial[0] = IL2ValidatorSet.Validator(v1, payable(v1), hex"01", 1000, false, 0);
-        vm.prank(owner);
-        vs = new L2ValidatorSet(initial, owner);
+        vs = new L2ValidatorSet();
+        vs.initialize(initial, owner);
     }
 
     function test_GetValidators_ReturnsInitial() public view {
@@ -33,7 +33,7 @@ contract L2ValidatorSetTest is Test {
         IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](1);
         next[0] = IL2ValidatorSet.Validator(v2, payable(v2), hex"02", 2000, false, 0);
         vm.prank(address(0xBEEF));
-        vm.expectRevert("not owner");
+        vm.expectRevert("Ownable: caller is not the owner");
         vs.updateValidatorSet(next);
         vm.prank(owner);
         vs.updateValidatorSet(next);
@@ -125,7 +125,7 @@ contract L2ValidatorSetTest is Test {
         address newOwner = address(0xD00D);
 
         vm.prank(address(0xBEEF));
-        vm.expectRevert("not owner");
+        vm.expectRevert("Ownable: caller is not the owner");
         vs.transferOwnership(newOwner);
 
         vm.prank(owner);
@@ -138,5 +138,11 @@ contract L2ValidatorSetTest is Test {
         vm.prank(newOwner);
         vs.updateValidatorSet(next);
         assertTrue(vs.isCurrentValidator(v2));
+    }
+
+    function test_Initialize_CannotBeCalledTwice() public {
+        IL2ValidatorSet.Validator[] memory empty = new IL2ValidatorSet.Validator[](0);
+        vm.expectRevert("Initializable: contract is already initialized");
+        vs.initialize(empty, address(0xD00D));
     }
 }

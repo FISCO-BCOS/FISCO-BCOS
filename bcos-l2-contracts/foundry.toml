@@ -18,6 +18,10 @@ via_ir = false
 evm_version = "cancun"
 remappings = [
     "forge-std/=lib/forge-std/src/",
+    # OZ pinned to op-fork-pin.toml [deps] SHAs (v4.7.3); forge-installed into
+    # git-ignored lib/, not vendored — same handling as forge-std.
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
 ]
 
 [profile.ci]

@@ -21,11 +21,14 @@ C++ build. The C++ tree only wires this in when `WITH_L2_CONTRACTS=ON`
 | `SystemConfig.sol` | `0x42000000000000000000000000000000000000C0` (`0x42...00C0`) |
 | `L2ValidatorSet.sol` | `0x42000000000000000000000000000000000000C1` (`0x42...00C1`) |
 
-`SystemConfig` exposes an aggregate getter `getChainConfig()`
-(selector `0x606c0c94`) returning `(chainId, l2BlockGasLimit,
-compatibilityVersion, featureFlags)` in one call, so PR-4's `L2ConfigLoader`
-makes exactly one `staticcall` per block. `chainId` is `immutable` (fixed at
-deploy, no setter, no storage slot).
+`SystemConfig` is a generic key→value store: `setValueByKey(key, value,
+enableNumber)` / `getValueByKey(key)`, each entry packed as `(uint192 value,
+uint64 enableNumber)` in a single slot. The L2 upper layers read a key's slot
+directly (no EVM) via `keccak256(utf8(key) ‖ be32(baseSlot))`, where `baseSlot`
+is the slot of `_config` (101, after the OZ upgradeable base; pinned in the
+storage-layout fixture). `getValueByKey` is the EVM-callable path for external
+callers. Access control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). See
+`2026-06-17-systemconfig-slot-kv-redesign.md` for the full contract.
 
 `L2ValidatorSet` follows the BSC ValidatorSet style. Phase A maintains only the
 active set; the struct's `jailed` (always `false`) and `incoming` (always `0`)
@@ -52,7 +55,10 @@ The 11 entry-point predeploys (listed in `op-fork-pin.toml`):
 ## Build / Test
 
 ```bash
-forge install foundry-rs/forge-std   # one-time, into lib/ (git-ignored)
+# one-time, into git-ignored lib/; OZ pinned to op-fork-pin.toml [deps] SHAs
+forge install foundry-rs/forge-std
+forge install OpenZeppelin/openzeppelin-contracts@ecd2ca2cd7cac116f7a37d0e474bbb3d7d5e1c4d
+forge install OpenZeppelin/openzeppelin-contracts-upgradeable@0a2cb9a445c365870ed7a8ab461b12acf3e27d63
 forge build
 forge test -vvv
 ```

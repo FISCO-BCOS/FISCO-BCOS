@@ -2,82 +2,55 @@
 pragma solidity 0.8.25;
 
 import {ISystemConfig} from "./interfaces/ISystemConfig.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 /// @title SystemConfig
-/// @notice L2 chain configuration predeploy for FISCO-BCOS L2 mode.
-/// @dev    Predeploy address: 0x42000000000000000000000000000000000000C0
-///         ("0x42...00C0"). PR-4's L2ConfigLoader reads it once per block via a
-///         single staticcall to {getChainConfig}
-///         (selector `0x606c0c94` == `cast sig "getChainConfig()"`).
+/// @notice Generic key→value system-config predeploy for FISCO-BCOS L2 mode at
+///         0x42000000000000000000000000000000000000C0.
+/// @dev    Storage is one standard `mapping(string => Entry)`; each Entry packs
+///         (value:uint192, enableNumber:uint64) into a single slot. The L2 upper
+///         layers read a key's slot directly (no EVM) via
+///         `keccak256(utf8(key) ‖ be32(baseSlot))`, where baseSlot is the slot of
+///         `_config` (pinned by the storage-layout fixture). getValueByKey is the
+///         EVM-callable path for external callers; writes are owner-only and the
+///         owner is the ProxyAdmin governance behind the ERC-1967 proxy.
 ///
-///         Storage layout (see storage-layout/SystemConfig.json golden fixture;
-///         CI gate in PR-7 diffs that file). NOTE: `chainId` is `immutable`, so
-///         it lives in the contract code, NOT in storage — it does not occupy a
-///         storage slot and does not appear in the storage-layout fixture. The
-///         storage variables below occupy slots starting at slot 0:
-///           slot 0: l2BlockGasLimit (uint64) + compatibilityVersion (uint32)  [packed]
-///           slot 1: featureFlags (uint256)
-///           slot 2: owner (address)
-///           slot 3: _hardforkActivations (mapping)
-contract SystemConfig is ISystemConfig {
-    /// @dev immutable: fixed at deploy, lives in code (no storage slot, no setter).
-    /// @dev GENESIS CONSTRAINT: `chainId` is immutable — it lives in the runtime
-    /// bytecode (solc `immutableReferences`), NOT in storage. A genesis predeploy
-    /// never executes this constructor, so the genesis tooling (build-allocs.py)
-    /// MUST patch the artifact's deployedBytecode at the offsets listed in
-    /// out/SystemConfig.sol/SystemConfig.json -> deployedBytecode.immutableReferences,
-    /// otherwise on-chain `getChainConfig()` returns chainId == 0.
-    uint256 public immutable chainId;
-
-    uint64 public l2BlockGasLimit;
-    uint32 public compatibilityVersion;
-    uint256 public featureFlags;
-    address public owner;
-    mapping(uint8 => uint64) internal _hardforkActivations;
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not owner");
-        _;
+///         GENESIS: as a predeploy the constructor/initialize do not run on-chain;
+///         genesis tooling writes the owner slot (OZ) and each key's packed Entry
+///         slot directly into allocs.
+contract SystemConfig is ISystemConfig, OwnableUpgradeable {
+    struct Entry {
+        uint192 value;
+        uint64 enableNumber;
     }
 
-    /// @dev The `OwnershipTransferred(address(0), _owner)` emission below happens
-    ///      only in tests / simulated deployments — a genesis predeploy never runs
-    ///      this constructor on-chain, so the event is not emitted at genesis.
-    constructor(uint256 _chainId, uint64 _gasLimit, uint32 _version, uint256 _featureFlags, address _owner) {
-        chainId = _chainId;
-        l2BlockGasLimit = _gasLimit;
-        compatibilityVersion = _version;
-        featureFlags = _featureFlags;
-        owner = _owner;
-        emit OwnershipTransferred(address(0), _owner);
+    /// @dev baseSlot is fixed by declaration order after the OZ upgradeable
+    ///      base storage; pinned in storage-layout/SystemConfig.json.
+    mapping(string => Entry) private _config;
+
+    /// @notice Set the deploy-time owner (ProxyAdmin in production). Not run at
+    ///         genesis — see contract @dev note.
+    function initialize(address owner_) external initializer {
+        __Ownable_init();
+        _transferOwnership(owner_);
     }
 
     /// @inheritdoc ISystemConfig
-    function getChainConfig() external view returns (uint256, uint64, uint32, uint256) {
-        return (chainId, l2BlockGasLimit, compatibilityVersion, featureFlags);
+    function setValueByKey(string calldata key, uint192 value, uint64 enableNumber)
+        external
+        onlyOwner
+    {
+        _config[key] = Entry(value, enableNumber);
+        emit ConfigUpdate(key, value, enableNumber);
     }
 
     /// @inheritdoc ISystemConfig
-    function getHardforkActivation(uint8 id) external view returns (uint64) {
-        return _hardforkActivations[id];
-    }
-
-    /// @inheritdoc ISystemConfig
-    function setFeatureFlag(uint256 newFlags) external onlyOwner {
-        emit FeatureFlagsUpdated(featureFlags, newFlags);
-        featureFlags = newFlags;
-    }
-
-    /// @inheritdoc ISystemConfig
-    function setHardforkActivation(uint8 id, uint64 timestamp) external onlyOwner {
-        emit HardforkActivationUpdated(id, _hardforkActivations[id], timestamp);
-        _hardforkActivations[id] = timestamp;
-    }
-
-    /// @notice Owner-only: hand ownership to a new non-zero address.
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "zero owner");
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+    function getValueByKey(string calldata key)
+        external
+        view
+        returns (uint192 value, uint64 enableNumber)
+    {
+        Entry storage e = _config[key];
+        return (e.value, e.enableNumber);
     }
 }

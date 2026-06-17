@@ -2,49 +2,42 @@
 pragma solidity 0.8.25;
 
 import {IL2ValidatorSet} from "./interfaces/IL2ValidatorSet.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 /// @title L2ValidatorSet
-/// @notice On-chain validator set predeploy for FISCO-BCOS L2 mode, in the BSC
-///         ValidatorSet style.
-/// @dev    Predeploy address: 0x42000000000000000000000000000000000000C1
-///         ("0x42...00C1"). See storage-layout/L2ValidatorSet.json for the
-///         golden storage fixture (PR-7 CI gate diffs it).
+/// @notice On-chain validator set predeploy for FISCO-BCOS L2 mode, BSC
+///         ValidatorSet style, at 0x42000000000000000000000000000000000000C1.
+/// @dev    Access control / upgradeability use OZ `OwnableUpgradeable` behind an
+///         ERC-1967 proxy administered by ProxyAdmin — consistent with SystemConfig
+///         and the vendored OP predeploys. The validator storage (active set +
+///         lookup maps) is unchanged from the Phase A design; only the owner
+///         mechanism moved from hand-rolled to OZ.
 ///
-///         Storage layout (slots start at 0):
-///           slot 0: owner (address)
-///           slot 1: epoch (uint256)
-///           slot 2: _currentValidators (address[] — length at slot 2, data hashed)
-///           slot 3: _validatorByAddr (mapping)
-///           slot 4: _isValidator (mapping)
+///         Storage: the OZ v4.7 upgradeable base occupies slots 0-100
+///         (Initializable[0] + ContextUpgradeable __gap[1-50] + _owner[51] +
+///         __gap[52-100]); this contract's validator storage starts at slot 101.
 ///
-///         Phase A maintains only the active set. {felony} / {misdemeanor} are
-///         Phase B placeholders that revert; the Validator struct's `jailed`
-///         (always false) and `incoming` (always 0) fields are reserved for the
-///         Phase B slashing / fee-accounting governance.
-contract L2ValidatorSet is IL2ValidatorSet {
-    /// @notice Upper bound on the active set size. The contract targets small
-    ///         consensus sets and does a full O(n) rotation on every update; this
-    ///         cap keeps that rotation gas-bounded. A `constant` lives in code, not
-    ///         storage, so it does not occupy a slot (storage-layout unchanged).
+///         Phase A maintains only the active set. {felony}/{misdemeanor} are Phase
+///         B placeholders that revert; the Validator struct's `jailed` (always
+///         false) / `incoming` (always 0) fields are reserved for Phase B.
+///
+///         GENESIS: as a predeploy the constructor/initialize do not run on-chain;
+///         genesis tooling writes the owner slot and validator storage into allocs.
+contract L2ValidatorSet is IL2ValidatorSet, OwnableUpgradeable {
+    /// @notice Upper bound on the active set size; rotation is O(n), so this caps
+    ///         the per-update gas. A `constant` lives in code, not storage.
     uint256 public constant MAX_VALIDATORS = 256;
 
-    address public owner;
     uint256 public epoch;
     address[] internal _currentValidators;
     mapping(address => Validator) internal _validatorByAddr;
     mapping(address => bool) internal _isValidator;
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not owner");
-        _;
-    }
-
-    /// @dev The initial `ValidatorSetUpdated` emitted via `_applyValidatorSet`
-    ///      below happens only in tests / simulated deployments — a genesis
-    ///      predeploy never runs this constructor on-chain, so that event is not
-    ///      emitted at genesis.
-    constructor(Validator[] memory initial, address _owner) {
-        owner = _owner;
+    /// @notice Set the owner (ProxyAdmin in production) and install the initial
+    ///         validator set. Not run at genesis — see contract @dev note.
+    function initialize(Validator[] memory initial, address owner_) external initializer {
+        __Ownable_init();
+        _transferOwnership(owner_);
         _applyValidatorSet(initial);
     }
 
@@ -74,8 +67,6 @@ contract L2ValidatorSet is IL2ValidatorSet {
     }
 
     /// @inheritdoc IL2ValidatorSet
-    /// @dev The contract targets small consensus sets: rotation is full O(n) over
-    ///      the set, so the new set must be at most {MAX_VALIDATORS}.
     function updateValidatorSet(Validator[] calldata next) external onlyOwner {
         _applyValidatorSet(next);
     }
@@ -90,16 +81,8 @@ contract L2ValidatorSet is IL2ValidatorSet {
         revert("not implemented in Phase A");
     }
 
-    /// @notice Owner-only: hand ownership to a new non-zero address.
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "zero owner");
-        owner = newOwner;
-    }
-
     /// @dev Replace the active set: clear the old set, install `next` (rejecting
-    ///      duplicate consensus addresses), bump the epoch, and emit the update.
-    ///      Targets small consensus sets — full O(n) rotation, capped at
-    ///      {MAX_VALIDATORS} to keep the gas cost bounded.
+    ///      duplicate consensus addresses), bump the epoch, emit the update.
     function _applyValidatorSet(Validator[] memory next) internal {
         require(next.length <= MAX_VALIDATORS, "validator set too large");
         for (uint256 i = 0; i < _currentValidators.length; i++) {

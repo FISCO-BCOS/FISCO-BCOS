@@ -1,43 +1,75 @@
 {
   "storage": [
     {
-      "astId": 12,
+      "astId": 138,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-      "label": "owner",
+      "label": "_initialized",
       "offset": 0,
       "slot": "0",
+      "type": "t_uint8"
+    },
+    {
+      "astId": 141,
+      "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+      "label": "_initializing",
+      "offset": 1,
+      "slot": "0",
+      "type": "t_bool"
+    },
+    {
+      "astId": 566,
+      "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_array(t_uint256)50_storage"
+    },
+    {
+      "astId": 10,
+      "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+      "label": "_owner",
+      "offset": 0,
+      "slot": "51",
       "type": "t_address"
     },
     {
-      "astId": 14,
+      "astId": 130,
+      "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "52",
+      "type": "t_array(t_uint256)49_storage"
+    },
+    {
+      "astId": 584,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
       "label": "epoch",
       "offset": 0,
-      "slot": "1",
+      "slot": "101",
       "type": "t_uint256"
     },
     {
-      "astId": 17,
+      "astId": 587,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
       "label": "_currentValidators",
       "offset": 0,
-      "slot": "2",
+      "slot": "102",
       "type": "t_array(t_address)dyn_storage"
     },
     {
-      "astId": 22,
+      "astId": 592,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
       "label": "_validatorByAddr",
       "offset": 0,
-      "slot": "3",
-      "type": "t_mapping(t_address,t_struct(Validator)335_storage)"
+      "slot": "103",
+      "type": "t_mapping(t_address,t_struct(Validator)875_storage)"
     },
     {
-      "astId": 26,
+      "astId": 596,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
       "label": "_isValidator",
       "offset": 0,
-      "slot": "4",
+      "slot": "104",
       "type": "t_mapping(t_address,t_bool)"
     }
   ],
@@ -58,6 +90,18 @@
       "numberOfBytes": "32",
       "base": "t_address"
     },
+    "t_array(t_uint256)49_storage": {
+      "encoding": "inplace",
+      "label": "uint256[49]",
+      "numberOfBytes": "1568",
+      "base": "t_uint256"
+    },
+    "t_array(t_uint256)50_storage": {
+      "encoding": "inplace",
+      "label": "uint256[50]",
+      "numberOfBytes": "1600",
+      "base": "t_uint256"
+    },
     "t_bool": {
       "encoding": "inplace",
       "label": "bool",
@@ -75,20 +119,20 @@
       "numberOfBytes": "32",
       "value": "t_bool"
     },
-    "t_mapping(t_address,t_struct(Validator)335_storage)": {
+    "t_mapping(t_address,t_struct(Validator)875_storage)": {
       "encoding": "mapping",
       "key": "t_address",
       "label": "mapping(address => struct IL2ValidatorSet.Validator)",
       "numberOfBytes": "32",
-      "value": "t_struct(Validator)335_storage"
+      "value": "t_struct(Validator)875_storage"
     },
-    "t_struct(Validator)335_storage": {
+    "t_struct(Validator)875_storage": {
       "encoding": "inplace",
       "label": "struct IL2ValidatorSet.Validator",
       "numberOfBytes": "160",
       "members": [
         {
-          "astId": 324,
+          "astId": 864,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "consensusAddress",
           "offset": 0,
@@ -96,7 +140,7 @@
           "type": "t_address"
         },
         {
-          "astId": 326,
+          "astId": 866,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "feeAddress",
           "offset": 0,
@@ -104,7 +148,7 @@
           "type": "t_address_payable"
         },
         {
-          "astId": 328,
+          "astId": 868,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "BLSPublicKey",
           "offset": 0,
@@ -112,7 +156,7 @@
           "type": "t_bytes_storage"
         },
         {
-          "astId": 330,
+          "astId": 870,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "votingPower",
           "offset": 0,
@@ -120,7 +164,7 @@
           "type": "t_uint64"
         },
         {
-          "astId": 332,
+          "astId": 872,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "jailed",
           "offset": 8,
@@ -128,7 +172,7 @@
           "type": "t_bool"
         },
         {
-          "astId": 334,
+          "astId": 874,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "incoming",
           "offset": 0,
@@ -146,6 +190,11 @@
       "encoding": "inplace",
       "label": "uint64",
       "numberOfBytes": "8"
+    },
+    "t_uint8": {
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
     }
   }
 }

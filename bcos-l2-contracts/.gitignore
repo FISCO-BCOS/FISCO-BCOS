@@ -1,7 +1,7 @@
 out/
 cache/
 broadcast/
-lib/forge-std/
+lib/
 # forge-install artifacts for the git-ignored forge-std lib (re-created by
 # `forge install foundry-rs/forge-std`); forge-std is not a tracked submodule.
 foundry.lock
