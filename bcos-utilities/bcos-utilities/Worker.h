@@ -99,11 +99,6 @@ private:
     unsigned m_idleWaitMs = 0;
 
     std::atomic<WorkerState> m_workerState = {WorkerState::Stopped};
-
-    // Shared alive flag captured by all async handlers. terminate() sets it to
-    // false; handlers check it before accessing `this`, so they can safely bail
-    // even if the handler was already posted before Worker destruction.
-    std::shared_ptr<std::atomic<bool>> m_aliveFlag = std::make_shared<std::atomic<bool>>(true);
 };
 
 }  // namespace bcos

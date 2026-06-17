@@ -18,9 +18,11 @@
 #include "Worker.h"
 
 #include "BoostLog.h"
+#include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <future>
 
 using namespace bcos;
 
@@ -31,10 +33,6 @@ void Worker::startWorking()
     {
         return;  // Already running, or lost the race
     }
-
-    // Reset the alive flag so that async handlers from a previous stop
-    // cycle don't prematurely bail out of a restarted worker.
-    *m_aliveFlag = true;
 
     // initWorker() is safe to call synchronously — subclasses only log.
     try
@@ -55,9 +53,10 @@ void Worker::startWorking()
     }
 
     // scheduleNext() mutates m_timer (expires_after / async_wait), which
-    // must only happen on the io_context thread.  Post it there so that
-    // callers from arbitrary threads (e.g. Sealer::start()) are safe.
-    boost::asio::post(m_ioContext, [this]() {
+    // must only happen on the io_context thread.  dispatch() runs the
+    // handler synchronously if we are already on the io_context thread;
+    // otherwise it behaves like post() and queues it for later execution.
+    boost::asio::dispatch(m_ioContext, [this]() {
         if (m_workerState == WorkerState::Started)
         {
             scheduleNext();
@@ -73,14 +72,39 @@ void Worker::stopWorking()
         return;  // Not running, or another thread is already stopping
     }
 
-    // Signal all in-flight handlers to bail out before accessing `this`.
-    // The CAS above already changed m_workerState to Stopped, and
-    // m_aliveFlag=false makes every captured handler return immediately.
-    *m_aliveFlag = false;
+    // The CAS above already changed m_workerState to Stopped, which
+    // causes in-flight handlers (handleTimerTick, scheduleNext) to
+    // bail out at their workerState checks.
 
-    // Route cancel through the io_context thread so that it doesn't race
-    // with handleTimerTick / scheduleNext executing on the io_context.
-    boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
+    // Cancel the timer.  If we are already on the io_context thread we
+    // can mutate m_timer directly; otherwise we post the cancel and
+    // synchronize on its completion via a promise/future barrier.  We
+    // cannot stop the io_context because it is shared with other users.
+    if (m_ioContext.get_executor().running_in_this_thread())
+    {
+        // On the io_context thread — cancel is safe to call directly.
+        m_timer.cancel();
+    }
+    else
+    {
+        // Not on the io_context thread — post cancel + barrier and wait.
+        auto syncPromise = std::make_shared<std::promise<void>>();
+        auto syncFuture = syncPromise->get_future();
+        boost::asio::post(m_ioContext, [this, syncPromise = std::move(syncPromise)]() {
+            m_timer.cancel();
+            syncPromise->set_value();
+        });
+
+        // Block until the io_context thread has processed our cancel.
+        // After this point, no timer handler can be in-flight or pending,
+        // and any remaining Worker::notify() / startWorking() posts that
+        // were queued before this cancel will also have been drained (the
+        // io_context preserves FIFO ordering of posted handlers).
+        //
+        // No deadlock risk: we only take this path when NOT on the
+        // io_context thread (checked above with running_in_this_thread()).
+        syncFuture.wait();
+    }
 
     try
     {
@@ -108,24 +132,11 @@ void Worker::scheduleNext()
     }
 
     m_timer.expires_after(boost::asio::chrono::milliseconds(m_idleWaitMs));
-    auto aliveFlag = m_aliveFlag;
-    m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
-        if (!*aliveFlag)
-        {
-            return;
-        }
-        handleTimerTick(ec);
-    });
+    m_timer.async_wait([this](boost::system::error_code const& ec) { handleTimerTick(ec); });
 }
 
 void Worker::handleTimerTick(boost::system::error_code const& ec)
 {
-    // aliveFlag check is performed by the wrapping lambda in scheduleNext()
-    // and the backoff path below; kept here for defense-in-depth.
-    if (!*m_aliveFlag)
-    {
-        return;
-    }
     if (ec == boost::asio::error::operation_aborted)
     {
         return;  // Timer was cancelled
@@ -158,14 +169,7 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
     {
         // Use a small backoff to avoid busy-looping on persistent exceptions
         m_timer.expires_after(boost::asio::chrono::milliseconds(10));
-        auto aliveFlag = m_aliveFlag;
-        m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
-            if (!*aliveFlag)
-            {
-                return;
-            }
-            handleTimerTick(ec);
-        });
+        m_timer.async_wait([this](boost::system::error_code const& ec) { handleTimerTick(ec); });
     }
     else
     {
@@ -177,11 +181,11 @@ void Worker::notify()
 {
     if (m_workerState == WorkerState::Started)
     {
-        // Post the re-schedule to the io_context thread because
-        // scheduleNext() mutates m_timer (expires_after / async_wait).
-        // The explicit cancel is not needed — expires_after() inside
-        // scheduleNext() implicitly cancels any pending async_wait.
-        boost::asio::post(m_ioContext, [this]() {
+        // scheduleNext() mutates m_timer (expires_after / async_wait), which
+        // must only happen on the io_context thread.  dispatch() runs the
+        // handler synchronously if we are already on the io_context thread;
+        // otherwise it behaves like post() and queues it for later execution.
+        boost::asio::dispatch(m_ioContext, [this]() {
             if (m_workerState == WorkerState::Started)
             {
                 scheduleNext();
