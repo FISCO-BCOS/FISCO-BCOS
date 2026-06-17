@@ -92,6 +92,12 @@ void TxsValidator::asyncResetTxsFlag(
                           << LOG_KV("message", boost::diagnostic_information(e));
         return;
     }
+    catch (...)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("asyncResetTxsFlag buildHashList unknown exception")
+                          << LOG_KV("message", boost::current_exception_diagnostic_information());
+        return;
+    }
     if (txsHash.empty())
     {
         return;

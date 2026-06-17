@@ -33,8 +33,8 @@
 using namespace bcos;
 using namespace bcos::event;
 
-EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService,
-    boost::asio::io_context& _ioContext)
+EventSub::EventSub(
+    std::shared_ptr<boostssl::ws::WsService> _wsService, boost::asio::io_context& _ioContext)
   : bcos::Worker(_ioContext, "t_event_sub"), m_wsService(_wsService)
 {
     m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_SUBSCRIBE,

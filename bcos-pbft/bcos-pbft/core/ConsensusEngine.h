@@ -21,8 +21,8 @@
 #pragma once
 #include "Common.h"
 #include "bcos-framework/consensus/ConsensusEngineInterface.h"
-#include <boost/asio/io_context.hpp>
 #include <bcos-utilities/Worker.h>
+#include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <thread>
 
