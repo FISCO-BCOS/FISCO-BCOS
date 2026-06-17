@@ -207,7 +207,8 @@ void PBFTImpl::enableAsMasterNode(bool _isMasterNode)
     catch (...)
     {
         PBFT_LOG(ERROR) << LOG_DESC(
-            "enableAsMasterNode: unknown failure, rolling back master flags");
+                               "enableAsMasterNode: unknown failure, rolling back master flags")
+                        << LOG_KV("err", boost::current_exception_diagnostic_information());
         // Both flags MUST stay/become false on failure.
         m_pbftEngine->pbftConfig()->enableAsMasterNode(false);
         m_masterNode.store(false);

@@ -29,16 +29,16 @@ using namespace bcos::boostssl::http;
 using namespace bcos::boostssl::context;
 
 HttpServer::HttpServer(std::string _listenIP, uint16_t _listenPort, uint32_t _httpBodySizeLimit,
-        CorsConfig _corsConfig)
-    : m_listenIP(std::move(_listenIP)),
-        m_listenPort(_listenPort),
-        m_httpBodySizeLimit(_httpBodySizeLimit),
-        m_corsConfig(std::move(_corsConfig))
+    CorsConfig _corsConfig)
+  : m_listenIP(std::move(_listenIP)),
+    m_listenPort(_listenPort),
+    m_httpBodySizeLimit(_httpBodySizeLimit),
+    m_corsConfig(std::move(_corsConfig))
 {}
 
 HttpServer::~HttpServer()
 {
-        stop();
+    stop();
 }
 
 // start http server
@@ -127,8 +127,7 @@ void HttpServer::onAccept(boost::beast::error_code ec, boost::asio::ip::tcp::soc
         // operation_aborted is expected during shutdown (m_acceptor->cancel());
         // bad_descriptor means the acceptor was already closed — in both
         // cases do NOT re-queue accept to avoid an infinite error loop.
-        if (ec == boost::asio::error::operation_aborted ||
-            ec == boost::asio::error::bad_descriptor)
+        if (ec == boost::asio::error::operation_aborted || ec == boost::asio::error::bad_descriptor)
         {
             return;
         }
