@@ -10,78 +10,152 @@ contract L2ValidatorSetTest is Test {
     address owner = address(0xCAFE);
     address v1 = address(0x1111);
     address v2 = address(0x2222);
+    address v3 = address(0x3333);
+
+    function _val(address fee, uint64 power, bytes memory key)
+        internal
+        pure
+        returns (IL2ValidatorSet.Validator memory)
+    {
+        return IL2ValidatorSet.Validator(payable(fee), false, power, key, 0);
+    }
 
     function setUp() public {
-        IL2ValidatorSet.Validator[] memory initial = new IL2ValidatorSet.Validator[](1);
-        initial[0] = IL2ValidatorSet.Validator(v1, payable(v1), hex"01", 1000, false, 0);
+        address[] memory addrs = new address[](1);
+        addrs[0] = v1;
+        IL2ValidatorSet.Validator[] memory vals = new IL2ValidatorSet.Validator[](1);
+        vals[0] = _val(v1, 1000, hex"01");
         vs = new L2ValidatorSet();
-        vs.initialize(initial, owner);
+        vs.initialize(addrs, vals, owner);
     }
 
-    function test_GetValidators_ReturnsInitial() public view {
-        address[] memory addrs = vs.getValidators();
-        assertEq(addrs.length, 1);
-        assertEq(addrs[0], v1);
+    function test_Initialize_InstallsValidators() public view {
+        address[] memory got = vs.getValidators();
+        assertEq(got.length, 1);
+        assertEq(got[0], v1);
+        assertTrue(vs.isValidator(v1));
+        assertFalse(vs.isValidator(v2));
     }
 
-    function test_IsCurrentValidator() public view {
-        assertTrue(vs.isCurrentValidator(v1));
-        assertFalse(vs.isCurrentValidator(v2));
-    }
-
-    function test_UpdateValidatorSet_OnlyOwner() public {
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](1);
-        next[0] = IL2ValidatorSet.Validator(v2, payable(v2), hex"02", 2000, false, 0);
-        vm.prank(address(0xBEEF));
-        vm.expectRevert("Ownable: caller is not the owner");
-        vs.updateValidatorSet(next);
-        vm.prank(owner);
-        vs.updateValidatorSet(next);
-        assertTrue(vs.isCurrentValidator(v2));
-        assertFalse(vs.isCurrentValidator(v1));
-    }
-
-    function test_PhaseA_JailedAlwaysFalse() public view {
+    function test_GetValidator_ReturnsRecord() public view {
         IL2ValidatorSet.Validator memory val = vs.getValidator(v1);
+        assertEq(val.feeAddress, v1);
+        assertEq(val.votingPower, 1000);
+        assertEq(val.consensusPublicKey, hex"01");
         assertFalse(val.jailed);
         assertEq(val.incoming, 0);
     }
 
-    function test_UpdateValidatorSet_DuplicateReverts() public {
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](2);
-        next[0] = IL2ValidatorSet.Validator(v2, payable(v2), hex"02", 2000, false, 0);
-        next[1] = IL2ValidatorSet.Validator(v2, payable(v2), hex"03", 3000, false, 0);
+    function test_AddValidator_OnlyOwner() public {
+        IL2ValidatorSet.Validator memory v = _val(v2, 2000, hex"02");
+        vm.prank(address(0xBEEF));
+        vm.expectRevert("Ownable: caller is not the owner");
+        vs.addValidator(v2, v);
+
+        vm.prank(owner);
+        vs.addValidator(v2, v);
+        assertTrue(vs.isValidator(v2));
+        assertEq(vs.getValidators().length, 2);
+    }
+
+    function test_AddValidator_DuplicateReverts() public {
         vm.prank(owner);
         vm.expectRevert("duplicate validator");
-        vs.updateValidatorSet(next);
+        vs.addValidator(v1, _val(v1, 1, hex"01"));
     }
 
-    function test_UpdateValidatorSet_EmptyRemovesAllAndBumpsEpoch() public {
-        uint256 epochBefore = vs.epoch();
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](0);
+    function test_AddValidator_ZeroAddressReverts() public {
         vm.prank(owner);
-        vs.updateValidatorSet(next);
+        vm.expectRevert("zero address");
+        vs.addValidator(address(0), _val(address(0), 1, hex"01"));
+    }
 
-        assertFalse(vs.isCurrentValidator(v1));
+    function test_RemoveValidator_OnlyOwnerAndRemoves() public {
+        vm.prank(address(0xBEEF));
+        vm.expectRevert("Ownable: caller is not the owner");
+        vs.removeValidator(v1);
+
+        vm.prank(owner);
+        vs.removeValidator(v1);
+        assertFalse(vs.isValidator(v1));
         assertEq(vs.getValidators().length, 0);
-        assertEq(vs.epoch(), epochBefore + 1);
     }
 
-    function test_GetCurrentValidators_ReturnsAddrsAndBlsKeys() public {
-        // Install a 2-validator set with distinct BLS keys.
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](2);
-        next[0] = IL2ValidatorSet.Validator(v1, payable(v1), hex"aa", 1000, false, 0);
-        next[1] = IL2ValidatorSet.Validator(v2, payable(v2), hex"bbbb", 2000, false, 0);
+    function test_RemoveValidator_NotValidatorReverts() public {
         vm.prank(owner);
-        vs.updateValidatorSet(next);
+        vm.expectRevert("not a validator");
+        vs.removeValidator(v2);
+    }
 
-        (address[] memory addrs, bytes[] memory bls) = vs.getCurrentValidators();
+    /// Remove the first of three; the swap-pop must keep the other two consistent
+    /// (still present, still removable — i.e. their _indexPlus1 stays correct).
+    function test_RemoveValidator_SwapPopKeepsOthers() public {
+        vm.startPrank(owner);
+        vs.addValidator(v2, _val(v2, 2000, hex"02"));
+        vs.addValidator(v3, _val(v3, 3000, hex"03"));
+        vs.removeValidator(v1); // v1 was index 0; v3 (last) swaps into its place
+        vm.stopPrank();
+
+        assertEq(vs.getValidators().length, 2);
+        assertTrue(vs.isValidator(v2));
+        assertTrue(vs.isValidator(v3));
+        assertFalse(vs.isValidator(v1));
+
+        // Both remaining must still be removable (proves indices were fixed up).
+        vm.startPrank(owner);
+        vs.removeValidator(v3);
+        vs.removeValidator(v2);
+        vm.stopPrank();
+        assertEq(vs.getValidators().length, 0);
+    }
+
+    function test_UpdateValidator_OnlyOwnerAndUpdates() public {
+        IL2ValidatorSet.Validator memory upd = _val(v2, 9999, hex"aabb");
+        vm.prank(address(0xBEEF));
+        vm.expectRevert("Ownable: caller is not the owner");
+        vs.updateValidator(v1, upd);
+
+        vm.prank(owner);
+        vs.updateValidator(v1, upd);
+        IL2ValidatorSet.Validator memory got = vs.getValidator(v1);
+        assertEq(got.votingPower, 9999);
+        assertEq(got.feeAddress, v2);
+        assertEq(got.consensusPublicKey, hex"aabb");
+        // still in the set, length unchanged
+        assertEq(vs.getValidators().length, 1);
+        assertTrue(vs.isValidator(v1));
+    }
+
+    function test_UpdateValidator_NotValidatorReverts() public {
+        vm.prank(owner);
+        vm.expectRevert("not a validator");
+        vs.updateValidator(v2, _val(v2, 1, hex"02"));
+    }
+
+    function test_GetCurrentValidators_AddrsAndKeys() public {
+        vm.prank(owner);
+        vs.addValidator(v2, _val(v2, 2000, hex"bbbb"));
+        (address[] memory addrs, bytes[] memory keys) = vs.getCurrentValidators();
         assertEq(addrs.length, 2);
-        assertEq(bls.length, 2);
+        assertEq(keys.length, 2);
         assertEq(addrs[0], v1);
         assertEq(addrs[1], v2);
-        assertEq(bls[0], hex"aa");
-        assertEq(bls[1], hex"bbbb");
+        assertEq(keys[0], hex"01");
+        assertEq(keys[1], hex"bbbb");
+    }
+
+    /// Packed slot (feeAddress|jailed|votingPower): setting each to a boundary
+    /// value must not bleed into the neighbours.
+    function test_Packing_FieldsIndependent() public {
+        address fee = address(type(uint160).max);
+        IL2ValidatorSet.Validator memory v =
+            IL2ValidatorSet.Validator(payable(fee), true, type(uint64).max, hex"ff", 0);
+        vm.prank(owner);
+        vs.addValidator(v2, v);
+        IL2ValidatorSet.Validator memory got = vs.getValidator(v2);
+        assertEq(got.feeAddress, fee);
+        assertTrue(got.jailed);
+        assertEq(got.votingPower, type(uint64).max);
     }
 
     function test_Felony_NotImplemented() public {
@@ -96,53 +170,18 @@ contract L2ValidatorSetTest is Test {
         vs.misdemeanor(v1);
     }
 
-    function test_UpdateValidatorSet_TooLargeReverts() public {
-        uint256 n = vs.MAX_VALIDATORS() + 1;
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](n);
-        for (uint256 i = 0; i < n; i++) {
-            address a = address(uint160(i + 1));
-            next[i] = IL2ValidatorSet.Validator(a, payable(a), hex"01", 1, false, 0);
-        }
-        vm.prank(owner);
-        vm.expectRevert("validator set too large");
-        vs.updateValidatorSet(next);
-    }
-
-    function test_UpdateValidatorSet_EmitsEvent() public {
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](1);
-        next[0] = IL2ValidatorSet.Validator(v2, payable(v2), hex"02", 2000, false, 0);
-        address[] memory expected = new address[](1);
-        expected[0] = v2;
-
-        // setUp's constructor already bumped epoch to 1, so this update is epoch 2.
-        vm.expectEmit(true, true, true, true);
-        emit IL2ValidatorSet.ValidatorSetUpdated(vs.epoch() + 1, expected);
-        vm.prank(owner);
-        vs.updateValidatorSet(next);
-    }
-
-    function test_TransferOwnership_NonOwnerRevertsAndNewOwnerTakesOver() public {
-        address newOwner = address(0xD00D);
-
-        vm.prank(address(0xBEEF));
-        vm.expectRevert("Ownable: caller is not the owner");
-        vs.transferOwnership(newOwner);
-
-        vm.prank(owner);
-        vs.transferOwnership(newOwner);
-        assertEq(vs.owner(), newOwner);
-
-        // New owner can update the set.
-        IL2ValidatorSet.Validator[] memory next = new IL2ValidatorSet.Validator[](1);
-        next[0] = IL2ValidatorSet.Validator(v2, payable(v2), hex"02", 2000, false, 0);
-        vm.prank(newOwner);
-        vs.updateValidatorSet(next);
-        assertTrue(vs.isCurrentValidator(v2));
-    }
-
     function test_Initialize_CannotBeCalledTwice() public {
-        IL2ValidatorSet.Validator[] memory empty = new IL2ValidatorSet.Validator[](0);
+        address[] memory addrs = new address[](0);
+        IL2ValidatorSet.Validator[] memory vals = new IL2ValidatorSet.Validator[](0);
         vm.expectRevert("Initializable: contract is already initialized");
-        vs.initialize(empty, address(0xD00D));
+        vs.initialize(addrs, vals, address(0xD00D));
+    }
+
+    function test_Initialize_LengthMismatchReverts() public {
+        address[] memory addrs = new address[](2);
+        IL2ValidatorSet.Validator[] memory vals = new IL2ValidatorSet.Validator[](1);
+        L2ValidatorSet fresh = new L2ValidatorSet();
+        vm.expectRevert("length mismatch");
+        fresh.initialize(addrs, vals, owner);
     }
 }

@@ -41,36 +41,20 @@
       "type": "t_array(t_uint256)49_storage"
     },
     {
-      "astId": 584,
+      "astId": 1186,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-      "label": "epoch",
+      "label": "_validatorSet",
       "offset": 0,
       "slot": "101",
-      "type": "t_uint256"
+      "type": "t_struct(AddressSet)879_storage"
     },
     {
-      "astId": 587,
-      "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-      "label": "_currentValidators",
-      "offset": 0,
-      "slot": "102",
-      "type": "t_array(t_address)dyn_storage"
-    },
-    {
-      "astId": 592,
+      "astId": 1191,
       "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
       "label": "_validatorByAddr",
       "offset": 0,
       "slot": "103",
-      "type": "t_mapping(t_address,t_struct(Validator)875_storage)"
-    },
-    {
-      "astId": 596,
-      "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-      "label": "_isValidator",
-      "offset": 0,
-      "slot": "104",
-      "type": "t_mapping(t_address,t_bool)"
+      "type": "t_mapping(t_address,t_struct(Validator)1492_storage)"
     }
   ],
   "types": {
@@ -84,11 +68,11 @@
       "label": "address payable",
       "numberOfBytes": "20"
     },
-    "t_array(t_address)dyn_storage": {
+    "t_array(t_bytes32)dyn_storage": {
       "encoding": "dynamic_array",
-      "label": "address[]",
+      "label": "bytes32[]",
       "numberOfBytes": "32",
-      "base": "t_address"
+      "base": "t_bytes32"
     },
     "t_array(t_uint256)49_storage": {
       "encoding": "inplace",
@@ -107,76 +91,111 @@
       "label": "bool",
       "numberOfBytes": "1"
     },
+    "t_bytes32": {
+      "encoding": "inplace",
+      "label": "bytes32",
+      "numberOfBytes": "32"
+    },
     "t_bytes_storage": {
       "encoding": "bytes",
       "label": "bytes",
       "numberOfBytes": "32"
     },
-    "t_mapping(t_address,t_bool)": {
-      "encoding": "mapping",
-      "key": "t_address",
-      "label": "mapping(address => bool)",
-      "numberOfBytes": "32",
-      "value": "t_bool"
-    },
-    "t_mapping(t_address,t_struct(Validator)875_storage)": {
+    "t_mapping(t_address,t_struct(Validator)1492_storage)": {
       "encoding": "mapping",
       "key": "t_address",
       "label": "mapping(address => struct IL2ValidatorSet.Validator)",
       "numberOfBytes": "32",
-      "value": "t_struct(Validator)875_storage"
+      "value": "t_struct(Validator)1492_storage"
     },
-    "t_struct(Validator)875_storage": {
+    "t_mapping(t_bytes32,t_uint256)": {
+      "encoding": "mapping",
+      "key": "t_bytes32",
+      "label": "mapping(bytes32 => uint256)",
+      "numberOfBytes": "32",
+      "value": "t_uint256"
+    },
+    "t_struct(AddressSet)879_storage": {
       "encoding": "inplace",
-      "label": "struct IL2ValidatorSet.Validator",
-      "numberOfBytes": "160",
+      "label": "struct EnumerableSet.AddressSet",
+      "numberOfBytes": "64",
       "members": [
         {
-          "astId": 864,
+          "astId": 878,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-          "label": "consensusAddress",
+          "label": "_inner",
           "offset": 0,
           "slot": "0",
-          "type": "t_address"
+          "type": "t_struct(Set)578_storage"
+        }
+      ]
+    },
+    "t_struct(Set)578_storage": {
+      "encoding": "inplace",
+      "label": "struct EnumerableSet.Set",
+      "numberOfBytes": "64",
+      "members": [
+        {
+          "astId": 573,
+          "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+          "label": "_values",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_array(t_bytes32)dyn_storage"
         },
         {
-          "astId": 866,
+          "astId": 577,
+          "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+          "label": "_indexes",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_mapping(t_bytes32,t_uint256)"
+        }
+      ]
+    },
+    "t_struct(Validator)1492_storage": {
+      "encoding": "inplace",
+      "label": "struct IL2ValidatorSet.Validator",
+      "numberOfBytes": "96",
+      "members": [
+        {
+          "astId": 1483,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "feeAddress",
           "offset": 0,
-          "slot": "1",
+          "slot": "0",
           "type": "t_address_payable"
         },
         {
-          "astId": 868,
-          "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-          "label": "BLSPublicKey",
-          "offset": 0,
-          "slot": "2",
-          "type": "t_bytes_storage"
-        },
-        {
-          "astId": 870,
-          "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
-          "label": "votingPower",
-          "offset": 0,
-          "slot": "3",
-          "type": "t_uint64"
-        },
-        {
-          "astId": 872,
+          "astId": 1485,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "jailed",
-          "offset": 8,
-          "slot": "3",
+          "offset": 20,
+          "slot": "0",
           "type": "t_bool"
         },
         {
-          "astId": 874,
+          "astId": 1487,
+          "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+          "label": "votingPower",
+          "offset": 21,
+          "slot": "0",
+          "type": "t_uint64"
+        },
+        {
+          "astId": 1489,
+          "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
+          "label": "consensusPublicKey",
+          "offset": 0,
+          "slot": "1",
+          "type": "t_bytes_storage"
+        },
+        {
+          "astId": 1491,
           "contract": "src/L2ValidatorSet.sol:L2ValidatorSet",
           "label": "incoming",
           "offset": 0,
-          "slot": "4",
+          "slot": "2",
           "type": "t_uint256"
         }
       ]

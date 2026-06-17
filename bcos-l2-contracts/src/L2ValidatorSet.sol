@@ -3,62 +3,66 @@ pragma solidity 0.8.25;
 
 import {IL2ValidatorSet} from "./interfaces/IL2ValidatorSet.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 /// @title L2ValidatorSet
-/// @notice On-chain validator set predeploy for FISCO-BCOS L2 mode, BSC
-///         ValidatorSet style, at 0x42000000000000000000000000000000000000C1.
+/// @notice On-chain validator set predeploy for FISCO-BCOS L2 mode at
+///         0x42000000000000000000000000000000000000C1.
 /// @dev    Access control / upgradeability use OZ `OwnableUpgradeable` behind an
-///         ERC-1967 proxy administered by ProxyAdmin — consistent with SystemConfig
-///         and the vendored OP predeploys. The validator storage (active set +
-///         lookup maps) is unchanged from the Phase A design; only the owner
-///         mechanism moved from hand-rolled to OZ.
+///         ERC-1967 proxy administered by ProxyAdmin, consistent with SystemConfig
+///         and the vendored OP predeploys.
 ///
-///         Storage: the OZ v4.7 upgradeable base occupies slots 0-100
-///         (Initializable[0] + ContextUpgradeable __gap[1-50] + _owner[51] +
-///         __gap[52-100]); this contract's validator storage starts at slot 101.
+///         Membership + enumeration use OZ `EnumerableSet.AddressSet` (O(1)
+///         add/remove/contains, swap-pop removal); the per-validator record hangs
+///         off a parallel `mapping(address => Validator)`. The consensus address is
+///         the identity (set element + mapping key), so it is not a struct field.
 ///
-///         Phase A maintains only the active set. {felony}/{misdemeanor} are Phase
-///         B placeholders that revert; the Validator struct's `jailed` (always
-///         false) / `incoming` (always 0) fields are reserved for Phase B.
+///         Storage: the OZ v4.7 upgradeable base occupies slots 0-100; this
+///         contract's storage starts at slot 101.
+///
+///         Phase A: {felony}/{misdemeanor} revert; Validator.jailed is always
+///         false and Validator.incoming always 0 (reserved for Phase B).
 ///
 ///         GENESIS: as a predeploy the constructor/initialize do not run on-chain;
 ///         genesis tooling writes the owner slot and validator storage into allocs.
 contract L2ValidatorSet is IL2ValidatorSet, OwnableUpgradeable {
-    /// @notice Upper bound on the active set size; rotation is O(n), so this caps
-    ///         the per-update gas. A `constant` lives in code, not storage.
-    uint256 public constant MAX_VALIDATORS = 256;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
-    uint256 public epoch;
-    address[] internal _currentValidators;
-    mapping(address => Validator) internal _validatorByAddr;
-    mapping(address => bool) internal _isValidator;
+    EnumerableSet.AddressSet private _validatorSet;
+    mapping(address => Validator) private _validatorByAddr;
 
     /// @notice Set the owner (ProxyAdmin in production) and install the initial
     ///         validator set. Not run at genesis — see contract @dev note.
-    function initialize(Validator[] memory initial, address owner_) external initializer {
+    function initialize(address[] memory addrs, Validator[] memory vals, address owner_)
+        external
+        initializer
+    {
+        require(addrs.length == vals.length, "length mismatch");
         __Ownable_init();
         _transferOwnership(owner_);
-        _applyValidatorSet(initial);
+        for (uint256 i = 0; i < addrs.length; i++) {
+            _add(addrs[i], vals[i]);
+        }
     }
 
     /// @inheritdoc IL2ValidatorSet
     function getValidators() external view returns (address[] memory) {
-        return _currentValidators;
+        return _validatorSet.values();
     }
 
     /// @inheritdoc IL2ValidatorSet
     function getCurrentValidators() external view returns (address[] memory, bytes[] memory) {
-        address[] memory cur = _currentValidators;
-        bytes[] memory bls = new bytes[](cur.length);
+        address[] memory cur = _validatorSet.values();
+        bytes[] memory keys = new bytes[](cur.length);
         for (uint256 i = 0; i < cur.length; i++) {
-            bls[i] = _validatorByAddr[cur[i]].BLSPublicKey;
+            keys[i] = _validatorByAddr[cur[i]].consensusPublicKey;
         }
-        return (cur, bls);
+        return (cur, keys);
     }
 
     /// @inheritdoc IL2ValidatorSet
-    function isCurrentValidator(address a) external view returns (bool) {
-        return _isValidator[a];
+    function isValidator(address a) public view returns (bool) {
+        return _validatorSet.contains(a);
     }
 
     /// @inheritdoc IL2ValidatorSet
@@ -67,8 +71,22 @@ contract L2ValidatorSet is IL2ValidatorSet, OwnableUpgradeable {
     }
 
     /// @inheritdoc IL2ValidatorSet
-    function updateValidatorSet(Validator[] calldata next) external onlyOwner {
-        _applyValidatorSet(next);
+    function addValidator(address a, Validator calldata v) external onlyOwner {
+        _add(a, v);
+    }
+
+    /// @inheritdoc IL2ValidatorSet
+    function removeValidator(address a) external onlyOwner {
+        require(_validatorSet.remove(a), "not a validator");
+        delete _validatorByAddr[a];
+        emit ValidatorRemoved(a);
+    }
+
+    /// @inheritdoc IL2ValidatorSet
+    function updateValidator(address a, Validator calldata v) external onlyOwner {
+        require(_validatorSet.contains(a), "not a validator");
+        _validatorByAddr[a] = v;
+        emit ValidatorUpdated(a);
     }
 
     /// @inheritdoc IL2ValidatorSet
@@ -81,25 +99,10 @@ contract L2ValidatorSet is IL2ValidatorSet, OwnableUpgradeable {
         revert("not implemented in Phase A");
     }
 
-    /// @dev Replace the active set: clear the old set, install `next` (rejecting
-    ///      duplicate consensus addresses), bump the epoch, emit the update.
-    function _applyValidatorSet(Validator[] memory next) internal {
-        require(next.length <= MAX_VALIDATORS, "validator set too large");
-        for (uint256 i = 0; i < _currentValidators.length; i++) {
-            _isValidator[_currentValidators[i]] = false;
-            delete _validatorByAddr[_currentValidators[i]];
-        }
-        delete _currentValidators;
-        for (uint256 i = 0; i < next.length; i++) {
-            address a = next[i].consensusAddress;
-            require(!_isValidator[a], "duplicate validator");
-            _isValidator[a] = true;
-            _validatorByAddr[a] = next[i];
-            _currentValidators.push(a);
-        }
-        unchecked {
-            epoch += 1;
-        }
-        emit ValidatorSetUpdated(epoch, _currentValidators);
+    function _add(address a, Validator memory v) internal {
+        require(a != address(0), "zero address");
+        require(_validatorSet.add(a), "duplicate validator");
+        _validatorByAddr[a] = v;
+        emit ValidatorAdded(a);
     }
 }

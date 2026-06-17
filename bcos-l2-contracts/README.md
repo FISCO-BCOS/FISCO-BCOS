@@ -30,10 +30,14 @@ storage-layout fixture). `getValueByKey` is the EVM-callable path for external
 callers. Access control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). See
 `2026-06-17-systemconfig-slot-kv-redesign.md` for the full contract.
 
-`L2ValidatorSet` follows the BSC ValidatorSet style. Phase A maintains only the
-active set; the struct's `jailed` (always `false`) and `incoming` (always `0`)
-fields and the `felony` / `misdemeanor` methods (which revert) are reserved for
-Phase B governance.
+`L2ValidatorSet` is a single-record-CRUD validator registry (BSC-style fields):
+`addValidator` / `removeValidator` / `updateValidator` / `getValidator` /
+`getValidators` / `isValidator`, all O(1), backed by OZ `EnumerableSet.AddressSet`
+plus a parallel record mapping. The `Validator` struct packs `feeAddress` +
+`jailed` + `votingPower` into one slot; `consensusPublicKey` is algorithm-neutral. Access
+control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). `jailed` (always
+`false`), `incoming` (always `0`) and `felony` / `misdemeanor` (revert) are
+reserved for Phase B.
 
 ### Upstream OP fork (not vendored)
 
