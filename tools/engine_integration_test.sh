@@ -667,10 +667,12 @@ L1CHAIN_EOF
         OPNODE_OUT="${WORK_DIR}/opnode_out.log"
         timeout 60 "${OPNODE_BINARY}" \
             --l1="${RPC_URL}" \
+            --l1.beacon="${RPC_URL}" \
             --l2="${RPC_URL}" \
             --l2.jwt-secret="${JWT_FILE}" \
             --rollup.config="${ROLLUP_CONFIG}" \
             --rollup.l1-chain-config="${L1_CHAIN_CONFIG}" \
+            --syncmode=execution-layer \
             --sequencer.enabled \
             --p2p.disable \
             --rpc.addr=0.0.0.0 \
