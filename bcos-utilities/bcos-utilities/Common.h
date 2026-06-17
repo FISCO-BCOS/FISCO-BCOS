@@ -87,18 +87,6 @@ using UpgradableGuard = boost::upgrade_lock<boost::shared_mutex>;
 using UpgradeGuard = boost::upgrade_to_unique_lock<boost::shared_mutex>;
 using WriteGuard = boost::unique_lock<boost::shared_mutex>;
 
-template <size_t n>
-inline u256 exp10()
-{
-    return exp10<n - 1>() * u256(10);
-}
-
-template <>
-inline u256 exp10<0>()
-{
-    return u256{1};
-}
-
 //------------ Type interprets and Convertions----------------
 /// Interprets @a _u as a two's complement signed number and returns the resulting s256.
 s256 u2s(u256 _u);
