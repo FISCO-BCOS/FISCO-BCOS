@@ -20,8 +20,10 @@
 
 #pragma once
 #include "bcos-utilities/Common.h"
+#include <unistd.h>
+#include <csignal>
+#include <cstring>
 #include <ctime>
-#include <iostream>
 
 
 namespace bcos::node
@@ -29,27 +31,97 @@ namespace bcos::node
 class ExitHandler
 {
 public:
-    static void exit() { exitHandler(0); }
-    static void exitHandler(int signal)
+    static void exit()
     {
-        std::cout << "[" << bcos::getCurrentDateTime() << "] "
-                  << "exit because receive signal " << signal << std::endl;
+        // Normal (non-signal) exit path — do NOT chain-call old handlers
+        // because signal number 0 is not a real signal and can trigger
+        // undefined behaviour in the previously installed handler.
+        const char* msg = "[ExitHandler] normal exit requested...\n";
+        [[maybe_unused]] auto _ret = write(STDERR_FILENO, msg, sizeof(msg) - 1);
         ExitHandler::c_shouldExit.store(true);
         ExitHandler::c_shouldExit.notify_all();
     }
+
+    /// Signal handler: sets the exit flag first so that main() can proceed,
+    /// then chains to the previously registered handler (if any) so that
+    /// sub-components like the TARS RPC framework also receive the signal.
+    static void exitHandler(int signal)
+    {
+        // Write a brief message using write() rather than std::cout
+        // because std::cout is not async-signal-safe and could deadlock
+        // if the logging / IO threads are stuck.
+        const char* msg = "[ExitHandler] received signal, exiting...\n";
+        // write() is tagged warn_unused_result on Linux; a void-cast does
+        // not suppress the warning, but a real use (assignment) does.
+        [[maybe_unused]] auto _ret = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+
+        // Set the flag first — this is the critical path that unblocks main().
+        ExitHandler::c_shouldExit.store(true);
+        ExitHandler::c_shouldExit.notify_all();
+
+        // Chain to the previously registered handler so that frameworks
+        // such as TARS can perform their own internal graceful shutdown.
+        auto& old = getOldHandler(signal);
+        if ((old.sa_flags & SA_SIGINFO) && old.sa_sigaction != nullptr)
+        {
+            old.sa_sigaction(signal, nullptr, nullptr);
+        }
+        else if (old.sa_handler != nullptr && old.sa_handler != SIG_DFL &&
+                 old.sa_handler != SIG_IGN && old.sa_handler != &ExitHandler::exitHandler)
+        {
+            old.sa_handler(signal);
+        }
+    }
+
+    /// Register (or re-register) our signal handler, saving the previously
+    /// installed handler so that exitHandler() can chain-call it.
+    ///
+    /// Call once BEFORE Initializer::start() so that crashes during start-up
+    /// are caught.  Call again AFTER start() because sub-components (TARS
+    /// RPC, etc.) may have installed their own handlers in the meantime.
+    static void registerSignalHandlers()
+    {
+        struct sigaction sa
+        {
+        };
+        sa.sa_handler = &ExitHandler::exitHandler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_RESTART;
+
+        sigaction(SIGTERM, &sa, &s_oldTERM);
+        sigaction(SIGABRT, &sa, &s_oldABRT);
+        sigaction(SIGINT, &sa, &s_oldINT);
+        sigaction(SIGSEGV, &sa, &s_oldSEGV);
+    }
+
     static bool shouldExit() { return ExitHandler::c_shouldExit.load(); }
 
     static boost::atomic_bool c_shouldExit;
-};
-boost::atomic_bool ExitHandler::c_shouldExit = {false};
 
-void setDefaultOrCLocale()
-{
-#if __unix__
-    if (std::setlocale(LC_ALL, "") == nullptr)
+private:
+    static struct sigaction& getOldHandler(int signal)
     {
-        setenv("LC_ALL", "C", 1);
+        switch (signal)
+        {
+        case SIGTERM:
+            return s_oldTERM;
+        case SIGINT:
+            return s_oldINT;
+        case SIGABRT:
+            return s_oldABRT;
+        case SIGSEGV:
+            return s_oldSEGV;
+        default:
+            return s_oldTERM;  // fallback
+        }
     }
-#endif
-}
+
+    static struct sigaction s_oldTERM;
+    static struct sigaction s_oldINT;
+    static struct sigaction s_oldABRT;
+    static struct sigaction s_oldSEGV;
+};
+
+// setDefaultOrCLocale() is defined in Common.cpp.
+void setDefaultOrCLocale();
 }  // namespace bcos::node
