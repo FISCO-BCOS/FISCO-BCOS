@@ -55,7 +55,6 @@ protected:
     virtual void finishWorker() { cout << "finishWorker..." << endl; }
 
 private:
-    boost::asio::io_context m_ioService;
     int count = 0;
     std::shared_ptr<Timer> m_timer;
 };

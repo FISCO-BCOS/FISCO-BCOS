@@ -21,10 +21,9 @@
 #include "Timer.h"
 #include "BoostLog.h"
 #include "Common.h"
-#include "bcos-utilities/Overloaded.h"
-#include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
+#include <chrono>
 #include <future>
 
 using namespace bcos;
@@ -45,28 +44,38 @@ void Timer::start()
     }
 
     // startTimer() mutates m_timer (expires_after / async_wait), which
-    // must only happen on the io_context thread.  dispatch() runs the
-    // handler synchronously if we are already on the io_context thread;
-    // otherwise it behaves like post() and queues it for later execution.
-    // Capture a weak_ptr so the handler safely bails out if the Timer is
-    // destroyed before the io_context processes this dispatch.
-    boost::asio::dispatch(ioService(), [weak = weak_from_this()]() {
-        auto self = weak.lock();
-        if (!self || !self->m_working)
-        {
-            return;
-        }
-        try
-        {
-            self->startTimer();
-        }
-        catch (std::exception const& e)
-        {
-            BCOS_LOG(WARNING) << LOG_DESC("startTimer exception")
-                              << LOG_KV("threadName", self->m_threadName)
-                              << LOG_KV("message", boost::diagnostic_information(e));
-        }
-    });
+    // must only happen on the io_context thread.
+    if (ioService().get_executor().running_in_this_thread())
+    {
+        // On the io_context thread — call synchronously so that
+        // exceptions propagate to the caller (preserving the pre-async
+        // behaviour for fatal-init scenarios).
+        startTimer();
+    }
+    else
+    {
+        // Not on the io_context thread — dispatch and log errors
+        // asynchronously.  Capture a weak_ptr so the handler safely
+        // bails out if the Timer is destroyed before the io_context
+        // processes this dispatch.
+        boost::asio::dispatch(ioService(), [weak = weak_from_this()]() {
+            auto self = weak.lock();
+            if (!self || !self->m_working)
+            {
+                return;
+            }
+            try
+            {
+                self->startTimer();
+            }
+            catch (std::exception const& e)
+            {
+                BCOS_LOG(WARNING) << LOG_DESC("startTimer exception")
+                                  << LOG_KV("threadName", self->m_threadName)
+                                  << LOG_KV("message", boost::diagnostic_information(e));
+            }
+        });
+    }
 }
 
 void Timer::startTimer()
@@ -116,7 +125,9 @@ void Timer::stop()
     {
         // Cancel the timer.  If we are already on the io_context thread we
         // can mutate m_timer directly; otherwise we post the cancel and
-        // synchronize on its completion via a promise/future barrier.
+        // synchronize on its completion via a promise/future barrier with
+        // a bounded wait to avoid a hard hang if the io_context is not
+        // being serviced (e.g. during unordered teardown).
         if (ioService().get_executor().running_in_this_thread())
         {
             // On the io_context thread — cancel is safe to call directly.
@@ -132,10 +143,16 @@ void Timer::stop()
                 syncPromise->set_value();
             });
 
-            // Block until the io_context thread has processed our cancel.
-            // No deadlock risk: we only take this path when NOT on the
-            // io_context thread (checked above with running_in_this_thread()).
-            syncFuture.wait();
+            // Block until the io_context thread has processed our cancel,
+            // but bound the wait to avoid a hard hang when the io_context
+            // is no longer being serviced (e.g. teardown ordering bug).
+            auto status = syncFuture.wait_for(std::chrono::seconds(5));
+            if (status != std::future_status::ready)
+            {
+                BCOS_LOG(ERROR)
+                    << LOG_DESC("Timer::stop() timed out waiting for io_context to process cancel")
+                    << LOG_KV("threadName", m_threadName);
+            }
         }
     }
 }
@@ -150,19 +167,9 @@ void Timer::destroy()
     // stop() internally checks m_working; we must not clear it beforehand.
     stop();
     m_working = false;
-    if (!borrowedIoService())
-    {
-        ioService().stop();
-        if (m_worker->get_id() != std::this_thread::get_id())
-        {
-            m_worker->join();
-            m_worker.reset();
-        }
-        else
-        {
-            m_worker->detach();
-        }
-    }
+    // The standalone Timer(int64_t, std::string) constructor that owned its
+    // own io_context and worker thread was removed — all Timers now borrow
+    // an external io_context.  There is no owned thread to join/detach.
 }
 bcos::Timer::~Timer() noexcept
 {
@@ -205,13 +212,7 @@ void bcos::Timer::setTimeout(int64_t timeout)
 {
     m_timeout = timeout;
 }
-bool bcos::Timer::borrowedIoService() const
-{
-    return std::holds_alternative<boost::asio::io_context*>(m_ioService);
-}
 boost::asio::io_context& bcos::Timer::ioService()
 {
-    return std::visit(bcos::overloaded([](boost::asio::io_context* ptr) -> auto& { return *ptr; },
-                          [](boost::asio::io_context& ref) -> auto& { return ref; }),
-        m_ioService);
+    return *m_ioService;
 }

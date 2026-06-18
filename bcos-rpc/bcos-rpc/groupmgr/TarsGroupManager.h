@@ -36,8 +36,12 @@ public:
     {
         m_groupStatusUpdater =
             std::make_shared<Timer>(_ioService, c_tarsAdminRefreshTime, "gmrTimer");
-        m_groupStatusUpdater->start();
+        // Register the timeout handler BEFORE starting the timer.
+        // Timer::start() dispatches asynchronously (via boost::asio::dispatch),
+        // so the first timer expiry can race handler registration if we call
+        // start() first.
         m_groupStatusUpdater->registerTimeoutHandler([this] { updateGroupStatus(); });
+        m_groupStatusUpdater->start();
     }
     ~TarsGroupManager() override
     {

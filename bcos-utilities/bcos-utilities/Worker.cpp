@@ -21,6 +21,7 @@
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <chrono>
 #include <exception>
 #include <future>
 
@@ -95,15 +96,25 @@ void Worker::stopWorking()
             syncPromise->set_value();
         });
 
-        // Block until the io_context thread has processed our cancel.
-        // After this point, no timer handler can be in-flight or pending,
-        // and any remaining Worker::notify() / startWorking() posts that
-        // were queued before this cancel will also have been drained (the
-        // io_context preserves FIFO ordering of posted handlers).
+        // Block until the io_context thread has processed our cancel,
+        // but bound the wait to avoid a hard hang when the io_context
+        // is no longer being serviced (e.g. teardown ordering bug).
         //
-        // No deadlock risk: we only take this path when NOT on the
-        // io_context thread (checked above with running_in_this_thread()).
-        syncFuture.wait();
+        // Note: the cancellation itself is synchronous, but
+        // boost::asio::steady_timer::cancel() queues an
+        // operation_aborted completion that runs *after* set_value().
+        // That one handler may escape this barrier.  It is safe because
+        // handleTimerTick() early-returns on operation_aborted before
+        // touching any member.
+        auto status = syncFuture.wait_for(std::chrono::seconds(5));
+        if (status != std::future_status::ready)
+        {
+            BCOS_LOG(ERROR)
+                << LOG_DESC(
+                       "Worker::stopWorking() timed out waiting for io_context to process "
+                       "cancel")
+                << LOG_KV("threadName", m_threadName);
+        }
     }
 
     try
