@@ -1,6 +1,8 @@
 #include "bcos-framework/ledger/Features.h"
 #include "protocol/Protocol.h"
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace bcos::ledger;
 
@@ -209,6 +211,25 @@ BOOST_AUTO_TEST_CASE(feature)
     {
         BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
     }
+}
+
+BOOST_AUTO_TEST_CASE(toFlagsNumber)
+{
+    // empty feature set packs to 0
+    Features none;
+    BOOST_CHECK_EQUAL(none.toFlagsNumber(), bcos::u256(0));
+
+    // bit i corresponds to the i-th Flag in declaration order (magic_enum index)
+    Features one;
+    one.set(Features::Flag::feature_l2_ethereum_compat);
+    auto l2Index = magic_enum::enum_index(Features::Flag::feature_l2_ethereum_compat).value();
+    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << l2Index);
+
+    // bugfix_revert is index 0 -> bit 0; multiple set flags OR together
+    Features two;
+    two.set(Features::Flag::bugfix_revert);
+    two.set(Features::Flag::feature_l2_ethereum_compat);
+    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << l2Index));
 }
 
 auto validFlags(const Features& features)

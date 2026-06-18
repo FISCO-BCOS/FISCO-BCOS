@@ -23,9 +23,9 @@
 
 #include "bcos-ledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -57,6 +57,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <memory>
 
 using namespace bcos;
@@ -1564,6 +1565,61 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
             BOOST_CHECK_EQUAL(codeHashEntry->get(),
                 std::string_view((const char*)codeHashBytes.data(), codeHashBytes.size()));
         }
+    }());
+}
+
+BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        // enable the L2 feature in genesis
+        genesisConfig.m_features.push_back(
+            ledger::FeatureSet{.flag = Features::Flag::feature_l2_ethereum_compat, .enable = 1});
+        // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
+        genesisConfig.m_allocs.push_back(
+            Alloc{.address = "42000000000000000000000000000000000000c0",
+                .balance = {},
+                .nonce = {},
+                .code = "6080604052",
+                .storage = {}});
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        // slot = keccak256(utf8("feature_flags") || be32(101))
+        bcos::bytes slotInput;
+        std::string key = "feature_flags";
+        slotInput.insert(slotInput.end(), key.begin(), key.end());
+        bcos::bytes baseSlot(32, 0);
+        baseSlot[31] = 101;
+        slotInput.insert(slotInput.end(), baseSlot.begin(), baseSlot.end());
+        auto slotHash = hashImpl->hash(bcos::ref(slotInput));
+
+        auto tableName = fmt::format(
+            "{}{}", SYS_DIRECTORY::USER_APPS, "42000000000000000000000000000000000000c0");
+        auto slotView = std::string_view(reinterpret_cast<const char*>(slotHash.data()), 32);
+        auto entry =
+            co_await storage2::readOne(*storage, executor_v1::StateKeyView(tableName, slotView));
+        BOOST_REQUIRE(entry.has_value());
+        auto value = entry->get();
+        BOOST_CHECK_EQUAL(value.size(), 32U);
+
+        // the feature_l2_ethereum_compat bit must be set in the big-endian value
+        auto idx = magic_enum::enum_index(Features::Flag::feature_l2_ethereum_compat).value();
+        auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
+        BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
     }());
 }
 

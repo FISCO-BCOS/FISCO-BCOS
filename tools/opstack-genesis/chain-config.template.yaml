@@ -6,27 +6,17 @@
 #   python3 build-allocs.py --config chain-config.yaml \
 #       --contracts ../../bcos-l2-contracts --out allocs.ini
 
-# L2 chain id. Patched into SystemConfig's immutable `chainId` (runtime bytecode),
-# NOT a storage slot — see build-allocs.py / bcos-l2-contracts/README.md.
-chain_id: 901
-
-# SystemConfig slot 0 packing: l2BlockGasLimit (uint64, low 8 bytes) +
-# compatibilityVersion (uint32, next 4 bytes).
-l2_block_gas_limit: 30000000
-compatibility_version: 50397696  # 0x03_0a_00_00 == version 3.10.0
-
-# SystemConfig slot 1: featureFlags (uint256). 0 is omitted from the alloc
-# (an unset storage slot already reads 0).
-feature_flags: 0
-
-# SystemConfig slot 2: owner (address). The governance owner of SystemConfig.
-system_config_owner: "0x0000000000000000000000000000000000000000"
+# This tool emits one [alloc.N] per predeploy: deployed bytecode, empty storage.
+# SystemConfig storage is NOT seeded here — `feature_flags` is injected by the
+# C++ genesis path (Ledger), which alone knows the version-gated feature set;
+# the remaining SystemConfig config entries (owner, chain_id, gas/version) are a
+# follow-up PR. Only the predeploy list is needed below.
 
 # Predeploys: SystemConfig + L2ValidatorSet (self-written, src/) and the 11
 # vendored OP fork entry-point contracts (vendor/op-fork/). Canonical OP-Stack
 # predeploy addresses are fixed by the protocol.
 predeploys:
-  # --- FISCO-BCOS self-written predeploys (chainId/storage seeded) ---
+  # --- FISCO-BCOS self-written predeploys ---
   - name: SystemConfig
     address: "0x42000000000000000000000000000000000000C0"
     sol_file: SystemConfig.sol

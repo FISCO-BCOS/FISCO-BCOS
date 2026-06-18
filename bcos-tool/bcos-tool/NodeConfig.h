@@ -322,8 +322,7 @@ private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
-    // A6.5: L2 chain mode + genesis alloc parsing
-    void loadChainMode(boost::property_tree::ptree const& _genesisConfig);
+    // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
     void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
     void validateL2Invariants();
 

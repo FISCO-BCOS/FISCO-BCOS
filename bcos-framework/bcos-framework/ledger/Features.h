@@ -2,6 +2,7 @@
 #include "../protocol/Protocol.h"
 #include "../storage2/Storage.h"
 #include "bcos-task/Task.h"
+#include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <array>
 #include <bitset>
@@ -152,6 +153,23 @@ public:
                    auto flag = magic_enum::enum_value<Flag>(index);
                    return magic_enum::enum_name(flag);
                });
+    }
+
+    // Pack the enabled flags into a 256-bit number: bit i is set iff the i-th
+    // Flag in declaration order (magic_enum index) is enabled. Append-only —
+    // never reorder or remove flags, or the bit meaning shifts for existing
+    // chains. Consumed by L2 genesis to seed SystemConfig's feature_flags entry.
+    u256 toFlagsNumber() const
+    {
+        u256 result = 0;
+        for (size_t i = 0; i < m_flags.size(); ++i)
+        {
+            if (m_flags[i])
+            {
+                result |= (u256(1) << i);
+            }
+        }
+        return result;
     }
 
     // Storage I/O member templates. Definitions live in FeaturesStorage.h,

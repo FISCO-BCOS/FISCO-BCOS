@@ -198,23 +198,9 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
 
-    // === A6.5: L2 chain mode + genesis allocs ===
-    loadChainMode(_genesisConfig);
+    // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
     loadAllocs(_genesisConfig);
     validateL2Invariants();
-}
-
-void NodeConfig::loadChainMode(boost::property_tree::ptree const& _genesisConfig)
-{
-    auto mode = _genesisConfig.get<std::string>("chain.chain_mode", "pbft");
-    if (mode != "pbft" && mode != "l2")
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidConfig() << errinfo_comment(
-                "invalid [chain].chain_mode: '" + mode + "'; must be 'pbft' or 'l2'"));
-    }
-    m_genesisConfig.m_chainMode = mode;
-    NodeConfig_LOG(INFO) << LOG_DESC("loadChainMode") << LOG_KV("chainMode", mode);
 }
 
 void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
@@ -291,16 +277,24 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
 void NodeConfig::validateL2Invariants()
 {
     auto const& genesis = m_genesisConfig;
-    if (genesis.m_chainMode == "l2" && genesis.m_allocs.empty())
+    // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
+    // there is no separate chain_mode. allocs and the flag must agree.
+    bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_l2_ethereum_compat &&
+                   featureSet.enable > 0;
+        });
+    if (l2Enabled && genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "L2 chain_mode requires non-empty [alloc.*] section in "
-                                  "config.genesis"));
+                                  "feature_l2_ethereum_compat requires a non-empty [alloc.*] "
+                                  "section in config.genesis"));
     }
-    if (genesis.m_chainMode == "pbft" && !genesis.m_allocs.empty())
+    if (!l2Enabled && !genesis.m_allocs.empty())
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "pbft chain_mode does not support [alloc.*] section"));
+                                  "[alloc.*] section requires feature_l2_ethereum_compat enabled "
+                                  "in [features]"));
     }
 }
 

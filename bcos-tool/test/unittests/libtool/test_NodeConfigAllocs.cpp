@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file test_NodeConfigAllocs.cpp
- * @brief [chain].chain_mode + [alloc.N] / [alloc.N.storage] parsing (A6.5)
+ * @brief [alloc.N] / [alloc.N.storage] parsing gated by feature_l2_ethereum_compat (A6.5)
  */
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-tool/Exceptions.h>
@@ -43,69 +43,67 @@ std::shared_ptr<NodeConfig> makeNodeConfig()
     return std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
 }
 
-// loadGenesisConfig -> loadLedgerConfig requires a non-empty sealer list and a
-// KeyFactory to build node ids; chain_mode/allocs run after that, so the base
-// config must carry one node line for the parse to reach the A6.5 code.
-constexpr auto kBasePbft =
+// loadGenesisConfig -> loadLedgerConfig needs a non-empty sealer list and a
+// KeyFactory to build node ids; allocs/invariant checks run after that, so the
+// base config must carry one node line. There is no [chain].chain_mode anymore —
+// L2 mode is signalled by feature_l2_ethereum_compat in [features], so L2 cases
+// append kFeatureL2.
+constexpr auto kBase =
     "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
     "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
     "node.0=0102030405060708090a0b0c0d0e0f1011121314:1\n"
     "[version]\ncompatibility_version=3.10.0\n"
     "[tx]\ngas_limit=300000000\n"
     "[executor]\nis_wasm=0\nis_auth_check=1\nauth_admin_account=0x0\n";
+
+constexpr auto kFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
+
+constexpr auto kAlloc0 =
+    "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+    "balance=0\nnonce=0\ncode=0x6080604052\n";
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(NodeConfigAllocsTest)
 
-BOOST_AUTO_TEST_CASE(ChainModePbftDefault)
+BOOST_AUTO_TEST_CASE(DefaultNoFeatureNoAllocs)
 {
     auto cfg = makeNodeConfig();
-    cfg->loadGenesisConfig(parseIni(kBasePbft));
-    BOOST_CHECK_EQUAL(cfg->genesisConfig().m_chainMode, "pbft");
+    cfg->loadGenesisConfig(parseIni(kBase));
     BOOST_CHECK(cfg->genesisConfig().m_allocs.empty());
 }
 
-BOOST_AUTO_TEST_CASE(ChainModeL2Parsed)
+BOOST_AUTO_TEST_CASE(FeatureL2WithAllocsParsed)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
-    cfg->loadGenesisConfig(parseIni(ini));
-    BOOST_CHECK_EQUAL(cfg->genesisConfig().m_chainMode, "l2");
+    cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2 + kAlloc0));
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs.size(), 1U);
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].address,
         "0x42000000000000000000000000000000000000c0");  // forced lowercase
     BOOST_CHECK_EQUAL(cfg->genesisConfig().m_allocs[0].code, "0x6080604052");
 }
 
-BOOST_AUTO_TEST_CASE(L2ModeRejectsEmptyAllocs)
+BOOST_AUTO_TEST_CASE(FeatureL2RejectsEmptyAllocs)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(std::string(kBase) + kFeatureL2)),
+        bcos::tool::InvalidConfig);
 }
 
-BOOST_AUTO_TEST_CASE(InvalidChainModeRejected)
+BOOST_AUTO_TEST_CASE(AllocsWithoutFeatureRejected)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=bogus\n");
+    // allocs present but feature_l2_ethereum_compat not enabled -> reject
     auto cfg = makeNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
+    BOOST_CHECK_THROW(
+        cfg->loadGenesisConfig(parseIni(std::string(kBase) + kAlloc0)), bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n"
-        "[alloc.0.storage]\n"
-        "0x0000000000000000000000000000000000000000000000000000000000000000=0x01\n";
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "balance=0\nnonce=0\ncode=0x6080604052\n"
+                      "[alloc.0.storage]\n"
+                      "0x0000000000000000000000000000000000000000000000000000000000000000=0x01\n";
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(parseIni(ini));
     auto const& allocs = cfg->genesisConfig().m_allocs;
@@ -116,22 +114,11 @@ BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
     BOOST_CHECK_EQUAL(allocs[0].storage[0].second, "0x01");
 }
 
-BOOST_AUTO_TEST_CASE(PbftModeRejectsAllocs)
-{
-    std::string ini = kBasePbft;
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n";
-    auto cfg = makeNodeConfig();
-    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
-}
-
 BOOST_AUTO_TEST_CASE(MissingAddressNamesSection)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
     // no address key -> boost ptree throws; the wrap must name [alloc.0].
-    ini += "[alloc.0]\nbalance=0\nnonce=0\ncode=0x6080604052\n";
+    std::string ini =
+        std::string(kBase) + kFeatureL2 + "[alloc.0]\nbalance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
         [](bcos::tool::InvalidConfig const& e) {
@@ -142,49 +129,41 @@ BOOST_AUTO_TEST_CASE(MissingAddressNamesSection)
 
 BOOST_AUTO_TEST_CASE(NonHexAddressRejected)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
-    ini +=
-        "[alloc.0]\naddress=0xZZ000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n";
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0xZZ000000000000000000000000000000000000C0\n"
+                      "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(BadBalanceNamesSection)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=garbage\nnonce=0\ncode=0x6080604052\n";
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "balance=garbage\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(DuplicateAddressRejected)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
     // same address, different case -> lowercased dedup must reject.
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n"
-        "[alloc.1]\naddress=0x42000000000000000000000000000000000000c0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n";
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "balance=0\nnonce=0\ncode=0x6080604052\n"
+                      "[alloc.1]\naddress=0x42000000000000000000000000000000000000c0\n"
+                      "balance=0\nnonce=0\ncode=0x6080604052\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }
 
 BOOST_AUTO_TEST_CASE(BadStorageKeyRejected)
 {
-    std::string ini = kBasePbft;
-    ini.replace(ini.find("group_id=g\n"), 11, "group_id=g\nchain_mode=l2\n");
     // storage key is not 64 hex chars -> reject.
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n"
-        "[alloc.0.storage]\n0x01=0x01\n";
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "balance=0\nnonce=0\ncode=0x6080604052\n"
+                      "[alloc.0.storage]\n0x01=0x01\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }
