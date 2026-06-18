@@ -71,6 +71,13 @@ void LeaderElection::stop()
 
 std::pair<bool, int64_t> LeaderElection::grantLease()
 {
+    // FIB-175: leasegrant().get() blocks until etcd answers. A stalled or
+    // unreachable etcd would otherwise wedge the campaign thread (and the
+    // campaign timer callback that drives it) indefinitely. The client is armed
+    // with a grpc timeout (set_grpc_timeout in the constructor), so etcd-cpp-apiv3
+    // bounds this blocking get() on its completion-queue wait and returns a
+    // not-ok response once the deadline elapses; callers (campaignLeader) already
+    // fall back to backup + restart the timer on a non-ok result.
     auto response = m_etcdClient->leasegrant(m_config->leaseTTL()).get();
     if (!response.is_ok())
     {
