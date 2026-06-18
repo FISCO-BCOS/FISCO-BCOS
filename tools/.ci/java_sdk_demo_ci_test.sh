@@ -114,9 +114,8 @@ config_console()
     rm -rf dist
     # use 0.6 solc
     ${sed_cmd} "s/org.fisco-bcos:solcJ:0.8.11.1/org.fisco-bcos:solcJ:0.6.10.1/g" build.gradle
-    if [ "${SKIP_BUILD}" != "true" ]; then
-        bash gradlew ass
-    fi
+    # solc 版本不同，必须重新 assemble（不能跳过）
+    bash gradlew ass
     git reset --hard # modify back
 
     cp -r ${node_path}/sdk/* ./dist/conf/
@@ -155,9 +154,8 @@ config_java_sdk_demo()
     fi
 
     rm -rf dist
-    if [ "${SKIP_BUILD}" != "true" ]; then
-        bash gradlew ass
-    fi
+    # 必须重新 assemble（dist/ 已清除）
+    bash gradlew ass
 
     cp -r ${node_path}/sdk/* ./dist/conf/
     cp ./dist/conf/config-example.toml ./dist/conf/config.toml
