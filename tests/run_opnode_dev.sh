@@ -115,85 +115,115 @@ CHAIN_ID_HEX=$(curl -s -X POST "${RPC_URL}" \
     -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('result','0x0'))" 2>/dev/null || echo "0x0")
-echo "  Chain ID: ${CHAIN_ID_HEX}"
+CHAIN_ID_DEC=$(python3 -c "h='${CHAIN_ID_HEX}'; print(int(h,16) if h.startswith('0x') else 0)")
+echo "  Chain ID: ${CHAIN_ID_HEX} (${CHAIN_ID_DEC})"
+
+# Get L1 genesis block hash (required by op-node v1.19.0+; empty/zero hash rejected)
+GENESIS_RESP=$(curl -s -X POST "${RPC_URL}" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["0x0",false]}')
+L1_GENESIS_HASH=$(echo "${GENESIS_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+b=d.get('result',{})
+h=b.get('hash','')
+if not h or h == '0x' + '0'*64:
+    h='0x' + 'ab'*32
+print(h)
+" 2>/dev/null || echo "0x$(printf 'ab%.0s' $(seq 1 32))")
+L1_GENESIS_NUMBER=$(echo "${GENESIS_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+b=d.get('result',{})
+n=b.get('number','0x0')
+print(int(n,16) if isinstance(n,str) and n.startswith('0x') else 0)
+" 2>/dev/null || echo "0")
+echo "  L1 Genesis Hash: ${L1_GENESIS_HASH}"
+echo "  L1 Genesis Number: ${L1_GENESIS_NUMBER}"
 
 # ---- Step 4: Generate rollup config ----
 echo "[4/5] Generating rollup config..."
 
 ROLLUP_CONFIG="${SCRIPT_DIR}/rollup.json"
-# Create a minimal rollup.json for testing (OP Stack bedrock config)
-cat > "${ROLLUP_CONFIG}" << ROLLUP_EOF
-{
-  "genesis": {
-    "l1": {
-      "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "number": 0
+# Generate via python3 to use actual genesis hash and chain IDs
+python3 -c "
+import json
+cfg = {
+  'genesis': {
+    'l1': {
+      'hash': '${L1_GENESIS_HASH}',
+      'number': ${L1_GENESIS_NUMBER}
     },
-    "l2": {
-      "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "number": 0
+    'l2': {
+      'hash': '${L1_GENESIS_HASH}',
+      'number': 0
     },
-    "l2_time": 0,
-    "system_config": {
-      "batcherAddr": "0x0000000000000000000000000000000000000001",
-      "overhead": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "scalar": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "gasLimit": 30000000,
-      "operatorFeeScalar": 0,
-      "operatorFeeConstant": 0
+    'l2_time': 0,
+    'system_config': {
+      'batcherAddr': '0x0000000000000000000000000000000000000001',
+      'overhead': '0x0000000000000000000000000000000000000000000000000000000000000000',
+      'scalar': '0x0000000000000000000000000000000000000000000000000000000000000000',
+      'gasLimit': 30000000,
+      'operatorFeeScalar': 0,
+      'operatorFeeConstant': 0
     }
   },
-  "block_time": 2,
-  "max_sequencer_drift": 600,
-  "seq_window_size": 3600,
-  "channel_timeout": 300,
-  "l1_chain_id": 0,
-  "l2_chain_id": 0,
-  "regolith_time": 0,
-  "canyon_time": 0,
-  "delta_time": 0,
-  "ecotone_time": 0,
-  "fjord_time": 0,
-  "granite_time": 0,
-  "holocene_time": 0,
-  "batch_inbox_address": "0x0000000000000000000000000000000000000000",
-  "deposit_contract_address": "0x0000000000000000000000000000000000000000",
-  "l1_system_config_address": "0x0000000000000000000000000000000000000000",
-  "protocol_versions_address": "0x0000000000000000000000000000000000000000"
+  'block_time': 2,
+  'max_sequencer_drift': 600,
+  'seq_window_size': 3600,
+  'channel_timeout': 300,
+  'l1_chain_id': ${CHAIN_ID_DEC},
+  'l2_chain_id': ${CHAIN_ID_DEC},
+  'regolith_time': 0,
+  'canyon_time': 0,
+  'delta_time': 0,
+  'ecotone_time': 0,
+  'fjord_time': 0,
+  'granite_time': 0,
+  'holocene_time': 0,
+  'batch_inbox_address': '0x0000000000000000000000000000000000000000',
+  'deposit_contract_address': '0x0000000000000000000000000000000000000000',
+  'l1_system_config_address': '0x0000000000000000000000000000000000000000',
+  'protocol_versions_address': '0x0000000000000000000000000000000000000000'
 }
-ROLLUP_EOF
+with open('${ROLLUP_CONFIG}', 'w') as f:
+    json.dump(cfg, f, indent=2)
+"
 echo "  Rollup config written to ${ROLLUP_CONFIG}"
 
 # ---- Step 4b: Generate L1 chain config ----
 echo "[4b/5] Generating L1 chain config..."
 
 L1_CHAIN_CONFIG="${SCRIPT_DIR}/l1_chain_config.json"
-cat > "${L1_CHAIN_CONFIG}" << 'L1CHAIN_EOF'
-{
-  "config": {
-    "chainId": 0,
-    "homesteadBlock": 0,
-    "eip150Block": 0,
-    "eip155Block": 0,
-    "eip158Block": 0,
-    "byzantiumBlock": 0,
-    "constantinopleBlock": 0,
-    "petersburgBlock": 0,
-    "istanbulBlock": 0,
-    "berlinBlock": 0,
-    "londonBlock": 0,
-    "mergeNetsplitBlock": 0,
-    "shanghaiTime": 0,
-    "cancunTime": 0,
-    "pragueTime": 0,
-    "terminalTotalDifficulty": 0,
-    "optimism": {
-      "eip1559Elasticity": 6,
-      "eip1559Denominator": 50
+python3 -c "
+import json
+cfg = {
+  'config': {
+    'chainId': ${CHAIN_ID_DEC},
+    'homesteadBlock': 0,
+    'eip150Block': 0,
+    'eip155Block': 0,
+    'eip158Block': 0,
+    'byzantiumBlock': 0,
+    'constantinopleBlock': 0,
+    'petersburgBlock': 0,
+    'istanbulBlock': 0,
+    'berlinBlock': 0,
+    'londonBlock': 0,
+    'mergeNetsplitBlock': 0,
+    'shanghaiTime': 0,
+    'cancunTime': 0,
+    'pragueTime': 0,
+    'terminalTotalDifficulty': 0,
+    'optimism': {
+      'eip1559Elasticity': 6,
+      'eip1559Denominator': 50
     }
   }
 }
-L1CHAIN_EOF
+with open('${L1_CHAIN_CONFIG}', 'w') as f:
+    json.dump(cfg, f, indent=2)
+"
 echo "  L1 chain config written to ${L1_CHAIN_CONFIG}"
 
 # ---- Step 5: Run op-node ----
