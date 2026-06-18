@@ -184,9 +184,13 @@ void Worker::notify()
         // Cancel any pending timer and immediately trigger one worker cycle
         // via handleTimerTick, which already contains executeWorker(),
         // exception handling, FIB-111 backoff, and scheduleNext().
-        // Must run on the io_context thread; dispatch() runs synchronously
-        // if we are already on it, otherwise posts.
-        boost::asio::dispatch(m_ioContext, [this]() {
+        // Use post() instead of dispatch() to avoid re-entrant execution
+        // of executeWorker() when notify() is called from within a Timer
+        // callback on the io_context thread (e.g. onTimeout() ->
+        // broadcastViewChangeReq() -> onReceivePBFTMessage() -> notify()).
+        // dispatch() would run handleTimerTick synchronously, causing
+        // nested PBFT message processing that breaks consensus ordering.
+        boost::asio::post(m_ioContext, [this]() {
             if (m_workerState == WorkerState::Started)
             {
                 m_timer.cancel();
