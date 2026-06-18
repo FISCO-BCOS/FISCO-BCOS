@@ -33,10 +33,11 @@
 void usage(void)
 {
     printf("Desc: rpc methods call test\n");
-    printf("Usage: rpc <host> <port> <ssl type> <group_id> [thread_count]\n");
+    printf("Usage: rpc <host> <port> <ssl type> <group_id> [thread_count] [loop_count]\n");
     printf("Example:\n");
     printf("   ./rpc 127.0.0.1 20200 ssl group0\n");
     printf("   ./rpc 127.0.0.1 20200 sm_ssl group0 50\n");
+    printf("   ./rpc 127.0.0.1 20200 sm_ssl group0 50 1000\n");
     exit(0);
 }
 struct bcos_sdk_c_endpoint
@@ -108,9 +109,10 @@ static std::shared_ptr<bcos::boostssl::ws::WsConfig> initWsConfig(
     }
     return wsConfig;
 }
-void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg)
+void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg, long long loop_count)
 {
-    while (1)
+    long long iter = 0;
+    while (loop_count <= 0 || iter++ < loop_count)
     {
         auto factory = std::make_shared<bcos::cppsdk::SdkFactory>();
         auto wsConfig = initWsConfig(arg);
@@ -174,12 +176,24 @@ int main(int argc, char** argv)
     {
         threadCount = 100;
     }
+    // optional loop_count: <= 0 or invalid means infinite loop (backward compatible)
+    long long loopCount = -1;
+    if (argc > 6)
+    {
+        loopCount = atoll(argv[6]);
+        if (loopCount <= 0)
+        {
+            printf(" \t # loopCount invalid (%lld), fallback to infinite loop\n", loopCount);
+            loopCount = -1;
+        }
+    }
     printf(" [RPC] params ===>>>> \n");
     printf(" \t # host: %s\n", host);
     printf(" \t # port: %d\n", port);
     printf(" \t # type: %s\n", type);
     printf(" \t # group: %s\n", group);
     printf(" \t # threadCount: %d\n", threadCount);
+    printf(" \t # loopCount: %lld (<=0 means infinite)\n", loopCount);
     int is_sm_ssl = 1;
     char const* pos = strstr(type, "sm_ssl");
     if (pos == NULL)
@@ -194,7 +208,7 @@ int main(int argc, char** argv)
     for (t = 0; t < threadCount; t++)
     {
         printf("In main: creating thread %ld\n", t);
-        threads[t] = std::thread(thread_function, config);
+        threads[t] = std::thread(thread_function, config, loopCount);
         //        rc = pthread_create(&threads[t], NULL, thread_function);
         //        if (rc)
         //        {

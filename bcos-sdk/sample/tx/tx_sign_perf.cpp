@@ -125,10 +125,11 @@ const char* getBinary(int _sm)
 void usage()
 {
     printf("Desc: create signed transaction[HelloWorld set] perf test\n");
-    printf("Usage: tx_sign_perf isSM txCount\n");
+    printf("Usage: tx_sign_perf isSM txCount [group_id] [chain_id]\n");
     printf("Example:\n");
     printf("    ./tx_sign_perf true 30000\n");
     printf("    ./tx_sign_perf false 30000\n");
+    printf("    ./tx_sign_perf true 30000 group1 chain1\n");
     exit(0);
 }
 
@@ -142,13 +143,17 @@ int main(int argc, char** argv)
     bool smCrypto = (std::string(argv[1]) == "true");
     uint32_t txCount = std::stoul(argv[2]);
 
+    std::string groupIdStr = (argc > 3) ? argv[3] : "group0";
+    std::string chainIdStr = (argc > 4) ? argv[4] : "chain0";
+
     if (txCount < 10)
     {
         printf("Error: txCount must be at least 10, got %u\n", txCount);
         exit(1);
     }
 
-    printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u\n", smCrypto, txCount);
+    printf("[Create Signed Tx Perf Test] ===>>>> smCrypto: %d, txCount: %u, group: %s, chain: %s\n",
+        smCrypto, txCount, groupIdStr.c_str(), chainIdStr.c_str());
 
     auto keyPairBuilder = std::make_shared<bcos::cppsdk::utilities::KeyPairBuilder>();
     auto keyPair =
@@ -159,8 +164,8 @@ int main(int argc, char** argv)
     auto code = *bcos::fromHexString(getBinary(smCrypto ? 1 : 0));
 
     int64_t block_limit = 111111;
-    const char* group_id = "group0";
-    const char* chain_id = "chain0";
+    const char* group_id = groupIdStr.c_str();
+    const char* chain_id = chainIdStr.c_str();
 
     std::string txHash = "";
     uint32_t i = 0;

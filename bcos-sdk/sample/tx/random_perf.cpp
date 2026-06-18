@@ -43,7 +43,22 @@ int main(int argc, char** argv)
         usage();
     }
 
-    long long count = std::stoul(argv[1]);
+    long long count = 0;
+    try
+    {
+        count = std::stol(argv[1]);
+    }
+    catch (const std::exception&)
+    {
+        printf("Error: count must be a valid integer, got '%s'\n", argv[1]);
+        exit(1);
+    }
+
+    if (count <= 0)
+    {
+        printf("Error: count must be a positive integer >= 10, got %lld\n", count);
+        exit(1);
+    }
 
     if (count < 10)
     {

@@ -58,12 +58,31 @@ struct StatData
     std::atomic<int64_t> lastFailedData{0};
     std::atomic<int64_t> lastSucData{0};
 
+    // per-period latency statistics, reset together with last* counters
+    std::atomic<int64_t> lastLatencySumUs{0};
+    std::atomic<int64_t> lastLatencyMaxUs{0};
+    std::atomic<int64_t> lastLatencyCount{0};
+
     void resetLast()
     {
         lastFailedC = 0;
         lastSucC = 0;
         lastFailedData = 0;
         lastSucData = 0;
+        lastLatencySumUs = 0;
+        lastLatencyMaxUs = 0;
+        lastLatencyCount = 0;
+    }
+
+    void updateLatency(int64_t _latencyUs)
+    {
+        lastLatencySumUs += _latencyUs;
+        lastLatencyCount++;
+        int64_t oldMax = lastLatencyMaxUs.load();
+        while (_latencyUs > oldMax && !lastLatencyMaxUs.compare_exchange_weak(oldMax, _latencyUs))
+        {
+            // oldMax refreshed by CAS failure, loop retries
+        }
     }
 
     void update(int64_t _data, bool _suc)
@@ -152,14 +171,8 @@ int main(int argc, char** argv)
 
                 bool result = rateLimiter->tryAcquire(acquire);
 
-                // auto end = utcTimeUs();
-                // if (end - start >= 500)
-                // {
-                //     std::cerr << " [distributed ratelimiter][timeout]"
-                //               << LOG_KV("tid", std::this_thread::get_id())
-                //               << LOG_KV("acquire", acquire) << LOG_KV("result", result)
-                //               << LOG_KV("elapsedUS", (end - start)) << std::endl;
-                // }
+                auto end = utcTimeUs();
+                stateData.updateLatency(end - start);
 
                 // state suc
                 stateData.update(acquire, result);
@@ -187,8 +200,13 @@ int main(int argc, char** argv)
             std::this_thread::sleep_for(std::chrono::seconds(rateInterval));
 
             // stat report
+            int64_t latencyCnt = stateData.lastLatencyCount.load();
+            int64_t avgLatencyUs =
+                (latencyCnt > 0) ? (stateData.lastLatencySumUs.load() / latencyCnt) : 0;
             std::cerr << " [distributed ratelimiter][stat]" << LOG_DESC(" stat -> ")
                       << LOG_KV("interval", rateInterval)
+                      << LOG_KV("avgLatencyUs", avgLatencyUs)
+                      << LOG_KV("maxLatencyUs", stateData.lastLatencyMaxUs.load())
                       << LOG_KV("totalSucC", stateData.totalSucC)
                       << LOG_KV("totalFailedC", stateData.totalFailedC)
                       << LOG_KV("totalSucData", stateData.totalSucData)
