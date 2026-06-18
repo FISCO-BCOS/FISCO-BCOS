@@ -15,9 +15,9 @@
  * threads it should allow to run simultaneously.") (since ethereum use 2, we
  * modify io_service from 1 to 2) 2.
  */
+#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/ASIOInterface.h"
 #include "bcos-gateway/libnetwork/Common.h"
-#include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
 #include <boost/algorithm/string.hpp>
@@ -375,12 +375,93 @@ void Host::handshakeServer(const boost::system::error_code& error,
  * @param _s : connected socket(used to init session object)
  */
 // TODO: asyncConnect pass handle to startPeerSession, make use of it
+// FIB-184: reserve a session slot under the global and per-IP caps. Returns false when either
+// cap is reached; the caller must then close the socket without creating a session.
+bool Host::tryAcquireSessionSlot(std::string const& _address)
+{
+    std::lock_guard<std::mutex> lock(x_sessionCountPerIP);
+    if (m_sessionCount.load(std::memory_order_relaxed) >= m_maxConcurrentSessions)
+    {
+        return false;
+    }
+    auto& perIP = m_sessionCountPerIP[_address];
+    if (perIP >= m_maxSessionsPerIP)
+    {
+        return false;
+    }
+    ++perIP;
+    m_sessionCount.fetch_add(1, std::memory_order_relaxed);
+    return true;
+}
+
+// FIB-184: release a previously reserved slot. Runs from the session lifetime guard's
+// destructor, i.e. exactly once when the session object is destroyed.
+void Host::releaseSessionSlot(std::string const& _address)
+{
+    std::lock_guard<std::mutex> lock(x_sessionCountPerIP);
+    auto it = m_sessionCountPerIP.find(_address);
+    if (it != m_sessionCountPerIP.end())
+    {
+        if (it->second > 0 && --(it->second) == 0)
+        {
+            m_sessionCountPerIP.erase(it);
+        }
+    }
+    if (m_sessionCount.load(std::memory_order_relaxed) > 0)
+    {
+        m_sessionCount.fetch_sub(1, std::memory_order_relaxed);
+    }
+}
+
+namespace
+{
+// FIB-184: RAII guard bound to a session's lifetime. Constructed after a slot is acquired and
+// attached to the session via setLifetimeGuard(); its destructor (running in ~Session) releases
+// the slot. Held via weak_ptr so a Host destroyed before the session does not crash the guard.
+struct SessionSlotGuard
+{
+    std::weak_ptr<Host> host;
+    std::string address;
+    SessionSlotGuard(std::weak_ptr<Host> _host, std::string _address)
+      : host(std::move(_host)), address(std::move(_address))
+    {}
+    SessionSlotGuard(const SessionSlotGuard&) = delete;
+    SessionSlotGuard& operator=(const SessionSlotGuard&) = delete;
+    ~SessionSlotGuard()
+    {
+        if (auto h = host.lock())
+        {
+            h->releaseSessionSlot(address);
+        }
+    }
+};
+}  // namespace
+
 void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
     std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = weak_from_this();
+
+    // FIB-184: enforce the concurrent-session and per-IP caps before creating the session.
+    // Past the limit, close the socket and drop the connection so an authenticated peer cannot
+    // exhaust memory by churning TLS connections.
+    std::string remoteAddress = socket->nodeIPEndpoint().address();
+    if (!tryAcquireSessionSlot(remoteAddress))
+    {
+        HOST_LOG(WARNING) << LOG_BADGE("startPeerSession")
+                          << LOG_DESC("session cap reached, reject connection")
+                          << LOG_KV("address", remoteAddress)
+                          << LOG_KV("sessionCount", m_sessionCount.load())
+                          << LOG_KV("maxConcurrentSessions", m_maxConcurrentSessions)
+                          << LOG_KV("maxSessionsPerIP", m_maxSessionsPerIP);
+        socket->close();
+        return;
+    }
+
     std::shared_ptr<SessionFace> session =
         m_sessionFactory->createSession(*this, socket, m_messageFactory, m_sessionCallbackManager);
+    // Bind a slot-release guard to the session; the slot is freed when the session is destroyed.
+    session->setLifetimeGuard(std::make_shared<SessionSlotGuard>(weakHost, remoteAddress));
 
     m_taskArena.execute([&]() {
         m_asyncGroup.run([weakHost, session = std::move(session), p2pInfo]() {

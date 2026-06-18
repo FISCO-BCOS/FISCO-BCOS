@@ -38,6 +38,14 @@ int main(int argc, const char* argv[])
 {
     /// set LC_ALL
     setDefaultOrCLocale();
+    // TODO(FIB-184): this terminate handler is the abort amplifier for the log-sink half of
+    // FIB-184. Under TLS connect/close churn an exception is rethrown inside the boost
+    // asynchronous_sink (BoostLogInitializer::sink_t) on the dedicated log thread; being
+    // uncaught there it reaches std::terminate -> abort() here and crashes the node. The real
+    // fix wraps the async sink's formatter/consumer in bcos-utilities/BoostLogInitializer.cpp so
+    // it can never propagate an uncaught exception. That file is outside this change's scope
+    // (gateway/pbft/air only); do NOT "fix" this by swallowing exceptions in the terminate
+    // handler, which would hide unrelated crashes. Tracked for a follow-up bcos-utilities PR.
     std::set_terminate([]() {
         std::cerr << "terminate handler called, print stacks" << std::endl;
         void* trace_elems[50];
