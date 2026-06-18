@@ -3,7 +3,7 @@ console_branch="master"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
-node_list="node0"
+node_list="node0 node1"
 expanded_node="node3"
 check_web3_test="false"
 # 导出环境变量给子脚本使用：SKIP_BUILD=跳过下载构建，RUN_DMC=运行DMC转账测试
@@ -76,7 +76,7 @@ init()
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -l "127.0.0.1:2" -e ${fisco_bcos_path} "${sm_option}"
     # enable web3_rpc on node0 config.ini
     perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node0/config.ini
     cd nodes/127.0.0.1 && wait_and_start
@@ -89,7 +89,7 @@ init_baseline()
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -l "127.0.0.1:2" -e ${fisco_bcos_path} "${sm_option}"
 
     # 启用executor v1
     # Enable executor v1
@@ -129,7 +129,7 @@ expand_node()
         for node in ${node_list}
         do
             count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* 2>/dev/null | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
-            if [ "${count}" == "1" ]; then
+            if [ "${count}" == "2" ]; then
                 flag='true'
                 break 2
             fi
@@ -142,6 +142,30 @@ expand_node()
     else
       LOG_ERROR "check expand node status error after ${waited}s..."
     fi
+}
+
+# 检查节点是否已达成共识（出块），测试前健康检查
+check_consensus()
+{
+    cd ${current_path}/nodes/127.0.0.1
+    LOG_INFO "=== wait for the node to reach consensus, waitTime: 20s ====="
+    sleep 20
+    LOG_INFO "=== wait for the node to reach consensus finish ====="
+    for node in ${node_list}
+    do
+        LOG_INFO "check_consensus for ${node}"
+        result=$(cat ${node}/log/* 2>/dev/null | grep -i reachN)
+        if [[ -z "${result}" ]]; then
+            LOG_ERROR "checkView failed ******* cons info for ${node} *******"
+            cat ${node}/log/* 2>/dev/null | grep -i cons
+            LOG_ERROR "checkView failed ******* print log info for ${node} finish *******"
+            cd ${current_path}
+            exit_node "check_consensus for ${node} failed for not reachNewView"
+        else
+            LOG_INFO "check_consensus for ${node} success"
+        fi
+    done
+    cd ${current_path}
 }
 
 clear_node()
@@ -248,6 +272,7 @@ LOG_INFO "======== check non-sm case ========"
 export RUN_DMC="true"
 init ""
 expand_node ""
+check_consensus
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"
@@ -276,6 +301,7 @@ clear_node
 LOG_INFO "======== check sm case ========"
 export RUN_DMC="false"
 init "-s"
+check_consensus
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"
@@ -303,6 +329,7 @@ clear_node
 LOG_INFO "======== check baseline cases ========"
 export RUN_DMC="false"
 init_baseline ""
+check_consensus
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
     echo "console_integrationTest error"
