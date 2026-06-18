@@ -351,10 +351,13 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                             }
                             catch (...)
                             {
-                                TXPOOL_LOG(WARNING) << LOG_DESC(
-                                                           "pre-store storeVerifiedBlock threw "
-                                                           "unknown exception")
-                                                    << LOG_KV("blockHash", blockHash.abridged());
+                                TXPOOL_LOG(WARNING)
+                                    << LOG_DESC(
+                                           "pre-store storeVerifiedBlock threw "
+                                           "unknown exception")
+                                    << LOG_KV("blockHash", blockHash.abridged())
+                                    << LOG_KV("msg",
+                                           boost::current_exception_diagnostic_information());
                             }
                             txpool->releasePreStoreSlot(blockHash);
                         });

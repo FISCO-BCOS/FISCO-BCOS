@@ -1179,11 +1179,9 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
         BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync verify archived block failed")
                            << LOG_KV("number", topBlockNumber)
                            << LOG_KV("transactionRoot", toHex(transactionRoot))
-                           << LOG_KV(
-                                  "localTransactionRoot", toHex(localBlockHeader->txsRoot()))
+                           << LOG_KV("localTransactionRoot", toHex(localBlockHeader->txsRoot()))
                            << LOG_KV("receiptRoot", toHex(receiptRoot))
-                           << LOG_KV("localReceiptRoot",
-                                  toHex(localBlockHeader->receiptsRoot()))
+                           << LOG_KV("localReceiptRoot", toHex(localBlockHeader->receiptsRoot()))
                            << LOG_KV("reason", "transactionRoot or receiptRoot not match");
         WriteGuard lock(x_archivedBlockQueue);
         m_archivedBlockQueue.pop();
@@ -1205,7 +1203,7 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         WriteGuard lock(x_archivedBlockQueue);
         for (auto topNumber = m_archivedBlockQueue.top()->blockHeader()->number();
-            topNumber >= topBlockNumber;)
+             topNumber >= topBlockNumber;)
         {
             m_archivedBlockQueue.pop();
             if (!m_archivedBlockQueue.empty())

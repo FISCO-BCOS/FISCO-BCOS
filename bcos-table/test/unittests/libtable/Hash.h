@@ -24,32 +24,38 @@
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <functional>
 
-namespace std
+namespace bcos::storage
 {
-inline ostream& operator<<(ostream& os, const std::optional<bcos::storage::Entry>& entry)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Entry>& entry)
 {
     os << entry.has_value();
     return os;
 }
 
-inline ostream& operator<<(ostream& os, const std::optional<bcos::storage::Table>& table)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Table>& table)
 {
     os << table.has_value();
     return os;
 }
+}  // namespace bcos::storage
 
-inline ostream& operator<<(ostream& os, const std::unique_ptr<bcos::Error>& error)
+namespace bcos
+{
+inline std::ostream& operator<<(std::ostream& os, const std::unique_ptr<Error>& error)
 {
     os << error->what();
     return os;
 }
+}  // namespace bcos
 
-inline ostream& operator<<(ostream& os, const std::tuple<std::string, bcos::crypto::HashType>& pair)
+namespace bcos::crypto
+{
+inline std::ostream& operator<<(std::ostream& os, const std::tuple<std::string, HashType>& pair)
 {
     os << std::get<0>(pair) << " " << std::get<1>(pair).hex();
     return os;
 }
-}  // namespace std
+}  // namespace bcos::crypto
 
 namespace bcos
 {

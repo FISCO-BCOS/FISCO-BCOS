@@ -47,6 +47,12 @@ void Worker::startWorking()
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
     }
+    catch (...)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker initWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::current_exception_diagnostic_information());
+    }
 
     // scheduleNext() mutates m_timer (expires_after / async_wait), which
     // must only happen on the io_context thread.  Post it there so that
@@ -85,6 +91,12 @@ void Worker::stopWorking()
         BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker finishWorker")
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+    catch (...)
+    {
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker finishWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::current_exception_diagnostic_information());
     }
 }
 
@@ -133,6 +145,13 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
         BCOS_LOG(WARNING) << LOG_DESC("Exception in Worker executeWorker")
                           << LOG_KV("threadName", m_threadName)
                           << LOG_KV("msg", boost::diagnostic_information(e));
+    }
+    catch (...)
+    {
+        hasException = true;
+        BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in Worker executeWorker")
+                          << LOG_KV("threadName", m_threadName)
+                          << LOG_KV("msg", boost::current_exception_diagnostic_information());
     }
     // FIB-111: backoff after exceptions to prevent tight CPU spin
     if (hasException && m_idleWaitMs == 0)
