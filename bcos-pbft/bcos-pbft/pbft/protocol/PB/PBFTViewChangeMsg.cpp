@@ -29,7 +29,8 @@ using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 PBFTViewChangeMsg::PBFTViewChangeMsg(std::shared_ptr<RawViewChangeMessage> _rawViewChange)
-  : PBFTBaseMessage(std::shared_ptr<BaseMessage>(_rawViewChange->mutable_message()))
+  : PBFTBaseMessage(std::shared_ptr<BaseMessage>(
+        _rawViewChange, _rawViewChange->mutable_message()))
 {
     m_packetType = PacketType::ViewChangePacket;
     m_preparedProposalList = std::make_shared<PBFTMessageList>();
@@ -44,8 +45,22 @@ bytesPointer PBFTViewChangeMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) 
 
 void PBFTViewChangeMsg::decode(bytesConstRef _data)
 {
+    // Release the arena's ownership of the old BaseMessage (set via
+    // set_allocated_message in the default ctor or from a previous decode)
+    // before parsing new data.  This prevents the arena and m_baseMessage
+    // from dual-owning the same object.
+    m_rawViewChange->unsafe_arena_release_message();
+
     decodePBObject(m_rawViewChange, _data);
-    setBaseMessage(std::shared_ptr<BaseMessage>(m_rawViewChange->mutable_message()));
+
+    // Use an aliasing shared_ptr: m_baseMessage points to the arena-allocated
+    // sub-message, but shares ownership with m_rawViewChange.  When the
+    // shared_ptr is destroyed it does NOT call delete (the arena owns the
+    // memory), avoiding the double-free that a non-aliasing shared_ptr would
+    // cause.
+    setBaseMessage(std::shared_ptr<BaseMessage>(
+        m_rawViewChange, m_rawViewChange->mutable_message()));
+
     PBFTViewChangeMsg::deserializeToObject();
     m_packetType = PacketType::ViewChangePacket;
 }
@@ -96,12 +111,15 @@ void PBFTViewChangeMsg::deserializeToObject()
     validateRepeatedSize(
         m_rawViewChange->preparedproposals(), MAX_PBFT_REPEATED_FIELD_SIZE, "preparedProposals");
 
-    std::shared_ptr<PBFTRawProposal> rawCommittedProposal(
-        m_rawViewChange->mutable_committedproposal());
+    // Use aliasing shared_ptrs: sub-messages live in m_rawViewChange's arena,
+    // so we share ownership with m_rawViewChange.
+    auto* committedRawPtr = m_rawViewChange->mutable_committedproposal();
+    std::shared_ptr<PBFTRawProposal> rawCommittedProposal(m_rawViewChange, committedRawPtr);
     m_committedProposal = std::make_shared<PBFTProposal>(rawCommittedProposal);
     for (int i = 0; i < m_rawViewChange->preparedproposals_size(); i++)
     {
-        std::shared_ptr<PBFTRawMessage> preparedMsg(m_rawViewChange->mutable_preparedproposals(i));
+        auto* rawPtr = m_rawViewChange->mutable_preparedproposals(i);
+        std::shared_ptr<PBFTRawMessage> preparedMsg(m_rawViewChange, rawPtr);
         m_preparedProposalList->push_back(std::make_shared<PBFTMessage>(preparedMsg));
     }
 }
