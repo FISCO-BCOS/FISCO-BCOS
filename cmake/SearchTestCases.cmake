@@ -55,7 +55,7 @@ function(config_test_cases TEST_ARGS SOURCES TEST_BINARY_PATH EXCLUDE_SUITES WOR
                         set(TestName ${TestSuitePathFixed})
                         set(TestArgs -t ${TestSuitePathFixed} -- ${_TestArgs})
                         add_test(NAME ${TestName} WORKING_DIRECTORY ${_WORKING_DIRECTORY} COMMAND ${TEST_BINARY_PATH} ${TestArgs})
-                        set_tests_properties(${TestName} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:detect_container_overflow=0")
+                        set_tests_properties(${TestName} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
                     endif()
                 endif()
             elseif(test MATCHES "^CASE .*")
@@ -72,7 +72,7 @@ function(config_test_cases TEST_ARGS SOURCES TEST_BINARY_PATH EXCLUDE_SUITES WOR
                         set(TestName "${TestSuitePathFixed}/${TestCase}")
                         set(TestArgs -t ${TestSuitePathFixed}/${TestCase} -- ${_TestArgs})
                         add_test(NAME ${TestName} WORKING_DIRECTORY ${_WORKING_DIRECTORY} COMMAND ${TEST_BINARY_PATH} ${TestArgs})
-                        set_tests_properties(${TestName} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0:detect_container_overflow=0")
+                        set_tests_properties(${TestName} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
                     endif()
                 endif()
             elseif (";${test_raw};" MATCHES "BOOST_AUTO_TEST_SUITE_END()")
@@ -86,4 +86,31 @@ function(config_test_cases TEST_ARGS SOURCES TEST_BINARY_PATH EXCLUDE_SUITES WOR
             endif()
         endforeach(test_raw)
     endforeach(file)
+endfunction()
+
+# ---------------------------------------------------------------------------
+# disable_container_overflow_for_tests
+#
+# Protobuf v5.29.x ABSL_ANNOTATE_CONTIGUOUS_CONTAINER leaves stale ASAN
+# container-overflow markers on RepeatedFields when ParseFromArray is
+# called on an object that already has a sub-message (e.g. from a prior
+# decode or from mutable_proposal()).  The annotation false-positive is
+# harmless in production but trips `detect_container_overflow`.
+#
+# This function appends `:detect_container_overflow=0` to ASAN_OPTIONS
+# for each test whose name appears in the supplied list, leaving other
+# tests at the default `detect_leaks=0`.
+# ---------------------------------------------------------------------------
+function(disable_container_overflow_for_tests)
+    foreach(_test_name ${ARGV})
+        if(TEST ${_test_name})
+            get_test_property(${_test_name} ENVIRONMENT _prev_env)
+            if(_prev_env STREQUAL "NOTFOUND" OR _prev_env STREQUAL "")
+                set(_new_env "ASAN_OPTIONS=detect_leaks=0:detect_container_overflow=0")
+            else()
+                set(_new_env "${_prev_env}:detect_container_overflow=0")
+            endif()
+            set_tests_properties(${_test_name} PROPERTIES ENVIRONMENT "${_new_env}")
+        endif()
+    endforeach()
 endfunction()
