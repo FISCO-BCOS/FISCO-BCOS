@@ -73,10 +73,6 @@ void Worker::stopWorking()
         return;  // Not running, or another thread is already stopping
     }
 
-    // The CAS above already changed m_workerState to Stopped, which
-    // causes in-flight handlers (handleTimerTick, scheduleNext) to
-    // bail out at their workerState checks.
-
     // Cancel the timer.  If we are already on the io_context thread we
     // can mutate m_timer directly; otherwise we post the cancel and
     // synchronize on its completion via a promise/future barrier.  We
@@ -148,13 +144,9 @@ void Worker::scheduleNext()
 
 void Worker::handleTimerTick(boost::system::error_code const& ec)
 {
-    if (ec == boost::asio::error::operation_aborted)
+    if (ec == boost::asio::error::operation_aborted || m_workerState != WorkerState::Started)
     {
         return;  // Timer was cancelled
-    }
-    if (m_workerState != WorkerState::Started)
-    {
-        return;
     }
     bool hasException = false;
     try
@@ -204,7 +196,6 @@ void Worker::notify()
         boost::asio::post(m_ioContext, [this]() {
             if (m_workerState == WorkerState::Started)
             {
-                m_timer.cancel();
                 handleTimerTick(boost::system::error_code());
             }
         });
