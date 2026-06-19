@@ -43,7 +43,9 @@ using namespace bcos::crypto;
 using namespace bcos::protocol;
 
 PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext)
-  : ConsensusEngine(_ioContext, "pbft", 20), m_config(_config), m_ledgerConfig(std::make_shared<LedgerConfig>())
+  : ConsensusEngine(_ioContext, "pbft", 20),
+    m_config(_config),
+    m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
@@ -635,9 +637,7 @@ void PBFTEngine::executeWorker()
     }
     // handle the PBFT message(here will wait when the msgQueue is empty)
     std::shared_ptr<PBFTBaseMessageInterface> messageResult;
-    m_msgQueue.try_pop(messageResult);
-    auto empty = m_msgQueue.empty();
-    if (messageResult)
+    if (m_msgQueue.try_pop(messageResult))
     {
         const auto& pbftMsg = messageResult;
         auto packetType = pbftMsg->packetType();
