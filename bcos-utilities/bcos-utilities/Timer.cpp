@@ -20,9 +20,9 @@
  */
 #include "Timer.h"
 #include "BoostLog.h"
-#include "Common.h"
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
+#include <boost/exception/diagnostic_information.hpp>
 #include <chrono>
 #include <future>
 

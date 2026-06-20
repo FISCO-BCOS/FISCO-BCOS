@@ -27,6 +27,29 @@
 
 using namespace bcos;
 
+Worker::~Worker()
+{
+    stopWorking();
+    // stopWorking() may return early when m_workerState is already
+    // Stopped (e.g. Sealer::stop() called stopWorking() before the
+    // destructor).  In that case pending [this]-capturing handlers
+    // (operation_aborted from cancel, notify() posts) may still be
+    // queued in the io_context.  Post a drain barrier and wait so
+    // that all such handlers are processed before *this is freed.
+    if (!m_ioContext.stopped() && !m_ioContext.get_executor().running_in_this_thread())
+    {
+        auto drainPromise = std::make_shared<std::promise<void>>();
+        auto drainFuture = drainPromise->get_future();
+        boost::asio::post(m_ioContext, [drainPromise]() { drainPromise->set_value(); });
+        auto drainStatus = drainFuture.wait_for(std::chrono::seconds(5));
+        if (drainStatus != std::future_status::ready)
+        {
+            BCOS_LOG(ERROR) << LOG_DESC("Worker::~Worker() timed out waiting for handler drain")
+                            << LOG_KV("threadName", m_threadName);
+        }
+    }
+}
+
 void Worker::startWorking()
 {
     WorkerState expected = WorkerState::Stopped;
@@ -74,43 +97,17 @@ void Worker::stopWorking()
     }
 
     // Cancel the timer.  If we are already on the io_context thread we
-    // can mutate m_timer directly; otherwise we post the cancel and
-    // synchronize on its completion via a promise/future barrier.  We
-    // cannot stop the io_context because it is shared with other users.
+    // can mutate m_timer directly; otherwise we post the cancel.
+    // No need to wait — ~Worker() drains all [this]-capturing handlers
+    // before the object can be freed, and any timer tick that fires
+    // between now and the cancel will early-return on !Started.
     if (m_ioContext.get_executor().running_in_this_thread())
     {
-        // On the io_context thread — cancel is safe to call directly.
         m_timer.cancel();
     }
     else
     {
-        // Not on the io_context thread — post cancel + barrier and wait.
-        auto syncPromise = std::make_shared<std::promise<void>>();
-        auto syncFuture = syncPromise->get_future();
-        boost::asio::post(m_ioContext, [this, syncPromise = std::move(syncPromise)]() {
-            m_timer.cancel();
-            syncPromise->set_value();
-        });
-
-        // Block until the io_context thread has processed our cancel,
-        // but bound the wait to avoid a hard hang when the io_context
-        // is no longer being serviced (e.g. teardown ordering bug).
-        //
-        // Note: the cancellation itself is synchronous, but
-        // boost::asio::steady_timer::cancel() queues an
-        // operation_aborted completion that runs *after* set_value().
-        // That one handler may escape this barrier.  It is safe because
-        // handleTimerTick() early-returns on operation_aborted before
-        // touching any member.
-        auto status = syncFuture.wait_for(std::chrono::seconds(5));
-        if (status != std::future_status::ready)
-        {
-            BCOS_LOG(ERROR)
-                << LOG_DESC(
-                       "Worker::stopWorking() timed out waiting for io_context to process "
-                       "cancel")
-                << LOG_KV("threadName", m_threadName);
-        }
+        boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
     }
 
     try

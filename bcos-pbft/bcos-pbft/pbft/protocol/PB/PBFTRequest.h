@@ -19,8 +19,8 @@
  * @date 2021-04-28
  */
 #pragma once
-#include "bcos-pbft/pbft/interfaces/PBFTRequestInterface.h"
 #include "PBFTBaseMessage.h"
+#include "bcos-pbft/pbft/interfaces/PBFTRequestInterface.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
 #include <bcos-protocol/Common.h>
 
@@ -55,16 +55,11 @@ public:
 
     void decode(bytesConstRef _data) override
     {
-        // Release the arena's ownership of the old BaseMessage (set via
-        // set_allocated_message in the default ctor) before parsing new data.
-        m_pbRequest->unsafe_arena_release_message();
-
         bcos::protocol::decodePBObject(m_pbRequest, _data);
 
         // Use an aliasing shared_ptr to avoid dual-ownership between the arena
         // and m_baseMessage.
-        setBaseMessage(std::shared_ptr<BaseMessage>(
-            m_pbRequest, m_pbRequest->mutable_message()));
+        setBaseMessage(std::shared_ptr<BaseMessage>(m_pbRequest, m_pbRequest->mutable_message()));
 
         PBFTBaseMessage::deserializeToObject();
     }

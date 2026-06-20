@@ -42,7 +42,7 @@ protected:
         m_threadName(std::move(_threadName)),
         m_idleWaitMs(_idleWaitMs)
     {}
-    virtual ~Worker() { stopWorking(); }
+    virtual ~Worker();
 
     /**
      * @brief Set thread name for the worker
