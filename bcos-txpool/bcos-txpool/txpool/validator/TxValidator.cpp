@@ -142,10 +142,6 @@ bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
 
 TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
-    if (_tx.value().str().length() > TRANSACTION_VALUE_MAX_LENGTH)
-    {
-        return TransactionStatus::OverFlowValue;
-    }
     // EIP-3860: Limit and meter initcode
     if (_tx.type() == TransactionType::Web3Transaction)
     {

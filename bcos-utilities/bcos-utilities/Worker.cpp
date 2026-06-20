@@ -16,13 +16,36 @@
  * @file Worker.cpp
  */
 #include "Worker.h"
-
 #include "BoostLog.h"
+#include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <exception>
+#include <future>
 
 using namespace bcos;
+
+Worker::~Worker()
+{
+    stopWorking();
+
+    // Drain barrier: flush all pending [this] handlers that were posted to
+    // the io_context before the object is destroyed.  We post a no-op lambda
+    // (no `this` capture) and wait for it to run; once it executes all
+    // previously-queued handlers that captured raw `this` have been drained.
+    //
+    // Skip the barrier when the io_context has already been stopped (no
+    // thread is processing its queue) or when the destructor is called from
+    // the io_context thread itself (would deadlock).
+    auto executor = m_ioContext.get_executor();
+    if (!m_ioContext.stopped() && !executor.running_in_this_thread())
+    {
+        std::promise<void> drainPromise;
+        auto drainFuture = drainPromise.get_future();
+        boost::asio::post(m_ioContext, [&drainPromise]() { drainPromise.set_value(); });
+        drainFuture.wait_for(std::chrono::seconds(60));
+    }
+}
 
 void Worker::startWorking()
 {
@@ -31,10 +54,6 @@ void Worker::startWorking()
     {
         return;  // Already running, or lost the race
     }
-
-    // Reset the alive flag so that async handlers from a previous stop
-    // cycle don't prematurely bail out of a restarted worker.
-    *m_aliveFlag = true;
 
     // initWorker() is safe to call synchronously — subclasses only log.
     try
@@ -74,13 +93,12 @@ void Worker::stopWorking()
     }
 
     // Signal all in-flight handlers to bail out before accessing `this`.
-    // The CAS above already changed m_workerState to Stopped, and
-    // m_aliveFlag=false makes every captured handler return immediately.
-    *m_aliveFlag = false;
+    // The CAS above already changed m_workerState to Stopped and the drain
+    // barrier in ~Worker() ensures all [this] handlers are flushed.
 
     // Route cancel through the io_context thread so that it doesn't race
     // with handleTimerTick / scheduleNext executing on the io_context.
-    boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
+    boost::asio::dispatch(m_ioContext, [this]() { m_timer.cancel(); });
 
     try
     {
@@ -108,24 +126,11 @@ void Worker::scheduleNext()
     }
 
     m_timer.expires_after(boost::asio::chrono::milliseconds(m_idleWaitMs));
-    auto aliveFlag = m_aliveFlag;
-    m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
-        if (!*aliveFlag)
-        {
-            return;
-        }
-        handleTimerTick(ec);
-    });
+    m_timer.async_wait([this](boost::system::error_code const& ec) { handleTimerTick(ec); });
 }
 
 void Worker::handleTimerTick(boost::system::error_code const& ec)
 {
-    // aliveFlag check is performed by the wrapping lambda in scheduleNext()
-    // and the backoff path below; kept here for defense-in-depth.
-    if (!*m_aliveFlag)
-    {
-        return;
-    }
     if (ec == boost::asio::error::operation_aborted)
     {
         return;  // Timer was cancelled
@@ -158,14 +163,7 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
     {
         // Use a small backoff to avoid busy-looping on persistent exceptions
         m_timer.expires_after(boost::asio::chrono::milliseconds(10));
-        auto aliveFlag = m_aliveFlag;
-        m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
-            if (!*aliveFlag)
-            {
-                return;
-            }
-            handleTimerTick(ec);
-        });
+        m_timer.async_wait([this](boost::system::error_code const& ec) { handleTimerTick(ec); });
     }
     else
     {
