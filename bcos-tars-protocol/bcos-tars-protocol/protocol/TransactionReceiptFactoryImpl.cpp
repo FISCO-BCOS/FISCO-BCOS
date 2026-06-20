@@ -66,7 +66,7 @@ bcostars::protocol::TransactionReceiptImpl::Ptr
 bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt2(bcos::u256 const& gasUsed,
     std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
     int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
-    std::string effectiveGasPrice, bcos::protocol::TransactionVersion version, bool withHash) const
+    bcos::u256 effectiveGasPrice, bcos::protocol::TransactionVersion version, bool withHash) const
 {
     auto transactionReceipt = std::make_shared<TransactionReceiptImpl>(
         [m_receipt = bcostars::TransactionReceipt()]() mutable { return &m_receipt; });
@@ -78,7 +78,7 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt2(bcos::u256 con
     data.data.output.assign(output.begin(), output.end());
     transactionReceipt->setLogEntries(logEntries);
     data.data.blockNumber = blockNumber;
-    data.data.effectiveGasPrice = std::move(effectiveGasPrice);
+    data.data.effectiveGasPrice = effectiveGasPrice.str();
 
     // Update the hash field
     bcos::concepts::hash::calculate(data, m_hashImpl->hasher(), data.dataHash);

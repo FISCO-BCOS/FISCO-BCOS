@@ -142,7 +142,7 @@ bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
 
 TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
-    if (_tx.value().length() > TRANSACTION_VALUE_MAX_LENGTH)
+    if (_tx.value().str().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
         return TransactionStatus::OverFlowValue;
     }
@@ -246,7 +246,7 @@ task::Task<TransactionStatus> TxValidator::validateBalance(
             }
         }
 
-        auto txValue = u256(_tx.value());
+        auto txValue = _tx.value();
         if (auto totalRequired = txValue + gasCost;
             balanceValue < totalRequired || balanceValue == 0)
         {

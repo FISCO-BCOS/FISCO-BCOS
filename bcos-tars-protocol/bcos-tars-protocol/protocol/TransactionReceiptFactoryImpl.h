@@ -48,7 +48,7 @@ public:
     TransactionReceiptImpl::Ptr createReceipt2(bcos::u256 const& gasUsed,
         std::string contractAddress, const std::vector<bcos::protocol::LogEntry>& logEntries,
         int32_t status, bcos::bytesConstRef output, bcos::protocol::BlockNumber blockNumber,
-        std::string effectiveGasPrice = "1",
+        bcos::u256 effectiveGasPrice = bcos::u256(1),
         bcos::protocol::TransactionVersion version = bcos::protocol::TransactionVersion::V1_VERSION,
         bool withHash = true) const override;
 

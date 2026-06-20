@@ -231,11 +231,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     jResp["extraData"] = std::string(transaction.extraData());
     if (transaction.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-        jResp["value"] = std::string(transaction.value());
-        jResp["gasPrice"] = std::string(transaction.gasPrice());
+        jResp["value"] = transaction.value().str();
+        jResp["gasPrice"] = transaction.gasPrice().str();
         jResp["gasLimit"] = transaction.gasLimit();
-        jResp["maxFeePerGas"] = std::string(transaction.maxFeePerGas());
-        jResp["maxPriorityFeePerGas"] = std::string(transaction.maxPriorityFeePerGas());
+        jResp["maxFeePerGas"] = transaction.maxFeePerGas().str();
+        jResp["maxPriorityFeePerGas"] = transaction.maxPriorityFeePerGas().str();
     }
     if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
@@ -330,7 +330,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     }
     if (transactionReceipt.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-        jResp["effectiveGasPrice"] = std::string(transactionReceipt.effectiveGasPrice());
+        jResp["effectiveGasPrice"] = transactionReceipt.effectiveGasPrice().str();
     }
 }
 

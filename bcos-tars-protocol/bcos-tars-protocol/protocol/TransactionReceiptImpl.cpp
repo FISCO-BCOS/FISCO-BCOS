@@ -117,13 +117,17 @@ bcos::protocol::BlockNumber bcostars::protocol::TransactionReceiptImpl::blockNum
 {
     return m_inner()->data.blockNumber;
 }
-std::string_view bcostars::protocol::TransactionReceiptImpl::effectiveGasPrice() const
+bcos::u256 bcostars::protocol::TransactionReceiptImpl::effectiveGasPrice() const
 {
-    return m_inner()->data.effectiveGasPrice;
+    if (m_inner()->data.effectiveGasPrice.empty())
+    {
+        return bcos::u256(0);
+    }
+    return bcos::u256(m_inner()->data.effectiveGasPrice);
 }
-void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(std::string effectiveGasPrice)
+void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(bcos::u256 effectiveGasPrice)
 {
-    m_inner()->data.effectiveGasPrice = std::move(effectiveGasPrice);
+    m_inner()->data.effectiveGasPrice = effectiveGasPrice.str();
 }
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {
@@ -197,13 +201,17 @@ void bcostars::protocol::TransactionReceiptImpl::setTransactionIndex(size_t inde
 {
     m_inner()->transactionIndex = index;
 }
-std::string_view bcostars::protocol::TransactionReceiptImpl::cumulativeGasUsed() const
+bcos::u256 bcostars::protocol::TransactionReceiptImpl::cumulativeGasUsed() const
 {
-    return m_inner()->cumulativeGasUsed;
+    if (m_inner()->cumulativeGasUsed.empty())
+    {
+        return bcos::u256(0);
+    }
+    return bcos::u256(m_inner()->cumulativeGasUsed);
 }
-void bcostars::protocol::TransactionReceiptImpl::setCumulativeGasUsed(std::string cumulativeGasUsed)
+void bcostars::protocol::TransactionReceiptImpl::setCumulativeGasUsed(bcos::u256 cumulativeGasUsed)
 {
-    m_inner()->cumulativeGasUsed = std::move(cumulativeGasUsed);
+    m_inner()->cumulativeGasUsed = cumulativeGasUsed.str();
 }
 bcos::bytesConstRef bcostars::protocol::TransactionReceiptImpl::logsBloom() const
 {

@@ -49,8 +49,8 @@ public:
     virtual gsl::span<const LogEntry> logEntries() const = 0;
     virtual LogEntries takeLogEntries() = 0;
     virtual protocol::BlockNumber blockNumber() const = 0;
-    virtual std::string_view effectiveGasPrice() const = 0;
-    virtual void setEffectiveGasPrice(std::string effectiveGasPrice) = 0;
+    virtual u256 effectiveGasPrice() const = 0;
+    virtual void setEffectiveGasPrice(u256 effectiveGasPrice) = 0;
 
     // additional information on transaction execution, no need to be involved in the hash
     // calculation
@@ -59,8 +59,8 @@ public:
     virtual size_t size() const = 0;
 
     // Fields after block execution
-    virtual std::string_view cumulativeGasUsed() const = 0;
-    virtual void setCumulativeGasUsed(std::string cumulativeGasUsed) = 0;
+    virtual u256 cumulativeGasUsed() const = 0;
+    virtual void setCumulativeGasUsed(u256 cumulativeGasUsed) = 0;
     virtual bcos::bytesConstRef logsBloom() const = 0;
     virtual void setLogsBloom(bcos::bytesConstRef logsBloom) = 0;
     virtual size_t transactionIndex() const = 0;

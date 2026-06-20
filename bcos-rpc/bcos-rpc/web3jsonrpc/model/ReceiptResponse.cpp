@@ -17,7 +17,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     result["status"] = toQuantity(status);
     auto txHashHex = tx.hash().hexPrefixed();
     result["transactionHash"] = txHashHex;
-    auto cumulativeGasUsed = safeCastToU256(receipt.cumulativeGasUsed());
+    auto cumulativeGasUsed = receipt.cumulativeGasUsed();
     size_t logIndex = receipt.logIndex();
     auto transactionIndex = toQuantity(receipt.transactionIndex());
     result["transactionIndex"] = transactionIndex;
@@ -41,7 +41,7 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     }
     result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
     result["effectiveGasPrice"] =
-        receipt.effectiveGasPrice().empty() ? "0x0" : std::string(receipt.effectiveGasPrice());
+        receipt.effectiveGasPrice() == 0 ? std::string("0x0") : receipt.effectiveGasPrice().str();
     result["gasUsed"] = toQuantity(receipt.gasUsed());
     if (receipt.contractAddress().empty())
     {

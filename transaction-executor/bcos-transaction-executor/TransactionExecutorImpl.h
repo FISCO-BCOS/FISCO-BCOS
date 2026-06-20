@@ -78,7 +78,7 @@ public:
             Rollbackable<decltype(m_transientStorage)> m_rollbackableTransientStorage;
             bool m_call;
             int64_t m_gasUsed = 0;
-            std::string m_gasPriceStr;
+            u256 m_effectiveGasPrice;
 
             int64_t m_gasLimit;
             int64_t m_seq = 0;
@@ -224,7 +224,7 @@ public:
             }
 
             const auto maxGasCost = u256(m_data->m_gasLimit) * gasPrice;
-            const auto txValue = u256(m_data->m_transaction.get().value());
+            const auto txValue = m_data->m_transaction.get().value();
             const auto totalRequired = maxGasCost + txValue;
 
             auto& evmcMessage = m_data->m_hostContext.message();
@@ -263,7 +263,7 @@ public:
                     EVMCResult(failResult, protocol::TransactionStatus::NotEnoughCash));
                 // gasUsed reflects what was actually charged as penalty (in gas units).
                 m_data->m_gasUsed = (penalty / gasPrice).template convert_to<int64_t>();
-                m_data->m_gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+                m_data->m_effectiveGasPrice = gasPrice;
 
                 co_return false;
             }
@@ -271,7 +271,7 @@ public:
             // Pre-deduct max gas cost from sender
             co_await senderAccount.setBalance(senderBalance - maxGasCost);
             m_data->m_afterBuyGasSavepoint = m_data->m_rollbackableStorage.current();
-            m_data->m_gasPriceStr = "0x" + gasPrice.str(256, std::ios_base::hex);
+            m_data->m_effectiveGasPrice = gasPrice;
             co_return true;
         }
 
@@ -327,9 +327,7 @@ public:
                 if (auto gasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     gasPrice > 0)
                 {
-                    constexpr static const auto GAS_PRICE_DIGITS = 256;
-                    m_data->m_gasPriceStr =
-                        "0x" + gasPrice.str(GAS_PRICE_DIGITS, std::ios_base::hex);
+                    m_data->m_effectiveGasPrice = gasPrice;
 
                     auto balanceUsed = m_data->m_gasUsed * gasPrice;
                     auto senderAccount = getAccount(m_data->m_hostContext, evmcMessage.sender);
@@ -413,7 +411,7 @@ public:
                 receipt = m_data->m_executor.get().m_receiptFactory.get().createReceipt2(
                     m_data->m_gasUsed, std::move(newContractAddress), logEntries, receiptStatus,
                     {evmcResult.output_data, evmcResult.output_size},
-                    m_data->m_blockHeader.get().number(), std::move(m_data->m_gasPriceStr),
+                    m_data->m_blockHeader.get().number(), m_data->m_effectiveGasPrice,
                     transactionVersion);
                 break;
             default:

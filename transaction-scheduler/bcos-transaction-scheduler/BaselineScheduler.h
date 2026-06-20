@@ -184,7 +184,7 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
                 receipt->setLogsBloom({logBloom.data(), logBloom.size()});
                 logIndex += receipt->logEntries().size();
                 totalGasUsed += receipt->gasUsed();
-                receipt->setCumulativeGasUsed(totalGasUsed.str());
+                receipt->setCumulativeGasUsed(totalGasUsed);
 
                 block.appendReceipt(receipt);
             }

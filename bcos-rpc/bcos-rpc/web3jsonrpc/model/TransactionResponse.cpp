@@ -6,10 +6,10 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
 {
     combineTxResponse(result, tx, receipt.transactionIndex(), receipt.blockNumber(), blockHash);
     // TODO: Check
-    if (!receipt.effectiveGasPrice().empty())
+    if (receipt.effectiveGasPrice() > 0)
     {
         auto gasPrice = receipt.effectiveGasPrice();
-        result["gasPrice"] = std::string{gasPrice.empty() ? "0x0" : gasPrice};
+        result["gasPrice"] = gasPrice == 0 ? std::string("0x0") : gasPrice.str();
     }
 }
 
@@ -41,7 +41,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     auto gasPrice = tx.gasPrice();
 
     // FIXME)): return will case coredump in executor
-    result["gasPrice"] = std::string(gasPrice.empty() ? "0x0" : gasPrice);
+    result["gasPrice"] = gasPrice == 0 ? std::string("0x0") : gasPrice.str();
     result["hash"] = tx.hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx.input());
 
@@ -50,10 +50,10 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["type"] = toQuantity(0);
         // web3 tools do not compatible with too long hex
         result["nonce"] = "0x" + std::string(tx.nonce());
-        result["value"] = std::string(tx.value().empty() ? "0x0" : tx.value());
+        result["value"] = tx.value() == 0 ? std::string("0x0") : tx.value().str();
         result["maxPriorityFeePerGas"] =
-            std::string(tx.maxPriorityFeePerGas().empty() ? "0x0" : tx.maxPriorityFeePerGas());
-        result["maxFeePerGas"] = std::string(tx.maxFeePerGas().empty() ? "0x0" : tx.maxFeePerGas());
+            tx.maxPriorityFeePerGas() == 0 ? std::string("0x0") : tx.maxPriorityFeePerGas().str();
+        result["maxFeePerGas"] = tx.maxFeePerGas() == 0 ? std::string("0x0") : tx.maxFeePerGas().str();
         result["chainId"] = "0x0";
     }
     else [[likely]]

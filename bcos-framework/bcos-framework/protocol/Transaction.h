@@ -106,11 +106,11 @@ public:
     virtual std::string_view abi() const = 0;
 
     // balance
-    virtual std::string_view value() const = 0;
-    virtual std::string_view gasPrice() const = 0;
+    virtual u256 value() const = 0;
+    virtual u256 gasPrice() const = 0;
     virtual int64_t gasLimit() const = 0;
-    virtual std::string_view maxFeePerGas() const = 0;
-    virtual std::string_view maxPriorityFeePerGas() const = 0;
+    virtual u256 maxFeePerGas() const = 0;
+    virtual u256 maxPriorityFeePerGas() const = 0;
 
     // v2
     virtual bcos::bytesConstRef extension() const = 0;
@@ -202,26 +202,18 @@ private:
 // - Legacy / EIP-2930 web3 txs: value is written into the gasPrice field
 //   (see Web3Transaction::takeToTarsTransaction: gasPrice = maxPriorityFeePerGas for
 //   pre-EIP-1559 types)
-// - EIP-1559+ web3 txs: gasPrice field is empty, value is in maxFeePerGas
+// - EIP-1559+ web3 txs: gasPrice field is 0, value is in maxFeePerGas
 // Returns 0 when no parseable price is available.
 inline u256 effectiveGasPrice(Transaction const& tx)
 {
-    try
+    if (const auto price = tx.gasPrice(); price > 0)
     {
-        if (const auto price = tx.gasPrice(); !price.empty())
-        {
-            if (auto value = u256(price); value > 0)
-            {
-                return value;
-            }
-        }
-        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
-        {
-            return u256(mfg);
-        }
+        return price;
     }
-    catch (...)
-    {}
+    if (const auto mfg = tx.maxFeePerGas(); mfg > 0)
+    {
+        return mfg;
+    }
     return u256{0};
 }
 

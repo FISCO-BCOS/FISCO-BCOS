@@ -47,7 +47,7 @@ public:
         BlockNumber blockNumber) const = 0;
     virtual TransactionReceipt::Ptr createReceipt2(u256 const& gasUsed, std::string contractAddress,
         const std::vector<LogEntry>& logEntries, int32_t status, bcos::bytesConstRef output,
-        BlockNumber blockNumber, std::string effectiveGasPrice = "1",
+        BlockNumber blockNumber, u256 effectiveGasPrice = u256(1),
         TransactionVersion version = TransactionVersion::V1_VERSION,
         bool withHash = true) const = 0;
 };

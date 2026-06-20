@@ -123,14 +123,22 @@ std::string_view bcostars::protocol::TransactionImpl::abi() const
     return m_inner()->data.abi;
 }
 
-std::string_view bcostars::protocol::TransactionImpl::value() const
+bcos::u256 bcostars::protocol::TransactionImpl::value() const
 {
-    return m_inner()->data.value;
+    if (m_inner()->data.value.empty())
+    {
+        return bcos::u256(0);
+    }
+    return bcos::u256(m_inner()->data.value);
 }
 
-std::string_view bcostars::protocol::TransactionImpl::gasPrice() const
+bcos::u256 bcostars::protocol::TransactionImpl::gasPrice() const
 {
-    return m_inner()->data.gasPrice;
+    if (m_inner()->data.gasPrice.empty())
+    {
+        return bcos::u256(0);
+    }
+    return bcos::u256(m_inner()->data.gasPrice);
 }
 
 int64_t bcostars::protocol::TransactionImpl::gasLimit() const
@@ -138,14 +146,22 @@ int64_t bcostars::protocol::TransactionImpl::gasLimit() const
     return m_inner()->data.gasLimit;
 }
 
-std::string_view bcostars::protocol::TransactionImpl::maxFeePerGas() const
+bcos::u256 bcostars::protocol::TransactionImpl::maxFeePerGas() const
 {
-    return m_inner()->data.maxFeePerGas;
+    if (m_inner()->data.maxFeePerGas.empty())
+    {
+        return bcos::u256(0);
+    }
+    return bcos::u256(m_inner()->data.maxFeePerGas);
 }
 
-std::string_view bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
+bcos::u256 bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
 {
-    return m_inner()->data.maxPriorityFeePerGas;
+    if (m_inner()->data.maxPriorityFeePerGas.empty())
+    {
+        return bcos::u256(0);
+    }
+    return bcos::u256(m_inner()->data.maxPriorityFeePerGas);
 }
 
 bcos::bytesConstRef bcostars::protocol::TransactionImpl::extension() const
