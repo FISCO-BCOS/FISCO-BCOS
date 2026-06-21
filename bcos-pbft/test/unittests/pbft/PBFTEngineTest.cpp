@@ -280,6 +280,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
     while (!nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg) &&
            (utcTime() - startT <= 60 * 1000))
     {
+        nonLeaderFaker->pbftEngine()->executeWorker();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     BOOST_CHECK(nonLeaderFaker->pbftEngine()->cacheProcessor()->existPrePrepare(pbftMsg));
