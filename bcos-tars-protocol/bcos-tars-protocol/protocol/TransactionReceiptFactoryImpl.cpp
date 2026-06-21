@@ -78,7 +78,9 @@ bcostars::protocol::TransactionReceiptFactoryImpl::createReceipt2(bcos::u256 con
     data.data.output.assign(output.begin(), output.end());
     transactionReceipt->setLogEntries(logEntries);
     data.data.blockNumber = blockNumber;
-    data.data.effectiveGasPrice = effectiveGasPrice.str();
+    data.data.effectiveGasPrice =
+        effectiveGasPrice == 0 ? std::string{} :
+                                 "0x" + effectiveGasPrice.str(0, std::ios_base::hex);
 
     // Update the hash field
     bcos::concepts::hash::calculate(data, m_hashImpl->hasher(), data.dataHash);

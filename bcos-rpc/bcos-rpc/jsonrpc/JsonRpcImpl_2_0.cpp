@@ -231,11 +231,12 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     jResp["extraData"] = std::string(transaction.extraData());
     if (transaction.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-        jResp["value"] = transaction.value().str();
-        jResp["gasPrice"] = transaction.gasPrice().str();
+        jResp["value"] = "0x" + transaction.value().str(0, std::ios_base::hex);
+        jResp["gasPrice"] = "0x" + transaction.gasPrice().str(0, std::ios_base::hex);
         jResp["gasLimit"] = transaction.gasLimit();
-        jResp["maxFeePerGas"] = transaction.maxFeePerGas().str();
-        jResp["maxPriorityFeePerGas"] = transaction.maxPriorityFeePerGas().str();
+        jResp["maxFeePerGas"] = "0x" + transaction.maxFeePerGas().str(0, std::ios_base::hex);
+        jResp["maxPriorityFeePerGas"] =
+            "0x" + transaction.maxPriorityFeePerGas().str(0, std::ios_base::hex);
     }
     if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
@@ -252,17 +253,20 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
             bcos::bytesRef(const_cast<byte*>(transaction.extraTransactionBytes().data()),
                 transaction.extraTransactionBytes().size());
         codec::rlp::decodeFromPayload(extraBytesRef, web3Tx);
-        jResp["value"] = web3Tx.value.str();
+        jResp["value"] = "0x" + web3Tx.value.str(0, std::ios_base::hex);
         jResp["gasLimit"] = web3Tx.gasLimit;
         if (web3Tx.type >= TransactionType::EIP1559)
         {
-            jResp["maxPriorityFeePerGas"] = web3Tx.maxPriorityFeePerGas.str();
-            jResp["maxFeePerGas"] = web3Tx.maxFeePerGas.str();
+            jResp["maxPriorityFeePerGas"] =
+                "0x" + web3Tx.maxPriorityFeePerGas.str(0, std::ios_base::hex);
+            jResp["maxFeePerGas"] =
+                "0x" + web3Tx.maxFeePerGas.str(0, std::ios_base::hex);
             jResp["gasPrice"] = "0";
         }
         else
         {
-            jResp["gasPrice"] = web3Tx.maxPriorityFeePerGas.str();
+            jResp["gasPrice"] =
+                "0x" + web3Tx.maxPriorityFeePerGas.str(0, std::ios_base::hex);
         }
     }
 }
@@ -330,7 +334,8 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     }
     if (transactionReceipt.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-        jResp["effectiveGasPrice"] = transactionReceipt.effectiveGasPrice().str();
+        jResp["effectiveGasPrice"] =
+            "0x" + transactionReceipt.effectiveGasPrice().str(0, std::ios_base::hex);
     }
 }
 

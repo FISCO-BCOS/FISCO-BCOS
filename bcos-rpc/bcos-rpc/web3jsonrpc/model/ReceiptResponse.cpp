@@ -41,7 +41,9 @@ void bcos::rpc::combineReceiptResponse(Json::Value& result, protocol::Transactio
     }
     result["cumulativeGasUsed"] = toQuantity(cumulativeGasUsed);
     result["effectiveGasPrice"] =
-        receipt.effectiveGasPrice() == 0 ? std::string("0x0") : receipt.effectiveGasPrice().str();
+        receipt.effectiveGasPrice() == 0 ?
+            std::string("0x0") :
+            "0x" + receipt.effectiveGasPrice().str(0, std::ios_base::hex);
     result["gasUsed"] = toQuantity(receipt.gasUsed());
     if (receipt.contractAddress().empty())
     {

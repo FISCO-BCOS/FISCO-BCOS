@@ -9,7 +9,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     if (receipt.effectiveGasPrice() > 0)
     {
         auto gasPrice = receipt.effectiveGasPrice();
-        result["gasPrice"] = gasPrice == 0 ? std::string("0x0") : gasPrice.str();
+        result["gasPrice"] =
+            gasPrice == 0 ? std::string("0x0") : "0x" + gasPrice.str(0, std::ios_base::hex);
     }
 }
 
@@ -41,7 +42,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     auto gasPrice = tx.gasPrice();
 
     // FIXME)): return will case coredump in executor
-    result["gasPrice"] = gasPrice == 0 ? std::string("0x0") : gasPrice.str();
+    result["gasPrice"] =
+        gasPrice == 0 ? std::string("0x0") : "0x" + gasPrice.str(0, std::ios_base::hex);
     result["hash"] = tx.hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx.input());
 
@@ -50,10 +52,15 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["type"] = toQuantity(0);
         // web3 tools do not compatible with too long hex
         result["nonce"] = "0x" + std::string(tx.nonce());
-        result["value"] = tx.value() == 0 ? std::string("0x0") : tx.value().str();
+        result["value"] =
+            tx.value() == 0 ? std::string("0x0") : "0x" + tx.value().str(0, std::ios_base::hex);
         result["maxPriorityFeePerGas"] =
-            tx.maxPriorityFeePerGas() == 0 ? std::string("0x0") : tx.maxPriorityFeePerGas().str();
-        result["maxFeePerGas"] = tx.maxFeePerGas() == 0 ? std::string("0x0") : tx.maxFeePerGas().str();
+            tx.maxPriorityFeePerGas() == 0 ?
+                std::string("0x0") :
+                "0x" + tx.maxPriorityFeePerGas().str(0, std::ios_base::hex);
+        result["maxFeePerGas"] = tx.maxFeePerGas() == 0 ?
+                                      std::string("0x0") :
+                                      "0x" + tx.maxFeePerGas().str(0, std::ios_base::hex);
         result["chainId"] = "0x0";
     }
     else [[likely]]
@@ -91,7 +98,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["chainId"] = toQuantity(web3Tx.chainId.value_or(0));
         if (web3Tx.type >= TransactionType::EIP4844)
         {
-            result["maxFeePerBlobGas"] = web3Tx.maxFeePerBlobGas.str();
+            result["maxFeePerBlobGas"] =
+                "0x" + web3Tx.maxFeePerBlobGas.str(0, std::ios_base::hex);
             result["blobVersionedHashes"] = Json::arrayValue;
             result["blobVersionedHashes"].resize(web3Tx.blobVersionedHashes.size());
             for (const auto& blobVersionedHashe : web3Tx.blobVersionedHashes)
