@@ -133,7 +133,7 @@ void bcostars::protocol::TransactionReceiptImpl::setEffectiveGasPrice(bcos::u256
         return;
     }
     m_inner()->data.effectiveGasPrice =
-        "0x" + effectiveGasPrice.str(0, std::ios_base::hex);
+        "0x" + effectiveGasPrice.str(256, std::ios_base::hex);
 }
 const bcostars::TransactionReceipt& bcostars::protocol::TransactionReceiptImpl::inner() const
 {
@@ -217,13 +217,7 @@ bcos::u256 bcostars::protocol::TransactionReceiptImpl::cumulativeGasUsed() const
 }
 void bcostars::protocol::TransactionReceiptImpl::setCumulativeGasUsed(bcos::u256 cumulativeGasUsed)
 {
-    if (cumulativeGasUsed == 0)
-    {
-        m_inner()->cumulativeGasUsed.clear();
-        return;
-    }
-    m_inner()->cumulativeGasUsed =
-        "0x" + cumulativeGasUsed.str(0, std::ios_base::hex);
+    m_inner()->cumulativeGasUsed = cumulativeGasUsed.str();
 }
 bcos::bytesConstRef bcostars::protocol::TransactionReceiptImpl::logsBloom() const
 {

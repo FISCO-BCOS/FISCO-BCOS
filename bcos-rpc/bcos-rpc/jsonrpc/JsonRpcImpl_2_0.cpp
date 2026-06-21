@@ -335,7 +335,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     if (transactionReceipt.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
         jResp["effectiveGasPrice"] =
-            "0x" + transactionReceipt.effectiveGasPrice().str(0, std::ios_base::hex);
+            "0x" + transactionReceipt.effectiveGasPrice().str(256, std::ios_base::hex);
     }
 }
 

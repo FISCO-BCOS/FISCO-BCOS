@@ -127,7 +127,7 @@ bcos::u256 bcostars::protocol::TransactionImpl::value() const
 {
     if (m_inner()->data.value.empty())
     {
-        return bcos::u256(0);
+        return {};
     }
     return bcos::u256(m_inner()->data.value);
 }
@@ -136,7 +136,7 @@ bcos::u256 bcostars::protocol::TransactionImpl::gasPrice() const
 {
     if (m_inner()->data.gasPrice.empty())
     {
-        return bcos::u256(0);
+        return {};
     }
     return bcos::u256(m_inner()->data.gasPrice);
 }
@@ -150,7 +150,7 @@ bcos::u256 bcostars::protocol::TransactionImpl::maxFeePerGas() const
 {
     if (m_inner()->data.maxFeePerGas.empty())
     {
-        return bcos::u256(0);
+        return {};
     }
     return bcos::u256(m_inner()->data.maxFeePerGas);
 }
@@ -159,7 +159,7 @@ bcos::u256 bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
 {
     if (m_inner()->data.maxPriorityFeePerGas.empty())
     {
-        return bcos::u256(0);
+        return {};
     }
     return bcos::u256(m_inner()->data.maxPriorityFeePerGas);
 }
