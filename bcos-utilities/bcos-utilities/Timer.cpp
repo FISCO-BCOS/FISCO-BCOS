@@ -21,8 +21,8 @@
 #include "Timer.h"
 #include "BoostLog.h"
 #include <boost/asio/dispatch.hpp>
-#include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <cassert>
 #include <chrono>
 
 using namespace bcos;
@@ -42,43 +42,34 @@ void Timer::start()
         return;
     }
 
-    // startTimer() mutates m_timer (expires_after / async_wait), which
-    // must only happen on the io_context thread.
-    if (ioService().get_executor().running_in_this_thread())
-    {
-        // On the io_context thread — call synchronously so that
-        // exceptions propagate to the caller (preserving the pre-async
-        // behaviour for fatal-init scenarios).
-        startTimer();
-    }
-    else
-    {
-        // Not on the io_context thread — dispatch and log errors
-        // asynchronously.  Capture a weak_ptr so the handler safely
-        // bails out if the Timer is destroyed before the io_context
-        // processes this dispatch.
-        boost::asio::dispatch(ioService(), [weak = weak_from_this()]() {
-            auto self = weak.lock();
-            if (!self || !self->m_working)
-            {
-                return;
-            }
-            try
-            {
-                self->startTimer();
-            }
-            catch (std::exception const& e)
-            {
-                BCOS_LOG(WARNING) << LOG_DESC("startTimer exception")
-                                  << LOG_KV("threadName", self->m_threadName)
-                                  << LOG_KV("message", boost::diagnostic_information(e));
-            }
-        });
-    }
+    // Always dispatch to the io_context thread: runs synchronously if
+    // already on it, otherwise posts asynchronously.  Lifecycle is
+    // protected by weak_ptr.
+    boost::asio::dispatch(ioService(), [weak = weak_from_this()]() {
+        auto self = weak.lock();
+        if (!self || !self->m_working)
+        {
+            return;
+        }
+        try
+        {
+            self->startTimer();
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("startTimer exception")
+                              << LOG_KV("threadName", self->m_threadName)
+                              << LOG_KV("message", boost::diagnostic_information(e));
+        }
+    });
 }
 
 void Timer::startTimer()
 {
+    // Must only be called on the io_context thread (guaranteed by start()'s
+    // dispatch).
+    assert(ioService().get_executor().running_in_this_thread());
+
     if (bool running = false; !m_running.compare_exchange_strong(running, true))
     {
         return;
