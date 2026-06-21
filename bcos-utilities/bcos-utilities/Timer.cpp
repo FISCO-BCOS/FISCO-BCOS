@@ -24,7 +24,6 @@
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <chrono>
-#include <future>
 
 using namespace bcos;
 
@@ -123,37 +122,18 @@ void Timer::stop()
 
     if (bool running = true; m_running.compare_exchange_strong(running, false))
     {
-        // Cancel the timer.  If we are already on the io_context thread we
-        // can mutate m_timer directly; otherwise we post the cancel and
-        // synchronize on its completion via a promise/future barrier with
-        // a bounded wait to avoid a hard hang if the io_context is not
-        // being serviced (e.g. during unordered teardown).
-        if (ioService().get_executor().running_in_this_thread())
-        {
-            // On the io_context thread — cancel is safe to call directly.
-            m_timer.cancel();
-        }
-        else
-        {
-            // Not on the io_context thread — post cancel + barrier and wait.
-            auto syncPromise = std::make_shared<std::promise<void>>();
-            auto syncFuture = syncPromise->get_future();
-            boost::asio::post(ioService(), [this, syncPromise = std::move(syncPromise)]() {
-                m_timer.cancel();
-                syncPromise->set_value();
-            });
-
-            // Block until the io_context thread has processed our cancel,
-            // but bound the wait to avoid a hard hang when the io_context
-            // is no longer being serviced (e.g. teardown ordering bug).
-            auto status = syncFuture.wait_for(std::chrono::seconds(5));
-            if (status != std::future_status::ready)
+        // Always dispatch to the io_context thread: runs synchronously if
+        // already on it, otherwise posts asynchronously.  Lifecycle is
+        // protected by weak_ptr in both the dispatch lambda and the
+        // async_wait handler in startTimer().
+        boost::asio::dispatch(ioService(), [weak = weak_from_this()]() {
+            auto self = weak.lock();
+            if (!self)
             {
-                BCOS_LOG(ERROR)
-                    << LOG_DESC("Timer::stop() timed out waiting for io_context to process cancel")
-                    << LOG_KV("threadName", m_threadName);
+                return;
             }
-        }
+            self->m_timer.cancel();
+        });
     }
 }
 
