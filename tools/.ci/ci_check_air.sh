@@ -3,7 +3,7 @@ console_branch="master"
 fisco_bcos_path="../build/fisco-bcos-air/fisco-bcos"
 build_chain_path="BcosAirBuilder/build_chain.sh"
 current_path=`pwd`
-node_list="node0 node1"
+node_list="node0"
 expanded_node="node3"
 check_web3_test="false"
 # 导出环境变量给子脚本使用：SKIP_BUILD=跳过下载构建，RUN_DMC=运行DMC转账测试
@@ -76,7 +76,7 @@ init()
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:2" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
     # enable web3_rpc on node0 config.ini
     perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node0/config.ini
     cd nodes/127.0.0.1 && wait_and_start
@@ -89,7 +89,7 @@ init_baseline()
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
     clear_node
-    bash ${build_chain_path} -l "127.0.0.1:2" -e ${fisco_bcos_path} "${sm_option}"
+    bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
 
     # 启用executor v1
     # Enable executor v1
@@ -129,7 +129,7 @@ expand_node()
         for node in ${node_list}
         do
             count=$(cat ${current_path}/nodes/127.0.0.1/${node}/log/* 2>/dev/null | grep -i "heartBeat,connected count" | tail -n 1 | awk -F' ' '{print $3}' | awk -F'=' '{print $2}')
-            if [ "${count}" == "2" ]; then
+            if [ "${count}" == "1" ]; then
                 flag='true'
                 break 2
             fi
@@ -173,6 +173,11 @@ clear_node()
     cd ${current_path}
     if [ -d "nodes" ]; then
         bash nodes/127.0.0.1/stop_all.sh 2>/dev/null
+        # 确保 fisco-bcos 进程确实已退出，防止僵尸进程占用端口
+        if pgrep -f "fisco-bcos" > /dev/null 2>&1; then
+            LOG_ERROR "Nodes still running after stop, force killing..."
+            pkill -9 -f "fisco-bcos" 2>/dev/null || true
+        fi
         rm -rf nodes
     fi
     if [ -d "config" ]; then
@@ -197,7 +202,7 @@ prebuild_deps()
         fi
     else
         cd console
-        git fetch --all --depth 1
+        git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for console"; exit 1; }
         git reset --hard
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
@@ -206,6 +211,10 @@ prebuild_deps()
         fi
     fi
     bash gradlew build -x test 2>&1 | tail -3
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        LOG_ERROR "gradlew build failed for console"
+        exit 1
+    fi
     cd ${current_path}
 
     # 预构建 java-sdk
@@ -219,7 +228,7 @@ prebuild_deps()
         fi
     else
         cd java-sdk
-        git fetch --all --depth 1
+        git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for java-sdk"; exit 1; }
         git reset --hard
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
@@ -228,6 +237,10 @@ prebuild_deps()
         fi
     fi
     bash gradlew build -x test 2>&1 | tail -3
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        LOG_ERROR "gradlew build failed for java-sdk"
+        exit 1
+    fi
     cd ${current_path}
 
     # 预构建 java-sdk-demo
@@ -241,7 +254,7 @@ prebuild_deps()
         fi
     else
         cd java-sdk-demo
-        git fetch --all --depth 1
+        git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for java-sdk-demo"; exit 1; }
         git reset --hard
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
@@ -250,6 +263,10 @@ prebuild_deps()
         fi
     fi
     bash gradlew build -x test 2>&1 | tail -3
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        LOG_ERROR "gradlew build failed for java-sdk-demo"
+        exit 1
+    fi
     cd ${current_path}
 
     export SKIP_BUILD="true"
