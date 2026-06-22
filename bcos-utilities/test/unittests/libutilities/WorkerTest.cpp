@@ -67,10 +67,10 @@ BOOST_AUTO_TEST_CASE(testWorker)
     auto work = boost::asio::make_work_guard(ioContext);
     std::thread ioThread([&]() { ioContext.run(); });
 
-    TestWorkerImpl workerImpl(ioContext);
-    workerImpl.run();
+    auto workerImpl = bcos::Worker::createShared<TestWorkerImpl>(ioContext);
+    workerImpl->run();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    workerImpl.stop();
+    workerImpl->stop();
 
     work.reset();
     ioContext.stop();

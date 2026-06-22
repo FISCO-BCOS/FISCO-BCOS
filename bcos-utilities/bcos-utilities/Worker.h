@@ -21,6 +21,8 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <atomic>
+#include <concepts>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -32,8 +34,26 @@ enum class WorkerState
     Started
 };
 
-class Worker
+/// Concept: T must derive from std::enable_shared_from_this<T> so that
+/// weak_from_this() / shared_from_this() are always usable.  Worker itself
+/// and all of its subclasses satisfy this once Worker inherits from
+/// std::enable_shared_from_this<Worker>.
+template <typename T>
+concept SharedFromThisEnabled =
+    std::derived_from<T, std::enable_shared_from_this<T>>;
+
+class Worker : public std::enable_shared_from_this<Worker>
 {
+public:
+    /// Factory: the only blessed way to create a Worker (or subclass) on the
+    /// heap.  Returns a shared_ptr so enable_shared_from_this is initialised.
+    template <typename T, typename... Args>
+        requires std::derived_from<T, Worker>
+    static std::shared_ptr<T> createShared(Args&&... args)
+    {
+        return std::make_shared<T>(std::forward<Args>(args)...);
+    }
+
 protected:
     Worker(boost::asio::io_context& _ioContext, std::string _threadName = "worker",
         unsigned _idleWaitMs = 30)
@@ -100,5 +120,12 @@ private:
 
     std::atomic<WorkerState> m_workerState = {WorkerState::Stopped};
 };
+
+// Compile-time guard: Worker must satisfy SharedFromThisEnabled so that
+// weak_from_this() functions correctly in all async handlers.  The
+// check is placed after the closing brace because std::derived_from
+// requires a complete type.
+static_assert(SharedFromThisEnabled<Worker>,
+    "Worker must be managed by std::shared_ptr via createShared()");
 
 }  // namespace bcos

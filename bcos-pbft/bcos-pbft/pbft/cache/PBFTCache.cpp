@@ -167,6 +167,12 @@ bool PBFTCache::collectEnoughCommitReq()
 
 void PBFTCache::intoPrecommit()
 {
+    if (!checkPrePrepareProposalStatus())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("intoPrecommit called without valid prePrepare")
+                          << LOG_KV("index", m_index);
+        return;
+    }
     m_precommit = m_prePrepare;
     m_precommit->setGeneratedFrom(m_config->nodeIndex());
     setSignatureList(m_precommit->consensusProposal(), m_prepareCacheList);

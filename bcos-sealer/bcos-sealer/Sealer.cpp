@@ -56,7 +56,7 @@ void Sealer::start()
     SEAL_LOG(INFO) << LOG_DESC("start the sealer");
     // FIB-164: register the onReady callback now via weak_from_this() so the
     // callback safely no-ops after Sealer is destroyed.
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<Sealer>::weak_from_this();
     m_sealingManager->setOnReadyCallback([self]() {
         if (auto sealer = self.lock())
         {
