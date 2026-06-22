@@ -167,7 +167,6 @@ void AirNodeInitializer::stop()
             m_tarsApplication->terminate();
             m_tarsThread->join();
         }
-
     }
     catch (std::exception const& e)
     {

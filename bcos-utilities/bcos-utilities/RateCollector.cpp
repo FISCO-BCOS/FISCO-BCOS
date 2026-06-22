@@ -26,10 +26,11 @@ using namespace bcos;
 
 bool c_enableStatCollector = false;
 
-RateCollector::RateCollector(std::string _moduleName, uint64_t _intervalMS)
+RateCollector::RateCollector(
+    boost::asio::io_context& _ioService, std::string _moduleName, uint64_t _intervalMS)
   : m_moduleName(std::move(_moduleName)), m_intervalMS(_intervalMS)
 {
-    m_reportTimer = std::make_shared<Timer>(_intervalMS, m_moduleName);
+    m_reportTimer = std::make_shared<Timer>(_ioService, _intervalMS, m_moduleName);
     m_reportTimer->registerTimeoutHandler([this]() {
         report();
         flush();

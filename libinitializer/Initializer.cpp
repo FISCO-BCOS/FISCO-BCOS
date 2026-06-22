@@ -325,7 +325,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
-        m_nodeConfig->executorServiceName(), m_nodeConfig);
+        *m_ioServicePool->getIOService(), m_nodeConfig->executorServiceName(), m_nodeConfig);
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),

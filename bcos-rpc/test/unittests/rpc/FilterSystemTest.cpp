@@ -20,8 +20,8 @@ public:
         rpc = factory->buildLocalRpc(groupInfo, nodeService);
         web3JsonRpc = rpc->web3JsonRpc();
         BOOST_CHECK(web3JsonRpc != nullptr);
-        filterSystem =
-            std::make_shared<Web3FilterSystem>(rpc->groupManager(), "test-group", 600000, 10);
+        filterSystem = std::make_shared<Web3FilterSystem>(
+            *ioServicePool->getIOService(), rpc->groupManager(), "test-group", 600000, 10);
     }
     Json::Value onRPCRequestWrapper(std::string_view request, rpc::Sender _diySender = nullptr)
     {
@@ -160,8 +160,8 @@ BOOST_AUTO_TEST_CASE(test_filter_expiration)
     request->setToBlock(100);
 
     auto timeout = 200;
-    filterSystem =
-        std::make_shared<Web3FilterSystem>(rpc->groupManager(), "test-group", timeout, 10);
+    filterSystem = std::make_shared<Web3FilterSystem>(
+        *ioServicePool->getIOService(), rpc->groupManager(), "test-group", timeout, 10);
 
     const auto filterId = task::syncWait(filterSystem->newFilter(request));
 

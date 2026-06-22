@@ -54,6 +54,7 @@ public:
 
     // redis distributed rate limiter
     bcos::ratelimiter::RateLimiterInterface::Ptr buildDistributedRateLimiter(
+        boost::asio::io_context& _ioService,
         const std::string& _distributedKey, int64_t _maxPermitsSize, int32_t _intervalSec,
         bool _allowExceedMaxPermitSize, bool _enableLocalCache, int32_t _localCachePercent);
 

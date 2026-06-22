@@ -46,7 +46,8 @@ BOOST_FIXTURE_TEST_SUITE(FIB135Test, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(view_change_backoff_is_bounded)
 {
     const int64_t baseTimeout = 3000;  // ms - typical consensus_timeout
-    auto pbftTimer = std::make_shared<PBFTTimer>(baseTimeout, "testPBFTTimer");
+    boost::asio::io_context ioService;
+    auto pbftTimer = std::make_shared<PBFTTimer>(ioService, baseTimeout, "testPBFTTimer");
 
     // Advance to the maximum change cycle
     // The timer internally clamps to c_maxChangeCycle
@@ -84,7 +85,8 @@ BOOST_AUTO_TEST_CASE(view_change_backoff_is_bounded)
 // Test that resetting the change cycle correctly resets the backoff
 BOOST_AUTO_TEST_CASE(change_cycle_resets_to_zero)
 {
-    auto pbftTimer = std::make_shared<PBFTTimer>(3000, "testReset");
+    boost::asio::io_context ioService;
+    auto pbftTimer = std::make_shared<PBFTTimer>(ioService, 3000, "testReset");
     pbftTimer->incChangeCycle(5);
     BOOST_CHECK_GT(pbftTimer->changeCycle(), 0U);
     pbftTimer->resetChangeCycle();

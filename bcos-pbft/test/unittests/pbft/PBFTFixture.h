@@ -58,15 +58,15 @@ class FakePBFTConfig : public PBFTConfig
 {
 public:
     using Ptr = std::shared_ptr<FakePBFTConfig>;
-    FakePBFTConfig(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
+    FakePBFTConfig(boost::asio::io_context& _ioService, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<PBFTMessageFactory> _pbftMessageFactory,
         std::shared_ptr<PBFTCodecInterface> _codec, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         StateMachineInterface::Ptr _stateMachine, PBFTStorage::Ptr _storage,
         protocol::BlockFactory::Ptr _blockFactory)
-      : PBFTConfig(_cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator, _frontService,
-            _stateMachine, _storage, _blockFactory)
+      : PBFTConfig(_ioService, _cryptoSuite, _keyPair, _pbftMessageFactory, _codec, _validator,
+            _frontService, _stateMachine, _storage, _blockFactory)
     {}
 
     ~FakePBFTConfig() override {}
@@ -243,17 +243,16 @@ class FakePBFTFactory : public PBFTFactory
 {
 public:
     using Ptr = std::shared_ptr<PBFTFactory>;
-    FakePBFTFactory(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-        bcos::crypto::KeyPairInterface::Ptr _keyPair,
+    FakePBFTFactory(boost::asio::io_context& _ioService,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
-        boost::asio::io_context& _ioContext)
-      : PBFTFactory(_cryptoSuite, _keyPair, _frontService, _storage, _ledger, _scheduler, _txpool,
-            _blockFactory, _txResultFactory, _ioContext)
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
+      : PBFTFactory(_ioService, _cryptoSuite, _keyPair, _frontService, _storage, _ledger,
+            _scheduler, _txpool, _blockFactory, _txResultFactory)
     {}
 
     PBFTImpl::Ptr createPBFT() override
@@ -266,11 +265,11 @@ public:
         auto pbftStorage = std::make_shared<LedgerStorage>(
             m_scheduler, m_storage, m_blockFactory, orgPBFTConfig->pbftMessageFactory());
 
-        auto pbftConfig = std::make_shared<FakePBFTConfig>(m_cryptoSuite, m_keyPair,
+        auto pbftConfig = std::make_shared<FakePBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair,
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
             orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
-        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, *m_ioContext);
+        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService);
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
         auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine);
@@ -322,9 +321,9 @@ public:
 
         auto txResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-        auto pbftFactory = std::make_shared<FakePBFTFactory>(_cryptoSuite, _keyPair, m_frontService,
-            m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory,
-            *m_ioServicePool->getIOService());
+        auto pbftFactory = std::make_shared<FakePBFTFactory>(*m_ioServicePool->getIOService(),
+            _cryptoSuite, _keyPair, m_frontService, m_storage, m_ledger, m_scheduler, m_txpool,
+            m_blockFactory, txResultFactory);
         m_pbft = pbftFactory->createPBFT();
         m_pbftEngine = std::dynamic_pointer_cast<FakePBFTEngine>(m_pbft->pbftEngine());
         m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });

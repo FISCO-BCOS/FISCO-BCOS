@@ -204,26 +204,7 @@ private:
 //   pre-EIP-1559 types)
 // - EIP-1559+ web3 txs: gasPrice field is empty, value is in maxFeePerGas
 // Returns 0 when no parseable price is available.
-inline u256 effectiveGasPrice(Transaction const& tx)
-{
-    try
-    {
-        if (const auto price = tx.gasPrice(); !price.empty())
-        {
-            if (auto value = u256(price); value > 0)
-            {
-                return value;
-            }
-        }
-        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
-        {
-            return u256(mfg);
-        }
-    }
-    catch (...)
-    {}
-    return u256{0};
-}
+u256 effectiveGasPrice(Transaction const& tx);
 
 using Transactions = std::vector<Transaction::Ptr>;
 using TransactionsPtr = std::shared_ptr<Transactions>;

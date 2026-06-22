@@ -96,6 +96,7 @@ public:
 
         nodeConfig->loadConfigFromString(configini);
         factory->setNodeConfig(nodeConfig);
+        factory->setIOServicePool(ioServicePool);
 
         auto blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
