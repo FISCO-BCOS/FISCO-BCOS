@@ -160,6 +160,12 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
         for (size_t i = 0; i < fakerMap.size(); i++)
         {
             auto faker = fakerMap[i];
+            // Poll the io_context so that timer callbacks (onTimeout etc.)
+            // and cross-thread notify() dispatches are processed.  On macOS
+            // the io_context worker thread may not be scheduled promptly;
+            // poll() gives the test thread an opportunity to drive pending
+            // handlers without relying solely on the worker thread.
+            faker->ioContext().poll();
             faker->pbftEngine()->executeWorkerByRoundbin();
         }
     }

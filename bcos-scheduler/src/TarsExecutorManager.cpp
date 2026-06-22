@@ -24,9 +24,9 @@
 using namespace bcos;
 using namespace bcos::scheduler;
 
-TarsExecutorManager::TarsExecutorManager(
+TarsExecutorManager::TarsExecutorManager(boost::asio::io_context& _ioService,
     const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig)
-  : m_nodeConfig(_nodeConfig)
+  : ExecutorManager(_ioService), m_nodeConfig(_nodeConfig)
 {
     m_executorServiceName = _executorServiceName + "." + bcos::protocol::EXECUTOR_SERVANT_NAME;
 

@@ -35,8 +35,16 @@ bytesPointer PBFTNewViewMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) con
 
 void PBFTNewViewMsg::decode(bytesConstRef _data)
 {
+    // Release the arena's ownership of the old BaseMessage (set via
+    // set_allocated_message in the default ctor) before parsing new data.
+    m_rawNewView->unsafe_arena_release_message();
+
     decodePBObject(m_rawNewView, _data);
-    setBaseMessage(std::shared_ptr<BaseMessage>(m_rawNewView->mutable_message()));
+
+    // Use an aliasing shared_ptr: points to the arena-allocated sub-message
+    // but shares ownership with m_rawNewView, avoiding a double-free.
+    setBaseMessage(std::shared_ptr<BaseMessage>(m_rawNewView, m_rawNewView->mutable_message()));
+
     PBFTNewViewMsg::deserializeToObject();
 }
 
@@ -44,16 +52,20 @@ void PBFTNewViewMsg::deserializeToObject()
 {
     PBFTBaseMessage::deserializeToObject();
     // decode into m_viewChangeList
+    // Use aliasing shared_ptrs: sub-messages live in m_rawNewView's arena,
+    // so we share ownership with m_rawNewView rather than taking ownership
+    // from the arena (which would lead to a double-free).
     for (int i = 0; i < m_rawNewView->viewchangemsglist_size(); i++)
     {
-        std::shared_ptr<RawViewChangeMessage> pbRawViewChange(
-            m_rawNewView->mutable_viewchangemsglist(i));
-        m_viewChangeList->push_back(std::make_shared<PBFTViewChangeMsg>(pbRawViewChange));
+        auto* rawPtr = m_rawNewView->mutable_viewchangemsglist(i);
+        std::shared_ptr<RawViewChangeMessage> pbRawViewChange(m_rawNewView, rawPtr);
+        m_viewChangeList->push_back(std::make_shared<PBFTViewChangeMsg>(pbRawViewChange)); 
     }
     // decode into m_prePrepareList
     for (int i = 0; i < m_rawNewView->prepreparelist_size(); i++)
     {
-        std::shared_ptr<PBFTRawMessage> pbftRawMessage(m_rawNewView->mutable_prepreparelist(i));
+        auto* rawPtr = m_rawNewView->mutable_prepreparelist(i);
+        std::shared_ptr<PBFTRawMessage> pbftRawMessage(m_rawNewView, rawPtr);
         m_prePrepareList->push_back(std::make_shared<PBFTMessage>(pbftRawMessage));
     }
 }

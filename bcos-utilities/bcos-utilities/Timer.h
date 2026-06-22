@@ -23,7 +23,6 @@
 #include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include <variant>
 
 namespace bcos
 {
@@ -31,7 +30,6 @@ class Timer : public std::enable_shared_from_this<Timer>
 {
 public:
     Timer(boost::asio::io_context& ioService, int64_t timeout, std::string threadName);
-    Timer(int64_t _timeout, std::string _threadName);
 
     virtual ~Timer() noexcept;
 
@@ -60,15 +58,14 @@ private:
     std::atomic_bool m_running = false;
     std::atomic_bool m_working = false;
 
-    std::variant<boost::asio::io_context*, boost::asio::io_context> m_ioService;
+    // The standalone Timer(int64_t, std::string) constructor was removed;
+    // all Timers now borrow an external io_context via pointer.
+    boost::asio::io_context* m_ioService;
 
     boost::asio::steady_timer m_timer;
     std::string m_threadName;
-    std::unique_ptr<std::thread> m_worker;
 
     std::function<void()> m_timeoutHandler;
-    // m_work ensures that io_service's run() function will not exit while work is underway
-    bool borrowedIoService() const;
     boost::asio::io_context& ioService();
 };
 }  // namespace bcos

@@ -19,7 +19,6 @@
  * @date 2021-04-21
  */
 #pragma once
-#include <compare>
 #include <concepts>
 #include <cstdint>
 #include <limits>

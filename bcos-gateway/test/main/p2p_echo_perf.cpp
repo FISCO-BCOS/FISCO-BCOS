@@ -26,6 +26,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/RateCollector.h"
 #include "bcos-utilities/ratelimiter/TimeWindowRateLimiter.h"
+#include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -71,7 +72,9 @@ int main(int argc, const char** argv)
         logInitializer->initLog(configPath);
 
         constexpr static int RATE_REPORT_INTERVAL = 10000;  // 10s
-        auto reporter = std::make_shared<RateCollector>(workModel, RATE_REPORT_INTERVAL);
+        boost::asio::io_context ioService;
+        auto reporter =
+            std::make_shared<RateCollector>(ioService, workModel, RATE_REPORT_INTERVAL);
         reporter->start();
 
         // load the config items
