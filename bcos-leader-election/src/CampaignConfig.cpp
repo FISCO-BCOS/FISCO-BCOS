@@ -108,7 +108,44 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
                               << LOG_KV("key", m_leaderKey) << LOG_KV("success", ret);
         return false;
     }
-    auto leader = m_memberFactory->createMember(_response.value().as_string());
+    bcos::protocol::MemberInterface::Ptr leader;
+    try
+    {
+        leader = m_memberFactory->createMember(_response.value().as_string());
+    }
+    catch (std::exception const& e)
+    {
+        // FIB-177: a malformed/corrupt etcd leader value must not wedge the
+        // election. Mirror the version==0 recovery path: drop the stale leader
+        // and trigger a fresh campaign so the node can recover instead of
+        // propagating the decode exception up to the watcher callback.
+        ELECTION_LOG(WARNING) << LOG_DESC(
+                                     "checkAndUpdateLeaderKey: malformed leader value, recover")
+                              << LOG_KV("key", m_leaderKey)
+                              << LOG_KV("message", boost::diagnostic_information(e));
+        resetLeader(nullptr);
+        if (m_triggerCampaign)
+        {
+            m_triggerCampaign();
+        }
+        return false;
+    }
+    catch (...)
+    {
+        // FIB-177: createMember may throw a non-std exception; it must not escape
+        // into the watcher callback either. Apply the same drop-stale-leader plus
+        // re-campaign recovery so an exotic throwable cannot wedge the election.
+        ELECTION_LOG(WARNING) << LOG_DESC(
+                                     "checkAndUpdateLeaderKey: malformed leader value (non-std "
+                                     "exception), recover")
+                              << LOG_KV("key", m_leaderKey);
+        resetLeader(nullptr);
+        if (m_triggerCampaign)
+        {
+            m_triggerCampaign();
+        }
+        return false;
+    }
     auto seq = _response.value().modified_index();
     leader->setSeq(seq);
     leader->setLeaseID(_response.value().lease());
