@@ -28,43 +28,61 @@ bcos::timer::TimerTask bcos::timer::Timer::timerTask() const
 }
 void bcos::timer::Timer::start()
 {
-    if (m_running)
+    if (bool running = false; !m_running.compare_exchange_strong(running, true))
     {
         return;
     }
-    m_running = true;
 
-    if (m_delayMS > 0)
-    {  // delay handle
-        startDelayTask();
-    }
-    else if (m_periodMS > 0)
-    {
-        // periodic task handle
-        startPeriodTask();
-    }
-    else
-    {
-        // execute the task directly
-        executeTask();
-    }
+    // Dispatch to io_context thread for thread safety (steady_timer is not
+    // thread-safe).  If already on the io_context thread this runs
+    // synchronously; otherwise it posts asynchronously.
+    boost::asio::dispatch(*m_ioService, [weak = weak_from_this()]() {
+        auto self = weak.lock();
+        if (!self || !self->m_running)
+        {
+            return;
+        }
+
+        if (self->m_delayMS > 0)
+        {
+            self->startDelayTask();
+        }
+        else if (self->m_periodMS > 0)
+        {
+            self->startPeriodTask();
+        }
+        else
+        {
+            self->executeTask();
+        }
+    });
 }
 void bcos::timer::Timer::stop()
 {
-    if (!m_running)
+    if (bool running = true; !m_running.compare_exchange_strong(running, false))
     {
         return;
     }
 
-    if (m_delayHandler)
-    {
-        m_delayHandler->cancel();
-    }
+    // Dispatch cancel to io_context thread to avoid racing with async_wait
+    // handlers.  Lifecycle protected by weak_ptr.
+    boost::asio::dispatch(*m_ioService, [weak = weak_from_this()]() {
+        auto self = weak.lock();
+        if (!self)
+        {
+            return;
+        }
 
-    if (m_timerHandler)
-    {
-        m_timerHandler->cancel();
-    }
+        if (self->m_delayHandler)
+        {
+            self->m_delayHandler->cancel();
+        }
+
+        if (self->m_timerHandler)
+        {
+            self->m_timerHandler->cancel();
+        }
+    });
 }
 void bcos::timer::Timer::startDelayTask()
 {
@@ -72,9 +90,15 @@ void bcos::timer::Timer::startDelayTask()
 
     auto self = weak_from_this();
     m_delayHandler->expires_after(std::chrono::milliseconds(m_delayMS));
-    m_delayHandler->async_wait([self](const boost::system::error_code& e) {
+    m_delayHandler->async_wait([self](const boost::system::error_code& error) {
+        // The timer has been cancelled
+        if (error == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+
         auto timer = self.lock();
-        if (!timer)
+        if (!timer || !timer->m_running)
         {
             return;
         }
@@ -94,15 +118,26 @@ void bcos::timer::Timer::startPeriodTask()
     m_timerHandler = std::make_shared<boost::asio::steady_timer>(*m_ioService);
     auto self = weak_from_this();
     m_timerHandler->expires_after(std::chrono::milliseconds(m_periodMS));
-    m_timerHandler->async_wait([self](const boost::system::error_code& e) {
+    m_timerHandler->async_wait([self](const boost::system::error_code& error) {
+        // The timer has been cancelled
+        if (error == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+
         auto timer = self.lock();
-        if (!timer)
+        if (!timer || !timer->m_running)
         {
             return;
         }
 
         timer->executeTask();
-        timer->startPeriodTask();
+        // Only re-arm if still running (stop() may have been called during
+        // executeTask())
+        if (timer->m_running)
+        {
+            timer->startPeriodTask();
+        }
     });
 }
 void bcos::timer::Timer::executeTask()
