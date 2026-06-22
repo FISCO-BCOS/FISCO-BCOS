@@ -20,6 +20,7 @@
 
 #include "EngineEndpoint.h"
 
+#include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 

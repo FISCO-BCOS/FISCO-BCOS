@@ -20,6 +20,7 @@
 project(bcos-rpc VERSION ${VERSION})
 
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(jwt-cpp CONFIG REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
@@ -30,7 +31,7 @@ find_package(tarscpp REQUIRED)
 add_library(rpc ${SRCS} ${HEADERS})
 target_include_directories(rpc PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto protocol-tars jsoncpp_static tarscpp::tarsservant tarscpp::tarsutil)
+target_link_libraries(rpc PUBLIC bcos-boostssl ledger codec bcos-crypto protocol-tars jsoncpp_static jwt-cpp::jwt-cpp tarscpp::tarsservant tarscpp::tarsutil)
 add_dependencies(rpc BuildInfo.h)
 set_target_properties(rpc PROPERTIES UNITY_BUILD "ON")
 
