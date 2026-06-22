@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file Types.h
- * @brief Engine API type definitions (Engine API V1/V2/V3)
+ * @brief Engine API type definitions shared by Engine API versions
  */
 
 #pragma once
@@ -43,6 +43,14 @@ enum class EngineApiVersion : std::uint8_t
     V3 = 3,
 };
 
+    enum class ApiVersion : std::uint8_t
+{
+    V1 = 1,
+    V2 = 2,
+    V3 = 3,
+    V4 = 4,
+};
+
 using PayloadID = std::string;
 
 struct WithdrawalV1
@@ -69,15 +77,25 @@ struct ForkchoiceState
 
 struct PayloadAttributes
 {
+    // Required by PayloadAttributesV1/V2/V3/V4.
     std::uint64_t timestamp = 0;
     h256 prevRandao;
     Address suggestedFeeRecipient;
+
+    // Required by PayloadAttributesV2/V3/V4.
     std::optional<std::vector<WithdrawalV1>> withdrawals;
+
+    // Required by PayloadAttributesV3/V4.
     std::optional<h256> parentBeaconBlockRoot;
+
+    // Required by PayloadAttributesV4.
+    std::optional<std::uint64_t> slotNumber;
+    std::optional<std::uint64_t> targetGasLimit;
 };
 
 struct ExecutionPayload
 {
+    // Required by ExecutionPayloadV1/V2/V3/V4.
     h256 parentHash;
     Address feeRecipient;
     h256 stateRoot;
@@ -92,16 +110,30 @@ struct ExecutionPayload
     u256 baseFeePerGas = 0;
     h256 blockHash;
     bcos::protocol::Transactions transactions;
+
+    // Required by ExecutionPayloadV2/V3/V4.
     std::optional<std::vector<WithdrawalV1>> withdrawals;
+
+    // Required by ExecutionPayloadV3/V4.
     std::optional<u256> blobGasUsed;
     std::optional<u256> excessBlobGas;
+
+    // Required by ExecutionPayloadV4.
+    std::optional<bytes> blockAccessList;
+    std::optional<std::uint64_t> slotNumber;
 };
 
 struct NewPayloadRequest
 {
+    // Required by engine_newPayloadV1/V2/V3/V4/V5.
     ExecutionPayload executionPayload;
+
+    // Required by engine_newPayloadV3/V4/V5.
     std::vector<h256> expectedBlobVersionedHashes;
     std::optional<h256> parentBeaconBlockRoot;
+
+    // Required by engine_newPayloadV4/V5.
+    std::optional<std::vector<bytes>> executionRequests;
 };
 
 enum class PayloadValidationStatus : std::uint8_t
@@ -128,10 +160,20 @@ struct ForkchoiceUpdatedResult
 
 struct GetPayloadResult
 {
+    // Required by engine_getPayloadV1/V2/V3/V4/V6.
     ExecutionPayload executionPayload;
+
+    // Required by engine_getPayloadV2/V3/V4/V6.
     u256 blockValue = 0;
+
+    // Required by engine_getPayloadV3/V4.
     std::optional<BlobsBundleV1> blobsBundle;
+
+    // Required by engine_getPayloadV3/V4/V6.
     bool shouldOverrideBuilder = false;
+
+    // Required by engine_getPayloadV4/V6.
+    std::optional<std::vector<bytes>> executionRequests;
 };
 
 }  // namespace bcos::engine
