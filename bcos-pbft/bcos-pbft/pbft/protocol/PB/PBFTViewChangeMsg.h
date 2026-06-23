@@ -45,7 +45,12 @@ public:
 
     ~PBFTViewChangeMsg() override
     {
-        // return back the ownership of message to PBFTBaseMessage
+        // Release the arena's ownership of the BaseMessage back to
+        // m_baseMessage.  In the default-constructor path m_baseMessage is a
+        // regular shared_ptr and needs to be the sole owner for a clean
+        // delete.  In the decode path m_baseMessage is an aliasing shared_ptr
+        // (tied to m_rawViewChange) and is unaffected by the release — the
+        // arena will clean up when m_rawViewChange is destroyed.
         m_rawViewChange->unsafe_arena_release_message();
         // return back the ownership to m_committedProposal
         if (m_rawViewChange->has_committedproposal())

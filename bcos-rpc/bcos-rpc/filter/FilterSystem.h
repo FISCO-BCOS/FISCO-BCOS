@@ -62,8 +62,9 @@ public:
     using Ptr = std::shared_ptr<FilterSystem>;
     using ConstPtr = std::shared_ptr<const FilterSystem>;
 
-    FilterSystem(GroupManager::Ptr groupManager, std::string groupId,
-        FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq);
+    FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
+        std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
+        int maxBlockProcessPerReq);
     virtual ~FilterSystem() { m_cleanUpTimer->stop(); }
 
     // jsonrpc

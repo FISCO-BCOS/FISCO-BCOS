@@ -73,6 +73,8 @@ enum JsonRpcError : int32_t
     OperationNotAllowed = -32003,
     ServiceNotInitCompleted = -32004,
     GroupNotExist = -32005,
+    JwtUnauthorized = -32010,
+    JwtForbidden = -32011,
 };
 
 struct JsonRequest

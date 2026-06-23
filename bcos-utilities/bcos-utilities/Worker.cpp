@@ -18,11 +18,37 @@
 #include "Worker.h"
 
 #include "BoostLog.h"
+#include <boost/asio/dispatch.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <chrono>
 #include <exception>
+#include <future>
 
 using namespace bcos;
+
+Worker::~Worker()
+{
+    stopWorking();
+    // stopWorking() may return early when m_workerState is already
+    // Stopped (e.g. Sealer::stop() called stopWorking() before the
+    // destructor).  In that case pending [this]-capturing handlers
+    // (operation_aborted from cancel, notify() posts) may still be
+    // queued in the io_context.  Post a drain barrier and wait so
+    // that all such handlers are processed before *this is freed.
+    if (!m_ioContext.stopped() && !m_ioContext.get_executor().running_in_this_thread())
+    {
+        auto drainPromise = std::make_shared<std::promise<void>>();
+        auto drainFuture = drainPromise->get_future();
+        boost::asio::post(m_ioContext, [drainPromise]() { drainPromise->set_value(); });
+        auto drainStatus = drainFuture.wait_for(std::chrono::seconds(5));
+        if (drainStatus != std::future_status::ready)
+        {
+            BCOS_LOG(ERROR) << LOG_DESC("Worker::~Worker() timed out waiting for handler drain")
+                            << LOG_KV("threadName", m_threadName);
+        }
+    }
+}
 
 void Worker::startWorking()
 {
@@ -31,10 +57,6 @@ void Worker::startWorking()
     {
         return;  // Already running, or lost the race
     }
-
-    // Reset the alive flag so that async handlers from a previous stop
-    // cycle don't prematurely bail out of a restarted worker.
-    *m_aliveFlag = true;
 
     // initWorker() is safe to call synchronously — subclasses only log.
     try
@@ -55,9 +77,10 @@ void Worker::startWorking()
     }
 
     // scheduleNext() mutates m_timer (expires_after / async_wait), which
-    // must only happen on the io_context thread.  Post it there so that
-    // callers from arbitrary threads (e.g. Sealer::start()) are safe.
-    boost::asio::post(m_ioContext, [this]() {
+    // must only happen on the io_context thread.  dispatch() runs the
+    // handler synchronously if we are already on the io_context thread;
+    // otherwise it behaves like post() and queues it for later execution.
+    boost::asio::dispatch(m_ioContext, [this]() {
         if (m_workerState == WorkerState::Started)
         {
             scheduleNext();
@@ -73,14 +96,19 @@ void Worker::stopWorking()
         return;  // Not running, or another thread is already stopping
     }
 
-    // Signal all in-flight handlers to bail out before accessing `this`.
-    // The CAS above already changed m_workerState to Stopped, and
-    // m_aliveFlag=false makes every captured handler return immediately.
-    *m_aliveFlag = false;
-
-    // Route cancel through the io_context thread so that it doesn't race
-    // with handleTimerTick / scheduleNext executing on the io_context.
-    boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
+    // Cancel the timer.  If we are already on the io_context thread we
+    // can mutate m_timer directly; otherwise we post the cancel.
+    // No need to wait — ~Worker() drains all [this]-capturing handlers
+    // before the object can be freed, and any timer tick that fires
+    // between now and the cancel will early-return on !Started.
+    if (m_ioContext.get_executor().running_in_this_thread())
+    {
+        m_timer.cancel();
+    }
+    else
+    {
+        boost::asio::post(m_ioContext, [this]() { m_timer.cancel(); });
+    }
 
     try
     {
@@ -108,31 +136,14 @@ void Worker::scheduleNext()
     }
 
     m_timer.expires_after(boost::asio::chrono::milliseconds(m_idleWaitMs));
-    auto aliveFlag = m_aliveFlag;
-    m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
-        if (!*aliveFlag)
-        {
-            return;
-        }
-        handleTimerTick(ec);
-    });
+    m_timer.async_wait([this](boost::system::error_code const& ec) { handleTimerTick(ec); });
 }
 
 void Worker::handleTimerTick(boost::system::error_code const& ec)
 {
-    // aliveFlag check is performed by the wrapping lambda in scheduleNext()
-    // and the backoff path below; kept here for defense-in-depth.
-    if (!*m_aliveFlag)
-    {
-        return;
-    }
-    if (ec == boost::asio::error::operation_aborted)
+    if (ec == boost::asio::error::operation_aborted || m_workerState != WorkerState::Started)
     {
         return;  // Timer was cancelled
-    }
-    if (m_workerState != WorkerState::Started)
-    {
-        return;
     }
     bool hasException = false;
     try
@@ -158,14 +169,7 @@ void Worker::handleTimerTick(boost::system::error_code const& ec)
     {
         // Use a small backoff to avoid busy-looping on persistent exceptions
         m_timer.expires_after(boost::asio::chrono::milliseconds(10));
-        auto aliveFlag = m_aliveFlag;
-        m_timer.async_wait([this, aliveFlag](boost::system::error_code const& ec) {
-            if (!*aliveFlag)
-            {
-                return;
-            }
-            handleTimerTick(ec);
-        });
+        m_timer.async_wait([this](boost::system::error_code const& ec) { handleTimerTick(ec); });
     }
     else
     {
@@ -177,14 +181,19 @@ void Worker::notify()
 {
     if (m_workerState == WorkerState::Started)
     {
-        // Post the re-schedule to the io_context thread because
-        // scheduleNext() mutates m_timer (expires_after / async_wait).
-        // The explicit cancel is not needed — expires_after() inside
-        // scheduleNext() implicitly cancels any pending async_wait.
+        // Cancel any pending timer and immediately trigger one worker cycle
+        // via handleTimerTick, which already contains executeWorker(),
+        // exception handling, FIB-111 backoff, and scheduleNext().
+        // Use post() instead of dispatch() to avoid re-entrant execution
+        // of executeWorker() when notify() is called from within a Timer
+        // callback on the io_context thread (e.g. onTimeout() ->
+        // broadcastViewChangeReq() -> onReceivePBFTMessage() -> notify()).
+        // dispatch() would run handleTimerTick synchronously, causing
+        // nested PBFT message processing that breaks consensus ordering.
         boost::asio::post(m_ioContext, [this]() {
             if (m_workerState == WorkerState::Started)
             {
-                scheduleNext();
+                handleTimerTick(boost::system::error_code());
             }
         });
     }

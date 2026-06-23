@@ -524,7 +524,8 @@ std::shared_ptr<gateway::ratelimiter::RateLimiterManager> GatewayFactory::buildR
     // rate limiter factory
     auto rateLimiterFactory = std::make_shared<ratelimiter::RateLimiterFactory>(_redis);
     // rate limiter manager
-    auto rateLimiterManager = std::make_shared<ratelimiter::RateLimiterManager>(_rateLimiterConfig);
+    auto rateLimiterManager =
+        std::make_shared<ratelimiter::RateLimiterManager>(*m_ioServicePool->getIOService(), _rateLimiterConfig);
 
     int32_t timeWindowS = _rateLimiterConfig.timeWindowSec;
     bool allowExceedMaxPermitSize = _rateLimiterConfig.allowExceedMaxPermitSize;
@@ -561,6 +562,7 @@ std::shared_ptr<gateway::ratelimiter::RateLimiterManager> GatewayFactory::buildR
             if (_rateLimiterConfig.enableDistributedRatelimit)
             {
                 rateLimiterInterface = rateLimiterFactory->buildDistributedRateLimiter(
+                    *m_ioServicePool->getIOService(),
                     rateLimiterFactory->toTokenKey(group), bandWidth * timeWindowS, timeWindowS,
                     allowExceedMaxPermitSize, _rateLimiterConfig.enableDistributedRateLimitCache,
                     _rateLimiterConfig.distributedRateLimitCachePercent);

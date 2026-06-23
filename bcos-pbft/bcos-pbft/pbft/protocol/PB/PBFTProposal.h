@@ -122,6 +122,12 @@ public:
     }
     void decode(bytesConstRef _data) override
     {
+        // FIB-122: reset the aliasing shared_ptr before ParseFromArray so that
+        // the PBFTRawProposal's internal proposal sub-message can be safely
+        // cleared and re-created by protobuf without an external reference
+        // keeping the old (soon-to-be-destroyed) sub-message alive.
+        m_rawProposal.reset();
+
         bcos::protocol::decodePBObject(m_pbftRawProposal, _data);
         // FIB-123: reject excessive signatureList / nodeList to prevent memory exhaustion
         validateRepeatedSize(

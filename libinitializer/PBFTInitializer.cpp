@@ -445,18 +445,20 @@ void PBFTInitializer::createPBFT()
     auto kvStorage = std::make_shared<bcos::storage::KVStorageHelper>(m_storage);
     if (m_nodeConfig->consensusType() == ledger::PBFT_CONSENSUS_TYPE)
     {
-        auto pbftFactory = std::make_shared<PBFTFactory>(m_protocolInitializer->cryptoSuite(),
+        auto pbftFactory = std::make_shared<PBFTFactory>(*m_ioContext,
+            m_protocolInitializer->cryptoSuite(),
             m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
             m_txpool, m_protocolInitializer->blockFactory(),
-            m_protocolInitializer->txResultFactory(), *m_ioContext);
+            m_protocolInitializer->txResultFactory());
         m_pbft = pbftFactory->createPBFT();
     }
     else if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
     {
-        auto rpbftFactory = std::make_shared<RPBFTFactory>(m_protocolInitializer->cryptoSuite(),
+        auto rpbftFactory = std::make_shared<RPBFTFactory>(*m_ioContext,
+            m_protocolInitializer->cryptoSuite(),
             m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
             m_txpool, m_protocolInitializer->blockFactory(),
-            m_protocolInitializer->txResultFactory(), *m_ioContext);
+            m_protocolInitializer->txResultFactory());
         m_pbft = rpbftFactory->createRPBFT();
     }
 

@@ -26,8 +26,8 @@
 using namespace bcos;
 using namespace bcos::ratelimiter;
 
-DistributedRateLimiter::DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>& _redis,
-    std::string _rateLimiterKey, int64_t _maxPermitsSize, bool _allowExceedMaxPermitSize,
+DistributedRateLimiter::DistributedRateLimiter(boost::asio::io_context& _ioService,
+    std::shared_ptr<sw::redis::Redis>& _redis, std::string _rateLimiterKey, int64_t _maxPermitsSize, bool _allowExceedMaxPermitSize,
     int32_t _intervalSec, bool _enableLocalCache, int32_t _localCachePercent)
   : m_redis(_redis),
     m_rateLimiterKey(std::move(_rateLimiterKey)),
@@ -44,12 +44,13 @@ DistributedRateLimiter::DistributedRateLimiter(std::shared_ptr<sw::redis::Redis>
 
     if (m_enableLocalCache)
     {
-        m_clearCacheTimer = std::make_shared<Timer>(toMillisecond(_intervalSec), "clearTimer");
+        m_clearCacheTimer =
+            std::make_shared<Timer>(_ioService, toMillisecond(_intervalSec), "clearTimer");
         m_clearCacheTimer->registerTimeoutHandler([this]() { refreshLocalCache(); });
         m_clearCacheTimer->start();
     }
 
-    m_statTimer = std::make_shared<Timer>(60000, "statTimer");
+    m_statTimer = std::make_shared<Timer>(_ioService, 60000, "statTimer");
     m_statTimer->registerTimeoutHandler([this]() { stat(); });
     m_statTimer->start();
 }
