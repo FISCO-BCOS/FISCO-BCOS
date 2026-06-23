@@ -237,6 +237,7 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
                     << errinfo_comment("[" + kv.first + "].address duplicate: " + alloc.address));
             }
             auto balance = kv.second.get<std::string>("balance", "0");
+            requireDecimalField(kv.first, "balance", balance);
             alloc.balance = u256(balance);
             alloc.nonce = kv.second.get<std::string>("nonce", "0");
             requireDecimalField(kv.first, "nonce", alloc.nonce);
@@ -250,7 +251,7 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
                 for (auto const& slot : *storageNode)
                 {
                     requireHexField(kv.first + ".storage", "key", slot.first, 64, false);
-                    requireHexField(kv.first + ".storage", "value", slot.second.data(), 0, false);
+                    requireHexField(kv.first + ".storage", "value", slot.second.data(), 64, false);
                     alloc.storage.emplace_back(slot.first, slot.second.data());
                 }
             }

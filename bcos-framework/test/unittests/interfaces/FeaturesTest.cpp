@@ -219,17 +219,26 @@ BOOST_AUTO_TEST_CASE(toFlagsNumber)
     Features none;
     BOOST_CHECK_EQUAL(none.toFlagsNumber(), bcos::u256(0));
 
-    // bit i corresponds to the i-th Flag in declaration order (magic_enum index)
+    // bit = the flag's explicit enum value
     Features one;
     one.set(Features::Flag::feature_l2_ethereum_compat);
-    auto l2Index = magic_enum::enum_index(Features::Flag::feature_l2_ethereum_compat).value();
-    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << l2Index);
+    auto l2Bit = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
+    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << l2Bit);
 
-    // bugfix_revert is index 0 -> bit 0; multiple set flags OR together
+    // bugfix_revert has value 0 -> bit 0; multiple set flags OR together
     Features two;
     two.set(Features::Flag::bugfix_revert);
     two.set(Features::Flag::feature_l2_ethereum_compat);
-    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << l2Index));
+    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << l2Bit));
+}
+
+BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)
+{
+    // feature_flags packs each flag at bit = its enum value; magic_enum's
+    // default reflection range is [-128,128]. Keep the enum within it (mirrors
+    // the static_assert in Features.h) so no flag is silently dropped from
+    // get/set/string2Flag/feature_flags.
+    BOOST_CHECK_LE(magic_enum::enum_count<Features::Flag>(), 128U);
 }
 
 auto validFlags(const Features& features)

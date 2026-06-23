@@ -1616,8 +1616,8 @@ BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
         auto value = entry->get();
         BOOST_CHECK_EQUAL(value.size(), 32U);
 
-        // the feature_l2_ethereum_compat bit must be set in the big-endian value
-        auto idx = magic_enum::enum_index(Features::Flag::feature_l2_ethereum_compat).value();
+        // the feature_l2_ethereum_compat bit (= its enum value) must be set in the big-endian value
+        auto idx = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
         auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
         BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
     }());

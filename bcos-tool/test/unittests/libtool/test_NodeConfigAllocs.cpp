@@ -103,7 +103,8 @@ BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
                       "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n"
-                      "0x0000000000000000000000000000000000000000000000000000000000000000=0x01\n";
+                      "0x0000000000000000000000000000000000000000000000000000000000000000="
+                      "0x0000000000000000000000000000000000000000000000000000000000000001\n";
     auto cfg = makeNodeConfig();
     cfg->loadGenesisConfig(parseIni(ini));
     auto const& allocs = cfg->genesisConfig().m_allocs;
@@ -111,7 +112,8 @@ BOOST_AUTO_TEST_CASE(AllocStorageSlotsParsed)
     BOOST_CHECK_EQUAL(allocs[0].storage.size(), 1U);
     BOOST_CHECK_EQUAL(allocs[0].storage[0].first,
         "0x0000000000000000000000000000000000000000000000000000000000000000");
-    BOOST_CHECK_EQUAL(allocs[0].storage[0].second, "0x01");
+    BOOST_CHECK_EQUAL(allocs[0].storage[0].second,
+        "0x0000000000000000000000000000000000000000000000000000000000000001");
 }
 
 BOOST_AUTO_TEST_CASE(MissingAddressNamesSection)
@@ -164,6 +166,19 @@ BOOST_AUTO_TEST_CASE(BadStorageKeyRejected)
                       "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
                       "balance=0\nnonce=0\ncode=0x6080604052\n"
                       "[alloc.0.storage]\n0x01=0x01\n";
+    auto cfg = makeNodeConfig();
+    BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
+}
+
+BOOST_AUTO_TEST_CASE(BadStorageValueRejected)
+{
+    // storage value is not 64 hex chars -> reject (importGenesisState unhexes it
+    // into a 32-byte word; short/odd values would corrupt genesis storage).
+    std::string ini = std::string(kBase) + kFeatureL2 +
+                      "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
+                      "balance=0\nnonce=0\ncode=0x6080604052\n"
+                      "[alloc.0.storage]\n"
+                      "0x0000000000000000000000000000000000000000000000000000000000000000=0x01\n";
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }

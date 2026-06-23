@@ -1801,7 +1801,7 @@ static task::Task<void> importGenesisState(
     for (auto&& importAccount : allocs)
     {
         auto addressHex = strip0x(importAccount.address);
-        evmc_address address;
+        evmc_address address{};
         boost::algorithm::unhex(addressHex.begin(), addressHex.end(), address.bytes);
 
         account::EVMAccount account(
