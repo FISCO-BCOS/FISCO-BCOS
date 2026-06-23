@@ -115,6 +115,7 @@ expand_node()
     fi
     ${sed_cmd}  's/listen_port=30300/listen_port=30303/g' config/config.ini
     ${sed_cmd}  's/listen_port=20200/listen_port=20203/g' config/config.ini
+    ${sed_cmd}  's/listen_port=8545/listen_port=8546/g' config/config.ini
     sed -e 's/"nodes":\[/"nodes":\["127.0.0.1:30303",/' config/nodes.json.tmp > config/nodes.json
     cat config/nodes.json
     bash ${build_chain_path} -C expand -c config -d config/ca -o nodes/127.0.0.1/node3 -e ${fisco_bcos_path} "${sm_option}"
@@ -141,6 +142,7 @@ expand_node()
       LOG_INFO "check expand node status normal (waited ${waited}s)..."
     else
       LOG_ERROR "check expand node status error after ${waited}s..."
+      exit 1
     fi
 }
 
@@ -204,6 +206,7 @@ prebuild_deps()
         cd console
         git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for console"; exit 1; }
         git reset --hard
+        rm -rf build log
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
         else
@@ -230,6 +233,7 @@ prebuild_deps()
         cd java-sdk
         git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for java-sdk"; exit 1; }
         git reset --hard
+        rm -rf build log
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
         else
@@ -256,6 +260,7 @@ prebuild_deps()
         cd java-sdk-demo
         git fetch --all --depth 1 || { LOG_ERROR "git fetch failed for java-sdk-demo"; exit 1; }
         git reset --hard
+        rm -rf build log
         if [ -n "$(git branch -a | grep origin/${console_branch})" ]; then
             git checkout origin/${console_branch}
         else

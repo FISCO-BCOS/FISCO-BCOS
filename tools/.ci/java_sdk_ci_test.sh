@@ -82,6 +82,8 @@ config_java_sdk()
     
     use_sm_str="useSMCrypto = \"${use_sm}\""
     ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/config.toml
+    # 单节点模式：peer指向node0(20200)
+    ${sed_cmd} 's/peers=\["127.0.0.1:20201"\]/peers=\["127.0.0.1:20200"\]/g' ./src/integration-test/resources/config.toml
     ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/amop/config-subscriber-for-test.toml
     ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/amop/config-publisher-for-test.toml
     LOG_INFO "Build and Config java sdk success ..."
