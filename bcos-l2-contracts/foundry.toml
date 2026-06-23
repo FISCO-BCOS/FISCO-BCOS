@@ -1,0 +1,29 @@
+# FISCO-BCOS OP-Stack L2 Solidity suite.
+#
+# This project compiles only the self-written predeploys in src/ (all pragma
+# 0.8.25). The upstream OP-Stack predeploys are NOT vendored into this repo;
+# they are pinned in op-fork-pin.toml and built separately — PR-7 CI clones the
+# pinned commit and builds it with OP's own foundry config, so none of OP's
+# import remappings are needed here. evm_version = cancun matches the L2 genesis
+# target EVM.
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+solc = "0.8.25"
+optimizer = true
+optimizer_runs = 999999
+via_ir = false
+evm_version = "cancun"
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    # OZ pinned to op-fork-pin.toml [deps] SHAs (v4.7.3); forge-installed into
+    # git-ignored lib/, not vendored — same handling as forge-std.
+    "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+[profile.ci]
+fuzz = { runs = 1000 }
+verbosity = 4

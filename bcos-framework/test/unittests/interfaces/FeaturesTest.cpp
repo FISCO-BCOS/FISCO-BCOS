@@ -1,6 +1,8 @@
 #include "bcos-framework/ledger/Features.h"
 #include "protocol/Protocol.h"
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 using namespace bcos::ledger;
 
@@ -202,12 +204,41 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_raw_address",
         "feature_rpbft_vrf_type_secp256k1",
         "feature_balance_policy2",
+        "feature_l2_ethereum_compat",
     };
     // clang-format on
     for (size_t i = 0; i < keys.size(); ++i)
     {
         BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
     }
+}
+
+BOOST_AUTO_TEST_CASE(toFlagsNumber)
+{
+    // empty feature set packs to 0
+    Features none;
+    BOOST_CHECK_EQUAL(none.toFlagsNumber(), bcos::u256(0));
+
+    // bit = the flag's explicit enum value
+    Features one;
+    one.set(Features::Flag::feature_l2_ethereum_compat);
+    auto l2Bit = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
+    BOOST_CHECK_EQUAL(one.toFlagsNumber(), bcos::u256(1) << l2Bit);
+
+    // bugfix_revert has value 0 -> bit 0; multiple set flags OR together
+    Features two;
+    two.set(Features::Flag::bugfix_revert);
+    two.set(Features::Flag::feature_l2_ethereum_compat);
+    BOOST_CHECK_EQUAL(two.toFlagsNumber(), (bcos::u256(1) << 0) | (bcos::u256(1) << l2Bit));
+}
+
+BOOST_AUTO_TEST_CASE(flagCountWithinReflectionRange)
+{
+    // feature_flags packs each flag at bit = its enum value; magic_enum's
+    // default reflection range is [-128,128]. Keep the enum within it (mirrors
+    // the static_assert in Features.h) so no flag is silently dropped from
+    // get/set/string2Flag/feature_flags.
+    BOOST_CHECK_LE(magic_enum::enum_count<Features::Flag>(), 128U);
 }
 
 auto validFlags(const Features& features)

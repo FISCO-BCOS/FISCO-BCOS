@@ -37,6 +37,7 @@
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/merkle/Merkle.h>
@@ -1776,16 +1777,32 @@ static task::Task<void> setGenesisFeatures(::ranges::input_range auto const& fea
     co_await writeToStorage(features, storage, 0);
 }
 
+// L2 SystemConfig predeploy: feature_flags is seeded at genesis from the
+// resolved feature set, so the on-chain SystemConfig mirrors the feature bitmap.
+// SystemConfig (bcos-l2-contracts) is a generic mapping(string => Entry); a
+// key's slot is keccak256(utf8(key) || be32(baseSlot)), baseSlot 101 pinned by
+// storage-layout/SystemConfig.json. At genesis the Entry.enableNumber is 0, so
+// the slot value is just the packed flags number (Entry.value, uint192).
+static constexpr std::string_view c_l2SystemConfigAddress =
+    "42000000000000000000000000000000000000c0";
+static constexpr std::string_view c_l2FeatureFlagsKey = "feature_flags";
+static constexpr uint8_t c_l2SystemConfigBaseSlot = 101;
+
 static task::Task<void> importGenesisState(
     ::ranges::input_range auto const& allocs, auto& storage, const crypto::Hash& hashImpl)
 {
+    // allocs from NodeConfig carry 0x-prefixed hex; LedgerTest builds them without
+    // a prefix. Strip a leading 0x so both shapes unhex cleanly.
+    auto strip0x = [](std::string_view hex) { return hex.starts_with("0x") ? hex.substr(2) : hex; };
+
     Features features;
     co_await ledger::readFromStorage(features, storage, 0);
 
     for (auto&& importAccount : allocs)
     {
-        evmc_address address;
-        boost::algorithm::unhex(importAccount.address, address.bytes);
+        auto addressHex = strip0x(importAccount.address);
+        evmc_address address{};
+        boost::algorithm::unhex(addressHex.begin(), addressHex.end(), address.bytes);
 
         account::EVMAccount account(
             storage, address, features.get(Features::Flag::feature_raw_address));
@@ -1793,9 +1810,10 @@ static task::Task<void> importGenesisState(
 
         if (!importAccount.code.empty())
         {
+            auto codeHex = strip0x(importAccount.code);
             bcos::bytes binaryCode;
-            binaryCode.reserve(importAccount.code.size() / 2);
-            boost::algorithm::unhex(importAccount.code, std::back_inserter(binaryCode));
+            binaryCode.reserve(codeHex.size() / 2);
+            boost::algorithm::unhex(codeHex.begin(), codeHex.end(), std::back_inserter(binaryCode));
 
             auto codeHash = hashImpl.hash(binaryCode);
             co_await account.setCode(std::move(binaryCode), std::string{}, codeHash);
@@ -1815,13 +1833,43 @@ static task::Task<void> importGenesisState(
         {
             for (auto const& [key, value] : importAccount.storage)
             {
-                evmc_bytes32 evmKey;
-                boost::algorithm::unhex(key, evmKey.bytes);
-                evmc_bytes32 evmValue;
-                boost::algorithm::unhex(value, evmValue.bytes);
+                auto keyHex = strip0x(key);
+                auto valueHex = strip0x(value);
+                evmc_bytes32 evmKey{};
+                boost::algorithm::unhex(keyHex.begin(), keyHex.end(), evmKey.bytes);
+                evmc_bytes32 evmValue{};
+                boost::algorithm::unhex(valueHex.begin(), valueHex.end(), evmValue.bytes);
 
                 co_await account.setStorage(evmKey, evmValue);
             }
+        }
+
+        if (addressHex == c_l2SystemConfigAddress)
+        {
+            // slot = keccak256(utf8("feature_flags") || be32(101))
+            bcos::bytes slotInput;
+            slotInput.reserve(c_l2FeatureFlagsKey.size() + 32);
+            slotInput.insert(
+                slotInput.end(), c_l2FeatureFlagsKey.begin(), c_l2FeatureFlagsKey.end());
+            bcos::bytes baseSlotBytes(32, 0);
+            baseSlotBytes[31] = c_l2SystemConfigBaseSlot;
+            slotInput.insert(slotInput.end(), baseSlotBytes.begin(), baseSlotBytes.end());
+            auto slotHash = crypto::keccak256Hash(bcos::ref(slotInput));
+
+            evmc_bytes32 slotKey{};
+            std::uninitialized_copy_n(slotHash.data(), sizeof(slotKey.bytes), slotKey.bytes);
+
+            // value = packed flags number as 32-byte big-endian (enableNumber=0)
+            evmc_bytes32 slotValue{};
+            auto flagsNumber = features.toFlagsNumber();
+            for (size_t i = 0; i < sizeof(slotValue.bytes); ++i)
+            {
+                slotValue.bytes[sizeof(slotValue.bytes) - 1 - i] =
+                    (flagsNumber & 0xFF).convert_to<uint8_t>();
+                flagsNumber >>= 8;
+            }
+
+            co_await account.setStorage(slotKey, slotValue);
         }
     }
 }

@@ -115,6 +115,10 @@ if(TOOLS)
   add_subdirectory(tools)
 endif()
 
+if(WITH_L2_CONTRACTS)
+    add_subdirectory(bcos-l2-contracts)
+endif()
+
 # for code coverage
 if(COVERAGE)
     include(Coverage)
