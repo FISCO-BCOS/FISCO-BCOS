@@ -23,6 +23,7 @@
 #pragma once
 #include <boost/asio.hpp>
 #include <boost/asio/steady_timer.hpp>
+#include <atomic>
 #include <memory>
 
 namespace bcos::timer
@@ -57,7 +58,7 @@ private:
     void startPeriodTask();
     void executeTask();
 
-    bool m_running = false;
+    std::atomic_bool m_running = false;
     std::shared_ptr<boost::asio::io_context> m_ioService;
     TimerTask m_timerTask;
     int m_delayMS;
