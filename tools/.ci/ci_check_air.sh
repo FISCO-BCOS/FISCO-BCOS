@@ -314,10 +314,11 @@ LOG_INFO "java_sdk_demo_ci_test success"
 LOG_INFO "======== check non-sm success ========"
 clear_node
 
-# ============ 阶段3：sm 国密测试（不扩容、不跑DMC）============
+# ============ 阶段3：sm 国密测试（扩容、不跑DMC）============
 LOG_INFO "======== check sm case ========"
 export RUN_DMC="false"
 init "-s"
+expand_node "-s"
 check_consensus
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "true" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
@@ -346,6 +347,7 @@ clear_node
 LOG_INFO "======== check baseline cases ========"
 export RUN_DMC="false"
 init_baseline ""
+expand_node ""
 check_consensus
 bash ${current_path}/.ci/console_ci_test.sh ${console_branch} "false" "${current_path}/nodes/127.0.0.1"
 if [[ ${?} != "0" ]]; then
