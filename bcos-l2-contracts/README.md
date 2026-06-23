@@ -11,7 +11,6 @@ C++ build. The C++ tree only wires this in when `WITH_L2_CONTRACTS=ON`
 |------|----------|
 | `src/` | FISCO-BCOS self-written predeploys + interfaces |
 | `test/` | Foundry tests for the self-written contracts |
-| `storage-layout/` | Golden `forge inspect ... storage-layout` fixtures (PR-7 CI gate) |
 | `op-fork-pin.toml` | Pinned upstream OP-Stack commit + dep SHAs (CI clones into `/tmp`) |
 
 ### Self-written predeploys (`src/`)
@@ -25,8 +24,8 @@ C++ build. The C++ tree only wires this in when `WITH_L2_CONTRACTS=ON`
 enableNumber)` / `getValueByKey(key)`, each entry packed as `(uint192 value,
 uint64 enableNumber)` in a single slot. The L2 upper layers read a key's slot
 directly (no EVM) via `keccak256(utf8(key) ‖ be32(baseSlot))`, where `baseSlot`
-is the slot of `_config` (101, after the OZ upgradeable base; pinned in the
-storage-layout fixture). `getValueByKey` is the EVM-callable path for external
+is the slot of `_config` (101, after the OZ upgradeable base; pinned by PR-7's
+storage-layout gate). `getValueByKey` is the EVM-callable path for external
 callers. Access control is OZ `OwnableUpgradeable` (owner = ProxyAdmin). See
 `2026-06-17-systemconfig-slot-kv-redesign.md` for the full contract.
 
@@ -79,18 +78,9 @@ git -C /tmp/op-fork submodule update --init --recursive --depth=1 \
 forge build --root /tmp/op-fork/packages/contracts-bedrock
 ```
 
-Regenerate the storage-layout fixtures (only when storage intentionally changes):
-
-```bash
-forge inspect SystemConfig storage-layout --json > storage-layout/SystemConfig.json
-forge inspect L2ValidatorSet storage-layout --json > storage-layout/L2ValidatorSet.json
-```
-
-The `--json` flag is mandatory: without it forge 1.5.1 emits an ASCII table
-instead of JSON, which corrupts the fixtures.
-
-CI gate (PR-7) fails if `forge inspect <C> storage-layout` diverges from the
-checked-in `storage-layout/*.json`.
+The storage-layout baseline (`storage-layout/*.json`) and its drift gate are
+added by PR-7: the gate regenerates `forge inspect <C> storage-layout --json`
+and fails if it diverges from the checked-in baseline.
 
 ## Genesis deployment notes
 
