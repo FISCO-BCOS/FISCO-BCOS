@@ -33,6 +33,14 @@ void bcos::timer::Timer::start()
         return;
     }
 
+    // For direct execution (no steady_timer involved), execute synchronously.
+    // This preserves the original behavior and avoids unnecessary dispatch.
+    if (m_delayMS <= 0 && m_periodMS <= 0)
+    {
+        executeTask();
+        return;
+    }
+
     // Dispatch to io_context thread for thread safety (steady_timer is not
     // thread-safe).  If already on the io_context thread this runs
     // synchronously; otherwise it posts asynchronously.
@@ -50,10 +58,6 @@ void bcos::timer::Timer::start()
         else if (self->m_periodMS > 0)
         {
             self->startPeriodTask();
-        }
-        else
-        {
-            self->executeTask();
         }
     });
 }
