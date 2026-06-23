@@ -60,7 +60,9 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         receiptFactory(cryptoSuite),
         checkpointBackend(backendStorage),
-        multiLayerStorage(checkpointBackend)
+        multiLayerStorage(checkpointBackend),
+        ioServicePool(std::make_shared<bcos::IOServicePool>(1, "testSerialGC")),
+        scheduler(ioServicePool)
     {}
 
     bcos::crypto::CryptoSuite::Ptr cryptoSuite;
@@ -68,6 +70,7 @@ public:
     BackendStorage backendStorage;
     CheckpointBackend checkpointBackend;
     MultiLayerStorage<MutableStorage, void, CheckpointBackend> multiLayerStorage;
+    bcos::IOServicePool::Ptr ioServicePool;
     SchedulerSerialImpl scheduler;
 
     crypto::Hash::Ptr hashImpl = std::make_shared<bcos::crypto::Keccak256>();

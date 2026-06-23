@@ -16,6 +16,7 @@
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
 #include "bcos-transaction-scheduler/SchedulerParallelImpl.h"
 #include "bcos-transaction-scheduler/SchedulerSerialImpl.h"
+#include <bcos-utilities/IOServicePool.h>
 #include "transaction-executor/tests/TestBytecode.h"
 #include <benchmark/benchmark.h>
 #include <boost/throw_exception.hpp>
@@ -53,6 +54,7 @@ struct Fixture
     MultiLayerStorageType m_multiLayerStorage;
     bcos::bytes m_helloworldBytecodeBinary;
 
+    bcos::IOServicePool::Ptr m_ioServicePool;
     PrecompiledManager m_precompiledManager;
     TransactionExecutorImpl m_executor;
     std::variant<std::monostate, SchedulerSerialImpl, SchedulerParallelImpl<MutableStorage>>
@@ -90,13 +92,15 @@ struct Fixture
         bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
         boost::algorithm::unhex(helloworldBytecode, std::back_inserter(m_helloworldBytecodeBinary));
 
+        m_ioServicePool = std::make_shared<bcos::IOServicePool>(1, "benchmarkGC");
+
         if constexpr (parallel)
         {
-            m_scheduler.emplace<SchedulerParallelImpl<MutableStorage>>();
+            m_scheduler.emplace<SchedulerParallelImpl<MutableStorage>>(m_ioServicePool);
         }
         else
         {
-            m_scheduler.emplace<SchedulerSerialImpl>();
+            m_scheduler.emplace<SchedulerSerialImpl>(m_ioServicePool);
         }
 
         ledger::Features features;

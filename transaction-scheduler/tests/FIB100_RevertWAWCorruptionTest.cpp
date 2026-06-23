@@ -139,7 +139,8 @@ BOOST_AUTO_TEST_CASE(revertedLaterChunkMustNotOverwriteEarlierWrite)
         }
 
         MockRevertExecutor executor;
-        SchedulerParallelImpl<MutableStorage> scheduler;
+        auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "testFIB100GC");
+        SchedulerParallelImpl<MutableStorage> scheduler(ioServicePool);
         scheduler.m_grainSize = 1;       // each tx is its own chunk
         scheduler.m_maxConcurrency = 2;  // allow the two chunks to overlap
 
