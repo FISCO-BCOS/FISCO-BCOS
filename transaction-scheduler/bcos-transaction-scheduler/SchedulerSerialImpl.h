@@ -21,8 +21,14 @@ namespace bcos::scheduler_v1
 
 class SchedulerSerialImpl
 {
+    GC m_gc;
+
 public:
     constexpr static auto MIN_TRANSACTION_GRAIN_SIZE = 16;
+
+    explicit SchedulerSerialImpl(bcos::IOServicePool::Ptr ioServicePool)
+      : m_gc(std::move(ioServicePool))
+    {}
 
     template <class Storage, executor_v1::TransactionExecutor<Storage> TransactionExecutor>
     task::Task<std::vector<protocol::TransactionReceipt::Ptr>> executeBlock(Storage& storage,
@@ -116,7 +122,7 @@ public:
                         }));
         });
 
-        GC::collect(std::move(contexts));
+        m_gc.collect(std::move(contexts));
         co_return receipts;
     }
 };
