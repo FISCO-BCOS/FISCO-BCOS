@@ -43,6 +43,10 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <cctype>
+#include <set>
+#include <string_view>
 #include <thread>
 #include <utility>
 
@@ -54,6 +58,62 @@ using namespace bcos::tool;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
+
+namespace
+{
+// Trust-boundary helpers for [alloc.N] parsing. Functions are camelCase; no
+// members so no m_ prefix.
+bool isHex(std::string_view sv)
+{
+    return !sv.empty() &&
+           std::all_of(sv.begin(), sv.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
+}
+
+// Require that `value` (the raw config value of `field` in `section`) is a
+// 0x-prefixed hex string. If expectedLen > 0, the hex body (after 0x) must be
+// exactly that many chars; otherwise it must merely be valid hex of even
+// length when `evenLength` is set. Throws InvalidConfig naming section+field.
+void requireHexField(std::string const& section, std::string const& field, std::string const& value,
+    size_t expectedLen, bool evenLength)
+{
+    if (value.rfind("0x", 0) != 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " must be 0x-prefixed: " + value));
+    }
+    std::string_view body{value};
+    body.remove_prefix(2);
+    if (expectedLen > 0 && body.size() != expectedLen)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " must be " +
+                                  std::to_string(expectedLen) + " hex chars: " + value));
+    }
+    if (!isHex(body))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " is not valid hex: " + value));
+    }
+    if (evenLength && (body.size() % 2) != 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be even-length hex: " + value));
+    }
+}
+
+void requireDecimalField(
+    std::string const& section, std::string const& field, std::string const& value)
+{
+    if (value.empty() || !std::all_of(value.begin(), value.end(),
+                             [](unsigned char c) { return std::isdigit(c) != 0; }))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be decimal digits: " + value));
+    }
+}
+}  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(std::move(_keyFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
@@ -137,6 +197,106 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
 
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
+
+    // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
+    loadAllocs(_genesisConfig);
+    validateL2Invariants();
+}
+
+void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
+{
+    // NOTE on boost read_ini representation (verified empirically):
+    // [alloc.0] becomes a FLAT top-level ptree key literally named "alloc.0"
+    // (NOT nested alloc->0), and [alloc.0.storage] is a separate flat key
+    // "alloc.0.storage". Because get_child treats '.' as a path separator,
+    // the storage sub-tree must be fetched with a NUL ('\0') path separator
+    // so the literal dotted key is matched.
+    m_genesisConfig.m_allocs.clear();
+    std::set<std::string> seen;
+    for (auto const& kv : _genesisConfig)
+    {
+        if (kv.first.rfind("alloc.", 0) != 0)
+        {
+            continue;
+        }
+        if (kv.first.find(".storage") != std::string::npos)
+        {
+            continue;
+        }
+        ledger::Alloc alloc;
+        try
+        {
+            alloc.address = kv.second.get<std::string>("address");
+            std::transform(alloc.address.begin(), alloc.address.end(), alloc.address.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            requireHexField(kv.first, "address", alloc.address, 40, false);
+            if (!seen.insert(alloc.address).second)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig()
+                    << errinfo_comment("[" + kv.first + "].address duplicate: " + alloc.address));
+            }
+            auto balance = kv.second.get<std::string>("balance", "0");
+            requireDecimalField(kv.first, "balance", balance);
+            alloc.balance = u256(balance);
+            alloc.nonce = kv.second.get<std::string>("nonce", "0");
+            requireDecimalField(kv.first, "nonce", alloc.nonce);
+            alloc.code = kv.second.get<std::string>("code");
+            requireHexField(kv.first, "code", alloc.code, 0, true);
+            // storage section is a sibling flat key "<alloc.N>.storage"; '\0'
+            // separator avoids boost interpreting the dots as a nested path.
+            boost::property_tree::ptree::path_type storagePath(kv.first + ".storage", '\0');
+            if (auto storageNode = _genesisConfig.get_child_optional(storagePath))
+            {
+                for (auto const& slot : *storageNode)
+                {
+                    requireHexField(kv.first + ".storage", "key", slot.first, 64, false);
+                    requireHexField(kv.first + ".storage", "value", slot.second.data(), 64, false);
+                    alloc.storage.emplace_back(slot.first, slot.second.data());
+                }
+            }
+        }
+        catch (InvalidConfig const&)
+        {
+            // already names the offending section + field; surface as-is.
+            throw;
+        }
+        catch (std::exception const& e)
+        {
+            // boost ptree (missing key, bad data) and u256 parse failures land
+            // here; name the failing [alloc.N] section so the operator can find it.
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[" + kv.first + "] malformed: " + e.what()));
+        }
+        NodeConfig_LOG(INFO) << LOG_DESC("loadAllocs") << LOG_KV("section", kv.first)
+                             << LOG_KV("address", alloc.address)
+                             << LOG_KV("storageSlots", alloc.storage.size());
+        m_genesisConfig.m_allocs.push_back(std::move(alloc));
+    }
+}
+
+void NodeConfig::validateL2Invariants()
+{
+    auto const& genesis = m_genesisConfig;
+    // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
+    // there is no separate chain_mode. allocs and the flag must agree.
+    bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_l2_ethereum_compat &&
+                   featureSet.enable > 0;
+        });
+    if (l2Enabled && genesis.m_allocs.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "feature_l2_ethereum_compat requires a non-empty [alloc.*] "
+                                  "section in config.genesis"));
+    }
+    if (!l2Enabled && !genesis.m_allocs.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[alloc.*] section requires feature_l2_ethereum_compat enabled "
+                                  "in [features]"));
+    }
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,

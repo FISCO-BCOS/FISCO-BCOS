@@ -28,8 +28,9 @@ using namespace bcos::gateway::ratelimiter;
 
 const std::string RateLimiterManager::TOTAL_OUTGOING_KEY = "total-outgoing-key";
 
-RateLimiterManager::RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
-  : m_rateLimiterConfig(_rateLimiterConfig)
+RateLimiterManager::RateLimiterManager(
+    boost::asio::io_context& _ioService, const GatewayConfig::RateLimiterConfig& _rateLimiterConfig)
+  : m_rateLimiterConfig(_rateLimiterConfig), m_ioService(std::addressof(_ioService))
 {
     initP2pBasicMsgTypes();
 }
@@ -226,7 +227,7 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLim
 
         if (m_rateLimiterConfig.enableDistributedRatelimit)
         {
-            rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(
+            rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(*m_ioService,
                 m_rateLimiterFactory->toTokenKey(_group), groupOutgoingBwLimit * timeWindowS,
                 timeWindowS, allowExceedMaxPermitSize,
                 m_rateLimiterConfig.enableDistributedRateLimitCache,
@@ -328,7 +329,7 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getInRateLimite
 
     if (enableDistributedRatelimit)
     {
-        rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(
+        rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(*m_ioService,
             m_rateLimiterFactory->toTokenKey(inKey), QPS * timeWindowS, timeWindowS,
             allowExceedMaxPermitSize, m_rateLimiterConfig.enableDistributedRateLimitCache,
             m_rateLimiterConfig.distributedRateLimitCachePercent);

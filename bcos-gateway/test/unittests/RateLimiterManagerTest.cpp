@@ -152,7 +152,9 @@ BOOST_AUTO_TEST_CASE(test_timeWindowRateLimiter)
 
 BOOST_AUTO_TEST_CASE(test_rateLimiterManager)
 {
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "test");
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
+    gatewayFactory->setIOServicePool(ioServicePool);
     bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
     bcos::gateway::GatewayConfig::RedisConfig redisConfig;
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
@@ -510,7 +512,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManager_configIPv4)
     checkRateLimiterConfigBase(config);
 
     auto rateLimiterConfig = config->rateLimiterConfig();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "test");
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
+    gatewayFactory->setIOServicePool(ioServicePool);
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();
     auto timeWindowSec = rateLimiterConfig.timeWindowSec;
@@ -535,7 +539,9 @@ BOOST_AUTO_TEST_CASE(test_rateLimiterManagerConfigIPv6)
     config->initFlowControlConfig(pt);
 
     auto rateLimiterConfig = config->rateLimiterConfig();
+    auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "test");
     auto gatewayFactory = std::make_shared<GatewayFactory>("", "");
+    gatewayFactory->setIOServicePool(ioServicePool);
     auto rateLimiterManager = gatewayFactory->buildRateLimiterManager(rateLimiterConfig, nullptr);
 
     auto rateLimiterFactory = rateLimiterManager->rateLimiterFactory();

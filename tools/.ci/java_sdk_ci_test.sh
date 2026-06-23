@@ -15,6 +15,15 @@ LOG_INFO() {
 download_java_sdk()
 {
     cd ${current_path}
+
+    # SKIP_BUILD 模式下跳过下载和 git 操作（已由主脚本预构建）
+    if [ "${SKIP_BUILD}" == "true" ]; then
+        LOG_INFO "SKIP_BUILD=true, skip java-sdk download"
+        if [ -d "java-sdk" ]; then
+            cd java-sdk
+            return 0
+        fi
+    fi
     
     LOG_INFO "Pull java sdk, branch: ${java_sdk_branch} ..."
     local java_sdk_file=java-sdk
@@ -73,6 +82,8 @@ config_java_sdk()
     
     use_sm_str="useSMCrypto = \"${use_sm}\""
     ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/config.toml
+    # 单节点模式：peer指向node0(20200)
+    ${sed_cmd} 's/peers=\["127.0.0.1:20201"\]/peers=\["127.0.0.1:20200"\]/g' ./src/integration-test/resources/config.toml
     ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/amop/config-subscriber-for-test.toml
     ${sed_cmd} "s/useSMCrypto = \"${not_use_sm}\"/${use_sm_str}/g" ./src/integration-test/resources/amop/config-publisher-for-test.toml
     LOG_INFO "Build and Config java sdk success ..."

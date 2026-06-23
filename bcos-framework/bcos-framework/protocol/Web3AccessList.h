@@ -2,7 +2,6 @@
 
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <utility>
 #include <vector>
 
 namespace bcos::protocol

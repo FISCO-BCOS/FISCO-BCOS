@@ -24,7 +24,7 @@ class ExecutorManager
 public:
     using Ptr = std::shared_ptr<ExecutorManager>;
 
-    ExecutorManager();
+    ExecutorManager(boost::asio::io_context& _ioService);
 
     virtual ~ExecutorManager();
 

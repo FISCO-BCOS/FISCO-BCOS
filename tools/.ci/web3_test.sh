@@ -12,7 +12,13 @@ cd bcos-testing
 
 git pull
 
-npm install
+# 缓存 node_modules，避免每次重复安装
+if [ -d "node_modules" ] && [ -f "package.json" ]; then
+    echo "[INFO] Using cached node_modules, running npm install --prefer-offline..."
+    npm install --prefer-offline
+else
+    npm install
+fi
 npm install ethereum-cryptography
 npm install node@22.14.0
 

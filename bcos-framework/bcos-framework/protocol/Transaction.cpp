@@ -150,4 +150,25 @@ std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
            << "size=" << transaction.size() << "}";
     return stream;
 }
+
+u256 effectiveGasPrice(Transaction const& tx)
+{
+    try
+    {
+        if (const auto price = tx.gasPrice(); !price.empty())
+        {
+            if (auto value = u256(price); value > 0)
+            {
+                return value;
+            }
+        }
+        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
+        {
+            return u256(mfg);
+        }
+    }
+    catch (...)
+    {}
+    return {0};
+}
 }  // namespace bcos::protocol

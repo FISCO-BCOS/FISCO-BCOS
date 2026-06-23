@@ -46,7 +46,7 @@ public:
     using Ptr = std::shared_ptr<TarsExecutorManager>;
     using EndPointSet = std::shared_ptr<std::set<std::pair<std::string, uint16_t>>>;
 
-    TarsExecutorManager(
+    TarsExecutorManager(boost::asio::io_context& _ioService,
                 const std::string& _executorServiceName, bcos::tool::NodeConfig::Ptr& _nodeConfig);
 
     TarsExecutorManager(TarsExecutorManager&&) = delete;

@@ -15,6 +15,15 @@ LOG_INFO() {
 download_console()
 {
     cd ${current_path}
+
+    # SKIP_BUILD 模式下跳过下载和 git 操作（已由主脚本预构建）
+    if [ "${SKIP_BUILD}" == "true" ]; then
+        LOG_INFO "SKIP_BUILD=true, skip console download"
+        if [ -d "console" ]; then
+            cd console
+            return 0
+        fi
+    fi
     
     LOG_INFO "Pull console, branch: ${console_branch} ..."
     console_file=console
@@ -59,7 +68,8 @@ config_console()
     mkdir -p "./src/integration-test/resources/conf"
     cp -r ${node_path}/sdk/* ./src/integration-test/resources/conf
     cp ./src/integration-test/resources/config-example.toml ./src/integration-test/resources/config.toml
-    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20201\"\]/g" ./src/integration-test/resources/config.toml
+    # 单节点模式：peer指向node0(20200)
+    ${sed_cmd} "s/peers=\[\"127.0.0.1:20200\", \"127.0.0.1:20201\"\]/peers=\[\"127.0.0.1:20200\"\]/g" ./src/integration-test/resources/config.toml
     cp -r ./src/main/resources/contract ./contracts
     
     local not_use_sm="true"

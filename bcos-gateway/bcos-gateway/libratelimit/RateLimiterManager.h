@@ -43,7 +43,9 @@ public:
     using ConstPtr = std::shared_ptr<const RateLimiterManager>;
     using UniquePtr = std::unique_ptr<RateLimiterManager>;
 
-        RateLimiterManager(const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
+        RateLimiterManager(
+            boost::asio::io_context& _ioService,
+            const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
     bcos::ratelimiter::RateLimiterInterface::Ptr getRateLimiter(const std::string& _rateLimiterKey);
 
@@ -105,6 +107,7 @@ private:
     std::array<bool, std::numeric_limits<uint16_t>::max()> m_p2pBasicMsgTypes{};
 
     GatewayConfig::RateLimiterConfig m_rateLimiterConfig;
+    boost::asio::io_context* m_ioService;
 };
 
 }  // namespace ratelimiter

@@ -322,6 +322,10 @@ private:
     void loadGenesisFeatures(boost::property_tree::ptree const& ptree);
     void loadAlloc(boost::property_tree::ptree const& ptree);
 
+    // A6.5: L2 genesis alloc parsing (L2 mode gated by feature_l2_ethereum_compat)
+    void loadAllocs(boost::property_tree::ptree const& _genesisConfig);
+    void validateL2Invariants();
+
     bcos::consensus::ConsensusNodeList parseConsensusNodeList(
         boost::property_tree::ptree const& _pt, std::string const& _sectionName,
         std::string const& _subSectionName);

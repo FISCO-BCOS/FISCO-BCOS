@@ -143,12 +143,18 @@ constexpr static auto DEFAULT_MAX_CONCURRENCY = 8UL;
 template <class MutableStorageType>
 class SchedulerParallelImpl
 {
+    GC m_gc;
+
 public:
     constexpr static bool isSchedulerParallelImpl = true;
     using MutableStorage = MutableStorageType;
 
     size_t m_grainSize = DEFAULT_GRAIN_SIZE;
     size_t m_maxConcurrency = DEFAULT_MAX_CONCURRENCY;
+
+    explicit SchedulerParallelImpl(bcos::IOServicePool::Ptr ioServicePool)
+      : m_gc(std::move(ioServicePool))
+    {}
 
     task::Task<void> mergeLastStorage(auto& storage, auto& lastStorage)
     {
@@ -244,7 +250,7 @@ public:
                             ittapi::ITT_DOMAINS::instance().STAGE_5);
                         if (hasRAW.test())
                         {
-                            GC::collect(std::move(chunk));
+                            m_gc.collect(std::move(chunk));
                             return {};
                         }
 
@@ -259,7 +265,7 @@ public:
                                 hasRAW.test_and_set();
                                 PARALLEL_SCHEDULER_LOG(DEBUG)
                                     << "Detected RAW Intersection:" << index;
-                                GC::collect(std::move(chunk));
+                                m_gc.collect(std::move(chunk));
                                 return {};
                             }
                         }
@@ -299,7 +305,7 @@ public:
                                 << chunk->count();
                             task::tbb::syncWait(
                                 storage2::merge(lastStorage, mutableStorage(chunk->storageView())));
-                            GC::collect(std::move(chunk));
+                            m_gc.collect(std::move(chunk));
                         }
                         else
                         {
@@ -309,7 +315,7 @@ public:
             context);
 
         task::tbb::syncWait(mergeLastStorage(storage, lastStorage));
-        GC::collect(std::move(writeSet));
+        m_gc.collect(std::move(writeSet));
         if (offset < count)
         {
             PARALLEL_SCHEDULER_LOG(DEBUG)
@@ -345,7 +351,7 @@ public:
         arena.execute([&]() {
             auto retryCount = executeSinglePass(
                 storage, executor, blockHeader, ledgerConfig, contexts, m_grainSize);
-            GC::collect(std::move(contexts));
+            m_gc.collect(std::move(contexts));
             PARALLEL_SCHEDULER_LOG(INFO) << "Parallel execute block retry count: " << retryCount;
         });
 

@@ -26,11 +26,12 @@ bcos::gateway::ratelimiter::RateLimiterFactory::buildTimeWindowRateLimiter(
 
 bcos::ratelimiter::RateLimiterInterface::Ptr
 bcos::gateway::ratelimiter::RateLimiterFactory::buildDistributedRateLimiter(
+    boost::asio::io_context& _ioService,
     const std::string& _distributedKey, int64_t _maxPermitsSize, int32_t _intervalSec,
     bool _allowExceedMaxPermitSize, bool _enableLocalCache, int32_t _localCachePercent)
 {
-    auto rateLimiter = std::make_shared<bcos::ratelimiter::DistributedRateLimiter>(m_redis,
-        _distributedKey, _maxPermitsSize, _allowExceedMaxPermitSize, _intervalSec,
+    auto rateLimiter = std::make_shared<bcos::ratelimiter::DistributedRateLimiter>(_ioService,
+        m_redis, _distributedKey, _maxPermitsSize, _allowExceedMaxPermitSize, _intervalSec,
         _enableLocalCache, _localCachePercent);
     return rateLimiter;
 }

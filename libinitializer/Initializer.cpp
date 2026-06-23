@@ -297,7 +297,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     if (baselineSchedulerConfig.parallel)
     {
         auto parallelScheduler =
-            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>();
+            std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
+                m_ioServicePool);
         parallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
         parallelScheduler->m_maxConcurrency = baselineSchedulerConfig.maxThread;
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
@@ -312,7 +313,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else
     {
-        auto serialScheduler = std::make_shared<scheduler_v1::SchedulerSerialImpl>();
+        auto serialScheduler =
+            std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
@@ -325,7 +327,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
-        m_nodeConfig->executorServiceName(), m_nodeConfig);
+        *m_ioServicePool->getIOService(), m_nodeConfig->executorServiceName(), m_nodeConfig);
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
