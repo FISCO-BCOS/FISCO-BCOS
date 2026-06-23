@@ -1,4 +1,5 @@
 #pragma once
+#include "DeferredWriteBatch.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-task/AwaitableValue.h"
 #include "bcos-utilities/Error.h"
@@ -69,6 +70,9 @@ public:
 
     ::rocksdb::DB& rocksDB() noexcept { return rocksDBRef(); }
     ::rocksdb::DB const& rocksDB() const noexcept { return rocksDBRef(); }
+
+    /// Create a single-CF atomic write handle over the underlying DB (spec §5.6 / §5.7).
+    DeferredWriteBatch makeDeferredBatch() { return DeferredWriteBatch{rocksDBRef()}; }
 
     auto readSomeRaw(::ranges::input_range auto keys, auto&&... /*args*/)
         -> task::Task<std::vector<StorageValueType<ValueType>>>

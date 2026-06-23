@@ -9,6 +9,7 @@ find_package(Boost REQUIRED serialization thread context filesystem)
 set(SRC_LIST bcos-storage/Common.cpp)
 list(APPEND SRC_LIST bcos-storage/RocksDBStorage.cpp)
 list(APPEND SRC_LIST bcos-storage/CheckpointRocksDBStorage.cpp)
+list(APPEND SRC_LIST bcos-storage/DeferredWriteBatch.cpp)
 
 set(LIB_LIST table bcos-framework Boost::serialization Boost::filesystem zstd::libzstd_static RocksDB::rocksdb ittapi)
 
