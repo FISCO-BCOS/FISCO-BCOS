@@ -165,7 +165,7 @@ public:
     using Ptr = std::shared_ptr<FakePBFTEngine>;
     explicit FakePBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext,
         bcos::IOServicePool::Ptr _ioServicePool)
-      : PBFTEngine(_config, _ioContext, std::move(_ioServicePool))
+      : PBFTEngine(_config, _ioContext, _ioServicePool)
     {
         auto cacheFactory = std::make_shared<FakePBFTCacheFactory>();
         m_cacheProcessor = std::make_shared<FakeCacheProcessor>(cacheFactory, _config);

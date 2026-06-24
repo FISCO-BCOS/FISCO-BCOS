@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
     for (int i = 0; i < N; ++i)
     {
         // Strand tasks must be serial.
-        pool->strand([&strandInFlight, &strandConcurrent, &strandOrder, &strandDone, i]() {
+        pool->strand([&strandInFlight, &strandConcurrent, &strandOrder, &strandDone]() {
             if (strandInFlight.fetch_add(1) > 0)
             {
                 strandConcurrent.store(true);
