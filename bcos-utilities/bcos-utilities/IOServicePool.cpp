@@ -72,3 +72,29 @@ std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
 bcos::IOServicePool::IOServiceContext::IOServiceContext(std::shared_ptr<IOService> _ioService)
   : ioService(std::move(_ioService)), work(this->ioService->get_executor())
 {}
+
+void IOServicePool::kickStrand()
+{
+    post([this]() { drainStrand(); });
+}
+
+void IOServicePool::drainStrand()
+{
+    std::function<void()> task;
+    bool hasMore = false;
+    {
+        std::lock_guard<std::mutex> lock(m_strandMutex);
+        task = std::move(m_strandQueue.front());
+        m_strandQueue.pop_front();
+        hasMore = !m_strandQueue.empty();
+        if (!hasMore)
+        {
+            m_strandBusy = false;
+        }
+    }
+    task();
+    if (hasMore)
+    {
+        kickStrand();
+    }
+}

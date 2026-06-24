@@ -32,7 +32,7 @@ void StateMachine::asyncApply(ssize_t _timeout, ProposalInterface::ConstPtr _las
 {
     auto self = weak_from_this();
     // Note: async here to increase performance
-    m_worker->enqueue(
+    m_ioServicePool->strand(
         [self, _timeout, _lastAppliedProposal, _proposal, _executedProposal, _onExecuteFinished]() {
             auto stateMachine = self.lock();
             if (!stateMachine)

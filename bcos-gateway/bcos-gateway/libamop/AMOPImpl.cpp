@@ -40,14 +40,15 @@ TopicManager::Ptr AMOPImpl::topicManager()
 AMOPImpl::AMOPImpl(TopicManager::Ptr _topicManager,
     bcos::amop::AMOPMessageFactory::Ptr _messageFactory, AMOPRequestFactory::Ptr _requestFactory,
     P2PInterface::Ptr _network, P2pID const& _p2pNodeID,
-    boost::asio::io_context& _ioContext)
+    boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool)
   : m_topicManager(_topicManager),
     m_messageFactory(_messageFactory),
     m_requestFactory(_requestFactory),
     m_network(_network),
-    m_p2pNodeID(_p2pNodeID)
+    m_p2pNodeID(_p2pNodeID),
+    m_ioServicePool(std::move(_ioServicePool))
 {
-    m_threadPool = std::make_shared<ThreadPool>("amopDispatcher", 1);
     m_timer = std::make_shared<Timer>(_ioContext, TOPIC_SYNC_PERIOD, "topicSync");
     m_timer->registerTimeoutHandler([this]() { broadcastTopicSeq(); });
 
@@ -216,7 +217,7 @@ void AMOPImpl::onReceiveAMOPMessage(P2pID const& _nodeID, std::string const& _to
         std::string errorMessage = "NotFoundClientByTopicDispatchMsg";
         amopMsg->setData(bytesConstRef((bcos::byte*)errorMessage.c_str(), errorMessage.size()));
         amopMsg->encode(*buffer);
-        m_threadPool->enqueue([buffer, _responseCallback]() {
+        m_ioServicePool->strand([buffer, _responseCallback]() {
             _responseCallback(buffer, GatewayMessageType::AMOPMessageType);
         });
         AMOP_LOG(WARNING) << LOG_BADGE("onRecvAMOPMessage")
@@ -487,7 +488,7 @@ void AMOPImpl::onAMOPMessage(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _message)
 {
     auto self = std::weak_ptr<AMOPImpl>(shared_from_this());
-    m_threadPool->enqueue([self, _e, _session, _message]() {
+    m_ioServicePool->strand([self, _e, _session, _message]() {
         auto amop = self.lock();
         if (!amop)
         {

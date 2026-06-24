@@ -39,14 +39,14 @@ using namespace bcos::ledger;
 using namespace bcos::tool;
 
 BlockSync::BlockSync(
-    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext, unsigned _idleWaitMs)
+    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs)
   : Worker(_ioContext, "syncWorker", _idleWaitMs),
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
-    m_downloadingQueue(std::make_shared<DownloadingQueue>(_config))
+    m_downloadingQueue(std::make_shared<DownloadingQueue>(_config)),
+    m_ioServicePool(std::move(_ioServicePool))
 {
-    m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
-    m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
     m_downloadingTimer =
         std::make_shared<Timer>(_ioContext, m_config->downloadTimeout(), "downloadTimer");
 
@@ -162,14 +162,6 @@ void BlockSync::stop()
         return;
     }
     BLKSYNC_LOG(INFO) << LOG_DESC("Stop BlockSync");
-    if (m_downloadBlockProcessor)
-    {
-        m_downloadBlockProcessor->stop();
-    }
-    if (m_sendBlockProcessor)
-    {
-        m_sendBlockProcessor->stop();
-    }
     if (m_downloadingTimer)
     {
         m_downloadingTimer->destroy();
@@ -220,7 +212,7 @@ void BlockSync::executeWorker()
     }
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    m_downloadBlockProcessor->enqueue([this]() {
+    m_ioServicePool->strand([this]() {
         try
         {
             // flush downloaded buffer into downloading queue
@@ -249,7 +241,7 @@ void BlockSync::executeWorker()
         }
     });
     // send block to other nodes
-    m_sendBlockProcessor->enqueue([this]() {
+    m_ioServicePool->strand([this]() {
         try
         {
             maintainBlockRequest();

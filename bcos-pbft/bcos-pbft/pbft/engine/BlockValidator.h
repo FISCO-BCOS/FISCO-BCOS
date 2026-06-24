@@ -21,7 +21,7 @@
 #pragma once
 #include "../config/PBFTConfig.h"
 #include <bcos-framework/protocol/Block.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 namespace bcos
 {
 namespace consensus
@@ -30,21 +30,13 @@ class BlockValidator : public std::enable_shared_from_this<BlockValidator>
 {
 public:
     using Ptr = std::shared_ptr<BlockValidator>;
-    explicit BlockValidator(PBFTConfig::Ptr _config)
-      : m_config(std::move(_config)), m_taskPool(std::make_shared<ThreadPool>("blockValidator", 1))
+    explicit BlockValidator(PBFTConfig::Ptr _config, bcos::IOServicePool::Ptr _ioServicePool)
+      : m_config(std::move(_config)), m_ioServicePool(std::move(_ioServicePool))
     {}
     virtual ~BlockValidator() = default;
 
     virtual void asyncCheckBlock(
         bcos::protocol::Block::Ptr _block, std::function<void(Error::Ptr, bool)> _onVerifyFinish);
-
-    virtual void stop()
-    {
-        if (m_taskPool)
-        {
-            m_taskPool->stop();
-        }
-    }
 
 protected:
     virtual bool checkSealerListAndWeightList(bcos::protocol::Block::Ptr _block);
@@ -52,7 +44,7 @@ protected:
 
 private:
     PBFTConfig::Ptr m_config;
-    ThreadPool::Ptr m_taskPool;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace consensus
 }  // namespace bcos

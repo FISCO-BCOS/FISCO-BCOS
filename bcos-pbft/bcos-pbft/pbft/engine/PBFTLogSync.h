@@ -22,14 +22,15 @@
 #include "../cache/PBFTCacheProcessor.h"
 #include "../config/PBFTConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 namespace bcos::consensus
 {
 class PBFTLogSync : public std::enable_shared_from_this<PBFTLogSync>
 {
 public:
     using Ptr = std::shared_ptr<PBFTLogSync>;
-    PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache);
+    PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache,
+        bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~PBFTLogSync() = default;
     using SendResponseCallback = std::function<void(bytesConstRef _respData)>;
     using HandlePrePrepareCallback = std::function<void(PBFTMessageInterface::Ptr)>;
@@ -53,7 +54,7 @@ public:
     virtual void requestPrecommitData(bcos::crypto::PublicPtr _from,
         PBFTMessageInterface::Ptr _prePrepareMsg, HandlePrePrepareCallback _prePrepareCallback);
 
-    virtual void stop() { m_requestThread->stop(); }
+    virtual void stop() {}
 
 protected:
     virtual void onRecvCommittedProposalsResponse(bcos::Error::Ptr _error,
@@ -71,6 +72,6 @@ protected:
 private:
     PBFTConfig::Ptr m_config;
     PBFTCacheProcessor::Ptr m_pbftCache;
-    std::shared_ptr<ThreadPool> m_requestThread;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace bcos::consensus

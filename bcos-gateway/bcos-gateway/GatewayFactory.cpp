@@ -1009,7 +1009,7 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     registerAMOPHandlers(service, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
-        _p2pNodeID, *m_ioServicePool->getIOService());
+        _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
@@ -1024,7 +1024,7 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     registerAMOPHandlers(service, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
-        _p2pNodeID, *m_ioServicePool->getIOService());
+        _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 void GatewayFactory::registerAMOPHandlers(

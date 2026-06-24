@@ -320,7 +320,7 @@ void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stab
                    << LOG_KV("blockProofSize", blockSignatureList.size());
     // Note: enqueue here to increase the performance since commitBlock is a sync implementation
     auto self = weak_from_this();
-    m_commitBlockWorker->enqueue([self, blockHeader, _stableProposal]() {
+    m_ioServicePool->strand([self, blockHeader, _stableProposal]() {
         auto storage = self.lock();
         if (!storage)
         {
@@ -397,7 +397,7 @@ void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stablePro
             // Note:Here the thread pool is used to asynchronize the operation of PBFT finalize to
             // prevent the commitBlock from calling the callback synchronously and affecting the
             // performance.
-            ledgerStorage->m_commitBlockWorker->enqueue(
+            ledgerStorage->m_ioServicePool->strand(
                 [self, txsSize, _blockHeader, _ledgerConfig]() {
                     auto storage = self.lock();
                     if (!storage)

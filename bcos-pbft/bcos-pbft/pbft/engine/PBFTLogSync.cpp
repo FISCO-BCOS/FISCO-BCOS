@@ -28,10 +28,11 @@ using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::consensus;
 
-PBFTLogSync::PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache)
+PBFTLogSync::PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftCache,
+    bcos::IOServicePool::Ptr _ioServicePool)
   : m_config(std::move(_config)),
     m_pbftCache(std::move(_pbftCache)),
-    m_requestThread(std::make_shared<ThreadPool>("pbftLogSync", 1))
+    m_ioServicePool(std::move(_ioServicePool))
 {}
 
 void PBFTLogSync::requestCommittedProposals(
@@ -82,7 +83,7 @@ void PBFTLogSync::requestPBFTData(
     PublicPtr _from, PBFTRequestInterface::Ptr _pbftRequest, CallbackFunc _callback)
 {
     auto self = weak_from_this();
-    m_requestThread->enqueue([self, _from, _pbftRequest, _callback]() {
+    m_ioServicePool->strand([self, _from, _pbftRequest, _callback]() {
         try
         {
             auto pbftLogSync = self.lock();

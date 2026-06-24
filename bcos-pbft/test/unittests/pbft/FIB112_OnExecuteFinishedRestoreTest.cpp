@@ -111,7 +111,8 @@ BOOST_AUTO_TEST_CASE(callback_called_on_block_number_mismatch)
         cryptoSuite, headerFactory, txFactory, receiptFactory);
 
     auto scheduler = std::make_shared<MismatchedNumberScheduler>(blockFactory);
-    auto stateMachine = std::make_shared<StateMachine>(scheduler, blockFactory);
+    auto ioPool = std::make_shared<IOServicePool>(1, "fib112");
+    auto stateMachine = std::make_shared<StateMachine>(scheduler, blockFactory, ioPool);
 
     // lastApplied at index 1
     auto lastApplied = std::make_shared<Proposal>();

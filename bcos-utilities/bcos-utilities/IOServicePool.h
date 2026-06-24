@@ -19,7 +19,10 @@
 
 #pragma once
 #include <boost/asio.hpp>
+#include <deque>
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <range/v3/algorithm/binary_search.hpp>
 #include <string>
 #include <string_view>
@@ -66,6 +69,31 @@ public:
         }
     }
 
+    // Submit a task that is guaranteed to execute serially with respect to
+    // other tasks submitted via strand() (FIFO order).  Unlike
+    // boost::asio::strand which binds to a single executor, this
+    // implementation round-robins each task across the pool's io_contexts
+    // so that strand work is spread over all threads while never executing
+    // two strand tasks concurrently.
+    template <class Task>
+    void strand(Task&& task)
+    {
+        bool needKick = false;
+        {
+            std::lock_guard<std::mutex> lock(m_strandMutex);
+            m_strandQueue.emplace_back(std::forward<Task>(task));
+            needKick = !m_strandBusy;
+            if (needKick)
+            {
+                m_strandBusy = true;
+            }
+        }
+        if (needKick)
+        {
+            kickStrand();
+        }
+    }
+
 private:
     struct IOServiceContext
     {
@@ -75,9 +103,18 @@ private:
 
         explicit IOServiceContext(std::shared_ptr<IOService> _ioService);
     };
+    void kickStrand();
+    void drainStrand();
+
     std::vector<IOServiceContext> m_contexts;
     std::vector<std::thread::id> m_threadIds;
     std::string m_threadName;
     std::atomic_size_t m_nextIOService = 0;
+
+    // Custom strand: deque-based serial task queue with round-robin dispatch
+    // across all pool io_contexts.  Only one task is in-flight at a time.
+    std::deque<std::function<void()>> m_strandQueue;
+    std::mutex m_strandMutex;
+    bool m_strandBusy{false};
 };
 }  // namespace bcos
