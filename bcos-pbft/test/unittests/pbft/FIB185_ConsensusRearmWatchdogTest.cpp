@@ -22,7 +22,9 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
+#include <boost/asio/post.hpp>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 using namespace bcos::crypto;
 
@@ -63,6 +65,14 @@ BOOST_AUTO_TEST_CASE(WatchdogRearmsStalledTimer)
 
     fixture->pbftEngine()->checkConsensusTimerWatchdogForTest();
 
+    // flush the io_context so the dispatched timer->start() completes
+    {
+        std::promise<void> flushDone;
+        auto flushFuture = flushDone.get_future();
+        boost::asio::post(fixture->ioContext(), [&flushDone]() { flushDone.set_value(); });
+        flushFuture.wait();
+    }
+
     // the watchdog re-armed the timer
     BOOST_CHECK(config->timer()->running());
 
@@ -97,6 +107,13 @@ BOOST_AUTO_TEST_CASE(WatchdogIsNoopWhenTimerRunning)
 
     config->setTimeoutState(true);
     config->timer()->start();
+    // flush the io_context so the dispatched timer->start() completes
+    {
+        std::promise<void> flushDone;
+        auto flushFuture = flushDone.get_future();
+        boost::asio::post(fixture->ioContext(), [&flushDone]() { flushDone.set_value(); });
+        flushFuture.wait();
+    }
     BOOST_CHECK(config->timer()->running());
 
     fixture->pbftEngine()->checkConsensusTimerWatchdogForTest();

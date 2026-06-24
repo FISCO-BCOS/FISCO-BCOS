@@ -37,7 +37,6 @@
 #include <boost/test/unit_test.hpp>
 #include <atomic>
 
-using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::crypto;
 using namespace bcos::front;
@@ -96,17 +95,15 @@ inline PBFTMessageInterface::Ptr makeExceptionPrePrepare(
 class MinimalPBFTConfig : public PBFTConfig
 {
 public:
-    MinimalPBFTConfig(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair,
-        std::shared_ptr<ValidatorInterface> _validator,
+    MinimalPBFTConfig(boost::asio::io_context& _ioService, CryptoSuite::Ptr _cryptoSuite,
+        KeyPairInterface::Ptr _keyPair, std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<FrontServiceInterface> _frontService, BlockFactory::Ptr _blockFactory)
-      : PBFTConfig(m_ioService, std::move(_cryptoSuite), std::move(_keyPair),
+      : PBFTConfig(_ioService, std::move(_cryptoSuite), std::move(_keyPair),
             std::make_shared<PBFTMessageFactoryImpl>(), nullptr, std::move(_validator),
             std::move(_frontService), nullptr, nullptr, std::move(_blockFactory))
     {}
-
-private:
-    boost::asio::io_context m_ioService;
 };
+
 }  // namespace
 
 BOOST_FIXTURE_TEST_SUITE(FIB181_ResetExceptionCacheAdjacent, TestPromptFixture)
@@ -123,8 +120,9 @@ BOOST_AUTO_TEST_CASE(adjacent_stale_entries_both_reset)
     auto validator = std::make_shared<CountingValidator>(txPool, blockFactory, txResultFactory);
     auto frontService = std::make_shared<FakeFrontService>(keyPair->publicKey());
 
+    boost::asio::io_context ioService;
     auto config = std::make_shared<MinimalPBFTConfig>(
-        cryptoSuite, keyPair, validator, frontService, blockFactory);
+        ioService, cryptoSuite, keyPair, validator, frontService, blockFactory);
 
     auto cache = std::make_shared<PBFTCache>(config, /*index*/ 10);
 

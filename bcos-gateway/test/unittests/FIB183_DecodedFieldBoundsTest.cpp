@@ -55,13 +55,10 @@ public:
 class FakeServiceV2FIB183 : public ServiceV2
 {
 public:
-    FakeServiceV2FIB183(P2PInfo const& _info, RouterTableFactory::Ptr _factory)
-      : ServiceV2(_info, std::move(_factory), m_ioContext)
+    FakeServiceV2FIB183(P2PInfo const& _info, RouterTableFactory::Ptr _factory,
+        boost::asio::io_context& _ioContext)
+      : ServiceV2(_info, std::move(_factory), _ioContext)
     {}
-
-private:
-    boost::asio::io_context m_ioContext;
-public:
     void callOnReceiveRouterSeq(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
     {
@@ -122,8 +119,9 @@ BOOST_AUTO_TEST_CASE(ShortRouterSeqPayloadIsDropped)
     P2PInfo selfInfo;
     selfInfo.rawP2pID = "selfRawP2pID";
     selfInfo.p2pID = "selfP2pID";
+    boost::asio::io_context ioContext;
     auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-    auto service = std::make_shared<FakeServiceV2FIB183>(selfInfo, routerTableFactory);
+    auto service = std::make_shared<FakeServiceV2FIB183>(selfInfo, routerTableFactory, ioContext);
     auto factory = std::make_shared<P2PMessageFactoryV2>();
 
     for (size_t len = 0; len < sizeof(uint32_t); ++len)
