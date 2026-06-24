@@ -42,7 +42,7 @@ public:
         m_storage(std::move(_storage)),
         m_blockFactory(std::move(_blockFactory)),
         m_messageFactory(std::move(_messageFactory)),
-        m_ioServicePool(std::move(_ioServicePool))
+        m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
     {
         createKVTable(m_pbftCommitDB);
     }
@@ -112,6 +112,6 @@ protected:
     std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> m_finalizeHandler;
     std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
         m_onStableCheckPointCommitFailed;
-    bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::Strand::Ptr m_strand;
 };
 }  // namespace bcos::consensus

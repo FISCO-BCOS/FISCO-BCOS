@@ -31,7 +31,7 @@ class BlockValidator : public std::enable_shared_from_this<BlockValidator>
 public:
     using Ptr = std::shared_ptr<BlockValidator>;
     explicit BlockValidator(PBFTConfig::Ptr _config, bcos::IOServicePool::Ptr _ioServicePool)
-      : m_config(std::move(_config)), m_ioServicePool(std::move(_ioServicePool))
+      : m_config(std::move(_config)), m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
     {}
     virtual ~BlockValidator() = default;
 
@@ -44,7 +44,7 @@ protected:
 
 private:
     PBFTConfig::Ptr m_config;
-    bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::Strand::Ptr m_strand;
 };
 }  // namespace consensus
 }  // namespace bcos

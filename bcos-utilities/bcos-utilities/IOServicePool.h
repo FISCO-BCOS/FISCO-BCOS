@@ -29,6 +29,74 @@
 #include <thread>
 namespace bcos
 {
+class IOServicePool;
+
+// Standalone serial task dispatcher that wraps an IOServicePool.
+// Tasks submitted via post() are guaranteed to execute in FIFO order
+// and never concurrently, while still being round-robin dispatched
+// across the pool's io_contexts.  Multiple Strand instances can coexist
+// independently — each serializes its own tasks without blocking others.
+//
+// Lifetime: the Strand can be safely destroyed even when drain handlers
+// are still queued in the pool — the inner Impl struct is kept alive by
+// the posted handlers until the queue is fully drained.
+class Strand
+{
+    struct Impl : public std::enable_shared_from_this<Impl>
+    {
+        std::weak_ptr<IOServicePool> pool;
+        std::deque<std::function<void()>> queue;
+        std::mutex mutex;
+        bool busy{false};
+
+        void kick();
+        void drain();
+    };
+
+public:
+    using Ptr = std::shared_ptr<Strand>;
+
+    explicit Strand(const std::shared_ptr<IOServicePool>& pool)
+    {
+        m_impl = std::make_shared<Impl>();
+        m_impl->pool = pool;
+    }
+
+    ~Strand()
+    {
+        std::lock_guard<std::mutex> lock(m_impl->mutex);
+        m_impl->queue.clear();
+        m_impl->busy = false;
+    }
+
+    Strand(const Strand&) = delete;
+    Strand& operator=(const Strand&) = delete;
+    Strand(Strand&&) = delete;
+    Strand& operator=(Strand&&) = delete;
+
+    template <class Task>
+    void post(Task&& task)
+    {
+        bool needKick = false;
+        {
+            std::lock_guard<std::mutex> lock(m_impl->mutex);
+            m_impl->queue.emplace_back(std::forward<Task>(task));
+            needKick = !m_impl->busy;
+            if (needKick)
+            {
+                m_impl->busy = true;
+            }
+        }
+        if (needKick)
+        {
+            m_impl->kick();
+        }
+    }
+
+private:
+    std::shared_ptr<Impl> m_impl;
+};
+
 class IOServicePool
 {
 public:
@@ -69,31 +137,6 @@ public:
         }
     }
 
-    // Submit a task that is guaranteed to execute serially with respect to
-    // other tasks submitted via strand() (FIFO order).  Unlike
-    // boost::asio::strand which binds to a single executor, this
-    // implementation round-robins each task across the pool's io_contexts
-    // so that strand work is spread over all threads while never executing
-    // two strand tasks concurrently.
-    template <class Task>
-    void strand(Task&& task)
-    {
-        bool needKick = false;
-        {
-            std::lock_guard<std::mutex> lock(m_strandMutex);
-            m_strandQueue.emplace_back(std::forward<Task>(task));
-            needKick = !m_strandBusy;
-            if (needKick)
-            {
-                m_strandBusy = true;
-            }
-        }
-        if (needKick)
-        {
-            kickStrand();
-        }
-    }
-
 private:
     struct IOServiceContext
     {
@@ -103,18 +146,10 @@ private:
 
         explicit IOServiceContext(std::shared_ptr<IOService> _ioService);
     };
-    void kickStrand();
-    void drainStrand();
 
     std::vector<IOServiceContext> m_contexts;
     std::vector<std::thread::id> m_threadIds;
     std::string m_threadName;
     std::atomic_size_t m_nextIOService = 0;
-
-    // Custom strand: deque-based serial task queue with round-robin dispatch
-    // across all pool io_contexts.  Only one task is in-flight at a time.
-    std::deque<std::function<void()>> m_strandQueue;
-    std::mutex m_strandMutex;
-    bool m_strandBusy{false};
 };
 }  // namespace bcos

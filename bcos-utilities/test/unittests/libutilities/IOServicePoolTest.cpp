@@ -37,6 +37,7 @@ BOOST_FIXTURE_TEST_SUITE(IOServicePoolTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(strandRunsSerially)
 {
     auto pool = std::make_shared<IOServicePool>(4, "strandSerial");
+    auto strand = std::make_shared<Strand>(pool);
 
     std::vector<int> order;
     std::atomic<int> inFlight{0};
@@ -45,7 +46,7 @@ BOOST_AUTO_TEST_CASE(strandRunsSerially)
     constexpr int N = 100;
     for (int i = 0; i < N; ++i)
     {
-        pool->strand([&order, &inFlight, &concurrent, i]() {
+        strand->post([&order, &inFlight, &concurrent, i]() {
             // If another strand task is already running, we have a concurrency bug.
             if (inFlight.fetch_add(1) > 0)
             {
@@ -73,6 +74,7 @@ BOOST_AUTO_TEST_CASE(strandSpreadsAcrossThreads)
 {
     constexpr size_t kThreads = 4;
     auto pool = std::make_shared<IOServicePool>(kThreads, "strandSpread");
+    auto strand = std::make_shared<Strand>(pool);
 
     std::vector<std::thread::id> threadIds;
     std::mutex mutex;
@@ -81,7 +83,7 @@ BOOST_AUTO_TEST_CASE(strandSpreadsAcrossThreads)
     constexpr int N = 20;
     for (int i = 0; i < N; ++i)
     {
-        pool->strand([&threadIds, &mutex, &done]() {
+        strand->post([&threadIds, &mutex, &done]() {
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 threadIds.push_back(std::this_thread::get_id());
@@ -111,6 +113,7 @@ BOOST_AUTO_TEST_CASE(strandSpreadsAcrossThreads)
 BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
 {
     auto pool = std::make_shared<IOServicePool>(4, "strandPost");
+    auto strand = std::make_shared<Strand>(pool);
 
     std::atomic<int> strandInFlight{0};
     std::atomic<bool> strandConcurrent{false};
@@ -125,7 +128,7 @@ BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
     for (int i = 0; i < N; ++i)
     {
         // Strand tasks must be serial.
-        pool->strand([&strandInFlight, &strandConcurrent, &strandOrder, &strandDone]() {
+        strand->post([&strandInFlight, &strandConcurrent, &strandOrder, &strandDone]() {
             if (strandInFlight.fetch_add(1) > 0)
             {
                 strandConcurrent.store(true);
@@ -176,30 +179,31 @@ BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
 BOOST_AUTO_TEST_CASE(strandOrderWithMixedSubmission)
 {
     auto pool = std::make_shared<IOServicePool>(2, "strandMixed");
+    auto strand = std::make_shared<Strand>(pool);
 
     std::vector<int> strandOrder;
     std::mutex orderMutex;
 
     // Submit strand tasks interleaved with post tasks.
-    pool->strand([&strandOrder, &orderMutex]() {
+    strand->post([&strandOrder, &orderMutex]() {
         std::lock_guard lock(orderMutex);
         strandOrder.push_back(0);
     });
     pool->post([]() {
         // no-op, just to interleave
     });
-    pool->strand([&strandOrder, &orderMutex]() {
+    strand->post([&strandOrder, &orderMutex]() {
         std::lock_guard lock(orderMutex);
         strandOrder.push_back(1);
     });
-    pool->strand([&strandOrder, &orderMutex]() {
+    strand->post([&strandOrder, &orderMutex]() {
         std::lock_guard lock(orderMutex);
         strandOrder.push_back(2);
     });
     pool->post([]() {
         // no-op
     });
-    pool->strand([&strandOrder, &orderMutex]() {
+    strand->post([&strandOrder, &orderMutex]() {
         std::lock_guard lock(orderMutex);
         strandOrder.push_back(3);
     });

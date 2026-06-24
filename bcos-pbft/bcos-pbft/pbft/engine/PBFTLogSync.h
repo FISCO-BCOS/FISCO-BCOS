@@ -72,6 +72,6 @@ protected:
 private:
     PBFTConfig::Ptr m_config;
     PBFTCacheProcessor::Ptr m_pbftCache;
-    bcos::IOServicePool::Ptr m_ioServicePool;
+    bcos::Strand::Ptr m_strand;
 };
 }  // namespace bcos::consensus

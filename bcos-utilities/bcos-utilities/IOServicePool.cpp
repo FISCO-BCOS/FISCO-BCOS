@@ -37,13 +37,6 @@ IOServicePool::IOServicePool(size_t _workerNum, std::string_view _threadName)
 
 IOServicePool::~IOServicePool()
 {
-    // Stop accepting new strand tasks and drain the pending queue so that
-    // no drain handler accesses members after they are destroyed.
-    {
-        std::lock_guard<std::mutex> lock(m_strandMutex);
-        m_strandQueue.clear();
-        m_strandBusy = false;
-    }
     for (auto& ctx : m_contexts)
     {
         ctx.ioService->stop();
@@ -80,33 +73,48 @@ bcos::IOServicePool::IOServiceContext::IOServiceContext(std::shared_ptr<IOServic
   : ioService(std::move(_ioService)), work(this->ioService->get_executor())
 {}
 
-void IOServicePool::kickStrand()
+void Strand::Impl::kick()
 {
-    post([this]() { drainStrand(); });
+    auto self = pool.lock();
+    if (!self)
+    {
+        // Pool is gone — clear queue and bail out.
+        std::lock_guard<std::mutex> lock(mutex);
+        queue.clear();
+        busy = false;
+        return;
+    }
+    // Capture a shared_ptr to Impl so that the queue / mutex / busy stay
+    // alive even if the owning Strand is destroyed before this handler runs.
+    std::shared_ptr<Impl> impl = shared_from_this();
+    self->post([impl]() { impl->drain(); });
 }
 
-void IOServicePool::drainStrand()
+void Strand::Impl::drain()
 {
     std::function<void()> task;
-    bool hasMore = false;
     {
-        std::lock_guard<std::mutex> lock(m_strandMutex);
-        if (m_strandQueue.empty())
+        std::lock_guard<std::mutex> lock(mutex);
+        if (queue.empty())
         {
-            m_strandBusy = false;
+            busy = false;
             return;
         }
-        task = std::move(m_strandQueue.front());
-        m_strandQueue.pop_front();
-        hasMore = !m_strandQueue.empty();
-        if (!hasMore)
-        {
-            m_strandBusy = false;
-        }
+        task = std::move(queue.front());
+        queue.pop_front();
     }
     task();
-    if (hasMore)
+    // Re-check queue AFTER task completes.  If a new task was enqueued while
+    // we were executing task(), the queue is non-empty and we kick the next
+    // drain.  Only set busy=false when the queue is truly empty — this
+    // closes the race where busy was cleared before task() finished.
     {
-        kickStrand();
+        std::lock_guard<std::mutex> lock(mutex);
+        if (queue.empty())
+        {
+            busy = false;
+            return;
+        }
     }
+    kick();
 }

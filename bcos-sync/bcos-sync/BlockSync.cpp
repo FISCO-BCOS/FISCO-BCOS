@@ -45,7 +45,7 @@ BlockSync::BlockSync(
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
     m_downloadingQueue(std::make_shared<DownloadingQueue>(_config)),
-    m_ioServicePool(std::move(_ioServicePool))
+    m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
 {
     m_downloadingTimer =
         std::make_shared<Timer>(_ioContext, m_config->downloadTimeout(), "downloadTimer");
@@ -212,7 +212,7 @@ void BlockSync::executeWorker()
     }
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    m_ioServicePool->strand([this]() {
+    m_strand->post([this]() {
         try
         {
             // flush downloaded buffer into downloading queue
@@ -241,7 +241,7 @@ void BlockSync::executeWorker()
         }
     });
     // send block to other nodes
-    m_ioServicePool->strand([this]() {
+    m_strand->post([this]() {
         try
         {
             maintainBlockRequest();

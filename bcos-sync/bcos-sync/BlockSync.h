@@ -151,7 +151,7 @@ protected:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    bcos::IOServicePool::Ptr m_ioServicePool = nullptr;
+    bcos::Strand::Ptr m_strand = nullptr;
     std::shared_ptr<Timer> m_downloadingTimer;
 
     std::atomic_bool m_running = {false};
