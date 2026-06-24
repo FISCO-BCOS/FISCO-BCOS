@@ -24,6 +24,7 @@
 #include "bcos-gateway/libp2p/ServiceV2.h"
 #include "bcos-gateway/libp2p/router/RouterTableImpl.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -55,8 +56,12 @@ class FakeServiceV2FIB183 : public ServiceV2
 {
 public:
     FakeServiceV2FIB183(P2PInfo const& _info, RouterTableFactory::Ptr _factory)
-      : ServiceV2(_info, std::move(_factory))
+      : ServiceV2(_info, std::move(_factory), m_ioContext)
     {}
+
+private:
+    boost::asio::io_context m_ioContext;
+public:
     void callOnReceiveRouterSeq(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
     {

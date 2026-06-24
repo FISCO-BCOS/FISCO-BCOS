@@ -41,16 +41,16 @@ BOOST_FIXTURE_TEST_SUITE(FIB184_SessionResourceCapTest, TestPromptFixture)
 class FakeASIO_FIB184 : public bcos::gateway::ASIOInterface
 {
 public:
-    FakeASIO_FIB184() : m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB184", 1)) {}
+    FakeASIO_FIB184()
+      : ASIOInterface(std::make_shared<IOServicePool>(1, "FakeASIO_FIB184"), "0.0.0.0", 0),
+        m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB184", 1))
+    {}
     ~FakeASIO_FIB184() noexcept override {}
     void asyncReadSome(
         const std::shared_ptr<SocketFace>&, ba::mutable_buffer, ReadWriteHandler) override
     {}
-    void strandPost(Base_Handler handler) override { m_handler = std::move(handler); }
-    void stop() override { m_threadPool->stop(); }
 
 protected:
-    Base_Handler m_handler;
     bcos::ThreadPool::Ptr m_threadPool;
 };
 

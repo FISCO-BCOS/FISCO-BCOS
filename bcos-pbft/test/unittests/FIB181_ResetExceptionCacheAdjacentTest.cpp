@@ -99,10 +99,13 @@ public:
     MinimalPBFTConfig(CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair,
         std::shared_ptr<ValidatorInterface> _validator,
         std::shared_ptr<FrontServiceInterface> _frontService, BlockFactory::Ptr _blockFactory)
-      : PBFTConfig(std::move(_cryptoSuite), std::move(_keyPair),
+      : PBFTConfig(m_ioService, std::move(_cryptoSuite), std::move(_keyPair),
             std::make_shared<PBFTMessageFactoryImpl>(), nullptr, std::move(_validator),
             std::move(_frontService), nullptr, nullptr, std::move(_blockFactory))
     {}
+
+private:
+    boost::asio::io_context m_ioService;
 };
 }  // namespace
 
