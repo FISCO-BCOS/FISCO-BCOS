@@ -37,6 +37,13 @@ IOServicePool::IOServicePool(size_t _workerNum, std::string_view _threadName)
 
 IOServicePool::~IOServicePool()
 {
+    // Stop accepting new strand tasks and drain the pending queue so that
+    // no drain handler accesses members after they are destroyed.
+    {
+        std::lock_guard<std::mutex> lock(m_strandMutex);
+        m_strandQueue.clear();
+        m_strandBusy = false;
+    }
     for (auto& ctx : m_contexts)
     {
         ctx.ioService->stop();
@@ -84,6 +91,11 @@ void IOServicePool::drainStrand()
     bool hasMore = false;
     {
         std::lock_guard<std::mutex> lock(m_strandMutex);
+        if (m_strandQueue.empty())
+        {
+            m_strandBusy = false;
+            return;
+        }
         task = std::move(m_strandQueue.front());
         m_strandQueue.pop_front();
         hasMore = !m_strandQueue.empty();
