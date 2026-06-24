@@ -47,6 +47,13 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
+# Export the generated-protobuf output dir to consumers: the PB message headers
+# (pulled transitively via PBFTMessageFactory.h / PBFTConfig.h) include
+# "bcos-pbft/pbft/protocol/proto/PBFT.pb.h", which lives under the build tree.
+# Directory-scoped include_directories() above does not propagate past this
+# subtree, so downstream targets (e.g. test-sealer) need it on the link interface
+# -- mirrors bcos-txpool's PUBLIC export of its own generated headers.
+target_include_directories(${PBFT_TARGET} PUBLIC ${PROTO_OUTPUT_PATH})
 target_link_libraries(${PBFT_TARGET} PUBLIC ${TXPOOL_TARGET} ${LEDGER_TARGET} ${UTILITIES_TARGET} ${TOOL_TARGET} bcos-framework jsoncpp_static)
 set_source_files_properties(
     "bcos-pbft/pbft/protocol/proto/PBFT.pb.cc"
