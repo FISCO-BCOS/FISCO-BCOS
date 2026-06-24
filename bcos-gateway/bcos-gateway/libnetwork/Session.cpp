@@ -34,10 +34,16 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-Session::Session(
-    std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
+Session::Session(std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize,
+    [[maybe_unused]] bool _forceSize)
   : m_maxRecvBufferSize(std::max<size_t>(_recvBufferSize, MIN_SESSION_RECV_BUFFER_SIZE)),
-    m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE),
+    // FIB-184: do not force the 512KB floor on every session. Start at the requested/initial size
+    // (the config-validated session_recv_buffer_size for production sessions, a tiny value for
+    // tests) and let doRead grow the buffer up to m_maxRecvBufferSize on demand. Previously the
+    // non-forced path unconditionally allocated MIN_SESSION_RECV_BUFFER_SIZE (512KB) per session,
+    // which let connection churn exhaust the heap. _forceSize is now retained only for ABI/source
+    // compatibility of the signature; both paths honor _recvBufferSize as the initial size.
+    m_recvBuffer(_recvBufferSize),
     m_server(server),
     m_socket(std::move(socket)),
     m_idleCheckTimer(

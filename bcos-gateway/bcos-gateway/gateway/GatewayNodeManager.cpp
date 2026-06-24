@@ -19,6 +19,7 @@
  * @date 2021-05-13
  */
 #include "GatewayNodeManager.h"
+#include <cstring>
 
 using namespace std;
 using namespace bcos;
@@ -144,8 +145,18 @@ void GatewayNodeManager::onReceiveStatusSeq(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto statusSeq =
-        boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)_msg->payload().data()));
+    // FIB-183: onReceiveStatusSeq reads a 4-byte sequence via *(uint32_t*)payload().data()
+    // with no size check (same defect class fixed in ServiceV2::onReceiveRouterSeq); a 0-3 byte
+    // payload reads past the decoded buffer. Drop short payloads and use memcpy for the read.
+    if (_msg->payload().size() < sizeof(uint32_t))
+    {
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq short payload, drop")
+                                  << LOG_KV("size", _msg->payload().size());
+        return;
+    }
+    uint32_t rawStatusSeq = 0;
+    std::memcpy(&rawStatusSeq, _msg->payload().data(), sizeof(rawStatusSeq));
+    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(rawStatusSeq);
     auto const& from = (_msg->srcP2PNodeID().size() > 0) ? _msg->srcP2PNodeID() : _session->p2pID();
     auto statusSeqChanged = statusChanged(from, statusSeq);
     if (!statusSeqChanged)
