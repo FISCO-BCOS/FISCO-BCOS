@@ -47,7 +47,7 @@ class TestPBFTEngine : public FakePBFTEngine
 public:
     using Ptr = std::shared_ptr<TestPBFTEngine>;
     explicit TestPBFTEngine(PBFTConfig::Ptr _config) : FakePBFTEngine(_config) {}
-    bool testIsValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _msg)
+    bool testIsValidNewViewMsg(std::shared_ptr<PBFTNewViewMsg> _msg)
     {
         return PBFTEngine::isValidNewViewMsg(_msg);
     }
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
         vc->setGeneratedFrom(i);
         vc->setIndex(committedPropFromConfig->index());
         vc->setHash(committedPropFromConfig->hash());
-        vc->setCommittedProposal(committedPropFromConfig);
+        vc->setCommittedProposal(*committedPropFromConfig);
         vc->setTimestamp(utcTime());
         vc->setVersion(1);
         vc->setPacketType(PacketType::ViewChangePacket);
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
         innerProposal->setHash(realHash);
 
         auto inner = std::make_shared<PBFTMessage>();
-        inner->setConsensusProposal(innerProposal);
+        inner->setConsensusProposal(*innerProposal);
         inner->setIndex(preparedIndex);
         inner->setHash(realHash);
         inner->setView(0);
@@ -121,7 +121,12 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
         inner->setTimestamp(utcTime());
         inner->setVersion(1);
         inner->setPacketType(PacketType::PrePreparePacket);
-        vc->setPreparedProposals({inner});
+        // FIB-121: flush the base fields (index/view/hash) into the protobuf's
+        // hashFieldsData so the deep-copy in setPreparedProposals preserves them.
+        // In production these messages reach setPreparedProposals already encoded
+        // (via PBFTMessage::populateWithoutProposal()).
+        inner->encodeHashFields();
+        vc->setPreparedProposals({*inner});
 
         // PBFTViewChangeMsg::encode() ignores cryptoSuite/keyPair; the codec wraps it.
         // Manually simulate the codec signature: encode payload → hash → sign → set.
@@ -131,7 +136,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
         auto vcSig = cryptoSuite->signatureImpl()->sign(*signerKP, vcPayloadHash, false);
         vc->setSignatureDataHash(vcPayloadHash);
         vc->setSignatureData(*vcSig);
-        viewChangeList.push_back(vc);
+        viewChangeList.push_back(*vc);
     }
 
     // Build a NewView with a prePrepare that carries a TAMPERED hash (not realHash).
@@ -141,7 +146,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
     tamperedProposal->setHash(tamperedHash);
 
     auto tamperedPrePrepare = std::make_shared<PBFTMessage>();
-    tamperedPrePrepare->setConsensusProposal(tamperedProposal);
+    tamperedPrePrepare->setConsensusProposal(*tamperedProposal);
     tamperedPrePrepare->setIndex(preparedIndex);
     tamperedPrePrepare->setHash(tamperedHash);
     tamperedPrePrepare->setView(targetView);
@@ -159,7 +164,7 @@ BOOST_AUTO_TEST_CASE(testRejectNewViewWithTamperedPrePrepareHash)
     newViewMsg->setVersion(1);
     newViewMsg->setPacketType(PacketType::NewViewPacket);
     newViewMsg->setViewChangeMsgList(viewChangeList);
-    newViewMsg->setPrePrepareList({tamperedPrePrepare});
+    newViewMsg->setPrePrepareList({*tamperedPrePrepare});
 
     // PBFTNewViewMsg::encode ignores crypto params (same as ViewChangeMsg). Sign manually.
     auto leaderKP = fakerMap[0]->keyPair();

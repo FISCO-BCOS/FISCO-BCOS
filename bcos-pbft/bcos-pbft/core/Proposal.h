@@ -24,20 +24,22 @@
 #include "bcos-pbft/pbft/utilities/Common.h"
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>
+#include <cassert>
 
 namespace bcos::consensus
 {
 const bcos::protocol::BlockNumber InvalidBlockNumber = -1;
+// FIB-121: Proposal no longer owns its protobuf. m_rawProposal is a NON-OWNING
+// view into the active PBFTRawProposal's `proposal` submessage, owned by the
+// derived PBFTProposal (either its standalone storage or a parent message's
+// submessage). The derived class re-points it via setRawProposal() whenever the
+// active protobuf changes. This removes the aliasing-shared_ptr / unsafe-arena
+// dance that the prior dual-ownership model required.
 class Proposal : virtual public ProposalInterface
 {
 public:
     using Ptr = std::shared_ptr<Proposal>;
-    Proposal() : m_rawProposal(std::make_shared<RawProposal>()) {}
-    explicit Proposal(bytesConstRef _data) : Proposal() { decode(_data); }
-    explicit Proposal(std::shared_ptr<RawProposal> _rawProposal) : m_rawProposal(_rawProposal)
-    {
-        deserializeObject();
-    }
+    Proposal() = default;
     ~Proposal() override = default;
 
     // the index of the proposal
@@ -111,11 +113,20 @@ public:
     }
     bool operator!=(Proposal const _proposal) const { return !(operator==(_proposal)); }
 
-    std::shared_ptr<RawProposal> rawProposal() { return m_rawProposal; }
+    RawProposal* rawProposal() { return m_rawProposal; }
 
-    bytesPointer encode() const override { return bcos::protocol::encodePBObject(m_rawProposal); }
+    bytesPointer encode() const override
+    {
+        // FIB-121: a bare Proposal has no backing storage — m_rawProposal is a
+        // non-owning view supplied by the derived PBFTProposal, which overrides
+        // encode()/decode(). These base versions are only reachable if someone
+        // misuses Proposal directly; assert the invariant instead of UB.
+        assert(m_rawProposal != nullptr);
+        return bcos::protocol::encodePBObject(m_rawProposal);
+    }
     void decode(bytesConstRef _data) override
     {
+        assert(m_rawProposal != nullptr);
         bcos::protocol::decodePBObject(m_rawProposal, _data);
         deserializeObject();
     }
@@ -131,10 +142,17 @@ public:
     }
 
 protected:
-    void setRawProposal(std::shared_ptr<RawProposal> _rawProposal)
+    // Re-point the non-owning view at the derived class's active submessage.
+    // _runDeserialize controls whether the cached hash is re-validated/derived
+    // (FIB-174): true after a decode (fields just changed), false for a plain
+    // re-bind after a move/copy where the cached hash is carried separately.
+    void setRawProposal(RawProposal* _rawProposal, bool _runDeserialize = true)
     {
-        m_rawProposal = std::move(_rawProposal);
-        deserializeObject();
+        m_rawProposal = _rawProposal;
+        if (_runDeserialize)
+        {
+            deserializeObject();
+        }
     }
     virtual void deserializeObject()
     {
@@ -165,7 +183,8 @@ protected:
     }
 
 protected:
-    std::shared_ptr<RawProposal> m_rawProposal;
+    // non-owning: points into the derived PBFTProposal's active PBFTRawProposal
+    RawProposal* m_rawProposal = nullptr;
     bcos::crypto::HashType m_hash;
 };
 }  // namespace bcos::consensus

@@ -19,86 +19,65 @@
  * @date 2021-04-16
  */
 #pragma once
-#include "../../interfaces/NewViewMsgInterface.h"
-#include "../../interfaces/ViewChangeMsgInterface.h"
 #include "PBFTBaseMessage.h"
+#include "PBFTMessage.h"
+#include "PBFTViewChangeMsg.h"
+#include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
+#include <memory>
 
-namespace bcos
+namespace bcos::consensus
 {
-namespace consensus
-{
-class PBFTNewViewMsg : public NewViewMsgInterface, public PBFTBaseMessage
+// FIB-121: standalone-only message (single-impl NewViewMsgInterface collapsed
+// in). NewView is never embedded in another message, so it owns its protobuf
+// and is non-copyable; viewChangeMsgList / prePrepareList are value views into
+// it. The base header is copied in/out of the protobuf's `message` field at
+// encode/decode (no set_allocated borrow + destructor release).
+class PBFTNewViewMsg : public PBFTBaseMessage
 {
 public:
     using Ptr = std::shared_ptr<PBFTNewViewMsg>;
-    PBFTNewViewMsg() : PBFTBaseMessage()
+    PBFTNewViewMsg() : PBFTBaseMessage(), m_rawNewView(std::make_unique<RawNewViewMessage>())
     {
-        m_rawNewView = std::make_shared<RawNewViewMessage>();
-        m_rawNewView->set_allocated_message(PBFTBaseMessage::baseMessage().get());
-        m_viewChangeList = std::make_shared<ViewChangeMsgList>();
-        m_prePrepareList = std::make_shared<PBFTMessageList>();
         m_packetType = PacketType::NewViewPacket;
+        rebuildViews();
     }
-    explicit PBFTNewViewMsg(bytesConstRef _data) : PBFTBaseMessage()
+    explicit PBFTNewViewMsg(bytesConstRef _data)
+      : PBFTBaseMessage(), m_rawNewView(std::make_unique<RawNewViewMessage>())
     {
-        m_rawNewView = std::make_shared<RawNewViewMessage>();
-        m_viewChangeList = std::make_shared<ViewChangeMsgList>();
-        m_prePrepareList = std::make_shared<PBFTMessageList>();
         m_packetType = PacketType::NewViewPacket;
         decode(_data);
     }
 
-    ~PBFTNewViewMsg() override
-    {
-        // return back the ownership of message to the PBFTBaseMessage
-        m_rawNewView->unsafe_arena_release_message();
-        // return back the ownership to m_viewChangeList
-        auto viewChangeSize = m_rawNewView->viewchangemsglist_size();
-        for (auto i = 0; i < viewChangeSize; i++)
-        {
-            m_rawNewView->mutable_viewchangemsglist()->UnsafeArenaReleaseLast();
-        }
-        auto preprepareSize = m_rawNewView->prepreparelist_size();
-        for (auto i = 0; i < preprepareSize; i++)
-        {
-            m_rawNewView->mutable_prepreparelist()->UnsafeArenaReleaseLast();
-        }
-    }
+    ~PBFTNewViewMsg() override = default;
 
     bytesPointer encode(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair) const override;
     void decode(bytesConstRef _data) override;
 
-    void setViewChangeMsgList(ViewChangeMsgList const& _viewChangeMsgList) override;
-    ViewChangeMsgList const& viewChangeMsgList() const override { return *m_viewChangeList; }
+    void setViewChangeMsgList(ViewChangeMsgList const& _viewChangeMsgList);
+    std::vector<PBFTViewChangeMsg> const& viewChangeMsgList() const { return m_viewChangeList; }
 
-    PBFTMessageList const& prePrepareList() override { return *m_prePrepareList; }
-    void setPrePrepareList(PBFTMessageList const& _preparedProposal) override;
+    std::vector<PBFTMessage> const& prePrepareList() const { return m_prePrepareList; }
+    void setPrePrepareList(PBFTMessageList const& _prePrepareList);
 
     std::string toDebugString() const override
     {
         std::stringstream stringstream;
         stringstream << LOG_KV("type", m_packetType)
                      << LOG_KV("fromNode", m_from ? m_from->shortHex() : "null")
-                     << LOG_KV("vcMsgSize", m_viewChangeList ? m_viewChangeList->size() : 0)
-                     << LOG_KV("prePreSize", m_prePrepareList ? m_prePrepareList->size() : 0);
+                     << LOG_KV("vcMsgSize", m_viewChangeList.size())
+                     << LOG_KV("prePreSize", m_prePrepareList.size());
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
-            if (m_prePrepareList)
+            size_t i = 0;
+            for (auto const& prePrepare : m_prePrepareList)
             {
-                size_t i = 0;
-                for (auto const& prePrepare : *m_prePrepareList)
-                {
-                    stringstream << "prePrepare" << i++ << printPBFTMsgInfo(prePrepare);
-                }
+                stringstream << "prePrepare" << i++ << printPBFTMsgInfo(&prePrepare);
             }
-            if (m_viewChangeList)
+            i = 0;
+            for (auto const& viewChange : m_viewChangeList)
             {
-                size_t i = 0;
-                for (auto const& viewChange : *m_viewChangeList)
-                {
-                    stringstream << "viewChange" << i++ << printPBFTMsgInfo(viewChange);
-                }
+                stringstream << "viewChange" << i++ << printPBFTMsgInfo(&viewChange);
             }
         }
         return stringstream.str();
@@ -108,10 +87,27 @@ protected:
     void deserializeToObject() override;
 
 private:
-    std::shared_ptr<RawNewViewMessage> m_rawNewView;
-    // required and need to be verified
-    ViewChangeMsgListPtr m_viewChangeList;
-    PBFTMessageListPtr m_prePrepareList;
+    void rebuildViews()
+    {
+        m_viewChangeList.clear();
+        m_viewChangeList.reserve(m_rawNewView->viewchangemsglist_size());
+        for (int i = 0; i < m_rawNewView->viewchangemsglist_size(); i++)
+        {
+            m_viewChangeList.push_back(
+                PBFTViewChangeMsg::asView(m_rawNewView->mutable_viewchangemsglist(i)));
+        }
+        m_prePrepareList.clear();
+        m_prePrepareList.reserve(m_rawNewView->prepreparelist_size());
+        for (int i = 0; i < m_rawNewView->prepreparelist_size(); i++)
+        {
+            m_prePrepareList.push_back(
+                PBFTMessage::asView(m_rawNewView->mutable_prepreparelist(i)));
+        }
+    }
+
+    std::unique_ptr<RawNewViewMessage> m_rawNewView;  // sole owner (NewView is never nested)
+    std::vector<PBFTViewChangeMsg> m_viewChangeList;  // VIEWS into
+                                                      // m_rawNewView->viewchangemsglist(i)
+    std::vector<PBFTMessage> m_prePrepareList;        // VIEWS into m_rawNewView->prepreparelist(i)
 };
-}  // namespace consensus
-}  // namespace bcos
+}  // namespace bcos::consensus

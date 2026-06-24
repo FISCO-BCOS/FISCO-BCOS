@@ -132,24 +132,19 @@ BOOST_AUTO_TEST_CASE(decode_rejects_nonempty_signatureList_empty_nodeList_FIB120
     BOOST_CHECK_THROW(PBFTProposal{ref}, bcos::Exception);
 }
 
-/// FIB-120 defensive: signatureProof() must not be reachable with an
-/// out-of-bounds index, regardless of how the underlying proposal got there.
-/// Build a PBFTRawProposal manually with mismatched sizes and confirm
-/// signatureProof() throws rather than triggering UB.
+/// FIB-120 defensive: signatureProof() must throw rather than triggering UB
+/// when asked for an out-of-bounds index. FIB-121 removed the raw-pointer
+/// constructor that let a mismatched protobuf be injected, so we build a valid
+/// (1:1) proposal and query a past-the-end index — the same bounds guard fires.
 BOOST_AUTO_TEST_CASE(signatureProof_throws_on_out_of_bounds_FIB120)
 {
-    auto raw = std::make_shared<PBFTRawProposal>();
-    raw->mutable_proposal()->set_index(1);
-    // Canonical hash so the constructor's deserializeObject does not reject the
-    // proposal on hash length (FIB-174) before we reach the signatureProof check.
-    std::string canonicalHash(bcos::crypto::HashType::SIZE, '\x11');
-    raw->mutable_proposal()->set_hash(canonicalHash.data(), canonicalHash.size());
-    // signature is set but nodelist is empty — index 0 is OOB on nodelist.
-    raw->add_signaturelist("sig");
+    PBFTProposal proposal;
+    std::string sig("sig");
+    proposal.appendSignatureProof(0, bytesConstRef((byte const*)sig.data(), sig.size()));
+    BOOST_CHECK_EQUAL(proposal.signatureProofSize(), 1U);
 
-    PBFTProposal proposal{raw};  // direct construction bypasses decode()
-
-    BOOST_CHECK_THROW(proposal.signatureProof(0), bcos::Exception);
+    // index 1 is one past the only proof — must throw, not read OOB.
+    BOOST_CHECK_THROW(proposal.signatureProof(1), bcos::Exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

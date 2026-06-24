@@ -18,6 +18,7 @@
  * @author: yujiechen
  * @date 2021-04-15
  */
+
 #include "PBFTViewChangeMsg.h"
 #include "PBFTMessage.h"
 #include "PBFTProposal.h"
@@ -28,80 +29,48 @@ using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
-PBFTViewChangeMsg::PBFTViewChangeMsg(std::shared_ptr<RawViewChangeMessage> _rawViewChange)
-  : PBFTBaseMessage(std::shared_ptr<BaseMessage>(_rawViewChange->mutable_message()))
-{
-    m_packetType = PacketType::ViewChangePacket;
-    m_preparedProposalList = std::make_shared<PBFTMessageList>();
-    m_rawViewChange = _rawViewChange;
-    PBFTViewChangeMsg::deserializeToObject();
-}
 
 bytesPointer PBFTViewChangeMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) const
 {
-    return encodePBObject(m_rawViewChange);
+    // FIB-121: materialize the independently-owned base header into the protobuf
+    // before serializing (no set_allocated borrow).
+    return encodePBObject(encodedRaw());
 }
 
 void PBFTViewChangeMsg::decode(bytesConstRef _data)
 {
-    decodePBObject(m_rawViewChange, _data);
-    setBaseMessage(std::shared_ptr<BaseMessage>(m_rawViewChange->mutable_message()));
-    PBFTViewChangeMsg::deserializeToObject();
+    decodePBObject(m_active, _data);
+    // FIB-121: copy the base header out of the protobuf into our own BaseMessage.
+    m_baseMessage->CopyFrom(m_active->message());
+    deserializeToObject();
     m_packetType = PacketType::ViewChangePacket;
-}
-
-void PBFTViewChangeMsg::setCommittedProposal(PBFTProposalInterface::Ptr _proposal)
-{
-    m_committedProposal = _proposal;
-    auto pbftProposal = std::dynamic_pointer_cast<PBFTProposal>(_proposal);
-    // set committed proposal
-    if (m_rawViewChange->has_committedproposal())
-    {
-        m_rawViewChange->unsafe_arena_release_committedproposal();
-    }
-    m_rawViewChange->unsafe_arena_set_allocated_committedproposal(
-        pbftProposal->pbftRawProposal().get());
-}
-
-void PBFTViewChangeMsg::setPreparedProposals(PBFTMessageList const& _preparedProposals)
-{
-    *m_preparedProposalList = _preparedProposals;
-    for (auto proposal : *m_preparedProposalList)
-    {
-        auto pbftMessage = std::dynamic_pointer_cast<PBFTMessage>(proposal);
-        m_rawViewChange->mutable_preparedproposals()->AddAllocated(
-            pbftMessage->pbftRawMessage().get());
-    }
 }
 
 void PBFTViewChangeMsg::deserializeToObject()
 {
     PBFTBaseMessage::deserializeToObject();
-    m_preparedProposalList->clear();
-    // FIB-121 / Issue #3 (DoS mitigation): reject oversized preparedProposals
-    // before allocating any wrappers, preventing memory-exhaustion attacks from
-    // malicious peers and shrinking the bad_alloc surface that Issue #1
-    // (partial-construct exception unwinding) depends on.
-    //
-    // A full structural fix for Issue #1 (release-then-wrap, or aliasing
-    // shared_ptrs throughout) requires consistently restructuring the encode
-    // path (setCommittedProposal / setPreparedProposals / PBFTNewViewMsg's
-    // viewchangemsglist AddAllocated) and the destructors of PBFTViewChangeMsg
-    // / PBFTNewViewMsg / PBFTMessage, all of which currently rely on a fragile
-    // dual-ownership + destructor-release protocol.  That refactor is deferred
-    // because (a) it crosses several files with subtle invariants, and (b) the
-    // size cap below reduces the bad_alloc trigger surface to near-zero for the
-    // realistic threat model (an attacker sending an oversized message — the
-    // primary CertiK concern in Issue #3).
+    // FIB-121 / DoS mitigation: reject oversized preparedProposals before
+    // allocating any wrappers.
     validateRepeatedSize(
-        m_rawViewChange->preparedproposals(), MAX_PBFT_REPEATED_FIELD_SIZE, "preparedProposals");
+        m_active->preparedproposals(), MAX_PBFT_REPEATED_FIELD_SIZE, "preparedProposals");
+    rebuildViews();
+}
 
-    std::shared_ptr<PBFTRawProposal> rawCommittedProposal(
-        m_rawViewChange->mutable_committedproposal());
-    m_committedProposal = std::make_shared<PBFTProposal>(rawCommittedProposal);
-    for (int i = 0; i < m_rawViewChange->preparedproposals_size(); i++)
+void PBFTViewChangeMsg::setCommittedProposal(PBFTProposal const& _proposal)
+{
+    m_active->mutable_committedproposal()->CopyFrom(*_proposal.pbftRawProposal());
+    m_hasCommitted = true;
+    m_committedProposal = PBFTProposal::asView(m_active->mutable_committedproposal());
+}
+
+void PBFTViewChangeMsg::setPreparedProposals(PBFTMessageList const& _preparedProposals)
+{
+    m_active->clear_preparedproposals();
+    for (auto const& preparedMsg : _preparedProposals)
     {
-        std::shared_ptr<PBFTRawMessage> preparedMsg(m_rawViewChange->mutable_preparedproposals(i));
-        m_preparedProposalList->push_back(std::make_shared<PBFTMessage>(preparedMsg));
+        // deep copy each prePrepare's protobuf into our repeated field
+        m_active->add_preparedproposals()->CopyFrom(*preparedMsg.pbftRawMessage());
     }
+    // rebuild views only after the repeated field is fully populated
+    rebuildViews();
 }

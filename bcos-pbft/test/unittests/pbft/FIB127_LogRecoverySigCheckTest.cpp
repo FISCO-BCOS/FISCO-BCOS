@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithNoSigProofs)
 
     auto responseMsg = std::make_shared<PBFTMessage>();
     responseMsg->setPacketType(PacketType::CommittedProposalResponse);
-    PBFTProposalList proposals = {proposal};
+    PBFTProposalList proposals = {*proposal};
     responseMsg->setProposals(proposals);
     // Use the codec to produce the full PBFT packet format that decode() expects.
     auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
@@ -131,7 +131,7 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithInsufficientWeight)
 
     auto responseMsg = std::make_shared<PBFTMessage>();
     responseMsg->setPacketType(PacketType::CommittedProposalResponse);
-    responseMsg->setProposals({proposal});
+    responseMsg->setProposals({*proposal});
     auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
 
     auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor);
@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithDuplicateSealerProofs)
 
     auto responseMsg = std::make_shared<PBFTMessage>();
     responseMsg->setPacketType(PacketType::CommittedProposalResponse);
-    responseMsg->setProposals({proposal});
+    responseMsg->setProposals({*proposal});
     auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
 
     auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor);
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(testVerifyProposalQuorumSignaturesRejectsDuplicates)
             *fakerMap[static_cast<size_t>(idx)]->keyPair(), blockHash);
         goodProposal->appendSignatureProof(static_cast<int64_t>(idx), ref(*sig));
     }
-    BOOST_CHECK(config->verifyProposalQuorumSignatures(goodProposal));
+    BOOST_CHECK(config->verifyProposalQuorumSignatures(goodProposal.get()));
 
     // Same number of proofs, but all are (sealer=0, sig0) replays — must reject on dedup.
     auto badProposal = std::make_shared<PBFTProposal>();
@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(testVerifyProposalQuorumSignaturesRejectsDuplicates)
     {
         badProposal->appendSignatureProof(0, ref(*sig0));
     }
-    BOOST_CHECK(!config->verifyProposalQuorumSignatures(badProposal));
+    BOOST_CHECK(!config->verifyProposalQuorumSignatures(badProposal.get()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

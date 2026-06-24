@@ -167,7 +167,7 @@ void LedgerStorage::asyncGetCommittedProposals(
                     }
                     auto proposalData = bytesConstRef((byte const*)value.data(), value.size());
                     proposalList->push_back(
-                        storage->m_messageFactory->createPBFTProposal(proposalData));
+                        *storage->m_messageFactory->createPBFTProposal(proposalData));
                 }
                 _onSuccess(proposalList);
                 PBFT_STORAGE_LOG(INFO) << LOG_DESC("asyncGetCommittedProposals success")
@@ -229,7 +229,7 @@ void LedgerStorage::asyncGetLatestCommittedProposalIndex()
         });
 }
 
-void LedgerStorage::asyncCommitProposal(PBFTProposalInterface::Ptr _committedProposal)
+void LedgerStorage::asyncCommitProposal(PBFTProposal::Ptr _committedProposal)
 {
     if (m_maxCommittedProposalIndex.load() >= _committedProposal->index())
     {
@@ -297,7 +297,7 @@ void LedgerStorage::asyncPutProposal(std::string const& _dbName, std::string con
         });
 }
 
-void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal)
+void LedgerStorage::asyncCommitStableCheckPoint(PBFTProposal::Ptr _stableProposal)
 {
     std::shared_ptr<std::vector<protocol::Signature>> signatureList =
         std::make_shared<std::vector<protocol::Signature>>();
@@ -351,8 +351,8 @@ void LedgerStorage::onStableCheckPointCommitted(
         asyncRemoveStabledCheckPoint(_blockHeader->number() - c_reservedCheckPointSize);
     }
 }
-void LedgerStorage::commitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal,
-    BlockHeader::Ptr _blockHeader, Block::Ptr _blockInfo)
+void LedgerStorage::commitStableCheckPoint(
+    PBFTProposal::Ptr _stableProposal, BlockHeader::Ptr _blockHeader, Block::Ptr _blockInfo)
 {
     auto self = weak_from_this();
     auto startT = utcTime();

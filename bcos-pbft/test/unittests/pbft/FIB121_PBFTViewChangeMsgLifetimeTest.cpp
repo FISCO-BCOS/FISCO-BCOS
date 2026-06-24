@@ -100,11 +100,13 @@ BOOST_AUTO_TEST_CASE(committedProposal_outlives_parent)
     auto data = buildViewChangeMsgBytes();
     bytesConstRef ref(data.data(), data.size());
 
-    PBFTProposalInterface::Ptr committedCopy;
+    PBFTProposal::Ptr committedCopy;
     {
         auto viewChange = std::make_shared<PBFTViewChangeMsg>(ref);
-        committedCopy = viewChange->committedProposal();
-        BOOST_REQUIRE(committedCopy != nullptr);
+        BOOST_REQUIRE(viewChange->committedProposal() != nullptr);
+        // FIB-121: committedProposal() returns a VIEW into the parent protobuf;
+        // materialize an owning copy so it outlives the parent below.
+        committedCopy = std::make_shared<PBFTProposal>(*viewChange->committedProposal());
         // Drop the parent.  Destructor must safely release submessages.
     }
 
@@ -119,12 +121,14 @@ BOOST_AUTO_TEST_CASE(preparedProposal_outlives_parent)
     auto data = buildViewChangeMsgBytes();
     bytesConstRef ref(data.data(), data.size());
 
-    PBFTMessageInterface::Ptr preparedCopy;
+    PBFTMessage::Ptr preparedCopy;
     {
         auto viewChange = std::make_shared<PBFTViewChangeMsg>(ref);
         const auto& prepList = viewChange->preparedProposals();
         BOOST_REQUIRE(!prepList.empty());
-        preparedCopy = prepList[0];
+        // FIB-121: preparedProposals() elements are VIEWS into the parent;
+        // materialize an owning copy so it outlives the parent below.
+        preparedCopy = std::make_shared<PBFTMessage>(prepList[0]);
         BOOST_REQUIRE(preparedCopy != nullptr);
         // Drop parent.
     }
@@ -147,8 +151,8 @@ BOOST_AUTO_TEST_CASE(decode_roundtrip_fields_correct)
 
     const auto& preps = viewChange->preparedProposals();
     BOOST_REQUIRE_EQUAL(preps.size(), 1u);
-    BOOST_REQUIRE(preps[0]->consensusProposal() != nullptr);
-    BOOST_CHECK_EQUAL(preps[0]->consensusProposal()->index(), 6);
+    BOOST_REQUIRE(preps[0].consensusProposal() != nullptr);
+    BOOST_CHECK_EQUAL(preps[0].consensusProposal()->index(), 6);
 }
 
 /// FIB-121 Issue #3 (DoS via OOM): the validateRepeatedSize guard in
@@ -231,8 +235,8 @@ BOOST_AUTO_TEST_CASE(preparedProposals_preserve_order_after_decode)
     BOOST_REQUIRE_EQUAL(preps.size(), static_cast<size_t>(kCount));
     for (int i = 0; i < kCount; ++i)
     {
-        BOOST_REQUIRE(preps[i]->consensusProposal() != nullptr);
-        BOOST_CHECK_EQUAL(preps[i]->consensusProposal()->index(), kIndices[i]);
+        BOOST_REQUIRE(preps[i].consensusProposal() != nullptr);
+        BOOST_CHECK_EQUAL(preps[i].consensusProposal()->index(), kIndices[i]);
     }
 }
 

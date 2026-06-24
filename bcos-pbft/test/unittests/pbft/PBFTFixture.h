@@ -81,7 +81,7 @@ public:
     FakePBFTCache(PBFTConfig::Ptr _config, BlockNumber _index) : PBFTCache(_config, _index) {}
     ~FakePBFTCache() override {}
 
-    PBFTMessageInterface::Ptr prePrepare() { return m_prePrepare; }
+    PBFTMessage::Ptr prePrepare() { return m_prePrepare; }
     void intoPrecommit() override { PBFTCache::intoPrecommit(); }
 };
 
@@ -112,14 +112,14 @@ public:
     PBFTCachesType& caches() { return m_caches; }
     size_t stableCheckPointQueueSize() const { return m_stableCheckPointQueue.size(); }
     size_t committedQueueSize() const { return m_committedQueue.size(); }
-    bool checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg) override
+    bool checkPrecommitWeight(PBFTMessage::Ptr _precommitMsg) override
     {
         PBFTCacheProcessor::checkPrecommitWeight(_precommitMsg);
         return true;
     }
 
     // Test helpers: allow direct queue manipulation for FIB regression tests.
-    void pushToCommittedQueueForTest(PBFTProposalInterface::Ptr _proposal)
+    void pushToCommittedQueueForTest(PBFTProposal::Ptr _proposal)
     {
         m_committedQueue.push(std::move(_proposal));
     }
@@ -127,7 +127,7 @@ public:
     // returns _proposal.  _slotIndex is the key in m_caches; _proposal->index() may
     // intentionally differ (e.g. stale) to exercise parent-consistency checks.
     void setAppliedCheckPointAtSlotForTest(
-        bcos::protocol::BlockNumber _slotIndex, PBFTProposalInterface::Ptr _proposal)
+        bcos::protocol::BlockNumber _slotIndex, PBFTProposal::Ptr _proposal)
     {
         if (!m_caches.contains(_slotIndex))
         {
@@ -204,7 +204,7 @@ public:
         PBFTEngine::onRecvProposal(_containSysTxs, _proposalData, _proposalIndex, _proposalHash);
     }
 
-    bool handlePrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg,
+    bool handlePrePrepareMsg(std::shared_ptr<PBFTMessage> _prePrepareMsg,
         bool _needVerifyProposal = true, bool _generatedFromNewView = false,
         bool _needCheckSignature = true) override
     {

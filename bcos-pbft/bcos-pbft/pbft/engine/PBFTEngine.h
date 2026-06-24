@@ -39,12 +39,12 @@ class LedgerConfig;
 namespace consensus
 {
 class PBFTBaseMessageInterface;
-class PBFTMessageInterface;
-class ViewChangeMsgInterface;
-class NewViewMsgInterface;
+class PBFTMessage;
+class PBFTViewChangeMsg;
+class PBFTNewViewMsg;
 class PBFTConfig;
 class PBFTCacheProcessor;
-class PBFTProposalInterface;
+class PBFTProposal;
 
 enum CheckResult
 {
@@ -131,71 +131,70 @@ protected:
     virtual void handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg);
 
     // Process Pre-prepare type message packets
-    virtual bool handlePrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg,
+    virtual bool handlePrePrepareMsg(std::shared_ptr<PBFTMessage> _prePrepareMsg,
         bool _needVerifyProposal, bool _generatedFromNewView = false,
         bool _needCheckSignature = true);
     // When handlePrePrepareMsg return false, then reset sealed txs
     virtual void resetSealedTxs(
-        std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg, const protocol::Block& block);
+        std::shared_ptr<PBFTMessage> const& _prePrepareMsg, const protocol::Block& block);
 
     // To check pre-prepare msg valid
-    virtual CheckResult checkPrePrepareMsg(std::shared_ptr<PBFTMessageInterface> _prePrepareMsg);
+    virtual CheckResult checkPrePrepareMsg(std::shared_ptr<PBFTMessage> _prePrepareMsg);
     // To check pbft msg sign valid
     virtual CheckResult checkSignature(std::shared_ptr<PBFTBaseMessageInterface> _req);
-    virtual bool checkProposalSignature(
-        IndexType _generatedFrom, PBFTProposalInterface::Ptr _proposal);
+    virtual bool checkProposalSignature(IndexType _generatedFrom, PBFTProposal const* _proposal);
 
-    virtual CheckResult checkPBFTMsgState(std::shared_ptr<PBFTMessageInterface> _pbftReq) const;
-    virtual bool checkRotateTransactionValid(PBFTMessageInterface::Ptr const& _proposal,
-        ConsensusNode const& _leaderInfo, bool needCheckSign);
+    virtual CheckResult checkPBFTMsgState(std::shared_ptr<PBFTMessage> _pbftReq) const;
+    virtual bool checkRotateTransactionValid(
+        PBFTMessage::Ptr const& _proposal, ConsensusNode const& _leaderInfo, bool needCheckSign);
 
     // When pre-prepare proposal seems ok, then broadcast prepare msg
-    virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessageInterface> const& _prePrepareMsg);
+    virtual void broadcastPrepareMsg(std::shared_ptr<PBFTMessage> const& _prePrepareMsg);
 
     // Process the Prepare type message packet
-    virtual bool handlePrepareMsg(PBFTMessageInterface::Ptr const& _prepareMsg);
+    virtual bool handlePrepareMsg(PBFTMessage::Ptr const& _prepareMsg);
     // To check 'Prepare' or 'Commit' type proposal
-    virtual CheckResult checkPBFTMsg(PBFTMessageInterface::Ptr const& _prepareMsg);
+    virtual CheckResult checkPBFTMsg(PBFTMessage::Ptr const& _prepareMsg);
 
-    virtual bool handleCommitMsg(PBFTMessageInterface::Ptr const& _commitMsg);
+    virtual bool handleCommitMsg(PBFTMessage::Ptr const& _commitMsg);
 
     virtual void onTimeout();
-    virtual ViewChangeMsgInterface::Ptr generateViewChange();
+    virtual PBFTViewChangeMsg::Ptr generateViewChange();
     virtual void broadcastViewChangeReq();
     virtual void sendViewChange(bcos::crypto::NodeIDPtr _dstNode);
 
-    virtual bool handleViewChangeMsg(std::shared_ptr<ViewChangeMsgInterface> _viewChangeMsg);
+    virtual bool handleViewChangeMsg(std::shared_ptr<PBFTViewChangeMsg> _viewChangeMsg);
     virtual bool isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
-        std::shared_ptr<ViewChangeMsgInterface> _viewChangeMsg, bool _shouldCheckSig = true);
+        std::shared_ptr<PBFTViewChangeMsg> _viewChangeMsg, bool _shouldCheckSig = true);
 
-    virtual bool handleNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
-    virtual void reHandlePrePrepareProposals(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
-    virtual bool isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
+    virtual bool handleNewViewMsg(std::shared_ptr<PBFTNewViewMsg> _newViewMsg);
+    virtual void reHandlePrePrepareProposals(std::shared_ptr<PBFTNewViewMsg> _newViewMsg);
+    virtual bool isValidNewViewMsg(std::shared_ptr<PBFTNewViewMsg> _newViewMsg);
     // FIB-124: verify every prePrepareList item carried by a NewView is exactly justified
     // by the bundled viewChange evidence (mirrors PBFTCacheProcessor::generatePrePrepareMsg).
     // Called from isValidNewViewMsg after viewChange signatures and quorum weight pass.
-    virtual bool isValidNewViewPrePrepareList(std::shared_ptr<NewViewMsgInterface> _newViewMsg);
+    virtual bool isValidNewViewPrePrepareList(std::shared_ptr<PBFTNewViewMsg> _newViewMsg);
     virtual void reachNewView(ViewType _view);
 
     // handle the checkpoint message
-    virtual bool handleCheckPointMsg(std::shared_ptr<PBFTMessageInterface> _checkPointMsg);
+    virtual bool handleCheckPointMsg(std::shared_ptr<PBFTMessage> _checkPointMsg);
 
     // function called after reaching a consensus
     virtual void finalizeConsensus(
         std::shared_ptr<bcos::ledger::LedgerConfig> _ledgerConfig, bool _syncedBlock = false);
 
 
-    virtual void onProposalApplied(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
-        PBFTProposalInterface::Ptr _executedProposal);
+    virtual void onProposalApplied(
+        int64_t _errorCode, PBFTProposal::Ptr _proposal, PBFTProposal::Ptr _executedProposal);
     virtual void onProposalApplySuccess(
-        PBFTProposalInterface::Ptr _proposal, PBFTProposalInterface::Ptr _executedProposal);
-    virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposalInterface::Ptr _proposal);
+        PBFTProposal::Ptr _proposal, PBFTProposal::Ptr _executedProposal);
+    virtual void onProposalApplyFailed(int64_t _errorCode, PBFTProposal::Ptr _proposal);
     virtual void onLoadAndVerifyProposalFinish(
-        bool _verifyResult, Error::Ptr const& _error, PBFTProposalInterface::Ptr const& _proposal);
+        bool _verifyResult, Error::Ptr const& _error, PBFTProposal::Ptr const& _proposal);
     virtual void triggerTimeout(bool _incTimeout = true);
 
-    void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
-    void handleRecoverRequest(PBFTMessageInterface::Ptr _request);
+    void handleRecoverResponse(PBFTMessage::Ptr _recoverResponse);
+    void handleRecoverRequest(PBFTMessage::Ptr _request);
     void sendRecoverResponse(bcos::crypto::NodeIDPtr _dstNode);
     bool isSyncingHigher();
     /**
@@ -220,7 +219,7 @@ protected:
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
 
     virtual void onStableCheckPointCommitFailed(
-        Error::Ptr&& _error, PBFTProposalInterface::Ptr _stableProposal);
+        Error::Ptr&& _error, PBFTProposal::Ptr _stableProposal);
 
     // FIB-132: helpers for in-flight proposal deduplication
     static std::string inFlightKey(std::shared_ptr<PBFTBaseMessageInterface> const& _msg);

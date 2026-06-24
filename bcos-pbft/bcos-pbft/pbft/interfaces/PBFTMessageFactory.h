@@ -19,11 +19,13 @@
  * @date 2021-04-20
  */
 #pragma once
-#include "NewViewMsgInterface.h"
-#include "PBFTMessageInterface.h"
-#include "PBFTProposalInterface.h"
-#include "PBFTRequestInterface.h"
-#include "ViewChangeMsgInterface.h"
+// FIB-121: the single-impl message/proposal interfaces were collapsed into the
+// concrete PB types; the factory now creates and returns those directly.
+#include "bcos-pbft/pbft/protocol/PB/PBFTMessage.h"
+#include "bcos-pbft/pbft/protocol/PB/PBFTNewViewMsg.h"
+#include "bcos-pbft/pbft/protocol/PB/PBFTProposal.h"
+#include "bcos-pbft/pbft/protocol/PB/PBFTRequest.h"
+#include "bcos-pbft/pbft/protocol/PB/PBFTViewChangeMsg.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 namespace bcos
@@ -37,22 +39,22 @@ public:
     PBFTMessageFactory() = default;
     virtual ~PBFTMessageFactory() {}
 
-    virtual PBFTMessageInterface::Ptr createPBFTMsg() = 0;
-    virtual PBFTMessageInterface::Ptr createPBFTMsg(
+    virtual PBFTMessage::Ptr createPBFTMsg() = 0;
+    virtual PBFTMessage::Ptr createPBFTMsg(
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bytesConstRef _data) = 0;
 
-    virtual ViewChangeMsgInterface::Ptr createViewChangeMsg() = 0;
-    virtual ViewChangeMsgInterface::Ptr createViewChangeMsg(bytesConstRef _data) = 0;
+    virtual PBFTViewChangeMsg::Ptr createViewChangeMsg() = 0;
+    virtual PBFTViewChangeMsg::Ptr createViewChangeMsg(bytesConstRef _data) = 0;
 
-    virtual NewViewMsgInterface::Ptr createNewViewMsg() = 0;
-    virtual NewViewMsgInterface::Ptr createNewViewMsg(bytesConstRef _data) = 0;
-    virtual PBFTProposalInterface::Ptr createPBFTProposal() = 0;
-    virtual PBFTProposalInterface::Ptr createPBFTProposal(bytesConstRef _data) = 0;
+    virtual PBFTNewViewMsg::Ptr createNewViewMsg() = 0;
+    virtual PBFTNewViewMsg::Ptr createNewViewMsg(bytesConstRef _data) = 0;
+    virtual PBFTProposal::Ptr createPBFTProposal() = 0;
+    virtual PBFTProposal::Ptr createPBFTProposal(bytesConstRef _data) = 0;
 
-    virtual PBFTRequestInterface::Ptr createPBFTRequest() = 0;
-    virtual PBFTRequestInterface::Ptr createPBFTRequest(bytesConstRef _data) = 0;
+    virtual PBFTRequest::Ptr createPBFTRequest() = 0;
+    virtual PBFTRequest::Ptr createPBFTRequest(bytesConstRef _data) = 0;
 
-    virtual PBFTRequestInterface::Ptr populateFrom(
+    virtual PBFTRequest::Ptr populateFrom(
         PacketType _packetType, bcos::protocol::BlockNumber _startIndex, int64_t _offset)
     {
         auto pbftRequest = createPBFTRequest();
@@ -62,7 +64,7 @@ public:
         return pbftRequest;
     }
 
-    virtual PBFTRequestInterface::Ptr populateFrom(PacketType _packetType,
+    virtual PBFTRequest::Ptr populateFrom(PacketType _packetType,
         bcos::protocol::BlockNumber _index, bcos::crypto::HashType const& _hash)
     {
         auto pbftRequest = createPBFTRequest();
@@ -72,10 +74,12 @@ public:
         return pbftRequest;
     }
 
-    virtual PBFTMessageInterface::Ptr populateFrom(PacketType _packetType, int32_t _version,
-        ViewType _view, int64_t _timestamp, IndexType _generatedFrom,
-        PBFTProposalInterface::Ptr _proposal, bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
-        bcos::crypto::KeyPairInterface::Ptr _keyPair, bool _needSign = true)
+    // _proposal is taken by non-const ref because ProposalInterface::sealerId()
+    // (a framework virtual we do not change) is non-const.
+    virtual PBFTMessage::Ptr populateFrom(PacketType _packetType, int32_t _version, ViewType _view,
+        int64_t _timestamp, IndexType _generatedFrom, PBFTProposal& _proposal,
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bcos::crypto::KeyPairInterface::Ptr _keyPair,
+        bool _needSign = true)
     {
         auto pbftMessage = createPBFTMsg();
         pbftMessage->setPacketType(_packetType);
@@ -83,26 +87,23 @@ public:
         pbftMessage->setView(_view);
         pbftMessage->setTimestamp(_timestamp);
         pbftMessage->setGeneratedFrom(_generatedFrom);
-        pbftMessage->setHash(_proposal->hash());
-        pbftMessage->setIndex(_proposal->index());
-        PBFTProposalList populatedProposalList;
-        // create the proposal
-        auto signedProposal = createPBFTProposal();
-        signedProposal->setIndex(_proposal->index());
-        signedProposal->setHash(_proposal->hash());
-        signedProposal->setSealerId(_proposal->sealerId());
+        pbftMessage->setHash(_proposal.hash());
+        pbftMessage->setIndex(_proposal.index());
+        // build the signed consensus proposal in place
+        auto* signedProposal = pbftMessage->mutableConsensusProposal();
+        signedProposal->setIndex(_proposal.index());
+        signedProposal->setHash(_proposal.hash());
+        signedProposal->setSealerId(_proposal.sealerId());
         if (_needSign)
         {
-            auto signatureData = _cryptoSuite->signatureImpl()->sign(*_keyPair, _proposal->hash());
+            auto signatureData = _cryptoSuite->signatureImpl()->sign(*_keyPair, _proposal.hash());
             signedProposal->setSignature(*signatureData);
         }
-        pbftMessage->setConsensusProposal(signedProposal);
         return pbftMessage;
     }
 
-    virtual PBFTMessageInterface::Ptr populateFrom(PacketType _packetType,
-        PBFTProposalInterface::Ptr _proposal, int32_t _version, ViewType _view, int64_t _timestamp,
-        IndexType _generatedFrom)
+    virtual PBFTMessage::Ptr populateFrom(PacketType _packetType, PBFTProposal& _proposal,
+        int32_t _version, ViewType _view, int64_t _timestamp, IndexType _generatedFrom)
     {
         auto pbftMessage = createPBFTMsg();
         pbftMessage->setPacketType(_packetType);
@@ -110,30 +111,30 @@ public:
         pbftMessage->setView(_view);
         pbftMessage->setTimestamp(_timestamp);
         pbftMessage->setGeneratedFrom(_generatedFrom);
-        pbftMessage->setHash(_proposal->hash());
-        pbftMessage->setIndex(_proposal->index());
+        pbftMessage->setHash(_proposal.hash());
+        pbftMessage->setIndex(_proposal.index());
         pbftMessage->setConsensusProposal(_proposal);
         return pbftMessage;
     }
 
-    virtual PBFTProposalInterface::Ptr populateFrom(
-        PBFTProposalInterface::Ptr _proposal, bool _withData = true, bool _withProof = true)
+    virtual PBFTProposal::Ptr populateFrom(
+        PBFTProposal& _proposal, bool _withData = true, bool _withProof = true)
     {
         auto proposal = createPBFTProposal();
-        proposal->setIndex(_proposal->index());
-        proposal->setHash(_proposal->hash());
-        proposal->setSealerId(_proposal->sealerId());
+        proposal->setIndex(_proposal.index());
+        proposal->setHash(_proposal.hash());
+        proposal->setSealerId(_proposal.sealerId());
         if (_withData)
         {
-            proposal->setData(_proposal->data());
+            proposal->setData(_proposal.data());
         }
         // set the signature proof
         if (_withProof)
         {
-            auto signatureSize = _proposal->signatureProofSize();
+            auto signatureSize = _proposal.signatureProofSize();
             for (size_t i = 0; i < signatureSize; i++)
             {
-                auto proof = _proposal->signatureProof(i);
+                auto proof = _proposal.signatureProof(i);
                 proposal->appendSignatureProof(proof.first, proof.second);
             }
         }

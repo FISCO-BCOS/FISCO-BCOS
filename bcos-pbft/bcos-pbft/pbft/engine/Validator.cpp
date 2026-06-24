@@ -173,7 +173,7 @@ void TxsValidator::asyncResetTxsFlag(
         });
 }
 
-bcos::consensus::PBFTProposalInterface::Ptr bcos::consensus::TxsValidator::generateEmptyProposal(
+bcos::consensus::PBFTProposal::Ptr bcos::consensus::TxsValidator::generateEmptyProposal(
     uint32_t _proposalVersion, PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId)
 {
     auto proposal = _factory->createPBFTProposal();

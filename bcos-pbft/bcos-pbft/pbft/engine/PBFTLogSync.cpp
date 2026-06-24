@@ -55,7 +55,7 @@ void PBFTLogSync::requestCommittedProposals(
 
 // new view
 void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
-    PBFTMessageInterface::Ptr _prePrepareMsg, HandlePrePrepareCallback _prePrepareCallback)
+    PBFTMessage::Ptr _prePrepareMsg, HandlePrePrepareCallback _prePrepareCallback)
 {
     auto pbftRequest = m_config->pbftMessageFactory()->populateFrom(
         PacketType::PreparedProposalRequest, _prePrepareMsg->index(), _prePrepareMsg->hash());
@@ -79,7 +79,7 @@ void PBFTLogSync::requestPrecommitData(bcos::crypto::PublicPtr _from,
 }
 
 void PBFTLogSync::requestPBFTData(
-    PublicPtr _from, PBFTRequestInterface::Ptr _pbftRequest, CallbackFunc _callback)
+    PublicPtr _from, PBFTRequest::Ptr _pbftRequest, CallbackFunc _callback)
 {
     auto self = weak_from_this();
     m_requestThread->enqueue([self, _from, _pbftRequest, _callback]() {
@@ -139,7 +139,7 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
     {
         return;
     }
-    auto proposalResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(response);
+    auto proposalResponse = std::dynamic_pointer_cast<PBFTMessage>(response);
     // FIB-127: verify signature proofs on each recovered proposal before loading into cache.
     // An untrusted peer could otherwise inject arbitrary committed-proposal data, or repeat
     // the same (sealerIdx, sig) pair to inflate vote weight past minRequiredQuorum().
@@ -149,14 +149,14 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
     PBFTProposalList validProposals;
     for (const auto& proposal : proposals)
     {
-        if (!m_config->verifyProposalQuorumSignatures(proposal))
+        if (!m_config->verifyProposalQuorumSignatures(&proposal))
         {
             PBFT_LOG(WARNING) << LOG_DESC(
                                      "onRecvCommittedProposalsResponse: drop proposal failing "
                                      "quorum-signature verification (FIB-127)")
                               << LOG_KV("from", _nodeID->shortHex())
-                              << LOG_KV("index", proposal->index())
-                              << LOG_KV("hash", proposal->hash().abridged())
+                              << LOG_KV("index", proposal.index())
+                              << LOG_KV("hash", proposal.hash().abridged())
                               << LOG_KV("required", m_config->minRequiredQuorum());
             continue;
         }
@@ -170,7 +170,7 @@ void PBFTLogSync::onRecvCommittedProposalsResponse(Error::Ptr _error, NodeIDPtr 
 }
 
 void PBFTLogSync::onRecvPrecommitResponse(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-    bytesConstRef _data, PBFTMessageInterface::Ptr _prePrepareMsg,
+    bytesConstRef _data, PBFTMessage::Ptr _prePrepareMsg,
     HandlePrePrepareCallback _prePrepareCallback, SendResponseCallback)
 {
     if (_error != nullptr)
@@ -186,7 +186,7 @@ void PBFTLogSync::onRecvPrecommitResponse(Error::Ptr _error, bcos::crypto::NodeI
         return;
     }
     PBFT_LOG(INFO) << LOG_DESC("onRecvPrecommitResponse") << printPBFTMsgInfo(response);
-    auto pbftMessage = std::dynamic_pointer_cast<ViewChangeMsgInterface>(response);
+    auto pbftMessage = std::dynamic_pointer_cast<PBFTViewChangeMsg>(response);
     if (pbftMessage->preparedProposals().size() != 1)
     {
         PBFT_LOG(WARNING) << LOG_DESC("onRecvPrecommitResponse: invalid preparedProposals size")
@@ -195,23 +195,22 @@ void PBFTLogSync::onRecvPrecommitResponse(Error::Ptr _error, bcos::crypto::NodeI
                           << LOG_KV("from", _nodeID->shortHex());
         return;
     }
-    auto precommitMsg = (pbftMessage->preparedProposals())[0];
-    if (!precommitMsg->consensusProposal())
+    auto const& precommitMsg = (pbftMessage->preparedProposals())[0];
+    if (!precommitMsg.consensusProposal())
     {
         return;
     }
-    if (precommitMsg->consensusProposal()->index() !=
-            _prePrepareMsg->consensusProposal()->index() ||
-        precommitMsg->consensusProposal()->hash() != _prePrepareMsg->consensusProposal()->hash())
+    if (precommitMsg.consensusProposal()->index() != _prePrepareMsg->consensusProposal()->index() ||
+        precommitMsg.consensusProposal()->hash() != _prePrepareMsg->consensusProposal()->hash())
     {
         return;
     }
-    if (!m_pbftCache->checkPrecommitMsg(precommitMsg))
+    if (!m_pbftCache->checkPrecommitMsg(std::make_shared<PBFTMessage>(precommitMsg)))
     {
         PBFT_LOG(WARNING) << LOG_DESC("Recv invalid precommit response")
-                          << printPBFTMsgInfo(precommitMsg);
+                          << printPBFTMsgInfo(&precommitMsg);
         return;
     }
-    _prePrepareMsg->consensusProposal()->setData(precommitMsg->consensusProposal()->data());
+    _prePrepareMsg->consensusProposal()->setData(precommitMsg.consensusProposal()->data());
     _prePrepareCallback(_prePrepareMsg);
 }

@@ -49,7 +49,7 @@ void PBFTCache::onCheckPointTimeout()
                       << m_config->printCurrentState();
     auto checkPointMsg = m_config->pbftMessageFactory()->populateFrom(PacketType::CheckPoint,
         m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex(),
-        m_checkpointProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
+        *m_checkpointProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to consensus node
     task::wait(
@@ -59,7 +59,7 @@ void PBFTCache::onCheckPointTimeout()
         }(m_config->frontService(), std::move(encodedData)));
 }
 
-bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCache::existPrePrepare(PBFTMessage::Ptr _prePrepareMsg)
 {
     if (!m_prePrepare)
     {
@@ -69,8 +69,8 @@ bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
            (m_prePrepare->view() >= _prePrepareMsg->view());
 }
 
-void PBFTCache::addCache(CollectionCacheType& _cachedReq, QuorumRecoderType& _weightInfo,
-    PBFTMessageInterface::Ptr _pbftCache)
+void PBFTCache::addCache(
+    CollectionCacheType& _cachedReq, QuorumRecoderType& _weightInfo, PBFTMessage::Ptr _pbftCache)
 {
     if (_pbftCache->index() != m_index)
     {
@@ -92,7 +92,7 @@ void PBFTCache::addCache(CollectionCacheType& _cachedReq, QuorumRecoderType& _we
     _cachedReq[proposalHash][generatedFrom] = _pbftCache;
 }
 
-bool PBFTCache::conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg)
+bool PBFTCache::conflictWithProcessedReq(PBFTMessage::Ptr _msg)
 {
     if (m_submitted || m_stableCommitted)
     {
@@ -173,13 +173,13 @@ void PBFTCache::intoPrecommit()
 
     m_precommitWithoutData = m_precommit->populateWithoutProposal();
     auto precommitProposalWithoutData =
-        m_config->pbftMessageFactory()->populateFrom(m_precommit->consensusProposal(), false);
-    m_precommitWithoutData->setConsensusProposal(precommitProposalWithoutData);
+        m_config->pbftMessageFactory()->populateFrom(*m_precommit->consensusProposal(), false);
+    m_precommitWithoutData->setConsensusProposal(*precommitProposalWithoutData);
     PBFT_LOG(INFO) << LOG_DESC("intoPrecommit") << printPBFTMsgInfo(m_precommit)
                    << m_config->printCurrentState();
 }
 
-void PBFTCache::setSignatureList(PBFTProposalInterface::Ptr _proposal, CollectionCacheType& _cache)
+void PBFTCache::setSignatureList(PBFTProposal* _proposal, CollectionCacheType& _cache)
 {
     assert(_cache.count(_proposal->hash()));
     _proposal->clearSignatureProof();
@@ -192,7 +192,7 @@ void PBFTCache::setSignatureList(PBFTProposalInterface::Ptr _proposal, Collectio
                    << printPBFTProposal(_proposal);
 }
 
-bool PBFTCache::conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCache::conflictWithPrecommitReq(PBFTMessage::Ptr _prePrepareMsg)
 {
     if (!m_precommit)
     {
@@ -237,7 +237,7 @@ bool PBFTCache::checkAndPreCommit()
     // generate the commitReq
     auto commitReq = m_config->pbftMessageFactory()->populateFrom(PacketType::CommitPacket,
         m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex(),
-        m_precommitWithoutData->consensusProposal(), m_config->cryptoSuite(), m_config->keyPair());
+        *m_precommitWithoutData->consensusProposal(), m_config->cryptoSuite(), m_config->keyPair());
     // add the commitReq to local cache
     addCommitCache(commitReq);
     // broadcast the commitReq
@@ -391,7 +391,7 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
     }
 }
 
-void PBFTCache::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
+void PBFTCache::setCheckPointProposal(PBFTProposal::Ptr _proposal)
 {
     // expired checkpoint proposal
     if (_proposal->index() <= m_config->committedProposal()->index())
@@ -443,7 +443,7 @@ bool PBFTCache::checkAndCommitStableCheckPoint()
     {
         return false;
     }
-    setSignatureList(m_checkpointProposal, m_checkpointCacheList);
+    setSignatureList(m_checkpointProposal.get(), m_checkpointCacheList);
     m_stableCommitted = true;
     PBFT_LOG(INFO) << LOG_DESC("checkAndCommitStableCheckPoint")
                    << LOG_KV("index", m_checkpointProposal->index())

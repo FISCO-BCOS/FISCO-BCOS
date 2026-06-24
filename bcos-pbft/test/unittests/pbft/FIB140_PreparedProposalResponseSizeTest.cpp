@@ -58,7 +58,7 @@ public:
 
     /// Public wrapper so tests can call the protected method directly.
     void callOnRecvPrecommitResponse(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
-        bytesConstRef _data, PBFTMessageInterface::Ptr _prePrepareMsg,
+        bytesConstRef _data, PBFTMessage::Ptr _prePrepareMsg,
         HandlePrePrepareCallback _prePrepareCallback)
     {
         onRecvPrecommitResponse(std::move(_error), std::move(_nodeID), _data,
@@ -123,7 +123,7 @@ static bytes wrapAsCodecBytes(const bytes& payload)
 /// after packet-type validation, so _prePrepareMsg is accessed AFTER the guard).
 /// We just need a non-null object; the hash/index mismatch causes an early return
 /// in the happy path anyway.
-static PBFTMessageInterface::Ptr makeDummyPrePrepareMsg(CryptoSuite::Ptr cryptoSuite)
+static PBFTMessage::Ptr makeDummyPrePrepareMsg(CryptoSuite::Ptr cryptoSuite)
 {
     auto msg = std::make_shared<PBFTMessage>();
     auto proposal = std::make_shared<PBFTProposal>();
@@ -131,7 +131,7 @@ static PBFTMessageInterface::Ptr makeDummyPrePrepareMsg(CryptoSuite::Ptr cryptoS
     std::string dummyStr = "dummy";
     auto hash = cryptoSuite->hashImpl()->hash(std::string_view(dummyStr));
     proposal->setHash(hash);
-    msg->setConsensusProposal(proposal);
+    msg->setConsensusProposal(*proposal);
     msg->setPacketType(PacketType::PrePreparePacket);
     return msg;
 }
@@ -183,7 +183,7 @@ BOOST_AUTO_TEST_CASE(rejects_empty_preparedProposals)
 
     auto prePrepare = makeDummyPrePrepareMsg(cryptoSuite);
     bool callbackCalled = false;
-    auto callback = [&callbackCalled](PBFTMessageInterface::Ptr) { callbackCalled = true; };
+    auto callback = [&callbackCalled](PBFTMessage::Ptr) { callbackCalled = true; };
 
     // Must not crash (UB on buggy code, early return on fixed code).
     BOOST_CHECK_NO_THROW(
@@ -204,7 +204,7 @@ BOOST_AUTO_TEST_CASE(rejects_two_preparedProposals)
 
     auto prePrepare = makeDummyPrePrepareMsg(cryptoSuite);
     bool callbackCalled = false;
-    auto callback = [&callbackCalled](PBFTMessageInterface::Ptr) { callbackCalled = true; };
+    auto callback = [&callbackCalled](PBFTMessage::Ptr) { callbackCalled = true; };
 
     BOOST_CHECK_NO_THROW(
         logSync->callOnRecvPrecommitResponse(nullptr, nodeID, ref, prePrepare, callback));
@@ -223,7 +223,7 @@ BOOST_AUTO_TEST_CASE(rejects_large_preparedProposals)
 
     auto prePrepare = makeDummyPrePrepareMsg(cryptoSuite);
     bool callbackCalled = false;
-    auto callback = [&callbackCalled](PBFTMessageInterface::Ptr) { callbackCalled = true; };
+    auto callback = [&callbackCalled](PBFTMessage::Ptr) { callbackCalled = true; };
 
     BOOST_CHECK_NO_THROW(
         logSync->callOnRecvPrecommitResponse(nullptr, nodeID, ref, prePrepare, callback));
@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(accepts_size_one_preparedProposal)
 
     auto prePrepare = makeDummyPrePrepareMsg(cryptoSuite);
     bool callbackCalled = false;
-    auto callback = [&callbackCalled](PBFTMessageInterface::Ptr) { callbackCalled = true; };
+    auto callback = [&callbackCalled](PBFTMessage::Ptr) { callbackCalled = true; };
 
     // Must not crash: size == 1 → guard does not fire → [0] accessed safely.
     BOOST_CHECK_NO_THROW(

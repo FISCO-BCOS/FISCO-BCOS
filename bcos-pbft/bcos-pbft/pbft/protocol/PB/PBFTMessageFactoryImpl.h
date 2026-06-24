@@ -37,50 +37,41 @@ public:
     PBFTMessageFactoryImpl() = default;
     ~PBFTMessageFactoryImpl() override {}
 
-    PBFTMessageInterface::Ptr createPBFTMsg() override { return std::make_shared<PBFTMessage>(); }
+    PBFTMessage::Ptr createPBFTMsg() override { return std::make_shared<PBFTMessage>(); }
 
-    ViewChangeMsgInterface::Ptr createViewChangeMsg() override
+    PBFTViewChangeMsg::Ptr createViewChangeMsg() override
     {
         return std::make_shared<PBFTViewChangeMsg>();
     }
 
-    NewViewMsgInterface::Ptr createNewViewMsg() override
-    {
-        return std::make_shared<PBFTNewViewMsg>();
-    }
+    PBFTNewViewMsg::Ptr createNewViewMsg() override { return std::make_shared<PBFTNewViewMsg>(); }
 
-    PBFTMessageInterface::Ptr createPBFTMsg(
+    PBFTMessage::Ptr createPBFTMsg(
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bytesConstRef _data) override
     {
         return std::make_shared<PBFTMessage>(_cryptoSuite, _data);
     }
 
-    ViewChangeMsgInterface::Ptr createViewChangeMsg(bytesConstRef _data) override
+    PBFTViewChangeMsg::Ptr createViewChangeMsg(bytesConstRef _data) override
     {
         return std::make_shared<PBFTViewChangeMsg>(_data);
     }
 
-    NewViewMsgInterface::Ptr createNewViewMsg(bytesConstRef _data) override
+    PBFTNewViewMsg::Ptr createNewViewMsg(bytesConstRef _data) override
     {
         return std::make_shared<PBFTNewViewMsg>(_data);
     }
 
-    PBFTProposalInterface::Ptr createPBFTProposal() override
-    {
-        return std::make_shared<PBFTProposal>();
-    }
+    PBFTProposal::Ptr createPBFTProposal() override { return std::make_shared<PBFTProposal>(); }
 
-    PBFTProposalInterface::Ptr createPBFTProposal(bytesConstRef _data) override
+    PBFTProposal::Ptr createPBFTProposal(bytesConstRef _data) override
     {
         return std::make_shared<PBFTProposal>(_data);
     }
 
-    PBFTRequestInterface::Ptr createPBFTRequest() override
-    {
-        return std::make_shared<PBFTRequest>();
-    }
+    PBFTRequest::Ptr createPBFTRequest() override { return std::make_shared<PBFTRequest>(); }
 
-    PBFTRequestInterface::Ptr createPBFTRequest(bytesConstRef _data) override
+    PBFTRequest::Ptr createPBFTRequest(bytesConstRef _data) override
     {
         return std::make_shared<PBFTRequest>(_data);
     }

@@ -95,10 +95,10 @@ public:
         PBFTProposalList const& _pbftProposals, PBFTProposalList const& _decodedProposals)
     {
         size_t i = 0;
-        for (auto proposal : _pbftProposals)
+        for (auto const& proposal : _pbftProposals)
         {
-            auto comparedProposal = std::dynamic_pointer_cast<PBFTProposal>(_decodedProposals[i++]);
-            BOOST_CHECK(*(std::dynamic_pointer_cast<PBFTProposal>(proposal)) == *comparedProposal);
+            auto const& comparedProposal = _decodedProposals[i++];
+            BOOST_CHECK(proposal == comparedProposal);
         }
     }
 
@@ -137,7 +137,7 @@ public:
 
         // encode: with generatedPrePrepare
         PBFTMessageList prePrepareList;
-        prePrepareList.push_back(_generatedPrepare);
+        prePrepareList.push_back(*_generatedPrepare);
         pbftNewViewChangeMsg->setPrePrepareList(prePrepareList);
         encodedData = pbftNewViewChangeMsg->encode(nullptr, nullptr);
         // decode
@@ -146,31 +146,29 @@ public:
         checkBaseMessageField(pbftNewViewChangeMsg, decodedNewViewMsg);
         prePrepareList = decodedNewViewMsg->prePrepareList();
         BOOST_CHECK(prePrepareList.size() == 1);
-        auto decodedPrePrepareMsg = std::dynamic_pointer_cast<PBFTMessage>(prePrepareList[0]);
-        BOOST_CHECK(*_generatedPrepare == *decodedPrePrepareMsg);
+        auto const& decodedPrePrepareMsg = prePrepareList[0];
+        BOOST_CHECK(*_generatedPrepare == decodedPrePrepareMsg);
         return pbftNewViewChangeMsg;
     }
 
     PBFTViewChangeMsg::Ptr fakePBFTViewChangeMsg(int64_t _timestamp, int32_t _version,
-        int64_t _view, int64_t _generatedFrom, HashType _hash,
-        PBFTProposalInterface::Ptr _committedProposal, PBFTProposalList const& _preparedProposals)
+        int64_t _view, int64_t _generatedFrom, HashType _hash, PBFTProposal::Ptr _committedProposal,
+        PBFTProposalList const& _preparedProposals)
     {
         auto pbftViewChangeMsg = std::make_shared<PBFTViewChangeMsg>();
         // fake the base PBFT message
         fakeBasePBFTMessage(pbftViewChangeMsg, _timestamp, _version, _view, _generatedFrom, _hash);
         // fake the commmitted proposal
 
-        auto committedProposal2 = std::dynamic_pointer_cast<PBFTProposal>(_committedProposal);
-        pbftViewChangeMsg->setCommittedProposal(_committedProposal);
-        auto committedProposal =
-            std::dynamic_pointer_cast<PBFTProposal>(pbftViewChangeMsg->committedProposal());
+        auto committedProposal2 = _committedProposal;
+        pbftViewChangeMsg->setCommittedProposal(*_committedProposal);
         // the preparedProposals
         PBFTMessageList preparedMsgs;
         for (size_t i = 0; i < _preparedProposals.size(); i++)
         {
             auto message = std::make_shared<PBFTMessage>();
             message->setConsensusProposal(_preparedProposals[i]);
-            preparedMsgs.push_back(message);
+            preparedMsgs.push_back(*message);
         }
         pbftViewChangeMsg->setPreparedProposals(preparedMsgs);
         // encode
@@ -180,15 +178,13 @@ public:
         // check the basic field
         checkBaseMessageField(pbftViewChangeMsg, decodedViewChange);
         // check committedProposal
-        auto decodedCommittedProposal =
-            std::dynamic_pointer_cast<PBFTProposal>(decodedViewChange->committedProposal());
-        BOOST_CHECK(*committedProposal2 == *decodedCommittedProposal);
+        BOOST_CHECK(*committedProposal2 == *decodedViewChange->committedProposal());
         // check prepared proposals
         preparedMsgs = decodedViewChange->preparedProposals();
         PBFTProposalList decodedProposalList;
-        for (auto msg : preparedMsgs)
+        for (auto const& msg : preparedMsgs)
         {
-            decodedProposalList.push_back(msg->consensusProposal());
+            decodedProposalList.push_back(*msg.consensusProposal());
         }
         checkProposals(_preparedProposals, decodedProposalList);
         return decodedViewChange;
@@ -201,7 +197,7 @@ private:
     KeyPairInterface::Ptr m_keyPair;
 };
 
-inline PBFTProposalInterface::Ptr fakeSingleProposal(CryptoSuite::Ptr _cryptoSuite,
+inline PBFTProposal::Ptr fakeSingleProposal(CryptoSuite::Ptr _cryptoSuite,
     PBFTMessageFixture::Ptr faker,
     std::vector<std::pair<int64_t, KeyPairInterface::Ptr>> const& _nodeKeyPairList,
     BlockNumber _index, HashType const& _hash, bytes const& _data)
@@ -229,7 +225,7 @@ inline PBFTProposalList fakeProposals(CryptoSuite::Ptr _cryptoSuite, PBFTMessage
     {
         auto hash = _cryptoSuite->hashImpl()->hash(std::to_string(index));
         proposals.push_back(
-            fakeSingleProposal(_cryptoSuite, faker, _nodeKeyPairList, index, hash, data));
+            *fakeSingleProposal(_cryptoSuite, faker, _nodeKeyPairList, index, hash, data));
         index++;
         if (data.size() > 0)
         {
@@ -251,7 +247,7 @@ inline void checkFakedBasePBFTMessage(PBFTBaseMessageInterface::Ptr fakedMessage
     BOOST_CHECK(fakedMessage->generatedFrom() == generatedFrom);
 }
 
-inline void checkSingleProposal(PBFTProposalInterface::Ptr _proposal, HashType const& _hash,
+inline void checkSingleProposal(PBFTProposal const* _proposal, HashType const& _hash,
     BlockNumber _index, bytes const& /*_data*/)
 {
     BOOST_CHECK(_proposal->index() == _index);
@@ -265,10 +261,10 @@ inline void checkProposals(PBFTProposalList _proposals, CryptoSuite::Ptr _crypto
     // check the proposal
     auto data = _data;
     auto index = _index;
-    for (auto proposal : _proposals)
+    for (auto const& proposal : _proposals)
     {
         auto hash = _cryptoSuite->hashImpl()->hash(std::to_string(index));
-        checkSingleProposal(proposal, hash, index, data);
+        checkSingleProposal(&proposal, hash, index, data);
         if (data.size() > 0)
         {
             data[0] += 1;
@@ -324,9 +320,9 @@ inline void checkViewChangeMessage(PBFTViewChangeMsg::Ptr fakedViewChangeMessage
     // check prepared proposal
     BOOST_CHECK(fakedViewChangeMessage->preparedProposals().size() == _proposalSize);
     PBFTProposalList fakedProposals;
-    for (auto msg : fakedViewChangeMessage->preparedProposals())
+    for (auto const& msg : fakedViewChangeMessage->preparedProposals())
     {
-        fakedProposals.push_back(msg->consensusProposal());
+        fakedProposals.push_back(*msg.consensusProposal());
     }
     checkProposals(fakedProposals, _cryptoSuite, _index, _data);
     // check committed proposal
@@ -471,9 +467,9 @@ inline void checkNewViewMessage(PBFTNewViewMsg::Ptr fakedNewViewMessage, int64_t
     for (int64_t i = 0; i < viewChangeSize; i++)
     {
         auto committedHash = _cryptoSuite->hash(std::to_string(committedIndex));
-        auto fakedViewChange = fakedNewViewMessage->viewChangeMsgList()[i];
-        checkViewChangeMessage(std::dynamic_pointer_cast<PBFTViewChangeMsg>(fakedViewChange),
-            orgTimestamp, version, view, generatedFrom, proposalHash, _index, _data, committedIndex,
+        auto const& fakedViewChange = fakedNewViewMessage->viewChangeMsgList()[i];
+        checkViewChangeMessage(std::make_shared<PBFTViewChangeMsg>(fakedViewChange), orgTimestamp,
+            version, view, generatedFrom, proposalHash, _index, _data, committedIndex,
             committedHash, proposalSize, _cryptoSuite);
         committedIndex++;
         committedHash = _cryptoSuite->hash(std::to_string(committedIndex));
@@ -509,7 +505,7 @@ inline void testPBFTNewViewMessage(CryptoSuite::Ptr _cryptoSuite)
     for (int64_t i = 0; i < viewChangeSize; i++)
     {
         auto committedHash = _cryptoSuite->hash(std::to_string(committedIndex));
-        viewChangeList.push_back(fakeViewChangeMessage(orgTimestamp, version, view, generatedFrom,
+        viewChangeList.push_back(*fakeViewChangeMessage(orgTimestamp, version, view, generatedFrom,
             proposalHash, index, data, committedIndex, committedHash, proposalSize, faker));
         committedIndex++;
         committedHash = _cryptoSuite->hash(std::to_string(committedIndex));

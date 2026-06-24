@@ -19,8 +19,8 @@
  * @date 2021-04-26
  */
 #pragma once
-#include "PBFTMessageInterface.h"
-#include "PBFTProposalInterface.h"
+#include "../protocol/PB/PBFTMessage.h"
+#include "../protocol/PB/PBFTProposal.h"
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Block.h>
 #include <bcos-framework/protocol/BlockHeader.h>
@@ -38,8 +38,8 @@ public:
 
     virtual PBFTProposalListPtr loadState(bcos::protocol::BlockNumber _stabledIndex) = 0;
     virtual int64_t maxCommittedProposalIndex() = 0;
-    virtual void asyncCommitProposal(PBFTProposalInterface::Ptr _commitProposal) = 0;
-    virtual void asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal) = 0;
+    virtual void asyncCommitProposal(PBFTProposal::Ptr _commitProposal) = 0;
+    virtual void asyncCommitStableCheckPoint(PBFTProposal::Ptr _stableProposal) = 0;
     virtual void asyncRemoveStabledCheckPoint(size_t _stabledCheckPointIndex) = 0;
 
     // get the latest committed proposal from the storage
@@ -48,7 +48,7 @@ public:
     virtual void registerFinalizeHandler(
         std::function<void(bcos::ledger::LedgerConfig::Ptr, bool)> _finalizeHandler) = 0;
     virtual void registerOnStableCheckPointCommitFailed(
-        std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
+        std::function<void(bcos::Error::Ptr&&, PBFTProposal::Ptr)>
             _onStableCheckPointCommitFailed) = 0;
 
     virtual void stop() {}

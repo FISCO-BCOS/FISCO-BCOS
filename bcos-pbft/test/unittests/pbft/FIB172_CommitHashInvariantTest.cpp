@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(testIntoPrecommitPreservesHash)
 
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         hash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     // Use FakePBFTCache which exposes intoPrecommit() and prePrepare().
     auto cache = std::make_shared<FakePBFTCache>(leaderFaker->pbftConfig(), expectedIndex);
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(testIntoPrecommitPreservesHash)
     {
         auto prepareMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), nodeIdx,
             hash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PreparePacket);
-        prepareMsg->setConsensusProposal(fakedProposal);
+        prepareMsg->setConsensusProposal(*fakedProposal);
         cache->addPrepareCache(prepareMsg);
     }
 
@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(testCollectEnoughCommitReqNoVotes)
 
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         hash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     // Create a cache with 4 consensus nodes — quorum is 3.
     // With no commit votes the quorum check must return false.
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(testCollectEnoughCommitReqNoVotes)
     {
         auto prepareMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), nodeIdx,
             hash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PreparePacket);
-        prepareMsg->setConsensusProposal(fakedProposal);
+        prepareMsg->setConsensusProposal(*fakedProposal);
         cache->addPrepareCache(prepareMsg);
     }
     cache->intoPrecommit();

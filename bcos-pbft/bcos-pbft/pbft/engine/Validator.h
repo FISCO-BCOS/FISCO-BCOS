@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "../interfaces/PBFTMessageFactory.h"
-#include "../interfaces/PBFTProposalInterface.h"
+#include "../protocol/PB/PBFTProposal.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/TransactionSubmitResultFactory.h>
@@ -41,7 +41,7 @@ public:
 
     virtual void asyncResetTxsFlag(
         const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash = false) = 0;
-    virtual PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
+    virtual PBFTProposal::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) = 0;
 
     virtual void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,
@@ -80,7 +80,7 @@ public:
         const protocol::Block& proposal, bool _flag, bool _emptyTxBatchHash = false) override;
     ssize_t resettingProposalSize() const override;
 
-    PBFTProposalInterface::Ptr generateEmptyProposal(uint32_t _proposalVersion,
+    PBFTProposal::Ptr generateEmptyProposal(uint32_t _proposalVersion,
         PBFTMessageFactory::Ptr _factory, int64_t _index, int64_t _sealerId) override;
 
     void updateValidatorConfig(bcos::consensus::ConsensusNodeList const& _consensusNodeList,

@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(testRejectPrePrepareWithMismatchedBlockNumber)
 
     // The consensus proposal carries the REAL block data but the outer PBFT index is wrong.
     auto proposal = leaderMsgFixture->fakePBFTProposal(spoofedIndex, hash, *blockData, {}, {});
-    pbftMsg->setConsensusProposal(proposal);
+    pbftMsg->setConsensusProposal(*proposal);
 
     auto encodedData = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(testRejectPrePrepareWithOuterInnerIndexMismatch)
         realHash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
     auto proposal =
         leaderMsgFixture->fakePBFTProposal(expectedIndex + 5, realHash, *blockData, {}, {});
-    pbftMsg->setConsensusProposal(proposal);
+    pbftMsg->setConsensusProposal(*proposal);
 
     auto encodedData = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(testRejectPrePrepareWithMismatchedBlockHash)
         bogusHash, expectedIndex, *blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
     auto proposal =
         leaderMsgFixture->fakePBFTProposal(expectedIndex, bogusHash, *blockData, {}, {});
-    pbftMsg->setConsensusProposal(proposal);
+    pbftMsg->setConsensusProposal(*proposal);
 
     auto encodedData = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->pbftEngine()->onReceivePBFTMessage(

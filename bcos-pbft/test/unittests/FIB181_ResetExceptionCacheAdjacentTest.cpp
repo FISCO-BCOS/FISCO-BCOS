@@ -71,7 +71,7 @@ inline CryptoSuite::Ptr makeCryptoSuiteFib181()
 /// Build an exception pre-prepare message carrying a distinct 32-byte hash and a
 /// consensusProposal whose data() is a real encoded empty block, so the
 /// resetExceptionCache else-branch's createBlock(data, false, false) parses.
-inline PBFTMessageInterface::Ptr makeExceptionPrePrepare(
+inline PBFTMessage::Ptr makeExceptionPrePrepare(
     CryptoSuite::Ptr const& _cryptoSuite, BlockFactory::Ptr const& _blockFactory, uint8_t _seed)
 {
     auto block = _blockFactory->createBlock();
@@ -86,7 +86,7 @@ inline PBFTMessageInterface::Ptr makeExceptionPrePrepare(
     auto msg = std::make_shared<PBFTMessage>();
     msg->setIndex(10);
     msg->setHash(_cryptoSuite->hashImpl()->hash("exception-" + std::to_string(_seed)));
-    msg->setConsensusProposal(proposal);
+    msg->setConsensusProposal(*proposal);
     return msg;
 }
 

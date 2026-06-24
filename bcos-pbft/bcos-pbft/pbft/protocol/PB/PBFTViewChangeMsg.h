@@ -19,54 +19,93 @@
  * @date 2021-04-15
  */
 #pragma once
-#include "../..//interfaces/ViewChangeMsgInterface.h"
 #include "PBFTBaseMessage.h"
+#include "PBFTMessage.h"
+#include "PBFTProposal.h"
+#include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
+#include <memory>
+
 namespace bcos::consensus
 {
-class PBFTViewChangeMsg : public ViewChangeMsgInterface, public PBFTBaseMessage
+// FIB-121: value + non-owning-view message (single-impl ViewChangeMsgInterface
+// collapsed in). STANDALONE owns its RawViewChangeMessage; VIEW windows onto a
+// parent NewView's viewChangeMsgList element. The base header lives in the
+// independently-owned PBFTBaseMessage and is copied in/out of the protobuf's
+// `message` field at encode/decode (no set_allocated borrow + destructor
+// release). committedProposal / preparedProposals are value views into m_active.
+class PBFTViewChangeMsg : public PBFTBaseMessage
 {
 public:
     using Ptr = std::shared_ptr<PBFTViewChangeMsg>;
-    PBFTViewChangeMsg() : PBFTBaseMessage()
+    PBFTViewChangeMsg()
+      : PBFTBaseMessage(),
+        m_rawViewChange(std::make_unique<RawViewChangeMessage>()),
+        m_active(m_rawViewChange.get())
     {
-        m_preparedProposalList = std::make_shared<PBFTMessageList>();
-        m_rawViewChange = std::make_shared<RawViewChangeMessage>();
-        m_rawViewChange->set_allocated_message(PBFTBaseMessage::baseMessage().get());
         m_packetType = PacketType::ViewChangePacket;
+        rebuildViews();
     }
 
-    explicit PBFTViewChangeMsg(std::shared_ptr<RawViewChangeMessage> _rawViewChange);
-    explicit PBFTViewChangeMsg(bytesConstRef _data) : PBFTBaseMessage()
+    explicit PBFTViewChangeMsg(bytesConstRef _data)
+      : PBFTBaseMessage(),
+        m_rawViewChange(std::make_unique<RawViewChangeMessage>()),
+        m_active(m_rawViewChange.get())
     {
-        m_preparedProposalList = std::make_shared<PBFTMessageList>();
-        m_rawViewChange = std::make_shared<RawViewChangeMessage>();
         decode(_data);
     }
 
-    ~PBFTViewChangeMsg() override
+    // Non-owning view onto a parent NewView's viewChangeMsgList element.
+    static PBFTViewChangeMsg asView(RawViewChangeMessage* _sub)
     {
-        // return back the ownership of message to PBFTBaseMessage
-        m_rawViewChange->unsafe_arena_release_message();
-        // return back the ownership to m_committedProposal
-        if (m_rawViewChange->has_committedproposal())
-        {
-            m_rawViewChange->unsafe_arena_release_committedproposal();
-        }
-        // return back the ownership to m_preparedProposalList
-        auto preparedProposalSize = m_rawViewChange->preparedproposals_size();
-        for (auto i = 0; i < preparedProposalSize; i++)
-        {
-            m_rawViewChange->mutable_preparedproposals()->UnsafeArenaReleaseLast();
-        }
+        return PBFTViewChangeMsg(ViewTag{}, _sub);
     }
 
-    std::shared_ptr<RawViewChangeMessage> rawViewChange() { return m_rawViewChange; }
+    PBFTViewChangeMsg(PBFTViewChangeMsg const& _other)
+      : PBFTBaseMessage(_other),
+        m_rawViewChange(std::make_unique<RawViewChangeMessage>(*_other.m_active)),
+        m_active(m_rawViewChange.get())
+    {
+        rebuildViews();
+    }
+    PBFTViewChangeMsg& operator=(PBFTViewChangeMsg const& _other)
+    {
+        PBFTViewChangeMsg tmp(_other);
+        *this = std::move(tmp);
+        return *this;
+    }
+    PBFTViewChangeMsg(PBFTViewChangeMsg&&) noexcept = default;
+    PBFTViewChangeMsg& operator=(PBFTViewChangeMsg&&) noexcept = default;
 
-    PBFTProposalInterface::Ptr committedProposal() override { return m_committedProposal; }
-    PBFTMessageList const& preparedProposals() override { return *m_preparedProposalList; }
+    ~PBFTViewChangeMsg() override = default;
 
-    void setCommittedProposal(PBFTProposalInterface::Ptr _proposal) override;
-    void setPreparedProposals(PBFTMessageList const& _preparedProposals) override;
+    RawViewChangeMessage* rawViewChange() { return m_active; }
+    RawViewChangeMessage const* rawViewChange() const { return m_active; }
+
+    // Materialize the independently-owned base header into the protobuf's
+    // `message` field and return it, so the protobuf is self-contained for
+    // serialization or for embedding into a NewView (replaces the old
+    // set_allocated_message aliasing). Logically const: the base header in
+    // m_baseMessage is the source of truth; this only mirrors it into m_active.
+    RawViewChangeMessage const* encodedRaw() const
+    {
+        m_active->mutable_message()->CopyFrom(*m_baseMessage);
+        return m_active;
+    }
+
+    // Nullable observer (returns nullptr when the field is absent).
+    // LIFETIME: the returned pointer aliases a value member that views into this
+    // message's protobuf — valid only while this PBFTViewChangeMsg is alive. Do
+    // NOT store it past the owning message's lifetime; for an owning handle copy
+    // it: std::make_shared<PBFTProposal>(*vc->committedProposal()).
+    PBFTProposal* committedProposal() { return m_hasCommitted ? &m_committedProposal : nullptr; }
+    PBFTProposal const* committedProposal() const
+    {
+        return m_hasCommitted ? &m_committedProposal : nullptr;
+    }
+    std::vector<PBFTMessage> const& preparedProposals() const { return m_preparedProposalList; }
+
+    void setCommittedProposal(PBFTProposal const& _proposal);
+    void setPreparedProposals(PBFTMessageList const& _preparedProposals);
 
     bytesPointer encode(
         bcos::crypto::CryptoSuite::Ptr, bcos::crypto::KeyPairInterface::Ptr) const override;
@@ -78,31 +117,50 @@ public:
         stringstream << LOG_KV("type", m_packetType)
                      << LOG_KV("fromNode", m_from ? m_from->shortHex() : "null")
                      << LOG_KV("commitProposal",
-                            m_committedProposal ? printPBFTProposal(m_committedProposal) : "null")
-                     << LOG_KV("prePreSize",
-                            m_preparedProposalList ? m_preparedProposalList->size() : 0);
-        if (m_preparedProposalList)
-        {
-            size_t i = 0;
-            for (auto const& prePrepare : *m_preparedProposalList)
-            {
-                stringstream << "prePrepare" << i++ << printPBFTMsgInfo(prePrepare);
-            }
-        }
+                            m_hasCommitted ? printPBFTProposal(&m_committedProposal) : "null")
+                     << LOG_KV("prePreSize", m_preparedProposalList.size());
         return stringstream.str();
     }
 
 protected:
-    // deserialize RawViewChangeMessage to Object
     void deserializeToObject() override;
 
 private:
-    std::shared_ptr<RawViewChangeMessage> m_rawViewChange;
-    // required and need to be verified
-    PBFTProposalInterface::Ptr m_committedProposal;
-    // optional
-    PBFTMessageListPtr m_preparedProposalList;
+    struct ViewTag
+    {
+    };
+    PBFTViewChangeMsg(ViewTag, RawViewChangeMessage* _sub)
+      : PBFTBaseMessage(), m_rawViewChange(nullptr), m_active(_sub)
+    {
+        // copy the base header out of the viewed protobuf, then build views
+        m_baseMessage->CopyFrom(m_active->message());
+        deserializeToObject();
+        m_packetType = PacketType::ViewChangePacket;
+    }
+
+    void rebuildViews()
+    {
+        m_hasCommitted = m_active->has_committedproposal();
+        if (m_hasCommitted)
+        {
+            m_committedProposal = PBFTProposal::asView(m_active->mutable_committedproposal());
+        }
+        m_preparedProposalList.clear();
+        m_preparedProposalList.reserve(m_active->preparedproposals_size());
+        for (int i = 0; i < m_active->preparedproposals_size(); i++)
+        {
+            m_preparedProposalList.push_back(
+                PBFTMessage::asView(m_active->mutable_preparedproposals(i)));
+        }
+    }
+
+    std::unique_ptr<RawViewChangeMessage> m_rawViewChange;  // non-null iff STANDALONE
+    RawViewChangeMessage* m_active;                         // owned or parent-owned protobuf
+    PBFTProposal m_committedProposal;  // VIEW into m_active->committedproposal()
+    bool m_hasCommitted = false;
+    std::vector<PBFTMessage> m_preparedProposalList;  // VIEWS into m_active->preparedproposals(i)
 };
-using PBFTViewChangeMsgList = std::vector<PBFTViewChangeMsg::Ptr>;
-using PBFTViewChangeMsgListPtr = std::shared_ptr<PBFTViewChangeMsg>;
+// FIB-121: value list (was std::vector<PBFTViewChangeMsg::Ptr>).
+using ViewChangeMsgList = std::vector<PBFTViewChangeMsg>;
+using ViewChangeMsgListPtr = std::shared_ptr<ViewChangeMsgList>;
 }  // namespace bcos::consensus

@@ -142,7 +142,7 @@ BOOST_AUTO_TEST_CASE(testSameViewPrePrepareAccepted)
     proposal->setIndex(proposalIndex);
     proposal->setHash(validHash);
     proposal->setData(blockData);
-    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setConsensusProposal(*proposal);
     prePrepare->setHash(proposal->hash());
 
     // handlePrePrepareMsg with _needVerifyProposal=false, _needCheckSignature=false
@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(testHigherViewPrePrepareRejected)
     proposal->setIndex(proposalIndex);
     proposal->setHash(validHash);
     proposal->setData(blockData);
-    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setConsensusProposal(*proposal);
     prePrepare->setHash(proposal->hash());
 
     // With FIB-133 fix: view mismatch (higherView != localView) → rejected (false).
@@ -229,7 +229,7 @@ BOOST_AUTO_TEST_CASE(testHigherViewPrePrepareAcceptedInNewViewPath)
     proposal->setIndex(proposalIndex);
     proposal->setHash(validHash);
     proposal->setData(blockData);
-    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setConsensusProposal(*proposal);
     prePrepare->setHash(proposal->hash());
 
     // _generatedFromNewView=true — FIB-133 guard is intentionally bypassed.
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(testLowerViewPrePrepareAlreadyRejected)
     proposal->setIndex(proposalIndex);
     proposal->setHash(validHash);
     proposal->setData(blockData);
-    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setConsensusProposal(*proposal);
     prePrepare->setHash(proposal->hash());
 
     // Lower-view is already rejected by checkPBFTMsgState() — must stay false.

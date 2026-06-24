@@ -463,7 +463,7 @@ uint64_t PBFTConfig::minRequiredQuorum() const
     return m_minRequiredQuorum;
 }
 
-bool PBFTConfig::verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal)
+bool PBFTConfig::verifyProposalQuorumSignatures(PBFTProposal const* _proposal)
 {
     if (!_proposal)
     {
@@ -545,7 +545,7 @@ IndexType PBFTConfig::leaderIndexInNewViewPeriod(
     return (_proposalIndex / m_leaderSwitchPeriod + _view) % m_consensusNodeNum;
 }
 
-PBFTProposalInterface::Ptr PBFTConfig::populateCommittedProposal()
+PBFTProposal::Ptr PBFTConfig::populateCommittedProposal()
 {
     ReadGuard lock(x_committedProposal);
     if (!m_committedProposal)
@@ -553,7 +553,7 @@ PBFTProposalInterface::Ptr PBFTConfig::populateCommittedProposal()
         return nullptr;
     }
     return m_pbftMessageFactory->populateFrom(
-        std::dynamic_pointer_cast<PBFTProposalInterface>(m_committedProposal));
+        *std::dynamic_pointer_cast<PBFTProposal>(m_committedProposal));
 }
 
 std::string PBFTConfig::printCurrentState()

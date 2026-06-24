@@ -21,6 +21,7 @@
  */
 #include "bcos-pbft/core/Proposal.h"
 #include "bcos-pbft/core/StateMachine.h"
+#include "bcos-pbft/pbft/protocol/PB/PBFTProposal.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
@@ -114,7 +115,9 @@ BOOST_AUTO_TEST_CASE(callback_called_on_block_number_mismatch)
     auto stateMachine = std::make_shared<StateMachine>(scheduler, blockFactory);
 
     // lastApplied at index 1
-    auto lastApplied = std::make_shared<Proposal>();
+    // FIB-121: Proposal is now a non-owning view; use the concrete PBFTProposal
+    // (which owns its protobuf) for standalone test fixtures.
+    auto lastApplied = std::make_shared<PBFTProposal>();
     lastApplied->setIndex(1);
     lastApplied->setHash(HashType{});
 
@@ -127,12 +130,12 @@ BOOST_AUTO_TEST_CASE(callback_called_on_block_number_mismatch)
     bytes blockData;
     proposalBlock->encode(blockData);
 
-    auto proposal = std::make_shared<Proposal>();
+    auto proposal = std::make_shared<PBFTProposal>();
     proposal->setIndex(2);
     proposal->setHash(proposalHeader->hash());
     proposal->setData(blockData);
 
-    auto executedProposal = std::make_shared<Proposal>();
+    auto executedProposal = std::make_shared<PBFTProposal>();
 
     std::atomic<bool> callbackCalled{false};
     std::atomic<int64_t> callbackCode{0};

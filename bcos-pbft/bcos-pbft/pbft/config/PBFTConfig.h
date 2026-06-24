@@ -99,7 +99,7 @@ public:
     //   * the same sealerIdx appears more than once (byzantine inflation signal — honest
     //     paths build the proof list from a deduplicated map so duplicates never occur)
     //   * accumulated vote weight is below minRequiredQuorum()
-    virtual bool verifyProposalQuorumSignatures(PBFTProposalInterface::Ptr const& _proposal);
+    virtual bool verifyProposalQuorumSignatures(PBFTProposal const* _proposal);
 
     virtual ViewType view() const { return m_view; }
     virtual void setView(ViewType _view) { m_view.store(_view); }
@@ -135,7 +135,7 @@ public:
     std::shared_ptr<bcos::front::FrontServiceInterface> frontService() { return m_frontService; }
     std::shared_ptr<PBFTCodecInterface> codec() { return m_codec; }
 
-    PBFTProposalInterface::Ptr populateCommittedProposal();
+    PBFTProposal::Ptr populateCommittedProposal();
     unsigned pbftMsgDefaultVersion() const { return c_pbftMsgDefaultVersion; }
     unsigned networkTimeoutInterval() const { return c_networkTimeoutInterval; }
     std::shared_ptr<ValidatorInterface> validator() { return m_validator; }

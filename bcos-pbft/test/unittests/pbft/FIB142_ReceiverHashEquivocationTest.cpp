@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(receiver_rejects_decoded_hash_mismatch)
         expectedIndex, bodyAHash, *blockBData, std::vector<int64_t>(), std::vector<bytes>());
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         bodyAHash, expectedIndex, bytes(), 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     auto data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->txpool()->setVerifyResult(true);
@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(receiver_accepts_matched_hash)
         expectedIndex, realHash, *blockData, std::vector<int64_t>(), std::vector<bytes>());
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         realHash, expectedIndex, bytes(), 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     auto data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->txpool()->setVerifyResult(true);
@@ -207,7 +207,7 @@ BOOST_AUTO_TEST_CASE(receiver_rejects_decoded_body_txsRoot_mismatch)
         expectedIndex, tamperedHash, *blockData, std::vector<int64_t>(), std::vector<bytes>());
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         tamperedHash, expectedIndex, bytes(), 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     auto data = leaderFaker->pbftConfig()->codec()->encode(pbftMsg);
     nonLeaderFaker->txpool()->setVerifyResult(true);

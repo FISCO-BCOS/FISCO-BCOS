@@ -48,18 +48,6 @@ bytes makePBFTProposalBytesWithHashLen(std::size_t hashLen)
     std::string serialised = raw.SerializeAsString();
     return bytes(serialised.begin(), serialised.end());
 }
-
-/// Serialize a bare RawProposal with a `hashLen`-byte hash.  Used by the
-/// Proposal::decode reuse case, which parses a RawProposal directly.
-bytes makeRawProposalBytesWithHashLen(std::size_t hashLen)
-{
-    RawProposal raw;
-    raw.set_index(1);
-    std::string hash(hashLen, '\xab');
-    raw.set_hash(hash.data(), hash.size());
-    std::string serialised = raw.SerializeAsString();
-    return bytes(serialised.begin(), serialised.end());
-}
 }  // namespace
 
 BOOST_FIXTURE_TEST_SUITE(FIB174_MalformedHashReject, TestPromptFixture)
@@ -93,8 +81,8 @@ BOOST_AUTO_TEST_CASE(canonical_hash_accepted_on_decode)
 /// (zeroed) hash identity.
 BOOST_AUTO_TEST_CASE(empty_hash_accepted_as_unset)
 {
-    auto data = makeRawProposalBytesWithHashLen(0);
-    Proposal proposal{bytesConstRef(data.data(), data.size())};
+    auto data = makePBFTProposalBytesWithHashLen(0);
+    PBFTProposal proposal{bytesConstRef(data.data(), data.size())};
     BOOST_CHECK_EQUAL(proposal.hash(), HashType{});
 
     // The default-constructed PBFTProposal (hash never set) must also construct
@@ -109,8 +97,8 @@ BOOST_AUTO_TEST_CASE(empty_hash_accepted_as_unset)
 BOOST_AUTO_TEST_CASE(stale_hash_not_retained_after_malformed_reuse)
 {
     // First decode: a canonical hash.  Capture the accepted identity.
-    auto goodData = makeRawProposalBytesWithHashLen(HashType::SIZE);
-    Proposal proposal{bytesConstRef(goodData.data(), goodData.size())};
+    auto goodData = makePBFTProposalBytesWithHashLen(HashType::SIZE);
+    PBFTProposal proposal{bytesConstRef(goodData.data(), goodData.size())};
     std::string goodHashBytes(HashType::SIZE, '\xab');
     HashType good((byte const*)goodHashBytes.data(), HashType::SIZE);
     BOOST_CHECK_EQUAL(proposal.hash(), good);
@@ -119,7 +107,7 @@ BOOST_AUTO_TEST_CASE(stale_hash_not_retained_after_malformed_reuse)
     // Second decode on the SAME object with a malformed (oversize) hash must
     // throw, and must clear the previously accepted identity rather than leave
     // the stale hash in place.
-    auto badData = makeRawProposalBytesWithHashLen(64);
+    auto badData = makePBFTProposalBytesWithHashLen(64);
     BOOST_CHECK_THROW(
         proposal.decode(bytesConstRef(badData.data(), badData.size())), bcos::Exception);
     BOOST_CHECK_EQUAL(proposal.hash(), HashType{});

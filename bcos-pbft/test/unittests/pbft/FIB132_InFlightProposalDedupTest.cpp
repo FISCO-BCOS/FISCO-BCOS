@@ -86,15 +86,15 @@ BOOST_AUTO_TEST_CASE(inflight_key_uniqueness_and_dedup)
 
     auto pbftProposal1 = pbftMsgFixture->fakePBFTProposal(proposalIndex, hash1, blockData1, {}, {});
     auto msg1 = pbftMsgFixture->fakePBFTMessage(utcTime(), 0, leaderFaker->pbftConfig()->view(),
-        leaderFaker->pbftConfig()->nodeIndex(), hash1, {pbftProposal1});
+        leaderFaker->pbftConfig()->nodeIndex(), hash1, {*pbftProposal1});
     msg1->setIndex(proposalIndex);
-    msg1->setConsensusProposal(pbftProposal1);
+    msg1->setConsensusProposal(*pbftProposal1);
 
     auto pbftProposal2 = pbftMsgFixture->fakePBFTProposal(proposalIndex, hash2, blockData1, {}, {});
     auto msg2 = pbftMsgFixture->fakePBFTMessage(utcTime(), 0, leaderFaker->pbftConfig()->view(),
-        leaderFaker->pbftConfig()->nodeIndex(), hash2, {pbftProposal2});
+        leaderFaker->pbftConfig()->nodeIndex(), hash2, {*pbftProposal2});
     msg2->setIndex(proposalIndex);
-    msg2->setConsensusProposal(pbftProposal2);
+    msg2->setConsensusProposal(*pbftProposal2);
 
     // Create an InspectablePBFTEngine backed by leaderFaker's config
     auto engine = std::make_shared<InspectablePBFTEngine>(leaderFaker->pbftConfig());

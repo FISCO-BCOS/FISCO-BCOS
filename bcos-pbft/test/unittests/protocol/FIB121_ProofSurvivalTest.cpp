@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(mutateAfterSetReflectedAtEncode)
     prePrepare->setView(1);
     prePrepare->setIndex(100);
     prePrepare->setHash(proposal->hash());
-    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setConsensusProposal(*proposal);
 
     // mutate AFTER set (the intoPrecommit / setSignatureList pattern)
     bytes sig0{'s', '0'};
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(proofSurvivesViewChangeEmbedding)
     prePrepare->setView(2);
     prePrepare->setIndex(200);
     prePrepare->setHash(proposal->hash());
-    prePrepare->setConsensusProposal(proposal);
+    prePrepare->setConsensusProposal(*proposal);
 
     // mutate after set
     bytes sig{'z', 'z'};
@@ -124,20 +124,20 @@ BOOST_AUTO_TEST_CASE(proofSurvivesViewChangeEmbedding)
     viewChange->setView(2);
     viewChange->setIndex(200);
     viewChange->setHash(proposal->hash());
-    viewChange->setCommittedProposal(committed);
-    PBFTMessageList prepared{prePrepare};
+    viewChange->setCommittedProposal(*committed);
+    PBFTMessageList prepared{*prePrepare};
     viewChange->setPreparedProposals(prepared);
 
     auto encoded = viewChange->encode(nullptr, nullptr);
     auto decodedViewChange = std::make_shared<PBFTViewChangeMsg>(ref(*encoded));
 
     BOOST_REQUIRE_EQUAL(decodedViewChange->preparedProposals().size(), 1U);
-    auto decodedPrePrepare = decodedViewChange->preparedProposals()[0];
-    BOOST_REQUIRE(decodedPrePrepare->consensusProposal() != nullptr);
-    BOOST_CHECK_EQUAL(decodedPrePrepare->consensusProposal()->signatureProofSize(), 1U);
-    BOOST_CHECK_EQUAL(decodedPrePrepare->consensusProposal()->signatureProof(0).first, 3);
-    BOOST_CHECK(decodedPrePrepare->consensusProposal()->signatureProof(0).second.toBytes() == sig);
-    BOOST_CHECK(decodedPrePrepare->consensusProposal()->data().toBytes() == data);
+    auto const& decodedPrePrepare = decodedViewChange->preparedProposals()[0];
+    BOOST_REQUIRE(decodedPrePrepare.consensusProposal() != nullptr);
+    BOOST_CHECK_EQUAL(decodedPrePrepare.consensusProposal()->signatureProofSize(), 1U);
+    BOOST_CHECK_EQUAL(decodedPrePrepare.consensusProposal()->signatureProof(0).first, 3);
+    BOOST_CHECK(decodedPrePrepare.consensusProposal()->signatureProof(0).second.toBytes() == sig);
+    BOOST_CHECK(decodedPrePrepare.consensusProposal()->data().toBytes() == data);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

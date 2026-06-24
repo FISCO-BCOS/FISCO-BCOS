@@ -45,6 +45,37 @@ public:
         PBFTBaseMessage::deserializeToObject();
     }
 
+    // FIB-121: the derived messages are now value types, so the base must
+    // DEEP-COPY its owned BaseMessage (a shallow shared_ptr copy would alias the
+    // base header across two logically-independent messages). Moves keep the
+    // cheap shared_ptr transfer.
+    PBFTBaseMessage(PBFTBaseMessage const& _other)
+      : PBFTBaseMessageInterface(_other),
+        m_baseMessage(std::make_shared<BaseMessage>(*_other.m_baseMessage)),
+        m_hash(_other.m_hash),
+        m_packetType(_other.m_packetType),
+        m_dataHash(_other.m_dataHash),
+        m_signatureData(std::make_shared<bytes>(*_other.m_signatureData)),
+        m_from(_other.m_from),
+        m_createTime(_other.m_createTime)
+    {}
+    PBFTBaseMessage& operator=(PBFTBaseMessage const& _other)
+    {
+        if (this != &_other)
+        {
+            m_baseMessage = std::make_shared<BaseMessage>(*_other.m_baseMessage);
+            m_hash = _other.m_hash;
+            m_packetType = _other.m_packetType;
+            m_dataHash = _other.m_dataHash;
+            m_signatureData = std::make_shared<bytes>(*_other.m_signatureData);
+            m_from = _other.m_from;
+            m_createTime = _other.m_createTime;
+        }
+        return *this;
+    }
+    PBFTBaseMessage(PBFTBaseMessage&&) noexcept = default;
+    PBFTBaseMessage& operator=(PBFTBaseMessage&&) noexcept = default;
+
     ~PBFTBaseMessage() override {}
 
     int64_t timestamp() const override { return m_baseMessage->timestamp(); }

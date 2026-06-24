@@ -70,7 +70,10 @@ public:
     virtual uint64_t liveTimeInMilliseconds() const = 0;
     virtual std::string toDebugString() const = 0;
 };
-inline std::string printPBFTMsgInfo(PBFTBaseMessageInterface::Ptr _pbftMsg)
+// FIB-121: accepts any pointer-like message handle (PBFTBaseMessageInterface::Ptr,
+// or a raw pointer to a concrete value message such as PBFTMessage*).
+template <typename T>
+inline std::string printPBFTMsgInfo(T const& _pbftMsg)
 {
     std::ostringstream stringstream;
     stringstream << LOG_KV("reqHash", _pbftMsg->hash().abridged())

@@ -28,54 +28,50 @@ using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
+
 bytesPointer PBFTNewViewMsg::encode(CryptoSuite::Ptr, KeyPairInterface::Ptr) const
 {
-    return encodePBObject(m_rawNewView);
+    // FIB-121: materialize the base header into the protobuf before serializing.
+    m_rawNewView->mutable_message()->CopyFrom(*m_baseMessage);
+    return encodePBObject(m_rawNewView.get());
 }
 
 void PBFTNewViewMsg::decode(bytesConstRef _data)
 {
-    decodePBObject(m_rawNewView, _data);
-    setBaseMessage(std::shared_ptr<BaseMessage>(m_rawNewView->mutable_message()));
-    PBFTNewViewMsg::deserializeToObject();
+    decodePBObject(m_rawNewView.get(), _data);
+    // FIB-121: copy the base header out of the protobuf into our own BaseMessage.
+    m_baseMessage->CopyFrom(m_rawNewView->message());
+    deserializeToObject();
+    m_packetType = PacketType::NewViewPacket;
 }
 
 void PBFTNewViewMsg::deserializeToObject()
 {
     PBFTBaseMessage::deserializeToObject();
-    // decode into m_viewChangeList
-    for (int i = 0; i < m_rawNewView->viewchangemsglist_size(); i++)
-    {
-        std::shared_ptr<RawViewChangeMessage> pbRawViewChange(
-            m_rawNewView->mutable_viewchangemsglist(i));
-        m_viewChangeList->push_back(std::make_shared<PBFTViewChangeMsg>(pbRawViewChange));
-    }
-    // decode into m_prePrepareList
-    for (int i = 0; i < m_rawNewView->prepreparelist_size(); i++)
-    {
-        std::shared_ptr<PBFTRawMessage> pbftRawMessage(m_rawNewView->mutable_prepreparelist(i));
-        m_prePrepareList->push_back(std::make_shared<PBFTMessage>(pbftRawMessage));
-    }
+    rebuildViews();
 }
 
 void PBFTNewViewMsg::setViewChangeMsgList(ViewChangeMsgList const& _viewChangeMsgList)
 {
-    *m_viewChangeList = _viewChangeMsgList;
-    for (auto viewChangeMsg : _viewChangeMsgList)
+    m_rawNewView->clear_viewchangemsglist();
+    for (auto const& viewChange : _viewChangeMsgList)
     {
-        auto pbViewChangeMsg = std::dynamic_pointer_cast<PBFTViewChangeMsg>(viewChangeMsg);
-        m_rawNewView->mutable_viewchangemsglist()->AddAllocated(
-            pbViewChangeMsg->rawViewChange().get());
+        // encodedRaw() materializes the viewChange's base header into its protobuf
+        // (it had no set_allocated alias), then we deep-copy it in.
+        m_rawNewView->add_viewchangemsglist()->CopyFrom(*viewChange.encodedRaw());
     }
+    rebuildViews();
 }
 
 void PBFTNewViewMsg::setPrePrepareList(PBFTMessageList const& _prePrepareList)
 {
-    *m_prePrepareList = _prePrepareList;
-    for (auto prePrepare : _prePrepareList)
+    m_rawNewView->clear_prepreparelist();
+    for (auto const& prePrepare : _prePrepareList)
     {
-        auto pbPrePrepare = std::dynamic_pointer_cast<PBFTMessage>(prePrepare);
-        pbPrePrepare->encodeHashFields();
-        m_rawNewView->mutable_prepreparelist()->AddAllocated(pbPrePrepare->pbftRawMessage().get());
+        // serialize the prePrepare's base fields into its hashFieldsData first,
+        // then deep-copy the whole message in.
+        prePrepare.encodeHashFields();
+        m_rawNewView->add_prepreparelist()->CopyFrom(*prePrepare.pbftRawMessage());
     }
+    rebuildViews();
 }

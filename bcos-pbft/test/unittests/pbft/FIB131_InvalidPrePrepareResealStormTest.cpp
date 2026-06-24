@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(testInvalidPrePrepareNeverEntersCache)
         PacketType::PrePreparePacket);
     auto proposal = wrongMsgFixture->fakePBFTProposal(
         static_cast<protocol::BlockNumber>(expectedIndex), hash, *blockData, {}, {});
-    pbftMsg->setConsensusProposal(proposal);
+    pbftMsg->setConsensusProposal(*proposal);
 
     // Send significantly more invalid pre-prepares than c_maxInvalidPrePreparePerPeer (=3).
     constexpr size_t sendCount = 10;

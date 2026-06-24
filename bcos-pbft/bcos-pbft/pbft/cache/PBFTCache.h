@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "../config/PBFTConfig.h"
-#include "../interfaces/PBFTMessageInterface.h"
+#include "../protocol/PB/PBFTMessage.h"
 
 namespace bcos::consensus
 {
@@ -30,11 +30,11 @@ public:
     using Ptr = std::shared_ptr<PBFTCache>;
     PBFTCache(PBFTConfig::Ptr _config, bcos::protocol::BlockNumber _index);
     virtual ~PBFTCache() = default;
-    bool existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg);
-    bool conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg);
-    bool conflictWithPrecommitReq(PBFTMessageInterface::Ptr _prePrepareMsg);
+    bool existPrePrepare(PBFTMessage::Ptr _prePrepareMsg);
+    bool conflictWithProcessedReq(PBFTMessage::Ptr _msg);
+    bool conflictWithPrecommitReq(PBFTMessage::Ptr _prePrepareMsg);
 
-    virtual void addPrepareCache(PBFTMessageInterface::Ptr _prepareProposal)
+    virtual void addPrepareCache(PBFTMessage::Ptr _prepareProposal)
     {
         addCache(m_prepareCacheList, m_prepareReqWeight, _prepareProposal);
         PBFT_LOG(INFO) << LOG_DESC("addPrepareCache") << printPBFTMsgInfo(_prepareProposal)
@@ -42,7 +42,7 @@ public:
                        << LOG_KV("weight", m_prepareReqWeight[_prepareProposal->hash()]);
     }
 
-    virtual void addCommitCache(PBFTMessageInterface::Ptr _commitProposal)
+    virtual void addCommitCache(PBFTMessage::Ptr _commitProposal)
     {
         addCache(m_commitCacheList, m_commitReqWeight, _commitProposal);
         PBFT_LOG(INFO) << LOG_DESC("addCommitCache") << printPBFTMsgInfo(_commitProposal)
@@ -50,7 +50,7 @@ public:
                        << LOG_KV("weight", m_commitReqWeight[_commitProposal->hash()]);
     }
 
-    virtual void addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
+    virtual void addPrePrepareCache(PBFTMessage::Ptr _prePrepareMsg)
     {
         if (m_stableCommitted)
         {
@@ -76,22 +76,22 @@ public:
                        << m_config->printCurrentState();
     }
 
-    void addExceptionPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
+    void addExceptionPrePrepareCache(PBFTMessage::Ptr _prePrepareMsg)
     {
         m_exceptionPrePrepareList.push_back(std::move(_prePrepareMsg));
     }
 
     bcos::protocol::BlockNumber index() const { return m_index; }
 
-    virtual PBFTMessageInterface::Ptr preCommitCache() { return m_precommit; }
+    virtual PBFTMessage::Ptr preCommitCache() { return m_precommit; }
     // Note: only called when receive checkPoint-triggered-proposal response
-    virtual void setPrecommitCache(PBFTMessageInterface::Ptr _precommit)
+    virtual void setPrecommitCache(PBFTMessage::Ptr _precommit)
     {
         PBFT_LOG(INFO) << LOG_DESC("setPrecommitCache") << printPBFTMsgInfo(_precommit);
         m_precommit = _precommit;
         m_precommitWithoutData = _precommit;
     }
-    virtual PBFTMessageInterface::Ptr preCommitWithoutData() { return m_precommitWithoutData; }
+    virtual PBFTMessage::Ptr preCommitWithoutData() { return m_precommitWithoutData; }
     virtual bool checkAndPreCommit();
     virtual bool checkAndCommit();
     virtual bool shouldStopTimer();
@@ -100,10 +100,10 @@ public:
 
     virtual void resetExceptionCache(ViewType _curView);
 
-    virtual void setCheckPointProposal(PBFTProposalInterface::Ptr _proposal);
-    PBFTProposalInterface::Ptr checkPointProposal() { return m_checkpointProposal; }
+    virtual void setCheckPointProposal(PBFTProposal::Ptr _proposal);
+    PBFTProposal::Ptr checkPointProposal() { return m_checkpointProposal; }
 
-    virtual void addCheckPointMsg(PBFTMessageInterface::Ptr _checkPointMsg)
+    virtual void addCheckPointMsg(PBFTMessage::Ptr _checkPointMsg)
     {
         addCache(m_checkpointCacheList, m_checkpointCacheWeight, _checkPointMsg);
         PBFT_LOG(INFO) << LOG_DESC("addCheckPointMsg") << printPBFTMsgInfo(_checkPointMsg)
@@ -144,18 +144,17 @@ public:
 protected:
     bool checkPrePrepareProposalStatus();
     using CollectionCacheType =
-        std::map<bcos::crypto::HashType, std::map<IndexType, PBFTMessageInterface::Ptr>>;
+        std::map<bcos::crypto::HashType, std::map<IndexType, PBFTMessage::Ptr>>;
     using QuorumRecoderType = std::map<bcos::crypto::HashType, uint64_t>;
     void addCache(CollectionCacheType& _cachedReq, QuorumRecoderType& _weightInfo,
-        PBFTMessageInterface::Ptr _proposal);
+        PBFTMessage::Ptr _proposal);
     bool collectEnoughQuorum(bcos::crypto::HashType const& _hash, QuorumRecoderType& _weightInfo);
 
     bool collectEnoughPrepareReq();
     bool collectEnoughCommitReq();
     bool collectEnoughCheckpoint();
     virtual void intoPrecommit();
-    virtual void setSignatureList(
-        PBFTProposalInterface::Ptr _proposal, CollectionCacheType& _cache);
+    virtual void setSignatureList(PBFTProposal* _proposal, CollectionCacheType& _cache);
 
     template <typename T>
     void resetCacheAfterViewChange(T& _caches, ViewType _curView)
@@ -224,12 +223,12 @@ protected:
     CollectionCacheType m_commitCacheList;
     QuorumRecoderType m_commitReqWeight;
 
-    PBFTMessageInterface::Ptr m_prePrepare = nullptr;
-    std::vector<PBFTMessageInterface::Ptr> m_exceptionPrePrepareList = {};
-    PBFTMessageInterface::Ptr m_precommit = nullptr;
-    PBFTMessageInterface::Ptr m_precommitWithoutData = nullptr;
+    PBFTMessage::Ptr m_prePrepare = nullptr;
+    std::vector<PBFTMessage::Ptr> m_exceptionPrePrepareList = {};
+    PBFTMessage::Ptr m_precommit = nullptr;
+    PBFTMessage::Ptr m_precommitWithoutData = nullptr;
 
-    PBFTProposalInterface::Ptr m_checkpointProposal = nullptr;
+    PBFTProposal::Ptr m_checkpointProposal = nullptr;
     // time record for checkPoint start
     std::uint64_t m_checkPointStartTime = 0;
 

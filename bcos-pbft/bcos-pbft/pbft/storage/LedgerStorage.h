@@ -57,9 +57,9 @@ public:
     PBFTProposalListPtr loadState(bcos::protocol::BlockNumber _stabledIndex) override;
 
     // commit the committed proposal into the kv-storage
-    void asyncCommitProposal(PBFTProposalInterface::Ptr _proposal) override;
+    void asyncCommitProposal(PBFTProposal::Ptr _proposal) override;
     // commit the executed-block into the blockchain
-    void asyncCommitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal) override;
+    void asyncCommitStableCheckPoint(PBFTProposal::Ptr _stableProposal) override;
     void registerFinalizeHandler(
         std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> _finalizeHandler)
         override
@@ -67,8 +67,8 @@ public:
         m_finalizeHandler = std::move(_finalizeHandler);
     }
     void registerOnStableCheckPointCommitFailed(
-        std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
-            _onStableCheckPointCommitFailed) override
+        std::function<void(bcos::Error::Ptr&&, PBFTProposal::Ptr)> _onStableCheckPointCommitFailed)
+        override
     {
         m_onStableCheckPointCommitFailed = std::move(_onStableCheckPointCommitFailed);
     }
@@ -87,7 +87,7 @@ protected:
 
     virtual void asyncRemove(std::string const& _dbName, std::string const& _key);
 
-    virtual void commitStableCheckPoint(PBFTProposalInterface::Ptr _stableProposal,
+    virtual void commitStableCheckPoint(PBFTProposal::Ptr _stableProposal,
         bcos::protocol::BlockHeader::Ptr _blockHeader, bcos::protocol::Block::Ptr _blockInfo);
     virtual void asyncGetLatestCommittedProposalIndex();
 
@@ -115,8 +115,7 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> m_finalizeHandler;
-    std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
-        m_onStableCheckPointCommitFailed;
+    std::function<void(bcos::Error::Ptr&&, PBFTProposal::Ptr)> m_onStableCheckPointCommitFailed;
     std::shared_ptr<ThreadPool> m_commitBlockWorker;
 };
 }  // namespace bcos::consensus

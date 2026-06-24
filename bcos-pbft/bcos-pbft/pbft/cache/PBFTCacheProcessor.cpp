@@ -43,26 +43,26 @@ void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr
     for (const auto& proposal : _proposals)
     {
         // the proposal has already been committed
-        if (proposal->index() <= m_config->committedProposal()->index())
+        if (proposal.index() <= m_config->committedProposal()->index())
         {
             PBFT_LOG(DEBUG) << LOG_DESC("initState: skip committedProposal")
-                            << LOG_KV("index", proposal->index())
-                            << LOG_KV("hash", proposal->hash().abridged());
+                            << LOG_KV("index", proposal.index())
+                            << LOG_KV("hash", proposal.hash().abridged());
             continue;
         }
         PBFT_LOG(DEBUG) << LOG_DESC("initState: apply committedProposal")
-                        << LOG_KV("index", proposal->index())
-                        << LOG_KV("hash", proposal->hash().abridged());
+                        << LOG_KV("index", proposal.index())
+                        << LOG_KV("hash", proposal.hash().abridged());
         // set the txs status to be sealed
-        auto block = m_config->blockFactory().createBlock(proposal->data(), false, false);
+        auto block = m_config->blockFactory().createBlock(proposal.data(), false, false);
         m_config->validator()->asyncResetTxsFlag(*block, true);
         // try to verify and load the proposal
-        loadAndVerifyProposal(_fromNode, proposal);
+        loadAndVerifyProposal(_fromNode, std::make_shared<PBFTProposal>(proposal));
     }
 }
 
 void PBFTCacheProcessor::loadAndVerifyProposal(
-    NodeIDPtr _fromNode, PBFTProposalInterface::Ptr _proposal, size_t _retryTime)
+    NodeIDPtr _fromNode, PBFTProposal::Ptr _proposal, size_t _retryTime)
 {
     if (_retryTime > 3)
     {
@@ -152,12 +152,11 @@ void PBFTCacheProcessor::loadAndVerifyProposal(
         });
 }
 // Note: please ensure the passed in _prePrepareMsg not be modified after addPrePrepareCache
-void PBFTCacheProcessor::addPrePrepareCache(PBFTMessageInterface::Ptr _prePrepareMsg)
+void PBFTCacheProcessor::addPrePrepareCache(PBFTMessage::Ptr _prePrepareMsg)
 {
-    addCache(m_caches, _prePrepareMsg,
-        [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr proposal) {
-            _pbftCache->addPrePrepareCache(std::move(proposal));
-        });
+    addCache(m_caches, _prePrepareMsg, [](PBFTCache::Ptr _pbftCache, PBFTMessage::Ptr proposal) {
+        _pbftCache->addPrePrepareCache(std::move(proposal));
+    });
     // notify the consensusing proposal index to the sync module
     notifyMaxProposalIndex(_prePrepareMsg->index());
 }
@@ -179,7 +178,7 @@ void PBFTCacheProcessor::notifyMaxProposalIndex(bcos::protocol::BlockNumber _pro
     }
 }
 
-bool PBFTCacheProcessor::existPrePrepare(PBFTMessageInterface::Ptr const& _prePrepareMsg) const
+bool PBFTCacheProcessor::existPrePrepare(PBFTMessage::Ptr const& _prePrepareMsg) const
 {
     if (!m_caches.contains(_prePrepareMsg->index()))
     {
@@ -189,7 +188,7 @@ bool PBFTCacheProcessor::existPrePrepare(PBFTMessageInterface::Ptr const& _prePr
     return pbftCache->existPrePrepare(_prePrepareMsg);
 }
 
-bool PBFTCacheProcessor::tryToFillProposal(PBFTMessageInterface::Ptr _prePrepareMsg)
+bool PBFTCacheProcessor::tryToFillProposal(PBFTMessage::Ptr _prePrepareMsg)
 {
     if (!m_caches.contains(_prePrepareMsg->index()))
     {
@@ -212,7 +211,7 @@ bool PBFTCacheProcessor::tryToFillProposal(PBFTMessageInterface::Ptr _prePrepare
     return true;
 }
 
-bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessageInterface::Ptr const& _msg) const
+bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessage::Ptr const& _msg) const
 {
     if (!m_caches.contains(_msg->index()))
     {
@@ -222,8 +221,7 @@ bool PBFTCacheProcessor::conflictWithProcessedReq(PBFTMessageInterface::Ptr cons
     return pbftCache->conflictWithProcessedReq(_msg);
 }
 
-bool PBFTCacheProcessor::conflictWithPrecommitReq(
-    PBFTMessageInterface::Ptr const& _prePrepareMsg) const
+bool PBFTCacheProcessor::conflictWithPrecommitReq(PBFTMessage::Ptr const& _prePrepareMsg) const
 {
     if (!m_caches.contains(_prePrepareMsg->index()))
     {
@@ -234,7 +232,7 @@ bool PBFTCacheProcessor::conflictWithPrecommitReq(
 }
 
 void PBFTCacheProcessor::addCache(
-    PBFTCachesType& _pbftCache, PBFTMessageInterface::Ptr _pbftReq, UpdateCacheHandler _handler)
+    PBFTCachesType& _pbftCache, PBFTMessage::Ptr _pbftReq, UpdateCacheHandler _handler)
 
 {
     auto index = _pbftReq->index();
@@ -256,7 +254,8 @@ void PBFTCacheProcessor::checkAndPreCommit()
         {
             continue;
         }
-        updateCommitQueue(cache.second->preCommitCache()->consensusProposal());
+        updateCommitQueue(
+            std::make_shared<PBFTProposal>(*cache.second->preCommitCache()->consensusProposal()));
         // refresh the timer when commit success
         m_config->timer()->restart();
         m_config->resetToView();
@@ -273,7 +272,8 @@ void PBFTCacheProcessor::checkAndCommit()
         {
             continue;
         }
-        updateCommitQueue(cache.second->preCommitCache()->consensusProposal());
+        updateCommitQueue(
+            std::make_shared<PBFTProposal>(*cache.second->preCommitCache()->consensusProposal()));
         // refresh the timer when commit success
         m_config->timer()->restart();
         m_config->resetToView();
@@ -300,7 +300,7 @@ void PBFTCacheProcessor::resetTimer()
     m_config->tryTriggerFastViewChange(m_config->getLeader());
 }
 
-void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committedProposal)
+void PBFTCacheProcessor::updateCommitQueue(PBFTProposal::Ptr _committedProposal)
 {
     assert(_committedProposal);
     if (m_executingProposals.contains(_committedProposal->hash()))
@@ -356,8 +356,7 @@ void PBFTCacheProcessor::notifyCommittedProposalIndex(bcos::protocol::BlockNumbe
 }
 
 bool PBFTCacheProcessor::verifyProposalParentConsistency(
-    PBFTProposalInterface::Ptr const& _proposal,
-    ProposalInterface::ConstPtr const& _lastAppliedProposal)
+    PBFTProposal::Ptr const& _proposal, ProposalInterface::ConstPtr const& _lastAppliedProposal)
 {
     // Decode the proposal's BlockHeader to inspect its timestamp.  An empty data() on
     // either side (proposal stub or bootstrap committedProposal whose data is unset) means
@@ -560,7 +559,7 @@ void PBFTCacheProcessor::notifyToSealNextBlock()
 
 // execute the proposal and broadcast checkpoint message
 void PBFTCacheProcessor::applyStateMachine(
-    ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
+    ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposal::Ptr _proposal)
 {
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState()
@@ -608,7 +607,7 @@ void PBFTCacheProcessor::applyStateMachine(
         });
 }
 
-void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _proposal)
+void PBFTCacheProcessor::setCheckPointProposal(PBFTProposal::Ptr _proposal)
 {
     auto index = _proposal->index();
     if (!m_caches.contains(index))
@@ -638,15 +637,15 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
     (m_caches[index])->setCheckPointProposal(_proposal);
 }
 
-void PBFTCacheProcessor::addCheckPointMsg(PBFTMessageInterface::Ptr _checkPointMsg)
+void PBFTCacheProcessor::addCheckPointMsg(PBFTMessage::Ptr _checkPointMsg)
 {
     addCache(m_caches, std::move(_checkPointMsg),
-        [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _checkPointMsg) {
+        [](PBFTCache::Ptr _pbftCache, PBFTMessage::Ptr _checkPointMsg) {
             _pbftCache->addCheckPointMsg(std::move(_checkPointMsg));
         });
 }
 
-void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChange)
+void PBFTCacheProcessor::addViewChangeReq(PBFTViewChangeMsg::Ptr _viewChange)
 {
     auto reqView = _viewChange->view();
     auto fromIdx = _viewChange->generatedFrom();
@@ -671,7 +670,7 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
     // get the max precommitIndex
     for (const auto& precommit : _viewChange->preparedProposals())
     {
-        auto precommitIndex = precommit->index();
+        auto precommitIndex = precommit.index();
         if (!m_maxPrecommitIndex.contains(reqView) || m_maxPrecommitIndex[reqView] < precommitIndex)
         {
             m_maxPrecommitIndex[reqView] = precommitIndex;
@@ -682,10 +681,10 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
     preparedProposalInfo << " preparedProposalInfo: ";
     for (const auto& proposal : _viewChange->preparedProposals())
     {
-        preparedProposalInfo << LOG_KV("propIndex", proposal->index())
-                             << LOG_KV("propHash", proposal->hash().abridged())
-                             << LOG_KV("fromIdx", proposal->generatedFrom())
-                             << LOG_KV("dataSize", proposal->consensusProposal()->data().size());
+        preparedProposalInfo << LOG_KV("propIndex", proposal.index())
+                             << LOG_KV("propHash", proposal.hash().abridged())
+                             << LOG_KV("fromIdx", proposal.generatedFrom())
+                             << LOG_KV("dataSize", proposal.consensusProposal()->data().size());
     }
     PBFT_LOG(INFO) << LOG_DESC("addViewChangeReq") << printPBFTMsgInfo(_viewChange)
                    << LOG_KV("weight", m_viewChangeWeight[reqView])
@@ -695,7 +694,7 @@ void PBFTCacheProcessor::addViewChangeReq(ViewChangeMsgInterface::Ptr _viewChang
 }
 
 PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
-    std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache)
+    std::map<IndexType, PBFTViewChangeMsg::Ptr> _viewChangeCache)
 {
     auto toView = m_config->toView();
     auto committedIndex = m_config->committedProposal()->index();
@@ -714,26 +713,26 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     {
         maxPrecommitIndex = std::min(m_config->waitSealUntil(), maxPrecommitIndex);
     }
-    std::map<BlockNumber, PBFTMessageInterface::Ptr> preparedProposals;
+    std::map<BlockNumber, PBFTMessage::Ptr> preparedProposals;
     for (const auto& it : _viewChangeCache)
     {
         auto viewChangeReq = it.second;
         for (const auto& proposal : viewChangeReq->preparedProposals())
         {
             // invalid precommit proposal
-            if (proposal->index() < maxCommittedIndex)
+            if (proposal.index() < maxCommittedIndex)
             {
                 continue;
             }
             // repeated precommit proposal
-            if (preparedProposals.contains(proposal->index()))
+            if (preparedProposals.contains(proposal.index()))
             {
-                auto precommitProposal = preparedProposals[proposal->index()];
-                if (precommitProposal->index() != proposal->index() ||
-                    precommitProposal->hash() != proposal->hash())
+                auto precommitProposal = preparedProposals[proposal.index()];
+                if (precommitProposal->index() != proposal.index() ||
+                    precommitProposal->hash() != proposal.hash())
                 {
                     // fatal case: two proposals in the same view with different hash
-                    if (precommitProposal->view() == proposal->view()) [[unlikely]]
+                    if (precommitProposal->view() == proposal.view()) [[unlikely]]
                     {
                         PBFT_LOG(FATAL)
                             << LOG_DESC(
@@ -741,30 +740,32 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
                                    "proposals")
                             << LOG_DESC("proposal already exist:")
                             << printPBFTProposal(precommitProposal)
-                            << LOG_DESC("conflicted proposal:") << printPBFTProposal(proposal);
+                            << LOG_DESC("conflicted proposal:") << printPBFTProposal(&proposal);
                     }
                     // newer precommit proposal
-                    if (precommitProposal->view() < proposal->view())
+                    if (precommitProposal->view() < proposal.view())
                     {
-                        preparedProposals[proposal->index()] = proposal;
+                        preparedProposals[proposal.index()] =
+                            std::make_shared<PBFTMessage>(proposal);
                     }
                 }
                 continue;
             }
             // new precommit proposal
-            preparedProposals[proposal->index()] = proposal;
+            preparedProposals[proposal.index()] = std::make_shared<PBFTMessage>(proposal);
         }
     }
     // generate prepareMsg from maxCommittedIndex to maxPrecommitIndex
     PBFTMessageList prePrepareMsgList;
     for (auto i = (maxCommittedIndex + 1); i <= maxPrecommitIndex; i++)
     {
-        PBFTProposalInterface::Ptr prePrepareProposal = nullptr;
+        PBFTProposal::Ptr prePrepareProposal = nullptr;
         auto generatedFrom = m_config->nodeIndex();
         bool empty = false;
         if (preparedProposals.contains(i))
         {
-            prePrepareProposal = preparedProposals[i]->consensusProposal();
+            prePrepareProposal =
+                std::make_shared<PBFTProposal>(*preparedProposals[i]->consensusProposal());
             generatedFrom = preparedProposals[i]->generatedFrom();
         }
         else
@@ -776,9 +777,9 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
             empty = true;
         }
         auto prePrepareMsg = m_config->pbftMessageFactory()->populateFrom(
-            PacketType::PrePreparePacket, prePrepareProposal, m_config->pbftMsgDefaultVersion(),
+            PacketType::PrePreparePacket, *prePrepareProposal, m_config->pbftMsgDefaultVersion(),
             m_config->toView(), utcTime(), generatedFrom);
-        prePrepareMsgList.push_back(prePrepareMsg);
+        prePrepareMsgList.push_back(*prePrepareMsg);
         PBFT_LOG(INFO) << LOG_DESC("generatePrePrepareMsg") << printPBFTMsgInfo(prePrepareMsg)
                        << LOG_KV("dataSize", prePrepareMsg->consensusProposal()->data().size())
                        << LOG_KV("emptyProposal", empty);
@@ -786,7 +787,7 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     return prePrepareMsgList;
 }
 
-NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
+PBFTNewViewMsg::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
 {
     // in syncing mode, no need to try into the newView period
     if (m_config->committedProposal()->index() < m_config->syncingHighestNumber())
@@ -812,7 +813,7 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
     ViewChangeMsgList viewChangeList;
     for (auto const& it : viewChangeCache)
     {
-        viewChangeList.push_back(it.second);
+        viewChangeList.push_back(*it.second);
     }
     // create newView message
     auto newViewMsg = m_config->pbftMessageFactory()->createNewViewMsg();
@@ -896,7 +897,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
     return viewToReach;
 }
 
-bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitMsg)
+bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessage::Ptr _precommitMsg)
 {
     // check the view(the first started node no need to check the view)
     if (m_config->startRecovered() && (_precommitMsg->view() > m_config->toView()))
@@ -931,7 +932,7 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
     return ret;
 }
 
-bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg)
+bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessage::Ptr _precommitMsg)
 {
     // Delegated to PBFTConfig::verifyProposalQuorumSignatures so both this path and the
     // FIB-127 log-recovery path share one audited implementation (proof-list dedup +
@@ -939,7 +940,7 @@ bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precomm
     return m_config->verifyProposalQuorumSignatures(_precommitMsg->consensusProposal());
 }
 
-ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
+PBFTViewChangeMsg::Ptr PBFTCacheProcessor::fetchPrecommitData(
     BlockNumber _index, bcos::crypto::HashType const& _hash)
 {
     if (!m_caches.contains(_index))
@@ -953,7 +954,7 @@ ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
     }
 
     PBFTMessageList precommitMessage;
-    precommitMessage.push_back(cache->preCommitCache());
+    precommitMessage.push_back(*cache->preCommitCache());
 
     auto pbftMessage = m_config->pbftMessageFactory()->createViewChangeMsg();
     pbftMessage->setPreparedProposals(precommitMessage);
@@ -1075,7 +1076,7 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
             // get the max precommitIndex
             for (const auto& precommit : viewChangeReq->preparedProposals())
             {
-                auto precommitIndex = precommit->index();
+                auto precommitIndex = precommit.index();
                 if (!m_maxPrecommitIndex.contains(view) ||
                     m_maxPrecommitIndex[view] < precommitIndex)
                 {
@@ -1106,7 +1107,7 @@ void PBFTCacheProcessor::checkAndCommitStableCheckPoint()
     }
 }
 
-void PBFTCacheProcessor::updateStableCheckPointQueue(PBFTProposalInterface::Ptr _stableCheckPoint)
+void PBFTCacheProcessor::updateStableCheckPointQueue(PBFTProposal::Ptr _stableCheckPoint)
 {
     assert(_stableCheckPoint);
     m_stableCheckPointQueue.push(_stableCheckPoint);
@@ -1143,7 +1144,7 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
     }
 }
 
-bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessageInterface::Ptr _checkPointMsg)
+bool PBFTCacheProcessor::shouldRequestCheckPoint(PBFTMessage::Ptr _checkPointMsg)
 {
     auto checkPointIndex = _checkPointMsg->index();
     auto committedIndex = m_config->committedProposal()->index();
@@ -1219,7 +1220,7 @@ void PBFTCacheProcessor::clearExpiredExecutingProposal()
     }
 }
 
-void PBFTCacheProcessor::addRecoverReqCache(PBFTMessageInterface::Ptr _recoverResponse)
+void PBFTCacheProcessor::addRecoverReqCache(PBFTMessage::Ptr _recoverResponse)
 {
     auto fromIdx = _recoverResponse->generatedFrom();
     auto view = _recoverResponse->view();
@@ -1278,8 +1279,7 @@ bool PBFTCacheProcessor::checkAndTryToRecover()
     return true;
 }
 
-PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
-    bcos::protocol::BlockNumber _index)
+PBFTProposal::Ptr PBFTCacheProcessor::fetchPrecommitProposal(bcos::protocol::BlockNumber _index)
 {
     if (!m_caches.contains(_index))
     {
@@ -1291,19 +1291,18 @@ PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
     {
         return nullptr;
     }
-    return cache->preCommitCache()->consensusProposal();
+    return std::make_shared<PBFTProposal>(*cache->preCommitCache()->consensusProposal());
 }
 
-void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
+void PBFTCacheProcessor::updatePrecommit(PBFTProposal::Ptr _proposal)
 {
     auto pbftMessage = m_config->pbftMessageFactory()->createPBFTMsg();
-    pbftMessage->setConsensusProposal(_proposal);
+    pbftMessage->setConsensusProposal(*_proposal);
     pbftMessage->setIndex(_proposal->index());
     pbftMessage->setHash(_proposal->hash());
-    addCache(
-        m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
-            _pbftCache->setPrecommitCache(std::move(_precommit));
-        });
+    addCache(m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessage::Ptr _precommit) {
+        _pbftCache->setPrecommitCache(std::move(_precommit));
+    });
 }
 
 PBFTMessageList PBFTCacheProcessor::preCommitCachesWithoutData()
@@ -1322,7 +1321,7 @@ PBFTMessageList PBFTCacheProcessor::preCommitCachesWithoutData()
                 it = m_caches.erase(it);
                 continue;
             }
-            precommitCacheList.push_back(precommitCache);
+            precommitCacheList.push_back(*precommitCache);
         }
         it++;
     }

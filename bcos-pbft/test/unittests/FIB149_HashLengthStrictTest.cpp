@@ -47,37 +47,46 @@ public:
 
 BOOST_FIXTURE_TEST_SUITE(FIB149_HashLengthStrict, TestPromptFixture)
 
+namespace
+{
+/// Serialize a PBFTRawProposal whose inner RawProposal carries a `hashLen`-byte
+/// hash, so PBFTProposal::decode exercises Proposal::deserializeObject on the
+/// inner proposal (FIB-121: Proposal no longer decodes standalone).
+bytes makePBFTProposalBytesWithHashLen(std::size_t hashLen)
+{
+    PBFTRawProposal raw;
+    auto* inner = raw.mutable_proposal();
+    inner->set_index(1);
+    std::string hash(hashLen, '\xab');
+    inner->set_hash(hash.data(), hash.size());
+    std::string serialised = raw.SerializeAsString();
+    return bytes(serialised.begin(), serialised.end());
+}
+}  // namespace
+
 BOOST_AUTO_TEST_CASE(oversize_proposal_hash_rejected)
 {
     // 64-byte (oversize) raw hash inside a RawProposal. FIB-149 made the length
     // predicate strict (`!= HashType::SIZE`); FIB-174 then upgraded the silent
     // return into a thrown invalid-message so a malformed proposal hash is
     // rejected at decode rather than accepted with a stale/default identity.
-    auto raw = std::make_shared<RawProposal>();
-    std::string oversize(64, '\xab');
-    raw->set_hash(oversize.data(), oversize.size());
-
-    BOOST_CHECK_THROW(Proposal{raw}, bcos::Exception);
+    auto data = makePBFTProposalBytesWithHashLen(64);
+    BOOST_CHECK_THROW(PBFTProposal{bytesConstRef(data.data(), data.size())}, bcos::Exception);
 }
 
 BOOST_AUTO_TEST_CASE(undersize_proposal_hash_rejected)
 {
     // Undersize was caught pre-fix (the `<` predicate) but only via a silent
     // return; FIB-174 makes it throw so the malformed input surfaces.
-    auto raw = std::make_shared<RawProposal>();
-    std::string undersize(16, '\xab');
-    raw->set_hash(undersize.data(), undersize.size());
-
-    BOOST_CHECK_THROW(Proposal{raw}, bcos::Exception);
+    auto data = makePBFTProposalBytesWithHashLen(16);
+    BOOST_CHECK_THROW(PBFTProposal{bytesConstRef(data.data(), data.size())}, bcos::Exception);
 }
 
 BOOST_AUTO_TEST_CASE(exact_proposal_hash_accepted)
 {
-    auto raw = std::make_shared<RawProposal>();
-    std::string exact(HashType::SIZE, '\xcd');
-    raw->set_hash(exact.data(), exact.size());
-
-    Proposal proposal(raw);
+    auto data = makePBFTProposalBytesWithHashLen(HashType::SIZE);
+    PBFTProposal proposal{bytesConstRef(data.data(), data.size())};
+    std::string exact(HashType::SIZE, '\xab');
     HashType expected((byte const*)exact.data(), HashType::SIZE);
     BOOST_CHECK_EQUAL(proposal.hash(), expected);
 }

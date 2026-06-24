@@ -35,41 +35,31 @@ bytesPointer PBFTMessage::encode(
     // encode the PBFTBaseMessage
     encodeHashFields();
     generateAndSetSignatureData(_cryptoSuite, _keyPair);
-    return encodePBObject(m_pbftRawMessage);
+    return encodePBObject(m_active);
 }
 
 void PBFTMessage::encodeHashFields() const
 {
     auto hashFieldsData = PBFTBaseMessage::encode();
-    m_pbftRawMessage->set_hashfieldsdata(hashFieldsData->data(), hashFieldsData->size());
+    m_active->set_hashfieldsdata(hashFieldsData->data(), hashFieldsData->size());
 }
 
 void PBFTMessage::decode(bytesConstRef _data)
 {
-    decodePBObject(m_pbftRawMessage, _data);
+    decodePBObject(m_active, _data);
     PBFTMessage::deserializeToObject();
 }
 
 void PBFTMessage::deserializeToObject()
 {
-    auto const& hashFieldsData = m_pbftRawMessage->hashfieldsdata();
+    auto const& hashFieldsData = m_active->hashfieldsdata();
     auto baseMessageData =
         bytesConstRef((byte const*)hashFieldsData.c_str(), hashFieldsData.size());
     PBFTBaseMessage::decode(baseMessageData);
 
-    // decode the proposals
-    m_proposals->clear();
-    if (m_pbftRawMessage->has_consensusproposal())
-    {
-        auto* consensusProposal = m_pbftRawMessage->mutable_consensusproposal();
-        std::shared_ptr<PBFTRawProposal> rawConsensusProposal(consensusProposal);
-        m_consensusProposal = std::make_shared<PBFTProposal>(rawConsensusProposal);
-    }
-    for (int i = 0; i < m_pbftRawMessage->proposals_size(); i++)
-    {
-        std::shared_ptr<PBFTRawProposal> rawProposal(m_pbftRawMessage->mutable_proposals(i));
-        m_proposals->push_back(std::make_shared<PBFTProposal>(rawProposal));
-    }
+    // FIB-121: re-point the consensusProposal / proposals views at m_active
+    // (zero-copy, no shared_ptr borrow, no destructor release dance).
+    rebuildProposalViews();
 }
 
 void PBFTMessage::decodeAndSetSignature(CryptoSuite::Ptr _cryptoSuite, bytesConstRef _data)
@@ -78,22 +68,27 @@ void PBFTMessage::decodeAndSetSignature(CryptoSuite::Ptr _cryptoSuite, bytesCons
     m_signatureDataHash = getHashFieldsDataHash(std::move(_cryptoSuite));
 }
 
-void PBFTMessage::setConsensusProposal(PBFTProposalInterface::Ptr _consensusProposal)
+void PBFTMessage::setConsensusProposal(PBFTProposal const& _consensusProposal)
 {
-    m_consensusProposal = _consensusProposal;
-    auto pbftProposal = std::dynamic_pointer_cast<PBFTProposal>(_consensusProposal);
-    // set committed proposal
-    if (m_pbftRawMessage->has_consensusproposal())
-    {
-        m_pbftRawMessage->unsafe_arena_release_consensusproposal();
-    }
-    m_pbftRawMessage->unsafe_arena_set_allocated_consensusproposal(
-        pbftProposal->pbftRawProposal().get());
+    // FIB-121: adopt by deep copy into our own protobuf (NOT alias/release). The
+    // source is caller-owned (often cache-held) and must stay intact; CopyFrom
+    // gives us an independent copy, then the view writes through for any proof
+    // appended afterwards (PBFTCache::intoPrecommit pattern).
+    m_active->mutable_consensusproposal()->CopyFrom(*_consensusProposal.pbftRawProposal());
+    m_hasConsensusProposal = true;
+    m_consensusProposal = PBFTProposal::asView(m_active->mutable_consensusproposal());
+}
+
+PBFTProposal* PBFTMessage::mutableConsensusProposal()
+{
+    m_hasConsensusProposal = true;
+    m_consensusProposal = PBFTProposal::asView(m_active->mutable_consensusproposal());
+    return &m_consensusProposal;
 }
 
 HashType PBFTMessage::getHashFieldsDataHash(CryptoSuite::Ptr _cryptoSuite) const
 {
-    auto const& hashFieldsData = m_pbftRawMessage->hashfieldsdata();
+    auto const& hashFieldsData = m_active->hashfieldsdata();
     auto hashFieldsDataRef =
         bytesConstRef((byte const*)hashFieldsData.data(), hashFieldsData.size());
     // FIB-134: dual-mode digest — receiver-side branch on message version.
@@ -107,20 +102,20 @@ void PBFTMessage::generateAndSetSignatureData(
     m_signatureDataHash = getHashFieldsDataHash(_cryptoSuite);
     auto signature = _cryptoSuite->signatureImpl()->sign(*_keyPair, m_signatureDataHash, false);
     // set the signature data
-    m_pbftRawMessage->set_signaturedata(signature->data(), signature->size());
+    m_active->set_signaturedata(signature->data(), signature->size());
 }
 
 void PBFTMessage::setProposals(PBFTProposalList const& _proposals)
 {
-    *m_proposals = _proposals;
-    m_pbftRawMessage->clear_proposals();
-    for (const auto& proposal : _proposals)
+    m_active->clear_proposals();
+    for (auto const& proposal : _proposals)
     {
-        auto proposalImpl = std::dynamic_pointer_cast<PBFTProposal>(proposal);
-        assert(proposalImpl);
-        m_pbftRawMessage->mutable_proposals()->UnsafeArenaAddAllocated(
-            proposalImpl->pbftRawProposal().get());
+        // deep copy each proposal's protobuf into our repeated field
+        m_active->add_proposals()->CopyFrom(*proposal.pbftRawProposal());
     }
+    // rebuild views only after the repeated field is fully populated (Add() may
+    // have reallocated the backing array, invalidating earlier element pointers)
+    rebuildProposalViews();
 }
 
 bool PBFTMessage::operator==(PBFTMessage const& _pbftMessage) const
@@ -130,12 +125,13 @@ bool PBFTMessage::operator==(PBFTMessage const& _pbftMessage) const
         return false;
     }
     // check proposal
-    for (size_t i = 0; i < _pbftMessage.proposals().size(); i++)
+    if (m_proposals.size() != _pbftMessage.m_proposals.size())
     {
-        auto proposal = std::dynamic_pointer_cast<PBFTProposal>((*m_proposals)[i]);
-        auto comparedProposal =
-            std::dynamic_pointer_cast<PBFTProposal>((_pbftMessage.proposals())[i]);
-        if (*proposal != *comparedProposal)
+        return false;
+    }
+    for (size_t i = 0; i < m_proposals.size(); i++)
+    {
+        if (m_proposals[i] != _pbftMessage.m_proposals[i])
         {
             return false;
         }

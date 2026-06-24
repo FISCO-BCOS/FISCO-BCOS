@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(testFutureTimestampRejected)
     auto fakedProposal = leaderMsgFixture->fakePBFTProposal(expectedIndex, hash, blockData, {}, {});
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         hash, expectedIndex, blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     // Bypass async tx verification (_needVerifyProposal=false) so the timestamp check
     // is the deciding factor.  _generatedFromNewView=true skips leader-identity check.
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(testNonMonotonicTimestampRejected)
     auto fakedProposal = leaderMsgFixture->fakePBFTProposal(expectedIndex, hash, blockData, {}, {});
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         hash, expectedIndex, blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     auto result = nonLeaderFaker->pbftEngine()->handlePrePrepareMsg(pbftMsg, false, true, false);
 
@@ -206,7 +206,7 @@ BOOST_AUTO_TEST_CASE(testValidTimestampAccepted)
     auto fakedProposal = leaderMsgFixture->fakePBFTProposal(expectedIndex, hash, blockData, {}, {});
     auto pbftMsg = fakePBFTMessage(utcTime(), 1, leaderFaker->pbftConfig()->view(), expectedLeader,
         hash, expectedIndex, blockData, 0, leaderMsgFixture, PacketType::PrePreparePacket);
-    pbftMsg->setConsensusProposal(fakedProposal);
+    pbftMsg->setConsensusProposal(*fakedProposal);
 
     // ledgerConfig timestamp stays 0 (before genesis) — valid for now-timestamp
     auto result = nonLeaderFaker->pbftEngine()->handlePrePrepareMsg(pbftMsg, false, true, false);
