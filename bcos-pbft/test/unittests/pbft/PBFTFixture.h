@@ -163,12 +163,13 @@ class FakePBFTEngine : public PBFTEngine
 {
 public:
     using Ptr = std::shared_ptr<FakePBFTEngine>;
-    explicit FakePBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext)
-      : PBFTEngine(_config, _ioContext)
+    explicit FakePBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool)
+      : PBFTEngine(_config, _ioContext, _ioServicePool)
     {
         auto cacheFactory = std::make_shared<FakePBFTCacheFactory>();
         m_cacheProcessor = std::make_shared<FakeCacheProcessor>(cacheFactory, _config);
-        m_logSync = std::make_shared<PBFTLogSync>(_config, m_cacheProcessor);
+        m_logSync = std::make_shared<PBFTLogSync>(_config, m_cacheProcessor, _ioServicePool);
         m_cacheProcessor->registerProposalAppliedHandler(
             [this](int64_t _errorCode, PBFTProposalInterface::Ptr _proposal,
                 PBFTProposalInterface::Ptr _executedProposal) {
@@ -225,7 +226,9 @@ public:
 class FakePBFTImpl : public PBFTImpl
 {
 public:
-    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine)
+    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine,
+        bcos::IOServicePool::Ptr _ioServicePool)
+      : PBFTImpl(_pbftEngine, std::move(_ioServicePool))
     {
         m_running = true;
         m_masterNode.store(true);
@@ -250,29 +253,30 @@ public:
         std::shared_ptr<bcos::ledger::LedgerInterface> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::txpool::TxPoolInterface::Ptr _txpool, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory)
+        bcos::protocol::TransactionSubmitResultFactory::Ptr _txResultFactory,
+        bcos::IOServicePool::Ptr _ioServicePool)
       : PBFTFactory(_ioService, _cryptoSuite, _keyPair, _frontService, _storage, _ledger,
-            _scheduler, _txpool, _blockFactory, _txResultFactory)
+            _scheduler, _txpool, _blockFactory, _txResultFactory, std::move(_ioServicePool))
     {}
 
     PBFTImpl::Ptr createPBFT() override
     {
         auto pbft = PBFTFactory::createPBFT();
         auto orgPBFTConfig = pbft->pbftEngine()->pbftConfig();
-        auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory);
+        auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
 
         PBFT_LOG(DEBUG) << LOG_DESC("create pbftStorage");
         auto pbftStorage = std::make_shared<LedgerStorage>(
-            m_scheduler, m_storage, m_blockFactory, orgPBFTConfig->pbftMessageFactory());
+            m_scheduler, m_storage, m_blockFactory, orgPBFTConfig->pbftMessageFactory(), m_ioServicePool);
 
         auto pbftConfig = std::make_shared<FakePBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair,
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
             orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
-        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService);
+        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService, m_ioServicePool);
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
-        auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine);
+        auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine, m_ioServicePool);
         fakedPBFT->setLedger(m_ledger);
         pbftConfig->setTimeoutState(false);
         pbftConfig->timer()->stop();
@@ -323,7 +327,7 @@ public:
 
         auto pbftFactory = std::make_shared<FakePBFTFactory>(*m_ioServicePool->getIOService(),
             _cryptoSuite, _keyPair, m_frontService, m_storage, m_ledger, m_scheduler, m_txpool,
-            m_blockFactory, txResultFactory);
+            m_blockFactory, txResultFactory, m_ioServicePool);
         m_pbft = pbftFactory->createPBFT();
         m_pbftEngine = std::dynamic_pointer_cast<FakePBFTEngine>(m_pbft->pbftEngine());
         m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });
@@ -403,6 +407,7 @@ public:
 
     BlockFactory::Ptr blockFactory() { return m_blockFactory; }
     boost::asio::io_context& ioContext() { return *m_ioServicePool->getIOService(); }
+    bcos::IOServicePool::Ptr ioServicePool() { return m_ioServicePool; }
 
 private:
     // Must be declared first so io_context outlives all Workers using it

@@ -24,7 +24,7 @@
 #include <bcos-framework/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/KVStorageHelper.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 #include <utility>
 
@@ -36,23 +36,18 @@ public:
     using Ptr = std::shared_ptr<LedgerStorage>;
     LedgerStorage(bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         std::shared_ptr<bcos::storage::KVStorageHelper> _storage,
-        bcos::protocol::BlockFactory::Ptr _blockFactory, PBFTMessageFactory::Ptr _messageFactory)
+        bcos::protocol::BlockFactory::Ptr _blockFactory, PBFTMessageFactory::Ptr _messageFactory,
+        bcos::IOServicePool::Ptr _ioServicePool)
       : m_scheduler(std::move(_scheduler)),
         m_storage(std::move(_storage)),
         m_blockFactory(std::move(_blockFactory)),
-        m_messageFactory(std::move(_messageFactory))
+        m_messageFactory(std::move(_messageFactory)),
+        m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
     {
         createKVTable(m_pbftCommitDB);
-        m_commitBlockWorker = std::make_shared<ThreadPool>("blockSubmit", 1);
     }
-    ~LedgerStorage() override { stop(); }
-    void stop() override
-    {
-        if (m_commitBlockWorker)
-        {
-            m_commitBlockWorker->stop();
-        }
-    }
+    ~LedgerStorage() override = default;
+
     void createKVTable(std::string const& _dbName);
     PBFTProposalListPtr loadState(bcos::protocol::BlockNumber _stabledIndex) override;
 
@@ -117,6 +112,6 @@ protected:
     std::function<void(bcos::ledger::LedgerConfig::Ptr, bool _syncBlock)> m_finalizeHandler;
     std::function<void(bcos::Error::Ptr&&, PBFTProposalInterface::Ptr)>
         m_onStableCheckPointCommitFailed;
-    std::shared_ptr<ThreadPool> m_commitBlockWorker;
+    bcos::Strand::Ptr m_strand;
 };
 }  // namespace bcos::consensus

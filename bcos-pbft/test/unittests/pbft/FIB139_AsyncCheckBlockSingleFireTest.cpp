@@ -58,7 +58,7 @@ BOOST_AUTO_TEST_CASE(CallbackFiredExactlyOnce_NormalPath)
     faker->init();
 
     auto config = faker->pbftConfig();
-    auto blockValidator = std::make_shared<BlockValidator>(config);
+    auto blockValidator = std::make_shared<BlockValidator>(config, faker->ioServicePool());
 
     // Genesis block (number == 0) fires the callback immediately with (nullptr, true).
     std::atomic<int> callCount{0};
@@ -68,7 +68,6 @@ BOOST_AUTO_TEST_CASE(CallbackFiredExactlyOnce_NormalPath)
     // Give the thread pool time to complete.
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     BOOST_CHECK_EQUAL(callCount.load(), 1);
-    blockValidator->stop();
 }
 
 // Test: callback is invoked exactly once when the callback itself throws.
@@ -84,7 +83,7 @@ BOOST_AUTO_TEST_CASE(CallbackFiredExactlyOnce_CallbackThrows)
     faker->init();
 
     auto config = faker->pbftConfig();
-    auto blockValidator = std::make_shared<BlockValidator>(config);
+    auto blockValidator = std::make_shared<BlockValidator>(config, faker->ioServicePool());
 
     // Genesis block fires immediately with true, then the callback throws.
     // Before the fix: outer catch catches that throw and calls the callback again → count == 2.
@@ -98,7 +97,6 @@ BOOST_AUTO_TEST_CASE(CallbackFiredExactlyOnce_CallbackThrows)
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     // Must be exactly 1 even though the callback threw.
     BOOST_CHECK_EQUAL(callCount.load(), 1);
-    blockValidator->stop();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

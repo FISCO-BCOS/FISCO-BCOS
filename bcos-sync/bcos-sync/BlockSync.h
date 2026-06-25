@@ -26,7 +26,7 @@
 #include "bcos-sync/utilities/SyncTreeTopology.h"
 #include "bcos-tool/NodeTimeMaintenance.h"
 #include <bcos-framework/sync/BlockSyncInterface.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <bcos-utilities/Worker.h>
 namespace bcos::sync
@@ -39,7 +39,7 @@ public:
     using Ptr = std::shared_ptr<BlockSync>;
     // FIXME: make idle configable
     BlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
-        unsigned _idleWaitMs = 200);
+        bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs = 200);
     ~BlockSync() override = default;
 
     void start() override;
@@ -151,8 +151,7 @@ protected:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    bcos::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;
-    bcos::ThreadPool::Ptr m_sendBlockProcessor = nullptr;
+    bcos::Strand::Ptr m_strand = nullptr;
     std::shared_ptr<Timer> m_downloadingTimer;
 
     std::atomic_bool m_running = {false};

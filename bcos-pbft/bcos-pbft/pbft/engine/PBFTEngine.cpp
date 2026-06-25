@@ -42,14 +42,15 @@ using namespace bcos::front;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext)
+PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool)
   : ConsensusEngine(_ioContext, "pbft", 20),
     m_config(_config),
     m_ledgerConfig(std::make_shared<LedgerConfig>())
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
-    m_logSync = std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor);
+    m_logSync = std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor, std::move(_ioServicePool));
     // register the timeout function
     m_config->timer()->registerTimeoutHandler([this]() { onTimeout(); });
     m_config->storage()->registerFinalizeHandler(

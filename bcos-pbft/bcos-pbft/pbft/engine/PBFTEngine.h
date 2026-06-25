@@ -24,6 +24,7 @@
 #include "bcos-pbft/core/ConsensusEngine.h"
 #include "bcos-pbft/pbft/utilities/PBFTPipeline.h"
 #include <bcos-utilities/Error.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <oneapi/tbb/concurrent_queue.h>
 #include <unordered_map>
@@ -58,7 +59,8 @@ public:
     using Ptr = std::shared_ptr<PBFTEngine>;
     using SendResponseCallback = std::function<void(bytesConstRef)>;
     explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config,
-        boost::asio::io_context& _ioContext);
+        boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool);
     ~PBFTEngine() override { stop(); }
 
     void start() override;

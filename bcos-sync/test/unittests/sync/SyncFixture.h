@@ -47,8 +47,8 @@ class FakeBlockSync : public BlockSync
 public:
     using Ptr = std::shared_ptr<FakeBlockSync>;
     FakeBlockSync(BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
-        unsigned _idleWaitMs = 200)
-      : BlockSync(_config, _ioContext, _idleWaitMs)
+        bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs = 200)
+      : BlockSync(_config, _ioContext, std::move(_ioServicePool), _idleWaitMs)
     {
         m_running = true;
         enableAsMaster(true);
@@ -90,10 +90,13 @@ public:
             _nodeTimeMaintenance)
     {}
 
-    BlockSync::Ptr createBlockSync(boost::asio::io_context& _ioContext) override
+    BlockSync::Ptr createBlockSync(boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool) override
     {
-        auto sync = BlockSyncFactory::createBlockSync(_ioContext);
-        return std::make_shared<FakeBlockSync>(sync->config(), _ioContext);
+        auto pool = _ioServicePool;  // keep a copy before move
+        auto sync = BlockSyncFactory::createBlockSync(_ioContext, std::move(_ioServicePool));
+        return std::make_shared<FakeBlockSync>(
+            sync->config(), _ioContext, std::move(pool));
     }
 };
 
@@ -123,7 +126,7 @@ public:
             std::make_shared<FakeBlockSyncFactory>(m_keyPair->publicKey(), m_blockFactory, m_ledger,
                 m_frontService, m_scheduler, m_consensus, m_nodeTimeMaintenance);
         m_sync = std::dynamic_pointer_cast<FakeBlockSync>(
-            blockSyncFactory->createBlockSync(*m_ioServicePool->getIOService()));
+            blockSyncFactory->createBlockSync(*m_ioServicePool->getIOService(), m_ioServicePool));
         if (_fakeGateWay)
         {
             _fakeGateWay->addSync(m_keyPair->publicKey(), m_sync);

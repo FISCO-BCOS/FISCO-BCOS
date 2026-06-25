@@ -72,3 +72,55 @@ std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
 bcos::IOServicePool::IOServiceContext::IOServiceContext(std::shared_ptr<IOService> _ioService)
   : ioService(std::move(_ioService)), work(this->ioService->get_executor())
 {}
+
+void Strand::Impl::kick()
+{
+    auto self = pool.lock();
+    if (!self)
+    {
+        // Pool is gone — clear queue and reset count.
+        std::lock_guard<std::mutex> lock(mutex);
+        queue.clear();
+        count_.store(0, std::memory_order_release);
+        return;
+    }
+    // Capture a shared_ptr to Impl so that the queue / mutex / count_ stay
+    // alive even if the owning Strand is destroyed before this handler runs.
+    std::shared_ptr<Impl> impl = shared_from_this();
+    self->post([impl]() { impl->drain(); });
+}
+
+void Strand::Impl::drain()
+{
+    std::function<void()> task;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        // count_ > 0 guarantees the queue is non-empty (post() enqueues
+        // before fetch_add), so this pop is always safe.
+        task = std::move(queue.front());
+        queue.pop_front();
+    }
+    IOServicePool::safeExecute(std::move(task));
+
+    // Atomically release our "running" slot.  fetch_sub returns the value
+    // *before* subtraction.
+    if (auto prev = count_.fetch_sub(1, std::memory_order_acq_rel); prev == 1)
+    {
+        // Only our running slot existed — no new tasks were posted during
+        // execution.  Verify under lock to close a narrow race: a post()
+        // between our fetch_sub and the lock below.
+        std::lock_guard<std::mutex> lock(mutex);
+        if (queue.empty())
+        {
+            return;  // Truly done.
+        }
+        // A post() snuck in and already called kick() for us (it saw
+        // count_ go from 0 to 1).  Restore the running count so the
+        // already-posted drain can proceed, and return without kicking.
+        count_.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    // prev > 1: more tasks were definitely enqueued during our execution.
+    // No lock needed here — just kick the next drain.
+    kick();
+}

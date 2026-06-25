@@ -45,8 +45,9 @@ class TestPBFTLogSync : public PBFTLogSync
 {
 public:
     using Ptr = std::shared_ptr<TestPBFTLogSync>;
-    TestPBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _cache)
-      : PBFTLogSync(_config, _cache)
+    TestPBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _cache,
+        bcos::IOServicePool::Ptr _pool)
+      : PBFTLogSync(_config, _cache, std::move(_pool))
     {}
     void testOnRecvCommittedProposalsResponse(bcos::Error::Ptr _error,
         bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data,
@@ -90,7 +91,8 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithNoSigProofs)
     // Use the codec to produce the full PBFT packet format that decode() expects.
     auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
 
-    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor);
+    auto ioPool = std::make_shared<IOServicePool>(1, "fib127");
+    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor, ioPool);
 
     // Before: cache has no entry for blockNumber + 1.
     auto beforeSize = cacheProcessor->caches().size();
@@ -134,7 +136,8 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithInsufficientWeight)
     responseMsg->setProposals({proposal});
     auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
 
-    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor);
+    auto ioPool2 = std::make_shared<IOServicePool>(1, "fib127b");
+    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor, ioPool2);
 
     auto beforeSize = cacheProcessor->caches().size();
     auto sender = cryptoSuite->signatureImpl()->generateKeyPair()->publicKey();
@@ -189,7 +192,8 @@ BOOST_AUTO_TEST_CASE(testDropProposalWithDuplicateSealerProofs)
     responseMsg->setProposals({proposal});
     auto encodedData = config->codec()->encode(responseMsg, config->pbftMsgDefaultVersion());
 
-    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor);
+    auto ioPool3 = std::make_shared<IOServicePool>(1, "fib127c");
+    auto logSync = std::make_shared<TestPBFTLogSync>(config, cacheProcessor, ioPool3);
 
     auto beforeSize = cacheProcessor->caches().size();
     auto sender = cryptoSuite->signatureImpl()->generateKeyPair()->publicKey();

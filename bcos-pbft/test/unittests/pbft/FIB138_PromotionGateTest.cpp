@@ -73,7 +73,7 @@ inline std::shared_ptr<FibPromotionPBFTImpl> makePromotionPBFTFib138(
     PBFTFixture::Ptr const& fixture)
 {
     auto pbftEngine = fixture->pbftEngine();
-    auto fakedPbft = std::make_shared<FibPromotionPBFTImpl>(pbftEngine);
+    auto fakedPbft = std::make_shared<FibPromotionPBFTImpl>(pbftEngine, fixture->ioServicePool());
     fakedPbft->setLedger(fixture->ledger());
     return fakedPbft;
 }
