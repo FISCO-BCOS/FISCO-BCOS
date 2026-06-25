@@ -27,6 +27,9 @@
 
 namespace bcos::ledger::mpt
 {
+/// Default LRU byte budget (64 KiB) for a NodeCache when no capacity is supplied.
+inline constexpr size_t DEFAULT_CACHE_CAPACITY_BYTES = size_t{64} * 1024;
+
 /// Bounded cache for decoded/encoded MPT nodes. Keys are 32-byte node hashes,
 /// values are the RLP encoding of the node. Wraps bcos-framework MemoryStorage
 /// with CONCURRENT (thread-safe sharded buckets) and LRU (capacity-bounded)
@@ -35,7 +38,7 @@ class NodeCache
 {
 public:
     /// @param capacity LRU byte budget (sum of key+value sizes) before eviction.
-    explicit NodeCache(size_t capacity = 64 * 1024);
+    explicit NodeCache(size_t capacity = DEFAULT_CACHE_CAPACITY_BYTES);
 
     /// Returns the cached RLP encoding for @p key, or nullopt on a miss.
     bcos::task::Task<std::optional<bcos::bytes>> get(bcos::h256 const& key);
