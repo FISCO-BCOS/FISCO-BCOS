@@ -74,8 +74,9 @@ BOOST_AUTO_TEST_SUITE(ClassifySuite)
 BOOST_AUTO_TEST_CASE(GroupsByAddressFirstTouch)
 {
     ClassifyFlatDelta delta;
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("\x01"));
-    delta.emplace_back(classifyFieldKey(ROW_BALANCE), makeEntry("\x64"));  // 100
+    // nonce/balance are stored as decimal ASCII strings by the executor, not big-endian binary.
+    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("1"));
+    delta.emplace_back(classifyFieldKey(ROW_BALANCE), makeEntry("100"));
 
     MockReadView view;  // address unset → hasAccount false → firstTouch true
 
@@ -117,13 +118,35 @@ BOOST_AUTO_TEST_CASE(StorageSlotEntersStorageChanges)
 }
 
 // ---------------------------------------------------------------------------
+// Test 2b: a codeHash write is read back as the raw 32-byte digest (the executor stores it via
+// codeHash.asBytes(), not decimal ASCII), with state Updated.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(CodeHashUpdatedReadsRawBytes)
+{
+    bcos::h256 const expected = makeHash(0x42);
+    ClassifyFlatDelta delta;
+    delta.emplace_back(classifyFieldKey(ROW_CODE_HASH),
+        makeEntry(
+            std::string_view(reinterpret_cast<char const*>(expected.data()), expected.size())));
+
+    MockReadView view;
+    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
+
+    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
+    auto const& account = result.perAccount.begin()->second;
+    BOOST_CHECK(account.codeHashState == AccountDelta::FieldState::Updated);
+    BOOST_CHECK_EQUAL(account.codeHash, expected);
+    BOOST_CHECK(account.nonceState == AccountDelta::FieldState::Unchanged);
+}
+
+// ---------------------------------------------------------------------------
 // Test 3 (Scenario A, l2Mode=false): BCOS extension rows are silently skipped;
 // nonce is kept, storageChanges stays empty.
 // ---------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(BcosExtensionSkippedWhenNotL2)
 {
     ClassifyFlatDelta delta;
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("\x01"));
+    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("1"));
     delta.emplace_back(classifyFieldKey("abi"), makeEntry("\xde\xad\xbe\xef"));
     delta.emplace_back(classifyFieldKey("alive"), makeEntry("\x01"));
     delta.emplace_back(classifyFieldKey("frozen"), makeEntry("\x00"));
@@ -189,8 +212,7 @@ BOOST_AUTO_TEST_CASE(NonAccountRowsIgnored)
     delta.emplace_back("/sys/s_tables:value", makeEntry("\x01"));
     delta.emplace_back("/tables/foo:nonce", makeEntry("\x01"));
     delta.emplace_back("no_colon_key", makeEntry("\x01"));
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("\x07"));  // the only real account
-                                                                         // row
+    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("7"));  // the only real account row
 
     MockReadView view;
     auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));

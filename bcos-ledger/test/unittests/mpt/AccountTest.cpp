@@ -106,6 +106,27 @@ BOOST_AUTO_TEST_CASE(NonDefaultHashesRoundTrip)
 }
 
 // ---------------------------------------------------------------------------
+// Test 4b: a hash with leading zero bytes must encode as a fixed 32-byte string (the
+// FixedBytes<32> RLP overload), NOT be trimmed like an integer. h256 has an implicit
+// operator u256(), so this guards against encode() accidentally selecting the leading-zero-
+// trimming integer path — which would shorten the field and corrupt Ethereum compatibility.
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(LeadingZeroHashStaysFixed32Bytes)
+{
+    Account account;
+    account.storageRoot =
+        bcos::h256("0x00000000000000000000000000000000000000000000000000000000000000ab");
+    account.codeHash =
+        bcos::h256("0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+    bcos::bytes const rlp = account.encode();
+    Account const decoded = Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size()));
+
+    BOOST_CHECK_EQUAL(decoded.storageRoot, account.storageRoot);
+    BOOST_CHECK_EQUAL(decoded.codeHash, account.codeHash);
+}
+
+// ---------------------------------------------------------------------------
 // Test 5: malformed inputs throw MPTDecodeError.
 // ---------------------------------------------------------------------------
 BOOST_AUTO_TEST_CASE(MalformedInputThrows)

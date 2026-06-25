@@ -80,8 +80,9 @@ struct ParsedKey
     bcos::h256 slot;  ///< valid only when kind==StorageSlot
 };
 
-/// Classify a single "<table>:<row>" key. Never throws; l2Mode handling of
-/// BcosExtension rows is the caller's decision.
+/// Classify a single "<table>:<row>" key. Never throws: a malformed (non-hex) address is
+/// reported as NotAnAccount rather than propagating. l2Mode handling of BcosExtension rows is
+/// the caller's decision.
 inline ParsedKey parseKey(std::string_view fullKey)
 {
     ParsedKey parsed;
@@ -104,7 +105,16 @@ inline ParsedKey parseKey(std::string_view fullKey)
     {
         return parsed;  // NotAnAccount: not a 20-byte address table
     }
-    parsed.address = bcos::Address(std::string(addrHex), bcos::Address::FromHex);
+    // Address(..., FromHex) throws BadHexCharacter on a non-hex digit. Real /apps/ table names are
+    // always valid 40-hex, but guard so parseKey's no-throw contract holds for arbitrary input.
+    try
+    {
+        parsed.address = bcos::Address(std::string(addrHex), bcos::Address::FromHex);
+    }
+    catch (...)
+    {
+        return parsed;  // NotAnAccount: address is not valid hex
+    }
 
     // A 32-byte binary row key is a storage slot, never a named field.
     if (row.size() == static_cast<size_t>(bcos::h256::SIZE))
@@ -135,15 +145,24 @@ inline ParsedKey parseKey(std::string_view fullKey)
     return parsed;
 }
 
-/// Decode an Entry's stored bytes as a big-endian u256 (nonce/balance values).
+/// Parse an Entry's stored value as a u256. The executor stores nonce and balance as DECIMAL
+/// ASCII strings, NOT big-endian binary: balance is written with boost::lexical_cast<string> and
+/// read with u256(string) (AccountPrecompiled.cpp), nonce with u256::convert_to<string>()
+/// (TransactionExecutive/EVMAccount). An empty value decodes as 0 (the executor's value_or("0")
+/// convention). Reading these bytes big-endian would corrupt the value (e.g. "100" -> 0x313030).
 inline bcos::u256 entryToU256(bcos::storage::Entry const& entry)
 {
     std::string_view const value = entry.get();
-    return bcos::fromBigEndian<bcos::u256>(
-        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(value.data()), value.size()));
+    if (value.empty())
+    {
+        return bcos::u256{0};
+    }
+    return bcos::u256{std::string{value}};
 }
 
-/// Copy an Entry's stored bytes into a 32-byte hash (codeHash value).
+/// Copy an Entry's stored bytes into a 32-byte hash. Unlike nonce/balance, codeHash is stored as
+/// the RAW 32-byte digest: TransactionExecutive writes codeHashEntry.importFields({codeHash
+/// .asBytes()}), so the value bytes ARE the hash and are read directly.
 inline bcos::h256 entryToH256(bcos::storage::Entry const& entry)
 {
     std::string_view const value = entry.get();
@@ -177,7 +196,9 @@ bcos::task::Task<MPTBuildInput> classify(FlatDelta const& delta, auto const& rea
 
     for (auto&& [key, entry] : delta)
     {
-        detail::ParsedKey const parsed = detail::parseKey(std::string_view{key});
+        // string_view{key.data(), key.size()} (not string_view{key}) so this also accepts a
+        // storage2 StateKey in PR-10: it exposes data()/size() but no operator string_view.
+        detail::ParsedKey const parsed = detail::parseKey(std::string_view{key.data(), key.size()});
         using Kind = detail::ParsedKey::Kind;
 
         if (parsed.kind == Kind::NotAnAccount)
