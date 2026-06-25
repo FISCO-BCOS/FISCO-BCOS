@@ -55,7 +55,8 @@ bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::P
 {
     if (!m_ioServicePool)
     {
-        m_ioServicePool = std::make_shared<IOServicePool>(1, "txpool-default");
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "TxPool: IOServicePool must be provided from outside!"));
     }
     m_preStoreStrand = std::make_unique<Strand>(m_ioServicePool);
     TXPOOL_LOG(INFO) << LOG_DESC("create TxPool") << LOG_KV("submitterNum", verifierWorkerNum);

@@ -56,13 +56,14 @@ inline std::size_t inflightSize(InspectableTxPool& p)
     return p.m_preStoreInFlight.size();
 }
 
-inline InspectableTxPool::Ptr makeInspectable(bcos::txpool::TxPool::Ptr const& base)
+inline InspectableTxPool::Ptr makeInspectable(bcos::txpool::TxPool::Ptr const& base,
+    bcos::IOServicePool::Ptr ioServicePool)
 {
     // Reuse the fixture's already-constructed components. The new instance is
     // never start()ed, so its destructor's stop() takes the m_running==false
     // fast path and does not double-stop the fixture's storage/sync.
     return std::make_shared<InspectableTxPool>(
-        base->txpoolConfig(), base->txpoolStorage(), base->transactionSync());
+        base->txpoolConfig(), base->txpoolStorage(), base->transactionSync(), 1, ioServicePool);
 }
 
 }  // namespace
@@ -72,7 +73,7 @@ BOOST_FIXTURE_TEST_SUITE(FIB154PreStoreDedupBacklogTest, TxPoolFixture)
 // 1. Duplicate hash: second acquire returns DuplicateSkipped and does not grow set.
 BOOST_AUTO_TEST_CASE(duplicate_block_hash_skipped)
 {
-    auto pool = makeInspectable(m_txpool);
+    auto pool = makeInspectable(m_txpool, ioServicePool);
     auto h = makeBlockHashFib154(1);
 
     BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
@@ -91,7 +92,7 @@ BOOST_AUTO_TEST_CASE(duplicate_block_hash_skipped)
 //    distinct hashes per test.
 BOOST_AUTO_TEST_CASE(backlog_cap_drops_excess)
 {
-    auto pool = makeInspectable(m_txpool);
+    auto pool = makeInspectable(m_txpool, ioServicePool);
     constexpr std::size_t cap = 4;
     pool->setPreStoreMaxInflight(cap);
 
@@ -127,7 +128,7 @@ BOOST_AUTO_TEST_CASE(backlog_cap_drops_excess)
 // 3. Disabled mode: gate returns Disabled, never inserts into the in-flight set.
 BOOST_AUTO_TEST_CASE(backpressure_disabled_bypasses_gate)
 {
-    auto pool = makeInspectable(m_txpool);
+    auto pool = makeInspectable(m_txpool, ioServicePool);
     pool->setPreStoreBackpressureEnabled(false);
 
     for (int i = 0; i < 8; ++i)
@@ -149,7 +150,7 @@ BOOST_AUTO_TEST_CASE(backpressure_disabled_bypasses_gate)
 // 4. Cleanup on success path: release brings set to 0.
 BOOST_AUTO_TEST_CASE(cleanup_on_success)
 {
-    auto pool = makeInspectable(m_txpool);
+    auto pool = makeInspectable(m_txpool, ioServicePool);
     auto h = makeBlockHashFib154(7);
 
     BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
@@ -162,7 +163,7 @@ BOOST_AUTO_TEST_CASE(cleanup_on_success)
 //    Mirrors the lambda's catch-then-release contract in production code.
 BOOST_AUTO_TEST_CASE(cleanup_on_exception)
 {
-    auto pool = makeInspectable(m_txpool);
+    auto pool = makeInspectable(m_txpool, ioServicePool);
     auto h = makeBlockHashFib154(8);
 
     BOOST_CHECK(pool->tryAcquirePreStoreSlot(h) ==
@@ -181,7 +182,7 @@ BOOST_AUTO_TEST_CASE(cleanup_on_exception)
 // 6. setPreStoreMaxInflight(0) must be rejected — would otherwise block all work.
 BOOST_AUTO_TEST_CASE(setPreStoreMaxInflight_rejects_zero)
 {
-    auto pool = makeInspectable(m_txpool);
+    auto pool = makeInspectable(m_txpool, ioServicePool);
     pool->setPreStoreMaxInflight(7);
     pool->setPreStoreMaxInflight(0);  // must be ignored
 
