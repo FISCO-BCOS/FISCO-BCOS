@@ -66,7 +66,6 @@ private:
     {
         if (!m_pool)
         {
-            // No longer lazily create - pool must be set externally
             throw std::runtime_error("ExecutiveFlow pool not initialized");
         }
 

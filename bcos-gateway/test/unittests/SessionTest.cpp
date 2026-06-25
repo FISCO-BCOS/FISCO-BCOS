@@ -44,9 +44,7 @@ public:
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
-    {
-        m_strand = std::make_unique<bcos::Strand>(m_threadPool);
-    };
+    {};
     virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -81,7 +79,7 @@ public:
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
-        m_strand->post([this, socket, buffers, handler]() {
+        m_threadPool->post([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -98,13 +96,12 @@ public:  // for testing
 
     void asyncAppendRecvPacket(Packet packet)
     {
-        m_strand->post([this, packet]() { appendRecvPacket(packet); });
+        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
     }
 
 protected:
     std::queue<Packet> m_recvPackets;
     bcos::IOServicePool::Ptr m_threadPool;
-    std::unique_ptr<bcos::Strand> m_strand;
 };
 
 class FakeP2PMessage : public P2PMessage
@@ -313,8 +310,8 @@ BOOST_AUTO_TEST_CASE(doReadTest)
     std::atomic<size_t> recvPacketCnt = 0;
     std::atomic<size_t> recvBufferSize = 0;
     std::atomic<uint64_t> lastReadTime = utcSteadyTime();
+    auto fakeAsio = std::make_shared<FakeASIO>();
     {
-        auto fakeAsio = std::make_shared<FakeASIO>();
         auto fakeHost = std::make_shared<FakeHost>(hashImpl, fakeAsio, nullptr, fakeMessageFactory);
 
         auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 2, true);

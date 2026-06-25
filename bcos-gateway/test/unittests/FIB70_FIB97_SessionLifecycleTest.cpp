@@ -48,7 +48,6 @@ public:
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
         m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
     {
-        m_strand = std::make_unique<bcos::Strand>(m_threadPool);
     }
     ~FakeASIO_FIB() noexcept override {}
 
@@ -84,7 +83,7 @@ public:
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
-        m_strand->post([this, socket, buffers, handler]() {
+        m_threadPool->post([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -101,11 +100,11 @@ public:
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
     void asyncAppendRecvPacket(Packet packet)
     {
-        m_strand->post([this, packet]() { appendRecvPacket(packet); });
+        m_threadPool->post([this, packet]() { appendRecvPacket(packet); });
     }
     void triggerRead()
     {
-        m_strand->post([this]() {
+        m_threadPool->post([this]() {
             if (m_handler)
             {
                 m_handler();
@@ -117,7 +116,6 @@ protected:
     Base_Handler m_handler;
     std::queue<Packet> m_recvPackets;
     bcos::IOServicePool::Ptr m_threadPool;
-    std::unique_ptr<bcos::Strand> m_strand;
 };
 
 // A message that always returns MESSAGE_ERROR to simulate decode failure

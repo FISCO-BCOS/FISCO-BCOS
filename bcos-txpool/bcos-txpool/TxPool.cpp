@@ -53,10 +53,11 @@ bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::P
     m_ledger(m_config->ledger()),
     m_ioServicePool(std::move(ioServicePool))
 {
-    if (m_ioServicePool)
+    if (!m_ioServicePool)
     {
-        m_preStoreStrand = std::make_unique<Strand>(m_ioServicePool);
+        m_ioServicePool = std::make_shared<IOServicePool>(1, "txpool-default");
     }
+    m_preStoreStrand = std::make_unique<Strand>(m_ioServicePool);
     TXPOOL_LOG(INFO) << LOG_DESC("create TxPool") << LOG_KV("submitterNum", verifierWorkerNum);
 }
 

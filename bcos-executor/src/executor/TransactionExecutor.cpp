@@ -155,8 +155,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 #endif
 
-    m_ioServicePool = ioServicePool;
-    assert(m_ioServicePool);
     setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
     if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {

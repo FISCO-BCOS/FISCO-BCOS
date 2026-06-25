@@ -1,3 +1,4 @@
+#include <bcos-utilities/IOServicePool.h>
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
@@ -34,6 +35,7 @@ struct BlockExecutiveFixture
 {
     BlockExecutiveFixture()
     {
+        ioServicePool = std::make_shared<bcos::IOServicePool>(1, "test-sched");
         hashImpl = std::make_shared<Keccak256>();
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
@@ -82,6 +84,7 @@ struct BlockExecutiveFixture
     }
 
     boost::asio::io_context ioService;
+    bcos::IOServicePool::Ptr ioServicePool;
     ledger::LedgerInterface::Ptr ledger;
     scheduler::ExecutorManager::Ptr executorManager;
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
