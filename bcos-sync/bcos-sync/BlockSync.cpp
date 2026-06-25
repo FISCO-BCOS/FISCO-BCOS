@@ -212,25 +212,31 @@ void BlockSync::executeWorker()
     }
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    m_strand->post([this]() {
+    auto self = weak_from_this();
+    m_strand->post([self]() {
+        auto sync = self.lock();
+        if (!sync)
+        {
+            return;
+        }
         try
         {
             // flush downloaded buffer into downloading queue
-            maintainDownloadingBuffer();
-            maintainDownloadingQueue();
+            sync->maintainDownloadingBuffer();
+            sync->maintainDownloadingQueue();
 
             // send block-download-request to peers if this node is behind others
-            tryToRequestBlocks();
+            sync->tryToRequestBlocks();
 
-            if (m_config->syncArchivedBlockBody())
+            if (sync->m_config->syncArchivedBlockBody())
             {
-                auto archivedBlockNumber = m_config->archiveBlockNumber();
+                auto archivedBlockNumber = sync->m_config->archiveBlockNumber();
                 if (archivedBlockNumber == 0)
                 {
                     return;
                 }
-                syncArchivedBlockBody(archivedBlockNumber);
-                verifyAndCommitArchivedBlock(archivedBlockNumber);
+                sync->syncArchivedBlockBody(archivedBlockNumber);
+                sync->verifyAndCommitArchivedBlock(archivedBlockNumber);
             }
         }
         catch (std::exception const& e)
@@ -241,10 +247,15 @@ void BlockSync::executeWorker()
         }
     });
     // send block to other nodes
-    m_strand->post([this]() {
+    m_strand->post([self]() {
+        auto sync = self.lock();
+        if (!sync)
+        {
+            return;
+        }
         try
         {
-            maintainBlockRequest();
+            sync->maintainBlockRequest();
         }
         catch (std::exception const& e)
         {

@@ -18,7 +18,10 @@
  */
 
 #pragma once
+#include "BoostLog.h"
 #include <boost/asio.hpp>
+#include <boost/exception/diagnostic_information.hpp>
+#include <atomic>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -47,7 +50,11 @@ class Strand
         std::weak_ptr<IOServicePool> pool;
         std::deque<std::function<void()>> queue;
         std::mutex mutex;
-        bool busy{false};
+        // 0 = idle, 1 = a drain is running (no waiting tasks),
+        // >1 = drain running + (count_-1) waiting tasks.
+        // Managed with atomic CAS to reduce mutex contention between
+        // post() and drain(), following boost::asio::strand's pattern.
+        std::atomic<int> count_{0};
 
         void kick();
         void drain();
@@ -66,7 +73,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(m_impl->mutex);
         m_impl->queue.clear();
-        m_impl->busy = false;
+        m_impl->count_.store(0, std::memory_order_release);
     }
 
     Strand(const Strand&) = delete;
@@ -77,17 +84,14 @@ public:
     template <class Task>
     void post(Task&& task)
     {
-        bool needKick = false;
         {
             std::lock_guard<std::mutex> lock(m_impl->mutex);
             m_impl->queue.emplace_back(std::forward<Task>(task));
-            needKick = !m_impl->busy;
-            if (needKick)
-            {
-                m_impl->busy = true;
-            }
         }
-        if (needKick)
+        // Atomically claim a slot.  If count was 0 (idle), we must kick.
+        // acq_rel: acquire to see prior drain completion, release so that
+        // drain()'s fetch_sub sees our increment.
+        if (m_impl->count_.fetch_add(1, std::memory_order_acq_rel) == 0)
         {
             m_impl->kick();
         }
@@ -120,7 +124,9 @@ public:
     void post(Task&& task)
     {
         auto& ioService = getIOService();
-        boost::asio::post(ioService->get_executor(), std::forward<Task>(task));
+        boost::asio::post(ioService->get_executor(), [task = std::forward<Task>(task)]() mutable {
+            IOServicePool::safeExecute(std::move(task));
+        });
     }
 
     template <class Task>
@@ -129,11 +135,34 @@ public:
         auto id = std::this_thread::get_id();
         if (::ranges::binary_search(m_threadIds, id))
         {
-            task();
+            IOServicePool::safeExecute(std::forward<Task>(task));
         }
         else
         {
             post(std::forward<Task>(task));
+        }
+    }
+
+    // Shared exception guard: wraps a task so that a throw inside it
+    // does not kill the pool thread or strand.  Used by both
+    // IOServicePool::post/dispatch and Strand::Impl::drain.
+    template <class Task>
+    static void safeExecute(Task task)
+    {
+        try
+        {
+            task();
+        }
+        catch (std::exception const& e)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("Exception in IOServicePool task")
+                              << LOG_KV("message", boost::diagnostic_information(e));
+        }
+        catch (...)
+        {
+            BCOS_LOG(WARNING) << LOG_DESC("Unknown exception in IOServicePool task")
+                              << LOG_KV(
+                                     "message", boost::current_exception_diagnostic_information());
         }
     }
 
