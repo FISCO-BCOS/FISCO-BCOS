@@ -82,20 +82,16 @@ task::Task<void> EthEndpoint::coinbase(const Json::Value&, Json::Value& response
 }
 task::Task<void> EthEndpoint::chainId(const Json::Value&, Json::Value& response)
 {
+    // Reads via LedgerConfig (not a raw SYS_CONFIG single-key read) so that L2-mode
+    // governance (SystemConfig.sol via L2ConfigLoader, wired in A4) flows through one
+    // path. getLedgerConfig over-fetches (~5 storage reads) per call; per plan decision,
+    // RPC-side caching is deferred to Phase B.
     auto const ledger = m_nodeService->ledger();
-    auto config = co_await ledger::getSystemConfig(*ledger, ledger::SYSTEM_KEY_WEB3_CHAIN_ID);
+    auto const ledgerConfig = co_await ledger::getLedgerConfig(*ledger);
     Json::Value result;
-    if (config.has_value())
+    if (ledgerConfig->chainId().has_value())
     {
-        try
-        {
-            auto [chainId, _] = config.value();
-            result = toQuantity(std::stoull(chainId));
-        }
-        catch (...)
-        {
-            result = "0x0";  // 0x0 for default
-        }
+        result = toQuantity(fromEvmC(ledgerConfig->chainId().value()));
     }
     else
     {
