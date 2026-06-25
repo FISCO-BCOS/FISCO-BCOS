@@ -29,7 +29,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/compute/detail/lru_cache.hpp>
 #include <utility>
 
@@ -45,11 +45,12 @@ public:
 
     Ledger(bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage, size_t _blockLimit,
-        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100)
+        bcos::storage::StorageInterface::Ptr _blockStorage = nullptr, int merkleTreeCacheSize = 100,
+        bcos::IOServicePool::Ptr _ioServicePool = nullptr)
       : m_blockFactory(std::move(_blockFactory)),
         m_stateStorage(std::move(_storage)),
         m_blockStorage(std::move(_blockStorage)),
-        m_threadPool(std::make_shared<ThreadPool>("ledgerWrite", 2)),
+        m_ioServicePool(std::move(_ioServicePool)),
         m_blockLimit(_blockLimit),
         m_merkleTreeCacheSize(merkleTreeCacheSize),
         m_txProofMerkleCache(m_merkleTreeCacheSize),
@@ -186,7 +187,7 @@ private:
     bcos::storage::StorageInterface::Ptr m_blockStorage = nullptr;
 
     mutable RecursiveMutex m_mutex;
-    std::shared_ptr<bcos::ThreadPool> m_threadPool;
+    std::shared_ptr<bcos::IOServicePool> m_ioServicePool;
     size_t m_blockLimit;
 
     // Maintain merkle trees of 100 blocks

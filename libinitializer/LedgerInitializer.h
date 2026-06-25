@@ -23,6 +23,7 @@
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcos::initializer
 {
@@ -32,6 +33,7 @@ public:
     static std::shared_ptr<bcos::ledger::Ledger> build(
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::storage::StorageInterface::Ptr storage, bcos::tool::NodeConfig::Ptr nodeConfig,
-        bcos::storage::StorageInterface::Ptr blockStorage);
+        bcos::storage::StorageInterface::Ptr blockStorage,
+        bcos::IOServicePool::Ptr ioServicePool = nullptr);
 };
 }  // namespace bcos::initializer

@@ -486,7 +486,7 @@ bcos::Error::Ptr Ledger::storeTransactionsAndReceipts(
             }
         });
     auto promise = std::make_shared<std::promise<bcos::Error::Ptr>>();
-    m_threadPool->enqueue([storage = getBlockStorage(), promise, keys = std::move(txsHash),
+    m_ioServicePool->post([storage = getBlockStorage(), promise, keys = std::move(txsHash),
                               values = std::move(receiptsView)]() mutable {
         auto err = storage->setRows(SYS_HASH_2_RECEIPT, keys, values);
         promise->set_value(err);
@@ -1248,7 +1248,7 @@ void Ledger::removeExpiredNonce(protocol::BlockNumber blockNumber, bool sync)
         }
         else
         {
-            m_threadPool->enqueue(deleteExpiredNonces);
+            m_ioServicePool->post(deleteExpiredNonces);
         }
     }
 }

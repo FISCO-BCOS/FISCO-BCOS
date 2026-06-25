@@ -34,7 +34,7 @@ class MessagePromiseSwapper
 {
 public:
     using Ptr = std::shared_ptr<MessagePromiseSwapper>;
-    MessagePromiseSwapper(ThreadPool::Ptr pool);
+    MessagePromiseSwapper(IOServicePool::Ptr pool);
     void spawnAndCall(std::function<CallParameters::UniquePtr()> spawnCall,
         std::function<void(CallParameters::UniquePtr)> waitAndDo);
 
@@ -42,7 +42,7 @@ private:
     std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_lastPromise;
     std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_currentPromise;
 
-    ThreadPool::Ptr m_pool;
+    IOServicePool::Ptr m_pool;
 };
 
 
@@ -52,7 +52,7 @@ public:
     using Ptr = std::shared_ptr<PromiseTransactionExecutive>;
 
 
-    PromiseTransactionExecutive(ThreadPool::Ptr pool, const BlockContext& blockContext,
+    PromiseTransactionExecutive(IOServicePool::Ptr pool, const BlockContext& blockContext,
         std::string contractAddress, int64_t contextID, int64_t seq,
         const wasm::GasInjector& gasInjector);
 

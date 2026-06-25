@@ -22,7 +22,7 @@
 
 #include <bcos-framework/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-tars-protocol/tars/ExecutorService.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcostars
 {
@@ -30,7 +30,7 @@ class ExecutorServiceClient : public bcos::executor::ParallelTransactionExecutor
 {
 public:
     using Ptr = std::shared_ptr<ExecutorServiceClient>;
-    ExecutorServiceClient(ExecutorServicePrx _prx);
+    ExecutorServiceClient(ExecutorServicePrx _prx, bcos::IOServicePool::Ptr ioServicePool = nullptr);
     ~ExecutorServiceClient() override;
 
     void status(
@@ -104,6 +104,6 @@ public:
 
 private:
     ExecutorServicePrx m_prx;
-    bcos::ThreadPool::Ptr m_callbackPool;
+    bcos::IOServicePool::Ptr m_callbackPool;
 };
 }  // namespace bcostars

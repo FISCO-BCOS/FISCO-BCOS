@@ -81,7 +81,6 @@
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
-#include "bcos-utilities/ThreadPool.h"
 #include "tbb/flow_graph.h"
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -130,7 +129,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
     bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
     std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
-    std::string name = "default-executor-name")
+    std::string name = "default-executor-name",
+    bcos::IOServicePool::Ptr ioServicePool = nullptr)
   : m_name(std::move(name)),
     m_ledger(ledger),
     m_txpool(std::move(txpool)),
@@ -143,7 +143,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_isWasm(isWasm),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
     m_ledgerCache(std::make_shared<LedgerCache>(ledger)),
-    m_vmFactory(std::move(vmFactory))
+    m_vmFactory(std::move(vmFactory)),
+    m_ioServicePool(std::move(ioServicePool))
 {
     assert(m_backendStorage);
 
@@ -154,8 +155,8 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
 #endif
 
-    m_threadPool =
-        std::make_shared<bcos::ThreadPool>(name, std::max(1u, std::thread::hardware_concurrency()));
+    m_ioServicePool = ioServicePool;
+    assert(m_ioServicePool);
     setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
     if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
     {
@@ -2323,7 +2324,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
             EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress)
                                      << LOG_KV("type", "ExecutiveSerialFlow");
             executiveFlow = std::make_shared<ExecutiveSerialFlow>(executiveFactory);
-            executiveFlow->setThreadPool(m_threadPool);
+            executiveFlow->setThreadPool(m_ioServicePool);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
         }
         else
@@ -2331,7 +2332,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
             EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress)
                                      << LOG_KV("type", "ExecutiveStackFlow");
             executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
-            executiveFlow->setThreadPool(m_threadPool);
+            executiveFlow->setThreadPool(m_ioServicePool);
             blockContext->setExecutiveFlow(codeAddress, executiveFlow);
         }
     }

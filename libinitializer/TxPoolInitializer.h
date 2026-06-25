@@ -28,6 +28,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <memory>
 
 namespace bcos
@@ -48,7 +49,8 @@ public:
         ProtocolInitializer::Ptr _protocolInitializer,
         bcos::front::FrontServiceInterface::Ptr _frontService,
         bcos::ledger::LedgerInterface::Ptr _ledger,
-        boost::asio::io_context& _ioContext);
+        boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~TxPoolInitializer() { stop(); }
 
     virtual void init();
@@ -68,6 +70,7 @@ private:
 
     std::shared_ptr<bcos::txpool::TxPoolFactory> m_txpoolFactory;
     std::shared_ptr<bcos::txpool::TxPool> m_txpool;
+    bcos::IOServicePool::Ptr m_ioServicePool;
     std::atomic_bool m_running = {false};
 };
 }  // namespace initializer

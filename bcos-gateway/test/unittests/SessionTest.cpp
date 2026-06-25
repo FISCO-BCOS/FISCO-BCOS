@@ -23,7 +23,7 @@
 #include "bcos-gateway/libnetwork/Host.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -43,7 +43,10 @@ public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
     FakeASIO()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"), "0.0.0.0", 0),
-        m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO", 1)) {};
+        m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO"))
+    {
+        m_strand = std::make_unique<bcos::Strand>(m_threadPool);
+    };
     virtual ~FakeASIO() noexcept override {};
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -78,7 +81,7 @@ public:
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
-        m_threadPool->enqueue([this, socket, buffers, handler]() {
+        m_strand->post([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -88,19 +91,20 @@ public:
             readSome(socket, buffers, handler);
         });
     }
-    void stop() { m_threadPool->stop(); }
+    void stop() { m_threadPool.reset(); }
 
 public:  // for testing
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
 
     void asyncAppendRecvPacket(Packet packet)
     {
-        m_threadPool->enqueue([this, packet]() { appendRecvPacket(packet); });
+        m_strand->post([this, packet]() { appendRecvPacket(packet); });
     }
 
 protected:
     std::queue<Packet> m_recvPackets;
-    bcos::ThreadPool::Ptr m_threadPool;
+    bcos::IOServicePool::Ptr m_threadPool;
+    std::unique_ptr<bcos::Strand> m_strand;
 };
 
 class FakeP2PMessage : public P2PMessage

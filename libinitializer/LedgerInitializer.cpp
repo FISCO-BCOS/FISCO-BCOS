@@ -5,7 +5,8 @@
 
 std::shared_ptr<bcos::ledger::Ledger> bcos::initializer::LedgerInitializer::build(
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::storage::StorageInterface::Ptr storage,
-    bcos::tool::NodeConfig::Ptr nodeConfig, bcos::storage::StorageInterface::Ptr blockStorage)
+    bcos::tool::NodeConfig::Ptr nodeConfig, bcos::storage::StorageInterface::Ptr blockStorage,
+    bcos::IOServicePool::Ptr ioServicePool)
 {
     bcos::storage::StorageImpl storageWrapper(storage);
     std::shared_ptr<bcos::ledger::Ledger> ledger;

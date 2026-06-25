@@ -25,7 +25,7 @@
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>
@@ -46,7 +46,10 @@ public:
     using Packet = std::shared_ptr<std::vector<uint8_t>>;
     FakeASIO_FIB()
       : ASIOInterface(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"), "0.0.0.0", 0),
-        m_threadPool(std::make_shared<bcos::ThreadPool>("FakeASIO_FIB", 1)) {}
+        m_threadPool(std::make_shared<bcos::IOServicePool>(1, "FakeASIO_FIB"))
+    {
+        m_strand = std::make_unique<bcos::Strand>(m_threadPool);
+    }
     ~FakeASIO_FIB() noexcept override {}
 
     void readSome(std::shared_ptr<SocketFace> socket, boost::asio::mutable_buffer buffers,
@@ -81,7 +84,7 @@ public:
     void asyncReadSome(const std::shared_ptr<SocketFace>& socket,
         boost::asio::mutable_buffer buffers, ReadWriteHandler handler) override
     {
-        m_threadPool->enqueue([this, socket, buffers, handler]() {
+        m_strand->post([this, socket, buffers, handler]() {
             if (m_recvPackets.empty())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -93,16 +96,16 @@ public:
     }
 
     void strandPost(Base_Handler handler) { m_handler = handler; }
-    void stop() { m_threadPool->stop(); }
+    void stop() { m_threadPool.reset(); }
 
     void appendRecvPacket(Packet packet) { m_recvPackets.push(packet); }
     void asyncAppendRecvPacket(Packet packet)
     {
-        m_threadPool->enqueue([this, packet]() { appendRecvPacket(packet); });
+        m_strand->post([this, packet]() { appendRecvPacket(packet); });
     }
     void triggerRead()
     {
-        m_threadPool->enqueue([this]() {
+        m_strand->post([this]() {
             if (m_handler)
             {
                 m_handler();
@@ -113,7 +116,8 @@ public:
 protected:
     Base_Handler m_handler;
     std::queue<Packet> m_recvPackets;
-    bcos::ThreadPool::Ptr m_threadPool;
+    bcos::IOServicePool::Ptr m_threadPool;
+    std::unique_ptr<bcos::Strand> m_strand;
 };
 
 // A message that always returns MESSAGE_ERROR to simulate decode failure

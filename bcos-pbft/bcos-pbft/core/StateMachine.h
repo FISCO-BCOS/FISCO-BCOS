@@ -36,7 +36,7 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::IOServicePool::Ptr _ioServicePool)
       : m_scheduler(std::move(_scheduler)), m_blockFactory(std::move(_blockFactory)),
-        m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
+        m_strand(std::move(_ioServicePool))
     {}
 
     void asyncApply(ssize_t _execTimeout, ProposalInterface::ConstPtr _lastAppliedProposal,
@@ -56,7 +56,7 @@ private:
 protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
-    bcos::Strand::Ptr m_strand;
+    bcos::Strand m_strand;
 };
 }  // namespace consensus
 }  // namespace bcos

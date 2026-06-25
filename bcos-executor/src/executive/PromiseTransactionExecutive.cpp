@@ -3,7 +3,7 @@
 
 using namespace bcos::executor;
 
-MessagePromiseSwapper::MessagePromiseSwapper(ThreadPool::Ptr pool) : m_pool(std::move(pool)) {}
+MessagePromiseSwapper::MessagePromiseSwapper(IOServicePool::Ptr pool) : m_pool(std::move(pool)) {}
 
 void MessagePromiseSwapper::spawnAndCall(
     std::function<CallParameters::UniquePtr()> spawnCall,
@@ -14,7 +14,7 @@ void MessagePromiseSwapper::spawnAndCall(
     auto lastPromise = m_currentPromise;
 
     m_currentPromise = std::make_shared<std::promise<CallParameters::UniquePtr>>();
-    m_pool->enqueue([this, lastPromise, spawnCall = std::move(spawnCall)]() {
+    m_pool->post([this, lastPromise, spawnCall = std::move(spawnCall)]() {
         auto message = spawnCall();
 
         auto promise = lastPromise ? lastPromise : m_currentPromise;
@@ -25,7 +25,7 @@ void MessagePromiseSwapper::spawnAndCall(
     waitAndDo(std::move(message));
 }
 
-PromiseTransactionExecutive::PromiseTransactionExecutive(ThreadPool::Ptr pool,
+PromiseTransactionExecutive::PromiseTransactionExecutive(IOServicePool::Ptr pool,
     const BlockContext& blockContext, std::string contractAddress, int64_t contextID,
     int64_t seq, const wasm::GasInjector& gasInjector)
   : CoroutineTransactionExecutive(

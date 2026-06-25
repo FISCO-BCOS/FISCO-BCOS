@@ -61,8 +61,6 @@ class Strand
     };
 
 public:
-    using Ptr = std::shared_ptr<Strand>;
-
     explicit Strand(const std::shared_ptr<IOServicePool>& pool)
     {
         m_impl = std::make_shared<Impl>();
@@ -78,8 +76,8 @@ public:
 
     Strand(const Strand&) = delete;
     Strand& operator=(const Strand&) = delete;
-    Strand(Strand&&) = delete;
-    Strand& operator=(Strand&&) = delete;
+    Strand(Strand&&) = default;
+    Strand& operator=(Strand&&) = default;
 
     template <class Task>
     void post(Task&& task)

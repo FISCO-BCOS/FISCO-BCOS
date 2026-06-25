@@ -28,7 +28,6 @@
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-utilities/BucketMap.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 
 namespace bcos::txpool
