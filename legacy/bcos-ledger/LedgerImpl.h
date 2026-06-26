@@ -6,8 +6,8 @@
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
-#include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/storage/Storage.h>
+#include "../concepts/bcos-concepts/ledger/Ledger.h"
+#include "../concepts/bcos-concepts/storage/Storage.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-executor/src/Common.h>

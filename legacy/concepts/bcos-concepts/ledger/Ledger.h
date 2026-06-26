@@ -1,5 +1,5 @@
 #pragma once
-#include "../ByteBuffer.h"
+#include <bcos-concepts/ByteBuffer.h>
 #include "../protocol/Block.h"
 #include <range/v3/range/concepts.hpp>
 #include <range/v3/range/traits.hpp>

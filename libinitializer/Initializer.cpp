@@ -40,7 +40,7 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-storage/RocksDBStorage.h"
-#include "bcos-storage/StorageWrapperImpl.h"
+#include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"

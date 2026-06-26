@@ -2,7 +2,7 @@
 
 #include "bcos-concepts/Serialize.h"
 #include "bcos-lightnode/Log.h"
-#include <bcos-concepts/ledger/Ledger.h>
+#include <legacy/concepts/bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/protocol/Protocol.h>

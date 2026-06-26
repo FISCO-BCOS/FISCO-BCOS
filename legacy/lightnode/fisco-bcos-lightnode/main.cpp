@@ -31,7 +31,7 @@
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-ledger/Ledger.h>
-#include <bcos-storage/StorageWrapperImpl.h>
+#include "../../bcos-storage/StorageWrapperImpl.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
 #include <bcos-task/Task.h>

@@ -1,7 +1,7 @@
 #pragma once
-#include "../Basic.h"
-#include "../Hash.h"
-#include "../Serialize.h"
+#include <bcos-concepts/Basic.h>
+#include <bcos-concepts/Hash.h>
+#include <bcos-concepts/Serialize.h>
 #include <range/v3/range.hpp>
 
 namespace bcos::concepts::receipt

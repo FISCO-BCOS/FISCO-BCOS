@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../Basic.h"
-#include "../Hash.h"
-#include "../Serialize.h"
+#include <bcos-concepts/Basic.h>
+#include <bcos-concepts/Hash.h>
+#include <bcos-concepts/Serialize.h>
 #include <bcos-framework/protocol/Transaction.h>
 #include <concepts>
 #include <type_traits>

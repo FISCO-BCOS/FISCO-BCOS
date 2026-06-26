@@ -9,7 +9,7 @@
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include <bcos-concepts/ledger/Ledger.h>
+#include "../../../concepts/bcos-concepts/ledger/Ledger.h"
 #include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
 #include "../../../concepts/bcos-concepts/transaction-pool/TransactionPool.h"
 #include <bcos-crypto/hasher/Hasher.h>

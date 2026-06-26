@@ -1,8 +1,8 @@
 #pragma once
 
 #include <bcos-concepts/Basic.h>
-#include <bcos-concepts/protocol/Receipt.h>
-#include <bcos-concepts/protocol/Transaction.h>
+#include "../protocol/Receipt.h"
+#include "../protocol/Transaction.h"
 
 namespace bcos::concepts::transacton_pool
 {

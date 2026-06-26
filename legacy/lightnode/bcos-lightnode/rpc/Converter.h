@@ -2,7 +2,7 @@
 
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
-#include <bcos-concepts/protocol/Block.h>
+#include "../../../concepts/bcos-concepts/protocol/Block.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/value.h>
 #include <boost/algorithm/hex.hpp>

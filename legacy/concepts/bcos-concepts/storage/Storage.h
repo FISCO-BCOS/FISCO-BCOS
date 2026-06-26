@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Basic.h"
+#include <bcos-concepts/Basic.h>
 #include <bcos-framework/storage/Entry.h>
 #include <range/v3/range/concepts.hpp>
 #include <type_traits>

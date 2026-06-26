@@ -1,11 +1,10 @@
 #pragma once
 
-#include "bcos-concepts/ledger/Ledger.h"
+#include "../concepts/bcos-concepts/ledger/Ledger.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
-#include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/storage/Storage.h>
+#include "../concepts/bcos-concepts/storage/Storage.h"
 #include "LedgerImpl.h"
 #include <bcos-utilities/DataConvertUtility.h>
 #include <range/v3/range/access.hpp>

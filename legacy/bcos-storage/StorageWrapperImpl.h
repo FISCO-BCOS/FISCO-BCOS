@@ -1,7 +1,7 @@
 #pragma once
 
 #include <bcos-concepts/Basic.h>
-#include <bcos-concepts/storage/Storage.h>
+#include "../concepts/bcos-concepts/storage/Storage.h"
 #include <bcos-framework/storage/Entry.h>
 #include <boost/throw_exception.hpp>
 #include <range/v3/range/access.hpp>

@@ -1,8 +1,8 @@
 #include <legacy/bcos-ledger/LedgerImpl.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Serialize.h>
-#include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/storage/Storage.h>
+#include "../../concepts/bcos-concepts/ledger/Ledger.h"
+#include "../../concepts/bcos-concepts/storage/Storage.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
