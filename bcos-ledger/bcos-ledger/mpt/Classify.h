@@ -106,11 +106,12 @@ inline ParsedKey parseKey(std::string_view fullKey)
     {
         return parsed;  // NotAnAccount: not a 20-byte address table
     }
-    // Address(..., FromHex) throws BadHexCharacter on a non-hex digit. Real /apps/ table names are
-    // always valid 40-hex, but guard so parseKey's no-throw contract holds for arbitrary input.
+    // Address (FixedBytes<20>) has a string_view + FromHex constructor, so no std::string temp is
+    // needed. It throws on a non-hex digit / bad length; real /apps/ table names are always valid
+    // 40-hex, but guard so parseKey's no-throw contract holds for arbitrary input.
     try
     {
-        parsed.address = bcos::Address(std::string(addrHex), bcos::Address::FromHex);
+        parsed.address = bcos::Address(addrHex, bcos::Address::FromHex);
     }
     catch (...)
     {
