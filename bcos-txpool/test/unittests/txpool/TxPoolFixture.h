@@ -133,7 +133,7 @@ public:
         auto txPoolFactory = std::make_shared<TxPoolFactory>(m_nodeId, _cryptoSuite,
             m_txResultFactory, m_blockFactory, m_frontService, m_ledger, m_groupId, m_chainId,
             m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-        m_txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService());
+        m_txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
 
         m_sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
         auto syncConfig = m_sync->config();
@@ -190,11 +190,11 @@ public:
                 auto txPoolFactoryTemp = std::make_shared<TxPoolFactory>(nodeId, _cryptoSuite,
                     m_txResultFactory, m_blockFactory, frontService, m_ledger, m_groupId, m_chainId,
                     m_blockLimit, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-                txpool = txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService());
+                txpool = txPoolFactoryTemp->createTxPool(*ioServicePool->getIOService(), ioServicePool);
             }
             else
             {
-                txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService());
+                txpool = txPoolFactory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
                 auto sync = std::dynamic_pointer_cast<TransactionSync>(m_txpool->transactionSync());
                 sync = std::make_shared<FakeTransactionSync1>(sync->config());
                 txpool->setTransactionSync(sync);

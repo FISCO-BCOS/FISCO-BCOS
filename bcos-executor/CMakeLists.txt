@@ -29,6 +29,17 @@ target_link_libraries(executor PRIVATE rpc)
 set_source_files_properties(
     "src/vm/VMFactory.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+# Exclude CoroutineTransactionExecutive from unity build to allow per-file
+# ASan flags. boost::context coroutines trigger false-positive
+# stack-use-after-scope errors under -fsanitize-address-use-after-scope.
+set_source_files_properties(
+    "src/executive/CoroutineTransactionExecutive.cpp"
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+if(SANITIZE_ADDRESS)
+    set_source_files_properties(
+        "src/executive/CoroutineTransactionExecutive.cpp"
+        PROPERTIES COMPILE_FLAGS "-fno-sanitize-address-use-after-scope")
+endif()
 set_target_properties(executor PROPERTIES UNITY_BUILD "ON")
 
 if (TOOLS)

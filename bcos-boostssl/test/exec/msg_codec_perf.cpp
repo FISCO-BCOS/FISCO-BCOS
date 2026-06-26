@@ -23,7 +23,6 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <memory>
 #include <string>
 

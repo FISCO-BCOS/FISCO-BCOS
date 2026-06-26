@@ -35,7 +35,7 @@ bool ShardingTransactionExecutive::isUsePromise() const
 
 ShardingTransactionExecutive::ShardingTransactionExecutive(const BlockContext& blockContext,
     std::string contractAddress, int64_t contextID, int64_t seq,
-    const wasm::GasInjector& gasInjector, ThreadPool::Ptr pool, bool usePromise)
+    const wasm::GasInjector& gasInjector, IOServicePool::Ptr pool, bool usePromise)
   : PromiseTransactionExecutive(
         pool, std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector),
     m_usePromise(usePromise)
@@ -195,7 +195,7 @@ CallParameters::UniquePtr& ShardingChildTransactionExecutive::getExchangeMessage
 ShardingChildTransactionExecutive::ShardingChildTransactionExecutive(
     ShardingTransactionExecutive* parent, const BlockContext& blockContext,
     std::string contractAddress, int64_t contextID, int64_t seq,
-    const wasm::GasInjector& gasInjector, ThreadPool::Ptr pool, bool usePromise)
+    const wasm::GasInjector& gasInjector, IOServicePool::Ptr pool, bool usePromise)
   : ShardingTransactionExecutive(
         blockContext, contractAddress, contextID, seq, gasInjector, pool, usePromise),
 

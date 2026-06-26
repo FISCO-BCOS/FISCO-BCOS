@@ -32,7 +32,6 @@
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-utilities/ITTAPI.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <utility>
 
 using namespace bcos;

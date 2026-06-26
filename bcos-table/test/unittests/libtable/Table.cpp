@@ -22,7 +22,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
@@ -59,7 +59,7 @@ BOOST_FIXTURE_TEST_SUITE(TableTest, TableFixture)
 
 BOOST_AUTO_TEST_CASE(constructor)
 {
-    auto threadPool = ThreadPool("a", 1);
+    auto threadPool = IOServicePool(1, "a");
     auto table = std::make_shared<Table>(nullptr, nullptr);
     auto tableFactory = std::make_shared<StateStorage>(nullptr, false);
 }

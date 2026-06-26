@@ -45,7 +45,8 @@ BlockSync::BlockSync(
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
     m_downloadingQueue(std::make_shared<DownloadingQueue>(_config)),
-    m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
+    m_downloadStrand(_ioServicePool),
+    m_sendStrand(_ioServicePool)
 {
     m_downloadingTimer =
         std::make_shared<Timer>(_ioContext, m_config->downloadTimeout(), "downloadTimer");
@@ -213,7 +214,7 @@ void BlockSync::executeWorker()
     // maintain the connections between observers/sealers
     maintainPeersConnection();
     auto self = weak_from_this();
-    m_strand->post([self]() {
+    m_downloadStrand.post([self]() {
         auto sync = self.lock();
         if (!sync)
         {
@@ -247,7 +248,7 @@ void BlockSync::executeWorker()
         }
     });
     // send block to other nodes
-    m_strand->post([self]() {
+    m_sendStrand.post([self]() {
         auto sync = self.lock();
         if (!sync)
         {

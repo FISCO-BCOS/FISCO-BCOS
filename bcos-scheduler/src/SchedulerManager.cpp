@@ -3,13 +3,18 @@
 using namespace bcos::scheduler;
 
 SchedulerManager::SchedulerManager(
-    int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager)
+    int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager,
+    bcos::IOServicePool::Ptr ioServicePool)
   : m_factory(std::move(factory)),
     m_schedulerTerm(schedulerSeq),
     m_executorManager(std::move(executorManager)),
-    m_pool("SchedulerManager", 1),
+    m_ioServicePool(std::move(ioServicePool)),
     m_status(INITIALING)
 {
+    if (m_ioServicePool)
+    {
+        m_strand = std::make_unique<bcos::Strand>(m_ioServicePool);
+    }
     m_executorManager->setExecutorChangeHandler([this]() {
         asyncSelfSwitchTerm();
     });
@@ -352,7 +357,7 @@ void SchedulerManager::asyncSwitchTerm(
 
     // Will update scheduler session, clear all scheduler & executor block pipeline cache and
     // re-dispatch executor
-    m_pool.enqueue([this, callback = std::move(callback), schedulerSeq]() {
+    m_strand->post([this, callback = std::move(callback), schedulerSeq]() {
         try
         {
             switchTerm(schedulerSeq);
@@ -560,7 +565,7 @@ void SchedulerManager::asyncSelfSwitchTerm()
         return;
     }
 
-    m_pool.enqueue([this]() { selfSwitchTerm(false); });
+    m_strand->post([this]() { selfSwitchTerm(false); });
 }
 
 void SchedulerManager::onSwitchTermNotify()

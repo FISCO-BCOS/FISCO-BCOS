@@ -44,16 +44,21 @@ using namespace bcos::consensus;
 using namespace bcos::tool;
 
 bcos::txpool::TxPool::TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::Ptr txpoolStorage,
-    bcos::sync::TransactionSyncInterface::Ptr transactionSync, size_t verifierWorkerNum)
+    bcos::sync::TransactionSyncInterface::Ptr transactionSync, size_t verifierWorkerNum,
+    bcos::IOServicePool::Ptr ioServicePool)
   : m_config(std::move(config)),
     m_txpoolStorage(std::move(txpoolStorage)),
     m_transactionSync(std::move(transactionSync)),
     m_transactionFactory(m_config->blockFactory()->transactionFactory()),
-    m_ledger(m_config->ledger())
+    m_ledger(m_config->ledger()),
+    m_ioServicePool(std::move(ioServicePool))
 {
-    m_verifier = std::make_shared<ThreadPool>("verifier", 2);
-    // worker to pre-store-txs
-    m_txsPreStore = std::make_shared<ThreadPool>("txsPreStore", 1);
+    if (!m_ioServicePool)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "TxPool: IOServicePool must be provided from outside!"));
+    }
+    m_preStoreStrand = std::make_unique<Strand>(m_ioServicePool);
     TXPOOL_LOG(INFO) << LOG_DESC("create TxPool") << LOG_KV("submitterNum", verifierWorkerNum);
 }
 
@@ -82,17 +87,10 @@ void TxPool::stop()
         TXPOOL_LOG(INFO) << LOG_DESC("The txpool has already been stopped!");
         return;
     }
-    if (m_txsPreStore)
+    // IOServicePool lifecycle is managed by Initializer; clear pre-store state
     {
-        m_txsPreStore->stop();
-        // Abandoned lambdas in the stopped thread pool never run their cleanup; clear
-        // stale entries so a restart doesn't see phantom in-flight blocks.
         std::scoped_lock lock(x_preStoreInFlight);
         m_preStoreInFlight.clear();
-    }
-    if (m_verifier)
-    {
-        m_verifier->stop();
     }
     if (m_txpoolStorage)
     {
@@ -270,7 +268,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
     // Note: here must have thread pool for lock in the callback
     // use single thread here to decrease thread competition
     auto self = weak_from_this();
-    m_verifier->enqueue([self, _generatedNodeID, block = std::move(_block), _onVerifyFinished]() {
+    m_ioServicePool->post([self, _generatedNodeID, block = std::move(_block), _onVerifyFinished]() {
         auto blockHeader = block->blockHeader();
         try
         {
@@ -337,7 +335,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                     if (const auto admission = txpool->tryAcquirePreStoreSlot(blockHash);
                         admission == TxPool::PreStoreAdmission::Accepted)
                     {
-                        txpool->m_txsPreStore->enqueue([txpool, block, blockHash]() {
+                        txpool->m_preStoreStrand->post([txpool, block, blockHash]() {
                             try
                             {
                                 txpool->storeVerifiedBlock(block);
@@ -365,7 +363,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, protocol::Block::Const
                     else if (admission == TxPool::PreStoreAdmission::Disabled)
                     {
                         // backpressure off: legacy unbounded behavior (operator escape hatch)
-                        txpool->m_txsPreStore->enqueue(
+                        txpool->m_preStoreStrand->post(
                             [txpool, block]() { txpool->storeVerifiedBlock(block); });
                     }
                     // DuplicateSkipped / CapDropped: nothing to do; logged inside the gate.

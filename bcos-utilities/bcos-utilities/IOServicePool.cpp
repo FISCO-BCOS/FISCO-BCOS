@@ -95,8 +95,14 @@ void Strand::Impl::drain()
     std::function<void()> task;
     {
         std::lock_guard<std::mutex> lock(mutex);
-        // count_ > 0 guarantees the queue is non-empty (post() enqueues
-        // before fetch_add), so this pop is always safe.
+        // Defensive: queue could be empty if kick() was called after
+        // the pool expired and cleared everything.  ~Strand() no longer
+        // clears the queue, so under normal operation this guard never
+        // triggers; it only protects against pool-lifetime edge cases.
+        if (queue.empty())
+        {
+            return;
+        }
         task = std::move(queue.front());
         queue.pop_front();
     }
@@ -107,17 +113,13 @@ void Strand::Impl::drain()
     if (auto prev = count_.fetch_sub(1, std::memory_order_acq_rel); prev == 1)
     {
         // Only our running slot existed — no new tasks were posted during
-        // execution.  Verify under lock to close a narrow race: a post()
-        // between our fetch_sub and the lock below.
-        std::lock_guard<std::mutex> lock(mutex);
-        if (queue.empty())
-        {
-            return;  // Truly done.
-        }
-        // A post() snuck in and already called kick() for us (it saw
-        // count_ go from 0 to 1).  Restore the running count so the
-        // already-posted drain can proceed, and return without kicking.
-        count_.fetch_add(1, std::memory_order_relaxed);
+        // execution.  If a post() snuck in between fetch_sub and this
+        // return, its fetch_add will see prev==0 and kick() a new drain
+        // itself, so we don't need to re-check the queue under lock.
+        // (The lock-based re-check with fetch_add(1) restore had a race:
+        //  post()'s lock+enqueue could land between our fetch_sub and lock,
+        //  but its fetch_add could land after our fetch_add(1), causing
+        //  neither side to kick — permanently stalling the strand.)
         return;
     }
     // prev > 1: more tasks were definitely enqueued during our execution.

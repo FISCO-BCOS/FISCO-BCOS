@@ -1,7 +1,7 @@
 #pragma once
 #include "bcos-scheduler/src/SchedulerFactory.h"
 #include "bcos-scheduler/src/SchedulerImpl.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcos::scheduler
 {
@@ -9,7 +9,8 @@ class SchedulerManager : public SchedulerInterface
 {
 public:
     SchedulerManager(
-        int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager);
+        int64_t schedulerSeq, SchedulerFactory::Ptr factory, ExecutorManager::Ptr executorManager,
+        bcos::IOServicePool::Ptr ioServicePool = nullptr);
 
     // by pbft & sync
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
@@ -87,7 +88,8 @@ private:
     ExecutorManager::Ptr m_executorManager;
     std::vector<std::function<void(bcos::protocol::BlockNumber)>> m_onSwitchTermHandlers;
 
-    bcos::ThreadPool m_pool;
+    bcos::IOServicePool::Ptr m_ioServicePool;
+    std::unique_ptr<bcos::Strand> m_strand;
 
     std::atomic<Status> m_status;
 };

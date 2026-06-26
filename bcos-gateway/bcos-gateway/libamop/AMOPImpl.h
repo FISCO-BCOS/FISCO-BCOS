@@ -149,7 +149,7 @@ private:
     std::shared_ptr<Timer> m_timer;
     bcos::gateway::P2PInterface::Ptr m_network;
     bcos::gateway::P2pID m_p2pNodeID;
-    bcos::Strand::Ptr m_strand;
+    bcos::Strand m_strand;
 
     unsigned const TOPIC_SYNC_PERIOD = 2000;
 };

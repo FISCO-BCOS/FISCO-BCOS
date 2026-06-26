@@ -22,7 +22,7 @@
 #include <bcos-crypto/hash/Sha256.h>
 #include <bcos-crypto/hash/Sha3.h>
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -41,9 +41,9 @@ BOOST_AUTO_TEST_CASE(testKeccak256)
     auto keccak256 = std::make_shared<Keccak256>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(keccak256, nullptr, nullptr);
     // test multiple-thread
-    auto worker = std::make_shared<ThreadPool>("testHash", 8);
+    auto worker = std::make_shared<IOServicePool>(8, "testHash");
     std::atomic<int64_t> totolCount = 1000;
-    worker->enqueue([&]() {
+    worker->post([&]() {
         if (totolCount <= 0)
         {
             return;

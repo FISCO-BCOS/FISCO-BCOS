@@ -249,7 +249,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     // build ledger
     auto ledger = LedgerInitializer::build(
-        m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig, m_blockStorage);
+        m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig, m_blockStorage, m_ioServicePool);
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
@@ -272,7 +272,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger,
-        *m_ioServicePool->getIOService());
+        *m_ioServicePool->getIOService(), m_ioServicePool);
     m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
@@ -339,7 +339,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_scheduler = std::make_shared<scheduler_v1::MultiVersionScheduler>(
         std::to_array<scheduler::SchedulerInterface::Ptr>(
             {std::make_shared<bcos::scheduler::SchedulerManager>(
-                 schedulerSeq, factory, executorManager),
+                 schedulerSeq, factory, executorManager, m_ioServicePool),
                 m_baselineSchedulerHolder()}));
 
     auto executorVersion = m_nodeConfig->executorVersion();
@@ -412,9 +412,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
             executionMessageFactory, storageFactory,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName);
+            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName,
+            m_ioServicePool);
         auto switchExecutorManager =
-            std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory);
+            std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory, m_ioServicePool);
         executorManager->addExecutor(executorName, switchExecutorManager);
         m_switchExecutorManager = switchExecutorManager;
     }

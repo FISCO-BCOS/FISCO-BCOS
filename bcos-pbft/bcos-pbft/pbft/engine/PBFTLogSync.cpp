@@ -32,7 +32,7 @@ PBFTLogSync::PBFTLogSync(PBFTConfig::Ptr _config, PBFTCacheProcessor::Ptr _pbftC
     bcos::IOServicePool::Ptr _ioServicePool)
   : m_config(std::move(_config)),
     m_pbftCache(std::move(_pbftCache)),
-    m_strand(std::make_shared<Strand>(std::move(_ioServicePool)))
+    m_strand(std::move(_ioServicePool))
 {}
 
 void PBFTLogSync::requestCommittedProposals(
@@ -83,7 +83,7 @@ void PBFTLogSync::requestPBFTData(
     PublicPtr _from, PBFTRequestInterface::Ptr _pbftRequest, CallbackFunc _callback)
 {
     auto self = weak_from_this();
-    m_strand->post([self, _from, _pbftRequest, _callback]() {
+    m_strand.post([self, _from, _pbftRequest, _callback]() {
         try
         {
             auto pbftLogSync = self.lock();

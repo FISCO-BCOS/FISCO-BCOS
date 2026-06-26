@@ -611,11 +611,11 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                 buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
                 buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
-    // init ASIOInterface
+    // IOServicePool must be set from outside before init()
     if (!m_ioServicePool)
     {
-        m_ioServicePool =
-            std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "gateway");
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                    "GatewayFactory: IOServicePool must be provided from outside!"));
     }
     auto ioServicePool = m_ioServicePool;
     auto asioInterface =

@@ -25,6 +25,7 @@
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
 #include <servant/Application.h>
 
@@ -45,6 +46,9 @@ public:
         {
             m_executor->stop();
         }
+        // Release IOServicePool after executor to ensure no pending
+        // handlers reference freed objects.
+        m_ioServicePool.reset();
     }
 
 protected:
@@ -63,5 +67,6 @@ private:
     bcos::txpool::TxPoolInterface::Ptr m_txpool;
     std::string m_executorName;
     std::shared_ptr<bcos::Timer> m_timer;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 }  // namespace bcostars
