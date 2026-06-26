@@ -67,12 +67,11 @@ public:
         m_impl->pool = pool;
     }
 
-    ~Strand()
-    {
-        std::lock_guard<std::mutex> lock(m_impl->mutex);
-        m_impl->queue.clear();
-        m_impl->count_.store(0, std::memory_order_release);
-    }
+    // ~Strand() does NOT clear the queue.  After the Strand object is
+    // destroyed, pending tasks continue to drain because drain() handlers
+    // hold shared_ptr<Impl> via shared_from_this(), keeping Impl alive
+    // until the queue is fully processed.
+    ~Strand() = default;
 
     Strand(const Strand&) = delete;
     Strand& operator=(const Strand&) = delete;

@@ -95,8 +95,14 @@ void Strand::Impl::drain()
     std::function<void()> task;
     {
         std::lock_guard<std::mutex> lock(mutex);
-        // count_ > 0 guarantees the queue is non-empty (post() enqueues
-        // before fetch_add), so this pop is always safe.
+        // Defensive: queue could be empty if kick() was called after
+        // the pool expired and cleared everything.  ~Strand() no longer
+        // clears the queue, so under normal operation this guard never
+        // triggers; it only protects against pool-lifetime edge cases.
+        if (queue.empty())
+        {
+            return;
+        }
         task = std::move(queue.front());
         queue.pop_front();
     }
