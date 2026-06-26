@@ -50,20 +50,10 @@ public:
         decodeAndSetSignature(std::move(_cryptoSuite), _data);
     }
 
-    ~PBFTMessage() override
-    {
-        // return back the ownership to m_consensusProposal
-        if (m_pbftRawMessage->has_consensusproposal())
-        {
-            m_pbftRawMessage->unsafe_arena_release_consensusproposal();
-        }
-        // return the ownership of rawProposal to the passed-in proposal
-        auto allocatedProposalSize = m_pbftRawMessage->proposals_size();
-        for (int i = 0; i < allocatedProposalSize; i++)
-        {
-            m_pbftRawMessage->mutable_proposals()->UnsafeArenaReleaseLast();
-        }
-    }
+    // FIB-121: consensusProposal / proposals wrappers hold aliasing shared_ptrs that
+    // share this message's control block; they never own the submessages, so there is
+    // no ownership to release here (was a fragile unsafe_arena_release dance).
+    ~PBFTMessage() override = default;
 
     std::shared_ptr<PBFTRawMessage> pbftRawMessage() { return m_pbftRawMessage; }
     bytesPointer encode(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
