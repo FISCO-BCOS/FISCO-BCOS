@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bcos-concepts/scheduler/Scheduler.h>
+#include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionReceiptImpl.h>
 #include <bcos-task/Task.h>

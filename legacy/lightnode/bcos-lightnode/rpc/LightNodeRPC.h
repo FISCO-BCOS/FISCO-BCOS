@@ -10,8 +10,8 @@
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-concepts/ledger/Ledger.h>
-#include <bcos-concepts/scheduler/Scheduler.h>
-#include <bcos-concepts/transaction-pool/TransactionPool.h>
+#include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
+#include "../../../concepts/bcos-concepts/transaction-pool/TransactionPool.h"
 #include <bcos-crypto/hasher/Hasher.h>
 #include <bcos-crypto/merkle/Merkle.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>

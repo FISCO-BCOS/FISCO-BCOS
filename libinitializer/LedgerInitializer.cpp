@@ -1,5 +1,5 @@
 #include "LedgerInitializer.h"
-#include "bcos-ledger/LedgerImpl.h"
+#include <legacy/bcos-ledger/LedgerImpl.h>
 #include "bcos-storage/bcos-storage/StorageWrapperImpl.h"
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 

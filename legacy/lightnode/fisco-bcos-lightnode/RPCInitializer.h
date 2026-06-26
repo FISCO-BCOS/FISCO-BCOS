@@ -9,8 +9,8 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-ledger/LedgerImpl.h>
-#include <bcos-lightnode/rpc/LightNodeRPC.h>
+#include <legacy/bcos-ledger/LedgerImpl.h>
+#include "../../bcos-lightnode/rpc/LightNodeRPC.h"
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-storage/RocksDBStorage.h>

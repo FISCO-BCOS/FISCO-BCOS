@@ -43,13 +43,6 @@ public:
     }
 
     template <DataFlag... Flags>
-    auto getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
-        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
-    {
-        return impl().template impl_getBlockByNodeList<Flags...>(blockNumber, block, nodeList);
-    }
-
-    template <DataFlag... Flags>
     auto setBlock(bcos::concepts::block::Block auto block)
     {
         return impl().template impl_setBlock<Flags...>(std::move(block));
@@ -78,17 +71,6 @@ public:
     }
 
     auto getStatus() { return impl().impl_getStatus(); }
-
-    auto getAllPeersStatus() { return impl().impl_getAllPeersStatus(); }
-
-    template <class LedgerType, bcos::concepts::block::Block BlockType>
-        requires std::derived_from<LedgerType, LedgerBase<LedgerType>> ||
-                 std::derived_from<typename LedgerType::element_type,
-                     LedgerBase<typename LedgerType::element_type>>
-    auto sync(LedgerType& source, bool onlyHeader)
-    {
-        return impl().template impl_sync<LedgerType, BlockType>(source, onlyHeader);
-    }
 
     auto setupGenesisBlock(bcos::concepts::block::Block auto block)
     {

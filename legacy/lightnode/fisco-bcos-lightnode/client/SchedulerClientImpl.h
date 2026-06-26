@@ -4,7 +4,7 @@
 
 #include "P2PClientImpl.h"
 #include <bcos-concepts/Serialize.h>
-#include <bcos-concepts/scheduler/Scheduler.h>
+#include "../../../concepts/bcos-concepts/scheduler/Scheduler.h"
 #include <bcos-tars-protocol/tars/LightNode.h>
 
 namespace bcos::scheduler
