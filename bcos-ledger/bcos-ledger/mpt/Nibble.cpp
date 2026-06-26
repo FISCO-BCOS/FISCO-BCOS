@@ -29,10 +29,10 @@ bcos::bytes bytesToNibbles(bcos::bytesConstRef bytes)
 {
     bcos::bytes out;
     out.reserve(bytes.size() * NIBBLES_PER_BYTE);
-    for (auto const _byte : bytes)
+    for (auto const byteValue : bytes)
     {
-        out.push_back(static_cast<uint8_t>((_byte >> NIBBLE_BITS) & LOW_NIBBLE_MASK));
-        out.push_back(static_cast<uint8_t>(_byte & LOW_NIBBLE_MASK));
+        out.push_back(static_cast<uint8_t>((byteValue >> NIBBLE_BITS) & LOW_NIBBLE_MASK));
+        out.push_back(static_cast<uint8_t>(byteValue & LOW_NIBBLE_MASK));
     }
     return out;
 }

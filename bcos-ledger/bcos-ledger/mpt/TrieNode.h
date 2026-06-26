@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include "Nibble.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <array>
@@ -26,8 +27,6 @@
 
 namespace bcos::ledger::mpt
 {
-
-inline constexpr std::uint8_t NIBBLE_RANGE = 16;
 
 /// The empty trie node — its RLP encoding is the single byte 0x80 (RLP empty string).
 struct EmptyNode

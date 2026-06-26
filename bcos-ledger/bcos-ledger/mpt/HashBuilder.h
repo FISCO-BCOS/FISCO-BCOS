@@ -47,6 +47,7 @@ struct TrieBuildResult
 /// (not a multimap). So there is no sort, no is_sorted check, no dup handling — just one O(n) walk.
 /// Touches no object state and no NodeCache, so independent inputs may be built concurrently
 /// (coarse-grained parallelism across tries). Internally single-threaded.
+/// @note Synchronous (returns a value, not a Task), unlike HashBuilder::commit().
 TrieBuildResult computeTrieRoot(std::map<bcos::h256, bcos::bytes> const& entries);
 
 /// Accumulates put/remove operations keyed by a 32-byte keccak path, then builds the canonical

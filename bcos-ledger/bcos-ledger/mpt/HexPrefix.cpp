@@ -20,7 +20,6 @@
 #include "HexPrefix.h"
 #include "Errors.h"
 #include "Nibble.h"
-#include "TrieNode.h"
 #include <boost/throw_exception.hpp>
 #include <cassert>
 
