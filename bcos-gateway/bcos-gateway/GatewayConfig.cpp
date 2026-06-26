@@ -593,6 +593,15 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                                                   "than 2 * p2p.allow_max_msg_size"));
     }
 
+    // FIB-184: inbound session caps, configurable instead of hardcoded in Host. Bound the number
+    // of concurrent / per-IP sessions so authenticated TLS connect-close churn cannot create
+    // sessions (each holding a recv buffer) faster than they tear down and exhaust the heap.
+    constexpr static std::size_t defaultMaxConcurrentSessions = 1024;
+    constexpr static std::size_t defaultMaxSessionsPerIP = 32;
+    m_maxConcurrentSessions =
+        _pt.get<std::size_t>("p2p.max_concurrent_sessions", defaultMaxConcurrentSessions);
+    m_maxSessionsPerIP = _pt.get<std::size_t>("p2p.max_sessions_per_ip", defaultMaxSessionsPerIP);
+
     constexpr static uint32_t defaultMaxReadDataSize = 40 * 1024;
     m_maxReadDataSize = _pt.get<uint32_t>("p2p.session_max_read_data_size", defaultMaxReadDataSize);
 

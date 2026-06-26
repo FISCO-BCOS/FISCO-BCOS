@@ -109,10 +109,9 @@ public:
 
     // FIB-184: caps on concurrent inbound sessions to bound memory under TLS connect/close
     // churn. With no cap, an authenticated peer can open sessions faster than they tear down
-    // and exhaust the heap (each session allocates a recv buffer). These are defaults; see
-    // TODO below about plumbing them through GatewayConfig.
-    // TODO(FIB-184): plumb these limits through GatewayConfig
-    // (p2p.max_concurrent_sessions / p2p.max_sessions_per_ip) instead of hardcoding.
+    // and exhaust the heap (each session allocates a recv buffer). GatewayFactory now plumbs the
+    // configured values (p2p.max_concurrent_sessions / p2p.max_sessions_per_ip) via the setters
+    // below; these constants are the defaults used when the config omits them.
     constexpr static std::size_t DEFAULT_MAX_CONCURRENT_SESSIONS = 1024;
     constexpr static std::size_t DEFAULT_MAX_SESSIONS_PER_IP = 32;
 
