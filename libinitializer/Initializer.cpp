@@ -300,7 +300,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
                 m_ioServicePool);
         parallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
-        parallelScheduler->m_maxConcurrency = baselineSchedulerConfig.maxThread;
+        parallelScheduler->m_maxConcurrency = m_nodeConfig->tbbThreadCount();
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,

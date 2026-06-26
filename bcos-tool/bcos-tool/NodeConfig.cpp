@@ -562,7 +562,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
-    int threadCount = _pt.get<int>("rpc.thread_count", 8);
     int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
     int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
@@ -576,7 +575,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
 
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
-    m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
     m_rpcFilterTimeout = filterTimeout * 1000;  // to milliseconds
@@ -614,7 +612,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
-    const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
     const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
@@ -632,7 +629,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
 
     m_web3RpcListenIP = listenIP;
     m_web3RpcListenPort = listenPort;
-    m_web3RpcThreadSize = threadCount;
     m_enableWeb3Rpc = enableWeb3Rpc;
     m_web3FilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_web3MaxProcessBlock = maxProcessBlock;
@@ -648,7 +644,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("listenPort", listenPort) << LOG_KV("threadCount", threadCount)
                          << LOG_KV("filterTimeout", filterTimeout)
                          << LOG_KV("maxProcessBlock", maxProcessBlock)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
@@ -768,19 +763,6 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set txpool.limit to positive !"));
     }
-    m_notifyWorkerNum = checkAndGetValue(_pt, "txpool.notify_worker_num", "2");
-    if (m_notifyWorkerNum <= 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set txpool.notify_worker_num to positive !"));
-    }
-    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num",
-        std::to_string(std::min(8U, std::thread::hardware_concurrency() + 1)));
-    if (m_verifierWorkerNum <= 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set txpool.verify_worker_num to positive !"));
-    }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
     if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS) [[unlikely]]
@@ -808,8 +790,6 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     m_preStoreMaxInflight = static_cast<size_t>(preStoreCap);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
-                         << LOG_KV("notifierWorkers", m_notifyWorkerNum)
-                         << LOG_KV("verifierWorkers", m_verifierWorkerNum)
                          << LOG_KV("checkBlockLimit", m_checkBlockLimit)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime)
                          << LOG_KV("enableTxsFromFreeNode", m_enableTxsFromFreeNode)
@@ -1181,13 +1161,16 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
     m_baselineSchedulerConfig.grainSize =
         _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
-    m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
+    m_ioThreadCount = checkAndGetValue(_pt, "executor.io_thread_count",
+        std::to_string(std::thread::hardware_concurrency() + 1));
+    m_tbbThreadCount = checkAndGetValue(_pt, "executor.tbb_thread_count",
+        std::to_string(std::thread::hardware_concurrency()));
+
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
-    m_tarsRPCConfig.threadCount = _pt.get<int>("rpc.tars_rpc_thread_count", 8);
 
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
     m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
@@ -1200,6 +1183,8 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize)
+                         << LOG_KV("ioThreadCount", m_ioThreadCount)
+                         << LOG_KV("tbbThreadCount", m_tbbThreadCount)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
                          << LOG_KV("checkParallelConflict", m_checkParallelConflict)
                          << LOG_KV("singlePointConsensus", m_singlePointConsensus)
@@ -1532,16 +1517,6 @@ size_t NodeConfig::txpoolLimit() const
     return m_txpoolLimit;
 }
 
-size_t NodeConfig::notifyWorkerNum() const
-{
-    return m_notifyWorkerNum;
-}
-
-size_t NodeConfig::verifierWorkerNum() const
-{
-    return m_verifierWorkerNum;
-}
-
 int64_t NodeConfig::txsExpirationTime() const
 {
     return m_txsExpirationTime;
@@ -1832,11 +1807,6 @@ uint16_t NodeConfig::rpcListenPort() const
     return m_rpcListenPort;
 }
 
-uint32_t NodeConfig::rpcThreadPoolSize() const
-{
-    return m_rpcThreadPoolSize;
-}
-
 uint32_t NodeConfig::rpcFilterTimeout() const
 {
     return m_rpcFilterTimeout;
@@ -1870,11 +1840,6 @@ const std::string& NodeConfig::web3RpcListenIP() const
 uint16_t NodeConfig::web3RpcListenPort() const
 {
     return m_web3RpcListenPort;
-}
-
-uint32_t NodeConfig::web3RpcThreadSize() const
-{
-    return m_web3RpcThreadSize;
 }
 
 uint32_t NodeConfig::web3FilterTimeout() const
@@ -2182,6 +2147,16 @@ bool NodeConfig::preStoreBackpressureEnabled() const
 size_t NodeConfig::preStoreMaxInflight() const
 {
     return m_preStoreMaxInflight;
+}
+
+size_t NodeConfig::ioThreadCount() const
+{
+    return m_ioThreadCount;
+}
+
+size_t NodeConfig::tbbThreadCount() const
+{
+    return m_tbbThreadCount;
 }
 
 void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)

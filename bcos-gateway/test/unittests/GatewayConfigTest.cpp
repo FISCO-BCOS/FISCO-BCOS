@@ -149,7 +149,6 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 3);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -158,7 +157,6 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 0);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 
     {
@@ -170,7 +168,6 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
         std::set<NodeIPEndpoint> nodeIPEndpointSet;
         config->parseConnectedJson(json, nodeIPEndpointSet);
         BOOST_CHECK_EQUAL(nodeIPEndpointSet.size(), 2);
-        BOOST_CHECK_EQUAL(config->threadPoolSize(), 8);
     }
 }
 

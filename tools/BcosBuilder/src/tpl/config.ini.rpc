@@ -1,7 +1,6 @@
 [rpc]
     listen_ip=0.0.0.0
     listen_port=20200
-    thread_count=4
     sm_ssl=false
     ; ssl connection switch, if disable the ssl connection, default: false
     enable_ssl=true

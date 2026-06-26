@@ -110,8 +110,6 @@ class ServiceInfoConfig:
             self.config, "listen_ip", ServiceInfo.default_listen_ip, False, self.desc)
         self.listen_port = utilities.get_item_value(
             self.config, "listen_port", 20200, False, self.desc)
-        self.thread_count = utilities.get_item_value(
-            self.config, "thread_count", 4, False, self.desc)
         # peers info
         self.peers = utilities.get_item_value(
             self.config, "peers", [], False, self.desc)
