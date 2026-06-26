@@ -159,6 +159,29 @@ BOOST_AUTO_TEST_CASE(MalformedInputThrows)
     }
 }
 
+// ---------------------------------------------------------------------------
+// Test 6: a hash field whose RLP payload is not exactly 32 bytes is rejected (the generic
+// FixedBytes<32> decoder would silently zero-pad a short payload — decodeHash32 must not).
+// ---------------------------------------------------------------------------
+BOOST_AUTO_TEST_CASE(ShortHashFieldRejected)
+{
+    // Build a 4-field list whose storageRoot is a 31-byte string (one byte short).
+    bcos::bytes payload;
+    payload.push_back(0x80);                                // nonce = 0 (empty string)
+    payload.push_back(0x80);                                // balance = 0 (empty string)
+    payload.push_back(static_cast<bcos::byte>(0x80 + 31));  // storageRoot: 31-byte string header
+    payload.insert(payload.end(), 31, 0x11);                // 31 payload bytes (should be 32)
+    payload.push_back(static_cast<bcos::byte>(0x80 + 32));  // codeHash: 32-byte string header
+    payload.insert(payload.end(), 32, 0x22);                // 32 payload bytes
+
+    bcos::bytes rlp;
+    rlp.push_back(static_cast<bcos::byte>(0xf7 + 1));  // long-list header, 1 length byte
+    rlp.push_back(static_cast<bcos::byte>(payload.size()));
+    rlp.insert(rlp.end(), payload.begin(), payload.end());
+
+    BOOST_CHECK_THROW(Account::decode(bcos::bytesConstRef(rlp.data(), rlp.size())), MPTDecodeError);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test

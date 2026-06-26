@@ -22,6 +22,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/throw_exception.hpp>
+#include <string>
 
 namespace bcos::ledger::mpt
 {
@@ -32,6 +33,38 @@ Account::Account() : storageRoot(emptyRootHash()), codeHash(emptyCodeHash()) {}
 // unqualified names would otherwise bind to Account's own member functions.
 namespace rlp = bcos::codec::rlp;
 
+namespace
+{
+// Decode one RLP string item into `out`, rejecting any payload whose length != 32. The generic
+// FixedBytes<32> decoder zero-pads a short payload (RLPDecode.h: FixedBytes<32>{getCroppedData(0,
+// payloadLength)}), silently accepting malformed input; Ethereum consensus requires storageRoot
+// and codeHash to be exactly 32-byte strings, so enforce that here.
+void decodeHash32(bcos::bytesRef& cursor, bcos::h256& out, char const* field)
+{
+    auto [error, header] = rlp::decodeHeader(cursor);
+    if (error)
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                std::string("Account RLP: bad ") + field + " header: " + error->errorMessage()));
+    }
+    if (header.isList)
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                std::string("Account RLP: ") + field + " must be a 32-byte string, got a list"));
+    }
+    if (header.payloadLength != bcos::h256::SIZE)
+    {
+        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
+                                  std::string("Account RLP: ") + field + " RLP payload is " +
+                                  std::to_string(header.payloadLength) + " bytes, expected 32"));
+    }
+    out = bcos::h256(bcos::bytesConstRef(cursor.data(), header.payloadLength));
+    cursor = cursor.getCroppedData(header.payloadLength);
+}
+}  // namespace
+
 bcos::bytes Account::encode() const
 {
     bcos::bytes out;
@@ -39,6 +72,8 @@ bcos::bytes Account::encode() const
     // the two hashes encode as fixed 32-byte strings.
     size_t const payloadLength = rlp::length(nonce) + rlp::length(balance) +
                                  rlp::length(storageRoot) + rlp::length(codeHash);
+    // Pre-size as the variadic rlp::encode(out, a, b, ...) path does, to avoid 1-2 reallocations.
+    out.reserve(rlp::lengthOfLength(payloadLength) + payloadLength);
     rlp::encodeHeader(out, {.isList = true, .payloadLength = payloadLength});
     rlp::encode(out, nonce);
     rlp::encode(out, balance);
@@ -79,16 +114,10 @@ Account Account::decode(bcos::bytesConstRef rlp)
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
                                   "Account RLP: bad balance: " + error->errorMessage()));
     }
-    if (auto error = ::bcos::codec::rlp::decode(cursor, account.storageRoot); error)
-    {
-        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "Account RLP: bad storageRoot: " + error->errorMessage()));
-    }
-    if (auto error = ::bcos::codec::rlp::decode(cursor, account.codeHash); error)
-    {
-        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
-                                  "Account RLP: bad codeHash: " + error->errorMessage()));
-    }
+    // storageRoot/codeHash must be exactly 32-byte RLP strings (decodeHash32 rejects shorter
+    // payloads that the generic FixedBytes<32> decoder would silently zero-pad).
+    decodeHash32(cursor, account.storageRoot, "storageRoot");
+    decodeHash32(cursor, account.codeHash, "codeHash");
 
     // The 4 fields must consume exactly the declared payload — no trailing bytes,
     // no missing fields.

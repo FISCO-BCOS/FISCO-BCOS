@@ -28,6 +28,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
+#include <cassert>
 #include <optional>
 #include <string_view>
 
@@ -162,10 +163,15 @@ inline bcos::u256 entryToU256(bcos::storage::Entry const& entry)
 
 /// Copy an Entry's stored bytes into a 32-byte hash. Unlike nonce/balance, codeHash is stored as
 /// the RAW 32-byte digest: TransactionExecutive writes codeHashEntry.importFields({codeHash
-/// .asBytes()}), so the value bytes ARE the hash and are read directly.
+/// .asBytes()}), so the value bytes ARE the hash and are read directly. A value whose length is
+/// not 32 would be silently zero-padded/truncated by the h256 ctor (and an empty value yields the
+/// all-zero hash, which is NOT emptyCodeHash()); callers only reach here for a non-deleted codeHash
+/// row, which is always 32 raw bytes, so assert the invariant rather than mask a corrupt entry.
 inline bcos::h256 entryToH256(bcos::storage::Entry const& entry)
 {
     std::string_view const value = entry.get();
+    assert(value.size() == static_cast<size_t>(bcos::h256::SIZE) &&
+           "codeHash entry must be exactly 32 raw bytes");
     return bcos::h256(
         bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(value.data()), value.size()));
 }
