@@ -68,11 +68,19 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-    auto self = shared_from_this();
-    tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
-        [self](auto const& executorIt) { executorIt.second->preExecute(); });
+    // Start preExecute on all shards without blocking.
+    // Each preExecute() initiates an async preExecuteTransactions call,
+    // transfers the x_preExecute WriteGuard ownership to the callback,
+    // and returns immediately.
+    for (auto& it : m_dmcExecutors)
+    {
+        it.second->preExecute();
+    }
+    // Returns immediately without waiting.
+    // shardingExecute() will chain shardGo() after each preExecute future is ready.
+
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
-                         << LOG_DESC("ShardingBlockExecutive preExecute finish")
+                         << LOG_DESC("ShardingBlockExecutive preExecute started (async)")
                          << LOG_KV("schedulerPrepareCost", schedulerPrepareCost)
                          << LOG_KV("executorsPrepareCost", utcTime() - breakPointT);
 }
@@ -166,7 +174,11 @@ void ShardingBlockExecutive::shardingExecute(
     batchStatus->total = m_dmcExecutors.size();
     auto startT = utcTime();
 
-    auto executorCallback = [this, startT, batchStatus, callback = std::move(callback)](
+    // Wrap the callback in a shared_ptr to make the executorCallback lambda copyable.
+    using CallbackType = std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)>;
+    auto sharedCB = std::make_shared<CallbackType>(std::move(callback));
+
+    auto executorCallback = [this, startT, batchStatus, sharedCB](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
@@ -213,7 +225,8 @@ void ShardingBlockExecutive::shardingExecute(
 
         if (!m_isRunning)
         {
-            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::Stopped, "BlockExecutive is stopped"),
+            (*sharedCB)(BCOS_ERROR_UNIQUE_PTR(
+                            SchedulerError::Stopped, "BlockExecutive is stopped"),
                 nullptr, m_isSysBlock);
             return;
         }
@@ -224,15 +237,16 @@ void ShardingBlockExecutive::shardingExecute(
                            " with errors! " + boost::lexical_cast<std::string>(batchStatus->error);
             SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << message;
 
-            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::DAGError, std::move(message)), nullptr,
-                m_isSysBlock);
+            (*sharedCB)(BCOS_ERROR_UNIQUE_PTR(
+                            SchedulerError::DAGError, std::move(message)),
+                nullptr, m_isSysBlock);
             return;
         }
 
         SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("ShardingExecute success")
                              << LOG_KV("shardingExecuteT", (utcTime() - startT));
 
-        DMCExecute(std::move(callback));
+        DMCExecute(std::move(*sharedCB));
     };
 
     std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> dmcExecutors;
@@ -242,11 +256,22 @@ void ShardingBlockExecutive::shardingExecute(
         dmcExecutors = m_dmcExecutors;
     }
 
-    tbb::parallel_for_each(
-        dmcExecutors.begin(), dmcExecutors.end(), [&executorCallback](auto const& executorIt) {
-            std::dynamic_pointer_cast<ShardingDmcExecutor>(executorIt.second)
-                ->shardGo(executorCallback);
-        });
+    // Fire shardGo on each shard using pure async callback chaining.
+    // If a shard's preExecute has not yet completed, register an onPreExecuteComplete
+    // callback that invokes shardGo when preExecute finishes.
+    // No thread is blocked waiting — follows the asyncPrewriteBlock counter pattern.
+    for (auto& it : dmcExecutors)
+    {
+        auto shardingExecutor =
+            std::dynamic_pointer_cast<ShardingDmcExecutor>(it.second);
+
+        // onPreExecuteComplete: if preExecute is still running, stores the callback
+        // and fires it when preExecute finishes; if already done, calls it immediately.
+        shardingExecutor->onPreExecuteComplete(
+            [exe = shardingExecutor, callback = executorCallback]() {
+                exe->shardGo(std::move(callback));
+            });
+    }
 }
 
 std::shared_ptr<DmcExecutor> ShardingBlockExecutive::registerAndGetDmcExecutor(

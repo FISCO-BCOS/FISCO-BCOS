@@ -28,7 +28,8 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
 {
     std::shared_ptr<std::vector<protocol::ExecutionMessage::UniquePtr>> messages;
     {
-        // NOTICE: waiting for preExecute finish
+        // preExecute has already completed at this point (guaranteed by caller),
+        // so this WriteGuard does not block.
         auto preExecuteGuard = bcos::WriteGuard(x_preExecute);
         messages = std::move(m_preparedMessages);
     }
@@ -198,6 +199,7 @@ void ShardingDmcExecutor::preExecute()
     auto message = std::move(m_preparedMessages);
     if (!message || message->size() == 0)
     {
+        m_preExecuteFuture = {};
         return;
     }
     DMC_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding") << "send preExecute message"
@@ -206,53 +208,60 @@ void ShardingDmcExecutor::preExecute()
                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
 
-    std::shared_ptr<std::promise<bcos::Error::UniquePtr>> preExePromise =
-        std::make_shared<std::promise<bcos::Error::UniquePtr>>();
+    auto promise = std::make_shared<std::promise<void>>();
+    m_preExecuteFuture = promise->get_future().share();
+
     m_executor->preExecuteTransactions(m_schedulerTermId, m_block->blockHeader(),
-        m_contractAddress, *message, [preExePromise](bcos::Error::UniquePtr error) {
-            preExePromise->set_value(std::move(error));
+        m_contractAddress, *message,
+        [this, preExecuteGuard = std::move(preExecuteGuard),
+            promise = std::move(promise)](bcos::Error::UniquePtr error) mutable {
+            if (error)
+            {
+                DMC_LOG(ERROR)
+                    << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
+                    << "send preExecute message error:" << error->errorMessage()
+                    << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
+                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
+            }
+            else
+            {
+                DMC_LOG(DEBUG)
+                    << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
+                    << "send preExecute message success " << LOG_KV("name", m_name)
+                    << LOG_KV("contract", m_contractAddress)
+                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
+                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
+            }
+            promise->set_value();
+            // preExecuteGuard is released here, allowing shardGo to acquire x_preExecute
+
+            // Fire the registered completion callback if any
+            std::function<void()> onComplete;
+            {
+                std::lock_guard<std::mutex> lock(m_onPreExecuteCompleteMutex);
+                onComplete = std::move(m_onPreExecuteComplete);
+            }
+            if (onComplete)
+            {
+                onComplete();
+            }
         });
+    // Returns immediately without blocking the calling thread.
+    // The x_preExecute WriteGuard is held by the lambda until preExecuteTransactions completes.
+}
 
-    auto future = preExePromise->get_future();
-    auto status = future.wait_for(std::chrono::seconds(30));
-    if (status != std::future_status::ready)
+void ShardingDmcExecutor::onPreExecuteComplete(std::function<void()> callback)
+{
     {
-        std::string reason;
-        switch (status)
+        std::lock_guard<std::mutex> lock(m_onPreExecuteCompleteMutex);
+        if (m_preExecuteFuture.valid())
         {
-        case std::future_status::deferred:
-            reason = "deferred\n";
-            break;
-        case std::future_status::timeout:
-            reason = "timeout\n";
-            break;
-        case std::future_status::ready:
-            reason = "ready!\n";
-            break;
+            // preExecute is still in progress, store the callback
+            m_onPreExecuteComplete = std::move(callback);
+            return;
         }
-        DMC_LOG(ERROR) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
-                       << "send preExecute message error:" << LOG_KV("reason", reason)
-                       << LOG_KV("contract", m_contractAddress)
-                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
-                       << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
-        return;
     }
-
-    auto error = future.get();
-    if (error)
-    {
-        DMC_LOG(ERROR) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
-                       << "send preExecute message error:" << error->errorMessage()
-                       << LOG_KV("name", m_name) << LOG_KV("contract", m_contractAddress)
-                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
-                       << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
-    }
-    else
-    {
-        DMC_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding")
-                       << "send preExecute message success " << LOG_KV("name", m_name)
-                       << LOG_KV("contract", m_contractAddress)
-                       << LOG_KV("blockNumber", m_block->blockHeader()->number())
-                       << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
-    }
+    // preExecute already completed (or never started), invoke immediately
+    callback();
 }

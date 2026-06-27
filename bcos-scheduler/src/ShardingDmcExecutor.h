@@ -24,6 +24,9 @@
 
 #include "DmcExecutor.h"
 
+#include <future>
+#include <mutex>
+
 namespace bcos::scheduler
 {
 class ShardingDmcExecutor : public DmcExecutor
@@ -54,6 +57,10 @@ public:
 
     void preExecute() override;
 
+    // Register a callback to be invoked when preExecute completes.
+    // If preExecute has already completed, the callback is called immediately.
+    void onPreExecuteComplete(std::function<void()> callback);
+
 private:
     void handleShardGoOutput(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
     void handleExecutiveOutputs(
@@ -63,5 +70,8 @@ private:
         std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
     int64_t m_schedulerTermId;
     mutable bcos::SharedMutex x_preExecute;
+    std::shared_future<void> m_preExecuteFuture;
+    std::function<void()> m_onPreExecuteComplete;
+    mutable std::mutex m_onPreExecuteCompleteMutex;
 };
 }  // namespace bcos::scheduler
