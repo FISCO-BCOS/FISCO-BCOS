@@ -178,13 +178,19 @@ void ShardingBlockExecutive::shardingExecute(
     using CallbackType = std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)>;
     auto sharedCB = std::make_shared<CallbackType>(std::move(callback));
 
-    auto executorCallback = [this, startT, batchStatus, sharedCB](
+    // Capture shared_from_this() to keep the ShardingBlockExecutive alive
+    // until all async shardGo callbacks have completed.  Otherwise triggerSwitch
+    // could destroy the BlockExecutive while pending callbacks still hold a raw
+    // this pointer — leading to use-after-free and apparent deadlock.
+    auto self = shared_from_this();
+
+    auto executorCallback = [self = std::move(self), startT, batchStatus, sharedCB](
                                 bcos::Error::UniquePtr error, DmcExecutor::Status status) {
         if (error || status == DmcExecutor::Status::ERROR)
         {
             batchStatus->error++;
             batchStatus->errorMessage = error.get()->errorMessage();
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << LOG_BADGE("ShardingExecutor")
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(self->number()) << LOG_BADGE("ShardingExecutor")
                                  << "shardGo() with error"
                                  << LOG_KV("code", error ? error->errorCode() : -1)
                                  << LOG_KV("msg", error ? error.get()->errorMessage() : "null");
@@ -194,7 +200,7 @@ void ShardingBlockExecutive::shardingExecute(
                 SCHEDULER_LOG(ERROR)
                     << "shardGo() SCHEDULER_TERM_ID_ERROR:" << error->errorMessage()
                     << ". trigger switch";
-                triggerSwitch();
+                self->triggerSwitch();
             }
         }
         else
@@ -223,30 +229,30 @@ void ShardingBlockExecutive::shardingExecute(
             batchStatus->callbackExecuted = true;
         }
 
-        if (!m_isRunning)
+        if (!self->m_isRunning)
         {
             (*sharedCB)(BCOS_ERROR_UNIQUE_PTR(
                             SchedulerError::Stopped, "BlockExecutive is stopped"),
-                nullptr, m_isSysBlock);
+                nullptr, self->m_isSysBlock);
             return;
         }
 
         if (batchStatus->error > 0)
         {
-            auto message = "ShardingExecute:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "ShardingExecute:" + boost::lexical_cast<std::string>(self->number()) +
                            " with errors! " + boost::lexical_cast<std::string>(batchStatus->error);
-            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(number()) << message;
+            SCHEDULER_LOG(ERROR) << BLOCK_NUMBER(self->number()) << message;
 
             (*sharedCB)(BCOS_ERROR_UNIQUE_PTR(
                             SchedulerError::DAGError, std::move(message)),
-                nullptr, m_isSysBlock);
+                nullptr, self->m_isSysBlock);
             return;
         }
 
-        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(number()) << LOG_DESC("ShardingExecute success")
+        SCHEDULER_LOG(DEBUG) << BLOCK_NUMBER(self->number()) << LOG_DESC("ShardingExecute success")
                              << LOG_KV("shardingExecuteT", (utcTime() - startT));
 
-        DMCExecute(std::move(*sharedCB));
+        self->DMCExecute(std::move(*sharedCB));
     };
 
     std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> dmcExecutors;
