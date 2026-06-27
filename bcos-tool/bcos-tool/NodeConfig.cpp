@@ -1166,8 +1166,7 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     m_ioThreadCount = checkAndGetValue(_pt, "executor.io_thread_count",
         std::to_string(std::thread::hardware_concurrency() + 1));
-    m_tbbThreadCount = checkAndGetValue(_pt, "executor.tbb_thread_count",
-        std::to_string(std::thread::hardware_concurrency()));
+    m_tbbThreadCount = checkAndGetValue(_pt, "executor.tbb_thread_count", "0");
 
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);

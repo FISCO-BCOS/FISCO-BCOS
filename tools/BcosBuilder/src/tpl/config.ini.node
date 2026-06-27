@@ -28,7 +28,7 @@
 
 [executor]
     enable_dag=true
-    ; TBB thread pool size, default is the number of CPU cores
+    ; TBB thread pool size, default is 0 (no limit), >0 will use tbb::global_control to limit threads
     ;tbb_thread_count=
     ; shared IOServicePool thread count, default is CPU cores + 1
     ;io_thread_count=
