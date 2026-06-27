@@ -24,6 +24,7 @@
 
 #include "DmcExecutor.h"
 
+#include <atomic>
 #include <future>
 #include <mutex>
 
@@ -71,6 +72,7 @@ private:
     int64_t m_schedulerTermId;
     mutable bcos::SharedMutex x_preExecute;
     std::shared_future<void> m_preExecuteFuture;
+    std::atomic_bool m_preExecuteCompleted = false;
     std::function<void()> m_onPreExecuteComplete;
     mutable std::mutex m_onPreExecuteCompleteMutex;
 };

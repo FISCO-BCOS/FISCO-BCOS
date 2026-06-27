@@ -200,6 +200,7 @@ void ShardingDmcExecutor::preExecute()
     if (!message || message->size() == 0)
     {
         m_preExecuteFuture = {};
+        m_preExecuteCompleted.store(true);
         return;
     }
     DMC_LOG(DEBUG) << LOG_BADGE("BlockTrace") << LOG_BADGE("Sharding") << "send preExecute message"
@@ -208,6 +209,7 @@ void ShardingDmcExecutor::preExecute()
                    << LOG_KV("blockNumber", m_block->blockHeader()->number())
                    << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
 
+    m_preExecuteCompleted.store(false);
     auto promise = std::make_shared<std::promise<void>>();
     m_preExecuteFuture = promise->get_future().share();
 
@@ -234,7 +236,12 @@ void ShardingDmcExecutor::preExecute()
                     << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
             }
             promise->set_value();
-            // preExecuteGuard is released here, allowing shardGo to acquire x_preExecute
+            m_preExecuteCompleted.store(true);
+
+            // Release the WriteGuard BEFORE firing the completion callback,
+            // because the callback (shardGo) needs to acquire x_preExecute
+            // and WriteGuard is not re-entrant.
+            preExecuteGuard.reset();
 
             // Fire the registered completion callback if any
             std::function<void()> onComplete;
@@ -255,7 +262,7 @@ void ShardingDmcExecutor::onPreExecuteComplete(std::function<void()> callback)
 {
     {
         std::lock_guard<std::mutex> lock(m_onPreExecuteCompleteMutex);
-        if (m_preExecuteFuture.valid())
+        if (!m_preExecuteCompleted.load())
         {
             // preExecute is still in progress, store the callback
             m_onPreExecuteComplete = std::move(callback);
