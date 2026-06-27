@@ -32,6 +32,11 @@ void ShardingDmcExecutor::shardGo(std::function<void(bcos::Error::UniquePtr, Sta
         // so this WriteGuard does not block.
         auto preExecuteGuard = bcos::WriteGuard(x_preExecute);
         messages = std::move(m_preparedMessages);
+        // Re-initialize m_preparedMessages for subsequent submit() calls
+        // during DMC rounds (cross-shard messages may be generated after
+        // shardGo completes, e.g. in DMCTransfer tests).
+        m_preparedMessages =
+            std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
     }
 
     if (messages && messages->size() == 1 && (*messages)[0]->staticCall())
