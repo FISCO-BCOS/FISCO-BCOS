@@ -236,17 +236,20 @@ void ShardingDmcExecutor::preExecute()
                     << LOG_KV("timestamp", m_block->blockHeader()->timestamp());
             }
             promise->set_value();
-            m_preExecuteCompleted.store(true);
 
             // Release the WriteGuard BEFORE firing the completion callback,
             // because the callback (shardGo) needs to acquire x_preExecute
             // and WriteGuard is not re-entrant.
             preExecuteGuard.reset();
 
-            // Fire the registered completion callback if any
+            // Atomically mark completion and consume the registered callback
+            // under the mutex, so that onPreExecuteComplete sees a consistent
+            // state: either the flag is false (callback stored, we consume it)
+            // or the flag is true (callback invoked directly by onPreExecuteComplete).
             std::function<void()> onComplete;
             {
                 std::lock_guard<std::mutex> lock(m_onPreExecuteCompleteMutex);
+                m_preExecuteCompleted.store(true);
                 onComplete = std::move(m_onPreExecuteComplete);
             }
             if (onComplete)
