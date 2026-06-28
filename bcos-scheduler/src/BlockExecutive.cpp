@@ -1669,35 +1669,55 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
         dmcExecutor->setOnNeedSwitchEventHandler([this]() { triggerSwitch(); });
 
         dmcExecutor->setOnGetCodeHandler([this](std::string_view address) {
-            auto executor = m_scheduler->executorManager()->dispatchExecutor(address);
-            if (!executor)
-            {
-                SCHEDULER_LOG(ERROR) << "Could not dispatch correspond executor during getCode(). "
-                                     << LOG_KV("address", address);
-                return bcos::bytes();
-            }
+            // Read code directly from the scheduler storage to avoid blocking on
+            // ioServicePool.  The original path (executor->getCode -> SwitchExecutor-
+            // Manager::post -> get_future().get()) deadlocks when io threads are
+            // scarce because the calling TBB thread waits for an io thread that may
+            // itself be blocked.  Reading through the storage backend uses I/O
+            // threads (or is synchronous) instead of the shared ioServicePool.
+            auto const tableName = std::string("/apps/") + std::string(address);
 
-            // getCode from executor
-            std::promise<bcos::bytes> codeFuture;
-            executor->getCode(
-                address, [&codeFuture, this](bcos::Error::Ptr error, bcos::bytes codes) {
-                    if (error)
+            // Step 1: read the code hash from the contract table
+            std::promise<std::optional<bcos::storage::Entry>> hashPromise;
+            m_scheduler->m_storage->asyncGetRow(tableName, "codeHash",
+                [&hashPromise](auto&& error, auto&& entry) {
+                    if (error || !entry)
                     {
-                        SCHEDULER_LOG(ERROR)
-                            << "Could not getCode from correspond executor. Trigger switch."
-                            << LOG_KV("code", error->errorCode())
-                            << LOG_KV("message", error->errorMessage());
-                        triggerSwitch();
-                        codeFuture.set_value(bcos::bytes());
+                        hashPromise.set_value(std::nullopt);
                     }
                     else
                     {
-                        codeFuture.set_value(std::move(codes));
+                        hashPromise.set_value(std::move(*entry));
                     }
                 });
-            bcos::bytes codes = codeFuture.get_future().get();
+            auto codeHashEntry = hashPromise.get_future().get();
+            if (!codeHashEntry)
+            {
+                return bcos::bytes();
+            }
+            auto const codeHash = std::string(codeHashEntry->get());
 
-            return codes;
+            // Step 2: read the code from SYS_CODE_BINARY
+            std::promise<std::optional<bcos::storage::Entry>> codePromise;
+            m_scheduler->m_storage->asyncGetRow(
+                std::string(bcos::ledger::SYS_CODE_BINARY), codeHash,
+                [&codePromise](auto&& error, auto&& entry) {
+                    if (error || !entry)
+                    {
+                        codePromise.set_value(std::nullopt);
+                    }
+                    else
+                    {
+                        codePromise.set_value(std::move(*entry));
+                    }
+                });
+            auto codeEntry = codePromise.get_future().get();
+            if (!codeEntry)
+            {
+                return bcos::bytes();
+            }
+            auto const& field = codeEntry->get();
+            return bcos::bytes(field.begin(), field.end());
         });
 
         return dmcExecutor;
