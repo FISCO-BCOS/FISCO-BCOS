@@ -32,6 +32,16 @@ class LedgerClientImpl : public bcos::concepts::ledger::LedgerBase<LedgerClientI
 public:
     LedgerClientImpl(std::shared_ptr<p2p::P2PClientImpl> p2p) : m_p2p(std::move(p2p)) {}
 
+    // CRTP wrappers for LedgerLightnode methods
+    auto getAllPeersStatus() { return this->impl_getAllPeersStatus(); }
+
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    auto getBlockByNodeList(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block, bcos::crypto::NodeIDs const& nodeList)
+    {
+        return this->template impl_getBlockByNodeList<Flags...>(blockNumber, block, nodeList);
+    }
+
 private:
     auto& p2p() { return bcos::concepts::getRef(m_p2p); }
 

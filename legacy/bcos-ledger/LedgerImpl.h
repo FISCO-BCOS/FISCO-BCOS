@@ -33,6 +33,8 @@ class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, 
                    public Ledger
 {
     friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
+    template <class T>
+    friend class bcos::concepts::ledger::LedgerBase;
 
 public:
     LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../concepts/bcos-concepts/ledger/Ledger.h"
+#include "../concepts/bcos-concepts/ledger/LedgerLightnode.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
 #include <bcos-concepts/Hash.h>
@@ -19,11 +20,33 @@ static constexpr const int LIGHTNODE_MAX_REQUEST_BLOCKS_COUNT = 50;
 // Lightnode-specific extensions to LedgerImpl.
 // These methods have been moved to legacy because they are only used by the lightnode module.
 template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
-class LedgerImplLightnode : public LedgerImpl<Hasher, Storage>
+class LedgerImplLightnode : public LedgerImpl<Hasher, Storage>,
+                              public bcos::concepts::ledger::LedgerLightnodeBase<
+                                  LedgerImplLightnode<Hasher, Storage>>
 {
 public:
     using Base = LedgerImpl<Hasher, Storage>;
     using Base::Base;
+
+    // Resolve diamond ambiguity: prefer LedgerLightnodeBase's versions of LedgerBase methods
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::getBlock;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::setBlock;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::getBlockNumberByHash;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::getBlockHashByNumber;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::getABI;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::getTransactions;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::getStatus;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::setupGenesisBlock;
+    using bcos::concepts::ledger::LedgerLightnodeBase<
+        LedgerImplLightnode<Hasher, Storage>>::checkGenesisBlock;
 
     using statusInfoType = std::map<crypto::NodeIDPtr, bcos::protocol::BlockNumber>;
 

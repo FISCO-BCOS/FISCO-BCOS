@@ -31,6 +31,7 @@
 #include "libinitializer/CommandHelper.h"
 #include <bcos-framework/protocol/ProtocolTypeDef.h>
 #include <bcos-ledger/Ledger.h>
+#include "../../bcos-ledger/LedgerImplLightnode.h"
 #include "../../bcos-storage/StorageWrapperImpl.h"
 #include <bcos-tars-protocol/impl/TarsHashable.h>
 #include <bcos-tars-protocol/tars/Block.h>
@@ -256,7 +257,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     std::shared_ptr<bcos::ledger::Ledger> nodeLedger;
     if (nodeConfig->smCryptoType())
     {
-        auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
+        auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImplLightnode<
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher{}, std::move(storageWrapper),
             protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
@@ -270,7 +271,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[])
     }
     else
     {
-        auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImpl<
+        auto lightNodeLedger = std::make_shared<bcos::ledger::LedgerImplLightnode<
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher, decltype(storageWrapper)>>(
             bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher{}, std::move(storageWrapper),
             protocolInitializer.blockFactory(), storage, nodeConfig->blockLimit());
