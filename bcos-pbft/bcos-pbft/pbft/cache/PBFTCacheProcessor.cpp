@@ -831,11 +831,9 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(newViewMsg);
     // only broadcast message to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     m_newViewGenerated = true;
     PBFT_LOG(INFO) << LOG_DESC("The next leader broadcast NewView request")
                    << printPBFTMsgInfo(newViewMsg) << LOG_KV("Idx", m_config->nodeIndex());

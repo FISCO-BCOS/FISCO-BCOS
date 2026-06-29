@@ -25,9 +25,12 @@
 #include <bcos-framework/gateway/GroupNodeInfo.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
+#include <oneapi/tbb/concurrent_queue.h>
 #include <oneapi/tbb/task_arena.h>
 #include <oneapi/tbb/task_group.h>
 #include <boost/asio.hpp>
+#include <atomic>
+#include <functional>
 #include <utility>
 
 namespace bcos::front
@@ -93,6 +96,19 @@ public:
 
     task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) override;
+
+    // FIB-185: dispatch the gateway broadcast onto a serial send queue (off the caller thread) so a
+    // caller holding a lock (PBFT under m_mutex) is not coupled to gateway session-lock contention.
+    // The owned payload is captured by the queued task -> the message body is never copied.
+    void asyncBroadcastMessageByOwnedPayload(
+        uint16_t type, int moduleID, bytesPointer payload) override;
+
+    // FIB-185: dispatch the point-to-point gateway send onto the serial send queue (off the caller
+    // thread), so sendViewChange / sendRecoverResponse run under m_mutex without contending the
+    // gateway session lock. Point-to-point encodes the wire frame, so this is not zero-copy; the
+    // owned payload is captured only to keep it alive across the deferred encode.
+    void asyncSendMessageByNodeIDByOwnedPayload(
+        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload) override;
 
     /**
      * @brief: receive nodeIDs from gateway
@@ -215,9 +231,17 @@ protected:
 
     virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
+    // FIB-185: hand a send task to the serial queue and return immediately; a single drainer runs
+    // tasks one at a time (FIFO) on m_asyncGroup, so no caller thread runs the gateway send.
+    void enqueueSend(std::function<void()> _sendTask);
+    void drainSendQueue();
+
 private:
     tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
+    // FIB-185: serial async send queue + single-drainer guard (reuses m_asyncGroup, no new thread).
+    tbb::concurrent_queue<std::function<void()>> m_sendQueue;
+    std::atomic_bool m_sendDraining{false};
     // timer
     std::shared_ptr<boost::asio::io_context> m_ioService;
     /// gateway interface
