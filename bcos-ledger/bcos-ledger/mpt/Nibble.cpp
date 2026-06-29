@@ -28,36 +28,36 @@ namespace bcos::ledger::mpt
 bcos::bytes bytesToNibbles(bcos::bytesConstRef bytes)
 {
     bcos::bytes out;
-    out.reserve(bytes.size() * 2);
-    for (bcos::byte b : bytes)
+    out.reserve(bytes.size() * NIBBLES_PER_BYTE);
+    for (auto const byteValue : bytes)
     {
-        out.push_back(static_cast<uint8_t>((b >> 4) & 0x0f));
-        out.push_back(static_cast<uint8_t>(b & 0x0f));
+        out.push_back(static_cast<uint8_t>((byteValue >> NIBBLE_BITS) & LOW_NIBBLE_MASK));
+        out.push_back(static_cast<uint8_t>(byteValue & LOW_NIBBLE_MASK));
     }
     return out;
 }
 
 bcos::bytes nibblesToBytes(bcos::bytesConstRef nibbles)
 {
-    if (nibbles.size() % 2 != 0)
+    if (nibbles.size() % NIBBLES_PER_BYTE != 0)
     {
         BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
                                   "nibblesToBytes requires even nibble count"));
     }
     bcos::bytes out;
-    out.reserve(nibbles.size() / 2);
-    for (size_t i = 0; i < nibbles.size(); i += 2)
+    out.reserve(nibbles.size() / NIBBLES_PER_BYTE);
+    for (size_t i = 0; i < nibbles.size(); i += NIBBLES_PER_BYTE)
     {
         // Strict invariant: each nibble must fit in 4 bits.
-        if ((nibbles[i] | nibbles[i + 1]) > 0x0fu)
+        if ((nibbles[i] | nibbles[i + 1]) > LOW_NIBBLE_MASK)
         {
             BOOST_THROW_EXCEPTION(
                 MPTInvariantViolation{} << bcos::errinfo_comment(
                     "nibblesToBytes: nibble value out of range [0, 15] at index " +
                     std::to_string(i) + " or " + std::to_string(i + 1)));
         }
-        out.push_back(
-            static_cast<bcos::byte>(((nibbles[i] & 0x0fu) << 4) | (nibbles[i + 1] & 0x0fu)));
+        out.push_back(static_cast<bcos::byte>(
+            ((nibbles[i] & LOW_NIBBLE_MASK) << NIBBLE_BITS) | (nibbles[i + 1] & LOW_NIBBLE_MASK)));
     }
     return out;
 }

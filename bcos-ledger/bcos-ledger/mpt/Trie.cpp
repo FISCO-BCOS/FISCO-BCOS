@@ -59,9 +59,9 @@ bcos::task::Task<TrieNode> trieLoadFromRef(NodeCache& cache, NodeRef const& ref)
 /// hash string (0xa0 followed by the 32-byte digest) OR the inline node's complete RLP encoding.
 bcos::task::Task<TrieNode> trieLoadFromRawRef(NodeCache& cache, bcos::bytes const& childRaw)
 {
-    if (childRaw.size() == 33 && childRaw[0] == 0xa0)
+    if (childRaw.size() == HASH_REF_ENCODED_SIZE && childRaw[0] == RLP_HASH_REF_PREFIX)
     {
-        bcos::h256 const childHash(childRaw.data() + 1, 32);
+        bcos::h256 const childHash(childRaw.data() + 1, bcos::h256::SIZE);
         co_return co_await trieLoadByHash(cache, childHash);
     }
     co_return decodeNode(bcos::ref(childRaw));
@@ -80,7 +80,7 @@ bcos::task::Task<std::optional<bcos::bytes>> Trie::get(bcos::h256 const& keyHash
     bcos::bytes const path = bytesToNibbles(keyHash.ref());  // 64 nibbles
     size_t pos = 0;                                          // nibbles consumed so far
 
-    TrieNode node = co_await trieLoadByHash(m_cache, m_root);
+    TrieNode node = co_await trieLoadByHash(m_cache.get(), m_root);
     while (true)
     {
         if (std::holds_alternative<EmptyNode>(node))
@@ -91,8 +91,7 @@ bcos::task::Task<std::optional<bcos::bytes>> Trie::get(bcos::h256 const& keyHash
         if (auto const* leaf = std::get_if<LeafNode>(&node))
         {
             // The remaining path is path[pos..end]; it must equal the leaf suffix exactly.
-            size_t const remaining = path.size() - pos;
-            if (remaining != leaf->keyNibbles.size())
+            if (size_t const remaining = path.size() - pos; remaining != leaf->keyNibbles.size())
             {
                 co_return std::nullopt;
             }
@@ -106,8 +105,7 @@ bcos::task::Task<std::optional<bcos::bytes>> Trie::get(bcos::h256 const& keyHash
         if (auto const* ext = std::get_if<ExtensionNode>(&node))
         {
             // The remaining path must start with the shared nibbles.
-            size_t const remaining = path.size() - pos;
-            if (remaining < ext->sharedNibbles.size())
+            if (size_t const remaining = path.size() - pos; remaining < ext->sharedNibbles.size())
             {
                 co_return std::nullopt;
             }
@@ -117,26 +115,26 @@ bcos::task::Task<std::optional<bcos::bytes>> Trie::get(bcos::h256 const& keyHash
                 co_return std::nullopt;
             }
             pos += ext->sharedNibbles.size();
-            node = co_await trieLoadFromRawRef(m_cache, ext->child);
+            node = co_await trieLoadFromRawRef(m_cache.get(), ext->child);
             continue;
         }
 
         // BranchNode
-        auto const& br = std::get<BranchNode>(node);
+        const auto& [children, value] = std::get<BranchNode>(node);
         if (pos == path.size())
         {
             // All nibbles consumed at a branch: the value (if any) belongs to this key.
-            co_return br.value.empty() ? std::nullopt : std::optional<bcos::bytes>{br.value};
+            co_return value.empty() ? std::nullopt : std::optional<bcos::bytes>{value};
         }
-        bcos::byte const nib = path[pos];
-        NodeRef const& child = br.children[nib];
+        bcos::byte const nib = path.at(pos);
+        NodeRef const& child = children.at(nib);
         // Absent child == Inline with empty inlineBytes.
         if (child.kind == NodeRef::Kind::Inline && child.inlineBytes.empty())
         {
             co_return std::nullopt;
         }
         pos += 1;
-        node = co_await trieLoadFromRef(m_cache, child);
+        node = co_await trieLoadFromRef(m_cache.get(), child);
     }
 }
 }  // namespace bcos::ledger::mpt

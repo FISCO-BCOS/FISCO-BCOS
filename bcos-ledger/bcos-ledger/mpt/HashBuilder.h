@@ -20,10 +20,10 @@
 
 #include "NodeCache.h"
 #include "TrieNode.h"
-#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <functional>
 #include <map>
 #include <optional>
 #include <unordered_map>
@@ -31,6 +31,24 @@
 
 namespace bcos::ledger::mpt
 {
+
+/// Result of a stateless trie build: the 32-byte root plus the hash-keyed RLP encodings of every
+/// node that must be persisted (the hash-kind nodes produced during the build).
+struct TrieBuildResult
+{
+    bcos::h256 root;
+    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+};
+
+/// Stateless, reentrant entry point: build one canonical MPT from an ordered keyHash -> value map
+/// and return {root, newNodes}. The input is std::map specifically: its type already pins down
+/// everything the build relies on — ascending iteration (red-black invariant), the canonical order
+/// (default std::less<h256> == 32-byte lexicographic == 64-nibble path order), and key uniqueness
+/// (not a multimap). So there is no sort, no is_sorted check, no dup handling — just one O(n) walk.
+/// Touches no object state and no NodeCache, so independent inputs may be built concurrently
+/// (coarse-grained parallelism across tries). Internally single-threaded.
+/// @note Synchronous (returns a value, not a Task), unlike HashBuilder::commit().
+TrieBuildResult computeTrieRoot(std::map<bcos::h256, bcos::bytes> const& entries);
 
 /// Accumulates put/remove operations keyed by a 32-byte keccak path, then builds the canonical
 /// Ethereum MPT and returns its 32-byte root.
@@ -64,14 +82,12 @@ public:
     std::unordered_set<bcos::h256> drainObsoletedNodes();
 
 private:
-    NodeCache& m_cache;
+    std::reference_wrapper<NodeCache> m_cache;
     bcos::h256 m_priorRoot;
     /// key → value, or nullopt for a recorded delete. Sorted by 32-byte key == 64-nibble path.
     std::map<bcos::h256, std::optional<bcos::bytes>> m_changes;
     std::unordered_map<bcos::h256, bcos::bytes> m_newNodes;
     std::unordered_set<bcos::h256> m_obsoleted;
-    /// Reused across encodeAndRef calls to amortise EVP_MD_CTX allocation.
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

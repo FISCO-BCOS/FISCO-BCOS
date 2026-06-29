@@ -15,13 +15,18 @@ vcpkg_execute_build_process(
     LOGNAME "patch-${TARGET_TRIPLET}"
 )
 
-# ProjectPbc.cmake uses PREFIX ${CMAKE_SOURCE_DIR}/deps, so CMake 3.30's
-# ExternalProject configure_file writes to deps/tmp/ before it exists.
-# Pre-create it so both parallel debug/release configure passes succeed.
+# ProjectPbc.cmake/ProjectPbcSig.cmake use PREFIX ${CMAKE_SOURCE_DIR}/deps (an
+# absolute path in the shared source tree). CMake 3.30's ExternalProject writes
+# deps/tmp/<name>-mkdirs.cmake before that dir exists, so pre-create it.
 file(MAKE_DIRECTORY "${SOURCE_PATH}/deps/tmp")
 
+# DISABLE_PARALLEL_CONFIGURE: debug and release configures share that same
+# absolute deps/ PREFIX. Running them in parallel (vcpkg's default) races on the
+# shared tree and intermittently fails in ExternalProject _ep_set_directories
+# ("configure_file: No such file or directory"). Configure them sequentially.
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
+    DISABLE_PARALLEL_CONFIGURE
     OPTIONS
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 )

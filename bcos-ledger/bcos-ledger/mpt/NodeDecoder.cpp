@@ -30,6 +30,9 @@ namespace bcos::ledger::mpt
 namespace
 {
 
+// A Leaf or Extension node is a 2-item RLP list; a Branch is NIBBLE_RANGE + 1 items.
+constexpr size_t LEAF_OR_EXTENSION_ITEM_COUNT = 2;
+
 // One RLP item read out of a buffer: its full raw span (header + payload), its string content span
 // (payload only; for a single byte < 0x80 the lone byte itself), and whether the item is a list.
 // MPT keeps branch/extension child references RLP-encoded, so we must track the raw span — the
@@ -99,7 +102,7 @@ TrieNode decodeNode(bcos::bytesConstRef rawInput)
     }
 
     // 3) Two items → Leaf or Extension, distinguished by the HP terminator flag.
-    if (items.size() == 2)
+    if (items.size() == LEAF_OR_EXTENSION_ITEM_COUNT)
     {
         auto [nibbles, isLeaf] = hexPrefixDecode(items[0].content);
         if (isLeaf)
