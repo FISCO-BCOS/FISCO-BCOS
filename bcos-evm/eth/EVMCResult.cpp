@@ -1,0 +1,242 @@
+#include <range/v3/algorithm/binary_search.hpp>
+#include <range/v3/algorithm/copy.hpp>
+#include <range/v3/algorithm/lower_bound.hpp>
+#include <range/v3/algorithm/partition_point.hpp>
+
+#include "EVMCResult.h"
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-protocol/TransactionStatus.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
+#include <evmc/evmc.h>
+#include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <cstdint>
+#include <gsl/pointers>
+
+DERIVE_BCOS_EXCEPTION(UnknownEVMCStatus);
+
+static void cleanEVMCResult(evmc_result& from)
+{
+    from.release = nullptr;
+    from.output_data = nullptr;
+    from.output_size = 0;
+}
+
+bcos::evm::EVMCResult::EVMCResult(evmc_result from)
+  : evmc_result(from), status{evmcStatusToTransactionStatus(from.status_code)}
+{}
+
+bcos::evm::EVMCResult::EVMCResult(evmc_result from, protocol::TransactionStatus statusCode)
+  : evmc_result(from), status(statusCode)
+{}
+
+bcos::evm::EVMCResult::EVMCResult(EVMCResult&& from) noexcept
+  : evmc_result(from), status{from.status}
+{
+    cleanEVMCResult(from);
+}
+
+bcos::evm::EVMCResult& bcos::evm::EVMCResult::operator=(EVMCResult&& from) noexcept
+{
+    evmc_result::operator=(from);
+    status = from.status;
+    cleanEVMCResult(from);
+    return *this;
+}
+
+bcos::evm::EVMCResult::~EVMCResult() noexcept
+{
+    if (release != nullptr)
+    {
+        release(static_cast<evmc_result*>(this));
+        release = nullptr;
+        output_data = nullptr;
+        output_size = 0;
+    }
+}
+
+bcos::bytes bcos::evm::writeErrInfoToOutput(
+    const crypto::Hash& hashImpl, std::string const& errInfo)
+{
+    bcos::codec::abi::ContractABICodec abi(hashImpl);
+    return abi.abiIn("Error(string)", errInfo);
+}
+
+std::tuple<gsl::owner<uint8_t*>, size_t, decltype(evmc_result::release)>
+bcos::evm::fillErrorOutputInPlace(
+    const crypto::Hash& hashImpl, evmc_status_code status, const std::string& errorInfo)
+{
+    bytes errorBytes;
+    if (!errorInfo.empty())
+    {
+        errorBytes = writeErrInfoToOutput(hashImpl, errorInfo);
+    }
+    else
+    {
+        auto [ignoredStatus, errorMessage] = evmcStatusToErrorMessage(hashImpl, status);
+        (void)ignoredStatus;
+        errorBytes.swap(errorMessage);
+    }
+
+    if (errorBytes.empty())
+    {
+        return {nullptr, 0, nullptr};
+    }
+
+    auto* output = new uint8_t[errorBytes.size()];  // NOLINT
+    ::ranges::copy(errorBytes, output);
+    constexpr static auto* release = +[](const struct evmc_result* result) {
+        gsl::owner<decltype(result->output_data)> ptr{result->output_data};
+        delete[] ptr;
+    };
+
+    return {output, errorBytes.size(), release};
+}
+
+bcos::protocol::TransactionStatus bcos::evm::evmcStatusToTransactionStatus(evmc_status_code status)
+{
+    switch (status)
+    {
+    case EVMC_SUCCESS:
+        return protocol::TransactionStatus::None;
+    case EVMC_REVERT:
+        return protocol::TransactionStatus::RevertInstruction;
+    case EVMC_OUT_OF_GAS:
+        return protocol::TransactionStatus::OutOfGas;
+    case EVMC_INSUFFICIENT_BALANCE:
+        return protocol::TransactionStatus::NotEnoughCash;
+    case EVMC_STACK_OVERFLOW:
+        return protocol::TransactionStatus::OutOfStack;
+    case EVMC_STACK_UNDERFLOW:
+        return protocol::TransactionStatus::StackUnderflow;
+    case EVMC_INVALID_INSTRUCTION:
+    case EVMC_UNDEFINED_INSTRUCTION:
+        return protocol::TransactionStatus::BadInstruction;
+    default:
+        BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
+    }
+}
+
+std::tuple<bcos::protocol::TransactionStatus, bcos::bytes> bcos::evm::evmcStatusToErrorMessage(
+    const bcos::crypto::Hash& hashImpl, evmc_status_code status)
+{
+    using namespace std::string_literals;
+    bcos::bytes output;
+
+    switch (status)
+    {
+    case EVMC_SUCCESS:
+        return {bcos::protocol::TransactionStatus::None, {}};
+    case EVMC_REVERT:
+        return {bcos::protocol::TransactionStatus::RevertInstruction, {}};
+    case EVMC_OUT_OF_GAS:
+        return {bcos::protocol::TransactionStatus::OutOfGas,
+            bcos::evm::writeErrInfoToOutput(hashImpl, "Execution out of gas."s)};
+    case EVMC_INSUFFICIENT_BALANCE:
+        return {bcos::protocol::TransactionStatus::NotEnoughCash, {}};
+    case EVMC_STACK_OVERFLOW:
+        return {bcos::protocol::TransactionStatus::OutOfStack,
+            bcos::evm::writeErrInfoToOutput(hashImpl, "Execution stack overflow."s)};
+    case EVMC_STACK_UNDERFLOW:
+        return {bcos::protocol::TransactionStatus::StackUnderflow,
+            bcos::evm::writeErrInfoToOutput(hashImpl, "Execution needs more items on EVM stack."s)};
+    case EVMC_INVALID_INSTRUCTION:
+    case EVMC_UNDEFINED_INSTRUCTION:
+        return {bcos::protocol::TransactionStatus::BadInstruction,
+            bcos::evm::writeErrInfoToOutput(hashImpl, "Execution invalid/undefined opcode."s)};
+    case EVMC_BAD_JUMP_DESTINATION:
+        return {bcos::protocol::TransactionStatus::BadJumpDestination,
+            bcos::evm::writeErrInfoToOutput(
+                hashImpl, "Execution has violated the jump destination restrictions."s)};
+    case EVMC_INVALID_MEMORY_ACCESS:
+        return {bcos::protocol::TransactionStatus::StackUnderflow,
+            bcos::evm::writeErrInfoToOutput(
+                hashImpl, "Execution tried to read outside memory bounds."s)};
+    case EVMC_STATIC_MODE_VIOLATION:
+        return {bcos::protocol::TransactionStatus::Unknown,
+            bcos::evm::writeErrInfoToOutput(hashImpl,
+                "Execution tried to execute an operation which is restricted in static mode."s)};
+    case EVMC_INTERNAL_ERROR:
+    default:
+        return {bcos::protocol::TransactionStatus::Unknown, {}};
+    }
+}
+
+bcos::evm::EVMCResult bcos::evm::makeErrorEVMCResult(crypto::Hash const& hashImpl,
+    protocol::TransactionStatus status, evmc_status_code evmStatus, int64_t gas,
+    const std::string& errorInfo, bool clampGasLeft)
+{
+    // FIB-78: when bugfix_v1_error_handling is active, force gas_left to 0 for
+    // fatal EVM error statuses so downstream gasUsed computations cannot under-charge,
+    // and clamp any negative value to prevent signed-overflow in (gasLimit - gas_left).
+    // Gated by a feature flag to preserve consensus with pre-fix nodes.
+    int64_t gasLeft = gas;
+    if (clampGasLeft)
+    {
+        switch (evmStatus)
+        {
+        case EVMC_OUT_OF_GAS:
+        case EVMC_INTERNAL_ERROR:
+        case EVMC_STACK_OVERFLOW:
+        case EVMC_STACK_UNDERFLOW:
+        case EVMC_INVALID_INSTRUCTION:
+        case EVMC_UNDEFINED_INSTRUCTION:
+        case EVMC_BAD_JUMP_DESTINATION:
+        case EVMC_INVALID_MEMORY_ACCESS:
+            gasLeft = 0;
+            break;
+        default:
+            break;
+        }
+        gasLeft = std::max<int64_t>(gasLeft, 0);
+    }
+
+    auto [outputData, outputSize, release] = fillErrorOutputInPlace(hashImpl, evmStatus, errorInfo);
+    EVMCResult result{evmc_result{.status_code = evmStatus,
+                          .gas_left = gasLeft,
+                          .gas_refund = 0,
+                          .output_data = outputData,
+                          .output_size = outputSize,
+                          .release = release,
+                          .create_address = {},
+                          .padding = {}},
+        status};
+
+    return result;
+}
+
+std::ostream& operator<<(std::ostream& output, const evmc_message& message)
+{
+    output << "evmc_message{";
+    output << "kind: " << message.kind << ", ";
+    output << "flags: " << message.flags << ", ";
+    output << "depth: " << message.depth << ", ";
+    output << "gas: " << message.gas << ", ";
+    output << "recipient: " << bcos::bytesConstRef(message.recipient.bytes) << ", ";
+    output << "sender: " << bcos::bytesConstRef(message.sender.bytes) << ", ";
+    output << "input_data: " << bcos::bytesConstRef(message.input_data, message.input_size) << ", ";
+    output << "value: " << bcos::bytesConstRef(message.value.bytes) << ", ";
+    output << "create2_salt: " << bcos::bytesConstRef(message.create2_salt.bytes) << ", ";
+    output << "code_address: " << bcos::bytesConstRef(message.code_address.bytes) << "}";
+    return output;
+}
+
+std::ostream& operator<<(std::ostream& output, const evmc_result& result)
+{
+    output << "evmc_result{";
+    output << "status_code: " << result.status_code << ", ";
+    output << "gas_left: " << result.gas_left << ", ";
+    output << "gas_refund: " << result.gas_refund << ", ";
+    output << "output_data: " << bcos::bytesConstRef(result.output_data, result.output_size)
+           << ", ";
+    output << "release: " << (result.release != nullptr) << ", ";
+    output << "create_address: " << bcos::bytesConstRef(result.create_address.bytes) << "}";
+    return output;
+}
+
+std::ostream& operator<<(std::ostream& output, const evmc_address& address)
+{
+    output << bcos::bytesConstRef(address.bytes);
+    return output;
+}
