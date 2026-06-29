@@ -36,7 +36,10 @@
  *        Solidity is the single authoritative source for the L2 chain config.
  *        A missing key (entry never written) or a malformed slot value aborts
  *        the current block via throw; the loader never falls back to a cached
- *        config.
+ *        config. A key whose packed enableNumber is still in the future is
+ *        skipped (the block keeps its prior value), matching
+ *        LedgerTypeDef::readFromStorage's `blockNumber >= enableNumber`
+ *        schedule semantics so every node activates a change on the same block.
  */
 #pragma once
 #include <bcos-crypto/hash/Keccak256.h>
@@ -114,16 +117,27 @@ inline bcos::h256 mappingStringSlot(std::string_view key, uint64_t baseSlot)
     return crypto::keccak256Hash(bcos::bytesConstRef(buffer.data(), buffer.size()));
 }
 
-// Decode the packed Entry slot into its uint192 value half.
+// One decoded SystemConfig entry: the uint192 value half plus the uint64
+// enableNumber the contract packed alongside it. The contract declares
+// `Entry{uint192 value, uint64 enableNumber}`, so both halves carry meaning —
+// enableNumber is the block at which a scheduled config change takes effect.
+struct DecodedEntry
+{
+    std::array<uint8_t, 24> value;  // uint192 config value, big-endian
+    uint64_t enableNumber;          // block this entry becomes active
+};
+
+// Decode the packed Entry slot into (value, enableNumber).
 // Layout (big-endian 32-byte word):
 //   [enableNumber:uint64 high 8 bytes | value:uint192 low 24 bytes]
 //
-// Returns the value as a 24-byte buffer. Callers project that down to the
+// The value is returned as a 24-byte buffer; callers project it down to the
 // actual config width (uint64 / uint32 / uint256) by reading the trailing N
 // bytes and asserting the leading bytes are zero — matching the contract's
 // typed accessors (value is declared uint192 on-chain so the upper bytes of
-// any uint64 / uint32 config are required to be zero).
-inline std::array<uint8_t, 24> decodeEntryValue(std::string_view slotBytes)
+// any uint64 / uint32 config are required to be zero). enableNumber gates
+// whether the value is applied this block (see loadIntoLedgerConfig).
+inline DecodedEntry decodeEntryValue(std::string_view slotBytes)
 {
     if (slotBytes.size() != L2_SLOT_BYTES)
     {
@@ -131,10 +145,15 @@ inline std::array<uint8_t, 24> decodeEntryValue(std::string_view slotBytes)
             std::runtime_error(fmt::format("L2ConfigLoader: slot value must be {} bytes, got {}",
                 L2_SLOT_BYTES, slotBytes.size())));
     }
-    std::array<uint8_t, 24> value{};
+    DecodedEntry decoded{};
+    // enableNumber occupies bytes [0..8) of the big-endian word.
+    for (size_t i = 0; i < sizeof(uint64_t); ++i)
+    {
+        decoded.enableNumber = (decoded.enableNumber << 8) | static_cast<uint8_t>(slotBytes[i]);
+    }
     // value occupies bytes [8..32) of the big-endian word.
-    std::copy_n(reinterpret_cast<uint8_t const*>(slotBytes.data() + 8), 24, value.begin());
-    return value;
+    std::copy_n(reinterpret_cast<uint8_t const*>(slotBytes.data() + 8), 24, decoded.value.begin());
+    return decoded;
 }
 
 // Project a 24-byte value down to uint64 (low 8 bytes BE). Throws if the
@@ -251,7 +270,18 @@ public:
                     key)));
             }
             auto const slotBytes = entries[i]->get();
-            auto const value = detail::decodeEntryValue(slotBytes);
+            auto const decoded = detail::decodeEntryValue(slotBytes);
+
+            // Schedule gate: a config whose enableNumber is still in the future
+            // must not be applied yet — the block keeps its prior value. This
+            // mirrors LedgerTypeDef::readFromStorage's `blockNumber >=
+            // enableNumber` check so every node activates a scheduled change on
+            // the same block (a divergence here would fork the chain).
+            if (blockNumber < static_cast<protocol::BlockNumber>(decoded.enableNumber))
+            {
+                continue;
+            }
+            auto const& value = decoded.value;
 
             if (key == "chain_id")
             {
@@ -274,7 +304,11 @@ public:
             }
             else if (key == "gas_limit")
             {
-                out.setGasLimit({detail::valueToUint64(value, key), blockNumber});
+                // The gas-limit tuple's second element is the block the value
+                // takes effect on; use the slot's enableNumber, not the caller's
+                // current block, so downstream sees the contract's schedule.
+                out.setGasLimit({detail::valueToUint64(value, key),
+                    static_cast<protocol::BlockNumber>(decoded.enableNumber)});
             }
             else if (key == "block_tx_count_limit")
             {

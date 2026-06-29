@@ -157,7 +157,9 @@ BOOST_AUTO_TEST_CASE(HappyPathPopulatesLedgerConfig)
 {
     FakeSlotStorage storage;
     putSlot(storage, "chain_id", chainIdLow192(901), /*enableNumber=*/0);
-    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 0);
+    // gas_limit carries a non-zero enableNumber (10) while the caller block is
+    // 42: the loader must record 10 (the slot's enable block), not 42 (caller).
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), /*enableNumber=*/10);
     putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
     putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
 
@@ -181,7 +183,67 @@ BOOST_AUTO_TEST_CASE(HappyPathPopulatesLedgerConfig)
 
     auto [gasLimit, gasLimitBlock] = out.gasLimit();
     BOOST_CHECK_EQUAL(gasLimit, 30'000'000U);
-    BOOST_CHECK_EQUAL(gasLimitBlock, 42);
+    // enableNumber from the slot, NOT the caller's block (42).
+    BOOST_CHECK_EQUAL(gasLimitBlock, 10);
+    BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 1000U);
+    BOOST_CHECK_EQUAL(out.compatibilityVersion(), 0x03'10'00'00U);
+}
+
+// A key whose enableNumber is still in the future must be skipped: the loader
+// leaves LedgerConfig's prior value untouched rather than applying the
+// scheduled change early. Mirrors LedgerTypeDef::readFromStorage semantics.
+BOOST_AUTO_TEST_CASE(ScheduledKeySkippedWhenFutureEnable)
+{
+    FakeSlotStorage storage;
+    putSlot(storage, "chain_id", chainIdLow192(901), 0);
+    // gas_limit is scheduled to enable at block 200, but we load at block 50.
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), /*enableNumber=*/200);
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 0);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 0);
+
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    LedgerConfig out;
+    // Pre-seed a cached gas limit the loader must NOT overwrite this block.
+    out.setGasLimit({99'999'999, 0});
+
+    task::syncWait([&]() -> task::Task<void> {
+        co_await loader.loadIntoLedgerConfig(/*blockNumber=*/50, out);  // 50 < 200
+        co_return;
+    }());
+
+    // gas_limit was future-enabled -> untouched, keeps the pre-seeded value.
+    auto [gasLimit, gasLimitBlock] = out.gasLimit();
+    BOOST_CHECK_EQUAL(gasLimit, 99'999'999U);
+    BOOST_CHECK_EQUAL(gasLimitBlock, 0);
+
+    // The other three keys (enableNumber 0) are active and applied normally.
+    BOOST_REQUIRE(out.chainId().has_value());
+    BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 1000U);
+    BOOST_CHECK_EQUAL(out.compatibilityVersion(), 0x03'10'00'00U);
+}
+
+// Boundary: a key activates on the exact block equal to its enableNumber. The
+// gate is `blockNumber >= enableNumber`, so block == enableNumber applies.
+BOOST_AUTO_TEST_CASE(ScheduledKeyAppliesAtExactEnableBlock)
+{
+    FakeSlotStorage storage;
+    putSlot(storage, "chain_id", chainIdLow192(901), 100);
+    putSlot(storage, "gas_limit", packUint64IntoLow192(30'000'000), 100);
+    putSlot(storage, "block_tx_count_limit", packUint64IntoLow192(1000), 100);
+    putSlot(storage, "compatibility_version", packUint64IntoLow192(0x03'10'00'00), 100);
+
+    L2ConfigLoaderImpl<FakeSlotStorage> loader(storage);
+    LedgerConfig out;
+
+    task::syncWait([&]() -> task::Task<void> {
+        co_await loader.loadIntoLedgerConfig(/*blockNumber=*/100, out);  // 100 >= 100
+        co_return;
+    }());
+
+    auto [gasLimit, gasLimitBlock] = out.gasLimit();
+    BOOST_CHECK_EQUAL(gasLimit, 30'000'000U);
+    BOOST_CHECK_EQUAL(gasLimitBlock, 100);
+    BOOST_REQUIRE(out.chainId().has_value());
     BOOST_CHECK_EQUAL(out.blockTxCountLimit(), 1000U);
     BOOST_CHECK_EQUAL(out.compatibilityVersion(), 0x03'10'00'00U);
 }
