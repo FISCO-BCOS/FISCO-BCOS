@@ -22,7 +22,7 @@ evmc_message bcos::executor_v1::newEVMCMessage(protocol::BlockNumber blockNumber
         .sender = origin,
         .input_data = transaction.input().data(),
         .input_size = transaction.input().size(),
-        .value = toEvmC(u256(transaction.value())),
+        .value = toEvmC(transaction.value()),
         .create2_salt = {},
         .code_address = recipientAddress,
         .code = nullptr,

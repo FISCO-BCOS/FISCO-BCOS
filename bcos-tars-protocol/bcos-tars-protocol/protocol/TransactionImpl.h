@@ -68,7 +68,7 @@ public:
     std::string_view to() const override;
     std::string_view abi() const override;
 
-    std::string_view value() const override;
+    bcos::u256 value() const override;
     std::string_view gasPrice() const override;
     int64_t gasLimit() const override;
     std::string_view maxFeePerGas() const override;
