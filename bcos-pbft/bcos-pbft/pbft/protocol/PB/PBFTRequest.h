@@ -19,8 +19,8 @@
  * @date 2021-04-28
  */
 #pragma once
-#include "bcos-pbft/pbft/interfaces/PBFTRequestInterface.h"
 #include "PBFTBaseMessage.h"
+#include "bcos-pbft/pbft/interfaces/PBFTRequestInterface.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
 #include <bcos-protocol/Common.h>
 
@@ -34,7 +34,9 @@ public:
     PBFTRequest() : PBFTBaseMessage()
     {
         m_pbRequest = std::make_shared<ProposalRequest>();
-        m_pbRequest->set_allocated_message(PBFTBaseMessage::baseMessage().get());
+        // FIB-121: alias the base header onto the protobuf's `message` field (was
+        // set_allocated_message + destructor release).
+        setBaseMessage(std::shared_ptr<BaseMessage>(m_pbRequest, m_pbRequest->mutable_message()));
     }
     explicit PBFTRequest(bytesConstRef _data) : PBFTBaseMessage()
     {
@@ -42,7 +44,8 @@ public:
         decode(_data);
     }
 
-    ~PBFTRequest() override { m_pbRequest->unsafe_arena_release_message(); }
+    // FIB-121: the base header wrapper aliases m_pbRequest's control block; nothing to release.
+    ~PBFTRequest() override = default;
 
     void setSize(int64_t _size) override { m_pbRequest->set_size(_size); }
     int64_t size() const override { return m_pbRequest->size(); }
@@ -56,7 +59,7 @@ public:
     void decode(bytesConstRef _data) override
     {
         bcos::protocol::decodePBObject(m_pbRequest, _data);
-        setBaseMessage(std::shared_ptr<BaseMessage>(m_pbRequest->mutable_message()));
+        setBaseMessage(std::shared_ptr<BaseMessage>(m_pbRequest, m_pbRequest->mutable_message()));
         PBFTBaseMessage::deserializeToObject();
     }
 

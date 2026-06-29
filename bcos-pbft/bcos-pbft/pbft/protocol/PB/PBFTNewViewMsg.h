@@ -34,7 +34,9 @@ public:
     PBFTNewViewMsg() : PBFTBaseMessage()
     {
         m_rawNewView = std::make_shared<RawNewViewMessage>();
-        m_rawNewView->set_allocated_message(PBFTBaseMessage::baseMessage().get());
+        // FIB-121: alias the base header onto the protobuf's `message` field (was
+        // set_allocated_message + destructor release).
+        setBaseMessage(std::shared_ptr<BaseMessage>(m_rawNewView, m_rawNewView->mutable_message()));
         m_viewChangeList = std::make_shared<ViewChangeMsgList>();
         m_prePrepareList = std::make_shared<PBFTMessageList>();
         m_packetType = PacketType::NewViewPacket;
@@ -48,22 +50,9 @@ public:
         decode(_data);
     }
 
-    ~PBFTNewViewMsg() override
-    {
-        // return back the ownership of message to the PBFTBaseMessage
-        m_rawNewView->unsafe_arena_release_message();
-        // return back the ownership to m_viewChangeList
-        auto viewChangeSize = m_rawNewView->viewchangemsglist_size();
-        for (auto i = 0; i < viewChangeSize; i++)
-        {
-            m_rawNewView->mutable_viewchangemsglist()->UnsafeArenaReleaseLast();
-        }
-        auto preprepareSize = m_rawNewView->prepreparelist_size();
-        for (auto i = 0; i < preprepareSize; i++)
-        {
-            m_rawNewView->mutable_prepreparelist()->UnsafeArenaReleaseLast();
-        }
-    }
+    // FIB-121: base header / viewChangeMsgList / prePrepareList wrappers hold aliasing
+    // shared_ptrs that share this object's control block; nothing to release here.
+    ~PBFTNewViewMsg() override = default;
 
     bytesPointer encode(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
         bcos::crypto::KeyPairInterface::Ptr _keyPair) const override;
