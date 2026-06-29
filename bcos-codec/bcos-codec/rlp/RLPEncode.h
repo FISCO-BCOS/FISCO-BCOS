@@ -102,24 +102,37 @@ inline void encode(bcos::bytes& to, bcos::FixedBytes<N> const& in) noexcept
 }
 
 template <typename T>
-inline void encodeItems(bcos::bytes& to, const std::span<const T>& v) noexcept;
-
-template <typename T>
-inline void encodeItems(bcos::bytes& to, const std::vector<T>& v) noexcept
+inline void encode(bcos::bytes& to, const std::optional<T>& v) noexcept
 {
-    encodeItems(to, std::span<const T>{v.data(), v.size()});
+    if (v.has_value()) {
+        encode(to, *v);
+        return;
+    }
+    if constexpr (  requires { typename T::value_type; } &&
+                    !std::same_as<std::remove_cvref_t<T>, bcos::byte> &&
+                    (std::same_as<T, std::span<typename T::value_type>> || 
+                    std::same_as<T, std::vector<typename T::value_type>>)) {
+        to.push_back(LIST_HEAD_BASE);
+    } 
+    else 
+    {
+        to.push_back(BYTES_HEAD_BASE);
+    }
 }
 
+// only for list
 template <typename T>
 inline void encode(bcos::bytes& to, const std::span<const T>& v) noexcept
 {
     const Header h{.isList = true, .payloadLength = lengthOfItems(v)};
     to.reserve(to.size() + lengthOfLength(h.payloadLength) + h.payloadLength);
     encodeHeader(to, h);
-    encodeItems(to, v);
+    for (auto& x : v)
+    {
+        encode(to, x);
+    }
 }
 
-// only for list
 template <typename T>
     requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
 inline void encode(bcos::bytes& to, const std::vector<T>& v) noexcept
@@ -127,37 +140,31 @@ inline void encode(bcos::bytes& to, const std::vector<T>& v) noexcept
     encode(to, std::span<const T>{v.data(), v.size()});
 }
 
-template <typename Arg1, typename Arg2>
-inline void encodeItems(bcos::bytes& to, const Arg1& arg1, const Arg2& arg2) noexcept
-{
-    encode(to, arg1);
-    encode(to, arg2);
-}
-
-template <typename Arg1, typename Arg2, typename... Args>
-inline void encodeItems(
-    bcos::bytes& to, const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
-{
-    encode(to, arg1);
-    encodeItems(to, arg2, args...);
-}
-
-template <typename Arg1, typename Arg2, typename... Args>
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
 inline void encode(
-    bcos::bytes& to, const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
+    bcos::bytes& to, const Args&... args) noexcept
 {
-    const Header h{.isList = true, .payloadLength = lengthOfItems(arg1, arg2, args...)};
+    const Header h{.isList = true, .payloadLength = lengthOfItems(args...)};
     to.reserve(to.size() + lengthOfLength(h.payloadLength) + h.payloadLength);
     encodeHeader(to, h);
-    encodeItems(to, arg1, arg2, args...);
+    (encode(to, args), ...);
 }
 
-template <typename T>
-inline void encodeItems(bcos::bytes& to, const std::span<const T>& v) noexcept
+
+/// Write an RLP list header and append pre-encoded items.
+/// Items must already be fully RLP-encoded (strings or sub-lists).
+/// This is a zero-copy optimization: no per-item re-encoding.
+inline void encodeListWithItems(bcos::bytes& to,
+    std::span<const bcos::bytes> encodedItems) noexcept
 {
-    for (auto& x : v)
-    {
-        encode(to, x);
-    }
+    size_t payloadLen = 0;
+    for (auto const& item : encodedItems)
+        payloadLen += item.size();
+
+    to.reserve(to.size() + lengthOfLength(payloadLen) + payloadLen);
+    encodeHeader(to, {.isList = true, .payloadLength = payloadLen});
+    for (auto const& item : encodedItems)
+        to.insert(to.end(), item.begin(), item.end());
 }
 }  // namespace bcos::codec::rlp
