@@ -28,9 +28,18 @@
 
 [executor]
     enable_dag=true
-    ; TBB thread pool size, default is 0 (no limit), >0 will use tbb::global_control to limit threads
+
+[thread_pool]
+    ; TBB global thread count for CPU-intensive tasks (e.g. parallel scheduler).
+    ; Default 0 means no global_control — TBB uses all available cores.
+    ; Set >0 to limit with tbb::global_control::max_allowed_parallelism.
+    ; Replaces the old executor.baseline_scheduler_maxthread (removed).
     ;tbb_thread_count=
-    ; shared IOServicePool thread count, default is CPU cores + 1
+    ; Shared IOServicePool thread count for IO-intensive tasks across all modules
+    ; (gateway, rpc, front, sync, pbft, txpool, scheduler, executor).
+    ; Default: hardware_concurrency() + 1.
+    ; Replaces old per-module thread configs (rpc.thread_count, web3_rpc.thread_count,
+    ; p2p.thread_count, txpool.notify_worker_num, txpool.verify_worker_num).
     ;io_thread_count=
 
 [storage]

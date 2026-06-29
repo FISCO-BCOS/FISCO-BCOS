@@ -572,6 +572,14 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
 
+    // Deprecation warning for removed p2p.thread_count
+    if (_pt.get_optional<uint32_t>("p2p.thread_count"))
+    {
+        GATEWAY_CONFIG_LOG(WARNING)
+            << LOG_DESC("initP2PConfig: p2p.thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     constexpr static uint32_t defaultAllowMaxMsgSize = MAX_MESSAGE_LENGTH;
     m_allowMaxMsgSize = _pt.get<uint32_t>("p2p.allow_max_msg_size", defaultAllowMaxMsgSize);
 

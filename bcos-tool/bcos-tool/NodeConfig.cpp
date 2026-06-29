@@ -573,6 +573,14 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     }
     bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
 
+    // Deprecation warning for removed rpc.thread_count
+    if (_pt.get_optional<int>("rpc.thread_count"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadRpcConfig: rpc.thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
     m_rpcDisableSsl = disableSsl;
@@ -626,6 +634,14 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     const std::string corsAllowedHeaders = _pt.get<std::string>(
         "web3_rpc.cors_allowed_headers", "Content-Type, Authorization, X-Requested-With");
     const int32_t corsMaxAge = _pt.get<int32_t>("web3_rpc.cors_max_age", 86400);
+
+    // Deprecation warning for removed web3_rpc.thread_count
+    if (_pt.get_optional<int>("web3_rpc.thread_count"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadWeb3RpcConfig: web3_rpc.thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
 
     m_web3RpcListenIP = listenIP;
     m_web3RpcListenPort = listenPort;
@@ -757,6 +773,20 @@ void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
 // load the txpool related params
 void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 {
+    // Deprecation warnings for removed txpool thread config keys
+    if (_pt.get_optional<std::string>("txpool.notify_worker_num"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadTxPoolConfig: txpool.notify_worker_num is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+    if (_pt.get_optional<std::string>("txpool.verify_worker_num"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadTxPoolConfig: txpool.verify_worker_num is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     m_txpoolLimit = checkAndGetValue(_pt, "txpool.limit", "15000");
     if (m_txpoolLimit <= 0)
     {
@@ -1164,9 +1194,23 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
-    m_ioThreadCount = checkAndGetValue(_pt, "executor.io_thread_count",
+    // Deprecation warning for removed config keys
+    if (_pt.get_optional<std::string>("executor.baseline_scheduler_maxthread"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadOthersConfig: executor.baseline_scheduler_maxthread is deprecated, "
+                        "use thread_pool.tbb_thread_count instead");
+    }
+    if (_pt.get_optional<std::string>("rpc.tars_rpc_thread_count"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadOthersConfig: rpc.tars_rpc_thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
+    m_ioThreadCount = checkAndGetValue(_pt, "thread_pool.io_thread_count",
         std::to_string(std::thread::hardware_concurrency() + 1));
-    m_tbbThreadCount = checkAndGetValue(_pt, "executor.tbb_thread_count", "0");
+    m_tbbThreadCount = checkAndGetValue(_pt, "thread_pool.tbb_thread_count", "0");
 
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
