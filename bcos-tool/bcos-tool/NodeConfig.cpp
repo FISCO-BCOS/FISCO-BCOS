@@ -168,6 +168,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt, bool _enforc
     loadCertConfig(_pt);
     loadRpcConfig(_pt);
     loadWeb3RpcConfig(_pt);
+    loadOpEngineRpcConfig(_pt);
     loadGatewayConfig(_pt);
     loadSealerConfig(_pt);
     loadTxPoolConfig(_pt);
@@ -688,6 +689,49 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("corsMaxAge", corsMaxAge)
                          << LOG_KV("corsAllowCredentials", corsAllowCredentials)
                          << LOG_KV("syncTransaction", m_web3SyncTransaction);
+}
+
+void NodeConfig::loadOpEngineRpcConfig(boost::property_tree::ptree const& _pt)
+{
+    /*
+    [op_engine_rpc]
+        enable=false
+        listen_ip=127.0.0.1
+        listen_port=8551
+        thread_count=4
+        request_body_size_limit=10485760
+        batch_request_size_limit=8
+        jwt_secret_file=conf/op-engine/jwt.hex
+        clock_skew_secs=60
+    */
+    const bool enableOpEngineRpc = _pt.get<bool>("op_engine_rpc.enable", false);
+    const std::string listenIP = _pt.get<std::string>("op_engine_rpc.listen_ip", "127.0.0.1");
+    const int listenPort = _pt.get<int>("op_engine_rpc.listen_port", 8551);
+    const int threadCount = _pt.get<int>("op_engine_rpc.thread_count", 4);
+    const int requestBodySizeLimit =
+        _pt.get<int>("op_engine_rpc.request_body_size_limit", 10485760);
+    const int batchRequestSizeLimit = _pt.get<int>("op_engine_rpc.batch_request_size_limit", 8);
+    const std::string jwtSecretFile =
+        _pt.get<std::string>("op_engine_rpc.jwt_secret_file", "conf/op-engine/jwt.hex");
+    const int32_t clockSkewSecs = _pt.get<int32_t>("op_engine_rpc.clock_skew_secs", 60);
+
+    m_enableOpEngineRpc = enableOpEngineRpc;
+    m_opEngineRpcListenIP = listenIP;
+    m_opEngineRpcListenPort = listenPort;
+    m_opEngineRpcThreadSize = threadCount;
+    m_opEngineHttpBodySizeLimit = requestBodySizeLimit;
+    m_opEngineBatchRequestSizeLimit = batchRequestSizeLimit;
+    m_opEngineJwtSecretFile = jwtSecretFile;
+    m_opEngineClockSkewSecs = clockSkewSecs;
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadOpEngineRpcConfig")
+                         << LOG_KV("enableOpEngineRpc", enableOpEngineRpc)
+                         << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
+                         << LOG_KV("threadCount", threadCount)
+                         << LOG_KV("requestBodySizeLimit", requestBodySizeLimit)
+                         << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
+                         << LOG_KV("jwtSecretFile", jwtSecretFile)
+                         << LOG_KV("clockSkewSecs", clockSkewSecs);
 }
 
 void NodeConfig::loadGatewayConfig(boost::property_tree::ptree const& _pt)
@@ -1933,6 +1977,46 @@ bool NodeConfig::web3CorsAllowCredentials() const
 bool NodeConfig::web3SyncTransaction() const
 {
     return m_web3SyncTransaction;
+}
+
+bool NodeConfig::enableOpEngineRpc() const
+{
+    return m_enableOpEngineRpc;
+}
+
+const std::string& NodeConfig::opEngineRpcListenIP() const
+{
+    return m_opEngineRpcListenIP;
+}
+
+uint16_t NodeConfig::opEngineRpcListenPort() const
+{
+    return m_opEngineRpcListenPort;
+}
+
+uint32_t NodeConfig::opEngineRpcThreadSize() const
+{
+    return m_opEngineRpcThreadSize;
+}
+
+uint32_t NodeConfig::opEngineHttpBodySizeLimit() const
+{
+    return m_opEngineHttpBodySizeLimit;
+}
+
+uint32_t NodeConfig::opEngineBatchRequestSizeLimit() const
+{
+    return m_opEngineBatchRequestSizeLimit;
+}
+
+const std::string& NodeConfig::opEngineJwtSecretFile() const
+{
+    return m_opEngineJwtSecretFile;
+}
+
+int32_t NodeConfig::opEngineClockSkewSecs() const
+{
+    return m_opEngineClockSkewSecs;
 }
 
 const std::string& NodeConfig::p2pListenIP() const

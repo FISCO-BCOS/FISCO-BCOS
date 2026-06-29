@@ -92,6 +92,11 @@ private:
     // cors config
     http::CorsConfig m_corsConfig;
 
+    bool m_enableJWT{false};
+    std::string m_jwtSecretFile;
+    int64_t m_jwtClockSkewSecs{60};
+    std::string m_jwtAllowedAlgorithms{"HS256"};
+
 public:
     void setModel(WsModel _model);
     WsModel model() const;
@@ -133,5 +138,17 @@ public:
 
     http::CorsConfig corsConfig() const;
     void setCorsConfig(http::CorsConfig _corsConfig);
+
+    bool enableJWT() const;
+    void setEnableJWT(bool _enableJWT);
+
+    const std::string& jwtSecretFile() const;
+    void setJwtSecretFile(std::string _jwtSecretFile);
+
+    int64_t jwtClockSkewSecs() const;
+    void setJwtClockSkewSecs(int64_t _jwtClockSkewSecs);
+
+    const std::string& jwtAllowedAlgorithms() const;
+    void setJwtAllowedAlgorithms(std::string _jwtAllowedAlgorithms);
 };
 }  // namespace bcos::boostssl::ws

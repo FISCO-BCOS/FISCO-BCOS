@@ -36,19 +36,11 @@ namespace bcos::engine
 /// Used as the fallback blockTxCountLimit in EngineServiceImpl and EngineServiceInitializer.
 inline constexpr int64_t c_defaultBlockTxCountLimit = 1000;
 
-enum class EngineApiVersion : std::uint8_t
+enum class ApiVersion : std::uint8_t
 {
     V1 = 1,
     V2 = 2,
     V3 = 3,
-};
-
-    enum class ApiVersion : std::uint8_t
-{
-    V1 = 1,
-    V2 = 2,
-    V3 = 3,
-    V4 = 4,
 };
 
 using PayloadID = std::string;

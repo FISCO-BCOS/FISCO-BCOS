@@ -64,7 +64,7 @@ bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
 
-bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion);
+bool isGetPayloadVersionCompatible(ApiVersion requestVersion, std::uint32_t payloadVersion);
 
 std::optional<std::string> validatePayloadAttributes(
     const PayloadAttributes& payloadAttributes, std::uint32_t version);
@@ -250,7 +250,7 @@ public:
             .shouldOverrideBuilder = false,
             .view = std::make_shared<ViewType>(std::move(view)),
         };
-        if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
@@ -307,8 +307,8 @@ private:
 
     static bool isVersionSupported(std::uint32_t version)
     {
-        return version >= static_cast<std::uint32_t>(EngineApiVersion::V1) &&
-               version <= static_cast<std::uint32_t>(EngineApiVersion::V3);
+        return version >= static_cast<std::uint32_t>(ApiVersion::V1) &&
+               version <= static_cast<std::uint32_t>(ApiVersion::V3);
     }
 
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -337,7 +337,7 @@ private:
             BOOST_THROW_EXCEPTION(UnknownPayload{} << bcos::errinfo_comment{"Unknown payload"});
         }
         if (!detail::isGetPayloadVersionCompatible(
-                static_cast<EngineApiVersion>(version), it->second.version))
+                static_cast<ApiVersion>(version), it->second.version))
         {
             BOOST_THROW_EXCEPTION(
                 IncompatiblePayloadVersion{} << bcos::errinfo_comment{
@@ -417,7 +417,7 @@ private:
             .shouldOverrideBuilder = false,
             .view = nullptr,
         };
-        if (version == static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version == static_cast<std::uint32_t>(ApiVersion::V3))
         {
             entry.blobsBundle = BlobsBundleV1{};
         }
@@ -467,12 +467,12 @@ private:
             .excessBlobGas = std::nullopt,
         };
 
-        if (version >= static_cast<std::uint32_t>(EngineApiVersion::V2))
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V2))
         {
             executionPayload.withdrawals =
                 payloadAttributes.withdrawals.value_or(std::vector<WithdrawalV1>{});
         }
-        if (version >= static_cast<std::uint32_t>(EngineApiVersion::V3))
+        if (version >= static_cast<std::uint32_t>(ApiVersion::V3))
         {
             executionPayload.blobGasUsed = u256(0);
             executionPayload.excessBlobGas = u256(0);

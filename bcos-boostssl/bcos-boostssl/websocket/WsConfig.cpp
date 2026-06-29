@@ -159,3 +159,43 @@ void WsConfig::setCorsConfig(bcos::boostssl::http::CorsConfig _corsConfig)
 {
     m_corsConfig = std::move(_corsConfig);
 }
+
+bool WsConfig::enableJWT() const
+{
+    return m_enableJWT;
+}
+
+void WsConfig::setEnableJWT(bool _enableJWT)
+{
+    m_enableJWT = _enableJWT;
+}
+
+const std::string& WsConfig::jwtSecretFile() const
+{
+    return m_jwtSecretFile;
+}
+
+void WsConfig::setJwtSecretFile(std::string _jwtSecretFile)
+{
+    m_jwtSecretFile = std::move(_jwtSecretFile);
+}
+
+int64_t WsConfig::jwtClockSkewSecs() const
+{
+    return m_jwtClockSkewSecs;
+}
+
+void WsConfig::setJwtClockSkewSecs(int64_t _jwtClockSkewSecs)
+{
+    m_jwtClockSkewSecs = _jwtClockSkewSecs;
+}
+
+const std::string& WsConfig::jwtAllowedAlgorithms() const
+{
+    return m_jwtAllowedAlgorithms;
+}
+
+void WsConfig::setJwtAllowedAlgorithms(std::string _jwtAllowedAlgorithms)
+{
+    m_jwtAllowedAlgorithms = std::move(_jwtAllowedAlgorithms);
+}
