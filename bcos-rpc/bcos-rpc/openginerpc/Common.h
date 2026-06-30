@@ -22,3 +22,17 @@
 #include <bcos-rpc/jsonrpc/Common.h>
 
 #define OP_ENGINE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[RPC][OPENGINE]"
+
+namespace bcos::rpc
+{
+enum EngineError : int32_t
+{
+    // -38000: Engine API base
+    UnknownPayload = -38001,
+    InvalidForkchoiceState = -38002,
+    InvalidPayloadAttributes = -38003,
+    TooLargeRequest = -38004,
+    UnsupportedFork = -38005,
+    TooDeepReorg = -38006,
+};
+}  // namespace bcos::rpc

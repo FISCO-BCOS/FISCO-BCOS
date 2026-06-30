@@ -1,6 +1,47 @@
 #include "HttpSession.h"
 #include <bcos-utilities/BoostLog.h>
 #include <boost/system/error_code.hpp>
+#include <json/json.h>
+
+namespace
+{
+constexpr int32_t c_jwtUnauthorizedJsonRpcCode = -32010;
+constexpr int32_t c_jwtForbiddenJsonRpcCode = -32011;
+
+// select http status from json rpc response, if the response is not a valid json rpc response, return ok
+boost::beast::http::status selectHttpStatusFromJsonRpcResponse(bcos::bytes const& _content)
+{
+    Json::Value response;
+    Json::Reader reader;
+    std::string_view view(reinterpret_cast<char const*>(_content.data()), _content.size());
+    if (!reader.parse(view.begin(), view.end(), response))
+    {
+        return boost::beast::http::status::ok;
+    }
+
+    if (!response.isObject() || !response.isMember("error") || !response["error"].isObject())
+    {
+        return boost::beast::http::status::ok;
+    }
+
+    auto const& error = response["error"];
+    if (!error.isMember("code"))
+    {
+        return boost::beast::http::status::ok;
+    }
+
+    auto code = error["code"].asInt();
+    if (code == c_jwtUnauthorizedJsonRpcCode)
+    {
+        return boost::beast::http::status::unauthorized;
+    }
+    if (code == c_jwtForbiddenJsonRpcCode)
+    {
+        return boost::beast::http::status::forbidden;
+    }
+    return boost::beast::http::status::ok;
+}
+}  // namespace
 
 bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)
   : m_httpBodySizeLimit(_httpBodySizeLimit), m_corsConfig(std::move(_corsConfig))
@@ -150,18 +191,28 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
         return;
     }
 
-    // handle http request
     if (m_httpReqHandler)
     {
         const std::string& request = _httpRequest.body();
-        m_httpReqHandler(request, [session = shared_from_this(), version, startT,
-                                      keepAlive = _httpRequest.keep_alive()](bcos::bytes _content) {
-            auto resp = session->buildHttpResp(boost::beast::http::status::ok, keepAlive, version,
-                std::move(_content), session->corsConfig());
+        HttpRequestMeta meta;
+        meta.method = std::string(_httpRequest.method_string());
+        meta.target = std::string(_httpRequest.target());
+        for (auto const& header : _httpRequest)
+        {
+            meta.headers.emplace(std::string(header.name_string()), std::string(header.value()));
+        }
+
+        m_httpReqHandler(request, meta,
+            [session = shared_from_this(), version, startT,
+                keepAlive = _httpRequest.keep_alive()](bcos::bytes _content) {
+            auto status = selectHttpStatusFromJsonRpcResponse(_content);
+            auto resp = session->buildHttpResp(
+                status, keepAlive, version, std::move(_content), session->corsConfig());
             // put the response into the queue and waiting to be send
             BCOS_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("response")
                             << LOG_KV("body", std::string_view((const char*)resp->body().data(),
                                                   resp->body().size()))
+                            << LOG_KV("status", static_cast<unsigned>(status))
                             << LOG_KV("keep_alive", resp->keep_alive())
                             << LOG_KV("need_eof", resp->need_eof())
                             << LOG_KV("timecost", (utcTime() - startT));

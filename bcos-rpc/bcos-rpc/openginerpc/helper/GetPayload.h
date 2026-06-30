@@ -19,8 +19,9 @@
 
 #pragma once
 
-#include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include "Helper.h"
+#include <bcos-rpc/openginerpc/Common.h>
+#include <bcos-rpc/web3jsonrpc/utils/util.h>
 
 
 namespace bcos::rpc
@@ -52,41 +53,34 @@ inline Json::Value serializeExecutionPayload(
     }
     ep["transactions"] = std::move(transactions);
 
-    if (version >= engine::ApiVersion::V2)
+    if (payload.withdrawals.has_value())
     {
         Json::Value withdrawals(Json::arrayValue);
-        if (payload.withdrawals.has_value())
+        for (auto const& w : *payload.withdrawals)
         {
-            for (auto const& w : *payload.withdrawals)
-            {
-                Json::Value item(Json::objectValue);
-                item["index"] = toQuantity(w.index);
-                item["validatorIndex"] = toQuantity(w.validatorIndex);
-                item["address"] = w.address.hexPrefixed();
-                item["amount"] = toQuantity(w.amount);
-                withdrawals.append(std::move(item));
-            }
+            Json::Value item(Json::objectValue);
+            item["index"] = toQuantity(w.index);
+            item["validatorIndex"] = toQuantity(w.validatorIndex);
+            item["address"] = w.address.hexPrefixed();
+            item["amount"] = toQuantity(w.amount);
+            withdrawals.append(std::move(item));
         }
         ep["withdrawals"] = std::move(withdrawals);
     }
-    if (version >= engine::ApiVersion::V3)
+    if (payload.blobGasUsed.has_value())
     {
-        ep["blobGasUsed"] = toQuantity(payload.blobGasUsed.value_or(0));
-        ep["excessBlobGas"] = toQuantity(payload.excessBlobGas.value_or(0));
+        ep["blobGasUsed"] = toQuantity(*payload.blobGasUsed);
     }
-    if (payload.blockAccessList.has_value())
+    if (payload.excessBlobGas.has_value())
     {
-        ep["blockAccessList"] = toHexStringWithPrefix(*payload.blockAccessList);
-    }
-    if (payload.slotNumber.has_value())
-    {
-        ep["slotNumber"] = toQuantity(*payload.slotNumber);
+        ep["excessBlobGas"] = toQuantity(*payload.excessBlobGas);
     }
     return ep;
 }
 
 inline void combineGetPayloadResponse(
-    Json::Value& _result, bcos::engine::GetPayloadResult const& _response, engine::ApiVersion version)
+    Json::Value& _result, bcos::engine::GetPayloadResult const& _response,
+    engine::ApiVersion version)
 {
     if (version == engine::ApiVersion::V1)
     {
@@ -102,6 +96,7 @@ inline void combineGetPayloadResponse(
         return;
     }
 
+    // V3+: blobsBundle and shouldOverrideBuilder
     Json::Value blobsBundle(Json::objectValue);
     blobsBundle["commitments"] = Json::Value(Json::arrayValue);
     blobsBundle["proofs"] = Json::Value(Json::arrayValue);
@@ -131,17 +126,5 @@ inline void combineGetPayloadResponse(
     }
     _result["blobsBundle"] = std::move(blobsBundle);
     _result["shouldOverrideBuilder"] = _response.shouldOverrideBuilder;
-    if (version >= engine::ApiVersion::V4)
-    {
-        Json::Value executionRequests(Json::arrayValue);
-        if (_response.executionRequests.has_value())
-        {
-            for (auto const& request : *_response.executionRequests)
-            {
-                executionRequests.append(toHexStringWithPrefix(request));
-            }
-        }
-        _result["executionRequests"] = std::move(executionRequests);
-    }
 }
 }  // namespace bcos::rpc

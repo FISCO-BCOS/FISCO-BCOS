@@ -21,6 +21,7 @@
 
 #pragma once
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include "bcos-rpc/openginerpc/OPEngineJsonRpcImpl.h"
 #include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
 #include "web3jsonrpc/Web3JsonRpcImpl.h"
 
@@ -103,7 +104,18 @@ public:
         m_web3Subscribe = std::move(_web3Subscribe);
     }
 
+    void setOpEngineService(boostssl::ws::WsService::Ptr _opEngineService)
+    {
+        m_opEngineService = std::move(_opEngineService);
+    }
+
+    void setOpEngineJsonRpcImpl(bcos::rpc::OPEngineJsonRpcImpl::Ptr _opEngineJsonRpcImpl)
+    {
+        m_opEngineJsonRpcImpl = std::move(_opEngineJsonRpcImpl);
+    }
+
     bcos::rpc::Web3Subscribe::Ptr web3Subscribe() const { return m_web3Subscribe; }
+    bcos::rpc::OPEngineJsonRpcImpl::Ptr opEngineJsonRpc() const { return m_opEngineJsonRpcImpl; }
 
     void setOnNewBlock(
         std::function<void(std::string const& _groupID, bcos::protocol::BlockNumber _blockNumber)>
@@ -142,8 +154,8 @@ private:
     boostssl::ws::WsService::Ptr m_web3Service = nullptr;
     bcos::rpc::Web3JsonRpcImpl::Ptr m_web3JsonRpcImpl = nullptr;
     bcos::rpc::Web3Subscribe::Ptr m_web3Subscribe = nullptr;
-
-
+    boostssl::ws::WsService::Ptr m_opEngineService = nullptr;
+    bcos::rpc::OPEngineJsonRpcImpl::Ptr m_opEngineJsonRpcImpl = nullptr;
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
 
     // callback for new block

@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <bcos-rpc/openginerpc/Common.h>
 #include <bcos-rpc/web3jsonrpc/utils/util.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include "Helper.h"
@@ -99,14 +100,6 @@ inline bcos::engine::NewPayloadRequest parseNewPayloadRequest(
     {
         payload.excessBlobGas = fromBigQuantity(ep["excessBlobGas"].asString());
     }
-    if (ep.isMember("blockAccessList") && !ep["blockAccessList"].isNull())
-    {
-        payload.blockAccessList = fromHex(ep["blockAccessList"].asString());
-    }
-    if (ep.isMember("slotNumber") && !ep["slotNumber"].isNull())
-    {
-        payload.slotNumber = fromQuantity(std::string(ep["slotNumber"].asString()));
-    }
 
     bcos::engine::NewPayloadRequest request{
         .executionPayload = std::move(payload),
@@ -126,17 +119,6 @@ inline bcos::engine::NewPayloadRequest parseNewPayloadRequest(
         params.size() >= 3 && !params[2].isNull())
     {
         request.parentBeaconBlockRoot = parseH256(params[2].asString());
-    }
-    if (version >= engine::ApiVersion::V4 &&
-        params.size() >= 4 && params[3].isArray())
-    {
-        std::vector<bytes> executionRequests;
-        executionRequests.reserve(params[3].size());
-        for (auto const& requestBytes : params[3])
-        {
-            executionRequests.push_back(fromHex(requestBytes.asString()));
-        }
-        request.executionRequests = std::move(executionRequests);
     }
     return request;
 }

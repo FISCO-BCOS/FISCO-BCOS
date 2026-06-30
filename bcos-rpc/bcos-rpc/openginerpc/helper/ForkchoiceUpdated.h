@@ -33,62 +33,46 @@ inline std::optional<bcos::engine::PayloadAttributes> parsePayloadAttributes(
     {
         return std::nullopt;
     }
-    auto const& param = params[1];
-    bcos::engine::PayloadAttributes payloadAttribute{
-        .timestamp = fromQuantity(param["timestamp"].asString()),
-        .prevRandao = parseH256(param["prevRandao"].asString()),
-        .suggestedFeeRecipient = parseAddress(param["suggestedFeeRecipient"].asString()),
+    auto const& pa = params[1];
+    bcos::engine::PayloadAttributes attrs{
+        .timestamp = fromQuantity(std::string(pa["timestamp"].asString())),
+        .prevRandao = parseH256(pa["prevRandao"].asString()),
+        .suggestedFeeRecipient = parseAddress(pa["suggestedFeeRecipient"].asString()),
         .withdrawals = std::nullopt,
         .parentBeaconBlockRoot = std::nullopt,
         .slotNumber = std::nullopt,
         .targetGasLimit = std::nullopt,
     };
-    if (version >= engine::ApiVersion::V2 && !param.isMember("withdrawals")) {
-        // TODO: need to return -32602: Invalid params;
-        // TODO： need a check function；
-    }
-    if(!param["withdrawals"].isNull())
+    if (pa.isMember("withdrawals") && !pa["withdrawals"].isNull())
     {
         std::vector<bcos::engine::WithdrawalV1> withdrawals;
-        for (auto const& withdrawal : param["withdrawals"])
+        for (auto const& w : pa["withdrawals"])
         {
             withdrawals.push_back(bcos::engine::WithdrawalV1{
-                .index = fromBigQuantity(withdrawal["index"].asString()),
-                .validatorIndex = fromBigQuantity(withdrawal["validatorIndex"].asString()),
-                .address = parseAddress(withdrawal["address"].asString()),
-                .amount = fromBigQuantity(withdrawal["amount"].asString()),
+                .index = fromBigQuantity(w["index"].asString()),
+                .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
+                .address = parseAddress(w["address"].asString()),
+                .amount = fromBigQuantity(w["amount"].asString()),
             });
         }
-        payloadAttribute.withdrawals = std::move(withdrawals);
+        attrs.withdrawals = std::move(withdrawals);
     }
-
-    if (param.isMember("parentBeaconBlockRoot") && !param["parentBeaconBlockRoot"].isNull())
+    if (pa.isMember("parentBeaconBlockRoot") && !pa["parentBeaconBlockRoot"].isNull())
     {
-        payloadAttribute.parentBeaconBlockRoot = parseH256(param["parentBeaconBlockRoot"].asString());
+        attrs.parentBeaconBlockRoot = parseH256(pa["parentBeaconBlockRoot"].asString());
     }
-
-    if (version >= engine::ApiVersion::V4 && param.isMember("slotNumber") && !param["slotNumber"].isNull())
-    {
-        payloadAttribute.slotNumber = fromQuantity(std::string(param["slotNumber"].asString()));
-    }
-
-    if (version >= engine::ApiVersion::V4 && param.isMember("targetGasLimit") && !param["targetGasLimit"].isNull())
-    {
-        payloadAttribute.targetGasLimit = fromQuantity(std::string(param["targetGasLimit"].asString()));
-    }
-    return payloadAttribute;
+    return attrs;
 }
 
 inline bcos::engine::ForkchoiceState parseForkchoiceState(Json::Value const& params)
 {
-    auto const& param = params[0];
+    auto const& fc = params[0u];
     return bcos::engine::ForkchoiceState{
-        .headBlockHash = parseH256(param["headBlockHash"].asString()),
-        .safeBlockHash = parseH256(param["safeBlockHash"].asString()),
-        .finalizedBlockHash = parseH256(param["finalizedBlockHash"].asString()),
+        .headBlockHash = parseH256(fc["headBlockHash"].asString()),
+        .safeBlockHash = parseH256(fc["safeBlockHash"].asString()),
+        .finalizedBlockHash = parseH256(fc["finalizedBlockHash"].asString()),
     };
 }
-
 
 inline Json::Value combineForkchoiceUpdatedResult(
     bcos::engine::ForkchoiceUpdatedResult const& result, engine::ApiVersion version)
