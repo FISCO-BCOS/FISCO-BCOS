@@ -111,7 +111,7 @@ void EventSub::onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace>
     task->setParams(eventSubRequest->params());
     task->setState(state);
 
-    auto eventSubWeakPtr = std::weak_ptr<EventSub>(shared_from_this());
+    auto eventSubWeakPtr = std::weak_ptr<EventSub>(std::enable_shared_from_this<EventSub>::shared_from_this());
     task->setCallback([eventSubWeakPtr, _session](const std::string& _id, bool _complete,
                           const Json::Value& _result) -> bool {
         auto eventSub = eventSubWeakPtr.lock();
@@ -438,7 +438,7 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task, int64_t _blockNum
 
     auto p = std::make_shared<RecursiveProcess>();
     p->m_endBlockNumber = currentBlockNumber + blockCanProcess - 1;
-    p->m_eventSub = shared_from_this();
+    p->m_eventSub = std::enable_shared_from_this<EventSub>::shared_from_this();
     p->m_task = _task;
     p->process(currentBlockNumber);
 
@@ -491,7 +491,7 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task)
 void EventSub::processNextBlock(
     int64_t _blockNumber, EventSubTask::Ptr _task, std::function<void(Error::Ptr _error)> _callback)
 {
-    auto self = std::weak_ptr<EventSub>(shared_from_this());
+    auto self = std::weak_ptr<EventSub>(std::enable_shared_from_this<EventSub>::shared_from_this());
     auto matcher = m_matcher;
 
     std::string group = _task->group();

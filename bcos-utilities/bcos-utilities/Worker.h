@@ -21,6 +21,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <atomic>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -32,7 +33,7 @@ enum class WorkerState
     Started
 };
 
-class Worker
+class Worker : public std::enable_shared_from_this<Worker>
 {
 protected:
     Worker(boost::asio::io_context& _ioContext, std::string _threadName = "worker",

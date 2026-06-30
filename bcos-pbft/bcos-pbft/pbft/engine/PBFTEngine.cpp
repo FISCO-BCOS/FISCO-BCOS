@@ -134,7 +134,7 @@ void PBFTEngine::start()
     // when the node setup, start the timer for view recovery
     m_config->timer()->start();
     // register timeout handler
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<PBFTEngine>::weak_from_this();
     m_timer->registerTimeoutHandler([self]() {
         try
         {
@@ -503,7 +503,7 @@ void PBFTEngine::asyncNotifyNewBlock(
 void PBFTEngine::onReceivePBFTMessage(
     bcos::Error::Ptr _error, std::string const& _id, NodeIDPtr _nodeID, bytesConstRef _data)
 {
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<PBFTEngine>::weak_from_this();
     onReceivePBFTMessage(
         std::move(_error), _nodeID, _data, [_id, _nodeID, self](bytesConstRef _respData) {
             try
@@ -1187,7 +1187,7 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         return true;
     }
     // verify the proposal
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<PBFTEngine>::weak_from_this();
     auto leaderNodeInfo = m_config->getConsensusNodeByIndex(_prePrepareMsg->generatedFrom());
     if (!leaderNodeInfo)
     {
@@ -1809,7 +1809,7 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
     m_config->notifyResetSealing();
     auto const& prePrepareList = _newViewReq->prePrepareList();
     auto maxProposalIndex = m_config->committedProposal()->index();
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<PBFTEngine>::weak_from_this();
     for (const auto& prePrepare : prePrepareList)
     {
         // empty block proposal
@@ -2004,7 +2004,7 @@ void PBFTEngine::onReceiveCommittedProposalRequest(
         sendCommittedProposalResponse(proposalList, _sendResponse);
         return;
     }
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<PBFTEngine>::weak_from_this();
     m_config->storage()->asyncGetCommittedProposals(pbftRequest->index(), pbftRequest->size(),
         [self, pbftRequest, _sendResponse](PBFTProposalListPtr _proposalList) {
             auto engine = self.lock();
