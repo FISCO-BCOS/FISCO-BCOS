@@ -79,6 +79,12 @@ init()
     bash ${build_chain_path} -l "127.0.0.1:1" -e ${fisco_bcos_path} "${sm_option}"
     # enable web3_rpc on node0 config.ini
     perl -p -i -e 'if (/\[web3_rpc\]/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node0/config.ini
+    # increase io thread count from default (cpu_cores+1) to 8 to reduce blocking probability in executor DMC tests
+    cat >> nodes/127.0.0.1/node0/config.ini <<EOF
+
+[thread_pool]
+    io_thread_count=8
+EOF
     cd nodes/127.0.0.1 && wait_and_start
 }
 
@@ -95,6 +101,12 @@ init_baseline()
     # Enable executor v1
     perl -p -i -e 's/version=0/version=1/g' nodes/127.0.0.1/node*/config.genesis
     perl -p -i -e 'if (/web3_rpc/) { $flag=1 } elsif ($flag && s/enable\s*=\s*false/enable=true/i) { $flag=0; }' nodes/127.0.0.1/node0/config.ini
+    # increase io thread count from default (cpu_cores+1) to 8 to reduce blocking probability in executor DMC tests
+    cat >> nodes/127.0.0.1/node0/config.ini <<EOF
+
+[thread_pool]
+    io_thread_count=8
+EOF
     cd nodes/127.0.0.1 && wait_and_start
 }
 
