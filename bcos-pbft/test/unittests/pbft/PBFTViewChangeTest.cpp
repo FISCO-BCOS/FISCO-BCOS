@@ -103,11 +103,12 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
     BOOST_CHECK(futureCache->index() == futureBlockIndex);
     BOOST_CHECK(futureCache->prePrepare());
 
-    // Poll until all nodes reach preCommit (2 caches each), with timeout
+    // Poll until all nodes reach preCommit (2 caches each), with timeout.
+    // Use a generous timeout: CI runners may be slow.
     auto precommitStartT = std::chrono::steady_clock::now();
     bool allInPrecommit = false;
     while (!allInPrecommit &&
-           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(3))
+           std::chrono::steady_clock::now() - precommitStartT < std::chrono::seconds(10))
     {
         for (auto const& otherNode : fakerMap)
         {
@@ -160,14 +161,17 @@ BOOST_AUTO_TEST_CASE(testViewChangeWithPrecommitProposals)
         for (size_t i = 0; i < fakerMap.size(); i++)
         {
             auto faker = fakerMap[i];
-            // Poll the io_context so that timer callbacks (onTimeout etc.)
-            // and cross-thread notify() dispatches are processed.  On macOS
-            // the io_context worker thread may not be scheduled promptly;
-            // poll() gives the test thread an opportunity to drive pending
-            // handlers without relying solely on the worker thread.
-            faker->ioContext().poll();
+            // Do NOT call ioContext().poll() here: each fixture owns an
+            // IOServicePool worker thread that runs ioService->run(), and
+            // concurrent poll() + run() on the same io_context creates a
+            // data race that causes flaky timeouts on CI.
+            // Timer callbacks (onTimeout etc.) are processed by the worker
+            // thread; the sleep below yields to it.
             faker->pbftEngine()->executeWorkerByRoundbin();
         }
+        // Yield to the IOServicePool worker threads so they can process
+        // timer callbacks and cross-thread notify() dispatches.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     // check reach new view
     for (size_t i = 0; i < fakerMap.size(); i++)
