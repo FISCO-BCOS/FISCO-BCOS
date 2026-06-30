@@ -17,9 +17,9 @@
  * @brief Unit tests for EthBlockHeader, EthWithdrawal, EthBlock
  * @date 2026/6/30
  */
-#include "EthBlockHeader.h"
-#include "EthBlock.h"
-#include "EthWithdrawal.h"
+#include "bcos-rlp-protocol/EthBlockHeader.h"
+#include "bcos-rlp-protocol/EthBlock.h"
+#include "bcos-rlp-protocol/EthWithdrawal.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -71,13 +71,6 @@ BOOST_AUTO_TEST_CASE(withdrawalEmpty)
 // EthBlockHeader tests
 // =====================================================================
 
-BOOST_AUTO_TEST_CASE(headerDefaultUncleHash)
-{
-    EthBlockHeader header;
-    BOOST_CHECK_EQUAL(header.uncleHash().hex(),
-        "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347");
-}
-
 BOOST_AUTO_TEST_CASE(headerEncodeDecode)
 {
     EthBlockHeader header;
@@ -86,7 +79,6 @@ BOOST_AUTO_TEST_CASE(headerEncodeDecode)
     header.setTimestamp(1700000000);
     header.setGasLimit(30000000);
     header.setGasUsed(21000);
-    header.setDifficulty(u256(131072));
     header.setCoinbase(Address("0xdead000000000000000000000000000000000000"));
     header.setExtraData(bcos::bytes{0x12, 0x34, 0x56});
 
@@ -107,7 +99,6 @@ BOOST_AUTO_TEST_CASE(headerEncodeDecode)
     BOOST_CHECK_EQUAL(header.timestamp(), decoded.timestamp());
     BOOST_CHECK_EQUAL(header.gasLimit(), decoded.gasLimit());
     BOOST_CHECK_EQUAL(header.gasUsed(), decoded.gasUsed());
-    BOOST_CHECK_EQUAL(header.difficulty(), decoded.difficulty());
     BOOST_CHECK(header.coinbase() == decoded.coinbase());
     BOOST_CHECK(header.extraData().toBytes() == decoded.extraData().toBytes());
     BOOST_CHECK(header.hash() == decoded.hash());
@@ -278,7 +269,6 @@ BOOST_AUTO_TEST_CASE(blockFullRoundtrip)
     hdr.setReceiptsRoot(crypto::HashType("0x4444444444444444444444444444444444444444444444444444444444444444"));
     hdr.setGasLimit(30000000);
     hdr.setGasUsed(21000);
-    hdr.setDifficulty(u256(1));
     hdr.setCoinbase(Address("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
     hdr.setExtraData(bcos::bytes{0xca, 0xfe});
     hdr.setBaseFee(u256(1000000000));
@@ -308,7 +298,7 @@ BOOST_AUTO_TEST_CASE(blockFullRoundtrip)
     BOOST_CHECK_EQUAL(decoded.blockHeader().timestamp(), 1800000000);
     BOOST_CHECK(decoded.blockHeader().parentHash() == hdr.parentHash());
     BOOST_CHECK_EQUAL(decoded.blockHeader().gasLimit(), 30000000);
-    BOOST_CHECK(decoded.blockHeader().gasUsed(), 21000);
+    BOOST_CHECK_EQUAL(decoded.blockHeader().gasUsed(), 21000);
     BOOST_CHECK_EQUAL(*decoded.blockHeader().baseFee(), u256(1000000000));
 
     BOOST_CHECK_EQUAL(decoded.transactionRlps().size(), 1);
