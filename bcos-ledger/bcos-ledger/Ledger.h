@@ -37,6 +37,15 @@
 
 namespace bcos::ledger
 {
+
+DERIVE_BCOS_EXCEPTION(NotFoundTransaction);
+DERIVE_BCOS_EXCEPTION(UnexpectedRowIndex);
+DERIVE_BCOS_EXCEPTION(MismatchTransactionCount);
+DERIVE_BCOS_EXCEPTION(MismatchParentHash);
+DERIVE_BCOS_EXCEPTION(NotFoundBlockHeader);
+DERIVE_BCOS_EXCEPTION(GetABIError);
+DERIVE_BCOS_EXCEPTION(GetBlockDataError);
+
 class Ledger : public LedgerInterface
 {
 public:

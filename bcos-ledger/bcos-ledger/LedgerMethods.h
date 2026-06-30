@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ConsensusNode.h"
+#include "Ledger.h"
 #include "bcos-concepts/Serialize.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/signature/key/KeyImpl.h"
@@ -16,7 +17,6 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
-#include "bcos-ledger/LedgerImpl.h"
 #include "bcos-table/src/LegacyStorageWrapper.h"
 #include "bcos-tars-protocol/impl/TarsSerializable.h"
 #include "bcos-task/AwaitableValue.h"
