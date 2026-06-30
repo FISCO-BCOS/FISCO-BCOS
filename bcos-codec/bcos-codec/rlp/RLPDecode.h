@@ -297,4 +297,20 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Args&... args) noexcept
     return nullptr;
 }
 
+/// Decode the next full RLP item, advance the input bytesRef past the header,
+/// and return a view of the FULL item bytes (header + payload).
+inline std::tuple<bcos::Error::UniquePtr, bcos::bytesConstRef> decodeItemRlp(bytesRef& from) noexcept
+{
+    auto saved = from;
+    auto [err, header] = decodeHeader(from);
+    if (err)
+    {
+        return {std::move(err), bcos::bytesConstRef{}};
+    }
+    auto consumed = static_cast<size_t>(from.data() - saved.data());
+    auto item = saved.getCroppedData(0, consumed + header.payloadLength);
+    from = saved.getCroppedData(item.size());
+    return {nullptr, item};
+}
+
 }  // namespace bcos::codec::rlp

@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file EthBlockHeaderImpl.h
+ * @file EthBlockHeader.h
  * @brief Ethereum-standard block header — inherits BlockHeader, shared_ptr aliasing, RLP encoding
  * @date 2026/6/24
  */
@@ -35,7 +35,7 @@ namespace bcos::protocol
 {
 
 /// Internal data block holding all 23 Ethereum header fields.
-/// Embedded in EthBlockImpl (value) or heap-allocated by EthBlockHeaderImpl (shared_ptr).
+/// Embedded in EthBlock (value) or heap-allocated by EthBlockHeader (shared_ptr).
 struct EthBlockHeaderData
 {
     // Non-optional fields (1–15)
@@ -69,39 +69,47 @@ struct EthBlockHeaderData
     bool operator==(const EthBlockHeaderData& other) const = default;
 };
 
-struct EthBlockHeader {
-    EthBlockHeaderData data;
-    bcos::bytes dataHash;
-};
 
-class EthBlockHeaderImpl
+
+class EthBlockHeader
 {
 public:
-    /// Default: heap-allocates new EthBlockHeader (owned mode, for factory usage)
-    EthBlockHeaderImpl(): m_inner(std::make_shared<EthBlockHeader>()) {}
-    /// Aliasing: points to existing EthBlockHeader (for sharing from EthBlockImpl)
-    explicit EthBlockHeaderImpl(std::shared_ptr<EthBlockHeader> _header) : m_inner(std::move(_header)){}
+    using Ptr = std::shared_ptr<EthBlockHeader>;
 
-    ~EthBlockHeaderImpl() noexcept  = default;
-    EthBlockHeaderImpl(const EthBlockHeaderImpl&) = default;
-    EthBlockHeaderImpl(EthBlockHeaderImpl&&) noexcept = default;
-    EthBlockHeaderImpl& operator=(const EthBlockHeaderImpl&) = default;
-    EthBlockHeaderImpl& operator=(EthBlockHeaderImpl&&) noexcept = default;
-    bool operator==(const EthBlockHeaderImpl& other) const
+    EthBlockHeader() = default;
+    explicit EthBlockHeader(EthBlockHeaderData _data) : data(std::move(_data)){}
+    explicit EthBlockHeader(int64_t _number) {data.number = _number;}
+    explicit EthBlockHeader(bcos::bytesConstRef _data) 
     {
-        return m_inner->data == other.m_inner->data;
+        if (auto err = decode(_data); err != nullptr)
+        {
+            clear();
+            return;
+        }
+        calculateHash();
+    }
+
+    ~EthBlockHeader() noexcept  = default;
+    EthBlockHeader(const EthBlockHeader&) = default;
+    EthBlockHeader(EthBlockHeader&&) noexcept = default;
+    EthBlockHeader& operator=(const EthBlockHeader&) = default;
+    EthBlockHeader& operator=(EthBlockHeader&&) noexcept = default;
+    bool operator==(const EthBlockHeader& other) const
+    {
+        return data == other.data;
     }
     
     // ---- BlockHeader interfaces ----
 
-    bcos::Error::UniquePtr decode(bcos::bytesConstRef _data) ;
-    void encode(bcos::bytes& _encodeData) const ;
+    bcos::Error::UniquePtr decode(bcos::bytesConstRef _data);
+    void encode(bcos::bytes& _encodeData) const;
+    size_t encodedLength() const;
 
-    bcos::crypto::HashType hash() const ;
-    void calculateHash() ;
+    bcos::crypto::HashType hash() const;
+    void calculateHash();
 
-    size_t size() const ;
-    void clear() ;    
+    size_t size() const;
+    void clear();    
 
     bcos::crypto::HashType txsRoot() const;
     bcos::crypto::HashType stateRoot() const;
@@ -161,15 +169,12 @@ public:
     std::optional<uint64_t> slotNumber() const;
     void setSlotNumber(std::optional<uint64_t> _val);
 
-    // ---- Access to underlying data ----
-    const std::shared_ptr<EthBlockHeader>& dataPtr() const { return m_inner; }
 
 private:
-    void clearDataHash() { m_inner->dataHash.clear(); }
-    std::shared_ptr<EthBlockHeader> m_inner;
-};
+    void clearDataHash() { dataHash.clear(); }
 
-static_assert(sizeof(EthBlockHeaderImpl) <= 72,
-    "EthBlockHeaderImpl must fit in AnyHolder<BlockHeader, 72>");
+    EthBlockHeaderData data;
+    bcos::crypto::HashType dataHash;
+};
 
 }  // namespace bcos::protocol

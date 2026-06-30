@@ -25,7 +25,6 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-codec/rlp/RLPEncode.h>
 
-using namespace bcos;
 namespace bcos::protocol
 {
 
@@ -36,58 +35,29 @@ struct EthWithdrawal
     bcos::Address address;
     uint64_t amount{0};
 
+    size_t encodedLength() const
+    {
+        return codec::rlp::lengthOfItems(index, validatorIndex, address.ref(), amount);
+    }
+
     void encode(bcos::bytes& out) const
     {
-        size_t payloadLen = 0;
-        payloadLen += codec::rlp::length(index);
-        payloadLen += codec::rlp::length(validatorIndex);
-        payloadLen += codec::rlp::length(address.ref());
-        payloadLen += codec::rlp::length(amount);
-    
-        codec::rlp::encodeHeader(out, {.isList = true, .payloadLength = payloadLen});
-        codec::rlp::encode(out, index);
-        codec::rlp::encode(out, validatorIndex);
-        codec::rlp::encode(out, address.ref());
-        codec::rlp::encode(out, amount);
+        codec::rlp::encode(out, index, validatorIndex, address.ref(), amount);
     }
     
-    void decode(bcos::bytesConstRef data)
+    bcos::Error::UniquePtr decode(bcos::bytesConstRef data)
     {
         auto mutableData = data.toBytes();
         bcos::bytesRef ref(mutableData.data(), mutableData.size());
     
-        auto [err, head] = codec::rlp::decodeHeader(ref);
-        if (err)
-            { BOOST_THROW_EXCEPTION(std::runtime_error(
-                "EthWithdrawal::decode: " + err->errorMessage()));}
-        if (!head.isList)
-            { BOOST_THROW_EXCEPTION(std::runtime_error(
-                "EthWithdrawal::decode: expected RLP list"));}
-    
-        if (auto e = codec::rlp::decodeItems(ref, index, validatorIndex); e != nullptr)
-            { BOOST_THROW_EXCEPTION(std::runtime_error(
-                "EthWithdrawal::decode: " + e->errorMessage()));}   
-    
+        auto error = codec::rlp::decode(ref, index, validatorIndex, address, amount);
+        if (error)
         {
-            auto [e2, h2] = codec::rlp::decodeHeader(ref);
-            if (e2 || h2.isList)
-                { BOOST_THROW_EXCEPTION(std::runtime_error(
-                    "EthWithdrawal: expected address bytes"));}
-            std::memcpy(address.mutableData().data(), ref.data(),
-                std::min<size_t>(h2.payloadLength, address.SIZE));
-            ref = ref.getCroppedData(h2.payloadLength);
+            return error;
         }
-    
-        // amount
-        if (auto e3 = codec::rlp::decode(ref, amount); e3 != nullptr)
-            { BOOST_THROW_EXCEPTION(std::runtime_error(
-                "EthWithdrawal::decode: amount"));}
+        return nullptr;
     }
     
-    bool operator==(const EthWithdrawal& other) const
-    {
-        return index == other.index && validatorIndex == other.validatorIndex &&
-               address == other.address && amount == other.amount;
-    }};
-
+    bool operator==(const EthWithdrawal& other) const = default;
+};
 }  // namespace bcos::protocol

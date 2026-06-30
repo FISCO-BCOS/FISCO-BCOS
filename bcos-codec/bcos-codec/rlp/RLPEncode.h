@@ -151,20 +151,4 @@ inline void encode(
     (encode(to, args), ...);
 }
 
-
-/// Write an RLP list header and append pre-encoded items.
-/// Items must already be fully RLP-encoded (strings or sub-lists).
-/// This is a zero-copy optimization: no per-item re-encoding.
-inline void encodeListWithItems(bcos::bytes& to,
-    std::span<const bcos::bytes> encodedItems) noexcept
-{
-    size_t payloadLen = 0;
-    for (auto const& item : encodedItems)
-        payloadLen += item.size();
-
-    to.reserve(to.size() + lengthOfLength(payloadLen) + payloadLen);
-    encodeHeader(to, {.isList = true, .payloadLength = payloadLen});
-    for (auto const& item : encodedItems)
-        to.insert(to.end(), item.begin(), item.end());
-}
 }  // namespace bcos::codec::rlp
