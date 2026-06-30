@@ -161,7 +161,6 @@ node.0=9418c37b060ecc49dc558d858a3e313a45e504ee7601034f657ed23ec8cce2aa2ef93c55e
 [rpc]
 listen_ip=0.0.0.0
 listen_port=21200
-thread_count=2
 disable_ssl=true
 sm_ssl=false
 
@@ -169,7 +168,6 @@ sm_ssl=false
 enable=true
 listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
-thread_count=2
 
 [p2p]
 listen_ip=0.0.0.0

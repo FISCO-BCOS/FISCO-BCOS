@@ -50,7 +50,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20200
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -102,7 +101,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20201
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -155,7 +153,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20202
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -208,7 +205,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=20203
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port

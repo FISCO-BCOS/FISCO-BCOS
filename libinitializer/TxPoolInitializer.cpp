@@ -48,8 +48,9 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_nodeConfig->blockLimit(), m_nodeConfig->txpoolLimit(),
         m_nodeConfig->checkTransactionSignature());
 
+    auto ioThreadCount = m_nodeConfig->ioThreadCount();
     m_txpool = m_txpoolFactory->createTxPool(_ioContext, m_ioServicePool,
-        m_nodeConfig->notifyWorkerNum(), m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
+        ioThreadCount, ioThreadCount, m_nodeConfig->txsExpirationTime());
     m_txpool->setCheckBlockLimit(m_nodeConfig->checkBlockLimit());
     m_txpool->setPreStoreBackpressureEnabled(m_nodeConfig->preStoreBackpressureEnabled());
     m_txpool->setPreStoreMaxInflight(m_nodeConfig->preStoreMaxInflight());

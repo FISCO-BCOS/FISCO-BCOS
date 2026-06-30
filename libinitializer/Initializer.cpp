@@ -170,6 +170,16 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion, const std::string& _logPath)
 {
+    // TBB global thread control
+    auto tbbThreadCount = m_nodeConfig->tbbThreadCount();
+    if (tbbThreadCount > 0)
+    {
+        m_tbbGlobalControl.emplace(
+            oneapi::tbb::global_control::max_allowed_parallelism, tbbThreadCount);
+        INITIALIZER_LOG(INFO) << LOG_DESC("TBB global_control set")
+                              << LOG_KV("maxAllowedParallelism", tbbThreadCount);
+    }
+
     // build the front service
     m_frontServiceInitializer = std::make_shared<FrontServiceInitializer>(
         m_nodeConfig, m_protocolInitializer, _gateway, m_ioServicePool);
@@ -248,8 +258,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
 
     // build ledger
-    auto ledger = LedgerInitializer::build(
-        m_protocolInitializer->blockFactory(), m_storage, m_nodeConfig, m_blockStorage, m_ioServicePool);
+    auto ledger = LedgerInitializer::build(m_protocolInitializer->blockFactory(), m_storage,
+        m_nodeConfig, m_blockStorage, m_ioServicePool);
     ledger->setKeyPageSize(m_nodeConfig->keyPageSize());
     m_ledger = ledger;
 
@@ -270,9 +280,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::make_shared<protocol::TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger,
-        *m_ioServicePool->getIOService(), m_ioServicePool);
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
+        m_frontServiceInitializer->front(), ledger, *m_ioServicePool->getIOService(),
+        m_ioServicePool);
     m_memPoolInitializer = MemPoolInitializer::build();
 
     std::shared_ptr<bcos::scheduler::TarsExecutorManager> executorManager;
@@ -300,30 +310,30 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             std::make_shared<scheduler_v1::SchedulerParallelImpl<GlobalStateMutableStorage>>(
                 m_ioServicePool);
         parallelScheduler->m_grainSize = baselineSchedulerConfig.grainSize;
-        parallelScheduler->m_maxConcurrency = baselineSchedulerConfig.maxThread;
+        if (tbbThreadCount > 0)
+        {
+            parallelScheduler->m_maxConcurrency = tbbThreadCount;
+        }
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), parallelScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor);
-        m_engineServiceInitializer =
-            EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), parallelScheduler,
-                transactionExecutor, m_memPoolInitializer->memPool());
+        m_engineServiceInitializer = EngineServiceInitializer::build(
+            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(),
+            parallelScheduler, transactionExecutor, m_memPoolInitializer->memPool());
     }
     else
     {
-        auto serialScheduler =
-            std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
+        auto serialScheduler = std::make_shared<scheduler_v1::SchedulerSerialImpl>(m_ioServicePool);
         std::tie(m_baselineSchedulerHolder, m_setBaselineSchedulerBlockNumberNotifier) =
             scheduler_v1::BaselineSchedulerInitializer::build(m_globalStateStorageInitializer,
                 m_protocolInitializer->blockFactory(), serialScheduler,
                 m_txpoolInitializer->txpool(), transactionSubmitResultFactory, ledger,
                 transactionExecutor);
-        m_engineServiceInitializer =
-            EngineServiceInitializer::build(m_globalStateStorageInitializer,
-                m_protocolInitializer->blockFactory(), serialScheduler,
-                transactionExecutor, m_memPoolInitializer->memPool());
+        m_engineServiceInitializer = EngineServiceInitializer::build(
+            m_globalStateStorageInitializer, m_protocolInitializer->blockFactory(), serialScheduler,
+            transactionExecutor, m_memPoolInitializer->memPool());
     }
 
     executorManager = std::make_shared<bcos::scheduler::TarsExecutorManager>(
@@ -414,8 +424,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
             m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
             m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName,
             m_ioServicePool);
-        auto switchExecutorManager =
-            std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory, m_ioServicePool);
+        auto switchExecutorManager = std::make_shared<bcos::executor::SwitchExecutorManager>(
+            executorFactory, m_ioServicePool);
         executorManager->addExecutor(executorName, switchExecutorManager);
         m_switchExecutorManager = switchExecutorManager;
     }
@@ -426,10 +436,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     // build and init the pbft related modules
     if (_nodeArchType == protocol::NodeArchitectureType::AIR)
     {
-        m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
-            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
-            m_ioServicePool);
+        m_pbftInitializer =
+            std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
+                m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
+                m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
         auto nodeID = m_protocolInitializer->keyPair()->publicKey();
         auto frontService = m_frontServiceInitializer->front();
         auto groupID = m_nodeConfig->groupId();
@@ -453,10 +463,10 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     }
     else
     {
-        m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
-            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-            consensusStorage, m_frontServiceInitializer->front(), nodeTimeMaintenance,
-            m_ioServicePool);
+        m_pbftInitializer =
+            std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig, m_protocolInitializer,
+                m_txpoolInitializer->txpool(), ledger, m_scheduler, consensusStorage,
+                m_frontServiceInitializer->front(), nodeTimeMaintenance, m_ioServicePool);
     }
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {

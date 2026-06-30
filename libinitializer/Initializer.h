@@ -35,6 +35,8 @@
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/IOServicePool.h>
 #include <memory>
+#include <optional>
+#include <oneapi/tbb/global_control.h>
 #ifdef WITH_LIGHTNODE
 #include "LightNodeInitializer.h"
 #endif
@@ -153,6 +155,7 @@ private:
     // if enable SeparateBlockAndState,txs and receipts will be stored in m_blockStorage
     bcos::storage::TransactionalStorageInterface::Ptr m_blockStorage = nullptr;
     std::shared_ptr<MemPoolInitializer> m_memPoolInitializer;
+    std::optional<oneapi::tbb::global_control> m_tbbGlobalControl;
 
     std::function<std::shared_ptr<scheduler::SchedulerInterface>()> m_baselineSchedulerHolder;
     std::function<void(std::function<void(protocol::BlockNumber)>)>
