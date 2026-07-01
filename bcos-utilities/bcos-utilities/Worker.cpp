@@ -28,8 +28,11 @@ using namespace bcos;
 Worker::~Worker()
 {
     stopWorking();
-    // All handlers capture weak_from_this() and safely no-op after
-    // destruction, so no explicit drain is needed.
+    // stopWorking() may only post the cancel (when called off the io_context
+    // thread). Call cancel() synchronously here as well so the timer is
+    // guaranteed quiesced before its destructor runs — macOS' kqueue-backed
+    // steady_timer can race with a live io_context otherwise.
+    m_timer.cancel();
 }
 
 void Worker::startWorking()
