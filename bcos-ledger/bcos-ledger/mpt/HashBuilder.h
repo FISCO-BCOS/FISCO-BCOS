@@ -30,6 +30,7 @@
 #include <map>
 #include <optional>
 #include <span>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -124,11 +125,17 @@ public:
         auto result = computeTrieRootFromSorted(survivors);
         m_newNodes = std::move(result.newNodes);
 
-        // Flush every new node into the storage in one pass.
-        for (auto& [hash, raw] : m_newNodes)
+        // Flush the new nodes into the storage in one batched writeSome — a single storage-layer
+        // round-trip instead of one per node (a real win for a RocksDB-backed store). m_newNodes is
+        // retained for drainNewNodes(), so the batch copies the entries; for a from-empty build the
+        // node set is bounded.
+        std::vector<std::tuple<bcos::h256, bcos::bytes>> batch;
+        batch.reserve(m_newNodes.size());
+        for (auto const& [hash, raw] : m_newNodes)
         {
-            co_await bcos::storage2::writeOne(m_storage.get(), hash, raw);
+            batch.emplace_back(hash, raw);
         }
+        co_await bcos::storage2::writeSome(m_storage.get(), std::move(batch));
 
         co_return result.root;
     }

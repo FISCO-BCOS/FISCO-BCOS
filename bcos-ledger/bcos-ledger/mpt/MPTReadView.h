@@ -50,6 +50,8 @@ public:
 
     /// Returns the decoded Account at @p addr, or nullopt if the account is absent.
     /// @throws MPTDecodeError if a leaf is present but its RLP is malformed (Account::decode).
+    /// @note Each call walks from the root with a fresh Trie; no traversal state is cached or
+    /// shared across readAccount calls. Any node-level caching is the Storage layer's concern.
     bcos::task::Task<std::optional<Account>> readAccount(bcos::Address const& addr) const
     {
         if (m_root == emptyRootHash())
