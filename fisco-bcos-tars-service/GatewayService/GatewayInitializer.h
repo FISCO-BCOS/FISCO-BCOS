@@ -26,6 +26,7 @@
 #include <bcos-framework/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-gateway/GatewayConfig.h>
+#include <bcos-utilities/IOServicePool.h>
 
 namespace bcostars
 {
@@ -58,6 +59,7 @@ private:
     bcos::group::ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::atomic_bool m_running = {false};
+    bcos::IOServicePool::Ptr m_ioServicePool;
 
     bcos::election::LeaderEntryPointInterface::Ptr m_leaderEntryPoint;
 };

@@ -25,7 +25,7 @@
 #include "bcos-table/src/StateStorage.h"
 #include "bcos-table/src/StateStorageInterface.h"
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>
@@ -93,7 +93,7 @@ BOOST_FIXTURE_TEST_SUITE(KeyPageStorageTest, KeyPageStorageFixture)
 
 BOOST_AUTO_TEST_CASE(constructor)
 {
-    auto threadPool = ThreadPool("a", 1);
+    auto threadPool = IOServicePool(1, "a");
     auto tf = std::make_shared<KeyPageStorage>(memoryStorage, false);
 }
 
@@ -2994,9 +2994,9 @@ BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
         meta->insertPageInfoNoLock(
             storage::KeyPageStorage::PageInfo(std::to_string(i), i % 2 == 0 ? 0 : i, i, nullptr));
     }
-    std::shared_ptr<bcos::ThreadPool> threadPool = std::make_shared<bcos::ThreadPool>("test", 2);
+    std::shared_ptr<bcos::IOServicePool> threadPool = std::make_shared<bcos::IOServicePool>(2, "test");
     auto promise = std::make_shared<std::promise<void>>();
-    threadPool->enqueue([&]() {
+    threadPool->post([&]() {
         std::cout << "==================== parallelTraverse" << std::endl;
         Entry entry;
         entry.setObject(*meta);
@@ -3004,7 +3004,7 @@ BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
         promise->set_value();
     });
     auto promise2 = std::make_shared<std::promise<void>>();
-    threadPool->enqueue([&]() {
+    threadPool->post([&]() {
         std::cout << "==================== meta2" << std::endl;
 
         storage::KeyPageStorage::TableMeta meta2(*meta);

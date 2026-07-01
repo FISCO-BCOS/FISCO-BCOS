@@ -75,7 +75,7 @@ struct Fib147SealerFixture
         txpool::TxPoolFactory factory(keyPair->publicKey(), cryptoSuite,
             std::make_shared<protocol::TransactionSubmitResultFactoryImpl>(), blockFactory, nullptr,
             ledger, "", "", 1000, bcos::txpool::DEFAULT_POOL_LIMIT, true);
-        txpool = factory.createTxPool(*ioServicePool->getIOService());
+        txpool = factory.createTxPool(*ioServicePool->getIOService(), ioServicePool);
         txpool->init();
     }
 

@@ -29,7 +29,7 @@ void BlockValidator::asyncCheckBlock(
     Block::Ptr _block, std::function<void(Error::Ptr, bool)> _onVerifyFinish)
 {
     auto self = weak_from_this();
-    m_taskPool->enqueue([self, _block, _onVerifyFinish]() {
+    m_strand.post([self, _block, _onVerifyFinish]() {
         auto blockHeader = _block->blockHeader();
 
         // Separate result computation from callback delivery (FIB-139):

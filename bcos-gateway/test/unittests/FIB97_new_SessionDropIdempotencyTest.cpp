@@ -26,7 +26,7 @@
 #include "bcos-gateway/libnetwork/Socket.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-utilities/IOServicePool.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/IOServicePool.h>
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 #include <atomic>

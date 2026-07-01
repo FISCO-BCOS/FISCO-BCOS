@@ -20,14 +20,19 @@
 
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Nibble.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieNode.h>
+#include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <memory>
 #include <random>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -47,6 +52,50 @@ inline std::mt19937 seededRng(uint32_t s)
 {
     return std::mt19937{s};
 }
+
+// ---------------------------------------------------------------------------
+// Account / classify test helpers (PR-08+)
+// ---------------------------------------------------------------------------
+
+/// A 20-byte address with only its first byte set to @p firstByte.
+inline bcos::Address makeAddress(uint8_t firstByte)
+{
+    bcos::Address addr{};
+    addr.data()[0] = firstByte;
+    return addr;
+}
+
+/// A NORMAL Entry holding @p value as its raw stored bytes.
+inline bcos::storage::Entry makeEntry(std::string_view value)
+{
+    bcos::storage::Entry entry;
+    entry.set(std::string{value});
+    return entry;
+}
+
+/// A DELETED Entry (status tombstone, no value).
+inline bcos::storage::Entry makeDeletedEntry()
+{
+    bcos::storage::Entry entry;
+    entry.setStatus(bcos::storage::Entry::DELETED);
+    return entry;
+}
+
+/// Minimal stand-in for the PR-09 MPTReadView: classify() only needs
+/// `task::Task<bool> hasAccount(Address) const`. Unset addresses default to
+/// "absent" (hasAccount → false → firstTouch true).
+struct MockReadView
+{
+    std::unordered_map<bcos::Address, bool> hasMap;
+
+    void setHasAccount(bcos::Address address, bool present) { hasMap[address] = present; }
+
+    bcos::task::Task<bool> hasAccount(bcos::Address address) const
+    {
+        auto const it = hasMap.find(address);
+        co_return it != hasMap.end() && it->second;
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Independent reference trie (correctness oracle).

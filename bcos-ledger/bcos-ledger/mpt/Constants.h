@@ -32,6 +32,13 @@ namespace bcos::ledger::mpt
 ///   - an absent-child placeholder inside a BranchNode payload
 inline constexpr bcos::byte RLP_EMPTY_STRING = 0x80;
 
+/// RLP header byte for a 32-byte string (RLP_EMPTY_STRING | 32 == 0xa0): the one-byte prefix that
+/// precedes a node's keccak256 digest when a hash node-reference is spliced into a parent payload.
+inline constexpr bcos::byte RLP_HASH_REF_PREFIX = 0xa0;
+
+/// Encoded size of a hash node-reference: the 1-byte RLP_HASH_REF_PREFIX plus the 32-byte digest.
+inline constexpr size_t HASH_REF_ENCODED_SIZE = 1 + bcos::h256::SIZE;
+
 /// Hex string for keccak256(RLP("")) = the empty trie root hash
 inline constexpr std::string_view EMPTY_ROOT_HASH_HEX =
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";

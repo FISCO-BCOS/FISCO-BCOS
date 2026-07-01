@@ -28,7 +28,7 @@
 #include "txpool/interfaces/TxPoolStorageInterface.h"
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tool/TreeTopology.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <atomic>
 #include <mutex>
 #include <unordered_set>
@@ -39,7 +39,8 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     using Ptr = std::shared_ptr<TxPool>;
     TxPool(TxPoolConfig::Ptr config, TxPoolStorageInterface::Ptr txpoolStorage,
-        bcos::sync::TransactionSyncInterface::Ptr transactionSync, size_t verifierWorkerNum = 1);
+        bcos::sync::TransactionSyncInterface::Ptr transactionSync, size_t verifierWorkerNum = 1,
+        bcos::IOServicePool::Ptr ioServicePool = nullptr);
 
     ~TxPool() noexcept override;
     void start() override;
@@ -192,8 +193,8 @@ private:
     std::function<void(std::string const&, int, bcos::crypto::NodeIDPtr, bytesConstRef)>
         m_sendResponseHandler;
 
-    ThreadPool::Ptr m_verifier;
-    ThreadPool::Ptr m_txsPreStore;
+    IOServicePool::Ptr m_ioServicePool;
+    std::unique_ptr<Strand> m_preStoreStrand;
     tool::TreeTopology::Ptr m_treeRouter = nullptr;
     std::atomic_bool m_running = {false};
     bool m_checkBlockLimit = true;

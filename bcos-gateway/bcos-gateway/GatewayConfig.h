@@ -179,7 +179,6 @@ public:
 
     std::string listenIP() const;
     uint16_t listenPort() const;
-    uint32_t threadPoolSize() const;
     bool smSSL() const;
     uint8_t sslClientMode() const;
     uint8_t sslServerMode() const;
@@ -290,8 +289,6 @@ private:
     std::string m_listenIP;
     // p2p network listen Port
     uint16_t m_listenPort;
-    // threadPool size
-    uint32_t m_threadPoolSize{8};
     // p2p connected nodes host list
     std::set<NodeIPEndpoint> m_connectedNodes;
     // peer black list

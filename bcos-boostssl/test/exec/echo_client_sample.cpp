@@ -25,7 +25,6 @@
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/RateLimiter.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <string>
 
 using namespace bcos;

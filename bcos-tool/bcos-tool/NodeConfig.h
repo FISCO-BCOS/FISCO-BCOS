@@ -83,8 +83,6 @@ public:
 
     // the txpool configurations
     size_t txpoolLimit() const;
-    size_t notifyWorkerNum() const;
-    size_t verifierWorkerNum() const;
     int64_t txsExpirationTime() const;
     bool checkBlockLimit() const;
 
@@ -165,7 +163,6 @@ public:
     // the rpc configurations
     const std::string& rpcListenIP() const;
     uint16_t rpcListenPort() const;
-    uint32_t rpcThreadPoolSize() const;
     uint32_t rpcFilterTimeout() const;
     uint32_t rpcMaxProcessBlock() const;
     bool rpcSmSsl() const;
@@ -175,7 +172,6 @@ public:
     bool enableWeb3Rpc() const;
     const std::string& web3RpcListenIP() const;
     uint16_t web3RpcListenPort() const;
-    uint32_t web3RpcThreadSize() const;
     uint32_t web3FilterTimeout() const;
     uint32_t web3MaxProcessBlock() const;
     uint32_t web3BatchRequestSizeLimit() const;
@@ -187,6 +183,10 @@ public:
     int32_t web3CorsMaxAge() const;
     bool web3CorsAllowCredentials() const;
     bool web3SyncTransaction() const;
+
+    // thread pool configuration
+    size_t ioThreadCount() const;
+    size_t tbbThreadCount() const;
 
     // the gateway configurations
     const std::string& p2pListenIP() const;
@@ -259,7 +259,6 @@ public:
     {
         bool parallel = false;
         int grainSize = 0;
-        int maxThread = 0;
     };
     BaselineSchedulerConfig const& baselineSchedulerConfig() const;
 
@@ -267,7 +266,6 @@ public:
     {
         std::string host;
         uint16_t port = 0;
-        uint32_t threadCount = 0;
     };
     TarsRPCConfig const& tarsRPCConfig() const;
 
@@ -337,8 +335,6 @@ private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // txpool related configuration
     size_t m_txpoolLimit{};
-    size_t m_notifyWorkerNum{};
-    size_t m_verifierWorkerNum{};
     int64_t m_txsExpirationTime{};
     bool m_checkBlockLimit = true;
     // permit txs from free node or not
@@ -443,7 +439,6 @@ private:
     // config for rpc
     std::string m_rpcListenIP;
     uint16_t m_rpcListenPort{};
-    uint32_t m_rpcThreadPoolSize{};
     uint32_t m_rpcFilterTimeout{};
     uint32_t m_rpcMaxProcessBlock{};
     bool m_rpcSmSsl{};
@@ -453,7 +448,6 @@ private:
     bool m_enableWeb3Rpc = false;
     std::string m_web3RpcListenIP;
     uint16_t m_web3RpcListenPort{};
-    uint32_t m_web3RpcThreadSize{};
     uint32_t m_web3FilterTimeout{};
     uint32_t m_web3MaxProcessBlock{};
     uint32_t m_web3BatchRequestSizeLimit{};
@@ -466,6 +460,10 @@ private:
     int32_t m_web3CorsMaxAge = 86400;
     bool m_web3CorsAllowCredentials = true;
     bool m_web3SyncTransaction = false;
+
+    // thread pool configuration
+    size_t m_ioThreadCount{};
+    size_t m_tbbThreadCount{};
 
     // config for gateway
     std::string m_p2pListenIP;

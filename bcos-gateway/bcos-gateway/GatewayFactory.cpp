@@ -611,11 +611,11 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
                 buildSSLContext(false, _config->sslClientMode(), _config->smCertConfig()) :
                 buildSSLContext(false, _config->sslClientMode(), _config->certConfig()));
 
-    // init ASIOInterface
+    // IOServicePool must be set from outside before init()
     if (!m_ioServicePool)
     {
-        m_ioServicePool =
-            std::make_shared<IOServicePool>(std::thread::hardware_concurrency() + 1, "gateway");
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                    "GatewayFactory: IOServicePool must be provided from outside!"));
     }
     auto ioServicePool = m_ioServicePool;
     auto asioInterface =
@@ -1009,7 +1009,7 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
     registerAMOPHandlers(service, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
-        _p2pNodeID, *m_ioServicePool->getIOService());
+        _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
@@ -1024,7 +1024,7 @@ bcos::amop::AMOPImpl::Ptr GatewayFactory::buildLocalAMOP(
     registerAMOPHandlers(service, topicManager);
 
     return std::make_shared<AMOPImpl>(topicManager, amopMessageFactory, requestFactory, _network,
-        _p2pNodeID, *m_ioServicePool->getIOService());
+        _p2pNodeID, *m_ioServicePool->getIOService(), m_ioServicePool);
 }
 
 void GatewayFactory::registerAMOPHandlers(

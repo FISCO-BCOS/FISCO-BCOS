@@ -25,7 +25,6 @@
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <cstddef>
 #include <cstdlib>

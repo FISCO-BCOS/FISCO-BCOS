@@ -25,7 +25,7 @@
 #include "bcos-front/FrontServiceFactory.h"
 #include "bcos-gateway/GatewayFactory.h"
 #include "bcos-utilities/Common.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/IOServicePool.h>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -37,7 +37,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     auto gatewayFactory = std::make_shared<bcos::gateway::GatewayFactory>("", "");
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontBuild");
-    auto threadPool = std::make_shared<bcos::ThreadPool>("frontServiceTest", 16);
+    auto threadPool = std::make_shared<bcos::IOServicePool>("frontServiceTest", 16);
 
     // build gateway
     gatewayFactory->setIOServicePool(ioServicePool);

@@ -23,7 +23,7 @@
 #include "bcos-framework/storage/Common.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #define SLEEP_MILLI_SECONDS 10
 
 using namespace bcos::storage;
@@ -36,9 +36,9 @@ public:
     MockStorage()
     {
         data[storage::SYS_TABLE] = std::map<std::string, Entry::Ptr>();
-        m_threadPool = std::make_shared<bcos::ThreadPool>("mockStorage", 4);
+        m_threadPool = std::make_shared<bcos::IOServicePool>(, "mockStorage");
     }
-    virtual ~MockStorage() { m_threadPool->stop(); }
+    virtual ~MockStorage() { m_threadPool/* IOServicePool lifecycle managed externally */; }
 
     std::vector<std::string> getPrimaryKeys(const std::shared_ptr<TableInfo>& _tableInfo,
         const Condition::Ptr& _condition) const override
@@ -156,7 +156,7 @@ public:
     {
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_tableInfo, _condition, _callback, self]() {
+        m_threadPool->post([_tableInfo, _condition, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
@@ -188,7 +188,7 @@ public:
         auto key = std::string(_key);
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_tableInfo, key, _callback, self]() {
+        m_threadPool->post([_tableInfo, key, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
@@ -219,7 +219,7 @@ public:
     {
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_tableInfo, _keyList, _callback, self]() {
+        m_threadPool->post([_tableInfo, _keyList, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
@@ -250,7 +250,7 @@ public:
     {
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_number, _tableInfo, _tableMap, _callback, self]() {
+        m_threadPool->post([_number, _tableInfo, _tableMap, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
@@ -280,7 +280,7 @@ public:
     {
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_number, _table, _callback, self]() {
+        m_threadPool->post([_number, _table, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
@@ -302,7 +302,7 @@ public:
     {
         auto self =
             std::weak_ptr<MockStorage>(std::dynamic_pointer_cast<MockStorage>(shared_from_this()));
-        m_threadPool->enqueue([_blockNumber, _callback, self]() {
+        m_threadPool->post([_blockNumber, _callback, self]() {
             auto storage = self.lock();
             if (storage)
             {
@@ -361,7 +361,7 @@ public:
     {}
 
 private:
-    bcos::ThreadPool::Ptr m_threadPool = nullptr;
+    bcos::IOServicePool::Ptr m_threadPool = nullptr;
     std::map<std::string, std::map<std::string, Entry::Ptr>> data;
     mutable std::mutex m_mutex;
     std::map<protocol::BlockNumber, TableFactoryInterface::Ptr> m_number2TableFactory;

@@ -35,7 +35,8 @@ public:
         storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
         bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
                 std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables,
-                std::string name);
+                std::string name,
+                bcos::IOServicePool::Ptr ioServicePool = nullptr);
 
     ~ShardingTransactionExecutor() override = default;
 

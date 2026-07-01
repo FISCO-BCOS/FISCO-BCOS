@@ -424,7 +424,7 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         (uint32_t)TransactionStatus::AlreadyInTxPool, importedTxNum);
 
     // batch import transactions with multiple thread
-    auto threadPool = std::make_shared<ThreadPool>("txpoolSubmitter", 8);
+    auto threadPool = std::make_shared<IOServicePool>(8, "txpoolSubmitter");
 
     Transactions transactions;
     for (auto i = 0; i < 40; i++)

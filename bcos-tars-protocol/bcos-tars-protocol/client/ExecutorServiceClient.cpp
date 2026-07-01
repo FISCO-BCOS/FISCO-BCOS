@@ -35,7 +35,7 @@ template <typename... Args>
 class AsyncCallback
 {
 public:
-    AsyncCallback(std::weak_ptr<bcos::ThreadPool> threadPool, std::function<void(Args...)> callback)
+    AsyncCallback(std::weak_ptr<bcos::IOServicePool> threadPool, std::function<void(Args...)> callback)
       : m_pool(threadPool), m_callback(std::move(callback))
     {}
 
@@ -45,7 +45,7 @@ public:
         if (pool)
         {
             // m_callback(std::move(args)...);
-            pool->enqueue([callback = std::move(m_callback),
+            pool->post([callback = std::move(m_callback),
                               m_args = std::make_shared<std::tuple<Args...>>(
                                   std::make_tuple(std::forward<Args>(args)...))]() mutable {
                 std::apply(callback, std::move(*m_args));
@@ -54,7 +54,7 @@ public:
     }
 
 private:
-    std::weak_ptr<bcos::ThreadPool> m_pool;
+    std::weak_ptr<bcos::IOServicePool> m_pool;
     std::function<void(Args...)> m_callback;
 };
 
@@ -64,7 +64,7 @@ void ExecutorServiceClient::status(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutorStatus::UniquePtr)>&&
                 _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -102,7 +102,7 @@ void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -136,7 +136,7 @@ void ExecutorServiceClient::executeTransaction(bcos::protocol::ExecutionMessage:
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(
                 bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -175,7 +175,7 @@ void ExecutorServiceClient ::call(bcos::protocol::ExecutionMessage::UniquePtr in
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(
                 bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -214,7 +214,7 @@ void ExecutorServiceClient::executeTransactions(std::string contractAddress,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -266,7 +266,7 @@ void ExecutorServiceClient::preExecuteTransactions(int64_t schedulerTermId,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -309,7 +309,7 @@ void ExecutorServiceClient::dmcExecuteTransactions(std::string contractAddress,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -362,7 +362,7 @@ void ExecutorServiceClient::dagExecuteTransactions(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -413,7 +413,7 @@ void ExecutorServiceClient::dmcCall(bcos::protocol::ExecutionMessage::UniquePtr 
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(
                 bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
@@ -450,7 +450,7 @@ void ExecutorServiceClient::getHash(bcos::protocol::BlockNumber number,
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -483,7 +483,7 @@ void ExecutorServiceClient::prepare(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::Ptr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -508,7 +508,7 @@ void ExecutorServiceClient::commit(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::Ptr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -532,7 +532,7 @@ void ExecutorServiceClient::rollback(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::Ptr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -557,7 +557,7 @@ void ExecutorServiceClient::reset(std::function<void(bcos::Error::Ptr)> callback
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::Ptr)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -579,7 +579,7 @@ void ExecutorServiceClient::getCode(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::Ptr, bcos::bytes)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -611,7 +611,7 @@ void ExecutorServiceClient::getABI(
     class Callback : public ExecutorServicePrxCallback
     {
     public:
-        Callback(std::weak_ptr<bcos::ThreadPool> threadPool,
+        Callback(std::weak_ptr<bcos::IOServicePool> threadPool,
             std::function<void(bcos::Error::Ptr, std::string)>&& _callback)
           : m_callback(threadPool, std::move(_callback))
         {}
@@ -646,9 +646,9 @@ void ExecutorServiceClient::updateEoaNonce(std::unordered_map<std::string, bcos:
 {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unimplemented"));
 }
-bcostars::ExecutorServiceClient::ExecutorServiceClient(ExecutorServicePrx _prx)
+bcostars::ExecutorServiceClient::ExecutorServiceClient(ExecutorServicePrx _prx,
+    bcos::IOServicePool::Ptr ioServicePool)
   : m_prx(_prx),
-    m_callbackPool(
-        std::make_shared<bcos::ThreadPool>("executorCallback", std::thread::hardware_concurrency()))
+    m_callbackPool(std::move(ioServicePool))
 {}
 bcostars::ExecutorServiceClient::~ExecutorServiceClient() {}

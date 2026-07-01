@@ -20,9 +20,22 @@
 
 #include <bcos-utilities/Common.h>
 #include <cstddef>
+#include <cstdint>
 
 namespace bcos::ledger::mpt
 {
+
+/// The number of distinct nibble values (0..15): a hex digit's range, and a branch node's fan-out.
+inline constexpr std::uint8_t NIBBLE_RANGE = 16;
+
+/// Bits per nibble: a nibble is one hex digit = 4 bits.
+inline constexpr unsigned NIBBLE_BITS = 4;
+
+/// A byte holds two nibbles (high nibble first).
+inline constexpr size_t NIBBLES_PER_BYTE = 2;
+
+/// Mask selecting the low nibble (low 4 bits) of a byte.
+inline constexpr bcos::byte LOW_NIBBLE_MASK = 0x0F;
 
 /// Splits each byte into two nibbles (high nibble first).
 /// Example: {0xab, 0xcd} -> {0x0a, 0x0b, 0x0c, 0x0d}

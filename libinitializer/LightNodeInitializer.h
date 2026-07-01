@@ -2,14 +2,14 @@
 
 #include "bcos-concepts/Serialize.h"
 #include "bcos-lightnode/Log.h"
-#include <bcos-concepts/ledger/Ledger.h>
+#include <legacy/concepts/bcos-concepts/ledger/Ledger.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/front/FrontServiceInterface.h>
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/storage/StorageInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-front/FrontService.h>
-#include <bcos-ledger/LedgerImpl.h>
+#include <legacy/bcos-ledger/LedgerImpl.h>
 #include <bcos-lightnode/scheduler/SchedulerWrapperImpl.h>
 #include <bcos-lightnode/transaction-pool/TransactionPoolImpl.h>
 #include <bcos-protocol/TransactionStatus.h>

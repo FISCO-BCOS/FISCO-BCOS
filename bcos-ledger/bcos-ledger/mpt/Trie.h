@@ -21,6 +21,7 @@
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <functional>
 #include <optional>
 
 namespace bcos::ledger::mpt
@@ -36,7 +37,7 @@ public:
     bcos::h256 root() const noexcept { return m_root; }
 
 private:
-    NodeCache& m_cache;
+    std::reference_wrapper<NodeCache> m_cache;
     bcos::h256 m_root;
 };
 }  // namespace bcos::ledger::mpt

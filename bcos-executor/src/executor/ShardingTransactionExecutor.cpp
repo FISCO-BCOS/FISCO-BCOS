@@ -38,11 +38,13 @@ ShardingTransactionExecutor::ShardingTransactionExecutor(bcos::ledger::LedgerInt
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
     bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
-    std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name)
+    std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name,
+    bcos::IOServicePool::Ptr ioServicePool)
   : TransactionExecutor(std::move(ledger), std::move(txpool), std::move(cachedStorage),
         std::move(backendStorage), std::move(executionMessageFactory),
         std::move(stateStorageFactory), std::move(hashImpl), isWasm, isAuthCheck,
-        std::move(vmFactory), std::move(keyPageIgnoreTables), std::move(name))
+        std::move(vmFactory), std::move(keyPageIgnoreTables), std::move(name),
+        std::move(ioServicePool))
 {}
 
 void ShardingTransactionExecutor::executeTransactions(std::string contractAddress,
@@ -436,7 +438,7 @@ std::shared_ptr<ExecutiveFlowInterface> ShardingTransactionExecutor::getExecutiv
                     m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
                 executiveFlow = std::make_shared<ExecutiveDagFlow>(executiveFactory, m_abiCache);
                 blockContext->setExecutiveFlow(codeAddress, executiveFlow);
-                executiveFlow->setThreadPool(m_threadPool);
+                executiveFlow->setThreadPool(m_ioServicePool);
             }
             else
             {

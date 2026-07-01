@@ -23,7 +23,7 @@
 #include <bcos-framework/consensus/ConsensusInterface.h>
 #include <bcos-framework/ledger/LedgerConfig.h>
 #include <bcos-pbft/pbft/config/PBFTConfig.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::crypto;
@@ -47,7 +47,7 @@ class FakeConsensus : public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeConsensus>;
-    FakeConsensus() { m_taskPool = std::make_shared<ThreadPool>("task", 1); }
+    FakeConsensus() { m_taskPool = std::make_shared<IOServicePool>(1, "task"); m_strand = std::make_unique<Strand>(m_taskPool); }
     FakeConsensus(bcos::crypto::KeyPairInterface::Ptr _keyPair) : FakeConsensus()
     {
         m_kp = _keyPair;
@@ -56,7 +56,7 @@ public:
 
 
     void start() override {}
-    void stop() override { m_taskPool->stop(); }
+    void stop() override { m_taskPool.reset(); }
 
     // useless for bcos-sync
     void asyncSubmitProposal(bool, const protocol::Block&, BlockNumber, HashType const&,
@@ -69,7 +69,7 @@ public:
     // the sync module calls this interface to check block
     void asyncCheckBlock(Block::Ptr, std::function<void(Error::Ptr, bool)> _onVerifyFinish) override
     {
-        m_taskPool->enqueue(
+        m_strand->post(
             [_onVerifyFinish, this]() { _onVerifyFinish(nullptr, m_checkBlockResult); });
     }
 
@@ -78,7 +78,7 @@ public:
         LedgerConfig::Ptr _ledgerConfig, std::function<void(Error::Ptr)> _onRecv) override
     {
         m_ledgerConfig = _ledgerConfig;
-        m_taskPool->enqueue([_onRecv]() { _onRecv(nullptr); });
+        m_strand->post([_onRecv]() { _onRecv(nullptr); });
     }
 
     // useless for the sync module
@@ -106,7 +106,8 @@ public:
 private:
     std::atomic_bool m_checkBlockResult = {true};
     LedgerConfig::Ptr m_ledgerConfig;
-    ThreadPool::Ptr m_taskPool;
+    IOServicePool::Ptr m_taskPool;
+    std::unique_ptr<Strand> m_strand;
     bcos::crypto::KeyPairInterface::Ptr m_kp;
 };
 }  // namespace test

@@ -178,8 +178,6 @@ class ServiceConfigGenerator:
         ini_config[section]['listen_port'] = str(service_config.listen_port)
         ini_config[section]['sm_ssl'] = utilities.convert_bool_to_str(
             service_config.sm_ssl)
-        ini_config[section]['thread_count'] = str(
-            service_config.thread_count)
         ini_config["service"]['gateway'] = service_config.agency_config.chain_id + \
             "." + service_config.agency_config.gateway_service_name
         ini_config["service"]['rpc'] = service_config.agency_config.chain_id + \

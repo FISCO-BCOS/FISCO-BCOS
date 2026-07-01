@@ -123,11 +123,6 @@ uint16_t GatewayConfig::listenPort() const
     return m_listenPort;
 }
 
-uint32_t GatewayConfig::threadPoolSize() const
-{
-    return m_threadPoolSize;
-}
-
 bool GatewayConfig::smSSL() const
 {
     return m_smSSL;
@@ -577,6 +572,14 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_enableCompress = _pt.get<bool>("p2p.enable_compression", true);
 
+    // Deprecation warning for removed p2p.thread_count
+    if (_pt.get_optional<uint32_t>("p2p.thread_count"))
+    {
+        GATEWAY_CONFIG_LOG(WARNING)
+            << LOG_DESC("initP2PConfig: p2p.thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     constexpr static uint32_t defaultAllowMaxMsgSize = MAX_MESSAGE_LENGTH;
     m_allowMaxMsgSize = _pt.get<uint32_t>("p2p.allow_max_msg_size", defaultAllowMaxMsgSize);
 
@@ -602,9 +605,6 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
     constexpr static uint32_t defaultMaxSendMsgCount = 10;
     m_maxSendMsgCount = _pt.get<uint32_t>("p2p.session_max_send_msg_count", defaultMaxSendMsgCount);
 
-    constexpr static uint32_t defaultThreadPoolSize = 8;
-    m_threadPoolSize = _pt.get<uint32_t>("p2p.thread_count", defaultThreadPoolSize);
-
     m_smSSL = smSSL;
     m_listenIP = listenIP;
     m_listenPort = (uint16_t)listenPort;
@@ -618,7 +618,6 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.session_max_read_data_size", m_maxReadDataSize)
                              << LOG_KV("p2p.session_max_send_data_size", m_maxSendDataSize)
                              << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
-                             << LOG_KV("p2p.thread_count", m_threadPoolSize)
                              << LOG_KV("p2p.nodes_path", m_nodePath)
                              << LOG_KV("p2p.nodes_file", m_nodeFileName)
                              << LOG_KV("p2p.readonly", m_readonly)

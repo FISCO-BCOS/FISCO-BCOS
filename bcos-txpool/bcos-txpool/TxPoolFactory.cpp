@@ -52,6 +52,7 @@ TxPoolFactory::TxPoolFactory(NodeIDPtr _nodeId, CryptoSuite::Ptr _cryptoSuite,
 
 
 TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool,
     size_t _notifyWorkerNum, size_t _verifierWorkerNum, uint64_t _txsExpirationTime)
 {
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction validator");
@@ -77,7 +78,8 @@ TxPool::Ptr TxPoolFactory::createTxPool(boost::asio::io_context& _ioContext,
 
     TXPOOL_LOG(INFO) << LOG_DESC("create txpool") << LOG_KV("submitWorkerNum", _verifierWorkerNum)
                      << LOG_KV("notifyWorkerNum", _notifyWorkerNum);
-    m_txpool = std::make_shared<TxPool>(txpoolConfig, txpoolStorage, txsSync, _verifierWorkerNum);
+    m_txpool = std::make_shared<TxPool>(txpoolConfig, txpoolStorage, txsSync, _verifierWorkerNum,
+        std::move(_ioServicePool));
     return m_txpool;
 }
 

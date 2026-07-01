@@ -39,20 +39,15 @@ ExecutiveFactory::ExecutiveFactory(const BlockContext& blockContext,
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>> evmPrecompiled,
     std::shared_ptr<PrecompiledMap> precompiled,
     std::shared_ptr<const std::set<std::string>> staticPrecompiled,
-    const wasm::GasInjector& gasInjector)
+    const wasm::GasInjector& gasInjector, bcos::IOServicePool::Ptr ioServicePool)
   : m_evmPrecompiled(std::move(evmPrecompiled)),
     m_precompiled(std::move(precompiled)),
     m_staticPrecompiled(std::move(staticPrecompiled)),
     m_blockContext(blockContext),
     m_gasInjector(gasInjector),
-    m_isTiKVStorage(boost::iequals("tikv", protocol::g_BCOSConfig.storageType()))
-{
-    if (m_isTiKVStorage)
-    {
-        m_poolForPromiseWait =
-            std::make_shared<bcos::ThreadPool>("promiseWait", 128);
-    }
-}
+    m_isTiKVStorage(boost::iequals("tikv", protocol::g_BCOSConfig.storageType())),
+    m_ioServicePool(std::move(ioServicePool))
+{}
 
 const BlockContext& ExecutiveFactory::getBlockContext()
 {
@@ -80,7 +75,7 @@ std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
         if (m_isTiKVStorage)
         {
             // this logic is just for version lesser than 3.3.0, bug fix
-            executive = std::make_shared<PromiseTransactionExecutive>(m_poolForPromiseWait,
+            executive = std::make_shared<PromiseTransactionExecutive>(m_ioServicePool,
                 m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
         }
         else
@@ -134,7 +129,7 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::build(
     case ExecutiveType::coroutine:
         needUsePromise = m_isTiKVStorage;  // tikv storage need to use promise executive
         executive = std::make_shared<ShardingTransactionExecutive>(m_blockContext, _contractAddress,
-            contextID, seq, m_gasInjector, m_poolForPromiseWait, needUsePromise);
+            contextID, seq, m_gasInjector, m_ioServicePool, needUsePromise);
         break;
     default:
         assert(execType != ExecutiveType::billing);
@@ -152,7 +147,7 @@ std::shared_ptr<TransactionExecutive> ShardingExecutiveFactory::buildChild(
 {
     TransactionExecutive::Ptr childExecutive = std::make_shared<ShardingChildTransactionExecutive>(
         parent, m_blockContext, _contractAddress, contextID, seq, m_gasInjector,
-        m_poolForPromiseWait, parent->isUsePromise());
+        m_ioServicePool, parent->isUsePromise());
     setParams(childExecutive);
     return childExecutive;
 }

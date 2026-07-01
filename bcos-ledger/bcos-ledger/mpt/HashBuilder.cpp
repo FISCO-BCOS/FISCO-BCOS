@@ -23,8 +23,10 @@
 #include "Nibble.h"
 #include "NodeEncoder.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <span>
 #include <utility>
+#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -67,8 +69,8 @@ bcos::bytes hbRefToRaw(NodeRef const& ref)
         return ref.inlineBytes;
     }
     bcos::bytes out;
-    out.reserve(1 + bcos::h256::SIZE);
-    out.push_back(0xa0);
+    out.reserve(HASH_REF_ENCODED_SIZE);
+    out.push_back(RLP_HASH_REF_PREFIX);
     out.insert(out.end(), ref.hash.begin(), ref.hash.end());
     return out;
 }
@@ -101,11 +103,11 @@ NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth)
 {
     if (entries.size() == 1)
     {
-        HBEntry const& only = entries.front();
+        const auto& [nibbles, value] = entries.front();
         LeafNode leaf;
         // keyNibbles is the SUFFIX from `depth` to the end (64), not the full key.
-        leaf.keyNibbles.assign(only.nibbles.begin() + depth, only.nibbles.end());
-        leaf.value = only.value;
+        leaf.keyNibbles.assign(nibbles.begin() + depth, nibbles.end());
+        leaf.value = value;
         return hbEmit(ctx, TrieNode{std::move(leaf)});
     }
 
@@ -114,9 +116,8 @@ NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth)
         entries.front().nibbles.data() + depth, entries.front().nibbles.size() - depth);
     bcos::bytesConstRef const lastSuffix(
         entries.back().nibbles.data() + depth, entries.back().nibbles.size() - depth);
-    size_t const cpl = commonPrefixLen(firstSuffix, lastSuffix);
 
-    if (cpl > 0)
+    if (size_t const cpl = commonPrefixLen(firstSuffix, lastSuffix); cpl > 0)
     {
         // Shared prefix → extension over [depth, depth+cpl) pointing at a branch below it.
         NodeRef const childRef = hbBuildBranch(ctx, entries, depth + cpl);
@@ -131,6 +132,62 @@ NodeRef hbBuild(HBContext& ctx, std::span<HBEntry const> entries, size_t depth)
 }
 
 }  // namespace
+
+namespace
+{
+// File-local core: build over already-normalised, sorted, unique (keyHash, value-view) entries.
+// Stateless and reentrant (owns its hasher, touches no shared state) → independent inputs may be
+// built concurrently.
+TrieBuildResult computeTrieRootImpl(
+    std::span<std::pair<bcos::h256, bcos::bytesConstRef> const> sortedEntries)
+{
+    if (sortedEntries.empty())
+    {
+        return TrieBuildResult{.root = emptyRootHash(), .newNodes = {}};
+    }
+
+    std::vector<HBEntry> entries;
+    entries.reserve(sortedEntries.size());
+    for (auto const& [keyHash, value] : sortedEntries)
+    {
+        entries.push_back(
+            HBEntry{.nibbles = bytesToNibbles(keyHash.ref()), .value = value.toBytes()});
+    }
+
+    // Own hasher + own newNodes → no shared state: many computeTrieRootImpl calls may run
+    // concurrently for independent inputs (coarse-grained parallelism across tries).
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
+    HBContext ctx{.hasher = hasher, .newNodes = newNodes};
+    NodeRef const rootRef =
+        hbBuild(ctx, std::span<HBEntry const>{entries.data(), entries.size()}, /*depth=*/0);
+
+    // A trie root is ALWAYS a 32-byte hash, even when the top node encodes to < 32 bytes.
+    bcos::h256 root;
+    if (rootRef.kind == NodeRef::Kind::Hash)
+    {
+        root = rootRef.hash;
+    }
+    else
+    {
+        bcos::crypto::hasher::hash(hasher, bcos::ref(rootRef.inlineBytes), root);
+        newNodes.emplace(root, rootRef.inlineBytes);
+    }
+
+    return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};
+}
+}  // namespace
+
+TrieBuildResult computeTrieRoot(std::map<bcos::h256, bcos::bytes> const& entries)
+{
+    std::vector<std::pair<bcos::h256, bcos::bytesConstRef>> normalized;
+    normalized.reserve(entries.size());
+    for (auto const& [key, value] : entries)
+    {
+        normalized.emplace_back(key, bcos::ref(value));
+    }
+    return computeTrieRootImpl(normalized);
+}
 
 HashBuilder::HashBuilder(NodeCache& cache, bcos::h256 priorRoot)
   : m_cache(cache), m_priorRoot(priorRoot)
@@ -157,45 +214,28 @@ bcos::task::Task<bcos::h256> HashBuilder::commit()
                 "HashBuilder incremental rebuild on non-empty root is implemented in M4 (PR-10)"));
     }
 
-    // 1) Drop deletes (no-op from empty); collect survivors in sorted order (map is sorted).
-    std::vector<HBEntry> entries;
-    entries.reserve(m_changes.size());
+    // Resolve deletes (no-op from an empty trie); m_changes is sorted, so survivors stay sorted.
+    std::vector<std::pair<bcos::h256, bcos::bytesConstRef>> survivors;
+    survivors.reserve(m_changes.size());
     for (auto const& [key, maybeValue] : m_changes)
     {
         if (maybeValue.has_value())
         {
-            entries.push_back(HBEntry{bytesToNibbles(key.ref()), *maybeValue});
+            survivors.emplace_back(key, bcos::ref(*maybeValue));
         }
     }
-    if (entries.empty())
-    {
-        co_return emptyRootHash();
-    }
 
-    // 2) Build the canonical node tree synchronously, recording hash-kind nodes.
-    HBContext ctx{m_hasher, m_newNodes};
-    NodeRef const rootRef =
-        hbBuild(ctx, std::span<HBEntry const>{entries.data(), entries.size()}, /*depth=*/0);
+    // Build the trie through the stateless core, then take ownership of the produced nodes.
+    TrieBuildResult result = computeTrieRootImpl(survivors);
+    m_newNodes = std::move(result.newNodes);
 
-    // 3) A trie root is ALWAYS a 32-byte hash, even when the top node encodes to < 32 bytes.
-    bcos::h256 root;
-    if (rootRef.kind == NodeRef::Kind::Hash)
-    {
-        root = rootRef.hash;
-    }
-    else
-    {
-        bcos::crypto::hasher::hash(m_hasher, bcos::ref(rootRef.inlineBytes), root);
-        m_newNodes.emplace(root, rootRef.inlineBytes);
-    }
-
-    // 4) Flush every new node into the cache in one pass.
+    // Flush every new node into the cache in one pass.
     for (auto const& [hash, raw] : m_newNodes)
     {
-        co_await m_cache.put(hash, raw);
+        co_await m_cache.get().put(hash, raw);
     }
 
-    co_return root;
+    co_return result.root;
 }
 
 std::unordered_map<bcos::h256, bcos::bytes> HashBuilder::drainNewNodes()

@@ -25,6 +25,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <atomic>
 #include <memory>
+#include <optional>
 
 namespace bcos::timer
 {
@@ -63,8 +64,8 @@ private:
     TimerTask m_timerTask;
     int m_delayMS;
     int m_periodMS;
-    std::shared_ptr<boost::asio::steady_timer> m_delayHandler;
-    std::shared_ptr<boost::asio::steady_timer> m_timerHandler;
+    std::optional<boost::asio::steady_timer> m_delayHandler;
+    std::optional<boost::asio::steady_timer> m_timerHandler;
 };
 class TimerFactory
 {
@@ -72,13 +73,12 @@ public:
     using Ptr = std::shared_ptr<TimerFactory>;
     using ConstPtr = std::shared_ptr<TimerFactory>;
 
-    TimerFactory(std::shared_ptr<boost::asio::io_context> _ioService);
-    TimerFactory();
+    explicit TimerFactory(std::shared_ptr<boost::asio::io_context> _ioService);
     TimerFactory(const TimerFactory&) = delete;
     TimerFactory(TimerFactory&&) = delete;
     TimerFactory& operator=(const TimerFactory&) = delete;
     TimerFactory& operator=(TimerFactory&&) = delete;
-    ~TimerFactory();
+    ~TimerFactory() = default;
 
     /**
      * @brief
@@ -92,12 +92,6 @@ public:
         ;
 
 private:
-    void startThread();
-    void stopThread();
-
-    std::atomic_bool m_running = {false};
-    std::string m_threadName = "timerFactory";
-    std::unique_ptr<std::thread> m_worker;
     std::shared_ptr<boost::asio::io_context> m_ioService;
 };
 

@@ -24,7 +24,7 @@
 #include "bcos-gateway/libp2p/P2PInterface.h"
 #include "bcos-gateway/libp2p/P2PMessage.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "bcos-utilities/Timer.h"
 #include <boost/asio/io_context.hpp>
 namespace bcos
@@ -38,7 +38,8 @@ public:
     AMOPImpl(TopicManager::Ptr _topicManager, AMOPMessageFactory::Ptr _messageFactory,
         bcos::protocol::AMOPRequestFactory::Ptr _requestFactory,
         bcos::gateway::P2PInterface::Ptr _network, bcos::gateway::P2pID const& _p2pNodeID,
-        boost::asio::io_context& _ioContext);
+        boost::asio::io_context& _ioContext,
+        bcos::IOServicePool::Ptr _ioServicePool);
     virtual ~AMOPImpl();
 
     virtual void start();
@@ -148,7 +149,7 @@ private:
     std::shared_ptr<Timer> m_timer;
     bcos::gateway::P2PInterface::Ptr m_network;
     bcos::gateway::P2pID m_p2pNodeID;
-    ThreadPool::Ptr m_threadPool;
+    bcos::Strand m_strand;
 
     unsigned const TOPIC_SYNC_PERIOD = 2000;
 };
