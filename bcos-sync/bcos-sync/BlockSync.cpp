@@ -213,7 +213,7 @@ void BlockSync::executeWorker()
     }
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<BlockSync>::weak_from_this();
     m_downloadStrand.post([self]() {
         auto sync = self.lock();
         if (!sync)
@@ -326,7 +326,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
         }
         return;
     }
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<BlockSync>::weak_from_this();
     asyncNotifyBlockSyncMessage(
         _error, _nodeID, _data,
         [_uuid, _nodeID, self](bytesConstRef _respData) {
@@ -856,7 +856,7 @@ void BlockSync::fetchAndSendBlock(
     PublicPtr const& _peer, BlockNumber _number, int32_t _blockDataFlag = HEADER | TRANSACTIONS)
 {
     // only fetch blockHeader and transactions
-    auto self = weak_from_this();
+    auto self = std::enable_shared_from_this<BlockSync>::weak_from_this();
     m_config->ledger()->asyncGetBlockDataByNumber(_number, _blockDataFlag,
         [self, _peer = std::move(_peer), _number, _blockDataFlag](
             auto&& _error, Block::Ptr _block) {
