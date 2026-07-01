@@ -297,6 +297,16 @@ void NodeConfig::validateL2Invariants()
                                   "[alloc.*] section requires feature_l2_ethereum_compat enabled "
                                   "in [features]"));
     }
+    // L2 predeploys/genesis are EVM-only (loadExecutorConfig at ~201 already set
+    // m_isWasm before this runs). The WASM executor builds a different precompiled
+    // map and has no L2 ethereum-compat path, so reject the combination up front.
+    // Reuses the l2Enabled bit already computed above.
+    if (l2Enabled && genesis.m_isWasm)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "feature_l2_ethereum_compat requires the EVM executor; "
+                                  "is_wasm=true is not supported"));
+    }
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
