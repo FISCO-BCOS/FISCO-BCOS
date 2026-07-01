@@ -32,6 +32,9 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/groupmgr/TarsGroupManager.h>
+#include <bcos-rpc/jwtAuth/JwtConfig.h>
+#include <bcos-rpc/jwtAuth/JwtVerifier.h>
+#include <bcos-rpc/openginerpc/OPEngineJsonRpcImpl.h>
 #include <bcos-rpc/jsonrpc/JsonRpcFilterSystem.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/web3jsonrpc/Web3FilterSystem.h>
@@ -351,6 +354,28 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
     return wsConfig;
 }
 
+std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initOpEngineRpcServiceConfig(
+    const bcos::tool::NodeConfig::Ptr& _nodeConfig)
+{
+    auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
+    wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
+    wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
+    wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
+    wsConfig->setDisableSsl(true);
+    wsConfig->setMaxMsgSize(_nodeConfig->opEngineHttpBodySizeLimit());
+
+    RPC_LOG(INFO) << LOG_BADGE("initOpEngineRpcServiceConfig")
+                  << LOG_KV("listenIP", wsConfig->listenIP())
+                  << LOG_KV("listenPort", wsConfig->listenPort())
+                  << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
+                  << LOG_KV("asServer", wsConfig->asServer())
+                  << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
+                  << LOG_KV("jwtSecretFile", _nodeConfig->opEngineJwtSecretFile())
+                  << LOG_KV("jwtClockSkewSecs", _nodeConfig->opEngineClockSkewSecs());
+
+    return wsConfig;
+}
+
 bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     bcos::boostssl::ws::WsConfig::Ptr _config)
 {
@@ -390,26 +415,26 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
 
     if (auto httpServer = _wsService->httpServer())
     {
-        httpServer->setHttpReqHandler([jsonRpcInterface](std::string_view body, auto sender) {
-            jsonRpcInterface->onRPCRequest(body, std::move(sender));
+        httpServer->setHttpReqHandler([jsonRpcInterface](std::string_view body,
+            const bcos::boostssl::http::HttpRequestMeta&, auto sender) {
+jsonRpcInterface->onRPCRequest(body, std::move(sender));
         });
     }
     return jsonRpcInterface;
 }
 
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
-    int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager)
+    int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
+    FilterSystem::Ptr _filterSystem)
 {
-    auto web3FilterSystem = std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(),
-        _groupManager, m_nodeConfig->groupId(), m_nodeConfig->web3FilterTimeout(),
-        m_nodeConfig->web3MaxProcessBlock());
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
         m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager), m_gateway, _wsService,
-        web3FilterSystem, m_nodeConfig->web3SyncTransaction());
+        std::move(_filterSystem), m_nodeConfig->web3SyncTransaction());
 
     if (auto httpServer = _wsService->httpServer())
     {
-        httpServer->setHttpReqHandler([web3JsonRpc](std::string_view body, auto sender) {
+        httpServer->setHttpReqHandler([web3JsonRpc](std::string_view body,
+            const bcos::boostssl::http::HttpRequestMeta&, auto sender) {
             web3JsonRpc->onRPCRequest(body, std::move(sender));
         });
     }
@@ -434,6 +459,32 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     _wsService->setMessageFactory(messageFactory);
 
     return web3JsonRpc;
+}
+bcos::rpc::OPEngineJsonRpcImpl::Ptr RpcFactory::buildOpEngineJsonRpc(
+    boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
+    FilterSystem::Ptr _filterSystem)
+{
+    auto opEngineJsonRpc = std::make_shared<OPEngineJsonRpcImpl>(
+        m_nodeConfig->groupId(), m_nodeConfig->opEngineBatchRequestSizeLimit(), _groupManager,
+        std::move(_filterSystem), m_nodeConfig->web3SyncTransaction());
+
+    auto jwtConfig = std::make_shared<bcos::rpc::JwtConfig>();
+    jwtConfig->setSecretFile(m_nodeConfig->opEngineJwtSecretFile());
+    jwtConfig->setClockSkewSecs(m_nodeConfig->opEngineClockSkewSecs());
+    jwtConfig->setAllowedAlgorithms("HS256");
+    opEngineJsonRpc->setJwtVerifier(
+        std::make_shared<bcos::rpc::JwtVerifier>(std::move(jwtConfig)));
+
+    if (auto httpServer = _wsService->httpServer())
+    {
+        httpServer->setHttpReqHandler(
+            [opEngineJsonRpc](
+                std::string_view body, const bcos::boostssl::http::HttpRequestMeta& meta, auto sender) {
+            opEngineJsonRpc->onRPCRequest(body, meta, std::move(sender));
+        });
+    }
+
+    return opEngineJsonRpc;
 }
 
 
@@ -464,6 +515,19 @@ Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
                   << LOG_KV("ioThreadCount", m_nodeConfig->ioThreadCount())
                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
+    if (m_nodeConfig->enableOpEngineRpc())
+    {
+        auto opEngineConfig = initOpEngineRpcServiceConfig(m_nodeConfig);
+        auto opEngineWsService = buildWsService(std::move(opEngineConfig));
+        auto opEngineFilterSystem =
+            std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(), groupManager, m_nodeConfig->groupId(),
+                m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
+        auto opEngineJsonRpc =
+            buildOpEngineJsonRpc(opEngineWsService, groupManager, opEngineFilterSystem);
+
+        rpc->setOpEngineService(opEngineWsService);
+        rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
+    }
     return rpc;
 }
 
@@ -475,13 +539,26 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildAirAMOPClient(wsService);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
+    auto web3FilterSystem = std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(), groupManager, m_nodeConfig->groupId(),
+        m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
+
+    if (m_nodeConfig->enableOpEngineRpc())
+    {
+        auto opEngineConfig = initOpEngineRpcServiceConfig(m_nodeConfig);
+        auto opEngineWsService = buildWsService(std::move(opEngineConfig));
+        auto opEngineJsonRpc =
+            buildOpEngineJsonRpc(opEngineWsService, groupManager, web3FilterSystem);
+
+        rpc->setOpEngineService(opEngineWsService);
+        rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
+    }
     if (m_nodeConfig->enableWeb3Rpc())
     {
         auto web3Config = initWeb3RpcServiceConfig(m_nodeConfig);
         auto web3WsService = buildWsService(std::move(web3Config));
 
-        auto web3JsonRpc =
-            buildWeb3JsonRpc(m_nodeConfig->sendTxTimeout(), web3WsService, groupManager);
+        auto web3JsonRpc = buildWeb3JsonRpc(
+            m_nodeConfig->sendTxTimeout(), web3WsService, groupManager, web3FilterSystem);
 
         auto weakPtrWeb3JsonRpc = std::weak_ptr<Web3JsonRpcImpl>(web3JsonRpc);
 
