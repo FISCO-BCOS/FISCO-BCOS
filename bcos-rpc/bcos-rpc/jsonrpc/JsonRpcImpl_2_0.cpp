@@ -231,7 +231,7 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     jResp["extraData"] = std::string(transaction.extraData());
     if (transaction.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
-        jResp["value"] = boost::lexical_cast<std::string>(transaction.value());
+        jResp["value"] = toQuantity(transaction.value());
         jResp["gasPrice"] = std::string(transaction.gasPrice());
         jResp["gasLimit"] = transaction.gasLimit();
         jResp["maxFeePerGas"] = std::string(transaction.maxFeePerGas());
