@@ -45,6 +45,8 @@
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <cstdint>
 #include <set>
 #include <string_view>
 #include <thread>
@@ -241,6 +243,22 @@ void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
             alloc.balance = u256(balance);
             alloc.nonce = kv.second.get<std::string>("nonce", "0");
             requireDecimalField(kv.first, "nonce", alloc.nonce);
+            // nonce is serialized into the genesis allocs hash as a uint64
+            // big-endian field; reject anything that does not fit uint64 here so
+            // the operator gets a clear error instead of a silent truncation /
+            // parse failure at hashing time. requireDecimalField already pinned
+            // the value to decimal digits, so the only remaining failure is
+            // overflow, which lexical_cast reports via bad_lexical_cast.
+            try
+            {
+                boost::lexical_cast<uint64_t>(alloc.nonce);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "[" + kv.first + "].nonce must fit in uint64: " + alloc.nonce));
+            }
             alloc.code = kv.second.get<std::string>("code");
             requireHexField(kv.first, "code", alloc.code, 0, true);
             // storage section is a sibling flat key "<alloc.N>.storage"; '\0'

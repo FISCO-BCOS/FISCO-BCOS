@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "GenesisStateRoot.h"
 #include "LedgerMethods.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
@@ -1891,6 +1892,16 @@ bool Ledger::buildGenesisBlock(
         }
         auto genesisBlockHash = co_await ledger::getBlockHash(*m_stateStorage, 0, fromStorage);
         auto genesisData = generateGenesisData(genesis, ledgerConfig);
+        // op-geth-compatible Ethereum state root over the allocs. Empty (zero)
+        // for pbft chains with no allocs. Set as the L2 genesis block's
+        // stateRoot below, and re-derived on restart to guard alloc
+        // immutability. computeGenesisStateRoot only reads genesis.m_allocs, so
+        // it does not depend on the genesis state being written first.
+        bcos::h256 ethStateRoot;
+        if (!genesis.m_allocs.empty())
+        {
+            ethStateRoot = co_await computeGenesisStateRoot(genesis);
+        }
         if (genesisBlockHash)
         {
             // genesis block exists, quit
@@ -1900,7 +1911,27 @@ bool Ledger::buildGenesisBlock(
             bcos::protocol::BlockHeader::Ptr genesisBlockHeader = block->blockHeader();
             auto existsGenesisData = genesisBlockHeader->extraData().toStringView();
 
-            // check genesisData whether inconsistent with initialGenesisData
+            // generateGenesisData() (hence extraData) covers chainID / groupID /
+            // smCrypto / isWasm / [features] / consensus / version / executor /
+            // tx / nodes, but NOT the allocs. The allocs are pinned by the
+            // genesis block's stateRoot (set to ethStateRoot on first init); a
+            // config change to any alloc changes that root, so compare the
+            // stored header's stateRoot against the freshly derived one.
+            if (existsGenesisData == genesisData && !genesis.m_allocs.empty() &&
+                genesisBlockHeader->stateRoot() != ethStateRoot)
+            {
+                LEDGER_LOG(FATAL) << LOG_BADGE("buildGenesisBlock")
+                                  << LOG_DESC("genesis allocs changed since first init")
+                                  << LOG_KV(
+                                         "storedStateRoot", genesisBlockHeader->stateRoot().hex())
+                                  << LOG_KV("computedStateRoot", ethStateRoot.hex());
+                BOOST_THROW_EXCEPTION(
+                    bcos::tool::InvalidConfig() << errinfo_comment(
+                        "genesis allocs changed since first init (op-geth state root mismatch); "
+                        "refuse to start. stored=" +
+                        genesisBlockHeader->stateRoot().hex() + " computed=" + ethStateRoot.hex()));
+            }
+
             if (existsGenesisData == genesisData)
             {
                 auto version = genesis.m_compatibilityVersion;
@@ -2022,6 +2053,16 @@ bool Ledger::buildGenesisBlock(
             header->setVersion(versionNumber);
         }
         header->setExtraData(bcos::bytes(genesisData.begin(), genesisData.end()));
+        // L2 genesis: pin the allocs into the block hash via the op-geth state
+        // root (also the value the Engine-API eth-block view serves to op-node
+        // as the genesis stateRoot). pbft chains leave stateRoot empty as before
+        // — the FISCO-BCOS native stateRoot for blocks >= 1 is an XOR of
+        // per-block state-change hashes, a different domain from this MPT root,
+        // so only the (previously empty) genesis block carries it.
+        if (!genesis.m_allocs.empty())
+        {
+            header->setStateRoot(ethStateRoot);
+        }
         header->calculateHash(*m_blockFactory->cryptoSuite()->hashImpl());
 
         auto block = m_blockFactory->createBlock();
@@ -2050,6 +2091,10 @@ bool Ledger::buildGenesisBlock(
         // Write default features
         Features features;
         features.setGenesisFeatures(protocol::BlockVersion(versionNumber));
+        // feature_l2_ethereum_compat (if set in genesis.m_features) is handled
+        // by setGenesisFeatures(genesis.m_features, ...) below, which iterates
+        // every featureSet with enable > 0 and calls features.set(flag). No
+        // separate L2-mode set needed here.
 
         // tx count limit
         Entry txLimitEntry;
@@ -2216,6 +2261,14 @@ bool Ledger::buildGenesisBlock(
         Entry archivedNumber;
         archivedNumber.importFields({"0"});
         stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
+
+        // The op-geth genesis state root lives in the genesis block header's
+        // stateRoot (set during header construction above), not in a separate
+        // SYS_CURRENT_STATE row: the restart guard reads it back from the header,
+        // and the Engine-API eth-block view serves the header's stateRoot
+        // directly. importGenesisState() above wrote the alloc bytes into
+        // stateStorage in this same genesis commit.
+
         co_return true;
     }());
 }
