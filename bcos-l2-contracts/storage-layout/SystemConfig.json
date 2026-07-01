@@ -1,0 +1,131 @@
+{
+  "storage": [
+    {
+      "astId": 138,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "_initialized",
+      "offset": 0,
+      "slot": "0",
+      "type": "t_uint8"
+    },
+    {
+      "astId": 141,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "_initializing",
+      "offset": 1,
+      "slot": "0",
+      "type": "t_bool"
+    },
+    {
+      "astId": 566,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "1",
+      "type": "t_array(t_uint256)50_storage"
+    },
+    {
+      "astId": 10,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "_owner",
+      "offset": 0,
+      "slot": "51",
+      "type": "t_address"
+    },
+    {
+      "astId": 130,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "__gap",
+      "offset": 0,
+      "slot": "52",
+      "type": "t_array(t_uint256)49_storage"
+    },
+    {
+      "astId": 589,
+      "contract": "src/SystemConfig.sol:SystemConfig",
+      "label": "_config",
+      "offset": 0,
+      "slot": "101",
+      "type": "t_mapping(t_string_memory_ptr,t_struct(Entry)583_storage)"
+    }
+  ],
+  "types": {
+    "t_address": {
+      "encoding": "inplace",
+      "label": "address",
+      "numberOfBytes": "20"
+    },
+    "t_array(t_uint256)49_storage": {
+      "encoding": "inplace",
+      "label": "uint256[49]",
+      "numberOfBytes": "1568",
+      "base": "t_uint256"
+    },
+    "t_array(t_uint256)50_storage": {
+      "encoding": "inplace",
+      "label": "uint256[50]",
+      "numberOfBytes": "1600",
+      "base": "t_uint256"
+    },
+    "t_bool": {
+      "encoding": "inplace",
+      "label": "bool",
+      "numberOfBytes": "1"
+    },
+    "t_mapping(t_string_memory_ptr,t_struct(Entry)583_storage)": {
+      "encoding": "mapping",
+      "key": "t_string_memory_ptr",
+      "label": "mapping(string => struct SystemConfig.Entry)",
+      "numberOfBytes": "32",
+      "value": "t_struct(Entry)583_storage"
+    },
+    "t_string_memory_ptr": {
+      "encoding": "bytes",
+      "label": "string",
+      "numberOfBytes": "32"
+    },
+    "t_struct(Entry)583_storage": {
+      "encoding": "inplace",
+      "label": "struct SystemConfig.Entry",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "astId": 580,
+          "contract": "src/SystemConfig.sol:SystemConfig",
+          "label": "value",
+          "offset": 0,
+          "slot": "0",
+          "type": "t_uint192"
+        },
+        {
+          "astId": 582,
+          "contract": "src/SystemConfig.sol:SystemConfig",
+          "label": "enableNumber",
+          "offset": 24,
+          "slot": "0",
+          "type": "t_uint64"
+        }
+      ]
+    },
+    "t_uint192": {
+      "encoding": "inplace",
+      "label": "uint192",
+      "numberOfBytes": "24"
+    },
+    "t_uint256": {
+      "encoding": "inplace",
+      "label": "uint256",
+      "numberOfBytes": "32"
+    },
+    "t_uint64": {
+      "encoding": "inplace",
+      "label": "uint64",
+      "numberOfBytes": "8"
+    },
+    "t_uint8": {
+      "encoding": "inplace",
+      "label": "uint8",
+      "numberOfBytes": "1"
+    }
+  }
+}
