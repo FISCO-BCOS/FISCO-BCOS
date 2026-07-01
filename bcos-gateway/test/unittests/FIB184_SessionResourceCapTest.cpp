@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(ForcedSmallRecvBufferIsHonored)
     auto session = std::make_shared<Session>(fakeSocket, *fakeHost, /*size*/ 2, /*forceSize*/ true);
     BOOST_CHECK_EQUAL(session->recvBuffer().recvBufferSize(), 2u);
     // grow ceiling is still the 512KB minimum
-    BOOST_CHECK_EQUAL(session->m_maxRecvBufferSize, Session::MIN_SESSION_RECV_BUFFER_SIZE);
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session::MIN_SESSION_RECV_BUFFER_SIZE);
 
     session->setSocket(nullptr);
     fakeSocket->close();
@@ -132,7 +132,33 @@ BOOST_AUTO_TEST_CASE(DefaultRecvBufferStartsSmall)
     BOOST_CHECK_LT(
         Session::INITIAL_SESSION_RECV_BUFFER_SIZE, Session::MIN_SESSION_RECV_BUFFER_SIZE);
     // the grow ceiling stays at the 512KB minimum so large messages still fit after growth
-    BOOST_CHECK_EQUAL(session->m_maxRecvBufferSize, Session::MIN_SESSION_RECV_BUFFER_SIZE);
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), Session::MIN_SESSION_RECV_BUFFER_SIZE);
+
+    session->setSocket(nullptr);
+    fakeSocket->close();
+}
+
+// FIB-184: production createSession passes the config-validated ceiling (forced to
+// 2 * allow_max_msg_size = 64MB), NOT forceSize. The session must allocate only the small initial
+// buffer and keep the 64MB as the grow ceiling -- not preallocate 64MB per session (the
+// heap-exhaustion crash source). This is the production path the two tests above do not cover.
+BOOST_AUTO_TEST_CASE(ProductionLargeRecvBufferDoesNotPreallocate)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocket = std::make_shared<FakeSocket_FIB184>();
+    auto fakeAsio = std::make_shared<FakeASIO_FIB184>();
+    auto fakeHost = std::make_shared<FakeHost_FIB184>(hashImpl, fakeAsio);
+
+    constexpr size_t k64MB =
+        64UL * 1024 * 1024;  // == 2 * MAX_MESSAGE_LENGTH, the production ceiling
+    auto session =
+        std::make_shared<Session>(fakeSocket, *fakeHost, /*ceiling*/ k64MB, /*forceSize*/ false);
+
+    // initial allocation is the lazy 16KB, NOT the 64MB ceiling
+    BOOST_CHECK_EQUAL(
+        session->recvBuffer().recvBufferSize(), Session::INITIAL_SESSION_RECV_BUFFER_SIZE);
+    // the grow ceiling still reflects the requested 64MB so large messages fit after growth
+    BOOST_CHECK_EQUAL(session->maxRecvBufferSize(), k64MB);
 
     session->setSocket(nullptr);
     fakeSocket->close();

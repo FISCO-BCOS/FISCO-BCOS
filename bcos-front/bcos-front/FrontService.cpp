@@ -22,6 +22,7 @@
 #include <bcos-front/Common.h>
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <oneapi/tbb/task_arena.h>
@@ -36,6 +37,22 @@
 using namespace bcos;
 using namespace front;
 using namespace protocol;
+
+namespace
+{
+// FIB-185: warn (do not drop) when the pending send queue grows pathologically, e.g. when the
+// gateway send is convoyed on the session lock under TLS-churn. Diagnostic only; below the hard cap
+// no consensus message is dropped.
+constexpr std::size_t c_maxPendingSendQueueWarnSize = 100000;
+// FIB-185 (review): hard ceiling as a last-resort OOM guard. If the gateway send stays convoyed on
+// the session lock under extreme churn the queue could otherwise grow without bound and exhaust
+// memory (each entry pins an encoded consensus message). Above this cap the OLDEST pending send is
+// shed (the most stale consensus message, least useful to retransmit) and an error is logged.
+// Dropping a message is strictly better than OOM-killing the node, and PBFT re-broadcast / the
+// view-change path recover from a dropped message. Set well above the warn size so shedding only
+// happens in a genuine runaway, after the warning has fired.
+constexpr std::size_t c_maxPendingSendQueueHardCap = 10 * c_maxPendingSendQueueWarnSize;
+}  // namespace
 
 FrontService::FrontService()
   : m_localProtocol(g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService))
@@ -220,8 +237,8 @@ void FrontService::start()
 
     // try to getNodeIDs from gateway
     auto self = std::weak_ptr<FrontService>(shared_from_this());
-    m_gatewayInterface->asyncGetGroupNodeInfo(
-        m_groupID, [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
+    m_gatewayInterface->asyncGetGroupNodeInfo(m_groupID,
+        [self](const Error::Ptr& _error, const bcos::gateway::GroupNodeInfo::Ptr& _groupNodeInfo) {
             if (_error)
             {
                 FRONT_LOG(ERROR) << LOG_BADGE("start") << LOG_DESC("asyncGetGroupNodeInfo failed")
@@ -307,6 +324,13 @@ void FrontService::stop()
         {
             m_frontServiceThread->join();
         }
+
+        // FIB-185 (review): flush the serial send queue before returning. m_run is already false
+        // (set above), so enqueueSend accepts no new tasks; the in-flight drainer empties the queue
+        // and waiting on m_asyncGroup quiesces it, so pending consensus sends are dispatched at
+        // stop() time rather than only at destruction. The drainer reuses m_asyncGroup, the same
+        // group every other FrontService async dispatch runs on, so this also joins those.
+        m_asyncGroup.wait();
     }
     catch (const std::exception& e)
     {
@@ -461,6 +485,117 @@ task::Task<void> FrontService::broadcastMessage(
     co_await m_gatewayInterface->broadcastMessage(type, m_groupID, moduleID, *m_nodeID,
         ::ranges::views::concat(
             ::ranges::views::single(bcos::ref(std::as_const(header))), std::move(payloads)));
+}
+
+void FrontService::asyncBroadcastMessageByOwnedPayload(
+    uint16_t type, int moduleID, bytesPointer payload)
+{
+    // FIB-185: enqueue the gateway broadcast onto the serial send queue and return immediately, so
+    // the caller (e.g. PBFT under m_mutex) never runs the gateway-session-lock-acquiring send on
+    // its own thread. The owned payload is captured by the task -> the message body is not copied
+    // (the gateway coroutine forwards it by reference from the shared_ptr).
+    enqueueSend([this, type, moduleID, payload = std::move(payload)]() {
+        FrontMessage message;
+        message.setModuleID(moduleID);
+        auto header = std::make_shared<bytes>();
+        message.encodeHeader(*header);
+        task::wait([](gateway::GatewayInterface::Ptr gateway, uint16_t msgType, std::string groupID,
+                       int module, bcos::crypto::NodeIDPtr srcNodeID, std::shared_ptr<bytes> hdr,
+                       bytesPointer body) -> task::Task<void> {
+            co_await gateway->broadcastMessage(msgType, groupID, module, *srcNodeID,
+                ::ranges::views::concat(::ranges::views::single(bcos::ref(*hdr)),
+                    ::ranges::views::single(bcos::ref(*body))));
+        }(m_gatewayInterface, type, m_groupID, moduleID, m_nodeID, header, payload));
+    });
+}
+
+void FrontService::asyncSendMessageByNodeIDByOwnedPayload(
+    int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
+{
+    // FIB-185: enqueue the point-to-point send onto the serial queue and return immediately, so the
+    // caller (PBFT under m_mutex, via sendViewChange / sendRecoverResponse) never runs the
+    // gateway-session-lock-acquiring send on its own thread. The owned payload is captured to keep
+    // it alive for the (synchronous) wire-frame encode inside asyncSendMessageByNodeID.
+    enqueueSend([this, moduleID, nodeID = std::move(nodeID), payload = std::move(payload)]() {
+        asyncSendMessageByNodeID(moduleID, nodeID, bcos::ref(*payload), 0, nullptr);
+    });
+}
+
+void FrontService::enqueueSend(std::function<void()> _sendTask)
+{
+    // FIB-185 (review): once stopped, do not enqueue new sends nor kick a drainer. stop() flushes
+    // the queue and waits on m_asyncGroup; a task enqueued after that would either be lost or,
+    // worse, run a drainer that outlives this FrontService. New sends after stop are dropped on
+    // purpose (the node is shutting down).
+    if (!m_run)
+    {
+        return;
+    }
+    m_sendQueue.push(std::move(_sendTask));
+    // backpressure: warn while still unbounded, then shed the oldest above the hard cap (OOM guard)
+    auto pending = m_sendQueue.unsafe_size();
+    if (pending > c_maxPendingSendQueueWarnSize)
+    {
+        FRONT_LOG(WARNING) << LOG_BADGE("enqueueSend")
+                           << LOG_DESC(
+                                  "pending send queue unusually large; gateway send may be "
+                                  "convoyed on the session lock")
+                           << LOG_KV("pending", pending);
+    }
+    if (pending > c_maxPendingSendQueueHardCap)
+    {
+        std::function<void()> dropped;
+        if (m_sendQueue.try_pop(dropped))
+        {
+            FRONT_LOG(ERROR) << LOG_BADGE("enqueueSend")
+                             << LOG_DESC(
+                                    "send queue hard cap exceeded; dropped oldest pending send to "
+                                    "avoid OOM")
+                             << LOG_KV("pending", pending)
+                             << LOG_KV("hardCap", c_maxPendingSendQueueHardCap);
+        }
+    }
+    // kick a single drainer if none is running (CAS false -> true wins the right to drain)
+    bool expected = false;
+    if (m_sendDraining.compare_exchange_strong(expected, true))
+    {
+        m_taskArena.execute([&]() { m_asyncGroup.run([this]() { drainSendQueue(); }); });
+    }
+}
+
+void FrontService::drainSendQueue()
+{
+    // single drainer: run tasks one at a time so sends keep submission order (FIFO). Each task is
+    // self-contained (owns its payload); a throwing task is logged, never escalated -- an exception
+    // escaping here would otherwise abort the tbb worker thread.
+    for (;;)
+    {
+        std::function<void()> task;
+        while (m_sendQueue.try_pop(task))
+        {
+            try
+            {
+                task();
+            }
+            catch (std::exception const& e)
+            {
+                FRONT_LOG(WARNING) << LOG_BADGE("drainSendQueue")
+                                   << LOG_KV("error", boost::diagnostic_information(e));
+            }
+        }
+        // release the drainer slot, then re-check to avoid a lost wakeup against a concurrent
+        // enqueueSend that pushed after our last try_pop but before we cleared the flag.
+        m_sendDraining.store(false);
+        if (m_sendQueue.empty())
+        {
+            break;
+        }
+        bool expected = false;
+        if (!m_sendDraining.compare_exchange_strong(expected, true))
+        {
+            break;
+        }
+    }
 }
 
 /**

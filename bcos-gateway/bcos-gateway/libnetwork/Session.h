@@ -187,6 +187,11 @@ public:
 
     SessionRecvBuffer& recvBuffer();
     const SessionRecvBuffer& recvBuffer() const;
+
+    // FIB-184 (review): grow ceiling for the recv buffer, set from the config-validated size at
+    // construction. Exposed read-only; the member itself is private (below) so external callers
+    // can read but never widen this security bound.
+    std::size_t maxRecvBufferSize() const { return m_maxRecvBufferSize; }
     /**
      * @brief The packets that can be sent are obtained based on the configured policy
      *
@@ -202,7 +207,13 @@ public:
 
     void doRead();
 
+    // FIB-184 (review): keep the grow ceiling private so it can only be read via
+    // maxRecvBufferSize() and never widened from outside. Declared before m_recvBuffer to preserve
+    // member init order.
+private:
     std::size_t m_maxRecvBufferSize;
+
+public:
     SessionRecvBuffer m_recvBuffer;
 
     // ------ for optimize send message parameters  begin ---------------
@@ -240,7 +251,11 @@ public:
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
     std::mutex m_writingQueueMutex;
-    bool m_active = false;
+    // FIB-184 (review): atomic so the active flag is read/written without a data race between the
+    // network worker (set/clear in start/drop) and readers in active()/doRead(). Note active() is
+    // still a composite read (also m_socket / haveNetwork()), so this narrows but does not by
+    // itself make the whole liveness check atomic.
+    std::atomic<bool> m_active{false};
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;

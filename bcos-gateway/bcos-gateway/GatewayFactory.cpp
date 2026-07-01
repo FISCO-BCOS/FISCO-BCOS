@@ -649,6 +649,9 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     host->setPeerWhitelist(peerWhitelist);
     host->setSessionCallbackManager(sessionCallbackManager);
     host->setEnableSslVerify(_config->enableSSLVerify());
+    // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
+    host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
+    host->setMaxSessionsPerIP(_config->maxSessionsPerIP());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;

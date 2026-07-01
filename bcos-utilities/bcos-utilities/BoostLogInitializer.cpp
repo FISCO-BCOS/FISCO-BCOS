@@ -29,6 +29,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/core/core.hpp>
 #include <boost/log/support/date_time.hpp>
+#include <boost/log/utility/exception_handler.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 
 using namespace bcos;
@@ -116,6 +117,11 @@ BoostLogInitializer::initConsoleLogSink(
 {
     boost::log::add_common_attributes();
     boost::shared_ptr<console_sink_t> consoleSink(new console_sink_t());
+    // FIB-184: the sink is asynchronous, so its backend runs on a dedicated feeding thread. An
+    // exception thrown there (formatting/IO during feed_records) with no handler propagates to
+    // std::terminate -> abort, turning the logging subsystem into a crash amplifier under load.
+    // Suppress it so a single log record is dropped instead of aborting the node.
+    consoleSink->set_exception_handler(boost::log::make_exception_suppressor());
     consoleSink->locked_backend()->add_stream(
         boost::shared_ptr<std::ostream>(&std::cout, boost::null_deleter()));
 
@@ -260,6 +266,8 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initHo
     std::string fileName = _logPath + "/" + _logPrefix + "_%Y%m%d%H.%M.log";
 
     boost::shared_ptr<sink_t> sink(new sink_t());
+    // FIB-184: suppress async-sink feeding-thread exceptions so they cannot reach abort.
+    sink->set_exception_handler(boost::log::make_exception_suppressor());
     sink->locked_backend()->set_open_mode(std::ios::ate);
     sink->locked_backend()->set_time_based_rotation(
         boost::bind(&BoostLogInitializer::canRotate, this, (m_currentHourVec.size() - 1)));
@@ -285,6 +293,8 @@ boost::shared_ptr<bcos::BoostLogInitializer::sink_t> BoostLogInitializer::initLo
     /// set file name
     // std::string fileName = _logPath + "/" + "log_%Y%m%d_%H%M.log";
     boost::shared_ptr<sink_t> sink(new sink_t());
+    // FIB-184: suppress async-sink feeding-thread exceptions so they cannot reach abort.
+    sink->set_exception_handler(boost::log::make_exception_suppressor());
     sink->locked_backend()->enable_final_rotation(false);
     sink->locked_backend()->set_open_mode(std::ios::app);
     sink->locked_backend()->set_time_based_rotation(boost::log::sinks::file::rotation_at_time_point(

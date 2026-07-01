@@ -117,7 +117,7 @@ public:
         bool enableOutConnRateLimit() const;
 
         bool enableInRateLimit() const;
-    bool enableInP2pBasicMsgLimit() const;
+        bool enableInP2pBasicMsgLimit() const;
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
@@ -216,6 +216,13 @@ public:
     uint32_t sessionRecvBufferSize() const;
     void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize);
 
+    // FIB-184: caps on inbound sessions, configurable via p2p.max_concurrent_sessions /
+    // p2p.max_sessions_per_ip (previously hardcoded in Host). Bound memory under TLS churn.
+    std::size_t maxConcurrentSessions() const { return m_maxConcurrentSessions; }
+    void setMaxConcurrentSessions(std::size_t _limit) { m_maxConcurrentSessions = _limit; }
+    std::size_t maxSessionsPerIP() const { return m_maxSessionsPerIP; }
+    void setMaxSessionsPerIP(std::size_t _limit) { m_maxSessionsPerIP = _limit; }
+
     uint32_t maxReadDataSize() const;
     void setMaxReadDataSize(uint32_t _maxReadDataSize);
 
@@ -271,6 +278,9 @@ private:
     uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
     // p2p session read buffer size, default: 128k
     uint32_t m_sessionRecvBufferSize{128 * 1024};
+    // FIB-184: inbound session caps (defaults match the prior hardcoded Host constants)
+    std::size_t m_maxConcurrentSessions{1024};
+    std::size_t m_maxSessionsPerIP{32};
     uint32_t m_maxReadDataSize = 40 * 1024;
     uint32_t m_maxSendDataSize = 1024 * 1024;
     uint32_t m_maxSendMsgCount = 10;

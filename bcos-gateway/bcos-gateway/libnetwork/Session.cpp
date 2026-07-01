@@ -33,16 +33,19 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-Session::Session(std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize,
-    [[maybe_unused]] bool _forceSize)
+Session::Session(
+    std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(std::max<size_t>(_recvBufferSize, MIN_SESSION_RECV_BUFFER_SIZE)),
-    // FIB-184: do not force the 512KB floor on every session. Start at the requested/initial size
-    // (the config-validated session_recv_buffer_size for production sessions, a tiny value for
-    // tests) and let doRead grow the buffer up to m_maxRecvBufferSize on demand. Previously the
-    // non-forced path unconditionally allocated MIN_SESSION_RECV_BUFFER_SIZE (512KB) per session,
-    // which let connection churn exhaust the heap. _forceSize is now retained only for ABI/source
-    // compatibility of the signature; both paths honor _recvBufferSize as the initial size.
-    m_recvBuffer(_recvBufferSize),
+    // FIB-184: treat _recvBufferSize as the grow CEILING, not the initial allocation. Production
+    // createSession passes the config-validated session_recv_buffer_size, which is forced to
+    // 2 * allow_max_msg_size = 64MB; allocating that per session up front let authenticated TLS
+    // connect/close churn exhaust the heap (SIGSEGV inside malloc during Session construction).
+    // Allocate only INITIAL_SESSION_RECV_BUFFER_SIZE (16KB) initially and let doRead grow the
+    // buffer up to m_maxRecvBufferSize on demand, so only sessions that actually carry large
+    // messages pay for a large buffer. _forceSize keeps the exact size for tests that assert a
+    // specific small buffer.
+    m_recvBuffer(_forceSize ? _recvBufferSize :
+                              std::min<size_t>(_recvBufferSize, INITIAL_SESSION_RECV_BUFFER_SIZE)),
     m_server(server),
     m_socket(std::move(socket)),
     m_idleCheckTimer(
@@ -508,7 +511,20 @@ void Session::doRead()
                 session->m_lastReadTime.store(utcSteadyTime());
 
                 auto& recvBuffer = session->recvBuffer();
-                recvBuffer.onWrite(bytesTransferred);
+                // FIB-184 (review): onWrite advances the write position and returns false if the
+                // just-read bytes would overrun the recv buffer. With the lazy-initial / grow-on-
+                // demand buffer the read size is bounded by the write-buffer span, so this should
+                // not happen; but if it ever did the bytes would be silently dropped and the stream
+                // desynchronized. Treat it as a transport error and drop the session instead.
+                if (!recvBuffer.onWrite(bytesTransferred))
+                {
+                    SESSION_LOG(ERROR)
+                        << LOG_BADGE("doRead") << LOG_DESC("recv buffer overflow on write, drop")
+                        << LOG_KV("bytesTransferred", bytesTransferred)
+                        << LOG_KV("recvBufferSize", recvBuffer.recvBufferSize());
+                    session->drop(TCPError);
+                    return;
+                }
 
                 while (true)
                 {
@@ -617,7 +633,7 @@ void Session::doRead()
     else
     {
         SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactive")
-                           << LOG_KV("active", m_active)
+                           << LOG_KV("active", m_active.load())
                            << LOG_KV("haveNetwork", m_server.get().haveNetwork());
     }
 }

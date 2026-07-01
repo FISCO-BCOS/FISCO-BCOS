@@ -477,4 +477,28 @@ BOOST_AUTO_TEST_CASE(test_RedisConfig)
     BOOST_CHECK_EQUAL(config->redisConfig().db, 12);
 }
 
+// FIB-184: inbound session caps are plumbed through config (p2p.max_concurrent_sessions /
+// p2p.max_sessions_per_ip) instead of being hardcoded in Host.
+BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
+{
+    // defaults when the keys are absent
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        config->initP2PConfig(pt, false);
+        BOOST_CHECK_EQUAL(config->maxConcurrentSessions(), 1024U);
+        BOOST_CHECK_EQUAL(config->maxSessionsPerIP(), 32U);
+    }
+    // parsed when present
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.max_concurrent_sessions", 256);
+        pt.put("p2p.max_sessions_per_ip", 8);
+        config->initP2PConfig(pt, false);
+        BOOST_CHECK_EQUAL(config->maxConcurrentSessions(), 256U);
+        BOOST_CHECK_EQUAL(config->maxSessionsPerIP(), 8U);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

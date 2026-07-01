@@ -322,11 +322,9 @@ void PBFTEngine::onProposalApplySuccess(
 
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     auto startT = utcTime();
     auto recordT = utcTime();
     // Note: must lock here to ensure thread safe
@@ -476,10 +474,9 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
                    << LOG_KV("index", pbftMessage->index())
                    << LOG_KV("encode(ms)", encodeEnd - encodeStart)
                    << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
-    task::wait([](auto front, decltype(encodedData) encoded) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(std::as_const(*encoded))));
-    }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // handle the pre-prepare packet
     RecursiveGuard lock(m_mutex);
@@ -1346,11 +1343,9 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
                    << LOG_KV("packetSize", encodedData->size())
                    << LOG_KV("index", _prePrepareMsg->index());
     // only broadcast to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
 }
@@ -1494,9 +1489,11 @@ void PBFTEngine::sendViewChange(bcos::crypto::NodeIDPtr _dstNode)
     auto viewChangeReq = generateViewChange();
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(viewChangeReq);
-    // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, std::move(_dstNode), ref(*encodedData), 0, nullptr);
+    // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
+    // (the gateway session-lock acquire runs on the front's send queue, not on the consensus
+    // worker)
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::PBFT, std::move(_dstNode), std::move(encodedData));
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1515,8 +1512,10 @@ void PBFTEngine::sendRecoverResponse(bcos::crypto::NodeIDPtr _dstNode)
     response->setTimestamp(utcTime());
     response->setIndex(m_config->committedProposal()->index());
     auto encodedData = m_config->codec()->encode(response);
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, _dstNode, ref(*encodedData), 0, nullptr);
+    // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
+    // (copy _dstNode; it is logged below). The gateway send runs on the front's send queue.
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::PBFT, _dstNode, std::move(encodedData));
     PBFT_LOG(DEBUG) << LOG_DESC("sendRecoverResponse") << LOG_KV("peer", _dstNode->shortHex())
                     << m_config->printCurrentState();
 }
@@ -1529,23 +1528,15 @@ void PBFTEngine::broadcastViewChangeReq()
     // only broadcast to the consensus nodes
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
                    << LOG_KV("packetSize", encodedData->size());
-    // FIB-185 (Fix 1, deferred): this runs under m_mutex (onTimeout -> triggerTimeout holds it).
-    // task::wait here is already fire-and-forget (it starts the coroutine and returns without
-    // blocking to completion), so it does NOT block the worker on the network round-trip. The
-    // residual coupling is that the coroutine's inline prefix (up to its first suspension inside
-    // FrontService::broadcastMessage) executes on this thread while m_mutex is held; if that
-    // prefix contends a gateway/session lock during teardown churn it can briefly stall the
-    // worker. Fully moving the send off-lock would require dispatching it onto a dedicated
-    // executor, which touches consensus-thread/lifetime ordering near the view-change cache; the
-    // watchdog (checkConsensusTimerWatchdog) recovers a stalled timer without that risk. Splitting
-    // the send off-lock is left as a follow-up so the view-change cache invariants below are not
-    // disturbed.
-    // TODO(FIB-185): move the network broadcast fully off the m_mutex critical section (dedicated
-    // executor) once the consensus-thread ordering around the view-change cache is verified safe.
-    task::wait([](FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(*encodedData)));
-    }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: this runs under m_mutex (onTimeout -> triggerTimeout holds it). Hand the owned
+    // payload to FrontService::asyncBroadcastMessageByOwnedPayload, which enqueues the gateway send
+    // onto its serial send queue and returns immediately -- the gateway-session-lock-acquiring send
+    // no longer runs on the consensus worker while m_mutex is held (the coupling that wedged
+    // consensus under session-teardown churn is decoupled at the FrontService layer), and the owned
+    // payload is forwarded without copying. The view-change cache mutations below stay under the
+    // lock, unchanged.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
