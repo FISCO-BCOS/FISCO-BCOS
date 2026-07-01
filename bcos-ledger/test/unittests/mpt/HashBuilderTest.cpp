@@ -20,10 +20,11 @@
 #include "TestHelpers.h"
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/Nibble.h>
-#include <bcos-ledger/mpt/NodeCache.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -98,8 +99,8 @@ std::vector<std::pair<bcos::h256, bcos::bytes>> randomKvs(size_t count, uint32_t
 // An empty change-set yields the canonical empty-trie root.
 BOOST_AUTO_TEST_CASE(EmptyTrieReturnsEmptyRootHash)
 {
-    NodeCache cache;
-    HashBuilder builder(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    HashBuilder builder(storage, emptyRootHash());
     auto root = bcos::task::syncWait(builder.commit());
     BOOST_CHECK_EQUAL(root, emptyRootHash());
 }
@@ -107,8 +108,8 @@ BOOST_AUTO_TEST_CASE(EmptyTrieReturnsEmptyRootHash)
 // A single key+value must match an independently computed leaf root (anchors to M2 encoder).
 BOOST_AUTO_TEST_CASE(SingleLeafMatchesNodeEncoder)
 {
-    NodeCache cache;
-    HashBuilder builder(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    HashBuilder builder(storage, emptyRootHash());
     auto key = makeHash(0x42);
     bcos::bytes value{0xca, 0xfe, 0xba, 0xbe};
 
@@ -134,16 +135,16 @@ BOOST_AUTO_TEST_CASE(TwoKeysSharedPrefix)
     bcos::bytes valA{0x01, 0x02};
     bcos::bytes valB{0x03, 0x04};
 
-    NodeCache cache;
-    HashBuilder builder(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    HashBuilder builder(storage, emptyRootHash());
     bcos::task::syncWait(builder.put(keyA, valA));
     bcos::task::syncWait(builder.put(keyB, valB));
     auto root = bcos::task::syncWait(builder.commit());
 
     BOOST_CHECK_EQUAL(root, referenceRoot({{keyA, valA}, {keyB, valB}}));
 
-    // The top node is large here, so the root must be retrievable from cache.
-    auto cached = bcos::task::syncWait(cache.get(root));
+    // The top node is large here, so the root must be retrievable from storage.
+    auto cached = bcos::task::syncWait(bcos::storage2::readOne(storage, root));
     BOOST_REQUIRE(cached.has_value());
     BOOST_CHECK_EQUAL(hbKeccak(*cached), root);
 }
@@ -162,8 +163,8 @@ BOOST_AUTO_TEST_CASE(RandomBatchMatchesReference)
         auto rng = seededRng(0xC0FFEE + static_cast<uint32_t>(size));
         std::shuffle(shuffled.begin(), shuffled.end(), rng);
 
-        NodeCache cache;
-        HashBuilder builder(cache, emptyRootHash());
+        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+        HashBuilder builder(storage, emptyRootHash());
         for (auto const& [key, value] : shuffled)
         {
             bcos::task::syncWait(builder.put(key, value));
@@ -181,8 +182,8 @@ BOOST_AUTO_TEST_CASE(DrainNewNodesNonEmptyForLargeTrie)
 {
     auto kvs = randomKvs(50, /*seed=*/0xABCD);
 
-    NodeCache cache;
-    HashBuilder builder(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    HashBuilder builder(storage, emptyRootHash());
     for (auto const& [key, value] : kvs)
     {
         bcos::task::syncWait(builder.put(key, value));

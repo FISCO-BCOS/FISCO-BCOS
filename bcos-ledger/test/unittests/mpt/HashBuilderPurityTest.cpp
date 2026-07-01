@@ -18,9 +18,10 @@
  */
 
 #include "TestHelpers.h"
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/NodeCache.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -87,8 +88,8 @@ BOOST_AUTO_TEST_CASE(SameInputProducesByteIdenticalRootOver1000Runs)
         std::mt19937 orderRng{run};
         std::shuffle(shuffled.begin(), shuffled.end(), orderRng);
 
-        NodeCache cache;
-        HashBuilder hb(cache, emptyRootHash());
+        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+        HashBuilder hb(storage, emptyRootHash());
         for (auto const& [key, value] : shuffled)
         {
             bcos::task::syncWait(hb.put(key, value));
@@ -118,8 +119,8 @@ BOOST_AUTO_TEST_CASE(EmptyInputDeterministicallyEmptyRoot)
 {
     for (int run = 0; run < 8; ++run)
     {
-        NodeCache cache;
-        HashBuilder hb(cache, emptyRootHash());
+        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+        HashBuilder hb(storage, emptyRootHash());
         auto const root = bcos::task::syncWait(hb.commit());
         BOOST_CHECK_EQUAL(root, emptyRootHash());
         BOOST_CHECK(hb.drainNewNodes().empty());

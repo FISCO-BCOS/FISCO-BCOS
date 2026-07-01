@@ -18,9 +18,10 @@
  */
 
 #include "TestHelpers.h"
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/NodeCache.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -57,15 +58,15 @@ bcos::h256 trieKey(bcos::byte fill, bcos::byte tail, size_t tailLen)
 // A key that was inserted reads back its exact value through a freshly built root.
 BOOST_AUTO_TEST_CASE(GetExistentKeyReturnsValue)
 {
-    NodeCache cache;
-    HashBuilder hb(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    HashBuilder hb(storage, emptyRootHash());
 
     auto const key = makeHash(0xab);
     bcos::bytes const value{0x42};
     bcos::task::syncWait(hb.put(key, value));
     auto const root = bcos::task::syncWait(hb.commit());
 
-    Trie trie(cache, root);
+    Trie trie(storage, root);
     auto got = bcos::task::syncWait(trie.get(key));
     BOOST_REQUIRE(got.has_value());
     BOOST_CHECK(*got == value);
@@ -74,8 +75,8 @@ BOOST_AUTO_TEST_CASE(GetExistentKeyReturnsValue)
 // An empty trie returns nullopt for any key (no node fetch happens at all).
 BOOST_AUTO_TEST_CASE(GetNonexistentKeyReturnsNullopt)
 {
-    NodeCache cache;
-    Trie trie(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    Trie trie(storage, emptyRootHash());
 
     BOOST_CHECK(!bcos::task::syncWait(trie.get(makeHash(0x01))).has_value());
     BOOST_CHECK(!bcos::task::syncWait(trie.get(makeHash(0xff))).has_value());
@@ -109,15 +110,15 @@ BOOST_AUTO_TEST_CASE(MultiKeyEachKeyResolves)
     kvs.emplace_back(makeHash(0x30), bcos::bytes{0xc0});
     kvs.emplace_back(makeHash(0x4f), bcos::bytes{0xc1});
 
-    NodeCache cache;
-    HashBuilder hb(cache, emptyRootHash());
+    bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+    HashBuilder hb(storage, emptyRootHash());
     for (auto const& [key, value] : kvs)
     {
         bcos::task::syncWait(hb.put(key, value));
     }
     auto const root = bcos::task::syncWait(hb.commit());
 
-    Trie trie(cache, root);
+    Trie trie(storage, root);
     for (auto const& [key, value] : kvs)
     {
         auto got = bcos::task::syncWait(trie.get(key));

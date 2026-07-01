@@ -189,63 +189,10 @@ TrieBuildResult computeTrieRoot(std::map<bcos::h256, bcos::bytes> const& entries
     return computeTrieRootImpl(normalized);
 }
 
-HashBuilder::HashBuilder(NodeCache& cache, bcos::h256 priorRoot)
-  : m_cache(cache), m_priorRoot(priorRoot)
-{}
-
-bcos::task::Task<void> HashBuilder::put(bcos::h256 const& keyHash, bcos::bytes value)
+TrieBuildResult computeTrieRootFromSorted(
+    std::span<std::pair<bcos::h256, bcos::bytesConstRef> const> sortedEntries)
 {
-    m_changes[keyHash] = std::move(value);
-    co_return;
-}
-
-bcos::task::Task<void> HashBuilder::remove(bcos::h256 const& keyHash)
-{
-    m_changes[keyHash] = std::nullopt;
-    co_return;
-}
-
-bcos::task::Task<bcos::h256> HashBuilder::commit()
-{
-    if (m_priorRoot != emptyRootHash())
-    {
-        BOOST_THROW_EXCEPTION(
-            MPTInvariantViolation{} << bcos::errinfo_comment(
-                "HashBuilder incremental rebuild on non-empty root is implemented in M4 (PR-10)"));
-    }
-
-    // Resolve deletes (no-op from an empty trie); m_changes is sorted, so survivors stay sorted.
-    std::vector<std::pair<bcos::h256, bcos::bytesConstRef>> survivors;
-    survivors.reserve(m_changes.size());
-    for (auto const& [key, maybeValue] : m_changes)
-    {
-        if (maybeValue.has_value())
-        {
-            survivors.emplace_back(key, bcos::ref(*maybeValue));
-        }
-    }
-
-    // Build the trie through the stateless core, then take ownership of the produced nodes.
-    TrieBuildResult result = computeTrieRootImpl(survivors);
-    m_newNodes = std::move(result.newNodes);
-
-    // Flush every new node into the cache in one pass.
-    for (auto const& [hash, raw] : m_newNodes)
-    {
-        co_await m_cache.get().put(hash, raw);
-    }
-
-    co_return result.root;
-}
-
-std::unordered_map<bcos::h256, bcos::bytes> HashBuilder::drainNewNodes()
-{
-    return std::exchange(m_newNodes, {});
-}
-
-std::unordered_set<bcos::h256> HashBuilder::drainObsoletedNodes()
-{
-    return std::exchange(m_obsoleted, {});
+    return computeTrieRootImpl(sortedEntries);
 }
 
 }  // namespace bcos::ledger::mpt
