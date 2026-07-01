@@ -146,6 +146,7 @@ public:
 
     void set(std::string_view flag) { set(string2Flag(flag)); }
 
+
     void setToShardingDefault(protocol::BlockVersion version);
 
     void setUpgradeFeatures(protocol::BlockVersion fromVersion, protocol::BlockVersion toVersion);

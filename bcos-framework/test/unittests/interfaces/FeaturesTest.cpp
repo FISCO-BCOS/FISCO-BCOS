@@ -207,6 +207,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_l2_ethereum_compat",
     };
     // clang-format on
+    BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());
     for (size_t i = 0; i < keys.size(); ++i)
     {
         BOOST_CHECK_EQUAL(keys[i], compareKeys[i]);
