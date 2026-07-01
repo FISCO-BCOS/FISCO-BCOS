@@ -31,7 +31,7 @@ namespace bcos::rpc
 class OPEngineEndpointsMapping
 {
 public:
-    using Handler = task::Task<void> (OPEngineEndpoints::*)(const Json::Value&, Json::Value&);
+    using Handler = task::Task<Json::Value> (OPEngineEndpoints::*)(const Json::Value&);
 
     OPEngineEndpointsMapping() { addHandlers(); }
     ~OPEngineEndpointsMapping() = default;

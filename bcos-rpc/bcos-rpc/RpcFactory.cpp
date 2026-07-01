@@ -42,6 +42,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/NewTimer.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -76,14 +77,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
 
     wsConfig->setListenIP(_nodeConfig->rpcListenIP());
     wsConfig->setListenPort(_nodeConfig->rpcListenPort());
-    wsConfig->setThreadPoolSize(_nodeConfig->rpcThreadPoolSize());
     wsConfig->setDisableSsl(_nodeConfig->rpcDisableSsl());
     if (_nodeConfig->rpcDisableSsl())
     {
         RPC_LOG(INFO) << LOG_BADGE("initConfig") << LOG_DESC("rpc work in disable ssl model")
                       << LOG_KV("listenIP", wsConfig->listenIP())
                       << LOG_KV("listenPort", wsConfig->listenPort())
-                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
                       << LOG_KV("asServer", wsConfig->asServer());
         return wsConfig;
     }
@@ -173,7 +173,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         RPC_LOG(INFO) << LOG_DESC("rpc work in ssl model")
                       << LOG_KV("listenIP", wsConfig->listenIP())
                       << LOG_KV("listenPort", wsConfig->listenPort())
-                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
                       << LOG_KV("asServer", wsConfig->asServer())
                       << LOG_KV("caCert", _nodeConfig->caCert())
                       << LOG_KV("nodeCert", _nodeConfig->nodeCert())
@@ -311,7 +311,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
         RPC_LOG(INFO) << LOG_DESC("rpc work in sm ssl model")
                       << LOG_KV("listenIP", wsConfig->listenIP())
                       << LOG_KV("listenPort", wsConfig->listenPort())
-                      << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                      << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
                       << LOG_KV("asServer", wsConfig->asServer())
                       << LOG_KV("caCert", _nodeConfig->smCaCert())
                       << LOG_KV("nodeCert", _nodeConfig->smNodeCert())
@@ -333,7 +333,6 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
 
     wsConfig->setListenIP(_nodeConfig->web3RpcListenIP());
     wsConfig->setListenPort(_nodeConfig->web3RpcListenPort());
-    wsConfig->setThreadPoolSize(_nodeConfig->web3RpcThreadSize());
     wsConfig->setDisableSsl(true);
     wsConfig->setMaxMsgSize(_nodeConfig->web3HttpBodySizeLimit());
     wsConfig->setCorsConfig(
@@ -347,7 +346,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConf
     RPC_LOG(INFO) << LOG_BADGE("initWeb3RpcServiceConfig")
                   << LOG_KV("listenIP", wsConfig->listenIP())
                   << LOG_KV("listenPort", wsConfig->listenPort())
-                  << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                  << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
                   << LOG_KV("asServer", wsConfig->asServer())
                   << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
                   << LOG_KV("corsConfig", wsConfig->corsConfig().toString());
@@ -362,14 +361,13 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initOpEngineRpcService
     wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
     wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
     wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
-    wsConfig->setThreadPoolSize(_nodeConfig->opEngineRpcThreadSize());
     wsConfig->setDisableSsl(true);
     wsConfig->setMaxMsgSize(_nodeConfig->opEngineHttpBodySizeLimit());
 
     RPC_LOG(INFO) << LOG_BADGE("initOpEngineRpcServiceConfig")
                   << LOG_KV("listenIP", wsConfig->listenIP())
                   << LOG_KV("listenPort", wsConfig->listenPort())
-                  << LOG_KV("threadCount", wsConfig->threadPoolSize())
+                  << LOG_KV("ioThreadCount", _nodeConfig->ioThreadCount())
                   << LOG_KV("asServer", wsConfig->asServer())
                   << LOG_KV("maxMsgSize", wsConfig->maxMsgSize())
                   << LOG_KV("jwtSecretFile", _nodeConfig->opEngineJwtSecretFile())
@@ -384,30 +382,22 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     auto wsService = std::make_shared<bcos::boostssl::ws::WsService>();
     auto initializer = std::make_shared<bcos::boostssl::ws::WsInitializer>();
 
-    // Check threadPoolSize configuration (read before moving _config)
-    size_t threadPoolSize = _config ? _config->threadPoolSize() : 0;
-
     initializer->setConfig(std::move(_config));
 
-    if (threadPoolSize > 0)
+    if (!m_ioServicePool)
     {
-        // Use a dedicated thread pool for RPC
-        auto rpcIOServicePool = std::make_shared<bcos::IOServicePool>(threadPoolSize, "rpc");
-        initializer->setIOServicePool(rpcIOServicePool);
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("No shared IOServicePool available for RPC!"));
     }
-    else if (m_ioServicePool)
-    {
-        // Use the shared external IOServicePool
-        initializer->setIOServicePool(m_ioServicePool);
-    }
-    else
-    {
-        // No external pool and no threadPoolSize configured, throw exception
-        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                  "No IOServicePool available for RPC: please configure "
-                                  "threadPoolSize or set shared IOServicePool!"));
-    }
+    // Use the shared external IOServicePool
+    initializer->setIOServicePool(m_ioServicePool);
     initializer->initWsService(wsService);
+
+    // Use shared IOServicePool's io_context for TimerFactory to avoid
+    // creating dedicated "timerFactory" threads
+    auto timerFactory =
+        std::make_shared<timer::TimerFactory>(m_ioServicePool->getIOService());
+    wsService->setTimerFactory(std::move(timerFactory));
 
     return wsService;
 }
@@ -416,9 +406,9 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     const std::shared_ptr<boostssl::ws::WsService>& _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
-    auto filterSystem = std::make_shared<JsonRpcFilterSystem>(
-        *m_ioServicePool->getIOService(), _groupManager, m_nodeConfig->groupId(),
-            m_nodeConfig->rpcFilterTimeout(), m_nodeConfig->rpcMaxProcessBlock());
+    auto filterSystem = std::make_shared<JsonRpcFilterSystem>(*m_ioServicePool->getIOService(),
+        _groupManager, m_nodeConfig->groupId(), m_nodeConfig->rpcFilterTimeout(),
+        m_nodeConfig->rpcMaxProcessBlock());
     auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(
         _groupManager, m_gateway, _wsService, filterSystem, m_nodeConfig->forceSender());
     jsonRpcInterface->setSendTxTimeout(sendTxTimeout);
@@ -426,8 +416,8 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     if (auto httpServer = _wsService->httpServer())
     {
         httpServer->setHttpReqHandler([jsonRpcInterface](std::string_view body,
-                                      const bcos::boostssl::http::HttpRequestMeta&, auto sender) {
-            jsonRpcInterface->onRPCRequest(body, std::move(sender));
+            const bcos::boostssl::http::HttpRequestMeta&, auto sender) {
+jsonRpcInterface->onRPCRequest(body, std::move(sender));
         });
     }
     return jsonRpcInterface;
@@ -444,7 +434,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     if (auto httpServer = _wsService->httpServer())
     {
         httpServer->setHttpReqHandler([web3JsonRpc](std::string_view body,
-                                      const bcos::boostssl::http::HttpRequestMeta&, auto sender) {
+            const bcos::boostssl::http::HttpRequestMeta&, auto sender) {
             web3JsonRpc->onRPCRequest(body, std::move(sender));
         });
     }
@@ -470,14 +460,13 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
 
     return web3JsonRpc;
 }
-
 bcos::rpc::OPEngineJsonRpcImpl::Ptr RpcFactory::buildOpEngineJsonRpc(
     boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
     FilterSystem::Ptr _filterSystem)
 {
-    auto opEngineJsonRpc = bcos::rpc::OPEngineJsonRpcImpl::Ptr(new OPEngineJsonRpcImpl(
+    auto opEngineJsonRpc = std::make_shared<OPEngineJsonRpcImpl>(
         m_nodeConfig->groupId(), m_nodeConfig->opEngineBatchRequestSizeLimit(), _groupManager,
-        m_gateway, _wsService, std::move(_filterSystem), m_nodeConfig->web3SyncTransaction()));
+        std::move(_filterSystem), m_nodeConfig->web3SyncTransaction());
 
     auto jwtConfig = std::make_shared<bcos::rpc::JwtConfig>();
     jwtConfig->setSecretFile(m_nodeConfig->opEngineJwtSecretFile());
@@ -523,7 +512,7 @@ Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
 
     RPC_LOG(INFO) << LOG_KV("listenIP", config->listenIP())
                   << LOG_KV("listenPort", config->listenPort())
-                  << LOG_KV("threadCount", config->threadPoolSize())
+                  << LOG_KV("ioThreadCount", m_nodeConfig->ioThreadCount())
                   << LOG_KV("gatewayServiceName", _gatewayServiceName);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
     if (m_nodeConfig->enableOpEngineRpc())
@@ -531,7 +520,7 @@ Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
         auto opEngineConfig = initOpEngineRpcServiceConfig(m_nodeConfig);
         auto opEngineWsService = buildWsService(std::move(opEngineConfig));
         auto opEngineFilterSystem =
-            std::make_shared<Web3FilterSystem>(groupManager, m_nodeConfig->groupId(),
+            std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(), groupManager, m_nodeConfig->groupId(),
                 m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
         auto opEngineJsonRpc =
             buildOpEngineJsonRpc(opEngineWsService, groupManager, opEngineFilterSystem);
@@ -550,7 +539,7 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildAirAMOPClient(wsService);
     auto rpc = buildRpc(m_nodeConfig->sendTxTimeout(), wsService, groupManager, amopClient);
-    auto web3FilterSystem = std::make_shared<Web3FilterSystem>(groupManager, m_nodeConfig->groupId(),
+    auto web3FilterSystem = std::make_shared<Web3FilterSystem>(*m_ioServicePool->getIOService(), groupManager, m_nodeConfig->groupId(),
         m_nodeConfig->web3FilterTimeout(), m_nodeConfig->web3MaxProcessBlock());
 
     if (m_nodeConfig->enableOpEngineRpc())
@@ -614,9 +603,8 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
                                        << LOG_KV("e", boost::diagnostic_information(e));
                     }
                 }
-        });
+            });
     }
-
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
     return rpc;
@@ -642,8 +630,8 @@ GroupManager::Ptr RpcFactory::buildGroupManager(
     if (!_entryPoint)
     {
         RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-        return std::make_shared<TarsGroupManager>(*m_ioServicePool->getIOService(),
-            _rpcServiceName, m_chainID, nodeServiceFactory, m_nodeConfig);
+        return std::make_shared<TarsGroupManager>(*m_ioServicePool->getIOService(), _rpcServiceName,
+            m_chainID, nodeServiceFactory, m_nodeConfig);
     }
     RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
     auto groupManager = std::make_shared<GroupManager>(
@@ -686,8 +674,8 @@ AMOPClient::Ptr RpcFactory::buildAMOPClient(
 {
     auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
-    return std::make_shared<AMOPClient>(*m_ioServicePool->getIOService(),
-        _wsService, wsFactory, requestFactory, m_gateway, _gatewayServiceName);
+    return std::make_shared<AMOPClient>(*m_ioServicePool->getIOService(), _wsService, wsFactory,
+        requestFactory, m_gateway, _gatewayServiceName);
 }
 
 AMOPClient::Ptr RpcFactory::buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService)

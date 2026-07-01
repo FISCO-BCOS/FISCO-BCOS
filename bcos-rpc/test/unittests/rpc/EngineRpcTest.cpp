@@ -22,7 +22,7 @@
 #include <bcos-rpc/openginerpc/Common.h>
 #include <bcos-rpc/openginerpc/endpoints/OPEngineEndpoints.h>
 #include <bcos-codec/wrapper/CodecWrapper.h>
-#include <bcos-task/Wait.h>
+
 #include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 #include <memory>
@@ -237,11 +237,13 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     params.append(fc);
 
     Json::Value response;
-    BOOST_CHECK_THROW(
-        task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await ep->forkchoiceUpdatedV4(p, r);
-        }(endpoints.get(), params, response)),
-        JsonRpcException);
+        {
+        OPEngineEndpointsMapping mapping;
+        auto handler = mapping.findHandler("engine_forkchoiceUpdatedV4");
+        BOOST_REQUIRE(handler.has_value());
+        Json::Value response;
+        BOOST_CHECK_THROW(handler.value()(*endpoints, params, response), JsonRpcException);
+    }
 }
 
 // ================================================================
@@ -304,11 +306,15 @@ BOOST_AUTO_TEST_CASE(getPayloadV4)
     params.append("0x0000000021f32cc1");
 
     Json::Value response;
-    BOOST_CHECK_THROW(
-        task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await ep->getPayloadV4(p, r);
-        }(endpoints.get(), params, response)),
-        JsonRpcException);
+        {
+        OPEngineEndpointsMapping mapping;
+        auto handler = mapping.findHandler("engine_getPayloadV4");
+        BOOST_REQUIRE(handler.has_value());
+        Json::Value params(Json::arrayValue);
+        params.append("0x0000000021f32cc1");
+        Json::Value response;
+        BOOST_CHECK_THROW(handler.value()(*endpoints, params, response), JsonRpcException);
+    }
 }
 
 // ================================================================
@@ -515,7 +521,7 @@ BOOST_AUTO_TEST_CASE(engineNotAvailable)
     BOOST_CHECK_THROW(
         task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
             co_await ep->exchangeCapabilities(p, r);
-        }(nullEndpoints.get(), params, response)),
+        }(&nullEndpoints, params, response)),
         JsonRpcException);
 }
 
@@ -543,6 +549,119 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilitiesNonString)
             co_await ep->exchangeCapabilities(p, r);
         }(endpoints.get(), params, response)),
         JsonRpcException);
+}
+
+// ================================================================
+// Round-trip test: newPayloadV2 → getPayloadV2
+// Matches the scope of handleEngineV2PayloadParsingAndSerializationTest
+// in Web3RpcTest.cpp.
+// ================================================================
+BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
+{
+    auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
+        "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
+        chainId, groupId, static_cast<int64_t>(utcTime()));
+    bytes encodedTx;
+    tx->encode(encodedTx);
+    auto encodedTxHex = toHexStringWithPrefix(encodedTx);
+
+    auto const largeQuantity = std::string("0x100000000000000000");
+    auto const expectedLargeValue = fromBigQuantity(largeQuantity);
+    auto const logsBloom = "0x" + std::string(BloomBytesSize * 2, '0');
+
+    // --- engine_newPayloadV2 ---
+    Json::Value params(Json::arrayValue);
+    Json::Value ep;
+    ep["parentHash"] = "0x1111111111111111111111111111111111111111111111111111111111111111";
+    ep["feeRecipient"] = "0x2222222222222222222222222222222222222222";
+    ep["stateRoot"] = "0x3333333333333333333333333333333333333333333333333333333333333333";
+    ep["receiptsRoot"] = "0x4444444444444444444444444444444444444444444444444444444444444444";
+    ep["logsBloom"] = logsBloom;
+    ep["prevRandao"] = "0x5555555555555555555555555555555555555555555555555555555555555555";
+    ep["blockNumber"] = "0x1";
+    ep["gasLimit"] = "0x5208";
+    ep["gasUsed"] = "0x5208";
+    ep["timestamp"] = "0x1";
+    ep["extraData"] = "0x1234";
+    ep["baseFeePerGas"] = "0x1";
+    ep["blockHash"] = "0x6666666666666666666666666666666666666666666666666666666666666666";
+    ep["transactions"] = Json::Value(Json::arrayValue);
+    ep["transactions"].append(encodedTxHex);
+    Json::Value w;
+    w["index"] = "0x1";
+    w["validatorIndex"] = "0x2";
+    w["address"] = "0x7777777777777777777777777777777777777777";
+    w["amount"] = largeQuantity;
+    ep["withdrawals"].append(w);
+    ep["blobGasUsed"] = largeQuantity;
+    ep["excessBlobGas"] = largeQuantity;
+    params.append(ep);
+
+    Json::Value newPayloadResponse;
+    task::wait([&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
+        co_await epObj->newPayloadV2(p, r);
+    }(endpoints.get(), params, newPayloadResponse));
+
+    BOOST_CHECK(newPayloadResponse.isMember("status"));
+    BOOST_CHECK_EQUAL(newPayloadResponse["status"].asString(), "VALID");
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
+    BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 2);
+    BOOST_CHECK_EQUAL(
+        mockService.m_state->capturedNewPayloadRequest->executionPayload.transactions.size(), 1);
+    BOOST_REQUIRE(
+        mockService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals.has_value());
+    BOOST_CHECK_EQUAL(
+        mockService.m_state->capturedNewPayloadRequest->executionPayload.withdrawals->front().amount,
+        expectedLargeValue);
+    BOOST_REQUIRE(
+        mockService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK_EQUAL(
+        *mockService.m_state->capturedNewPayloadRequest->executionPayload.blobGasUsed,
+        expectedLargeValue);
+    BOOST_REQUIRE(
+        mockService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas.has_value());
+    BOOST_CHECK_EQUAL(
+        *mockService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas,
+        expectedLargeValue);
+
+    // Verify encoded tx round-trips correctly
+    bytes decodedEncodedTx;
+    mockService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
+        decodedEncodedTx);
+    BOOST_CHECK_EQUAL(toHexStringWithPrefix(decodedEncodedTx), encodedTxHex);
+
+    // --- engine_getPayloadV2 ---
+    // Feed the captured payload back as the getPayload result
+    mockService.m_state->getPayloadResult.executionPayload =
+        mockService.m_state->capturedNewPayloadRequest->executionPayload;
+    mockService.m_state->getPayloadResult.blockValue = expectedLargeValue;
+
+    Json::Value getPayloadParams(Json::arrayValue);
+    getPayloadParams.append("payload-id-1");
+
+    Json::Value getPayloadResponse;
+    task::wait(
+        [&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
+            co_await epObj->getPayloadV2(p, r);
+        }(endpoints.get(), getPayloadParams, getPayloadResponse));
+
+    BOOST_REQUIRE(mockService.m_state->capturedPayloadId.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedPayloadId, "payload-id-1");
+    BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
+    BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 2);
+    BOOST_CHECK(getPayloadResponse.isMember("executionPayload"));
+    BOOST_CHECK_EQUAL(getPayloadResponse["executionPayload"]["transactions"].size(), 1);
+    BOOST_CHECK_EQUAL(
+        getPayloadResponse["executionPayload"]["transactions"][0u].asString(), encodedTxHex);
+    BOOST_CHECK_EQUAL(
+        getPayloadResponse["executionPayload"]["withdrawals"][0u]["amount"].asString(),
+        largeQuantity);
+    BOOST_CHECK_EQUAL(
+        getPayloadResponse["executionPayload"]["blobGasUsed"].asString(), largeQuantity);
+    BOOST_CHECK_EQUAL(
+        getPayloadResponse["executionPayload"]["excessBlobGas"].asString(), largeQuantity);
+    BOOST_CHECK_EQUAL(getPayloadResponse["blockValue"].asString(), largeQuantity);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

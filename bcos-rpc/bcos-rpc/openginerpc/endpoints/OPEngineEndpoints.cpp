@@ -35,8 +35,7 @@ void buildEngineNotAvailableError()
 
 namespace bcos::rpc
 {
-task::Task<void> OPEngineEndpoints::exchangeCapabilities(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::exchangeCapabilities(const Json::Value& _request)
 {
     if (!m_engineService)
     {
@@ -61,92 +60,79 @@ task::Task<void> OPEngineEndpoints::exchangeCapabilities(
     {
         result.append(cap);
     }
-    _response = std::move(result);
+    co_return result;
 }
 
-task::Task<void> OPEngineEndpoints::forkchoiceUpdatedV1(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::forkchoiceUpdatedV1(const Json::Value& _request)
 {
-    co_await handleForkchoiceUpdated(engine::ApiVersion::V1, _request, _response);
+    co_return co_await handleForkchoiceUpdated(engine::ApiVersion::V1, _request);
 }
 
-task::Task<void> OPEngineEndpoints::forkchoiceUpdatedV2(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::forkchoiceUpdatedV2(const Json::Value& _request)
 {
-    co_await handleForkchoiceUpdated(engine::ApiVersion::V2, _request, _response);
+    co_return co_await handleForkchoiceUpdated(engine::ApiVersion::V2, _request);
 }
 
-task::Task<void> OPEngineEndpoints::forkchoiceUpdatedV3(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::forkchoiceUpdatedV3(const Json::Value& _request)
 {
-    co_await handleForkchoiceUpdated(engine::ApiVersion::V3, _request, _response);
+    co_return co_await handleForkchoiceUpdated(engine::ApiVersion::V3, _request);
 }
 
-task::Task<void> OPEngineEndpoints::forkchoiceUpdatedV4(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::forkchoiceUpdatedV4(const Json::Value& _request)
 {
     // V4 not yet implemented (Prague fork)
     BOOST_THROW_EXCEPTION(
         JsonRpcException(EngineError::UnsupportedFork, "engine_forkchoiceUpdatedV4 is not yet supported"));
-    co_return;
+    co_return {};
 }
 
-task::Task<void> OPEngineEndpoints::getPayloadV1(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::getPayloadV1(const Json::Value& _request)
 {
-    co_await handleGetPayload(engine::ApiVersion::V1, _request, _response);
+    co_return co_await handleGetPayload(engine::ApiVersion::V1, _request);
 }
 
-task::Task<void> OPEngineEndpoints::getPayloadV2(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::getPayloadV2(const Json::Value& _request)
 {
-    co_await handleGetPayload(engine::ApiVersion::V2, _request, _response);
+    co_return co_await handleGetPayload(engine::ApiVersion::V2, _request);
 }
 
-task::Task<void> OPEngineEndpoints::getPayloadV3(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::getPayloadV3(const Json::Value& _request)
 {
-    co_await handleGetPayload(engine::ApiVersion::V3, _request, _response);
+    co_return co_await handleGetPayload(engine::ApiVersion::V3, _request);
 }
 
-task::Task<void> OPEngineEndpoints::getPayloadV4(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::getPayloadV4(const Json::Value& _request)
 {
     // V4 not yet implemented (Prague fork)
     BOOST_THROW_EXCEPTION(
         JsonRpcException(EngineError::UnsupportedFork, "engine_getPayloadV4 is not yet supported"));
-    co_return;
+    co_return {};
 }
 
-task::Task<void> OPEngineEndpoints::newPayloadV1(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::newPayloadV1(const Json::Value& _request)
 {
-    co_await handleNewPayload(engine::ApiVersion::V1, _request, _response);
+    co_return co_await handleNewPayload(engine::ApiVersion::V1, _request);
 }
 
-task::Task<void> OPEngineEndpoints::newPayloadV2(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::newPayloadV2(const Json::Value& _request)
 {
-    co_await handleNewPayload(engine::ApiVersion::V2, _request, _response);
+    co_return co_await handleNewPayload(engine::ApiVersion::V2, _request);
 }
 
-task::Task<void> OPEngineEndpoints::newPayloadV3(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::newPayloadV3(const Json::Value& _request)
 {
-    co_await handleNewPayload(engine::ApiVersion::V3, _request, _response);
+    co_return co_await handleNewPayload(engine::ApiVersion::V3, _request);
 }
 
-task::Task<void> OPEngineEndpoints::newPayloadV4(
-    const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::newPayloadV4(const Json::Value& _request)
 {
     // V4 not yet implemented (Prague fork)
     BOOST_THROW_EXCEPTION(
         JsonRpcException(EngineError::UnsupportedFork, "engine_newPayloadV4 is not yet supported"));
-    co_return;
+    co_return {};
 }
 
-task::Task<void> OPEngineEndpoints::handleForkchoiceUpdated(
-    engine::ApiVersion version, const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::handleForkchoiceUpdated(engine::ApiVersion version, const Json::Value& _request)
 {
     if (!m_engineService)
     {
@@ -164,11 +150,10 @@ task::Task<void> OPEngineEndpoints::handleForkchoiceUpdated(
         forkchoiceState, payloadAttrs.has_value() ? &*payloadAttrs : nullptr,
         toServiceVersion(version));
 
-    _response = combineForkchoiceUpdatedResult(engineResult, version);
+    co_return combineForkchoiceUpdatedResult(engineResult, version);
 }
 
-task::Task<void> OPEngineEndpoints::handleGetPayload(
-    engine::ApiVersion version, const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::handleGetPayload(engine::ApiVersion version, const Json::Value& _request)
 {
     if (!m_engineService)
     {
@@ -188,11 +173,10 @@ task::Task<void> OPEngineEndpoints::handleGetPayload(
 
     Json::Value result(Json::objectValue);
     combineGetPayloadResponse(result, engineResult, version);
-    _response = std::move(result);
+    co_return result;
 }
 
-task::Task<void> OPEngineEndpoints::handleNewPayload(
-    engine::ApiVersion version, const Json::Value& _request, Json::Value& _response)
+task::Task<Json::Value> OPEngineEndpoints::handleNewPayload(engine::ApiVersion version, const Json::Value& _request)
 {
     if (!m_engineService)
     {
@@ -206,7 +190,7 @@ task::Task<void> OPEngineEndpoints::handleNewPayload(
     //   -38005 UnsupportedFork: timestamp out of fork window (V2/V3)
     auto engineResult =
         co_await m_engineService->newPayload(engineRequest, toServiceVersion(version));
-    _response = serializePayloadStatus(engineResult, version);
+    co_return serializePayloadStatus(engineResult, version);
 }
 
 std::uint32_t OPEngineEndpoints::toServiceVersion(engine::ApiVersion version)

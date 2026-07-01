@@ -40,33 +40,25 @@ public:
     using Ptr = std::shared_ptr<OPEngineJsonRpcImpl>;
     using Sender = std::function<void(bcos::bytes)>;
 
-    OPEngineJsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
-        GroupManager::Ptr _groupManager, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr _filterSystem,
+    OPEngineJsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
+        GroupManager::Ptr const& _groupManager, FilterSystem::Ptr _filterSystem,
         bool _syncTransaction);
     ~OPEngineJsonRpcImpl() = default;
 
     void setEngineService(std::shared_ptr<bcos::engine::AnyEngineService> _engineService);
     void setJwtVerifier(bcos::rpc::JwtVerifier::Ptr _jwtVerifier);
 
-    void onRPCRequest(std::string_view _requestBody, const bcos::boostssl::http::HttpRequestMeta& _meta,
-        const Sender& _sender);
+    void onRPCRequest(std::string_view _requestBody, const bcos::boostssl::http::HttpRequestMeta& _meta, Sender _sender);
 
     OPEngineEndpoints& endpoints() { return m_endpoints; }
     Endpoints& web3Endpoints() { return m_web3Endpoints; }
 
 private:
-    void handleRequest(Json::Value _request, const std::function<void(Json::Value)>& _callback);
-    void handleBatchRequest(Json::Value _request, const Sender& _sender);
+    task::Task<Json::Value> handleRequest(Json::Value _request);
+    task::Task<Json::Value> handleBatchRequest(Json::Value _request);
 
-private:
-    std::string m_groupId;
     uint32_t m_batchRequestSizeLimit;
-    GroupManager::Ptr m_groupManager;
-    bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
-    std::shared_ptr<boostssl::ws::WsService> m_wsService;
     bcos::rpc::JwtVerifier::Ptr m_jwtVerifier;
-    std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
     OPEngineEndpoints m_endpoints;
     OPEngineEndpointsMapping m_endpointsMapping;
     Endpoints m_web3Endpoints;

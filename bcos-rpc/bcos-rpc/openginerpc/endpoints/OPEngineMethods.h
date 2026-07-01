@@ -24,7 +24,7 @@
 
 namespace bcos::rpc
 {
-enum class OPEngineMethod
+enum class OPEngineMethod : uint8_t
 {
     engine_exchangeCapabilities,
     engine_forkchoiceUpdatedV1,
@@ -41,7 +41,7 @@ enum class OPEngineMethod
     engine_newPayloadV4,
 };
 
-static std::string methodString(OPEngineMethod _method)
+inline std::string methodString(OPEngineMethod _method)
 {
     return std::string(magic_enum::enum_name(_method));
 }

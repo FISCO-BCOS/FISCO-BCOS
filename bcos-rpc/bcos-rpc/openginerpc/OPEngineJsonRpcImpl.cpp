@@ -18,7 +18,7 @@
  */
 
 #include "OPEngineJsonRpcImpl.h"
-
+#include <cassert>
 #include "Common.h"
 
 #include <bcos-rpc/validator/JsonValidator.h>
@@ -28,25 +28,19 @@
 
 namespace bcos::rpc
 {
-OPEngineJsonRpcImpl::OPEngineJsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
-    GroupManager::Ptr _groupManager, bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-    std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr _filterSystem,
+OPEngineJsonRpcImpl::OPEngineJsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
+    GroupManager::Ptr const& _groupManager, FilterSystem::Ptr _filterSystem,
     bool _syncTransaction)
-  : m_groupId(std::move(_groupId)),
-    m_batchRequestSizeLimit(_batchRequestSizeLimit),
-    m_groupManager(std::move(_groupManager)),
-    m_gatewayInterface(std::move(_gatewayInterface)),
-    m_wsService(std::move(_wsService)),
-    m_endpoints(m_groupManager->getNodeService(m_groupId, "")),
+  : m_batchRequestSizeLimit(_batchRequestSizeLimit),
+    m_endpoints(_groupManager->getNodeService(_groupId, "")),
     m_web3Endpoints(
-        m_groupManager->getNodeService(m_groupId, ""), std::move(_filterSystem), _syncTransaction)
+        _groupManager->getNodeService(_groupId, ""), std::move(_filterSystem), _syncTransaction)
 {}
 
 void OPEngineJsonRpcImpl::setEngineService(
     std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
 {
-    m_engineService = std::move(_engineService);
-    m_endpoints.setEngineService(m_engineService);
+    m_endpoints.setEngineService(std::move(_engineService));
 }
 
 void OPEngineJsonRpcImpl::setJwtVerifier(bcos::rpc::JwtVerifier::Ptr _jwtVerifier)
@@ -55,7 +49,7 @@ void OPEngineJsonRpcImpl::setJwtVerifier(bcos::rpc::JwtVerifier::Ptr _jwtVerifie
 }
 
 void OPEngineJsonRpcImpl::onRPCRequest(
-    std::string_view _requestBody, const bcos::boostssl::http::HttpRequestMeta& _meta, const Sender& _sender)
+    std::string_view _requestBody, const bcos::boostssl::http::HttpRequestMeta& _meta, Sender _sender)
 {
     auto const startT = utcTime();
     Json::Value request;
@@ -67,18 +61,14 @@ void OPEngineJsonRpcImpl::onRPCRequest(
             OP_ENGINE_LOG(TRACE) << LOG_BADGE("onRPCRequest") << LOG_DESC("begin")
                                 << LOG_KV("request", _requestBody);
         }
-
-        if (!m_jwtVerifier)
-        {
-            BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "jwt verifier is not initialized"));
-        }
-
+        
         std::string authorization;
         if (auto it = _meta.headers.find("Authorization"); it != _meta.headers.end())
         {
             authorization = it->second;
         }
 
+        assert(m_jwtVerifier != nullptr && "jwt verifier is not initialized");
         auto verifyResult = m_jwtVerifier->verify(authorization);
         if (!verifyResult)
         {
@@ -120,14 +110,20 @@ void OPEngineJsonRpcImpl::onRPCRequest(
             }
             else
             {
-                handleBatchRequest(std::move(request), _sender);
+                task::wait([this, _request = std::move(request), sender = std::move(_sender)]() -> task::Task<void> 
+                {
+                    auto response = co_await this->handleBatchRequest(_request);
+                    sender(toBytesResponse(response));
+                }());
                 return;
             }
         }
 
-        handleRequest(std::move(request), [_sender](Json::Value _response) {
-            _sender(toBytesResponse(_response));
-        });
+        task::wait([this, _request = std::move(request), sender = std::move(_sender)]() -> task::Task<void> 
+        {
+            auto response = co_await this->handleRequest(_request);
+            sender(toBytesResponse(response));
+        }());
         return;
     }
     catch (const JsonRpcException& e)
@@ -156,8 +152,7 @@ void OPEngineJsonRpcImpl::onRPCRequest(
     _sender(toBytesResponse(response));
 }
 
-void OPEngineJsonRpcImpl::handleRequest(
-    Json::Value _request, const std::function<void(Json::Value)>& _callback)
+task::Task<Json::Value> OPEngineJsonRpcImpl::handleRequest(Json::Value _request)
 {
     Json::Value response;
     try
@@ -172,8 +167,7 @@ void OPEngineJsonRpcImpl::handleRequest(
         if (auto result = JsonValidator::validate(_request); !std::get<bool>(result))
         {
             buildJsonError(_request, InvalidRequest, std::get<std::string>(result), response);
-            _callback(std::move(response));
-            return;
+            co_return response;
         }
 
         OP_ENGINE_LOG(TRACE) << LOG_BADGE("EngineRPCRequest") << LOG_DESC("parsed request")
@@ -185,88 +179,25 @@ void OPEngineJsonRpcImpl::handleRequest(
         // if the method is engine API, use the engine endpoints to handle the request; otherwise, use the web3 endpoints to handle the request;
         if (optHandler.has_value())
         {
-            task::wait([](OPEngineJsonRpcImpl* self, OPEngineEndpointsMapping::Handler _handler,
-                           Json::Value _request, std::function<void(Json::Value)> _callback,
-                           decltype(startT) startT) -> task::Task<void> {
-                Json::Value result;
-                Json::Value resp;
-                try
-                {
-                    Json::Value const& params = _request["params"];
-                    co_await (self->m_endpoints.*_handler)(params, result);
-                    buildJsonContent(result, resp);
-                    resp["id"] = _request["id"];
-                }
-                catch (const JsonRpcException& e)
-                {
-                    buildJsonError(_request, e.code(), e.msg(), resp);
-                }
-                catch (bcos::Error const& e)
-                {
-                    buildJsonError(_request, InternalError, e.errorMessage(), resp);
-                }
-                catch (...)
-                {
-                    buildJsonError(_request, InternalError,
-                        boost::current_exception_diagnostic_information(), resp);
-                }
-
-                if (c_fileLogLevel == TRACE) [[unlikely]]
-                {
-                    auto const endT = utcTime();
-                    OP_ENGINE_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("end")
-                                        << LOG_KV("costMs", endT - startT)
-                                        << LOG_KV("request", printJson(_request))
-                                        << LOG_KV("response", printJson(resp));
-                }
-
-                _callback(std::move(resp));
-            }(this, optHandler.value(), std::move(_request), _callback, startT));
-            return;
+            Json::Value const& params = _request["params"];
+            auto result = co_await (m_endpoints.*optHandler.value())(params);
+            buildJsonContent(result, response);
+            response["id"] = _request["id"];
+            co_return response;   
         }
 
         auto web3Handler = m_web3EndpointsMapping.findHandler(method);
-        if (!web3Handler.has_value())
+        if (web3Handler.has_value())
         {
-            BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
+            Json::Value const& params = _request["params"];
+            //auto result = co_await (m_web3Endpoints.*web3Handler.value())(params);
+            //buildJsonContent(result, response);
+            response["id"] = _request["id"];
         }
-
-        task::wait([](OPEngineJsonRpcImpl* self, EndpointsMapping::Handler _handler,
-                       Json::Value _request, std::function<void(Json::Value)> _callback,
-                       decltype(startT) startT) -> task::Task<void> {
-            Json::Value resp;
-            try
-            {
-                Json::Value const& params = _request["params"];
-                co_await (self->m_web3Endpoints.*_handler)(params, resp);
-                resp["id"] = _request["id"];
-            }
-            catch (const JsonRpcException& e)
-            {
-                buildJsonError(_request, e.code(), e.msg(), resp);
-            }
-            catch (bcos::Error const& e)
-            {
-                buildJsonError(_request, InternalError, e.errorMessage(), resp);
-            }
-            catch (...)
-            {
-                buildJsonError(_request, InternalError,
-                    boost::current_exception_diagnostic_information(), resp);
-            }
-
-            if (c_fileLogLevel == TRACE) [[unlikely]]
-            {
-                auto const endT = utcTime();
-                OP_ENGINE_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("end")
-                                    << LOG_KV("costMs", endT - startT)
-                                    << LOG_KV("request", printJson(_request))
-                                    << LOG_KV("response", printJson(resp));
-            }
-
-            _callback(std::move(resp));
-        }(this, web3Handler.value(), std::move(_request), _callback, startT));
-        return;
+        else 
+        {
+            buildJsonError(_request, MethodNotFound, "Method not found", response);
+        }
     }
     catch (const JsonRpcException& e)
     {
@@ -282,10 +213,10 @@ void OPEngineJsonRpcImpl::handleRequest(
             response);
     }
 
-    _callback(std::move(response));
+    co_return response;
 }
 
-void OPEngineJsonRpcImpl::handleBatchRequest(Json::Value _request, const Sender& _sender)
+task::Task<Json::Value> OPEngineJsonRpcImpl::handleBatchRequest(Json::Value _request)
 {
     auto responses = std::make_shared<Json::Value>(Json::arrayValue);
     auto const requestSize = _request.size();
@@ -298,23 +229,20 @@ void OPEngineJsonRpcImpl::handleBatchRequest(Json::Value _request, const Sender&
 
     for (auto& req : _request)
     {
-        handleRequest(std::move(req), [responses, requestSize, _sender, startT](Json::Value _response) {
-            responses->append(std::move(_response));
-            if (responses->size() < requestSize)
-            {
-                return;
-            }
-
-            if (c_fileLogLevel == TRACE) [[unlikely]]
-            {
+        auto result = co_await handleRequest(std::move(req));
+        responses->append(std::move(result));
+    }
+    
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
                 auto const endT = utcTime();
                 OP_ENGINE_LOG(TRACE) << LOG_BADGE("handleBatchRequest") << LOG_DESC("end")
                                     << LOG_KV("costMs", endT - startT)
                                     << LOG_KV("response", printJson(*responses));
-            }
-
-            _sender(toBytesResponse(*responses));
-        });
     }
+
+    co_return *responses;
 }
+
+
 }  // namespace bcos::rpc

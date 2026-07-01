@@ -40,19 +40,19 @@ public:
     {}
     virtual ~OPEngineEndpoints() = default;
 
-    task::Task<void> exchangeCapabilities(const Json::Value&, Json::Value&);
-    task::Task<void> forkchoiceUpdatedV1(const Json::Value&, Json::Value&);
-    task::Task<void> forkchoiceUpdatedV2(const Json::Value&, Json::Value&);
-    task::Task<void> forkchoiceUpdatedV3(const Json::Value&, Json::Value&);
-    task::Task<void> forkchoiceUpdatedV4(const Json::Value&, Json::Value&);
-    task::Task<void> getPayloadV1(const Json::Value&, Json::Value&);
-    task::Task<void> getPayloadV2(const Json::Value&, Json::Value&);
-    task::Task<void> getPayloadV3(const Json::Value&, Json::Value&);
-    task::Task<void> getPayloadV4(const Json::Value&, Json::Value&);
-    task::Task<void> newPayloadV1(const Json::Value&, Json::Value&);
-    task::Task<void> newPayloadV2(const Json::Value&, Json::Value&);
-    task::Task<void> newPayloadV3(const Json::Value&, Json::Value&);
-    task::Task<void> newPayloadV4(const Json::Value&, Json::Value&);
+    task::Task<Json::Value> exchangeCapabilities(const Json::Value&);
+    task::Task<Json::Value> forkchoiceUpdatedV1(const Json::Value&);
+    task::Task<Json::Value> forkchoiceUpdatedV2(const Json::Value&);
+    task::Task<Json::Value> forkchoiceUpdatedV3(const Json::Value&);
+    task::Task<Json::Value> forkchoiceUpdatedV4(const Json::Value&);
+    task::Task<Json::Value> getPayloadV1(const Json::Value&);
+    task::Task<Json::Value> getPayloadV2(const Json::Value&);
+    task::Task<Json::Value> getPayloadV3(const Json::Value&);
+    task::Task<Json::Value> getPayloadV4(const Json::Value&);
+    task::Task<Json::Value> newPayloadV1(const Json::Value&);
+    task::Task<Json::Value> newPayloadV2(const Json::Value&);
+    task::Task<Json::Value> newPayloadV3(const Json::Value&);
+    task::Task<Json::Value> newPayloadV4(const Json::Value&);
 
     void setEngineService(
         std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
@@ -61,12 +61,9 @@ public:
     }
 
 private:
-    task::Task<void> handleForkchoiceUpdated(
-        engine::ApiVersion version, const Json::Value& _request, Json::Value& _response);
-    task::Task<void> handleGetPayload(
-        engine::ApiVersion version, const Json::Value& _request, Json::Value& _response);
-    task::Task<void> handleNewPayload(
-        engine::ApiVersion version, const Json::Value& _request, Json::Value& _response);
+    task::Task<Json::Value> handleForkchoiceUpdated(engine::ApiVersion version, const Json::Value& _request);
+    task::Task<Json::Value> handleGetPayload(engine::ApiVersion version, const Json::Value& _request);
+    task::Task<Json::Value> handleNewPayload(engine::ApiVersion version, const Json::Value& _request);
     static std::uint32_t toServiceVersion(engine::ApiVersion version);
 
     NodeService::Ptr m_nodeService;
