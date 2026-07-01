@@ -20,8 +20,7 @@ PYTHON    ?= python3
 all: allocs
 
 # Clone the pinned OP fork into $(OP_FORK). No-op if the dir already exists —
-# bumping the pin is a manual step (see docs/runbook-op-fork-upgrade.md once
-# that runbook lands in the wrap-up PR).
+# bumping the pin is a manual step (see docs/runbook-op-fork-upgrade.md).
 op-fork:
 	@if [ ! -d "$(OP_FORK)" ]; then \
 		COMMIT=$$(grep -E '^commit' $(CONTRACTS)/op-fork-pin.toml | awk -F'"' '{print $$2}'); \
