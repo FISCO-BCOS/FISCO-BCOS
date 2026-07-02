@@ -17,6 +17,10 @@
  * @brief Read-only account lookups over an MPT state root (spec §5.6, §7.1)
  */
 #include "MPTReadView.h"
+// AnyHasher.h defines the free bcos::crypto::hasher::hash(); OpenSSLHasher.h only defines the
+// hasher type. A unity build can mask a missing include of the former (a sibling TU's include
+// leaks in), so keep both explicit.
+#include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 
 namespace bcos::ledger::mpt
