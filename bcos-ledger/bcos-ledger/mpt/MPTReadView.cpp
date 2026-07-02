@@ -13,22 +13,25 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file NodeCache.cpp
- * @brief LRU+CONCURRENT cache mapping node hash -> RLP-encoded MPT node (spec §5.1)
+ * @file MPTReadView.cpp
+ * @brief Read-only account lookups over an MPT state root (spec §5.6, §7.1)
  */
-#include "NodeCache.h"
+#include "MPTReadView.h"
+// AnyHasher.h defines the free bcos::crypto::hasher::hash(); OpenSSLHasher.h only defines the
+// hasher type. A unity build can mask a missing include of the former (a sibling TU's include
+// leaks in), so keep both explicit.
+#include <bcos-crypto/hasher/AnyHasher.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 
 namespace bcos::ledger::mpt
 {
-NodeCache::NodeCache(size_t capacity) : m_inner(/*buckets=*/0, static_cast<int64_t>(capacity)) {}
 
-bcos::task::Task<std::optional<bcos::bytes>> NodeCache::get(bcos::h256 const& key)
+bcos::h256 accountKeyHash(bcos::Address const& addr)
 {
-    co_return co_await bcos::storage2::readOne(m_inner, key);
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    bcos::h256 out;
+    bcos::crypto::hasher::hash(hasher, addr.ref(), out);
+    return out;
 }
 
-bcos::task::Task<void> NodeCache::put(bcos::h256 const& key, bcos::bytes value)
-{
-    co_await bcos::storage2::writeOne(m_inner, key, std::move(value));
-}
 }  // namespace bcos::ledger::mpt

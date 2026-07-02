@@ -19,9 +19,10 @@
  */
 
 #include "TestHelpers.h"
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
-#include <bcos-ledger/mpt/NodeCache.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
@@ -86,8 +87,8 @@ BOOST_AUTO_TEST_CASE(MatchesReferenceAndStatefulCommit)
         TrieBuildResult const result = computeTrieRoot(sorted);
         BOOST_CHECK_EQUAL(result.root, expected);
 
-        NodeCache cache;
-        HashBuilder builder(cache, emptyRootHash());
+        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+        HashBuilder builder(storage, emptyRootHash());
         for (auto const& [key, value] : kvs)
         {
             bcos::task::syncWait(builder.put(key, value));

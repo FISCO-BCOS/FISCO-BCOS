@@ -18,9 +18,9 @@
 #include "GenesisStateRoot.h"
 #include "mpt/Constants.h"
 #include "mpt/HashBuilder.h"
-#include "mpt/NodeCache.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
@@ -53,8 +53,8 @@ bcos::bytesConstRef trimLeadingZeros(bcos::bytes const& in)
 // Zero-valued slots are skipped (no-op in Ethereum state). Empty -> emptyRoot.
 bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& storage)
 {
-    mpt::NodeCache cache;
-    mpt::HashBuilder builder(cache, mpt::emptyRootHash());
+    storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> nodes;
+    mpt::HashBuilder builder(nodes, mpt::emptyRootHash());
     bool anySlot = false;
     for (auto const& [slotHex, valueHex] : storage)
     {
@@ -81,8 +81,8 @@ bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& stor
 
 bcos::task::Task<bcos::h256> bcos::ledger::computeGenesisStateRoot(GenesisConfig const& genesis)
 {
-    mpt::NodeCache stateCache;
-    mpt::HashBuilder stateBuilder(stateCache, mpt::emptyRootHash());
+    storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> stateNodes;
+    mpt::HashBuilder stateBuilder(stateNodes, mpt::emptyRootHash());
 
     for (auto const& alloc : genesis.m_allocs)
     {
