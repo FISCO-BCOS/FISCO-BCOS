@@ -457,7 +457,9 @@ bool TransactionSync::importDownloadedTxs(TransactionsPtr _txs, Block::ConstPtr 
                     }
                     if (m_checkTransactionSignature)
                     {
-                        // clear sender and hash so that verify() will recompute them
+                        // clear sender and hash so that verify() will recompute them. For Web3 tx
+                        // this also drops the untrusted wire-supplied canonical txHash, forcing
+                        // verify() to recompute it from the signed payload (FIB-New1).
                         tx->clearSenderAndHash();
                         // verify failed, it will throw exception
                         tx->verify(*m_hashImpl, *m_signatureImpl);

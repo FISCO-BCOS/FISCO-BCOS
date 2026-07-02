@@ -108,8 +108,9 @@ struct MemoryStorageFixture
         HashType txHash = HashType::generateRandomFixedBytes();
         tx->mutableInner().extraTransactionHash.assign(txHash.begin(), txHash.end());
         tx->setSealed(sealed);
-        Keccak256 keccak;
-        tx->calculateHash(keccak);
+        // No calculateHash() here: this fabricated tx has no signing preimage/signature, and
+        // since FIB-New1 the Web3 branch of calculateHash() unconditionally recomputes the
+        // canonical hash from them (throwing on absence). hash() reads the value set above.
         return tx;
     }
 

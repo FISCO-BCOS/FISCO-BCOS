@@ -97,6 +97,11 @@ public:
     size_t size() const override;
 
 private:
+    // FIB-New1: recompute the canonical Web3 txHash = keccak256(rlp(signed tx)) directly from the
+    // signing preimage (extraTransactionBytes) + signature, without rebuilding a Web3Transaction.
+    static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+        bcos::bytesConstRef payload, bcos::bytesConstRef signature);
+
     std::function<bcostars::Transaction*()> m_inner;
 };
 }  // namespace bcostars::protocol
