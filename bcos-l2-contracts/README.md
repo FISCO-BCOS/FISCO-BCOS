@@ -78,9 +78,28 @@ git -C /tmp/op-fork submodule update --init --recursive --depth=1 \
 forge build --root /tmp/op-fork/packages/contracts-bedrock
 ```
 
-The storage-layout baseline (`storage-layout/*.json`) and its drift gate are
-added by PR-7: the gate regenerates `forge inspect <C> storage-layout --json`
-and fails if it diverges from the checked-in baseline.
+Regenerate the storage-layout fixtures (only when storage intentionally changes):
+
+```bash
+forge inspect SystemConfig storage-layout --json > storage-layout/SystemConfig.json
+forge inspect L2ValidatorSet storage-layout --json > storage-layout/L2ValidatorSet.json
+```
+
+The `--json` flag is mandatory: without it forge 1.5.1 emits an ASCII table
+instead of JSON, which corrupts the fixtures.
+
+CI gate (PR-7) fails if `forge inspect <C> storage-layout` diverges from the
+checked-in `storage-layout/*.json`. The gate normalizes away compiler-internal
+AST node ids (`astId` and the numeric suffix in struct type identifiers) before
+diffing, so it only fires on a real slot / offset / label / type-shape change —
+see `.github/workflows/l2-contracts.yml`.
+
+## Runbooks
+
+| Runbook | Covers |
+|---------|--------|
+| [`docs/runbook-l2-mode.md`](docs/runbook-l2-mode.md) | Bring up a node in L2 mode: 5-step quick start, L2-vs-pbft behavior, the exact genesis error strings, and upgrade paths |
+| [`docs/runbook-op-fork-upgrade.md`](docs/runbook-op-fork-upgrade.md) | Bump the pinned OP fork commit: edit `op-fork-pin.toml`, CI re-clones, storage-layout hard gate |
 
 ## Genesis deployment notes
 
