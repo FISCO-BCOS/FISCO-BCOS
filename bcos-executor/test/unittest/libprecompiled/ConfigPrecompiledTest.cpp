@@ -19,6 +19,7 @@
  */
 
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
 #include <boost/endian/conversion.hpp>
@@ -316,7 +317,7 @@ public:
             p.set_value(entry.value());
         });
         auto entry = p.get_future().get();
-        auto nodeList = entry.getObject<ledger::ConsensusNodeList>();
+        auto nodeList = bcos::storage::serialize::decode<ledger::ConsensusNodeList>(entry.get());
         return nodeList;
     }
 
@@ -328,7 +329,7 @@ public:
             p.set_value(entry.value());
         });
         auto entry = p.get_future().get();
-        auto systemConfig = entry.getObject<SystemConfigEntry>();
+        auto systemConfig = bcos::storage::serialize::decode<SystemConfigEntry>(entry.get());
         return systemConfig;
     }
 

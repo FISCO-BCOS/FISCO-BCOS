@@ -135,7 +135,7 @@ protected:
         auto versionEntry =
             storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
         auto [compatibilityVersionStr, number] =
-            versionEntry->template getObject<SystemConfigEntry>();
+            bcos::storage::serialize::decode<SystemConfigEntry>(versionEntry->get());
         if (!versionEntry)
         {
             LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";

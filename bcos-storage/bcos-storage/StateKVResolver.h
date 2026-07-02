@@ -14,19 +14,21 @@ struct InvalidStateKey : public Error
 
 struct StateValueResolver
 {
-    static auto encode(const storage::Entry& entry) { return entry; }
-    static auto encode(storage::Entry&& entry) { return std::move(entry); }
+    static auto encode(const storage::Entry& entry) -> std::string
+    {
+        return entry.encodeToBytes();
+    }
+    static auto encode(storage::Entry&& entry) -> std::string
+    {
+        return entry.encodeToBytes();
+    }
     static storage::Entry decode(std::string_view view)
     {
-        storage::Entry entry;
-        entry.set(view);
-        return entry;
+        return storage::Entry::decodeFromBytes(view);
     }
     static storage::Entry decode(std::string buffer)
     {
-        storage::Entry entry;
-        entry.set(std::move(buffer));
-        return entry;
+        return storage::Entry::decodeFromBytes(buffer);
     }
 };
 

@@ -5,16 +5,6 @@
 
 namespace bcos::storage
 {
-Entry::Entry(const Entry& other) = default;
-
-bcos::storage::Entry& Entry::operator=(const Entry& other)
-{
-    if (this != &other)
-    {
-        m_buffer = other.m_buffer;
-    }
-    return *this;
-}
 
 std::string_view Entry::get() const&
 {
@@ -43,7 +33,6 @@ std::string_view Entry::getField(size_t index) const&
             BCOS_ERROR(-1, "Get field index: " + boost::lexical_cast<std::string>(index) +
                                " failed, index out of range"));
     }
-
     return get();
 }
 
@@ -62,8 +51,7 @@ void Entry::setStatus(Status status)
 
     if (status == DELETED)
     {
-        // Encode DELETED purely as a type tag — no data stored.
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(DeletedModel{});
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(DeletedModel{});
     }
     else if (status == EMPTY)
     {
@@ -71,7 +59,7 @@ void Entry::setStatus(Status status)
     }
     else
     {
-        // NORMAL or MODIFIED: preserve existing data, change status tag.
+        // NORMAL or MODIFIED: preserve data, change status tag.
         if (m_buffer.has_value())
         {
             auto view = get();
@@ -89,7 +77,6 @@ bool Entry::dirty() const
     if (!m_buffer.has_value()) [[unlikely]]
         return false;
     auto s = m_buffer->status();
-
     return s == ENTRY_MODIFIED || s == ENTRY_DELETED;
 }
 
@@ -103,12 +90,11 @@ bool Entry::valid() const
 void Entry::setImplCopy(const char* data, size_t sz)
 {
     if (sz <= SMALL_SIZE)
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
     else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-        m_buffer =
-            pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
     else
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             BufferModel<std::string, ENTRY_MODIFIED>{std::string(data, sz)});
 }
 
@@ -123,6 +109,20 @@ Entry::Holder Entry::makeBuffer(EntryStatus es, const char* data, size_t sz)
     default:
         return Holder{};
     }
+}
+
+std::string Entry::encodeToBytes() const
+{
+    if (!m_buffer.has_value())
+        return {};
+    return m_buffer->encodeTo();
+}
+
+/* static */ Entry Entry::decodeFromBytes(std::string_view bytes)
+{
+    Entry entry;
+    entry.set(bytes);
+    return entry;
 }
 
 crypto::HashType Entry::hash(std::string_view table, std::string_view key,

@@ -1111,7 +1111,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
 
                     LEDGER_LOG(TRACE) << "Entry value: " << toHex(entry->get());
 
-                    auto [value, number] = entry->getObject<SystemConfigEntry>();
+                    auto [value, number] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
 
                     // The param was reset at height getLatestBlockNumber(), and takes effect in
                     // next block. So we query the status of getLatestBlockNumber() + 1.
@@ -1955,7 +1955,7 @@ bool Ledger::buildGenesisBlock(
                     executor_v1::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
-                    auto [versionStr, _] = versionEntry->getObject<SystemConfigEntry>();
+                    auto [versionStr, _] = bcos::storage::serialize::decode<SystemConfigEntry>(versionEntry->get());
                     auto storageVersion = tool::toVersionNumber(versionStr);
 
                     // 设置sharding default，相关的bugfix也要设置上，否则会不一致
@@ -2098,21 +2098,21 @@ bool Ledger::buildGenesisBlock(
 
         // tx count limit
         Entry txLimitEntry;
-        txLimitEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txCountLimit), 0});
+        txLimitEntry.set(bcos::storage::serialize::encode(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txCountLimit), 0}));
         sysTable->setRow(SYSTEM_KEY_TX_COUNT_LIMIT, std::move(txLimitEntry));
 
         // tx gas limit
         Entry gasLimitEntry;
-        gasLimitEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0});
+        gasLimitEntry.set(bcos::storage::serialize::encode(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_txGasLimit), 0}));
         sysTable->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(gasLimitEntry));
 
         // tx gas price
         if (versionCompareTo(versionNumber, BlockVersion::V3_6_VERSION) >= 0)
         {
             Entry gasPriceEntry;
-            gasPriceEntry.setObject(SystemConfigEntry("0x0", 0));
+            gasPriceEntry.set(bcos::storage::serialize::encode(SystemConfigEntry("0x0", 0)));
             sysTable->setRow(SYSTEM_KEY_TX_GAS_PRICE, std::move(gasPriceEntry));
         }
 
@@ -2123,17 +2123,17 @@ bool Ledger::buildGenesisBlock(
             features.set(ledger::Features::Flag::feature_rpbft);
 
             Entry epochSealerNumEntry;
-            epochSealerNumEntry.setObject(
-                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochSealerNum), 0});
+            epochSealerNumEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochSealerNum), 0}));
             sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, std::move(epochSealerNumEntry));
 
             Entry epochBlockNumEntry;
-            epochBlockNumEntry.setObject(
-                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochBlockNum), 0});
+            epochBlockNumEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_epochBlockNum), 0}));
             sysTable->setRow(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, std::move(epochBlockNumEntry));
 
             Entry notifyRotateEntry;
-            notifyRotateEntry.setObject(SystemConfigEntry("0", 0));
+            notifyRotateEntry.set(bcos::storage::serialize::encode(SystemConfigEntry("0", 0)));
             sysTable->setRow(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(notifyRotateEntry));
         }
 
@@ -2143,25 +2143,25 @@ bool Ledger::buildGenesisBlock(
 
         // consensus leader period
         Entry leaderPeriodEntry;
-        leaderPeriodEntry.setObject(
-            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0});
+        leaderPeriodEntry.set(bcos::storage::serialize::encode(
+            SystemConfigEntry{boost::lexical_cast<std::string>(genesis.m_leaderSwitchPeriod), 0}));
         sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
 
         LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
                          << LOG_KV("versionNumber", versionNumber);
         // write compatibility version
         Entry compatibilityVersionEntry;
-        compatibilityVersionEntry.setObject(
+        compatibilityVersionEntry.set(bcos::storage::serialize::encode(
             SystemConfigEntry{tool::fromVersionNumber(static_cast<protocol::BlockVersion>(
                                   genesis.m_compatibilityVersion)),
-                0});
+                0}));
         sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
 
         if (versionCompareTo(versionNumber, BlockVersion::V3_3_VERSION) >= 0)
         {
             // write auth check status
             Entry authCheckStatusEntry;
-            authCheckStatusEntry.setObject(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0});
+            authCheckStatusEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0}));
             sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
         }
 
@@ -2169,7 +2169,7 @@ bool Ledger::buildGenesisBlock(
         {
             // write web3 chain id
             Entry chainIdEntry;
-            chainIdEntry.setObject(SystemConfigEntry{genesis.m_web3ChainID, 0});
+            chainIdEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{genesis.m_web3ChainID, 0}));
             sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
         }
 
@@ -2177,8 +2177,8 @@ bool Ledger::buildGenesisBlock(
         if (versionNumber >= BlockVersion::V3_15_0_VERSION && genesis.m_executorVersion > 0)
         {
             Entry executorVersion;
-            executorVersion.setObject(
-                SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0});
+            executorVersion.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{std::to_string(genesis.m_executorVersion), 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::executor_version)),
@@ -2187,7 +2187,7 @@ bool Ledger::buildGenesisBlock(
             // 按会议结论，executor v1默认打开balance_transfer
             // According to the meeting conclusion, executor v1 defaults to open balance_transfer
             Entry balanceTransfer;
-            balanceTransfer.setObject(SystemConfigEntry{"1", 0});
+            balanceTransfer.set(bcos::storage::serialize::encode(SystemConfigEntry{"1", 0}));
             co_await storage2::writeOne(*m_stateStorage,
                 executor_v1::StateKey(
                     SYS_CONFIG, magic_enum::enum_name(ledger::SystemConfig::balance_transfer)),
@@ -2456,7 +2456,7 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
     {
         if (entry)
         {
-            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            auto [value, enableNumber] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
             if (enableNumber <= _blockNumber)
             {
                 configs.set(key, value, enableNumber);
@@ -2487,7 +2487,7 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
         {
             BOOST_THROW_EXCEPTION(BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
         }
-        auto [compatibilityVersionStr, _] = entry->template getObject<SystemConfigEntry>();
+        auto [compatibilityVersionStr, _] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
         auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         auto stateStorage = stateStorageFactory.createStateStorage(
             m_stateStorage, version, true, false, keyPageIgnoreTables);

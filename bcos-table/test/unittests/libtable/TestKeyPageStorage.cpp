@@ -18,6 +18,7 @@
  */
 
 #include "Hash.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/storage/StorageInterface.h"
@@ -2999,7 +3000,7 @@ BOOST_AUTO_TEST_CASE(TableMeta_read_write_mutex)
     threadPool->post([&]() {
         std::cout << "==================== parallelTraverse" << std::endl;
         Entry entry;
-        entry.setObject(*meta);
+        entry.set(bcos::storage::serialize::encode(*meta));
         std::cout << meta->size() << std::endl;
         promise->set_value();
     });

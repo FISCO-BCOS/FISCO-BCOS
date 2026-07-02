@@ -564,7 +564,7 @@ task::Task<std::optional<SystemConfigEntry>> tag_invoke(ledger::tag_t<getSystemC
     if (auto entry =
             co_await storage2::readOne(storage, executor_v1::StateKeyView(SYS_CONFIG, key)))
     {
-        co_return entry->template getObject<SystemConfigEntry>();
+        co_return bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
     }
     co_return {};
 }

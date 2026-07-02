@@ -22,12 +22,12 @@
 #include "../consensus/ConsensusNode.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "SystemConfigs.h"
+#include "bcos-framework/storage/Serialize.h"
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
 #include <oneapi/tbb/concurrent_unordered_map.h>
-#include <boost/archive/binary_iarchive.hpp>
 #include <magic_enum/magic_enum.hpp>
 
 namespace bcos::ledger
@@ -176,7 +176,8 @@ inline task::Task<void> readFromStorage(
     {
         if (entry)
         {
-            auto [value, enableNumber] = entry->template getObject<ledger::SystemConfigEntry>();
+            auto [value, enableNumber] =
+                storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
             if (blockNumber >= enableNumber)
             {
                 configs.set(key, value, enableNumber);

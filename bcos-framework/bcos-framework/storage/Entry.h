@@ -7,9 +7,6 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <proxy/proxy.h>
-#include <boost/archive/basic_archive.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -20,8 +17,11 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
-#include <type_traits>
 #include <range/v3/range/concepts.hpp>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <typeindex>
 
 namespace bcos::storage
 {
@@ -40,9 +40,6 @@ concept ByteBuffer = requires(const T& t) {
 template <typename T>
 constexpr bool IsByteBufferViewV = ::ranges::view_<std::remove_cvref_t<T>>;
 
-constexpr static int32_t ARCHIVE_FLAG =
-    boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
-
 // ─── Status enum at namespace scope ────────────────────────────────
 // Defined before buffer models and facade so they can use it as a
 // non-type template parameter and convention return type.  Values MUST
@@ -56,41 +53,39 @@ enum EntryStatus : int8_t
     ENTRY_MODIFIED = 3,  // dirty() can use status
 };
 
-// ─── Proxy-based type-erased byte-buffer facade ────────────────────
-// Replaces the previous AnyHolder + AnyBufferVTableExt hand-rolled vtable
-// with proxy's facade-builder, which achieves the same zero-virtual-overhead
-// dispatch (data/size/status) through its own vtable mechanism.
+// ─── Proxy-based type-erased entry facade ──────────────────────────
+// Unified facade for both byte-buffer and typed models.
+// Byte-buffer models: data/size/status return buffer content; encodeTo
+//   returns a copy of raw bytes; getTypedPtr returns nullptr.
+// Typed models: data returns nullptr; encodeTo calls T::encode();
+//   getTypedPtr returns the concrete object pointer.
 
-// Maximum inline buffer size for the proxy's small-buffer optimization.
-// Must accommodate the largest buffer model (currently BufferModel<T> / SmallBuffer etc.).
 inline constexpr size_t MAX_PROXY_BUFFER_SIZE = 32;
 
 PRO_DEF_MEM_DISPATCH(MemData, data);
 PRO_DEF_MEM_DISPATCH(MemSize, size);
 PRO_DEF_MEM_DISPATCH(MemStatus, status);
+PRO_DEF_MEM_DISPATCH(MemEncodeTo, encodeTo);
+PRO_DEF_MEM_DISPATCH(MemGetTypedPtr, getTypedPtr);
 
-struct AnyBufferFacade
+struct AnyEntryFacade
   : pro::facade_builder ::add_convention<MemData, const char*() const noexcept>::add_convention<
-        MemSize, size_t() const noexcept>::add_convention<MemStatus,
-        EntryStatus() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
-        support_relocation<pro::constraint_level::nothrow>::support_destruction<
-            pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE, 8>::build
+        MemSize, size_t() const noexcept>::add_convention<MemStatus, EntryStatus() const noexcept>::
+        add_convention<MemEncodeTo, std::string() const>::add_convention<MemGetTypedPtr,
+            void*() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
+            support_relocation<pro::constraint_level::nothrow>::support_destruction<
+                pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE, 8>::build
 {
 };
 
-// Buffer models no longer need a common base class — proxy dispatches
-// through the facade conventions above. Each model only needs data(),
-// size() and status() member functions with the signatures declared in
-// AnyBufferFacade.
-//
-// Every buffer model is templated on EntryStatus so the status is
-// encoded in the *type* rather than stored as a runtime field.  This
-// removes the 8-byte m_status member from Entry (reducing sizeof(Entry)
-// from 48 → 40).  Status transitions reconstruct the proxy with a
-// different template argument.
+// ─── Buffer models ─────────────────────────────────────────────────
+// Every model implements the full AnyEntryFacade convention set.
+// Byte-buffer models: data/size/status work as before; encodeTo returns
+//   a copy of the raw bytes; typeTag returns RAW_BYTES; getTypedPtr returns nullptr.
+// Typed models: data returns nullptr; encodeTo calls T::encode();
+//   typeTag returns the tag for T; getTypedPtr returns the concrete object.
 
-// Stores ≤31 bytes inline.  Repurposes 1 byte for the length so the
-// total data-member footprint stays at 32 bytes (saving 8 B vs size_t).
+// Stores ≤31 bytes inline.
 template <EntryStatus S>
 class SmallBuffer
 {
@@ -107,9 +102,11 @@ public:
     [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
     [[nodiscard]] size_t size() const noexcept { return m_size; }
     [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    [[nodiscard]] std::string encodeTo() const { return {data(), size()}; }
+    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// Stores exactly 32 bytes inline — no size field needed.
+// Stores exactly 32 bytes inline.
 template <EntryStatus S>
 class Fixed32Buffer
 {
@@ -122,10 +119,11 @@ public:
     [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
     [[nodiscard]] size_t size() const noexcept { return CAPACITY; }
     [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    [[nodiscard]] std::string encodeTo() const { return {data(), size()}; }
+    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// Adapts any ByteBuffer-conforming type T (std::string, std::vector<char>,
-// std::array<char,N>, etc.). Owns the value by move/copy.
+// Adapts any ByteBuffer-conforming type T.
 template <ByteBuffer T, EntryStatus S>
     requires(sizeof(T) <= MAX_PROXY_BUFFER_SIZE)
 class BufferModel
@@ -140,10 +138,11 @@ public:
     }
     [[nodiscard]] size_t size() const noexcept { return m_value.size(); }
     [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    [[nodiscard]] std::string encodeTo() const { return {data(), size()}; }
+    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// Adapts a shared_ptr-wrapped ByteBuffer type. Shares ownership of the
-// underlying buffer — no copy on clone().
+// Adapts a shared_ptr-wrapped ByteBuffer type.
 template <ByteBuffer T, EntryStatus S>
 class SharedBufferModel
 {
@@ -157,14 +156,11 @@ public:
     }
     [[nodiscard]] size_t size() const noexcept { return m_ptr->size(); }
     [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    [[nodiscard]] std::string encodeTo() const { return {data(), size()}; }
+    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// ─── Deleted sentinel model ────────────────────────────────────────
-// Encodes the DELETED status purely as a type tag — no data is stored.
-// This avoids the value copy/move that the old setStatus(DELETED) path
-// incurred.  The proxy still satisfies has_value()==true, but data()
-// returns a pointer to an empty string and size() returns 0, so the
-// observable behaviour is identical to the previous DELETED state.
+// Deleted sentinel model.
 class DeletedModel
 {
 public:
@@ -175,6 +171,27 @@ public:
     }
     [[nodiscard]] size_t size() const noexcept { return 0; }
     [[nodiscard]] EntryStatus status() const noexcept { return ENTRY_DELETED; }
+    [[nodiscard]] std::string encodeTo() const { return {}; }
+    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
+};
+
+// ─── Typed holder model ────────────────────────────────────────────
+// Stores a typed shared_ptr<void> (16 bytes) + encode function pointer
+// (8 bytes) = 24 bytes inline.  Fits in 32-byte proxy SBO.
+class TypedHolderModel
+{
+    std::shared_ptr<void> m_ptr;
+    std::string (*m_encodeFn)(const void*);
+
+public:
+    TypedHolderModel(std::shared_ptr<void> ptr, std::string (*encodeFn)(const void*))
+      : m_ptr(std::move(ptr)), m_encodeFn(encodeFn)
+    {}
+    [[nodiscard]] const char* data() const noexcept { return nullptr; }
+    [[nodiscard]] size_t size() const noexcept { return 0; }
+    [[nodiscard]] EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
+    [[nodiscard]] std::string encodeTo() const { return m_encodeFn(m_ptr.get()); }
+    [[nodiscard]] void* getTypedPtr() const noexcept { return m_ptr.get(); }
 };
 
 class Entry
@@ -192,49 +209,16 @@ public:
     constexpr static int32_t SMALL_SIZE = 31;
     static constexpr size_t INLINE_BUFFER_SIZE = 40;
 
-    using Holder = pro::proxy<AnyBufferFacade>;
+    using Holder = pro::proxy<AnyEntryFacade>;
 
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry& other);
+    Entry(const Entry& other) = default;
     Entry(Entry&&) noexcept = default;
-    bcos::storage::Entry& operator=(const Entry& other);
+    bcos::storage::Entry& operator=(const Entry& other) = default;
     bcos::storage::Entry& operator=(Entry&&) noexcept = default;
     ~Entry() noexcept = default;
-
-    template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
-        int flag = ARCHIVE_FLAG>
-    void getObject(Out& out) const
-    {
-        auto view = get();
-        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-            view.data(), view.size());
-        InputArchive archive(inputStream, flag);
-        archive >> out;
-    }
-
-    template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
-        int flag = ARCHIVE_FLAG>
-    Out getObject() const
-    {
-        Out out;
-        getObject<Out, InputArchive, flag>(out);
-        return out;
-    }
-
-    template <typename In, typename OutputArchive = boost::archive::binary_oarchive,
-        int flag = ARCHIVE_FLAG>
-    void setObject(const In& input)
-    {
-        std::string value;
-        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
-            value);
-        OutputArchive archive(outputStream, flag);
-        archive << input;
-        outputStream.flush();
-        setField(0, std::move(value));
-    }
 
     // ── Accessors ──────────────────────────────────────────────────
 
@@ -264,21 +248,19 @@ public:
         using RawType = std::remove_cvref_t<decltype(value)>;
         if constexpr (IsByteBufferViewV<RawType>)
         {
-            // Non-owning views (string_view, span, etc.): deep-copy the content
             setImplCopy(reinterpret_cast<const char*>(value.data()), value.size());
         }
         else
         {
-            // Owning types (string, vector, etc.): store the value directly
             auto sz = value.size();
             if (sz <= SMALL_SIZE)
-                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
                     SmallBuffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
             else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
-                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
                     Fixed32Buffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
             else
-                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
                     BufferModel<RawType, ENTRY_MODIFIED>{std::forward<decltype(value)>(value)});
         }
     }
@@ -293,9 +275,22 @@ public:
     template <ByteBuffer T>
     void set(std::shared_ptr<T> value)
     {
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
     }
+
+    // ── Typed storage API ──────────────────────────────────────────
+    template <typename T>
+    void setTyped(std::shared_ptr<T> ptr);
+
+    template <typename T>
+    T* getTyped() const;
+
+    template <typename T>
+    bool holdsType() const noexcept;
+
+    // Encode for persistence via the facade's encodeTo convention.
+    std::string encodeToBytes() const;
 
     // ── Status ─────────────────────────────────────────────────────
 
@@ -329,36 +324,74 @@ public:
 private:
     void setImplCopy(const char* data, size_t sz);
 
-    // Helper: construct a buffer with the given status, preserving data.
-    // Used by setStatus() for NORMAL ↔ MODIFIED transitions.
     static Holder makeBuffer(EntryStatus es, const char* data, size_t sz);
 
     template <EntryStatus S>
     static Holder makeBufferImpl(const char* data, size_t sz)
     {
         if (sz <= SMALL_SIZE)
-            return pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<S>{data, sz});
+            return pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<S>{data, sz});
         else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-            return pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<S>{data, sz});
+            return pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<S>{data, sz});
         else
-            return pro::make_proxy_inplace<AnyBufferFacade>(
+            return pro::make_proxy_inplace<AnyEntryFacade>(
                 BufferModel<std::string, S>{std::string(data, sz)});
     }
 
     Holder m_buffer;
 
-    // Unit-test accessor: exposes the internal proxy holder for inspection
-    // (buffer model type can be verified via decltype and size checks).
+    // Unit-test accessor.
     friend const Holder& entryTestHolder(const Entry& e) noexcept { return e.m_buffer; }
 };
 
-}  // namespace bcos::storage
+// ─── Template implementations ──────────────────────────────────────
 
-namespace boost::serialization
+template <typename T>
+void Entry::setTyped(std::shared_ptr<T> ptr)
 {
-template <typename Archive, typename... Types>
-void serialize(Archive& ar, std::tuple<Types...>& t, const unsigned int)
-{
-    std::apply([&](auto&... element) { ((ar & element), ...); }, t);
+    auto encodeFn = +[](const void* p) -> std::string {
+        std::string out;
+        static_cast<const T*>(p)->encode(out);
+        return out;
+    };
+    m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel{std::move(ptr), encodeFn});
 }
-}  // namespace boost::serialization
+
+template <typename T>
+T* Entry::getTyped() const
+{
+    if (!m_buffer.has_value())
+        return nullptr;
+
+    // If already a typed model, return the stored pointer.
+    auto* ptr = m_buffer->getTypedPtr();
+    if (ptr != nullptr)
+        return static_cast<T*>(ptr);
+
+    // Byte-buffer mode: lazy decode.
+    auto view = get();
+    if (view.empty())
+        return nullptr;
+
+    auto obj = std::make_shared<T>();
+    obj->decode(bcos::bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
+
+    // Replace byte-buffer model with a typed model.
+    auto encodeFn = +[](const void* p) -> std::string {
+        std::string out;
+        static_cast<const T*>(p)->encode(out);
+        return out;
+    };
+    auto* self = const_cast<Entry*>(this);
+    self->m_buffer =
+        pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel{std::move(obj), encodeFn});
+    return static_cast<T*>(self->m_buffer->getTypedPtr());
+}
+
+template <typename T>
+bool Entry::holdsType() const noexcept
+{
+    if (!m_buffer.has_value())
+        return false;
+    return m_buffer->getTypedPtr() != nullptr;
+}

@@ -278,7 +278,7 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     if (auto featureSwitch =
             _executive->storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_SWITCH))
     {
-        auto featureInfo = featureSwitch->getObject<ledger::SystemConfigEntry>();
+        auto featureInfo = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(featureSwitch->get());
         if (std::get<1>(featureInfo) == blockContext.number())
         {
             PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: enable feature_rpbft last block")
@@ -290,7 +290,7 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
     if (auto epochEntry = _executive->storage().getRow(
             ledger::SYS_CONFIG, ledger::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM))
     {
-        auto epochInfo = epochEntry->getObject<ledger::SystemConfigEntry>();
+        auto epochInfo = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(epochEntry->get());
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: get epoch_sealer_num")
                                << LOG_KV("value", std::get<0>(epochInfo))
                                << LOG_KV("enableBlk", std::get<1>(epochInfo));
@@ -318,7 +318,7 @@ bool WorkingSealerManagerImpl::shouldRotate(const executor::TransactionExecutive
         return false;
     }
 
-    auto epochBlockNumEntry = epochBlockInfo->getObject<ledger::SystemConfigEntry>();
+    auto epochBlockNumEntry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(epochBlockInfo->get());
     auto epochBlockNum = boost::lexical_cast<uint32_t>(std::get<0>(epochBlockNumEntry));
     if ((blockContext.number() - std::get<1>(epochBlockNumEntry)) % epochBlockNum == 0)
     {
@@ -384,8 +384,8 @@ void WorkingSealerManagerImpl::setNotifyRotateFlag(
 {
     auto const& blockContext = executive->blockContext();
     storage::Entry rotateEntry;
-    rotateEntry.setObject(
-        SystemConfigEntry{boost::lexical_cast<std::string>(flag), blockContext.number() + 1});
+    rotateEntry.set(bcos::storage::serialize::encode(
+        SystemConfigEntry{boost::lexical_cast<std::string>(flag), blockContext.number() + 1}));
     executive->storage().setRow(
         SYS_CONFIG, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, std::move(rotateEntry));
 }
@@ -396,7 +396,7 @@ bool WorkingSealerManagerImpl::getNotifyRotateFlag(
     auto const& blockContext = executive->blockContext();
     if (auto entry = executive->storage().getRow(SYS_CONFIG, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE))
     {
-        auto config = entry->getObject<ledger::SystemConfigEntry>();
+        auto config = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
         if (!std::get<0>(config).empty() && blockContext.number() >= std::get<1>(config))
         {
             return boost::lexical_cast<bool>(std::get<0>(config));

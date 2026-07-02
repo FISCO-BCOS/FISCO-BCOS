@@ -1,3 +1,4 @@
+#include <bcos-framework/storage/Serialize.h>
 /**
  *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
@@ -72,7 +73,7 @@ void BfsFileFactory::buildDirEntry(
             }
         },
         fileType);
-    _mutableEntry.setObject<std::vector<std::string>>({type.data(), "0", "0", "", "", ""});
+    _mutableEntry.set(bcos::storage::serialize::encode<std::vector<std::string>>({type.data(), "0", "0", "", "", ""}));
 }
 
 bool BfsFileFactory::buildLink(Table& _table, const std::string& _address, const std::string& _abi,

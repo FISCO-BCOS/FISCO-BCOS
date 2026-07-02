@@ -26,6 +26,7 @@
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/storage/StorageInterface.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-tool/BfsFileFactory.h"
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -353,7 +354,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 _callParameters->setExecResult(codec.encode(int32_t(CODE_FILE_NOT_EXIST), files));
                 return;
             }
-            auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
+            auto baseFields = bcos::storage::serialize::decode<std::vector<std::string>>(baseNameEntry->get());
             if (baseFields[0] == tool::FS_TYPE_DIR)
             {
                 // if type is dir, then return sub resource
@@ -364,7 +365,7 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 for (const auto& key : keys | ::ranges::views::all)
                 {
                     auto entry = _executive->storage().getRow(absolutePath, key);
-                    auto fields = entry->getObject<std::vector<std::string>>();
+                    auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
                     files.emplace_back(
                         key, fields[0], std::vector<std::string>{fields.begin() + 1, fields.end()});
                 }
@@ -490,7 +491,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         _callParameters->setExecResult(codec.encode(s256((int)CODE_FILE_NOT_EXIST), files));
         return;
     }
-    auto baseFields = baseNameEntry->getObject<std::vector<std::string>>();
+    auto baseFields = bcos::storage::serialize::decode<std::vector<std::string>>(baseNameEntry->get());
     if (baseFields[0] == tool::FS_TYPE_DIR)
     {
         // if type is dir, then return sub resource
@@ -501,7 +502,7 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         for (const auto& key : keys | ::ranges::views::all)
         {
             auto entry = _executive->storage().getRow(absolutePath, key);
-            auto fields = entry->getObject<std::vector<std::string>>();
+            auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
             files.emplace_back(
                 key, fields[0], std::vector<std::string>{fields.begin() + 1, fields.end()});
         }
@@ -1092,14 +1093,14 @@ void BFSPrecompiled::rebuildBfs310(
         auto extraEntry = _executive->storage().getRow(rebuildPath, tool::FS_KEY_EXTRA);
         // root has no parent
         Entry newFormEntry;
-        newFormEntry.setObject(std::vector<std::string>{
+        newFormEntry.set(bcos::storage::serialize::encode(std::vector<std::string>{
             std::string(typeEntry->get()),
             std::string("0"),
             std::string(aclTypeEntry->get()),
             std::string(aclWhiteEntry->get()),
             std::string(aclBlackEntry->get()),
             std::string(extraEntry->get()),
-        });
+        }));
         typeEntry->setStatus(Entry::Status::DELETED);
         aclTypeEntry->setStatus(Entry::Status::DELETED);
         aclWhiteEntry->setStatus(Entry::Status::DELETED);
@@ -1208,7 +1209,7 @@ bool BFSPrecompiled::recursiveBuildDir(
             }
             else
             {
-                auto dirFields = dirEntry->getObject<std::vector<std::string>>();
+                auto dirFields = bcos::storage::serialize::decode<std::vector<std::string>>(dirEntry->get());
                 if (dirFields[0] == tool::FS_TYPE_DIR)
                 {
                     // if dir is directory, continue

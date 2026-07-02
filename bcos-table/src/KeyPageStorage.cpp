@@ -285,7 +285,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                         {
                             auto* meta = it.second->getTableMeta();
                             Entry entry;
-                            entry.setObject(*meta);
+                            entry.set(bcos::storage::serialize::encode(*meta));
                             m_size += entry.size();
                             if (!m_readOnly)
                             {
@@ -329,7 +329,7 @@ void KeyPageStorage::parallelTraverse(bool onlyDirty,
                             }
                             else
                             {
-                                entry.setObject(*page);
+                                entry.set(bcos::storage::serialize::encode(*page));
                                 m_size += entry.size();
                                 entry.setStatus(it.second->entry.status());
                                 if (!m_readOnly)
@@ -735,7 +735,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
             if (data.value()->entry.dirty())
             {
                 Entry entry;
-                entry.setObject(*meta);
+                entry.set(bcos::storage::serialize::encode(*meta));
                 entry.setStatus(data.value()->entry.status());
                 return std::make_pair(nullptr, std::move(entry));
             }
@@ -808,7 +808,7 @@ auto KeyPageStorage::getEntryFromPage(std::string_view table, std::string_view k
                         << LOG_KV("dirty", data.value()->entry.dirty());
                 }
                 Entry entry;
-                entry.setObject(*page);
+                entry.set(bcos::storage::serialize::encode(*page));
                 entry.setStatus(pageData->entry.status());
                 return std::make_pair(nullptr, std::move(entry));
             }

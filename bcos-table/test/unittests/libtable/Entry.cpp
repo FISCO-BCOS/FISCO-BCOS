@@ -20,6 +20,7 @@
 // Allow unit tests to inspect private members for buffer-model verification
 
 #include "bcos-framework/protocol/Protocol.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hash/SM3.h>
@@ -156,9 +157,9 @@ BOOST_AUTO_TEST_CASE(object)
     std::tuple<int, std::string, std::string> value = std::make_tuple(100, "hello", "world");
 
     Entry entry;
-    entry.setObject(value);
+    entry.set(bcos::storage::serialize::encode(value));
 
-    auto out = entry.getObject<std::tuple<int, std::string, std::string>>();
+    auto out = bcos::storage::serialize::decode<std::tuple<int, std::string, std::string>>(entry.get());
 
     BOOST_CHECK(out == value);
 }
