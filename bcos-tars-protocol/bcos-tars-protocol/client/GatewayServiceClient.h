@@ -23,6 +23,7 @@
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/gateway/GatewayInterface.h>
+#include <range/v3/view/any_view.hpp>
 #include <string>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
