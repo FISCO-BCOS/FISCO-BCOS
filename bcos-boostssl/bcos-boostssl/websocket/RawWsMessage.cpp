@@ -15,6 +15,7 @@
  */
 
 #include <bcos-boostssl/websocket/RawWsMessage.h>
+#include <bcos-utilities/BoostLog.h>
 
 using namespace bcos::boostssl::ws;
 
@@ -40,16 +41,14 @@ uint16_t RawWsMessage::version() const
     return 0;
 }
 
-void RawWsMessage::setVersion(uint16_t)
-{}
+void RawWsMessage::setVersion(uint16_t) {}
 
 uint16_t RawWsMessage::packetType() const
 {
     return m_packetType;
 }
 
-void RawWsMessage::setPacketType(uint16_t)
-{}
+void RawWsMessage::setPacketType(uint16_t) {}
 
 std::string const& RawWsMessage::seq() const
 {
@@ -76,8 +75,7 @@ uint16_t RawWsMessage::ext() const
     return 0;
 }
 
-void RawWsMessage::setExt(uint16_t)
-{}
+void RawWsMessage::setExt(uint16_t) {}
 
 bool RawWsMessage::encode(bcos::bytes& _buffer)
 {
@@ -96,8 +94,7 @@ bool RawWsMessage::isRespPacket() const
     return false;
 }
 
-void RawWsMessage::setRespPacket()
-{}
+void RawWsMessage::setRespPacket() {}
 
 uint32_t RawWsMessage::length() const
 {

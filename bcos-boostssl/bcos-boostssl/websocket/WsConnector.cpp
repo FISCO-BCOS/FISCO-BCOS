@@ -22,6 +22,7 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConnector.h>
 #include <bcos-boostssl/websocket/WsTools.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/asio/error.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/websocket/stream_base.hpp>

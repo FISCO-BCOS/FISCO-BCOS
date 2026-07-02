@@ -20,6 +20,7 @@
 
 #include <bcos-boostssl/context/NodeInfoTools.h>
 #include <bcos-boostssl/httpserver/HttpServer.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <memory>
 #include <utility>
@@ -30,16 +31,16 @@ using namespace bcos::boostssl::http;
 using namespace bcos::boostssl::context;
 
 HttpServer::HttpServer(std::string _listenIP, uint16_t _listenPort, uint32_t _httpBodySizeLimit,
-        CorsConfig _corsConfig)
-    : m_listenIP(std::move(_listenIP)),
-        m_listenPort(_listenPort),
-        m_httpBodySizeLimit(_httpBodySizeLimit),
-        m_corsConfig(std::move(_corsConfig))
+    CorsConfig _corsConfig)
+  : m_listenIP(std::move(_listenIP)),
+    m_listenPort(_listenPort),
+    m_httpBodySizeLimit(_httpBodySizeLimit),
+    m_corsConfig(std::move(_corsConfig))
 {}
 
 HttpServer::~HttpServer()
 {
-        stop();
+    stop();
 }
 
 // start http server
