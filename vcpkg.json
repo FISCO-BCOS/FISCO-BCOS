@@ -43,6 +43,7 @@
     },
     "fmt",
     "secp256k1",
+    "evmc",
     {
       "name": "aws-sdk-cpp",
       "features": [
@@ -63,7 +64,6 @@
       "description": "Full node dependencies",
       "dependencies": [
         "evmone",
-        "evmc",
         "boost-coroutine2",
         {
           "name": "rocksdb",
