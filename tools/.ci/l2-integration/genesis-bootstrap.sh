@@ -3,7 +3,8 @@
 #
 # Scenario: genesis bootstrap. Assert that all 13 predeploys are present in the
 # genesis state (non-empty runtime code at their canonical addresses) and that
-# SystemConfig.getChainConfig() returns a well-formed (>= 4-word) result.
+# SystemConfig.getValueByKey("chain_id") returns a well-formed 2-word result
+# with a nonzero chainId.
 #
 # Fully automated once the A8 devnet is up. SKIPs (exit 77) if the devnet
 # compose file is absent or the RPC never comes up.
@@ -26,15 +27,21 @@ for addr in "${ALL_PREDEPLOYS[@]}"; do
 done
 log "all 13 predeploys carry non-empty runtime code"
 
-log "calling SystemConfig.getChainConfig() (${SELECTOR_GET_CHAIN_CONFIG})"
-ret="$(eth_call "${SYSTEM_CONFIG_ADDR}" "${SELECTOR_GET_CHAIN_CONFIG}")"
+log "calling SystemConfig.getValueByKey(\"chain_id\")"
+ret="$(eth_call "${SYSTEM_CONFIG_ADDR}" "${CALLDATA_GET_CHAIN_ID}")"
 ret_len="$(hex_byte_len "${ret}")"
-# getChainConfig() returns (chainId, l2BlockGasLimit, compatibilityVersion,
-# featureFlags) = 4 ABI words = 128 bytes. The C++ L2ConfigLoader aborts the
-# block on a return < 128 bytes, so the integration check uses the same bound.
-if [[ "${ret_len}" -lt 128 ]]; then
-    fail "getChainConfig() returned ${ret_len} bytes, expected >= 128"
+# getValueByKey returns (value uint192, enableNumber uint64) = 2 ABI words =
+# 64 bytes. chain_id == 0 is rejected by the C++ L2ConfigLoader (breaks
+# EIP-155), so a zero word 0 here means the genesis allocs never seeded the
+# chain_id slot.
+if [[ "${ret_len}" -ne 64 ]]; then
+    fail "getValueByKey(\"chain_id\") returned ${ret_len} bytes, expected 64"
 fi
-log "getChainConfig() returned ${ret_len} bytes (>= 128)"
+word0="$(hex_body "${ret}")"
+word0="${word0:0:64}"
+if [[ "${word0}" =~ ^0+$ ]]; then
+    fail "getValueByKey(\"chain_id\") returned chainId == 0 (chain_id slot not seeded)"
+fi
+log "getValueByKey(\"chain_id\") returned ${ret_len} bytes, chainId word nonzero"
 
 log "PASS"

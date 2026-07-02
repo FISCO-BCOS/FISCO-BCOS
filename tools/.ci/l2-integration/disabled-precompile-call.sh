@@ -31,10 +31,11 @@ for addr in "${DISABLED[@]}"; do
     fi
     log "  eth_getCode -> 0x (code-less account)"
 
-    # eth_call with the SystemConfig getter selector. Against a code-less
-    # account the EVM returns empty output with success (no revert data) —
-    # the same observable behavior as calling any address with no code.
-    resp="$(rpc eth_call "[{\"to\":\"${addr}\",\"data\":\"${SELECTOR_GET_CHAIN_CONFIG}\"},\"latest\"]")"
+    # eth_call with plausible getter calldata (the payload content is
+    # irrelevant here — any bytes exercise the dispatch path). Against a
+    # code-less account the EVM returns empty output with success (no revert
+    # data) — the same observable behavior as calling any address with no code.
+    resp="$(rpc eth_call "[{\"to\":\"${addr}\",\"data\":\"${CALLDATA_GET_CHAIN_ID}\"},\"latest\"]")"
     if echo "${resp}" | jq -e '.error' >/dev/null 2>&1; then
         # An empty-account call must NOT carry revert data. A populated error
         # object means the precompile is still reachable (still registered).

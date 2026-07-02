@@ -50,11 +50,14 @@ jobs:
           set -euo pipefail
           mkdir -p lib
           git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std
-          oz=$(grep -E '^"openzeppelin-contracts"' op-fork-pin.toml | awk -F'"' '{print $4}')
-          ozu=$(grep -E '^"openzeppelin-contracts-upgradeable"' op-fork-pin.toml | awk -F'"' '{print $4}')
+          # Normalize to lowercase first: git accepts uppercase hex SHAs (a
+          # GitHub-UI copy-paste can produce them), so enforce the lowercase
+          # convention by folding rather than rejecting with a confusing error.
+          oz=$(grep -E '^"openzeppelin-contracts"' op-fork-pin.toml | awk -F'"' '{print $4}' | tr 'A-F' 'a-f')
+          ozu=$(grep -E '^"openzeppelin-contracts-upgradeable"' op-fork-pin.toml | awk -F'"' '{print $4}' | tr 'A-F' 'a-f')
           for sha in "$oz" "$ozu"; do
             if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "::error::op-fork-pin.toml OZ dep SHA is not 40-char hex: '${sha}'"; exit 1
+              echo "::error::op-fork-pin.toml OZ dep SHA is not a 40-char hex SHA: '${sha}'"; exit 1
             fi
           done
           git clone https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts
@@ -75,12 +78,15 @@ jobs:
         id: pin
         run: |
           set -euo pipefail
-          COMMIT=$(grep -E '^commit' op-fork-pin.toml | awk -F'"' '{print $2}')
+          # Lowercase-fold before validating (same rationale as the OZ dep
+          # step: uppercase hex SHAs are valid to git, so normalize instead of
+          # rejecting them with a misleading "not hex" error).
+          COMMIT=$(grep -E '^commit' op-fork-pin.toml | awk -F'"' '{print $2}' | tr 'A-F' 'a-f')
           if [ -z "$COMMIT" ]; then
             echo "::error::failed to parse 'commit' from op-fork-pin.toml"; exit 1
           fi
           if ! [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::op-fork-pin.toml 'commit' is not a 40-char lowercase hex SHA: ${COMMIT}"
+            echo "::error::op-fork-pin.toml 'commit' is not a 40-char hex SHA: ${COMMIT}"
             exit 1
           fi
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"

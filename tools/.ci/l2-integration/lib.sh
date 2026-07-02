@@ -113,8 +113,13 @@ wait_for_rpc() {
 
 # --- L2 protocol constants (single source of truth for the scenarios) --------
 
-# SystemConfig.getChainConfig() selector (corrected: NOT 0x0a91e36f).
-SELECTOR_GET_CHAIN_CONFIG="0x606c0c94"
+# SystemConfig.getValueByKey(string) calldata for key "chain_id". The string
+# arg is a dynamic ABI type, so we carry the full pre-encoded calldata rather
+# than hand-assembling head/len/padding in shell. Regenerate with:
+#   cast calldata 'getValueByKey(string)' 'chain_id'
+# Returns (value uint192, enableNumber uint64) = 2 ABI words = 64 bytes;
+# word 0 (low bits) is the chainId.
+CALLDATA_GET_CHAIN_ID="0x1258a93a00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000008636861696e5f6964000000000000000000000000000000000000000000000000"
 # Ownable.owner() selector.
 SELECTOR_OWNER="0x8da5cb5b"
 

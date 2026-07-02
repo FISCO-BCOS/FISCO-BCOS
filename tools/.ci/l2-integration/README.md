@@ -54,8 +54,8 @@ without faking passes, and the same script becomes a real gate once A8 lands.
 
 | Script | Fully automated now | TODO-A8 |
 |--------|--------------------|---------|
-| `genesis-bootstrap.sh` | yes — getCode on 13 predeploys + getChainConfig >= 128B | — |
-| `system-config-roundtrip.sh` | yes — getChainConfig chainId == eth_chainId | — |
+| `genesis-bootstrap.sh` | yes — getCode on 13 predeploys + getValueByKey("chain_id") == 2 words, nonzero | — |
+| `system-config-roundtrip.sh` | yes — getValueByKey("chain_id") word 0 == eth_chainId | — |
 | `disabled-precompile-call.sh` | yes — 3 disabled precompiles read as code-less | — |
 | `proxy-upgrade.sh` | partial — ProxyAdmin.owner() check | full `upgrade()` tx roundtrip (funded key) |
 | `extcodehash-extcodecopy.sh` | partial — getCode size/stability + local keccak | in-EVM EXTCODEHASH/EXTCODECOPY via deployed helper (funded key) |

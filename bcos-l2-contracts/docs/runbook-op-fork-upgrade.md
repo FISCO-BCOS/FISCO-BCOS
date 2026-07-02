@@ -13,9 +13,10 @@ storage-layout baseline (only if drift is real and intentional), and merge.
 Someone bumps the `commit` field in `op-fork-pin.toml` to a tag that moved a
 storage slot on `SystemConfig` (e.g. inherited a new field from a shared OP
 base contract). Genesis allocs in production already wrote the old layout, so
-the new bytecode reads a non-existent slot and `getChainConfig()` returns
-garbage at block 0 — silently. The storage-layout drift gate (PR-7 CI step)
-fails the bump before merge:
+the new bytecode reads a non-existent slot: `getValueByKey("chain_id")` — and
+the node's `L2ConfigLoader`, which derives the same `_config` slot address and
+reads it directly — return garbage at block 0, silently. The storage-layout
+drift gate (PR-7 CI step) fails the bump before merge:
 
 ```
 ::error::storage-layout drift detected for SystemConfig; if intentional,

@@ -132,7 +132,9 @@ running devnet.
 ## Common errors
 
 Genesis-config errors are thrown as `bcos::tool::InvalidConfig`; the per-block
-config-load errors are `std::runtime_error`. Exact strings:
+config-load errors are `std::runtime_error`. Line numbers are as of
+release-3.18.0 and will drift; the verbatim error string is the stable anchor.
+Exact strings:
 
 | Error string (verbatim) | Cause | Source |
 |-------------------------|-------|--------|
