@@ -19,9 +19,15 @@
  * @date 2021-04-20
  */
 
-#include "BlockImpl.h"
+// On Windows tup/Tars.h must be parsed before the generated tars headers,
+// otherwise the tars namespace is broken for them (same workaround as
+// bcos-tars-protocol/Common.h).
+#ifdef _WIN32
+#include <tup/Tars.h>
+#endif
 #include "../impl/TarsHashable.h"
 #include "../impl/TarsSerializable.h"
+#include "BlockImpl.h"
 #include "bcos-concepts/Serialize.h"
 #include "bcos-framework/protocol/TransactionReceipt.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
