@@ -58,7 +58,7 @@ void StorageInterface::asyncCreateTable(std::string _tableName, std::string _val
                     }
 
                     auto tableEntry = sysTable->newEntry();
-                    tableEntry.setField(0, std::string(valueFields));
+                    tableEntry.set(std::string(valueFields));
 
                     sysTable->asyncSetRow(tableName, tableEntry,
                         [this, callback, tableName, valueFields = std::move(valueFields)](
@@ -150,7 +150,7 @@ void StorageInterface::asyncGetTableInfo(
                         }
 
                         std::vector<std::string> fields;
-                        boost::split(fields, entry->getField(0), boost::is_any_of(","));
+                        boost::split(fields, entry->get(), boost::is_any_of(","));
 
                         auto tableInfo = std::make_shared<storage::TableInfo>(
                             std::move(tableName), std::move(fields));

@@ -349,7 +349,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto entry = table.getRow("code");
     BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
+    BOOST_CHECK_GT(entry->get().size(), 0);
 
     // start new block
     auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
@@ -559,7 +559,7 @@ BOOST_AUTO_TEST_CASE(deployError)
 
         auto entry = table.getRow("code");
         BOOST_CHECK(entry);
-        BOOST_CHECK_GT(entry->getField(0).size(), 0);
+        BOOST_CHECK_GT(entry->get().size(), 0);
     }
 
     string errorAddress = "usr/alice/hello_world/hello_world";
@@ -761,7 +761,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     auto entry = table.getRow("code");
     BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
+    BOOST_CHECK_GT(entry->get().size(), 0);
 
     // start new block
     auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(

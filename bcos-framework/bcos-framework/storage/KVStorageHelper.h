@@ -24,7 +24,7 @@ public:
 
                 if (entry)
                 {
-                    callback(nullptr, entry->getField(0));
+                    callback(nullptr, entry->get());
                 }
                 else
                 {
@@ -51,7 +51,7 @@ public:
                 {
                     if (it)
                     {
-                        values->emplace_back(std::string(it->getField(0)));
+                        values->emplace_back(std::string(it->get()));
                     }
                     else
                     {

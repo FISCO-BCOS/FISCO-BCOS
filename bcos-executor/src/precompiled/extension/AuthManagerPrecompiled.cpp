@@ -719,7 +719,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     auto getAclStr =
         (type == (int)AuthType::BLACK_LIST_MODE) ? tool::FS_ACL_BLACK : tool::FS_ACL_WHITE;
     auto entry = _executive->storage().getRow(tool::FS_APPS, getAclStr);
-    auto mapStr = std::string(entry->getField(0));
+    auto mapStr = std::string(entry->get());
     if (!mapStr.empty())
     {
         auto&& out = asBytes(mapStr);
@@ -727,7 +727,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     }
     // covered writing
     aclMap[account] = access;
-    entry->setField(0, asString(codec::scale::encode(aclMap)));
+    entry->set(asString(codec::scale::encode(aclMap)));
     _executive->storage().setRow(tool::FS_APPS, getAclStr, std::move(entry.value()));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);

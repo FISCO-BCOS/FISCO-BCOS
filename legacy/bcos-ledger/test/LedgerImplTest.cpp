@@ -123,7 +123,7 @@ struct LedgerImplFixture
         bcos::storage::Entry headerEntry;
         std::vector<bcos::byte> headerBuffer;
         bcos::concepts::serialize::encode(header, headerBuffer);
-        headerEntry.setField(0, std::move(headerBuffer));
+        headerEntry.set(std::move(headerBuffer));
         data.emplace(std::tuple{SYS_NUMBER_2_BLOCK_HEADER, "10086"}, std::move(headerEntry));
 
         bcostars::Block transactionsBlock;
@@ -142,7 +142,7 @@ struct LedgerImplFixture
             std::vector<bcos::byte> txBuffer;
             bcos::concepts::serialize::encode(transaction, txBuffer);
             bcos::storage::Entry txEntry;
-            txEntry.setField(0, std::move(txBuffer));
+            txEntry.set(std::move(txBuffer));
 
             data.emplace(std::tuple{SYS_HASH_2_TX, hashStr}, std::move(txEntry));
 
@@ -154,14 +154,14 @@ struct LedgerImplFixture
             std::vector<bcos::byte> receiptBuffer;
             bcos::concepts::serialize::encode(receipt, receiptBuffer);
             bcos::storage::Entry receiptEntry;
-            receiptEntry.setField(0, std::move(receiptBuffer));
+            receiptEntry.set(std::move(receiptBuffer));
             data.emplace(std::tuple{SYS_HASH_2_RECEIPT, hashStr}, std::move(receiptEntry));
         }
 
         std::vector<bcos::byte> txsBuffer;
         bcos::concepts::serialize::encode(transactionsBlock, txsBuffer);
         bcos::storage::Entry txsEntry;
-        txsEntry.setField(0, std::move(txsBuffer));
+        txsEntry.set(std::move(txsBuffer));
         data.emplace(std::tuple{SYS_NUMBER_2_TXS, "10086"}, std::move(txsEntry));
 
         bcostars::Block nonceBlock;
@@ -170,7 +170,7 @@ struct LedgerImplFixture
         std::vector<bcos::byte> nonceBuffer;
         bcos::concepts::serialize::encode(nonceBlock, nonceBuffer);
         bcos::storage::Entry nonceEntry;
-        nonceEntry.setField(0, std::move(nonceBuffer));
+        nonceEntry.set(std::move(nonceBuffer));
         data.emplace(std::tuple{SYS_BLOCK_NUMBER_2_NONCES, "10086"}, std::move(nonceEntry));
     }
 

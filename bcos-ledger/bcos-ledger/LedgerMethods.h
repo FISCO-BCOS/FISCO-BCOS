@@ -201,7 +201,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
         if (auto entry = co_await storage2::readOne(
                 storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
         {
-            auto field = entry->getField(0);
+            auto field = entry->get();
             auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
                 bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
             block->setBlockHeader(std::move(headerPtr));
@@ -217,7 +217,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
         if (auto txsEntry = co_await storage2::readOne(
                 storage, executor_v1::StateKeyView{SYS_NUMBER_2_TXS, blockNumberStr}))
         {
-            auto txs = txsEntry->getField(0);
+            auto txs = txsEntry->get();
             auto blockWithTxs =
                 blockFactory.createBlock(bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
             auto hashes = blockWithTxs->transactionHashes() | ::ranges::to<std::vector>();
@@ -232,7 +232,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                     }));
                 for (auto& txEntry : transactions)
                 {
-                    auto field = txEntry->getField(0);
+                    auto field = txEntry->get();
                     auto transaction = blockFactory.transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
                         false);
@@ -249,7 +249,7 @@ task::Task<protocol::Block::Ptr> tag_invoke(ledger::tag_t<getBlockData> /*unused
                     }));
                 for (auto& receiptEntry : receipts)
                 {
-                    auto field = receiptEntry->getField(0);
+                    auto field = receiptEntry->get();
                     auto receipt = blockFactory.receiptFactory()->createReceipt(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
                     block->appendReceipt(std::move(receipt));
@@ -329,7 +329,7 @@ task::Task<void> tag_invoke(ledger::tag_t<getLedgerConfig> /*unused*/, auto& sto
     if (auto entry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr}))
     {
-        auto field = entry->getField(0);
+        auto field = entry->get();
         auto headerPtr = blockFactory.blockHeaderFactory()->createBlockHeader(
             bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
         ledgerConfig.setTimestamp(headerPtr->timestamp());
@@ -418,7 +418,7 @@ task::Task<std::optional<crypto::HashType>> tag_invoke(ledger::tag_t<getBlockHas
     if (auto entry = co_await storage2::readOne(
             storage, executor_v1::StateKeyView{SYS_NUMBER_2_HASH, blockNumberString}))
     {
-        auto hashStr = entry->getField(0);
+        auto hashStr = entry->get();
         bcos::crypto::HashType hash(hashStr, bcos::crypto::HashType::FromBinary);
 
         co_return std::make_optional(hash);
@@ -435,7 +435,7 @@ task::Task<std::optional<protocol::BlockNumber>> tag_invoke(
     if (auto entry = co_await storage2::readOne(storage,
             executor_v1::StateKeyView{SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash)}))
     {
-        auto blockNumberStr = entry->getField(0);
+        auto blockNumberStr = entry->get();
         auto blockNumber = boost::lexical_cast<protocol::BlockNumber>(blockNumberStr);
 
         co_return std::make_optional(blockNumber);
@@ -453,13 +453,13 @@ task::Task<protocol::BlockNumber> tag_invoke(ledger::tag_t<getCurrentBlockNumber
         try
         {
             blockNumber =
-                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->getField(0));
+                boost::lexical_cast<bcos::protocol::BlockNumber>(blockNumberEntry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {
             // Ignore the exception
             LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
-                             << LOG_KV("blockNumber str", blockNumberEntry->getField(0));
+                             << LOG_KV("blockNumber str", blockNumberEntry->get());
         }
         LEDGER_LOG(TRACE) << "GetBlockNumber success" << LOG_KV("blockNumber", blockNumber);
         co_return blockNumber;
@@ -478,7 +478,7 @@ task::Task<consensus::ConsensusNodeList> tag_invoke(ledger::tag_t<getNodeList> /
         co_return consensus::ConsensusNodeList{};
     }
 
-    auto ledgerConsensusNodeList = decodeConsensusList(nodeListEntry->getField(0));
+    auto ledgerConsensusNodeList = decodeConsensusList(nodeListEntry->get());
     consensus::ConsensusNodeList nodes =
         ledgerConsensusNodeList | ::ranges::views::transform([](auto const& node) {
             auto nodeIDBin = fromHex(node.nodeID);

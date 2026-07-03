@@ -5,6 +5,7 @@
 
 namespace bcos::storage
 {
+DERIVE_BCOS_EXCEPTION(TypedEntryStatusChange);
 
 std::string_view Entry::get() const&
 {
@@ -25,17 +26,6 @@ int32_t Entry::size() const
     return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
 }
 
-std::string_view Entry::getField(size_t index) const&
-{
-    if (index > 0)
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Get field index: " + boost::lexical_cast<std::string>(index) +
-                               " failed, index out of range"));
-    }
-    return get();
-}
-
 Entry::Status Entry::status() const
 {
     if (!m_buffer.has_value()) [[unlikely]]
@@ -45,6 +35,12 @@ Entry::Status Entry::status() const
 
 void Entry::setStatus(Status status)
 {
+    // Typed entries are immutable — refuse status mutation.
+    if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(TypedEntryStatusChange{});
+    }
+
     auto cur = this->status();
     if (cur == status)
         return;

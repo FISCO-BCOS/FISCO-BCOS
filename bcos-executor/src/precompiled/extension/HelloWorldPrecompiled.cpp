@@ -100,7 +100,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
             gasPricer->updateMemUsed(entry->size());
             gasPricer->appendOperation(InterfaceOpcode::Select, 1);
 
-            retValue = entry->getField(0);
+            retValue = entry->get();
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
@@ -113,7 +113,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
         auto entry = table->getRow(HELLO_WORLD_KEY_FIELD_NAME);
         gasPricer->updateMemUsed(entry->size());
         gasPricer->appendOperation(InterfaceOpcode::Select, 1);
-        entry->setField(0, strValue);
+        entry->set(strValue);
 
         table->setRow(HELLO_WORLD_KEY_FIELD_NAME, *entry);
         gasPricer->appendOperation(InterfaceOpcode::Update, 1);

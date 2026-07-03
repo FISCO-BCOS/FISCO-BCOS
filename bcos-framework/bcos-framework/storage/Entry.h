@@ -22,6 +22,7 @@
 #include <range/v3/range/concepts.hpp>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <typeindex>
 
@@ -76,7 +77,7 @@ struct AnyEntryFacade
         MemSize, size_t() const noexcept>::add_convention<MemStatus,
         EntryStatus() const noexcept>::add_convention<MemEncode,
         void(std::function<void(const uint8_t*, size_t)>) const>::add_convention<MemGetTypedPtr,
-        void*() const noexcept>::add_convention<MemTypeIndex,
+        const void*() const noexcept>::add_convention<MemTypeIndex,
         std::type_index() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
         support_relocation<pro::constraint_level::nothrow>::support_destruction<
             pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE, 8>::build
@@ -114,7 +115,7 @@ public:
     }
 
     [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
+    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Stores exactly 32 bytes inline.
@@ -137,7 +138,7 @@ public:
     }
 
     [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
+    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Adapts any ByteBuffer-conforming type T.
@@ -162,7 +163,7 @@ public:
     }
 
     [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
+    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Adapts a shared_ptr-wrapped ByteBuffer type.
@@ -186,7 +187,7 @@ public:
     }
 
     [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
+    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Deleted sentinel model.
@@ -204,17 +205,47 @@ public:
     void encode(std::function<void(const uint8_t*, size_t)>) const {}
 
     [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] void* getTypedPtr() const noexcept { return nullptr; }
+    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
+// ─── tag_invoke infrastructure ─────────────────────────────────────
+// ADL anchor declared in bcos::storage.  Users must overload tag_invoke
+// in their own namespaces to provide encode/decode for their types.
+void tag_invoke();  // not defined — poison pill to prevent unqualified calls
+
+// ─── Encode customization point object ────────────────────────────
+// Requires: tag_invoke(encode_t, const T&, std::function<void(const uint8_t*, size_t)>)
+// to be defined in T's associated namespace.
+struct encode_t
+{
+    template <typename T>
+    void operator()(const T& v, std::function<void(const uint8_t*, size_t)> sink) const
+    {
+        tag_invoke(*this, v, std::move(sink));
+    }
+};
+inline constexpr encode_t encode{};
+
+// ─── Decode customization point object ────────────────────────────
+// Requires: tag_invoke(decode_t, std::type_identity<T>, const uint8_t*, size_t)
+// to be defined in T's associated namespace.
+struct decode_t
+{
+    template <typename T>
+    T operator()(std::type_identity<T>, const uint8_t* data, size_t size) const
+    {
+        return tag_invoke(*this, std::type_identity<T>{}, data, size);
+    }
+};
+inline constexpr decode_t decode{};
+
 // ─── Encodable concept ─────────────────────────────────────────────
-// T must provide:
-//   void encode(std::function<void(const uint8_t*, size_t)> sink) const
-//   T(const uint8_t* data, size_t size)  // decode constructor
+// Satisfied when tag_invoke(encode_t, v, sink) and
+// tag_invoke(decode_t, type_identity<T>{}, data, size) are well-formed.
 template <typename T>
 concept Encodable = requires(const T& v, const uint8_t* data, size_t size) {
-    { v.encode(std::declval<std::function<void(const uint8_t*, size_t)>>()) } -> std::same_as<void>;
-    T{data, size};
+    { encode(v, std::declval<std::function<void(const uint8_t*, size_t)>>()) } -> std::same_as<void>;
+    { decode(std::type_identity<T>{}, data, size) } -> std::same_as<T>;
 };
 
 // ─── Typed holder model ────────────────────────────────────────────
@@ -233,9 +264,9 @@ public:
 
     void encode(std::function<void(const uint8_t*, size_t)> sink) const
     {
-        m_value.encode(std::move(sink));
+        bcos::storage::encode(m_value, std::move(sink));
     }
-    [[nodiscard]] void* getTypedPtr() const noexcept { return const_cast<T*>(&m_value); }
+    [[nodiscard]] const void* getTypedPtr() const noexcept { return &m_value; }
     [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(T); }
 };
 
@@ -278,25 +309,10 @@ public:
     // ── Accessors ──────────────────────────────────────────────────
 
     std::string_view get() const&;
-
-    std::string_view getField(size_t index) const&;
-
     const char* data() const&;
     int32_t size() const;
 
     // ── Mutators ───────────────────────────────────────────────────
-
-    template <typename T>
-    void setField(size_t index, T&& input)
-    {
-        if (index > 0)
-        {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(-1, "Set field index: " + boost::lexical_cast<std::string>(index) +
-                                   " failed, index out of range"));
-        }
-        set(std::forward<T>(input));
-    }
 
     void set(ByteBuffer auto value)
     {
@@ -307,13 +323,13 @@ public:
         }
         else
         {
-            auto sz = value.size();
-            if (sz <= SMALL_SIZE)
-                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
-                    SmallBuffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
-            else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
-                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
-                    Fixed32Buffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
+            auto valueSize = value.size();
+            if (valueSize <= SMALL_SIZE)
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<ENTRY_MODIFIED>{
+                    reinterpret_cast<const char*>(value.data()), valueSize});
+            else if (valueSize == static_cast<decltype(valueSize)>(SMALL_SIZE + 1))
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<ENTRY_MODIFIED>{
+                    reinterpret_cast<const char*>(value.data()), valueSize});
             else
                 m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
                     BufferModel<RawType, ENTRY_MODIFIED>{std::forward<decltype(value)>(value)});
@@ -339,7 +355,7 @@ public:
     void setTyped(T value);
 
     template <Encodable T>
-    T* getTyped() const;
+    const T* getTyped() const;
 
     template <Encodable T>
     bool holdsType() const noexcept;
@@ -362,7 +378,7 @@ public:
             BOOST_THROW_EXCEPTION(
                 BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
         }
-        setField(0, std::move(*values.begin()));
+        set(std::move(*values.begin()));
     }
 
     bool valid() const;
@@ -394,7 +410,7 @@ private:
                 BufferModel<std::string, S>{std::string(data, sz)});
     }
 
-    Holder m_buffer;
+    mutable Holder m_buffer;
 
     // ── Decode synchronization ────────────────────────────────────
     // Protects the lazy-decode transition in getTyped<T>().
@@ -416,52 +432,63 @@ void Entry::setTyped(T value)
 }
 
 template <Encodable T>
-T* Entry::getTyped() const
+const T* Entry::getTyped() const
 {
     if (!m_buffer.has_value())
         return nullptr;
 
     // ── Fast path: already typed, no lock ─────────────────────────
+    // Acquire fence pairs with m_decodeLock.clear(release) in the
+    // slow path to ensure visibility of TypedHolderModel<T> inline
+    // data on weakly-ordered architectures (ARM, Power).
+    std::atomic_thread_fence(std::memory_order_acquire);
     auto* ptr = m_buffer->getTypedPtr();
     if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
-        return static_cast<T*>(ptr);
+        return static_cast<const T*>(ptr);
 
     // Typed model with a different type — refuse (type is immutable).
     if (ptr != nullptr)
         return nullptr;
 
     // ── Slow path: byte-buffer → typed, needs synchronization ─────
-    // Spin until we acquire the lock.
+    // Spin until we acquire the lock, with backoff after 64 spins
+    // to avoid burning CPU if the decoding thread is preempted.
+    int spins = 0;
     while (m_decodeLock.test_and_set(std::memory_order_acquire))
-        ;
+    {
+        if (++spins > 64)
+        {
+            spins = 0;
+            std::this_thread::yield();
+        }
+    }
+
+    // RAII spinlock guard: releases m_decodeLock on scope exit,
+    // preventing lock leaks from early returns or exceptions.
+    struct DecodeLockGuard
+    {
+        std::atomic_flag* lock;
+        ~DecodeLockGuard() { lock->clear(std::memory_order_release); }
+    } guard{std::addressof(m_decodeLock)};
 
     // Double-check: another thread may have decoded while we waited.
     ptr = m_buffer->getTypedPtr();
     if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
-    {
-        m_decodeLock.clear(std::memory_order_release);
-        return static_cast<T*>(ptr);
-    }
+        return static_cast<const T*>(ptr);
+
+    // Typed model with a different type — refuse (type is immutable).
     if (ptr != nullptr)
-    {
-        m_decodeLock.clear(std::memory_order_release);
         return nullptr;
-    }
 
     // Still byte-buffer — perform the decode.
     auto view = get();
     if (view.empty())
-    {
-        m_decodeLock.clear(std::memory_order_release);
         return nullptr;
-    }
 
-    T obj(reinterpret_cast<const uint8_t*>(view.data()), view.size());
-    auto* self = const_cast<Entry*>(this);
-    self->m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
-    auto* result = static_cast<T*>(self->m_buffer->getTypedPtr());
-    m_decodeLock.clear(std::memory_order_release);
-    return result;
+    auto obj = decode(std::type_identity<T>{},
+        reinterpret_cast<const uint8_t*>(view.data()), view.size());
+    m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
+    return static_cast<const T*>(m_buffer->getTypedPtr());
 }
 
 template <Encodable T>

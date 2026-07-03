@@ -586,7 +586,7 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     m_storage->asyncGetRow(
         tool::FS_ROOT, tool::FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
             std::map<std::string, std::string> bfsInfos;
-            auto&& out = asBytes(std::string(_entry->getField(0)));
+            auto&& out = asBytes(std::string(_entry->get()));
             codec::scale::decode(bfsInfos, gsl::make_span(out));
             for (const auto& item : v)
             {
@@ -708,7 +708,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromBinary);
+                std::string(hashEntry->get()), bcos::crypto::HashType::FromBinary);
 
             Entry numberEntry;
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER,

@@ -100,13 +100,13 @@ protected:
 
         try
         {
-            number = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+            number = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
         }
         catch (boost::bad_lexical_cast& e)
         {
             // Ignore the exception
             LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
-                             << LOG_KV("blockNumber str", entry->getField(0));
+                             << LOG_KV("blockNumber str", entry->get());
             number = -1;
         }
     }
@@ -124,7 +124,7 @@ protected:
             co_return;
         }
 
-        auto hashStr = entry->getField(0);
+        auto hashStr = entry->get();
         bcos::concepts::bytebuffer::assignTo(hashStr, hash);
     }
 
@@ -166,7 +166,7 @@ protected:
             LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
             BOOST_THROW_EXCEPTION(GetABIError{} << errinfo_comment{"Get CodeHash not found"});
         }
-        auto codeHash = codeHashEntry.second->getField(0);
+        auto codeHash = codeHashEntry.second->get();
 
         // according to codeHash get abi
         auto entry = stateStorage->getRow(SYS_CONTRACT_ABI, codeHash);
@@ -176,7 +176,7 @@ protected:
             BOOST_THROW_EXCEPTION(GetABIError{} << errinfo_comment{"Get Abi not found"});
         }
 
-        std::string abiStr = std::string(entry.second->getField(0));
+        std::string abiStr = std::string(entry.second->get());
         LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress
                           << "ledger impl get abi is: " << abiStr;
         co_return abiStr;
@@ -204,7 +204,7 @@ protected:
                             NotFoundTransaction{} << errinfo_comment{"Get transaction not found"});
                     }
 
-                    auto field = entries[index]->getField(0);
+                    auto field = entries[index]->get();
                     auto bytesRef =
                         bcos::bytesConstRef((const bcos::byte*)field.data(), field.size());
                     bcos::concepts::serialize::decode(bytesRef, out[index]);
@@ -229,7 +229,7 @@ protected:
             int64_t value = 0;
             if (entry)
             {
-                [[likely]] value = boost::lexical_cast<int64_t>(entry->getField(0));
+                [[likely]] value = boost::lexical_cast<int64_t>(entry->get());
             }
 
             switch (i)
@@ -269,7 +269,7 @@ protected:
                 NotFoundBlockHeader{} << errinfo_comment{"Not found block header!"});
         }
 
-        auto field = entry->getField(0);
+        auto field = entry->get();
         bcos::concepts::serialize::decode(field, block.blockHeader);
 
         co_return;
@@ -288,7 +288,7 @@ protected:
             co_return;
         }
 
-        auto field = entry->getField(0);
+        auto field = entry->get();
         std::remove_reference_t<decltype(block)> metadataBlock;
         bcos::concepts::serialize::decode(field, metadataBlock);
         block.transactionsMetaData = std::move(metadataBlock.transactionsMetaData);
@@ -343,7 +343,7 @@ protected:
         }
 
         std::remove_reference_t<decltype(block)> nonceBlock;
-        auto field = entry->getField(0);
+        auto field = entry->get();
         bcos::concepts::serialize::decode(field, nonceBlock);
         block.nonceList = std::move(nonceBlock.nonceList);
     }

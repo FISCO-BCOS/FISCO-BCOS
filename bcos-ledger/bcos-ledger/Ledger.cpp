@@ -754,13 +754,13 @@ void Ledger::asyncGetBlockNumber(
             bcos::protocol::BlockNumber blockNumber = -1;
             try
             {
-                blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
             }
             catch (boost::bad_lexical_cast& e)
             {
                 // Ignore the exception
                 LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
-                                 << LOG_KV("blockNumber str", entry->getField(0));
+                                 << LOG_KV("blockNumber str", entry->get());
             }
 
             LEDGER_LOG(TRACE) << "GetBlockNumber success" << LOG_KV("blockNumber", blockNumber);
@@ -796,7 +796,7 @@ void Ledger::asyncGetBlockHashByNumber(bcos::protocol::BlockNumber _blockNumber,
                     return;
                 }
 
-                auto hashStr = entry->getField(0);
+                auto hashStr = entry->get();
                 bcos::crypto::HashType hash(
                     std::string(hashStr), bcos::crypto::HashType::FromBinary);
 
@@ -836,14 +836,14 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                 try
                 {
                     blockNumber =
-                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
                 }
                 catch (boost::bad_lexical_cast& e)
                 {
                     // Ignore the exception
                     LEDGER_LOG(INFO)
                         << "Cast blockNumber failed, may be empty, set to default value -1"
-                        << LOG_KV("blockNumber str", entry->getField(0));
+                        << LOG_KV("blockNumber str", entry->get());
                 }
                 callback(nullptr, blockNumber);
             }
@@ -966,7 +966,7 @@ void Ledger::asyncGetTransactionReceiptByHash(bcos::crypto::HashType const& _txH
                 return;
             }
 
-            auto value = entry->getField(0);
+            auto value = entry->get();
             auto receipt = m_blockFactory->receiptFactory()->createReceipt(
                 bcos::bytesConstRef((bcos::byte*)value.data(), value.size()));
 
@@ -1039,7 +1039,7 @@ void Ledger::asyncGetTotalTransactionCount(
                     {
                         try
                         {
-                            value = boost::lexical_cast<int64_t>(entry->getField(0));
+                            value = boost::lexical_cast<int64_t>(entry->get());
                         }
                         catch (boost::bad_lexical_cast& e)
                         {
@@ -1198,7 +1198,7 @@ void Ledger::asyncGetNonceList(bcos::protocol::BlockNumber _startNumber, int64_t
                                 continue;
                             }
 
-                            auto value = entry->getField(0);
+                            auto value = entry->get();
                             auto block = m_blockFactory->createBlock(
                                 bcos::bytesConstRef((bcos::byte*)value.data(), value.size()), false,
                                 false);
@@ -1354,7 +1354,7 @@ void Ledger::asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
                         return;
                     }
 
-                    auto field = entry->getField(0);
+                    auto field = entry->get();
                     auto headerPtr = m_blockFactory->blockHeaderFactory()->createBlockHeader(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
 
@@ -1386,7 +1386,7 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
                         return;
                     }
 
-                    auto txs = entry->getField(0);
+                    auto txs = entry->get();
                     auto blockWithTxs = m_blockFactory->createBlock(
                         bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
 
@@ -1437,7 +1437,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                 }
                 else
                 {
-                    auto field = entry->getField(0);
+                    auto field = entry->get();
                     auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                         bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false, false,
                         false);
@@ -1505,7 +1505,7 @@ void Ledger::asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>>
                     }
                     else
                     {
-                        auto field = entry->getField(0);
+                        auto field = entry->get();
                         auto transaction = m_blockFactory->transactionFactory()->createTransaction(
                             bcos::bytesConstRef((bcos::byte*)field.data(), field.size()), false,
                             false, false);
@@ -1565,7 +1565,7 @@ void Ledger::asyncBatchGetReceipts(std::shared_ptr<std::vector<std::string>> has
                     return;
                 }
 
-                auto field = entry->getField(0);
+                auto field = entry->get();
                 auto receipt = m_blockFactory->receiptFactory()->createReceipt(
                     bcos::bytesConstRef((bcos::byte*)field.data(), field.size()));
                 receipts.push_back(std::move(receipt));

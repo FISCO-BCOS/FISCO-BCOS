@@ -347,7 +347,7 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                         continue;
                                     }
 
-                                    auto codeHash = entry->getField(0);
+                                    auto codeHash = entry->get();
 
                                     // get abi according to codeHash
                                     auto abiTable =
@@ -367,14 +367,14 @@ critical::CriticalFieldsInterface::Ptr ExecutiveDagFlow::generateDagCriticals(
                                         }
                                     }
                                     tmpEntry = std::move(*abiEntry);
-                                    abiStr = tmpEntry.getField(0);
+                                    abiStr = tmpEntry.get();
                                 }
                                 else
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
                                     tmpEntry = std::move(*entry);
-                                    abiStr = tmpEntry.getField(0);
+                                    abiStr = tmpEntry.get();
                                 }
                                 bool isSmCrypto = blockContext.hashHandler()->getHashImplType() ==
                                                   crypto::HashImplType::Sm3Hash;

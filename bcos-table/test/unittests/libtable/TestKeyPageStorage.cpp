@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(rollback)
         crypto::HashType("ab98649ca506b076000000000000000000000000000000000000000000000001").hex());
 #endif
     auto entry = std::make_optional(table->newEntry());
-    BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
+    BOOST_REQUIRE_NO_THROW(entry->set("Lili"));
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
 
     countRet = tableFactory->count(testTableName);
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
     BOOST_REQUIRE(entry->dirty() == true);
-    BOOST_REQUIRE(entry->getField(0) == "Lili");
+    BOOST_REQUIRE(entry->get() == "Lili");
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     tableFactory->setRecoder(savePoint);
 
     entry = table->newEntry();
-    entry->setField(0, "12345");
+    entry->set("12345");
     table->setRow("id", *entry);
     countRet = tableFactory->count(testTableName);
     BOOST_REQUIRE_EQUAL(countRet.first, 2);
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     tableFactory->setRecoder(savePoint1);
 
     entry = table->newEntry();
-    entry->setField(0, "500");
+    entry->set("500");
     table->setRow("balance", *entry);
     countRet = tableFactory->count(testTableName);
     BOOST_REQUIRE_EQUAL(countRet.first, 3);
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     // insert without version
     entry = table->newEntry();
-    entry->setField(0, "new record");
+    entry->set("new record");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
     countRet = tableFactory->count(testTableName);
     BOOST_REQUIRE_EQUAL(countRet.first, 2);
@@ -355,7 +355,7 @@ BOOST_AUTO_TEST_CASE(rollback2)
 #endif
     auto entry = std::make_optional(table->newEntry());
     // entry->setField("key", "name");
-    entry->setField(0, "Lili");
+    entry->set("Lili");
     table->setRow("name", *entry);
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -371,14 +371,14 @@ BOOST_AUTO_TEST_CASE(rollback2)
 #endif
     // BOOST_REQUIRE(table->dirty() == true);
     BOOST_REQUIRE(entry->dirty() == true);
-    BOOST_REQUIRE(entry->getField(0) == "Lili");
+    BOOST_REQUIRE(entry->get() == "Lili");
     // auto savePoint = tableFactory->savepoint();
     auto savePoint = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint);
 
     entry = table->newEntry();
     // entry->setField("key", "id");
-    entry->setField(0, "12345");
+    entry->set("12345");
     table->setRow("id", *entry);
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -497,7 +497,7 @@ BOOST_AUTO_TEST_CASE(hash)
     auto table = tableFactory->openTable(testTableName);
     auto entry = std::make_optional(table->newEntry());
     // entry->setField("key", "name");
-    entry->setField(0, "Lili");
+    entry->set("Lili");
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
@@ -505,7 +505,7 @@ BOOST_AUTO_TEST_CASE(hash)
 
     entry = std::make_optional(table->newEntry());
     // entry->setField("key", "id");
-    entry->setField(0, "12345");
+    entry->set("12345");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
     entry = table->getRow("id");
     BOOST_REQUIRE(entry.has_value());
@@ -542,14 +542,14 @@ BOOST_AUTO_TEST_CASE(hash)
     // getPrimaryKeys and getRows
     entry = table->newEntry();
     // entry->setField("key", "id");
-    entry->setField(0, "12345");
+    entry->set("12345");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
     entry = table->getRow("name");
-    entry->setField(0, "Wang");
+    entry->set("Wang");
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
     entry = table->newEntry();
     // entry->setField("key", "balance");
-    entry->setField(0, "12345");
+    entry->set("12345");
     BOOST_REQUIRE_NO_THROW(table->setRow("balance", *entry));
     BOOST_REQUIRE(entry.has_value());
     keys = table->getPrimaryKeys({c});
@@ -610,13 +610,13 @@ BOOST_AUTO_TEST_CASE(hash_V3_1_0)
         auto table = tableFactory1->openTable(tableName);
 
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
 
         std::promise<bool> getRow;
         table->asyncGetRow(key, [&](auto&& error, auto&& result) {
             BOOST_REQUIRE(!error);
-            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+            BOOST_REQUIRE_EQUAL(result->get(), "hello world!");
 
             getRow.set_value(true);
         });
@@ -634,13 +634,13 @@ BOOST_AUTO_TEST_CASE(hash_V3_1_0)
         auto table = tableFactory2->openTable(tableName);
 
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
 
         std::promise<bool> getRow;
         table->asyncGetRow(key, [&](auto&& error, auto&& result) {
             BOOST_REQUIRE(!error);
-            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+            BOOST_REQUIRE_EQUAL(result->get(), "hello world!");
 
             getRow.set_value(true);
         });
@@ -672,14 +672,14 @@ BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
         tableFactory->createTable(tableName, "value");
         auto table = tableFactory->openTable(tableName);
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
         tableName = "testTable2";
         tableFactory->createTable(tableName, "value");
         key = "testKey2";
         table = tableFactory->openTable(tableName);
         entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
     };
     auto setData2 = [&](auto&& tableFactory) {
@@ -688,14 +688,14 @@ BOOST_AUTO_TEST_CASE(hash_different_table_same_data)
         tableFactory->createTable(tableName, "value");
         auto table = tableFactory->openTable(tableName);
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
         tableName = "testTable1";
         tableFactory->createTable(tableName, "value");
         key = "testKey2";
         table = tableFactory->openTable(tableName);
         entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
     };
     setData1(tableFactory1);
@@ -738,13 +738,13 @@ BOOST_AUTO_TEST_CASE(openAndCommit)
         auto table = tableFactory2->openTable(tableName);
 
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
 
         std::promise<bool> getRow;
         table->asyncGetRow(key, [&](auto&& error, auto&& result) {
             BOOST_REQUIRE(!error);
-            BOOST_REQUIRE_EQUAL(result->getField(0), "hello world!");
+            BOOST_REQUIRE_EQUAL(result->get(), "hello world!");
 
             getRow.set_value(true);
         });
@@ -767,7 +767,7 @@ BOOST_AUTO_TEST_CASE(checkInvalidKeys)
     {
         auto key = "testKey" + boost::lexical_cast<std::string>(i);
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
     }
     std::atomic<size_t> invalid = 0;
@@ -787,7 +787,7 @@ BOOST_AUTO_TEST_CASE(checkInvalidKeys)
     table = tableFactory3->openTable(tableName);
     key = "testKey" + boost::lexical_cast<std::string>(8);
     entry = table->newEntry();
-    entry.setField(0, "hello world!sss");
+    entry.set("hello world!sss");
     table->setRow(key, entry);
     invalid = 0;
     tableFactory3->parallelTraverse(false, [&](auto&, auto&, auto& entry) {
@@ -825,7 +825,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                 auto entry = std::make_optional(table->newEntry());
                 auto key =
                     boost::lexical_cast<std::string>(i) + boost::lexical_cast<std::string>(k);
-                entry->setField(0, boost::lexical_cast<std::string>(i));
+                entry->set(boost::lexical_cast<std::string>(i));
                 BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
             }
         }
@@ -918,7 +918,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                 // BOOST_REQUIRE_NE(tableInfo, nullptr);
                 if (table != "s_tables" && !key.empty() && entry.status() != Entry::Status::DELETED)
                 {
-                    auto l = entry.getField(0).size();
+                    auto l = entry.get().size();
                     BOOST_REQUIRE_GE(l, 10);
                 }
             });
@@ -941,7 +941,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                 // BOOST_REQUIRE_NE(tableInfo, nullptr);
                 if (table != "s_tables" && !key.empty() && entry.status() != Entry::Status::DELETED)
                 {
-                    auto l = entry.getField(0).size();
+                    auto l = entry.get().size();
                     BOOST_REQUIRE_GE(l, 10);
                     BOOST_REQUIRE_EQUAL(entry.dirty(), true);
                 }
@@ -1089,7 +1089,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     for (auto& it : values3)
     {
         BOOST_REQUIRE(it);
-        BOOST_REQUIRE_EQUAL(it->getField(0), "ddd1");
+        BOOST_REQUIRE_EQUAL(it->get(), "ddd1");
         BOOST_REQUIRE_EQUAL(it->dirty(), true);
     }
 
@@ -1100,7 +1100,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     for (auto& it : values4)
     {
         BOOST_REQUIRE(it);
-        BOOST_REQUIRE_EQUAL(it->getField(0), "data" + boost::lexical_cast<std::string>(count));
+        BOOST_REQUIRE_EQUAL(it->get(), "data" + boost::lexical_cast<std::string>(count));
         BOOST_REQUIRE_EQUAL(it->dirty(), false);
         ++count;
     }
@@ -1169,12 +1169,12 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndModifyNotChangePageKey)
     // write a page but the pageKey k0 is deleted, suppose the real pageKey is k1
     auto table = tableFactory->openTable(testTableName);
     auto entry = std::make_optional(table->newEntry());
-    entry->setField(0, "fruit999");
+    entry->set("fruit999");
     BOOST_REQUIRE_NO_THROW(table->setRow("999", *entry));
     entry = table->getRow("999");
     BOOST_REQUIRE(entry.has_value());
     entry = std::make_optional(table->newEntry());
-    entry->setField(0, "fruit99");
+    entry->set("fruit99");
     BOOST_REQUIRE_NO_THROW(table->setRow("99", *entry));
     entry = table->getRow("99");
     BOOST_REQUIRE(entry.has_value());
@@ -1193,10 +1193,10 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndModifyNotChangePageKey)
     entry = std::make_optional(table->newDeletedEntry());
     BOOST_REQUIRE_NO_THROW(table->setRow("99", *entry));
     entry = std::make_optional(table->newEntry());
-    entry->setField(0, "fruit98");
+    entry->set("fruit98");
     BOOST_REQUIRE_NO_THROW(table->setRow("98", *entry));
     entry = std::make_optional(table->newEntry());
-    entry->setField(0, "fruit97");
+    entry->set("fruit97");
     BOOST_REQUIRE_NO_THROW(table->setRow("97", *entry));
 
     // commit the page, if has bug it will commit the page use invalid pageKey k0, otherwise it
@@ -1220,12 +1220,12 @@ BOOST_AUTO_TEST_CASE(readPageWithInvalidKeyAndDeleteNotChangePageKey)
     // write a page but the pageKey k0 is deleted, suppose the real pageKey is k1
     auto table = tableFactory->openTable(testTableName);
     auto entry = std::make_optional(table->newEntry());
-    entry->setField(0, "fruit999");
+    entry->set("fruit999");
     BOOST_REQUIRE_NO_THROW(table->setRow("999", *entry));
     entry = table->getRow("999");
     BOOST_REQUIRE(entry.has_value());
     entry = std::make_optional(table->newEntry());
-    entry->setField(0, "fruit99");
+    entry->set("fruit99");
     BOOST_REQUIRE_NO_THROW(table->setRow("99", *entry));
     entry = table->getRow("99");
     BOOST_REQUIRE(entry.has_value());
@@ -1356,7 +1356,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
         BOOST_REQUIRE(!error);
         BOOST_REQUIRE(entry.has_value());
-        BOOST_REQUIRE_EQUAL(entry->getField(0), "value2");
+        BOOST_REQUIRE_EQUAL(entry->get(), "value2");
     });
 
     storage2->rollback(*recoder);
@@ -1364,7 +1364,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
         BOOST_REQUIRE(!error);
         BOOST_REQUIRE(entry.has_value());
-        BOOST_REQUIRE_EQUAL(entry->getField(0), "value1");
+        BOOST_REQUIRE_EQUAL(entry->get(), "value1");
     });
 }
 
@@ -1399,7 +1399,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
             BOOST_REQUIRE(!error);
             BOOST_REQUIRE_EQUAL(entry.size(), 1);
-            BOOST_REQUIRE_EQUAL(entry[0].value().getField(0), "value2");
+            BOOST_REQUIRE_EQUAL(entry[0].value().get(), "value2");
         });
 
     storage2->rollback(*recoder);
@@ -1408,7 +1408,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
             BOOST_REQUIRE(!error);
             BOOST_REQUIRE_EQUAL(entry.size(), 1);
-            BOOST_REQUIRE_EQUAL(entry[0].value().getField(0), "value1");
+            BOOST_REQUIRE_EQUAL(entry[0].value().get(), "value1");
         });
 }
 
@@ -1595,7 +1595,7 @@ BOOST_AUTO_TEST_CASE(pageMerge)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -1675,7 +1675,7 @@ BOOST_AUTO_TEST_CASE(pageMergeRandom)
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
 
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             table->setRow(key, *entry);
             // BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
             // try
@@ -1788,7 +1788,7 @@ BOOST_AUTO_TEST_CASE(pageMergeParallelRandom)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -1873,7 +1873,7 @@ BOOST_AUTO_TEST_CASE(parallelMix)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -1893,7 +1893,7 @@ BOOST_AUTO_TEST_CASE(parallelMix)
                 auto entry = std::make_optional(table->newEntry());
                 auto key =
                     boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-                entry->setField(0, boost::lexical_cast<std::string>(k + 1));
+                entry->set(boost::lexical_cast<std::string>(k + 1));
                 BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
             }
             else
@@ -1967,7 +1967,7 @@ BOOST_AUTO_TEST_CASE(pageSplit)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2020,7 +2020,7 @@ BOOST_AUTO_TEST_CASE(pageSplitRandom)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2077,7 +2077,7 @@ BOOST_AUTO_TEST_CASE(pageSplitParallelRandom)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2129,7 +2129,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
         {
             auto entry = std::make_optional(table->newEntry());
             auto key = boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2205,7 +2205,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     BOOST_REQUIRE(table);
     auto entry = std::make_optional(table->newEntry());
     auto key = "fruit";
-    entry->setField(0, "a");
+    entry->set("a");
     BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
     Condition c6;
     c6.limit(0, 0);
@@ -2258,11 +2258,11 @@ BOOST_AUTO_TEST_CASE(BigTableAdd)
             auto value =
                 boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
             auto entry0 = std::make_optional(table0->newEntry());
-            entry0->setField(0, value);
+            entry0->set(value);
             BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
 
             auto entry1 = std::make_optional(table1->newEntry());
-            entry1->setField(0, value);
+            entry1->set(value);
             BOOST_REQUIRE_NO_THROW(table1->setRow(key, *entry1));
         }
         auto hash0 = tableStorage0->hash(hashImpl, features);
@@ -2332,11 +2332,11 @@ BOOST_AUTO_TEST_CASE(BigTableAddSerialize)
             auto value =
                 boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
             auto entry0 = std::make_optional(table0->newEntry());
-            entry0->setField(0, value);
+            entry0->set(value);
             BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
 
             auto entry1 = std::make_optional(table1->newEntry());
-            entry1->setField(0, value);
+            entry1->set(value);
             BOOST_REQUIRE_NO_THROW(table1->setRow(key, *entry1));
         }
         auto hash0 = tableStorage0->hash(hashImpl, features);
@@ -2418,21 +2418,21 @@ BOOST_AUTO_TEST_CASE(mockCommitProcess)
                 boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
             auto getKey = boost::lexical_cast<std::string>(index + k);
             auto entry0 = std::make_optional(table0->newEntry());
-            entry0->setField(0, value);
+            entry0->set(value);
             BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
             entry0 = table0->getRow(key);
             BOOST_REQUIRE(entry0);
             entry0 = table0->getRow(getKey);
 
             auto entry1 = std::make_optional(table1->newEntry());
-            entry1->setField(0, value);
+            entry1->set(value);
             BOOST_REQUIRE_NO_THROW(table1->setRow(key, *entry1));
             entry1 = table1->getRow(key);
             BOOST_REQUIRE(entry1);
             entry1 = table1->getRow(getKey);
 
             auto entry2 = std::make_optional(table2->newEntry());
-            entry2->setField(0, value);
+            entry2->set(value);
             BOOST_REQUIRE_NO_THROW(table2->setRow(key, *entry2));
             entry2 = table2->getRow(key);
             BOOST_REQUIRE(entry2);
@@ -2536,21 +2536,21 @@ BOOST_AUTO_TEST_CASE(mockCommitProcessParallel)
                 boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
             auto getKey = boost::lexical_cast<std::string>(index + k);
             auto entry0 = std::make_optional(table0->newEntry());
-            entry0->setField(0, value);
+            entry0->set(value);
             BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
             entry0 = table0->getRow(key);
             BOOST_REQUIRE(entry0);
             entry0 = table0->getRow(getKey);
 
             auto entry1 = std::make_optional(table1->newEntry());
-            entry1->setField(0, value);
+            entry1->set(value);
             BOOST_REQUIRE_NO_THROW(table1->setRow(key, *entry1));
             entry1 = table1->getRow(key);
             BOOST_REQUIRE(entry1);
             entry1 = table1->getRow(getKey);
 
             auto entry2 = std::make_optional(table2->newEntry());
-            entry2->setField(0, value);
+            entry2->set(value);
             BOOST_REQUIRE_NO_THROW(table2->setRow(key, *entry2));
             entry2 = table2->getRow(key);
             BOOST_REQUIRE(entry2);
@@ -2629,7 +2629,7 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
             auto entry = std::make_optional(table->newEntry());
             auto key =
                 boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-            entry->setField(0, boost::lexical_cast<std::string>(k));
+            entry->set(boost::lexical_cast<std::string>(k));
             BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
         }
     }
@@ -2664,7 +2664,7 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
                 auto entry = std::make_optional(table->newEntry());
                 auto key =
                     boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-                entry->setField(0, boost::lexical_cast<std::string>(k));
+                entry->set(boost::lexical_cast<std::string>(k));
                 BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
             }
         }
@@ -2677,7 +2677,7 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
                 auto entry = std::make_optional(table->newEntry());
                 auto key =
                     boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-                entry->setField(0, boost::lexical_cast<std::string>(k));
+                entry->set(boost::lexical_cast<std::string>(k));
                 BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
             }
         }
@@ -2704,7 +2704,7 @@ BOOST_AUTO_TEST_CASE(pageMergeBig)
                 auto entry = std::make_optional(table->newEntry());
                 auto key =
                     boost::lexical_cast<std::string>(j) + "_" + boost::lexical_cast<std::string>(k);
-                entry->setField(0, boost::lexical_cast<std::string>(k));
+                entry->set(boost::lexical_cast<std::string>(k));
                 BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
             }
         }
@@ -2780,7 +2780,7 @@ BOOST_AUTO_TEST_CASE(insertAndDelete)
             auto value =
                 boost::lexical_cast<std::string>(i) + "_" + boost::lexical_cast<std::string>(v);
             auto entry0 = std::make_optional(table0->newEntry());
-            entry0->setField(0, value);
+            entry0->set(value);
             BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
         }
 
@@ -2846,7 +2846,7 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
     {
         auto entry = std::make_optional(table->newEntry());
         auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
-        entry->setField(0, key);
+        entry->set(key);
         // 64B every entry
         BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
     }
@@ -2854,7 +2854,7 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
     {
         auto entry = std::make_optional(table->newEntry());
         auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
-        entry->setField(0, key);
+        entry->set(key);
         // 64B every entry
         BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
     }
@@ -2893,7 +2893,7 @@ BOOST_AUTO_TEST_CASE(invalidPageKeyToValid)
     {
         auto entry = table->newEntry();
         auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
-        entry.setField(0, key);
+        entry.set(key);
         tableStorage2->asyncSetRow(
             tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
     }
@@ -2933,7 +2933,7 @@ BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
     {
         auto entry = std::make_optional(table->newEntry());
         auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
-        entry->setField(0, key);
+        entry->set(key);
         // 64B every entry
         BOOST_REQUIRE_NO_THROW(table->setRow(key, *entry));
     }
@@ -2949,7 +2949,7 @@ BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
         size_t keyVal = 1000002035;
         auto entry = table->newEntry();
         auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
-        entry.setField(0, key);
+        entry.set(key);
         tableStorage2->asyncSetRow(
             tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
     }
@@ -2959,7 +2959,7 @@ BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
     {
         auto entry = table->newDeletedEntry();
         auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(k);
-        // entry.setField(0, key);
+        // entry.set(key);
         tableStorage3->asyncSetRow(
             tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
     }
@@ -2968,13 +2968,13 @@ BOOST_AUTO_TEST_CASE(DeleteTableToEmpty_InsertInvalidPageKey)
     size_t keyVal = 1000002034;
     auto key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
     auto entry = table->newEntry();
-    entry.setField(0, "ss");
+    entry.set("ss");
     tableStorage4->asyncSetRow(
         tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
     keyVal = 1000002035;
     key = "key1234567890123456789" + boost::lexical_cast<std::string>(keyVal);
     entry = table->newEntry();
-    entry.setField(0, "ss");
+    entry.set("ss");
     tableStorage4->asyncSetRow(
         tableName, key, entry, [](Error::UniquePtr e) { BOOST_REQUIRE(!e); });
     std::atomic<size_t> valid = 0;
@@ -3046,10 +3046,10 @@ BOOST_AUTO_TEST_CASE(bugfix_keypage_system_entry_hash)
         auto key = "1";
         auto value = "value";
         auto entry0 = std::make_optional(table0->newEntry());
-        entry0->setField(0, value);
+        entry0->set(value);
         BOOST_REQUIRE_NO_THROW(table0->setRow(key, *entry0));
         auto entry = std::make_optional(table0->newEntry());
-        entry->setField(0, value);
+        entry->set(value);
         storage->asyncSetRow(StorageInterface::SYS_TABLES, "1", *entry, [](Error::UniquePtr) {});
         return storage->hash(hashImpl, f);
     };

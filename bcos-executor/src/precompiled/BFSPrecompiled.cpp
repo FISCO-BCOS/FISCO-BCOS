@@ -375,8 +375,8 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                 // if type is link, then return link address
                 auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
                 auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
-                std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
-                    abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
+                std::vector<std::string> ext = {std::string(addressEntry->get()),
+                    abiEntry.has_value() ? std::string(abiEntry->get()) : ""};
                 BfsTuple link =
                     std::make_tuple(baseName, std::string(FS_TYPE_LINK), std::move(ext));
                 files.emplace_back(std::move(link));
@@ -397,11 +397,11 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
         {
             // get type success, this is dir or link
             // if dir
-            if (typeEntry->getField(0) == FS_TYPE_DIR)
+            if (typeEntry->get() == FS_TYPE_DIR)
             {
                 auto subEntry = _executive->storage().getRow(absolutePath, FS_KEY_SUB);
                 std::map<std::string, std::string> bfsInfo;
-                auto&& out = asBytes(std::string(subEntry->getField(0)));
+                auto&& out = asBytes(std::string(subEntry->get()));
                 codec::scale::decode(bfsInfo, gsl::make_span(out));
                 files.reserve(bfsInfo.size());
                 for (const auto& bfs : bfsInfo)
@@ -411,13 +411,13 @@ void BFSPrecompiled::listDir(const std::shared_ptr<executor::TransactionExecutiv
                     files.emplace_back(std::move(file));
                 }
             }
-            else if (typeEntry->getField(0) == FS_TYPE_LINK)
+            else if (typeEntry->get() == FS_TYPE_LINK)
             {
                 // if link
                 auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
                 auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
-                std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
-                    abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
+                std::vector<std::string> ext = {std::string(addressEntry->get()),
+                    abiEntry.has_value() ? std::string(abiEntry->get()) : ""};
                 BfsTuple link =
                     std::make_tuple(baseName, std::string(FS_TYPE_LINK), std::move(ext));
                 files.emplace_back(std::move(link));
@@ -535,8 +535,8 @@ void BFSPrecompiled::listDirPage(const std::shared_ptr<executor::TransactionExec
         // if type is link, then return link address
         auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
         auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
-        std::vector<std::string> ext = {std::string(addressEntry->getField(0)),
-            abiEntry.has_value() ? std::string(abiEntry->getField(0)) : ""};
+        std::vector<std::string> ext = {std::string(addressEntry->get()),
+            abiEntry.has_value() ? std::string(abiEntry->get()) : ""};
         BfsTuple link = std::make_tuple(baseName, std::string(FS_TYPE_LINK), std::move(ext));
         files.emplace_back(std::move(link));
     }
@@ -614,7 +614,7 @@ void BFSPrecompiled::linkImpl(const std::string& _absolutePath, const std::strin
     {
         // table exist, check this resource is a link
         auto typeEntry = _executive->storage().getRow(linkTableName, FS_KEY_TYPE);
-        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        if (typeEntry && typeEntry->get() == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
             tool::BfsFileFactory::buildLink(
@@ -689,7 +689,7 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
     {
         // table exist, check this resource is a link
         auto typeEntry = _executive->storage().getRow(linkTableName, FS_KEY_TYPE);
-        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        if (typeEntry && typeEntry->get() == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
             auto addressEntry = linkTable->newEntry();
@@ -748,11 +748,11 @@ void BFSPrecompiled::readLink(const std::shared_ptr<executor::TransactionExecuti
     {
         // file exists, try to get type
         auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
-        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        if (typeEntry && typeEntry->get() == FS_TYPE_LINK)
         {
             // if link
             auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
-            auto contractAddress = std::string(addressEntry->getField(0));
+            auto contractAddress = std::string(addressEntry->get());
             auto codecAddress = blockContext.isWasm() ? codec.encode(contractAddress) :
                                                         codec.encode(Address(contractAddress));
             _callParameters->setExecResult(codecAddress);
@@ -869,10 +869,10 @@ void BFSPrecompiled::touch(const std::shared_ptr<executor::TransactionExecutive>
     {
         std::map<std::string, std::string> bfsInfo;
         auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
-        auto&& out = asBytes(std::string(subEntry->getField(0)));
+        auto&& out = asBytes(std::string(subEntry->get()));
         codec::scale::decode(bfsInfo, gsl::make_span(out));
         bfsInfo.insert(std::make_pair(baseName, type));
-        subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+        subEntry->set(asString(codec::scale::encode(bfsInfo)));
         _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
         _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
@@ -1236,7 +1236,7 @@ bool BFSPrecompiled::recursiveBuildDir(
             {
                 // root + dir table exist, try to get type entry
                 auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
-                if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
+                if (tryGetTypeEntry.has_value() && tryGetTypeEntry->get() == FS_TYPE_DIR)
                 {
                     // if success and dir is directory, continue
                     root = newTableName;
@@ -1252,7 +1252,7 @@ bool BFSPrecompiled::recursiveBuildDir(
 
             // root + dir not exist, create root + dir and build bfs info in root table
             auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
-            auto&& out = asBytes(std::string(subEntry->getField(0)));
+            auto&& out = asBytes(std::string(subEntry->get()));
             // codec to map
             std::map<std::string, std::string> bfsInfo;
             codec::scale::decode(bfsInfo, gsl::make_span(out));
@@ -1276,7 +1276,7 @@ bool BFSPrecompiled::recursiveBuildDir(
             _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
 
             // set metadata in parent dir
-            subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+            subEntry->set(asString(codec::scale::encode(bfsInfo)));
             _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
             root = newTableName;
         }
