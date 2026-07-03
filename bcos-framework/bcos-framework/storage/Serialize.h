@@ -10,7 +10,6 @@
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <type_traits>
 
 namespace bcos::storage::serialize
 {
@@ -31,8 +30,7 @@ template <typename T, typename OutputArchive = boost::archive::binary_oarchive,
 std::string encode(const T& input)
 {
     std::string value;
-    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
-        value);
+    boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(value);
     OutputArchive archive(outputStream, flag);
     archive << input;
     outputStream.flush();
@@ -48,29 +46,6 @@ T decode(std::string_view view)
     InputArchive archive(inputStream, flag);
     archive >> out;
     return out;
-}
-
-// ─── Typed encode/decode (for types with encode()/decode() members) ─
-// Used for Transaction, TransactionReceipt, and similar.
-// Caller: entry.set(serialize::typedEncode(tx));
-//         auto tx = serialize::typedDecode<Transaction>(entry.get());
-
-template <typename T>
-    requires requires(const T& obj, std::string& out) { obj.encode(out); }
-std::string typedEncode(const T& obj)
-{
-    std::string out;
-    obj.encode(out);
-    return out;
-}
-
-template <typename T>
-    requires requires(T& obj, std::string_view in) { obj.decode(in); }
-T typedDecode(std::string_view view)
-{
-    T obj;
-    obj.decode(view);
-    return obj;
 }
 
 }  // namespace bcos::storage::serialize
