@@ -106,6 +106,11 @@ public:
     {
         m_run = true;
     }
+
+    // Simulate Host::stop() having already run (IOServicePool::stop() joins the io_context
+    // threads), so haveNetwork() returns false and no io_context is left to service posted
+    // handlers.
+    void stopNetwork() { m_run = false; }
 };
 
 // A socket backed by a real SSL stream so drop()/closeSocket() can call sslref() safely; close()
@@ -181,6 +186,41 @@ BOOST_AUTO_TEST_CASE(InFlightReadKeepsSessionAlive)
     BOOST_CHECK_MESSAGE(weakSession.lock() == nullptr,
         "FIB-184: once the outstanding read and the deferred teardown complete, the Session must "
         "be released (no leak / self-reference cycle)");
+}
+
+// Shutdown-path regression: Service::stop() calls Host::stop() -- which stops and JOINS the
+// io_context threads via IOServicePool::stop() -- BEFORE dropping sessions. A drop() that posts its
+// teardown to the now-dead io_context would never close the socket and would pin the session in a
+// dead queue. When the network is already down, drop() must close the socket inline instead. This
+// test deliberately never runs the socket's io_context, mirroring the joined-thread state.
+BOOST_AUTO_TEST_CASE(DropClosesSocketInlineWhenNetworkDown)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto fakeSocket = std::make_shared<FakeSocket_Lifetime>();
+    auto messageFactory = std::make_shared<P2PMessageFactory>();
+    auto fakeAsio = std::make_shared<FakeASIO_Lifetime>();
+    auto fakeHost =
+        std::make_shared<FakeHost_Lifetime>(hashImpl, fakeAsio, nullptr, messageFactory);
+
+    auto session = std::make_shared<Session>(fakeSocket, *fakeHost, 1024, true);
+    session->setMessageFactory(messageFactory);
+    session->setMessageHandler([](NetworkException, SessionFace::Ptr, Message::Ptr) {});
+    BOOST_REQUIRE(fakeSocket->isConnected());
+
+    // Host::stop() has already joined the io_context threads: the socket's io_context will never
+    // run again, so a posted teardown would be dead code.
+    fakeHost->stopNetwork();
+
+    // The socket's io_context is deliberately never run in this test.
+    session->drop(DisconnectReason::ClientQuit);
+
+    BOOST_CHECK_MESSAGE(!fakeSocket->isConnected(),
+        "FIB-184: with the network down (io_context threads joined), drop() must close the socket "
+        "inline; a teardown posted to the dead io_context would never run");
+
+    // Drain the shutdown handlers closeSocket() queued (they hold the socket, not the session) so
+    // the fake io_context tears down cleanly.
+    fakeSocket->ioService().poll();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

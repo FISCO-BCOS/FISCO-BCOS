@@ -312,9 +312,10 @@ void Session::write()
         m_server.get().asioInterface()->asyncWrite(m_socket, m_writings->buffers,
             // FIB-184: hold a strong reference to the session for the duration of the async write.
             // async_write operates on this->m_socket and reads from buffers owned via m_writings;
-            // a strong ref keeps the socket/SSL stream alive until the write completes, so a
-            // concurrent teardown on another thread cannot free the stream mid-write.
-            [session = shared_from_this(), writings = m_writings, m_lock = std::move(lock)](
+            // a strong ref keeps the socket/SSL stream (and m_writings, which backs the buffers
+            // asyncWrite captures by reference) alive until the write completes, so a concurrent
+            // teardown on another thread cannot free them mid-write.
+            [session = shared_from_this(), m_lock = std::move(lock)](
                 const boost::system::error_code _error, std::size_t _size) mutable {
                 {
                     session->m_writings->buffers.clear();
@@ -388,10 +389,24 @@ void Session::drop(DisconnectReason _reason)
     // makes it run on the same single thread that services every read/write for this session —
     // i.e. a per-session strand — so socket operations never overlap. The strong self capture keeps
     // the session (and its socket) alive until the teardown runs.
+    //
+    // Shutdown path exception: Service::stop() calls Host::stop() (which stops and joins the
+    // io_context threads via IOServicePool::stop()) BEFORE dropping sessions, so once the network
+    // is down a posted handler would never run — the socket would never be closed and the posted
+    // task would pin this session in a dead io_context queue. With the io_context threads joined
+    // there are no read/write handlers left to race, so close inline instead (matching the old
+    // synchronous teardown behaviour on shutdown).
     if (m_socket)
     {
-        boost::asio::post(m_socket->ioService(),
-            [self = shared_from_this(), _reason]() { self->closeSocket(_reason); });
+        if (m_server.get().haveNetwork())
+        {
+            boost::asio::post(m_socket->ioService(),
+                [self = shared_from_this(), _reason]() { self->closeSocket(_reason); });
+        }
+        else
+        {
+            closeSocket(_reason);
+        }
     }
 }
 
