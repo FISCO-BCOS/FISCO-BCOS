@@ -44,6 +44,9 @@ target_link_libraries(bcos-framework PUBLIC
     fmt::fmt
     TBB::tbb)
 set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
+# Entry.cpp uses namespace bcos::storage which conflicts with unity build
+# namespace stacking from other translation units in the same batch.
+set_source_files_properties(bcos-framework/storage/Entry.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 if (TESTS)
     enable_testing()

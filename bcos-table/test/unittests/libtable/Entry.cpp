@@ -600,6 +600,171 @@ BOOST_AUTO_TEST_CASE(viewDeepCopy_constructFromView)
     BOOST_TEST(entryTestHolder(entry).has_value());
 }
 
+// ─── Encodable test types for typed Entry tests ────────────────────
+// Must be ≤ 32 bytes to satisfy proxy's restrict_layout<SBO=32, align=8>.
+
+struct TestValueA
+{
+    int32_t id = 0;
+    int32_t nameLen = 0;
+    std::array<char, 24> nameBuf{};
+
+    TestValueA() = default;
+    TestValueA(int32_t i, std::string_view n) : id(i)
+    {
+        nameLen = static_cast<int32_t>(std::min(n.size(), nameBuf.size()));
+        std::memcpy(nameBuf.data(), n.data(), nameLen);
+    }
+    TestValueA(const uint8_t* data, size_t size)
+    {
+        if (size < 8) return;
+        std::memcpy(&id, data, 4);
+        std::memcpy(&nameLen, data + 4, 4);
+        auto actualLen = std::min(static_cast<size_t>(nameLen), nameBuf.size());
+        if (size >= 8 + actualLen)
+            std::memcpy(nameBuf.data(), data + 8, actualLen);
+    }
+    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    {
+        uint8_t buf[32];
+        std::memcpy(buf, &id, 4);
+        std::memcpy(buf + 4, &nameLen, 4);
+        std::memcpy(buf + 8, nameBuf.data(), nameLen);
+        sink(buf, 8 + static_cast<size_t>(nameLen));
+    }
+    std::string nameStr() const { return std::string(nameBuf.data(), nameLen); }
+    bool operator==(const TestValueA& o) const
+    {
+        return id == o.id && nameLen == o.nameLen &&
+               std::memcmp(nameBuf.data(), o.nameBuf.data(), nameLen) == 0;
+    }
+};
+static_assert(sizeof(TestValueA) <= 32);
+
+struct TestValueB
+{
+    int64_t value = 0;
+
+    TestValueB() = default;
+    explicit TestValueB(int64_t v) : value(v) {}
+    TestValueB(const uint8_t* data, size_t size)
+    {
+        if (size >= 8) std::memcpy(&value, data, 8);
+    }
+    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    {
+        sink(reinterpret_cast<const uint8_t*>(&value), 8);
+    }
+    bool operator==(const TestValueB& o) const { return value == o.value; }
+};
+static_assert(sizeof(TestValueB) <= 32);
+
+// ─── Typed Entry tests ─────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(setTypedGetTypedSameType)
+{
+    Entry entry;
+    TestValueA original{42, "hello"};
+    entry.setTyped(original);
+
+    // getTyped should return a valid pointer with matching data
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr != nullptr);
+    BOOST_CHECK_EQUAL(ptr->id, 42);
+    BOOST_CHECK_EQUAL(ptr->nameStr(), "hello");
+
+    // holdsType should be correct
+    BOOST_TEST(entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+}
+
+BOOST_AUTO_TEST_CASE(setTypedGetTypedDifferentType)
+{
+    Entry entry;
+    entry.setTyped(TestValueA{7, "test"});
+
+    // getTyped<TestValueB> on an Entry holding TestValueA should fail
+    auto* ptr = entry.getTyped<TestValueB>();
+    BOOST_TEST(ptr == nullptr);
+
+    // But getTyped<TestValueA> still works
+    auto* ptrA = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptrA != nullptr);
+    BOOST_CHECK_EQUAL(ptrA->id, 7);
+
+    // holdsType should distinguish
+    BOOST_TEST(entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+}
+
+BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
+{
+    // Start with a byte-mode Entry (simulating data from RocksDB)
+    Entry entry;
+    TestValueA original{99, "lazy"};
+    std::string encoded;
+    original.encode([&encoded](const uint8_t* d, size_t s) {
+        encoded.append(reinterpret_cast<const char*>(d), s);
+    });
+    entry.set(encoded);
+
+    // Entry is in byte-mode; holdsType should be false for any type
+    BOOST_TEST(!entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+
+    // First getTyped triggers lazy decode
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr != nullptr);
+    BOOST_CHECK_EQUAL(ptr->id, 99);
+    BOOST_CHECK_EQUAL(ptr->nameStr(), "lazy");
+
+    // After lazy decode, entry holds the typed model
+    BOOST_TEST(entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+
+    // Second getTyped is O(1) — no re-decode
+    auto* ptr2 = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr2 != nullptr);
+    BOOST_CHECK(ptr == ptr2);  // Same pointer, same TypedHolderModel instance
+}
+
+BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)
+{
+    Entry entry;
+    entry.setTyped(TestValueA{55, "world"});
+
+    // Encode to bytes — should match what TestValueA::encode produces
+    auto bytes = entry.encodeToBytes();
+    TestValueA expected{55, "world"};
+    std::string expectedBytes;
+    expected.encode([&expectedBytes](const uint8_t* d, size_t s) {
+        expectedBytes.append(reinterpret_cast<const char*>(d), s);
+    });
+    BOOST_CHECK_EQUAL(bytes, expectedBytes);
+}
+
+BOOST_AUTO_TEST_CASE(setTypedMoveSemantics)
+{
+    Entry entry;
+    TestValueA original{1, "move-test-name"};
+    auto originalName = original.nameStr();
+
+    entry.setTyped(std::move(original));
+
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr != nullptr);
+    BOOST_CHECK_EQUAL(ptr->id, 1);
+    BOOST_CHECK_EQUAL(ptr->nameStr(), originalName);
+}
+
+BOOST_AUTO_TEST_CASE(emptyEntryGetTyped)
+{
+    Entry entry;
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_TEST(ptr == nullptr);
+    BOOST_TEST(!entry.holdsType<TestValueA>());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace bcos

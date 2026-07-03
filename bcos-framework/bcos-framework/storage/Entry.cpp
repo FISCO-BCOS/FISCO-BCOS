@@ -115,7 +115,11 @@ std::string Entry::encodeToBytes() const
 {
     if (!m_buffer.has_value())
         return {};
-    return m_buffer->encodeTo();
+    std::string result;
+    m_buffer->encode([&result](const uint8_t* data, size_t size) {
+        result.append(reinterpret_cast<const char*>(data), size);
+    });
+    return result;
 }
 
 /* static */ Entry Entry::decodeFromBytes(std::string_view bytes)
