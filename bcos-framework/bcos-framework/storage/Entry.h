@@ -105,17 +105,17 @@ public:
     {
         std::memcpy(m_buffer.data(), data, size);
     }
-    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
-    [[nodiscard]] size_t size() const noexcept { return m_size; }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    const char* data() const noexcept { return m_buffer.data(); }
+    size_t size() const noexcept { return m_size; }
+    EntryStatus status() const noexcept { return S; }
 
     void encode(std::function<void(const uint8_t*, size_t)> sink) const
     {
         sink(reinterpret_cast<const uint8_t*>(data()), size());
     }
 
-    [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Stores exactly 32 bytes inline.
@@ -128,17 +128,17 @@ class Fixed32Buffer
 public:
     Fixed32Buffer() = default;
     Fixed32Buffer(const char* data, size_t) { std::memcpy(m_buffer.data(), data, CAPACITY); }
-    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
-    [[nodiscard]] size_t size() const noexcept { return CAPACITY; }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    const char* data() const noexcept { return m_buffer.data(); }
+    size_t size() const noexcept { return CAPACITY; }
+    EntryStatus status() const noexcept { return S; }
 
     void encode(std::function<void(const uint8_t*, size_t)> sink) const
     {
         sink(reinterpret_cast<const uint8_t*>(data()), size());
     }
 
-    [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Adapts any ByteBuffer-conforming type T.
@@ -150,20 +150,17 @@ class BufferModel
 
 public:
     explicit BufferModel(T value) : m_value(std::move(value)) {}
-    [[nodiscard]] const char* data() const noexcept
-    {
-        return reinterpret_cast<const char*>(m_value.data());
-    }
-    [[nodiscard]] size_t size() const noexcept { return m_value.size(); }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    const char* data() const noexcept { return reinterpret_cast<const char*>(m_value.data()); }
+    size_t size() const noexcept { return m_value.size(); }
+    EntryStatus status() const noexcept { return S; }
 
     void encode(std::function<void(const uint8_t*, size_t)> sink) const
     {
         sink(reinterpret_cast<const uint8_t*>(data()), size());
     }
 
-    [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Adapts a shared_ptr-wrapped ByteBuffer type.
@@ -174,38 +171,35 @@ class SharedBufferModel
 
 public:
     explicit SharedBufferModel(std::shared_ptr<T> ptr) : m_ptr(std::move(ptr)) {}
-    [[nodiscard]] const char* data() const noexcept
-    {
-        return reinterpret_cast<const char*>(m_ptr->data());
-    }
-    [[nodiscard]] size_t size() const noexcept { return m_ptr->size(); }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    const char* data() const noexcept { return reinterpret_cast<const char*>(m_ptr->data()); }
+    size_t size() const noexcept { return m_ptr->size(); }
+    EntryStatus status() const noexcept { return S; }
 
     void encode(std::function<void(const uint8_t*, size_t)> sink) const
     {
         sink(reinterpret_cast<const uint8_t*>(data()), size());
     }
 
-    [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // Deleted sentinel model.
 class DeletedModel
 {
 public:
-    [[nodiscard]] const char* data() const noexcept
+    const char* data() const noexcept
     {
         static constexpr const char* empty = "";
         return empty;
     }
-    [[nodiscard]] size_t size() const noexcept { return 0; }
-    [[nodiscard]] EntryStatus status() const noexcept { return ENTRY_DELETED; }
+    size_t size() const noexcept { return 0; }
+    EntryStatus status() const noexcept { return ENTRY_DELETED; }
 
     void encode(std::function<void(const uint8_t*, size_t)>) const {}
 
-    [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(void); }
-    [[nodiscard]] const void* getTypedPtr() const noexcept { return nullptr; }
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
 // ─── tag_invoke infrastructure ─────────────────────────────────────
@@ -244,7 +238,9 @@ inline constexpr decode_t decode{};
 // tag_invoke(decode_t, type_identity<T>{}, data, size) are well-formed.
 template <typename T>
 concept Encodable = requires(const T& v, const uint8_t* data, size_t size) {
-    { encode(v, std::declval<std::function<void(const uint8_t*, size_t)>>()) } -> std::same_as<void>;
+    {
+        encode(v, std::declval<std::function<void(const uint8_t*, size_t)>>())
+    } -> std::same_as<void>;
     { decode(std::type_identity<T>{}, data, size) } -> std::same_as<T>;
 };
 
@@ -258,16 +254,16 @@ class TypedHolderModel
 
 public:
     explicit TypedHolderModel(T value) : m_value(std::move(value)) {}
-    [[nodiscard]] const char* data() const noexcept { return nullptr; }
-    [[nodiscard]] size_t size() const noexcept { return 0; }
-    [[nodiscard]] EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
+    const char* data() const noexcept { return nullptr; }
+    size_t size() const noexcept { return 0; }
+    EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
 
     void encode(std::function<void(const uint8_t*, size_t)> sink) const
     {
         bcos::storage::encode(m_value, std::move(sink));
     }
-    [[nodiscard]] const void* getTypedPtr() const noexcept { return &m_value; }
-    [[nodiscard]] std::type_index typeIndex() const noexcept { return typeid(T); }
+    const void* getTypedPtr() const noexcept { return &m_value; }
+    std::type_index typeIndex() const noexcept { return typeid(T); }
 };
 
 class Entry
@@ -485,8 +481,8 @@ const T* Entry::getTyped() const
     if (view.empty())
         return nullptr;
 
-    auto obj = decode(std::type_identity<T>{},
-        reinterpret_cast<const uint8_t*>(view.data()), view.size());
+    auto obj =
+        decode(std::type_identity<T>{}, reinterpret_cast<const uint8_t*>(view.data()), view.size());
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
     return static_cast<const T*>(m_buffer->getTypedPtr());
 }
