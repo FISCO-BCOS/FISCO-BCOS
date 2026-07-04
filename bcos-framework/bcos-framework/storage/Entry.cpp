@@ -113,8 +113,8 @@ std::string Entry::encodeToBytes() const
     if (!m_buffer.has_value())
         return {};
     std::string result;
-    m_buffer->encode([&result](const uint8_t* data, size_t size) {
-        result.append(reinterpret_cast<const char*>(data), size);
+    m_buffer->encode([&result](bytesConstRef data) {
+        result.append(reinterpret_cast<const char*>(data.data()), data.size());
     });
     return result;
 }

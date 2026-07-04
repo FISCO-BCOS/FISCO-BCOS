@@ -615,23 +615,23 @@ struct TestValueA
         nameLen = static_cast<int32_t>(std::min(n.size(), nameBuf.size()));
         std::memcpy(nameBuf.data(), n.data(), nameLen);
     }
-    TestValueA(const uint8_t* data, size_t size)
+    TestValueA(bytesConstRef data)
     {
-        if (size < 8)
+        if (data.size() < 8)
             return;
-        std::memcpy(&id, data, 4);
-        std::memcpy(&nameLen, data + 4, 4);
+        std::memcpy(&id, data.data(), 4);
+        std::memcpy(&nameLen, data.data() + 4, 4);
         auto actualLen = std::min(static_cast<size_t>(nameLen), nameBuf.size());
-        if (size >= 8 + actualLen)
-            std::memcpy(nameBuf.data(), data + 8, actualLen);
+        if (data.size() >= 8 + actualLen)
+            std::memcpy(nameBuf.data(), data.data() + 8, actualLen);
     }
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(auto&& sink) const
     {
         uint8_t buf[32];
         std::memcpy(buf, &id, 4);
         std::memcpy(buf + 4, &nameLen, 4);
         std::memcpy(buf + 8, nameBuf.data(), nameLen);
-        sink(buf, 8 + static_cast<size_t>(nameLen));
+        sink(bytesConstRef(buf, 8 + static_cast<size_t>(nameLen)));
     }
     std::string nameStr() const { return std::string(nameBuf.data(), nameLen); }
     bool operator==(const TestValueA& o) const
@@ -648,14 +648,14 @@ struct TestValueB
 
     TestValueB() = default;
     explicit TestValueB(int64_t v) : value(v) {}
-    TestValueB(const uint8_t* data, size_t size)
+    TestValueB(bytesConstRef data)
     {
-        if (size >= 8)
-            std::memcpy(&value, data, 8);
+        if (data.size() >= 8)
+            std::memcpy(&value, data.data(), 8);
     }
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(auto&& sink) const
     {
-        sink(reinterpret_cast<const uint8_t*>(&value), 8);
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(&value), 8));
     }
     bool operator==(const TestValueB& o) const { return value == o.value; }
 };
@@ -663,26 +663,26 @@ static_assert(sizeof(TestValueB) <= 32);
 
 // ─── tag_invoke overloads for Encodable test types ────────────────
 
-void tag_invoke(
-    bcos::storage::encode_t, const TestValueA& v, std::function<void(const uint8_t*, size_t)> sink)
+template <typename Sink>
+void tag_invoke(bcos::storage::encode_t, const TestValueA& v, Sink&& sink)
 {
-    v.encode(std::move(sink));
+    v.encode(std::forward<Sink>(sink));
 }
 TestValueA tag_invoke(
-    bcos::storage::decode_t, std::type_identity<TestValueA>, const uint8_t* data, size_t size)
+    bcos::storage::decode_t, std::type_identity<TestValueA>, bytesConstRef data)
 {
-    return TestValueA{data, size};
+    return TestValueA{data};
 }
 
-void tag_invoke(
-    bcos::storage::encode_t, const TestValueB& v, std::function<void(const uint8_t*, size_t)> sink)
+template <typename Sink>
+void tag_invoke(bcos::storage::encode_t, const TestValueB& v, Sink&& sink)
 {
-    v.encode(std::move(sink));
+    v.encode(std::forward<Sink>(sink));
 }
 TestValueB tag_invoke(
-    bcos::storage::decode_t, std::type_identity<TestValueB>, const uint8_t* data, size_t size)
+    bcos::storage::decode_t, std::type_identity<TestValueB>, bytesConstRef data)
 {
-    return TestValueB{data, size};
+    return TestValueB{data};
 }
 
 // ─── Typed Entry tests ─────────────────────────────────────────────
@@ -729,8 +729,8 @@ BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
     Entry entry;
     TestValueA original{99, "lazy"};
     std::string encoded;
-    encode(original, [&encoded](const uint8_t* d, size_t s) {
-        encoded.append(reinterpret_cast<const char*>(d), s);
+    encode(original, [&encoded](bytesConstRef d) {
+        encoded.append(reinterpret_cast<const char*>(d.data()), d.size());
     });
     entry.set(encoded);
 
@@ -763,8 +763,8 @@ BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)
     auto bytes = entry.encodeToBytes();
     TestValueA expected{55, "world"};
     std::string expectedBytes;
-    encode(expected, [&expectedBytes](const uint8_t* d, size_t s) {
-        expectedBytes.append(reinterpret_cast<const char*>(d), s);
+    encode(expected, [&expectedBytes](bytesConstRef d) {
+        expectedBytes.append(reinterpret_cast<const char*>(d.data()), d.size());
     });
     BOOST_CHECK_EQUAL(bytes, expectedBytes);
 }

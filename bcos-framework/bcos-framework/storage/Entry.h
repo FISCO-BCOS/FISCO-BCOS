@@ -76,7 +76,7 @@ struct AnyEntryFacade
   : pro::facade_builder ::add_convention<MemData, const char*() const noexcept>::add_convention<
         MemSize, size_t() const noexcept>::add_convention<MemStatus,
         EntryStatus() const noexcept>::add_convention<MemEncode,
-        void(std::function<void(const uint8_t*, size_t)>) const>::add_convention<MemGetTypedPtr,
+        void(std::function<void(bytesConstRef)>) const>::add_convention<MemGetTypedPtr,
         const void*() const noexcept>::add_convention<MemTypeIndex,
         std::type_index() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
         support_relocation<pro::constraint_level::nothrow>::support_destruction<
@@ -109,9 +109,9 @@ public:
     size_t size() const noexcept { return m_size; }
     EntryStatus status() const noexcept { return S; }
 
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
-        sink(reinterpret_cast<const uint8_t*>(data()), size());
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
     }
 
     std::type_index typeIndex() const noexcept { return typeid(void); }
@@ -132,9 +132,9 @@ public:
     size_t size() const noexcept { return CAPACITY; }
     EntryStatus status() const noexcept { return S; }
 
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
-        sink(reinterpret_cast<const uint8_t*>(data()), size());
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
     }
 
     std::type_index typeIndex() const noexcept { return typeid(void); }
@@ -154,9 +154,9 @@ public:
     size_t size() const noexcept { return m_value.size(); }
     EntryStatus status() const noexcept { return S; }
 
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
-        sink(reinterpret_cast<const uint8_t*>(data()), size());
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
     }
 
     std::type_index typeIndex() const noexcept { return typeid(void); }
@@ -175,9 +175,9 @@ public:
     size_t size() const noexcept { return m_ptr->size(); }
     EntryStatus status() const noexcept { return S; }
 
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
-        sink(reinterpret_cast<const uint8_t*>(data()), size());
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
     }
 
     std::type_index typeIndex() const noexcept { return typeid(void); }
@@ -196,7 +196,7 @@ public:
     size_t size() const noexcept { return 0; }
     EntryStatus status() const noexcept { return ENTRY_DELETED; }
 
-    void encode(std::function<void(const uint8_t*, size_t)>) const {}
+    void encode(std::function<void(bytesConstRef)>) const {}
 
     std::type_index typeIndex() const noexcept { return typeid(void); }
     const void* getTypedPtr() const noexcept { return nullptr; }
@@ -208,40 +208,40 @@ public:
 void tag_invoke();  // not defined — poison pill to prevent unqualified calls
 
 // ─── Encode customization point object ────────────────────────────
-// Requires: tag_invoke(encode_t, const T&, std::function<void(const uint8_t*, size_t)>)
-// to be defined in T's associated namespace.
+// Requires: tag_invoke(encode_t, const T&, Sink) where Sink is callable
+// with bytesConstRef, to be defined in T's associated namespace.
 struct encode_t
 {
-    template <typename T>
-    void operator()(const T& v, std::function<void(const uint8_t*, size_t)> sink) const
+    template <typename T, typename Sink>
+    void operator()(const T& v, Sink&& sink) const
     {
-        tag_invoke(*this, v, std::move(sink));
+        tag_invoke(*this, v, std::forward<Sink>(sink));
     }
 };
 inline constexpr encode_t encode{};
 
 // ─── Decode customization point object ────────────────────────────
-// Requires: tag_invoke(decode_t, std::type_identity<T>, const uint8_t*, size_t)
+// Requires: tag_invoke(decode_t, std::type_identity<T>, bytesConstRef)
 // to be defined in T's associated namespace.
 struct decode_t
 {
     template <typename T>
-    T operator()(std::type_identity<T>, const uint8_t* data, size_t size) const
+    T operator()(std::type_identity<T>, bytesConstRef data) const
     {
-        return tag_invoke(*this, std::type_identity<T>{}, data, size);
+        return tag_invoke(*this, std::type_identity<T>{}, data);
     }
 };
 inline constexpr decode_t decode{};
 
 // ─── Encodable concept ─────────────────────────────────────────────
 // Satisfied when tag_invoke(encode_t, v, sink) and
-// tag_invoke(decode_t, type_identity<T>{}, data, size) are well-formed.
+// tag_invoke(decode_t, type_identity<T>{}, bytes) are well-formed.
 template <typename T>
-concept Encodable = requires(const T& v, const uint8_t* data, size_t size) {
+concept Encodable = requires(const T& v, bytesConstRef bytes) {
     {
-        encode(v, std::declval<std::function<void(const uint8_t*, size_t)>>())
+        encode(v, [](bytesConstRef) {})
     } -> std::same_as<void>;
-    { decode(std::type_identity<T>{}, data, size) } -> std::same_as<T>;
+    { decode(std::type_identity<T>{}, bytes) } -> std::same_as<T>;
 };
 
 // ─── Typed holder model ────────────────────────────────────────────
@@ -258,7 +258,7 @@ public:
     size_t size() const noexcept { return 0; }
     EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
 
-    void encode(std::function<void(const uint8_t*, size_t)> sink) const
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
         bcos::storage::encode(m_value, std::move(sink));
     }
@@ -501,8 +501,8 @@ const T* Entry::getTyped() const
         return nullptr;
     }
 
-    auto obj =
-        decode(std::type_identity<T>{}, reinterpret_cast<const uint8_t*>(view.data()), view.size());
+    auto obj = decode(std::type_identity<T>{},
+        bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
     return static_cast<const T*>(m_buffer->getTypedPtr());
 }
