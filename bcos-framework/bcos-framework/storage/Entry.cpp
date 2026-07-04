@@ -6,6 +6,7 @@
 namespace bcos::storage
 {
 DERIVE_BCOS_EXCEPTION(TypedEntryStatusChange);
+DERIVE_BCOS_EXCEPTION(TypedEntryHashCall);
 
 std::string_view Entry::get() const&
 {
@@ -129,6 +130,11 @@ crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
     std::optional<bcos::ledger::Features> const& features) const
 {
+    if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(TypedEntryHashCall{});
+    }
+
     const bool enableHashCollisionFix =
         features.has_value() &&
         features->get(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);

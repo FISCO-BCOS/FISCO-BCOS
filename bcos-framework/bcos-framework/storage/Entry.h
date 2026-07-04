@@ -279,7 +279,6 @@ public:
     };
 
     constexpr static int32_t SMALL_SIZE = 31;
-    static constexpr size_t INLINE_BUFFER_SIZE = 40;
 
     using Holder = pro::proxy<AnyEntryFacade>;
 
@@ -321,14 +320,20 @@ public:
         {
             auto valueSize = value.size();
             if (valueSize <= SMALL_SIZE)
+            {
                 m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<ENTRY_MODIFIED>{
                     reinterpret_cast<const char*>(value.data()), valueSize});
+            }
             else if (valueSize == static_cast<decltype(valueSize)>(SMALL_SIZE + 1))
+            {
                 m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<ENTRY_MODIFIED>{
                     reinterpret_cast<const char*>(value.data()), valueSize});
+            }
             else
+            {
                 m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
                     BufferModel<RawType, ENTRY_MODIFIED>{std::forward<decltype(value)>(value)});
+            }
         }
     }
 
@@ -398,12 +403,15 @@ private:
     static Holder makeBufferImpl(const char* data, size_t sz)
     {
         if (sz <= SMALL_SIZE)
+        {
             return pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<S>{data, sz});
-        else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+        }
+        if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+        {
             return pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<S>{data, sz});
-        else
-            return pro::make_proxy_inplace<AnyEntryFacade>(
-                BufferModel<std::string, S>{std::string(data, sz)});
+        }
+        return pro::make_proxy_inplace<AnyEntryFacade>(
+            BufferModel<std::string, S>{std::string(data, sz)});
     }
 
     mutable Holder m_buffer;
@@ -431,7 +439,9 @@ template <Encodable T>
 const T* Entry::getTyped() const
 {
     if (!m_buffer.has_value())
+    {
         return nullptr;
+    }
 
     // ── Fast path: already typed, no lock ─────────────────────────
     // Acquire fence pairs with m_decodeLock.clear(release) in the
@@ -440,11 +450,15 @@ const T* Entry::getTyped() const
     std::atomic_thread_fence(std::memory_order_acquire);
     auto* ptr = m_buffer->getTypedPtr();
     if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+    {
         return static_cast<const T*>(ptr);
+    }
 
     // Typed model with a different type — refuse (type is immutable).
     if (ptr != nullptr)
+    {
         return nullptr;
+    }
 
     // ── Slow path: byte-buffer → typed, needs synchronization ─────
     // Spin until we acquire the lock, with backoff after 64 spins
@@ -470,16 +484,22 @@ const T* Entry::getTyped() const
     // Double-check: another thread may have decoded while we waited.
     ptr = m_buffer->getTypedPtr();
     if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+    {
         return static_cast<const T*>(ptr);
+    }
 
     // Typed model with a different type — refuse (type is immutable).
     if (ptr != nullptr)
+    {
         return nullptr;
+    }
 
     // Still byte-buffer — perform the decode.
     auto view = get();
     if (view.empty())
+    {
         return nullptr;
+    }
 
     auto obj =
         decode(std::type_identity<T>{}, reinterpret_cast<const uint8_t*>(view.data()), view.size());
@@ -491,7 +511,9 @@ template <Encodable T>
 bool Entry::holdsType() const noexcept
 {
     if (!m_buffer.has_value())
+    {
         return false;
+    }
     return m_buffer->typeIndex() == std::type_index(typeid(T));
 }
 
