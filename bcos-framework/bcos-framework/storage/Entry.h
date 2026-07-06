@@ -287,7 +287,7 @@ public:
 
     Entry(const Entry& other)
       : m_buffer(other.m_buffer)
-    {}  // m_decodeLock default-initialized (cleared) — new object, independent state
+    {}  // m_decodeState default-initialized (0) — new object, independent state
     Entry(Entry&& other) noexcept : m_buffer(std::move(other.m_buffer)) {}
     bcos::storage::Entry& operator=(const Entry& other)
     {
@@ -417,11 +417,42 @@ private:
     mutable Holder m_buffer;
 
     // ── Decode synchronization ────────────────────────────────────
-    // Protects the lazy-decode transition in getTyped<T>().
-    // Spinlock (atomic_flag): only 1-2 bytes overhead, and the
-    // critical section is a single decode + proxy assignment —
-    // spinning is cheaper than a futex wakeup.
-    mutable std::atomic_flag m_decodeLock = ATOMIC_FLAG_INIT;
+    // Tri-state atomic for lazy-decode in getTyped<T>().
+    //
+    // acquire-release ordering: store(DECODE_TYPED, release) pairs with
+    // load(acquire)==DECODE_TYPED in the fast path, guaranteeing visibility
+    // of m_buffer writes on weakly-ordered architectures.
+    static constexpr int DECODE_BYTE = 0;    // m_buffer holds a byte model (unlocked)
+    static constexpr int DECODE_LOCKED = 1;  // decode in progress — m_buffer being written
+    static constexpr int DECODE_TYPED =
+        2;  // m_buffer holds TypedHolderModel<T> (stable, immutable)
+    mutable std::atomic<int> m_decodeState{DECODE_BYTE};
+
+    // CAS-spin to acquire exclusive access to m_buffer.
+    // Returns the state that was replaced: DECODE_BYTE or DECODE_TYPED.
+    // Spins with backoff if another thread holds DECODE_LOCKED.
+    int acquireDecodeLock() const
+    {
+        int spins = 0;
+        while (true)
+        {
+            int expected = m_decodeState.load(std::memory_order_relaxed);
+            if (expected != DECODE_LOCKED)
+            {
+                if (m_decodeState.compare_exchange_weak(expected, DECODE_LOCKED,
+                        std::memory_order_acquire, std::memory_order_relaxed))
+                {
+                    return expected;
+                }
+                continue;
+            }
+            if (++spins > 64)
+            {
+                spins = 0;
+                std::this_thread::yield();
+            }
+        }
+    }
 
     // Unit-test accessor.
     friend const Holder& entryTestHolder(const Entry& e) noexcept { return e.m_buffer; }
@@ -432,7 +463,9 @@ private:
 template <Encodable T>
 void Entry::setTyped(T value)
 {
+    acquireDecodeLock();  // CAS BYTE→LOCKED or TYPED→LOCKED; spin-waits if LOCKED
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(value)});
+    m_decodeState.store(DECODE_TYPED, std::memory_order_release);
 }
 
 template <Encodable T>
@@ -443,67 +476,75 @@ const T* Entry::getTyped() const
         return nullptr;
     }
 
-    // ── Fast path: already typed, no lock ─────────────────────────
-    // Acquire fence pairs with m_decodeLock.clear(release) in the
-    // slow path to ensure visibility of TypedHolderModel<T> inline
-    // data on weakly-ordered architectures (ARM, Power).
-    std::atomic_thread_fence(std::memory_order_acquire);
-    auto* ptr = m_buffer->getTypedPtr();
-    if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+    // ── Fast path: already typed, lock-free ───────────────────────
+    // DECODE_TYPED: m_buffer is typed AND immutable (no concurrent
+    // writer will ever modify it).  acquire-load synchronizes with the
+    // release-store in setTyped() or the slow-path decode completion,
+    // guaranteeing full visibility of the TypedHolderModel<T> inline data.
+    if (m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
     {
-        return static_cast<const T*>(ptr);
-    }
-
-    // Typed model with a different type — refuse (type is immutable).
-    if (ptr != nullptr)
-    {
-        return nullptr;
-    }
-
-    // ── Slow path: byte-buffer → typed, needs synchronization ─────
-    // Spin until we acquire the lock, with backoff after 64 spins
-    // to avoid burning CPU if the decoding thread is preempted.
-    int spins = 0;
-    while (m_decodeLock.test_and_set(std::memory_order_acquire))
-    {
-        if (++spins > 64)
+        auto* ptr = m_buffer->getTypedPtr();
+        if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
         {
-            spins = 0;
-            std::this_thread::yield();
+            return static_cast<const T*>(ptr);
         }
+        // Rare edge case: DECODE_TYPED but getTypedPtr() is null.
+        // Can happen if set() overwrites a previously-typed entry
+        // (m_buffer now holds bytes, state is stale).  Fall through
+        // to the CAS loop which resets state→DECODE_BYTE and retries.
     }
 
-    // RAII spinlock guard: releases m_decodeLock on scope exit,
-    // preventing lock leaks from early returns or exceptions.
-    struct DecodeLockGuard
-    {
-        std::atomic_flag* lock;
-        ~DecodeLockGuard() { lock->clear(std::memory_order_release); }
-    } guard{std::addressof(m_decodeLock)};
+    // ── Slow path: CAS-based synchronization ──────────────────────
+    int prevState = acquireDecodeLock();
 
-    // Double-check: another thread may have decoded while we waited.
-    ptr = m_buffer->getTypedPtr();
-    if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+    // RAII guard: on exception (e.g. T ctor throws on corrupt data),
+    // reset state to DECODE_BYTE so future callers can retry.
+    struct StateGuard
     {
-        return static_cast<const T*>(ptr);
+        std::atomic<int>* state;
+        bool dismissed = false;
+        ~StateGuard()
+        {
+            if (!dismissed) [[unlikely]]
+                state->store(DECODE_BYTE, std::memory_order_release);
+        }
+    } guard{std::addressof(m_decodeState)};
+
+    if (prevState == DECODE_TYPED)
+    {
+        // Another thread finished decoding while we waited for the lock.
+        auto* ptr = m_buffer->getTypedPtr();
+        if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+        {
+            guard.dismissed = true;
+            m_decodeState.store(DECODE_TYPED, std::memory_order_release);
+            return static_cast<const T*>(ptr);
+        }
+        if (ptr != nullptr)
+        {
+            guard.dismissed = true;
+            m_decodeState.store(DECODE_TYPED, std::memory_order_release);
+            return nullptr;  // typed, but wrong type
+        }
+        // TYPED but null ptr — set() overwrote a typed entry.
+        // Fall through to decode from the byte buffer.
     }
 
-    // Typed model with a different type — refuse (type is immutable).
-    if (ptr != nullptr)
-    {
-        return nullptr;
-    }
-
-    // Still byte-buffer — perform the decode.
+    // prevState == DECODE_BYTE: perform the lazy decode.
     auto view = get();
     if (view.empty())
     {
+        guard.dismissed = true;
+        m_decodeState.store(DECODE_BYTE, std::memory_order_release);
         return nullptr;
     }
 
     auto obj = decode(std::type_identity<T>{},
         bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
+
+    guard.dismissed = true;
+    m_decodeState.store(DECODE_TYPED, std::memory_order_release);
     return static_cast<const T*>(m_buffer->getTypedPtr());
 }
 
