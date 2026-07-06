@@ -69,6 +69,10 @@ PRO_DEF_MEM_DISPATCH(MemData, data);
 PRO_DEF_MEM_DISPATCH(MemSize, size);
 PRO_DEF_MEM_DISPATCH(MemStatus, status);
 PRO_DEF_MEM_DISPATCH(MemEncode, encode);
+// TODO(#5312): MemEncode convention is fixed to std::function<void(bytesConstRef)>,
+// so every encodeToBytes() call constructs a std::function temporary.
+// Future work: template the sink to eliminate type-erasure overhead,
+// or add an owning std::string overload to decodeFromBytes for zero-copy.
 PRO_DEF_MEM_DISPATCH(MemGetTypedPtr, getTypedPtr);
 PRO_DEF_MEM_DISPATCH(MemTypeIndex, typeIndex);
 
@@ -256,6 +260,10 @@ public:
     explicit TypedHolderModel(T value) : m_value(std::move(value)) {}
     const char* data() const noexcept { return nullptr; }
     size_t size() const noexcept { return 0; }
+    // TODO(#5312): Typed entries are always MODIFIED→dirty(), which collides
+    // with the commit path's hash-if-dirty logic.  Eventually degrade to byte
+    // semantics: hash() should hash encodeToBytes(), setStatus() should
+    // materialize encoded bytes before changing status.
     EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
 
     void encode(std::function<void(bytesConstRef)> sink) const
@@ -362,6 +370,10 @@ public:
     bool holdsType() const noexcept;
 
     // Encode for persistence via the facade's encodeTo convention.
+    // TODO(#5312): encodeToBytes() materializes a std::string per call.
+    // For the RocksDB hot path this adds one copy vs the old zero-copy
+    // approach.  Future optimization: template the sink, or add a
+    // RocksDB-specific encode that writes directly to a Slice.
     std::string encodeToBytes() const;
     // Reconstruct from raw bytes (no type tag needed — caller knows the type).
     static Entry decodeFromBytes(std::string_view bytes);
