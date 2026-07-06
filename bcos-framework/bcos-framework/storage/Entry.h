@@ -293,23 +293,42 @@ public:
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry& other)
-      : m_buffer(other.m_buffer)
-    {}  // m_decodeState default-initialized (0) — new object, independent state
-    Entry(Entry&& other) noexcept : m_buffer(std::move(other.m_buffer)) {}
+    Entry(const Entry& other) : m_buffer(other.m_buffer)
+    {
+        // Propagate TYPED state so copies of typed entries hit the fast path.
+        // LOCKED state is not copied — the source must not be under concurrent
+        // mutation during copy (that would be UB regardless).
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
+    }
+    Entry(Entry&& other) noexcept : m_buffer(std::move(other.m_buffer))
+    {
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
+    }
     bcos::storage::Entry& operator=(const Entry& other)
     {
         m_buffer = other.m_buffer;
+        // Propagate TYPED state; if other is BYTE we keep current state.
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
         return *this;
     }
     bcos::storage::Entry& operator=(Entry&& other) noexcept
     {
         m_buffer = std::move(other.m_buffer);
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
         return *this;
     }
     ~Entry() noexcept = default;
 
     // ── Accessors ──────────────────────────────────────────────────
+    // NOTE: get()/data()/size() do not participate in the decode state
+    // machine.  They read m_buffer directly without acquiring DECODE_LOCKED.
+    // Concurrent get() + getTyped() (slow path) on the same Entry is a data
+    // race — callers must ensure external synchronization or use getTyped()
+    // exclusively once typed access begins.
 
     std::string_view get() const&;
     const char* data() const&;
@@ -522,27 +541,25 @@ const T* Entry::getTyped() const
         }
     } guard{std::addressof(m_decodeState)};
 
-    if (prevState == DECODE_TYPED)
+    // Double-check m_buffer regardless of prevState.  Handles:
+    // - Another thread finished decoding while we waited (prevState==TYPED).
+    // - Copy/move of a typed entry where state is stale BYTE (prevState==BYTE
+    //   but m_buffer already holds TypedHolderModel).
+    if (const auto* ptr = m_buffer->getTypedPtr(); ptr != nullptr)
     {
-        // Another thread finished decoding while we waited for the lock.
-        auto* ptr = m_buffer->getTypedPtr();
-        if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+        if (m_buffer->typeIndex() == std::type_index(typeid(T)))
         {
             guard.dismissed = true;
             m_decodeState.store(DECODE_TYPED, std::memory_order_release);
             return static_cast<const T*>(ptr);
         }
-        if (ptr != nullptr)
-        {
-            guard.dismissed = true;
-            m_decodeState.store(DECODE_TYPED, std::memory_order_release);
-            return nullptr;  // typed, but wrong type
-        }
-        // TYPED but null ptr — set() overwrote a typed entry.
-        // Fall through to decode from the byte buffer.
+        // Typed, but wrong type — immutable.
+        guard.dismissed = true;
+        m_decodeState.store(DECODE_TYPED, std::memory_order_release);
+        return nullptr;
     }
 
-    // prevState == DECODE_BYTE: perform the lazy decode.
+    // Not typed — must be byte-buffer.  Perform the lazy decode.
     auto view = get();
     if (view.empty())
     {
