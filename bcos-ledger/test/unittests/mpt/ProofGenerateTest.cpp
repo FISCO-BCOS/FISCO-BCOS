@@ -338,6 +338,23 @@ BOOST_AUTO_TEST_CASE(AccountNotInMPTErrors)
     BOOST_CHECK(std::get<ProofErrorCode>(unknownRoot) == ProofErrorCode::BlockNotCommitted);
 }
 
+// The hasher is a template parameter with a keccak256 default; the guomi door stays open:
+// the SM3 instantiation is well-formed and the injection form actually uses the injected hasher.
+BOOST_AUTO_TEST_CASE(HasherParameterizationKeepsSm3Possible)
+{
+    // Compile-time coverage: taking the address forces full instantiation with SM3.
+    [[maybe_unused]] auto* sm3Instantiation =
+        &generateProof<MemStorage, bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher>;
+
+    bcos::h256 const slot = makeHash(0x01);
+    bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher sm3;
+    auto const sm3Key = detail::slotKeyHash(slot, sm3);
+    BOOST_CHECK(sm3Key != detail::slotKeyHash(slot));  // keccak default != SM3 injection
+
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher keccakHasher;
+    BOOST_CHECK(detail::slotKeyHash(slot, keccakHasher) == detail::slotKeyHash(slot));
+}
+
 // Generating the same proof twice yields byte-identical output.
 BOOST_AUTO_TEST_CASE(DeterministicOutput)
 {

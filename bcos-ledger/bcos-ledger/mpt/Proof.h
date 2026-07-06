@@ -44,16 +44,28 @@ namespace bcos::ledger::mpt
 {
 namespace detail
 {
-/// The "secure trie" key transform for storage slots: the trie path is keccak256 of the raw
-/// 32-byte slot key. Mirrors accountKeyHash (MPTReadView.h) for the account trie (spec §5.9).
-/// Kept in detail: #5310 introduces the shared mpt::slotKeyHash (StorageValueCodec.h) — once
-/// both land, this duplicate folds into it. detail scoping avoids an ODR clash meanwhile.
-inline bcos::h256 slotKeyHash(bcos::h256 const& slot)
+/// The "secure trie" key transform for storage slots: hash of the raw 32-byte slot key
+/// (keccak256 on Ethereum-compatible chains, SM3 on guomi ones — whatever @p hasher computes).
+/// Mirrors accountKeyHash (MPTReadView.h) for the account trie (spec §5.9).
+/// Kept in detail with the SAME signature as #5310's shared mpt::slotKeyHash
+/// (StorageValueCodec.h) — once both land, this duplicate folds into it mechanically.
+/// detail scoping avoids an ODR clash meanwhile.
+///
+/// Hasher-injection form: the caller owns @p hasher and reuses it across calls
+/// (generateProof hashes one slot key per requested slot).
+template <bcos::crypto::hasher::Hasher HasherT>
+bcos::h256 slotKeyHash(bcos::h256 const& slot, HasherT& hasher)
 {
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     bcos::h256 out;
     bcos::crypto::hasher::hash(hasher, slot.ref(), out);
     return out;
+}
+
+/// Convenience overload constructing a fresh keccak256 hasher per call (tests, one-off use).
+inline bcos::h256 slotKeyHash(bcos::h256 const& slot)
+{
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    return slotKeyHash(slot, hasher);
 }
 }  // namespace detail
 
@@ -231,7 +243,14 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
 /// @throws MPTInvariantViolation on storage inconsistency (a committed root referencing a missing
 /// node), MPTDecodeError on a malformed account leaf — programming/data errors, not request
 /// errors.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
+///
+/// @tparam HasherT the slot-key hash function (Hasher concept), owned here and reused across the
+/// requested slots; keccak256 by default, SM3 for guomi deployments (same end-to-end caveat as
+/// the builders: accountKeyHash and the trie the proof reads were produced with the chain's
+/// hasher — parameterizing this function alone does not make an SM3 chain, it keeps the door
+/// open for one).
+template <bcos::storage2::ReadableStorage<bcos::h256> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Storage& storage,
     bcos::h256 stateRoot, bcos::Address address, std::span<bcos::h256 const> slots)
 {
@@ -262,13 +281,14 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
     out.accountProof = std::move(accountWalk.nodes);
 
     out.storageProof.reserve(slots.size());
+    HasherT hasher;  // one hash context, reused for every requested slot's key transform
     for (auto const& slot : slots)
     {
         StorageProof entry;
         entry.key = slot;
         if (account.storageRoot != emptyRootHash())
         {
-            auto const slotHash = detail::slotKeyHash(slot);
+            auto const slotHash = detail::slotKeyHash(slot, hasher);
             auto slotWalk = co_await detail::proofWalk(
                 storage, account.storageRoot, bytesToNibbles(slotHash.ref()));
             if (slotWalk.rootMissing)
