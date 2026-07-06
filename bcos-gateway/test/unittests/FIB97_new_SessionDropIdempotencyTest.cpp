@@ -154,20 +154,21 @@ BOOST_AUTO_TEST_CASE(drop_twice_sequential_no_double_teardown)
     BOOST_REQUIRE(bundle.session);
     BOOST_REQUIRE(bundle.socket);
 
-    // First drop: should perform the full teardown.
+    // First drop: wins the m_dropped CAS and posts the (single) socket teardown.
     bundle.session->drop(DisconnectReason::TCPError);
-    // Second drop: must be a no-op (not re-enter teardown).
+    // Second drop: must be a no-op (CAS fails), so it posts no second teardown.
     bundle.session->drop(DisconnectReason::TCPError);
 
-    // The socket must have been closed exactly once — a second drop re-invoking
-    // socket close is a sign of double-teardown.
-    // NOTE: close() in FakeSocket sets m_connected = false and increments m_closeCount.
-    // After the first drop the socket is already disconnected, so the second drop's
-    // `if (m_socket->isConnected())` guard may also prevent re-entry even without the
-    // new m_dropped guard — but the isConnected() check is not thread-safe and a race
-    // between two concurrent callers can slip through.  The atomic CAS fix is the
-    // correct guard.  The sequential check here still demonstrates the invariant.
+    // drop() marks the session inactive synchronously.
     BOOST_CHECK(!bundle.session->active());
+
+    // FIB-184: the actual socket close/shutdown is deferred onto the socket's own io_context so it
+    // can never race an in-flight async_read_some/async_write. Drain that io_context to run the
+    // deferred teardown; only the CAS winner posted one, so close() must run exactly once.
+    bundle.socket->ioService().poll();
+
+    // The socket must have been closed exactly once — a second drop re-invoking socket close is a
+    // sign of double-teardown. close() in FakeSocket increments m_closeCount.
     BOOST_CHECK_EQUAL(bundle.socket->m_closeCount.load(), 1);
 }
 
@@ -186,7 +187,9 @@ BOOST_AUTO_TEST_CASE(drop_concurrent_two_threads_no_race)
 
     // No crash, no UAF, no TSan report.
     BOOST_CHECK(!bundle.session->active());
-    BOOST_CHECK_LE(bundle.socket->m_closeCount.load(), 1);
+    // FIB-184: run the deferred teardown posted by the single CAS winner (see sequential case).
+    bundle.socket->ioService().poll();
+    BOOST_CHECK_EQUAL(bundle.socket->m_closeCount.load(), 1);
 }
 
 // FIB-97-new: Eight threads all calling drop() concurrently — stress the CAS path.
@@ -208,7 +211,9 @@ BOOST_AUTO_TEST_CASE(drop_many_threads_stress)
     }
 
     BOOST_CHECK(!bundle.session->active());
-    BOOST_CHECK_LE(bundle.socket->m_closeCount.load(), 1);
+    // FIB-184: run the deferred teardown posted by the single CAS winner (see sequential case).
+    bundle.socket->ioService().poll();
+    BOOST_CHECK_EQUAL(bundle.socket->m_closeCount.load(), 1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

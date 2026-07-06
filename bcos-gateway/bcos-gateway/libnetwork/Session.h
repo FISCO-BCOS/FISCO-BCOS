@@ -232,6 +232,16 @@ public:
     /// Drop the connection for the reason @a _reason.
     void drop(DisconnectReason _reason);
 
+private:
+    // FIB-184: perform the actual SSL/socket teardown (close + graceful async_shutdown). It has a
+    // strict threading contract — it must run on the socket's io_context (or, on the shutdown path,
+    // with the io_context threads already joined) so it never touches the ssl::stream concurrently
+    // with an in-flight async_read_some/async_write. It is therefore private and reachable only via
+    // drop(), which enforces that contract (post to the io_context, or inline once the network is
+    // down); calling it directly from an arbitrary thread would reintroduce the original race.
+    void closeSocket(DisconnectReason _reason);
+
+public:
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
 
