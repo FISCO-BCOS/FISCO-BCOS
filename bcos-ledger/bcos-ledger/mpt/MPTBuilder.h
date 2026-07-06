@@ -60,8 +60,8 @@ struct MPTBuildOutput
 ///
 /// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
 /// slotKeyHash and both HashBuilder instantiations; keccak256 by default, SM3 for guomi
-/// deployments (same end-to-end caveat as HashBuilder: the keccak-pinned constants and
-/// accountKeyHash still need parameterizing before SM3 is complete).
+/// deployments (same end-to-end caveat as HashBuilder: the from-empty core, accountKeyHash and
+/// Account's default storageRoot/codeHash still need parameterizing before SM3 is complete).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTBuilder

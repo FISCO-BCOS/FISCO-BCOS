@@ -82,10 +82,10 @@ TrieBuildResult computeTrieRootFromSorted(
 ///    on changed key paths are read; untouched subtrees are re-referenced by hash, unread.
 ///
 /// @tparam HasherT the node-hash function (Hasher concept), threaded down into mergeTrie's emit
-/// phase; keccak256 by default, SM3 for guomi deployments. NOTE: the module's well-known
-/// constants (emptyRootHash / emptyCodeHash) and the stateless from-empty core are still
-/// keccak-pinned — an SM3 trie additionally needs those parameterized before it is end-to-end
-/// correct.
+/// phase and into the emptyRootHash<HasherT>() sentinel; keccak256 by default, SM3 for guomi
+/// deployments. NOTE: the stateless from-empty core (computeTrieRoot) is still keccak-pinned —
+/// a non-keccak instantiation is only correct on the incremental path until that core is
+/// parameterized too.
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class HashBuilder
@@ -113,7 +113,7 @@ public:
     /// the storage; a missing referenced node throws MPTInvariantViolation).
     bcos::task::Task<bcos::h256> commit()
     {
-        if (m_priorRoot != emptyRootHash())
+        if (m_priorRoot != emptyRootHash<HasherT>())
         {
             auto merged = co_await mergeTrie(m_storage.get(), m_priorRoot, m_changes, m_hasher);
             m_newNodes = std::move(merged.newNodes);

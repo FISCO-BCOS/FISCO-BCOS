@@ -669,8 +669,9 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
     if (std::holds_alternative<std::monostate>(root))
     {
         // The deletes emptied the whole trie. Nothing to emit; every resolved node (including
-        // the prior root) falls through to phase 4 and obsoletes.
-        result.root = emptyRootHash();
+        // the prior root) falls through to phase 4 and obsoletes. The sentinel is HasherT's
+        // empty root — plain emptyRootHash() would silently pick the keccak default.
+        result.root = emptyRootHash<HasherT>();
     }
     else if (std::holds_alternative<NodeRef>(root) ||
              !std::get<std::unique_ptr<detail::MutableNode>>(root)->dirty)
