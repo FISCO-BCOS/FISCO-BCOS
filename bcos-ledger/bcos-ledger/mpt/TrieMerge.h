@@ -562,14 +562,18 @@ bcos::task::Task<EraseOutcome> mergeErase(
 
 // Encode the overlay bottom-up. Clean references splice back verbatim; only in-memory nodes are
 // re-encoded (and recorded into newNodes when their encoding is hash-kind).
+// The hasher is injected (NodeEncoder's convention): generic over the Hasher concept — keccak256
+// on Ethereum-compatible chains, SM3 on guomi ones — owned by the caller and reused across every
+// emit of this merge; never constructed down here.
+template <bcos::crypto::hasher::Hasher HasherT>
 struct EmitContext
 {
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    HasherT& hasher;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
 
     NodeRef emit(TrieNode const& node)
     {
-        auto [raw, ref] = NodeEncoder<>::encodeAndRef(node, hasher);
+        auto [raw, ref] = NodeEncoder<HasherT>::encodeAndRef(node, hasher);
         if (ref.kind == NodeRef::Kind::Hash)
         {
             newNodes.emplace(ref.hash, std::move(raw));
@@ -578,12 +582,14 @@ struct EmitContext
     }
 };
 
-inline NodeRef emitNode(EmitContext& ctx, MutableNode& node);  // NOLINT(misc-no-recursion)
+template <bcos::crypto::hasher::Hasher HasherT>
+NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node);  // NOLINT(misc-no-recursion)
 
 // The last link of the zero-I/O guarantee: a slot still holding a clean NodeRef is returned
 // verbatim — that whole prior-version subtree is never read, hashed, or re-written. Only boxed
 // (resolved) nodes recurse into emitNode. Absent (monostate) slots are the branch loop's case.
-inline NodeRef emitChild(EmitContext& ctx, MutableChild& child)
+template <bcos::crypto::hasher::Hasher HasherT>
+NodeRef emitChild(EmitContext<HasherT>& ctx, MutableChild& child)
 {
     if (auto* ref = std::get_if<NodeRef>(&child))
     {
@@ -592,7 +598,8 @@ inline NodeRef emitChild(EmitContext& ctx, MutableChild& child)
     return emitNode(ctx, *std::get<std::unique_ptr<MutableNode>>(child));
 }
 
-inline NodeRef emitNode(EmitContext& ctx, MutableNode& node)  // NOLINT(misc-no-recursion)
+template <bcos::crypto::hasher::Hasher HasherT>
+NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node)  // NOLINT(misc-no-recursion)
 {
     if (auto* leaf = std::get_if<MutableLeaf>(&node.node))
     {
@@ -627,10 +634,13 @@ inline NodeRef emitNode(EmitContext& ctx, MutableNode& node)  // NOLINT(misc-no-
 /// newNodes holds every node emitted for the new version (a no-net-change subtree re-emits its
 /// identical encoding — harmless). obsoletedNodes = nodes of the prior version that the new root
 /// no longer references: exactly the resolved-and-replaced set minus re-emitted identical hashes.
-/// Storage is only read; the caller (HashBuilder::commit) owns flushing newNodes.
-template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
+/// Storage is only read; the caller (HashBuilder::commit) owns flushing newNodes — and owns
+/// @p hasher, reused across every node emission of this merge (and across merges, if the caller
+/// keeps it around). @p hasher is any type satisfying the Hasher concept (keccak256, SM3, ...);
+/// it is single-threaded state, same contract as NodeEncoder's injection overload.
+template <bcos::storage2::ReadableStorage<bcos::h256> Storage, bcos::crypto::hasher::Hasher HasherT>
 bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRoot,
-    std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
+    std::map<bcos::h256, std::optional<bcos::bytes>> const& changes, HasherT& hasher)
 {
     detail::MergeContext<Storage> ctx{.storage = storage, .resolvedHashes = {}};
 
@@ -674,7 +684,7 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
     else
     {
         // Phase 3 — re-encode the overlay bottom-up; clean subtrees splice back by hash.
-        detail::EmitContext emitCtx;
+        detail::EmitContext<HasherT> emitCtx{.hasher = hasher, .newNodes = {}};
         NodeRef const rootRef =
             detail::emitNode(emitCtx, *std::get<std::unique_ptr<detail::MutableNode>>(root));
         // A trie root is ALWAYS addressed by a 32-byte hash, even when the top node encodes

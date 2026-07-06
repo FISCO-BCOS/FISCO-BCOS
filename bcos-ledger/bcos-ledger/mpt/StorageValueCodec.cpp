@@ -30,9 +30,7 @@ namespace bcos::ledger::mpt
 bcos::h256 slotKeyHash(bcos::h256 const& slot)
 {
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    bcos::h256 out;
-    bcos::crypto::hasher::hash(hasher, slot.ref(), out);
-    return out;
+    return slotKeyHash(slot, hasher);
 }
 
 bcos::bytes encodeStorageValue(bcos::bytesConstRef value)

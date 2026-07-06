@@ -24,6 +24,8 @@
 #include "HashBuilder.h"
 #include "MPTReadView.h"
 #include "StorageValueCodec.h"
+// Named directly for the HasherT default template argument (also reachable transitively).
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
@@ -55,7 +57,13 @@ struct MPTBuildOutput
 ///
 /// SCOPE (M4.3): only the subsequent-touch path — the account already exists in the parent MPT.
 /// firstTouch and tombstone deltas throw MPTInvariantViolation until PR-11/PR-12 land.
-template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
+///
+/// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
+/// slotKeyHash and both HashBuilder instantiations; keccak256 by default, SM3 for guomi
+/// deployments (same end-to-end caveat as HashBuilder: the keccak-pinned constants and
+/// accountKeyHash still need parameterizing before SM3 is complete).
+template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTBuilder
 {
 public:
@@ -73,7 +81,9 @@ public:
     {
         MPTBuildOutput output;
         MPTReadView<Storage> view(m_storage.get(), m_parentStateRoot);
-        HashBuilder accountBuilder(m_storage.get(), m_parentStateRoot);
+        // Spelled explicitly (no CTAD): CTAD would silently fall back to the default keccak
+        // hasher even when this MPTBuilder is instantiated with another HasherT.
+        HashBuilder<Storage, HasherT> accountBuilder(m_storage.get(), m_parentStateRoot);
 
         for (auto const& [addr, delta] : input.perAccount)
         {
@@ -141,10 +151,10 @@ private:
         {
             co_return priorStorageRoot;
         }
-        HashBuilder storageBuilder(m_storage.get(), priorStorageRoot);
+        HashBuilder<Storage, HasherT> storageBuilder(m_storage.get(), priorStorageRoot);
         for (auto const& [slot, valueOpt] : delta.storageChanges)
         {
-            auto const keyHash = slotKeyHash(slot);
+            auto const keyHash = slotKeyHash(slot, m_hasher);
             // nullopt and a value that trims to nothing both mean "slot leaves the trie".
             bcos::bytes encoded;
             if (valueOpt.has_value())
@@ -165,7 +175,7 @@ private:
         co_return newRoot;
     }
 
-    static void mergeNodeDelta(HashBuilder<Storage>& builder, MPTBuildOutput& output)
+    static void mergeNodeDelta(HashBuilder<Storage, HasherT>& builder, MPTBuildOutput& output)
     {
         for (auto& [hash, raw] : builder.drainNewNodes())
         {
@@ -176,6 +186,9 @@ private:
 
     std::reference_wrapper<Storage> m_storage;
     bcos::h256 m_parentStateRoot;
+    /// One hash context per builder, reused for every slot-key transform of this block
+    /// (slotKeyHash injection form). Single-threaded, like buildAndCollect itself.
+    HasherT m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

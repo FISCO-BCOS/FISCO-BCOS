@@ -18,15 +18,32 @@
  */
 #pragma once
 
+// AnyHasher.h supplies the Hasher concept and the free bcos::crypto::hasher::hash().
+#include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 
 namespace bcos::ledger::mpt
 {
 
-/// The secure-trie key transform for storage slots: keccak256 of the 32 raw slot-key bytes.
+/// The secure-trie key transform for storage slots: hash of the 32 raw slot-key bytes
+/// (keccak256 on Ethereum-compatible chains, SM3 on guomi ones — whatever @p hasher computes).
 /// The counterpart of accountKeyHash() one trie level up; every producer of storage-trie paths
 /// (genesis build, MPTBuilder, proof generation) must apply this identical transform.
+///
+/// Hasher-injection form (NodeEncoder's hot-path convention): the caller owns @p hasher and
+/// reuses it across calls — MPTBuilder hashes one slot key per storage change, so a fresh
+/// hash context per call would be a per-slot allocation.
+template <bcos::crypto::hasher::Hasher HasherT>
+bcos::h256 slotKeyHash(bcos::h256 const& slot, HasherT& hasher)
+{
+    bcos::h256 out;
+    bcos::crypto::hasher::hash(hasher, slot.ref(), out);
+    return out;
+}
+
+/// Convenience overload constructing a fresh keccak256 hasher per call. For one-off /
+/// low-frequency use (tests, tooling); hot paths use the injection form above.
 bcos::h256 slotKeyHash(bcos::h256 const& slot);
 
 /// Ethereum storage-value leaf encoding: RLP of the value with leading zero bytes trimmed
