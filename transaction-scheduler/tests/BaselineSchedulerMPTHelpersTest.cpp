@@ -63,4 +63,41 @@ BOOST_AUTO_TEST_CASE(ScenarioA_FlagSetButActivationUnknown_DoesNotBuild)
     BOOST_CHECK(!shouldBuildMPT(features, 1000));
 }
 
+BOOST_AUTO_TEST_CASE(FlagMatrix_NoL2FlagAlwaysPasses)
+{
+    ledger::Features features;
+    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(features));
+
+    // Scenario A alone is a legal matrix regardless of its activation block: the
+    // guard only polices scenario B's genesis-only assumption.
+    features.set(ledger::Features::Flag::feature_mpt_state_root);
+    features.setActivationBlock(ledger::Features::Flag::feature_mpt_state_root, 500);
+    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(features));
+}
+
+BOOST_AUTO_TEST_CASE(FlagMatrix_L2AtGenesisPasses)
+{
+    ledger::Features features;
+    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
+    features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 0);
+    BOOST_CHECK_NO_THROW(validateMPTFlagMatrix(features));
+}
+
+BOOST_AUTO_TEST_CASE(FlagMatrix_L2MidChainThrows)
+{
+    ledger::Features features;
+    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
+    features.setActivationBlock(ledger::Features::Flag::feature_l2_ethereum_compat, 42);
+    BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
+}
+
+BOOST_AUTO_TEST_CASE(FlagMatrix_L2ActivationUnknownThrows)
+{
+    ledger::Features features;
+    features.set(ledger::Features::Flag::feature_l2_ethereum_compat);
+    // Bare set() without a storage load: activationBlockOf is -1. An unverifiable
+    // activation must not pass a consistency check.
+    BOOST_CHECK_THROW(validateMPTFlagMatrix(features), InvalidMPTFlagMatrix);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
