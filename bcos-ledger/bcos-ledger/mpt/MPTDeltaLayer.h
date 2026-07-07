@@ -23,6 +23,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace bcos::ledger::mpt
@@ -52,5 +53,18 @@ struct MPTDeltaLayer
     /// WriteBatch — a consumed root must not seed a second first-touch.
     std::vector<bcos::Address> preheatManifestsToDelete;
 };
+
+/// Drain a builder's produced node delta into @p delta: newNodes overwrite-insert, obsoleted
+/// hashes merge. Duck-typed on the drainNewNodes()/drainObsoletedNodes() interface HashBuilder
+/// defines, so this pure-data header does not depend on the builder template.
+template <typename Builder>
+void absorbNodeDelta(Builder& builder, MPTDeltaLayer& delta)
+{
+    for (auto& [hash, raw] : builder.drainNewNodes())
+    {
+        delta.newNodes.insert_or_assign(hash, std::move(raw));
+    }
+    delta.obsoletedNodes.merge(builder.drainObsoletedNodes());
+}
 
 }  // namespace bcos::ledger::mpt

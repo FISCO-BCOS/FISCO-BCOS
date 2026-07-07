@@ -23,10 +23,10 @@
 #include <bcos-ledger/mpt/AccountDelta.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
+#include <bcos-ledger/mpt/FlatToMPT.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
-#include <bcos-ledger/mpt/PreheatManifest.h>
 #include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-ledger/mpt/Trie.h>
 #include <bcos-task/Task.h>
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
     NodeStorage storage;
     auto const addr = makeAddress(0xA1);
 
-    MPTBuilderBackends backends;
+    FlatToMPTBackends backends;
     backends.flatSlotScanner = [](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
         co_return FlatSlots{};  // brand-new account: no flat slots exist
     };
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfDormantAccountWithExistingSlots)
     FlatSlots scanResult(flatSlots.begin(), flatSlots.end());
     scanResult.emplace_back(slotKeyAt(1000), bcos::bytes{0x00, 0x00});
 
-    MPTBuilderBackends backends;
+    FlatToMPTBackends backends;
     backends.flatSlotScanner = [&scanResult](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
         co_return scanResult;
     };
@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchEqualsSubsequentTouchAfterPreheat)
 
     // Path A: first-touch bootstrap over the flat scan, then apply the changes.
     NodeStorage storageA;
-    MPTBuilderBackends backendsA;
+    FlatToMPTBackends backendsA;
     backendsA.flatSlotScanner = [&flatSlots](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
         co_return FlatSlots(flatSlots.begin(), flatSlots.end());
     };
@@ -265,7 +265,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchEqualsSubsequentTouchAfterPreheat)
     auto const baselineRoot = bcos::task::syncWait(baseline.commit());
 
     bool scannerCalled = false;
-    MPTBuilderBackends backendsB;
+    FlatToMPTBackends backendsB;
     backendsB.flatSlotScanner = failingScanner(scannerCalled);
     backendsB.manifestReader = singleEntryManifest(addr, baselineRoot);
     MPTBuildInput inputB;
@@ -319,7 +319,7 @@ BOOST_AUTO_TEST_CASE(PreheatManifestHitDoesNotCallScanner)
     auto const baselineRoot = bcos::task::syncWait(baseline.commit());
 
     bool scannerCalled = false;
-    MPTBuilderBackends backends;
+    FlatToMPTBackends backends;
     backends.flatSlotScanner = failingScanner(scannerCalled);
     backends.manifestReader = singleEntryManifest(addr, baselineRoot);
 
@@ -366,7 +366,7 @@ BOOST_AUTO_TEST_CASE(TombstonePriorityOverFirstTouch)
     auto const parentRoot = bcos::task::syncWait(stateTrie.commit());
 
     bool scannerCalled = false;
-    MPTBuilderBackends backends;
+    FlatToMPTBackends backends;
     backends.flatSlotScanner = failingScanner(scannerCalled);
 
     MPTBuildInput input;
@@ -390,7 +390,7 @@ BOOST_AUTO_TEST_CASE(FirstTouchWithoutScannerThrows)
     NodeStorage storage;
     auto const addr = makeAddress(0xA6);
 
-    MPTBuilderBackends backends;  // manifest misses, and no scanner to fall back to
+    FlatToMPTBackends backends;  // manifest misses, and no scanner to fall back to
     backends.manifestReader = [](std::string) -> bcos::task::Task<std::optional<bcos::bytes>> {
         co_return std::nullopt;
     };
@@ -408,7 +408,7 @@ BOOST_AUTO_TEST_CASE(UnchangedMetaFieldsComeFromFlat)
     auto const addr = makeAddress(0xA7);
 
     int metaCalls = 0;
-    MPTBuilderBackends backends;
+    FlatToMPTBackends backends;
     backends.flatSlotScanner = [](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
         co_return FlatSlots{};
     };
@@ -442,7 +442,7 @@ BOOST_AUTO_TEST_CASE(UnchangedMetaFieldsComeFromFlat)
 
     // The same delta without a flatAccountMeta backend cannot fill the Unchanged fields.
     NodeStorage storage2;
-    MPTBuilderBackends noMeta;
+    FlatToMPTBackends noMeta;
     noMeta.flatSlotScanner = [](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
         co_return FlatSlots{};
     };

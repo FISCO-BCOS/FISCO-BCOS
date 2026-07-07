@@ -22,10 +22,10 @@
 #include "Account.h"
 #include "AccountDelta.h"
 #include "Errors.h"
+#include "FlatToMPT.h"
 #include "HashBuilder.h"
 #include "MPTDeltaLayer.h"
 #include "MPTReadView.h"
-#include "PreheatManifest.h"
 #include "StorageValueCodec.h"
 // Named directly for the HasherT default template argument (also reachable transitively).
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -34,12 +34,8 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
-#include <functional>
 #include <optional>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
-#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -48,41 +44,6 @@ namespace bcos::ledger::mpt
 /// MPTDeltaLayer.h — it is the contract with the commit flow / MultiLayerStorage (spec §5.7),
 /// not a builder detail; the alias keeps every existing buildAndCollect call site unchanged.
 using MPTBuildOutput = MPTDeltaLayer;
-
-/// An account's baseline nonce/balance/codeHash as stored in the flat KV, for first-touch
-/// fields the block did not update (a first-touch account has no parent MPT leaf to merge onto).
-struct FlatAccountMeta
-{
-    bcos::u256 nonce{};
-    bcos::u256 balance{};
-    /// Implementations MUST return emptyCodeHash() — the hash of empty code — for accounts
-    /// without code, never a zero h256: the account leaf encodes this field verbatim
-    /// (Yellow Paper §4.1), and a zero here would produce a wrong leaf hash.
-    bcos::h256 codeHash{};
-};
-
-/// Injected flat-KV access the first-touch path needs (spec §5.3 path 2). All callbacks are
-/// optional: default-constructed backends keep MPTBuilder in subsequent-touch-only mode, and
-/// each callback is only required by the sub-path that actually consumes it.
-///
-/// This machinery exists for scenario A — a legacy chain activating feature_mpt_state_root
-/// mid-flight (spec §5.10): only there does an account own flat-KV state that predates the MPT
-/// and must be bootstrapped into it. A scenario-B chain (L2, MPT from genesis) has no pre-MPT
-/// state; its first-touch deltas only ever see an empty scan and never profit from preheating.
-struct MPTBuilderBackends
-{
-    /// Enumerate ALL existing storage slots of an account from the flat KV:
-    /// (raw 32-byte slot key → raw stored value). Required on a manifest miss (path 2a).
-    std::function<bcos::task::Task<std::vector<std::pair<bcos::h256, bcos::bytes>>>(
-        bcos::Address const&)>
-        flatSlotScanner;
-    /// Baseline nonce/balance/codeHash from the flat KV. Required when a first-touch delta
-    /// leaves any of the three fields Unchanged.
-    std::function<bcos::task::Task<FlatAccountMeta>(bcos::Address const&)> flatAccountMeta;
-    /// Preheat manifest KV reader (PreheatManifest::read is called over it). Unset = no
-    /// manifest lookup; every first-touch takes the flat-scan path 2a.
-    PreheatManifest::BackendReader manifestReader;
-};
 
 /// Builds the post-block MPT from a classify()-produced MPTBuildInput on top of the parent
 /// block's state root. Templated on the same storage2 ReadWriteStorage the trie primitives use:
@@ -108,9 +69,10 @@ public:
       : m_storage(storage), m_parentStateRoot(parentStateRoot)
     {}
 
-    /// As above, plus the flat-KV backends the first-touch path reads through. Without them
-    /// (the 2-arg ctor) any first-touch delta throws for lack of a scanner.
-    MPTBuilder(Storage& storage, bcos::h256 parentStateRoot, MPTBuilderBackends backends)
+    /// As above, plus the flat-KV backends the first-touch migration reads through (FlatToMPT.h,
+    /// scenario A). Without them (the 2-arg ctor) any first-touch delta throws for lack of a
+    /// scanner.
+    MPTBuilder(Storage& storage, bcos::h256 parentStateRoot, FlatToMPTBackends backends)
       : m_storage(storage), m_parentStateRoot(parentStateRoot), m_backends(std::move(backends))
     {}
 
@@ -173,7 +135,7 @@ public:
         }
 
         output.stateRoot = co_await accountBuilder.commit();
-        mergeNodeDelta(accountBuilder, output);
+        absorbNodeDelta(accountBuilder, output);
 
         // MPTBuildOutput aggregates several HashBuilder commits (a first-touch bootstrap plus
         // the same block's apply, plus the account trie), so unlike a single mergeTrie() result
@@ -190,52 +152,15 @@ public:
 
 private:
     /// The first-touch path (spec §5.3 path 2): the account has no parent-MPT leaf, so its
-    /// baseline storage trie comes from either a preheat-manifest hit (2b — the recorded root,
-    /// pre-built nodes already in storage) or a full flat-KV slot scan (2a — bootstrap from the
-    /// empty root). This block's slot changes then apply over that baseline, and account fields
-    /// the block left Unchanged come from the flat KV via flatAccountMeta.
+    /// baseline storage-trie root comes from the flat→MPT migration (FlatToMPT.h — a
+    /// preheat-manifest hit or a full flat-KV bootstrap). This block's slot changes then apply
+    /// over that baseline, and account fields the block left Unchanged come from the flat KV
+    /// via flatAccountMeta.
     bcos::task::Task<void> buildFirstTouch(bcos::Address const& addr, AccountDelta const& delta,
         HashBuilder<Storage, HasherT>& accountBuilder, MPTBuildOutput& output)
     {
-        auto baselineStorageRoot = emptyRootHash<HasherT>();
-        bool manifestHit = false;
-        if (m_backends.manifestReader)
-        {
-            auto preheated = co_await PreheatManifest::read(m_backends.manifestReader, addr);
-            if (preheated.has_value())
-            {
-                // Path 2b: the preheat run already built and flushed this account's storage
-                // trie; adopt its root and schedule the consumed record for deletion.
-                baselineStorageRoot = *preheated;
-                output.preheatManifestsToDelete.push_back(addr);
-                manifestHit = true;
-            }
-        }
-        if (!manifestHit)
-        {
-            // Path 2a: bootstrap the storage trie from every existing flat slot.
-            if (!m_backends.flatSlotScanner)
-            {
-                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                          "MPTBuilder: first-touch needs flatSlotScanner"));
-            }
-            HashBuilder<Storage, HasherT> bootstrap(m_storage.get(), emptyRootHash<HasherT>());
-            // Bind the awaited result to a local before iterating: iterating a co_await
-            // temporary directly is the same GCC template-coroutine hazard class as the member
-            // access noted in MPTReadView::hasAccount.
-            auto flatSlots = co_await m_backends.flatSlotScanner(addr);
-            for (auto& [slot, value] : flatSlots)
-            {
-                auto encoded = encodeStorageValue(bcos::ref(value));
-                if (encoded.empty())
-                {
-                    continue;  // zero value: never part of the storage trie
-                }
-                co_await bootstrap.put(slotKeyHash(slot, m_hasher), std::move(encoded));
-            }
-            baselineStorageRoot = co_await bootstrap.commit();
-            mergeNodeDelta(bootstrap, output);
-        }
+        auto baselineStorageRoot =
+            co_await resolveFirstTouchBaseline(m_storage.get(), m_backends, addr, m_hasher, output);
 
         Account updated;  // default storageRoot/codeHash — a fresh EOA until proven otherwise
         updated.storageRoot = co_await applyStorageChanges(baselineStorageRoot, delta, output);
@@ -331,24 +256,15 @@ private:
             }
         }
         auto newRoot = co_await storageBuilder.commit();
-        mergeNodeDelta(storageBuilder, output);
+        absorbNodeDelta(storageBuilder, output);
         co_return newRoot;
-    }
-
-    static void mergeNodeDelta(HashBuilder<Storage, HasherT>& builder, MPTBuildOutput& output)
-    {
-        for (auto& [hash, raw] : builder.drainNewNodes())
-        {
-            output.newNodes.insert_or_assign(hash, std::move(raw));
-        }
-        output.obsoletedNodes.merge(builder.drainObsoletedNodes());
     }
 
     std::reference_wrapper<Storage> m_storage;
     bcos::h256 m_parentStateRoot;
-    /// Flat-KV access for the first-touch path; default-constructed (all callbacks empty) for
-    /// subsequent-touch-only usage via the 2-arg ctor.
-    MPTBuilderBackends m_backends;
+    /// Flat-KV access for the first-touch migration (FlatToMPT.h); default-constructed (all
+    /// callbacks empty) for subsequent-touch-only usage via the 2-arg ctor.
+    FlatToMPTBackends m_backends;
     /// One hash context per builder, reused for every slot-key transform of this block
     /// (slotKeyHash injection form). Single-threaded, like buildAndCollect itself.
     HasherT m_hasher;

@@ -23,6 +23,7 @@
 #include <bcos-ledger/mpt/AccountDelta.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
+#include <bcos-ledger/mpt/FlatToMPT.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/MPTBuilder.h>
 #include <bcos-ledger/mpt/MPTReadView.h>
@@ -197,7 +198,7 @@ BOOST_AUTO_TEST_CASE(TombstoneOfAccountAbsentFromParentIsNoop)
     // The pathological combo: tombstone AND firstTouch. Tombstone wins, and removing an
     // absent leaf is a legal no-op — the first-touch machinery must never run.
     bool scannerCalled = false;
-    MPTBuilderBackends backends;
+    FlatToMPTBackends backends;
     backends.flatSlotScanner = [&scannerCalled](
                                    bcos::Address const&) -> bcos::task::Task<FlatSlots> {
         scannerCalled = true;
@@ -250,7 +251,7 @@ BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)
     // storage trie.
     int scannerCalls = 0;
     auto makeBackends = [&scannerCalls] {
-        MPTBuilderBackends backends;
+        FlatToMPTBackends backends;
         backends.flatSlotScanner = [&scannerCalls](
                                        bcos::Address const&) -> bcos::task::Task<FlatSlots> {
             ++scannerCalls;

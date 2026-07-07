@@ -13,10 +13,10 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file PreheatManifest.cpp
- * @brief Preheat-manifest KV schema and read/remove interface (spec §5.11)
+ * @file FlatToMPT.cpp
+ * @brief Flat-KV → MPT migration: preheat-manifest schema implementation (spec §5.11)
  */
-#include "PreheatManifest.h"
+#include "FlatToMPT.h"
 #include "Errors.h"
 #include <bcos-utilities/Exceptions.h>
 #include <boost/throw_exception.hpp>
