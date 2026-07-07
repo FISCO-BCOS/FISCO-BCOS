@@ -106,7 +106,7 @@ task::Task<void> writeBlockNumberToStorage(RealGlobalStateBackendStorage& backen
     const h256& blockHash, bcos::protocol::BlockNumber blockNumber)
 {
     storage::Entry entry;
-    entry.importFields({boost::lexical_cast<std::string>(blockNumber)});
+    entry.set(boost::lexical_cast<std::string>(blockNumber));
     co_await bcos::storage2::writeOne(backendStorage,
         bcos::executor_v1::StateKey{
             ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},

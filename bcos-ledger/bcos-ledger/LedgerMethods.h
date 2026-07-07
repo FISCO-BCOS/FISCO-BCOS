@@ -112,7 +112,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         auto txHash = blockTxs ? blockTxs->at(i)->hash() : inlineTxs[i]->hash();
 
         storage::Entry receiptEntry;
-        receiptEntry.importFields({std::move(encodedReceipt)});
+        receiptEntry.set(std::move(encodedReceipt));
         co_await storage2::writeOne(storage,
             executor_v1::StateKey{SYS_HASH_2_RECEIPT, bcos::concepts::bytebuffer::toView(txHash)},
             std::move(receiptEntry));
@@ -143,7 +143,7 @@ task::Task<void> tag_invoke(ledger::tag_t<prewriteBlockToBuffer> /*unused*/,
         auto txHash = tx->hash();
 
         storage::Entry txEntry;
-        txEntry.importFields({std::move(encodedTx)});
+        txEntry.set(std::move(encodedTx));
         co_await storage2::writeOne(storage,
             executor_v1::StateKey{SYS_HASH_2_TX, bcos::concepts::bytebuffer::toView(txHash)},
             std::move(txEntry));

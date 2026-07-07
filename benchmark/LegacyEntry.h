@@ -181,18 +181,6 @@ public:
 
     bool dirty() const { return (m_status == MODIFIED || m_status == DELETED); }
 
-    template <typename Input>
-    void importFields(std::initializer_list<Input> values)
-    {
-        if (values.size() != 1)
-        {
-            BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                storage::StorageError::UnknownEntryType, "Import fields not equal to 1"));
-        }
-
-        setField(0, std::move(*values.begin()));
-    }
-
     auto&& exportFields()
     {
         m_size = 0;

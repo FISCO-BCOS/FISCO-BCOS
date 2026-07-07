@@ -1307,7 +1307,7 @@ bcos::Error::Ptr Initializer::importSnapshotToRocksDB(
     {  // snapshot without tx and receipt
         storage::Entry archivedNumber;
         // the archived number is the first block has full tx and receipt
-        archivedNumber.importFields({std::to_string(currentBlockNumber + 1)});
+        archivedNumber.set(std::to_string(currentBlockNumber + 1));
         std::promise<Error::UniquePtr> setPromise;
 
         stateStorage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_ARCHIVED_NUMBER,

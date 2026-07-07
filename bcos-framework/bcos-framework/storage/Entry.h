@@ -405,17 +405,6 @@ public:
     void setStatus(Status status);
     bool dirty() const;
 
-    template <typename Input>
-    void importFields(std::initializer_list<Input> values)
-    {
-        if (values.size() != 1)
-        {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
-        }
-        set(std::move(*values.begin()));
-    }
-
     bool valid() const;
 
     crypto::HashType hash(std::string_view table, std::string_view key,
@@ -571,7 +560,7 @@ const T* Entry::getTyped() const
         return nullptr;
     }
 
-    auto obj = decode(std::type_identity<T>{},
+    auto obj = bcos::storage::decode(std::type_identity<T>{},
         bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
 

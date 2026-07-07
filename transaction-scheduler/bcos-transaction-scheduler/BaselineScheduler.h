@@ -208,12 +208,12 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     auto blockHash = newBlockHeader.hash();
 
     storage::Entry hashEntry;
-    hashEntry.importFields({blockHash.asBytes()});
+    hashEntry.set(blockHash.asBytes());
     co_await storage2::writeOne(storage,
         executor_v1::StateKey{ledger::SYS_NUMBER_2_HASH, blockNumberStr}, std::move(hashEntry));
 
     storage::Entry hash2NumberEntry;
-    hash2NumberEntry.importFields({blockNumberStr});
+    hash2NumberEntry.set(blockNumberStr);
     co_await storage2::writeOne(storage,
         executor_v1::StateKey{
             ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},

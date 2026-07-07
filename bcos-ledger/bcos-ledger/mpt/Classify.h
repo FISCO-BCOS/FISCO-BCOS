@@ -165,7 +165,7 @@ inline bcos::u256 entryToU256(bcos::storage::Entry const& entry)
 }
 
 /// Copy an Entry's stored bytes into a 32-byte hash. Unlike nonce/balance, codeHash is stored as
-/// the RAW 32-byte digest: TransactionExecutive writes codeHashEntry.importFields({codeHash
+/// the RAW 32-byte digest: TransactionExecutive writes codeHashEntry.set(codeHash
 /// .asBytes()}), so the value bytes ARE the hash and are read directly. A value whose length is
 /// not 32 would be silently zero-padded/truncated by the h256 ctor (and an empty value yields the
 /// all-zero hash, which is NOT emptyCodeHash()); callers only reach here for a non-deleted codeHash
