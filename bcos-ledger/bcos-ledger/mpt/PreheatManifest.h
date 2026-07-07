@@ -36,6 +36,12 @@ namespace bcos::ledger::mpt
 /// scanning every flat slot (spec §5.3 path 2b). This class owns the schema plus the read/remove
 /// side; the manifest-writing CLI is Plan C scope and does not exist yet.
 ///
+/// Preheating is a scenario-A device (legacy chain activating feature_mpt_state_root mid-flight,
+/// spec §5.10/§5.11): it moves a large account's one-off bootstrap cost off the consensus commit
+/// path into an operator-chosen offline window. It is purely an accelerator — correctness never
+/// depends on a manifest being present. Scenario-B chains (L2, MPT from genesis) have no pre-MPT
+/// flat state and no use for it.
+///
 /// Backend access is via injected callbacks rather than a storage type: manifest records live in
 /// the string-keyed flat KV space, not the h256-keyed node space the MPT templates are built
 /// over, and the eventual owner (MultiLayerStorage / ledger) supplies read/delete lambdas.

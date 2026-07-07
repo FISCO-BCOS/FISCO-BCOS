@@ -65,12 +65,20 @@ struct FlatAccountMeta
 {
     bcos::u256 nonce{};
     bcos::u256 balance{};
+    /// Implementations MUST return emptyCodeHash() — the hash of empty code — for accounts
+    /// without code, never a zero h256: the account leaf encodes this field verbatim
+    /// (Yellow Paper §4.1), and a zero here would produce a wrong leaf hash.
     bcos::h256 codeHash{};
 };
 
 /// Injected flat-KV access the first-touch path needs (spec §5.3 path 2). All callbacks are
 /// optional: default-constructed backends keep MPTBuilder in subsequent-touch-only mode, and
 /// each callback is only required by the sub-path that actually consumes it.
+///
+/// This machinery exists for scenario A — a legacy chain activating feature_mpt_state_root
+/// mid-flight (spec §5.10): only there does an account own flat-KV state that predates the MPT
+/// and must be bootstrapped into it. A scenario-B chain (L2, MPT from genesis) has no pre-MPT
+/// state; its first-touch deltas only ever see an empty scan and never profit from preheating.
 struct MPTBuilderBackends
 {
     /// Enumerate ALL existing storage slots of an account from the flat KV:
@@ -176,6 +184,17 @@ public:
 
         output.stateRoot = co_await accountBuilder.commit();
         mergeNodeDelta(accountBuilder, output);
+
+        // MPTBuildOutput aggregates several HashBuilder commits (a first-touch bootstrap plus
+        // the same block's apply, plus the account trie), so unlike a single mergeTrie() result
+        // the two sets can intersect: a node emitted by one commit and obsoleted by a later one.
+        // Re-establish disjointness the way mergeTrie() does (end-subtraction): the node stays
+        // in newNodes — it is already flushed and may be referenced by another trie — and leaves
+        // the prune ledger, so a consumer never writes and deletes the same node in one batch.
+        for (auto const& [hash, raw] : output.newNodes)
+        {
+            output.obsoletedNodes.erase(hash);
+        }
         co_return output;
     }
 

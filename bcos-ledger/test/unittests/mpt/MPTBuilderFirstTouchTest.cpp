@@ -277,6 +277,15 @@ BOOST_AUTO_TEST_CASE(FirstTouchEqualsSubsequentTouchAfterPreheat)
     // The invariant: both paths land on the identical state root.
     BOOST_CHECK(outputA.stateRoot == outputB.stateRoot);
 
+    // Path A runs two commits over the same trie (bootstrap, then apply); the aggregated
+    // node sets must still be disjoint, or a consumer would write and delete the same node
+    // in one persistence batch.
+    for (auto const& hash : outputA.obsoletedNodes)
+    {
+        BOOST_CHECK_MESSAGE(!outputA.newNodes.contains(hash),
+            "node " << hash.hex() << " is in both newNodes and obsoletedNodes");
+    }
+
     // And every slot reads back identically through both node stores.
     auto expectedSlots = flatSlots;
     expectedSlots[overwrittenSlot] = bcos::bytes{0xEE};
