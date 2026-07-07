@@ -6,6 +6,7 @@
 #include "Features.h"
 #include "bcos-task/Task.h"
 #include <boost/lexical_cast.hpp>
+#include <range/v3/range/conversion.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
@@ -25,6 +26,7 @@ inline task::Task<void> Features::readFromStorage(
             if (blockNumber >= enableNumber)
             {
                 set(key);
+                setActivationBlock(string2Flag(key), enableNumber);
             }
         }
     }
@@ -52,10 +54,13 @@ inline task::Task<void> readFromStorage(Features& features,
     storage2::ReadableStorage<executor_v1::StateKey> auto& storage, long blockNumber)
 {
     decltype(auto) keys = bcos::ledger::Features::featureKeys();
-    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage),
-        keys | ::ranges::views::transform([](std::string_view key) {
-            return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
-        }));
+    // Materialize the key views: a lazy range-v3 pipeline reports its size as
+    // ranges::detail::diffmax_t, which storages like MemoryStorage cannot narrow to
+    // size_t in readSome's reserve; a vector is a plain sized range for any storage.
+    auto keyViews = keys | ::ranges::views::transform([](std::string_view key) {
+        return executor_v1::StateKeyView(ledger::SYS_CONFIG, key);
+    }) | ::ranges::to<std::vector>();
+    auto entries = co_await storage2::readSome(std::forward<decltype(storage)>(storage), keyViews);
     for (auto&& [key, entry] : ::ranges::views::zip(keys, entries))
     {
         if (entry)
@@ -64,6 +69,7 @@ inline task::Task<void> readFromStorage(Features& features,
             if (blockNumber >= enableNumber)
             {
                 features.set(key);
+                features.setActivationBlock(Features::string2Flag(key), enableNumber);
             }
         }
     }

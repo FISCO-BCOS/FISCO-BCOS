@@ -205,6 +205,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "feature_rpbft_vrf_type_secp256k1",
         "feature_balance_policy2",
         "feature_l2_ethereum_compat",
+        "feature_mpt_state_root",
     };
     // clang-format on
     BOOST_CHECK_EQUAL(keys.size(), compareKeys.size());

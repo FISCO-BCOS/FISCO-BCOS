@@ -1,5 +1,6 @@
 #pragma once
 #include "../protocol/Protocol.h"
+#include "../protocol/ProtocolTypeDef.h"
 #include "../storage2/Storage.h"
 #include "bcos-task/Task.h"
 #include <bcos-utilities/Common.h>
@@ -7,6 +8,7 @@
 #include <array>
 #include <bitset>
 #include <magic_enum/magic_enum.hpp>
+#include <map>
 #include <ostream>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/iota.hpp>
@@ -113,6 +115,9 @@ public:
         feature_balance_policy2 = 56,     // 转账白名单 Transfer whitelist
         feature_l2_ethereum_compat = 57,  // OP-Stack L2 mode: Ethereum-compatible
                                           // genesis/predeploys
+        feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
+                                          // Ethereum MPT root from this flag's activation
+                                          // block on (spec 2026-04-24 design3 4.3)
     };
 
     // feature_flags bit = enum value; magic_enum's default reflection range is
@@ -125,6 +130,11 @@ public:
 
 private:
     std::bitset<magic_enum::enum_count<Flag>()> m_flags;
+    // Activation block per flag, recorded only by the readFromStorage paths (spec 5.6):
+    // the shouldBuildMPT decision (PR-17) needs the block a flag activated AT, which the
+    // bitset alone cannot answer. A flag enabled via bare set() has no activation context
+    // and is deliberately absent here.
+    std::map<Flag, protocol::BlockNumber> m_activationBlocks;
 
 public:
     static Flag string2Flag(std::string_view str);
@@ -145,6 +155,23 @@ public:
     void set(Flag flag);
 
     void set(std::string_view flag) { set(string2Flag(flag)); }
+
+    // The block number @p flag activated at, or -1 when unknown — i.e. the flag was never
+    // loaded through a readFromStorage path (bare set() records nothing). Callers deciding
+    // on activation-block semantics must check get(flag) first: an enabled-but-unrecorded
+    // flag also reports -1.
+    protocol::BlockNumber activationBlockOf(Flag flag) const noexcept
+    {
+        auto it = m_activationBlocks.find(flag);
+        return it == m_activationBlocks.end() ? -1 : it->second;
+    }
+
+    // Record @p flag's activation block. Public so the free-function readFromStorage
+    // overload (FeaturesStorage.h) can write it without friendship.
+    void setActivationBlock(Flag flag, protocol::BlockNumber enableNumber)
+    {
+        m_activationBlocks[flag] = enableNumber;
+    }
 
 
     void setToShardingDefault(protocol::BlockVersion version);
