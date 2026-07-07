@@ -19,7 +19,7 @@ namespace bcos::storage2::rocksdb
 
 template <class ResolverType, class Item>
 concept Resolver = requires(ResolverType&& resolver) {
-    { resolver.encode(std::declval<Item>(), std::declval<void(*)(bytesConstRef)>()) };
+    { resolver.encode(std::declval<Item>(), std::declval<void (*)(bytesConstRef)>()) };
     { resolver.decode(std::string_view{}) } -> std::convertible_to<Item>;
 };
 
@@ -165,20 +165,16 @@ public:
     task::AwaitableValue<void> writeSome(::ranges::input_range auto keyValues)
     {
         ::rocksdb::WriteBatch writeBatch;
-        std::string keyBuffer;
-        std::string valueBuffer;
         for (auto&& [key, value] : keyValues)
         {
-            m_keyResolver.encode(key, [&keyBuffer](bytesConstRef data) {
-                keyBuffer.assign(
-                    reinterpret_cast<const char*>(data.data()), data.size());
+            m_keyResolver.encode(key, [&](bytesConstRef keyData) {
+                m_valueResolver.encode(value, [&](bytesConstRef valueData) {
+                    writeBatch.Put(::rocksdb::Slice(reinterpret_cast<const char*>(keyData.data()),
+                                       keyData.size()),
+                        ::rocksdb::Slice(
+                            reinterpret_cast<const char*>(valueData.data()), valueData.size()));
+                });
             });
-            m_valueResolver.encode(value, [&valueBuffer](bytesConstRef data) {
-                valueBuffer.assign(
-                    reinterpret_cast<const char*>(data.data()), data.size());
-            });
-            writeBatch.Put(::rocksdb::Slice(keyBuffer.data(), keyBuffer.size()),
-                ::rocksdb::Slice(valueBuffer.data(), valueBuffer.size()));
         }
 
         ::rocksdb::WriteOptions options;
@@ -197,17 +193,21 @@ public:
         }
         else
         {
-            auto rocksDBKey = encodeToBuffer(m_keyResolver, key);
-            auto rocksDBValue = encodeToBuffer(m_valueResolver, value);
-
             ::rocksdb::WriteOptions options;
-            if (auto status = rocksDBRef().Put(options,
-                    ::rocksdb::Slice(::ranges::data(rocksDBKey), ::ranges::size(rocksDBKey)),
-                    ::rocksdb::Slice(::ranges::data(rocksDBValue), ::ranges::size(rocksDBValue)));
-                !status.ok())
-            {
-                BOOST_THROW_EXCEPTION(RocksDBException{} << errinfo_comment(status.ToString()));
-            }
+            m_keyResolver.encode(key, [&](bytesConstRef keyData) {
+                m_valueResolver.encode(value, [&](bytesConstRef valueData) {
+                    if (auto status = rocksDBRef().Put(options,
+                            ::rocksdb::Slice(
+                                reinterpret_cast<const char*>(keyData.data()), keyData.size()),
+                            ::rocksdb::Slice(
+                                reinterpret_cast<const char*>(valueData.data()), valueData.size()));
+                        !status.ok())
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            RocksDBException{} << errinfo_comment(status.ToString()));
+                    }
+                });
+            });
             return {};
         }
     }
@@ -220,16 +220,13 @@ public:
     task::AwaitableValue<void> removeSome(::ranges::input_range auto keys)
     {
         ::rocksdb::WriteBatch writeBatch;
-        std::string keyBuffer;
 
         for (auto const& key : keys)
         {
-            m_keyResolver.encode(key, [&keyBuffer](bytesConstRef data) {
-                keyBuffer.assign(
-                    reinterpret_cast<const char*>(data.data()), data.size());
+            m_keyResolver.encode(key, [&writeBatch](bytesConstRef data) {
+                writeBatch.Delete(
+                    ::rocksdb::Slice(reinterpret_cast<const char*>(data.data()), data.size()));
             });
-            writeBatch.Delete(
-                ::rocksdb::Slice(keyBuffer.data(), keyBuffer.size()));
         }
 
         ::rocksdb::WriteOptions options;
@@ -245,30 +242,27 @@ public:
     task::Task<void> writeToBatch(
         ::rocksdb::WriteBatch& writeBatch, auto& storage, auto&... fromStorage)
     {
-        std::string keyBuffer;
-        std::string valueBuffer;
         auto range = co_await storage2::range(storage);
         while (auto keyValue = co_await range.next())
         {
             auto&& [key, variantValue] = *keyValue;
-            m_keyResolver.encode(key, [&keyBuffer](bytesConstRef data) {
-                keyBuffer.assign(
-                    reinterpret_cast<const char*>(data.data()), data.size());
+            m_keyResolver.encode(key, [&](bytesConstRef keyData) {
+                if (auto* value = std::get_if<ValueType>(std::addressof(variantValue)))
+                {
+                    m_valueResolver.encode(*value, [&](bytesConstRef valueData) {
+                        writeBatch.Put(
+                            ::rocksdb::Slice(
+                                reinterpret_cast<const char*>(keyData.data()), keyData.size()),
+                            ::rocksdb::Slice(
+                                reinterpret_cast<const char*>(valueData.data()), valueData.size()));
+                    });
+                }
+                else
+                {
+                    writeBatch.Delete(::rocksdb::Slice(
+                        reinterpret_cast<const char*>(keyData.data()), keyData.size()));
+                }
             });
-            if (auto* value = std::get_if<ValueType>(std::addressof(variantValue)))
-            {
-                m_valueResolver.encode(*value, [&valueBuffer](bytesConstRef data) {
-                    valueBuffer.assign(
-                        reinterpret_cast<const char*>(data.data()), data.size());
-                });
-                writeBatch.Put(::rocksdb::Slice(keyBuffer.data(), keyBuffer.size()),
-                    ::rocksdb::Slice(valueBuffer.data(), valueBuffer.size()));
-            }
-            else
-            {
-                writeBatch.Delete(
-                    ::rocksdb::Slice(keyBuffer.data(), keyBuffer.size()));
-            }
         }
         co_await writeToBatch(writeBatch, fromStorage...);
     }
