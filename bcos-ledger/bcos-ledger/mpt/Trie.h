@@ -66,14 +66,14 @@ bcos::task::Task<TrieNode> trieLoadFromRef(Storage& storage, NodeRef const& ref)
 /// Resolve an ExtensionNode.child, which is kept as a raw RLP child reference: EITHER the 33-byte
 /// hash string (0xa0 followed by the 32-byte digest) OR the inline node's complete RLP encoding.
 template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<TrieNode> trieLoadFromRawRef(Storage& storage, bcos::bytes const& childRaw)
+bcos::task::Task<TrieNode> trieLoadFromRawRef(Storage& storage, bcos::bytesConstRef childRaw)
 {
     if (childRaw.size() == HASH_REF_ENCODED_SIZE && childRaw[0] == RLP_HASH_REF_PREFIX)
     {
-        bcos::h256 const childHash(childRaw.data() + 1, bcos::h256::SIZE);
+        bcos::h256 const childHash(childRaw.getCroppedData(1, bcos::h256::SIZE));
         co_return co_await trieLoadByHash(storage, childHash);
     }
-    co_return decodeNode(bcos::ref(childRaw));
+    co_return decodeNode(childRaw);
 }
 }  // namespace detail
 
@@ -135,7 +135,7 @@ public:
                     co_return std::nullopt;
                 }
                 pos += ext->sharedNibbles.size();
-                node = co_await detail::trieLoadFromRawRef(m_storage.get(), ext->child);
+                node = co_await detail::trieLoadFromRawRef(m_storage.get(), bcos::ref(ext->child));
                 continue;
             }
 

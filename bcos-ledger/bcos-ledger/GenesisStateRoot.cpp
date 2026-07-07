@@ -18,6 +18,7 @@
 #include "GenesisStateRoot.h"
 #include "mpt/Constants.h"
 #include "mpt/HashBuilder.h"
+#include "mpt/StorageValueCodec.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
@@ -35,22 +36,12 @@ bcos::h256 keccak(bcos::bytesConstRef data)
     return crypto::keccak256Hash(data);
 }
 
-// Trim leading zero bytes — Ethereum stores storage values as the minimal
-// big-endian byte string. Returns a view into `in`.
-bcos::bytesConstRef trimLeadingZeros(bcos::bytes const& in)
-{
-    size_t offset = 0;
-    while (offset < in.size() && in[offset] == 0)
-    {
-        ++offset;
-    }
-    return bcos::bytesConstRef(in.data() + offset, in.size() - offset);
-}
-
 // storageRoot over one account's storage slots, as a secure trie:
-//   key   = keccak256(slotKey32)
-//   value = RLP(value-with-leading-zero-bytes-trimmed)
+//   key   = keccak256(slot bytes as configured)
+//   value = RLP(value-with-leading-zero-bytes-trimmed)   (mpt::encodeStorageValue)
 // Zero-valued slots are skipped (no-op in Ethereum state). Empty -> emptyRoot.
+// The slot keccak stays over the raw configured bytes (not mpt::slotKeyHash, which
+// right-aligns into a fixed 32 bytes) to keep genesis hashing byte-identical.
 bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& storage)
 {
     storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> nodes;
@@ -59,16 +50,14 @@ bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& stor
     for (auto const& [slotHex, valueHex] : storage)
     {
         auto valueBytes = bcos::fromHex(valueHex);
-        auto trimmed = trimLeadingZeros(valueBytes);
-        if (trimmed.size() == 0)
+        auto rlpValue = mpt::encodeStorageValue(bcos::ref(valueBytes));
+        if (rlpValue.empty())
         {
             continue;  // zero value: not part of the storage trie
         }
         anySlot = true;
         auto slotBytes = bcos::fromHex(slotHex);
         auto slotKeyHash = keccak(bcos::bytesConstRef(slotBytes.data(), slotBytes.size()));
-        bcos::bytes rlpValue;
-        codec::rlp::encode(rlpValue, trimmed);
         co_await builder.put(slotKeyHash, std::move(rlpValue));
     }
     if (!anySlot)

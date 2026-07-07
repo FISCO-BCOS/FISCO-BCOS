@@ -19,13 +19,13 @@
 #pragma once
 
 #include "Constants.h"
-#include "Errors.h"
-#include "TrieNode.h"
+#include "TrieMerge.h"
+// Named directly for the m_hasher member (also reachable via TrieMerge.h — keep explicit).
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <boost/throw_exception.hpp>
 #include <functional>
 #include <map>
 #include <optional>
@@ -71,13 +71,23 @@ TrieBuildResult computeTrieRootFromSorted(
 /// nodes never carry a value here. Because 32-byte lexicographic order equals 64-nibble order,
 /// the std::map of changes already yields paths in canonical sorted order.
 ///
-/// Templated on @p Storage — any type satisfying storage2::WritableStorage<h256, bytes>. commit()
-/// flushes each produced node into that storage via storage2::writeOne; the storage layer (cache,
-/// backing store, or a layered stack) owns persistence and cache policy.
+/// Templated on @p Storage — any type satisfying storage2::ReadWriteStorage<h256, bytes>:
+/// commit() reads prior-version nodes through it for the incremental path and flushes every
+/// produced node back via storage2::writeSome; the storage layer (cache, backing store, or a
+/// layered stack) owns persistence and cache policy.
 ///
-/// SCOPE: only the from-empty build is implemented (m_priorRoot == emptyRootHash()). Incremental
-/// rebuild on a non-empty prior root throws MPTInvariantViolation and is deferred to M4 (PR-10).
-template <bcos::storage2::WritableStorage<bcos::h256, bcos::bytes> Storage>
+/// Two build paths, selected by the prior root:
+///  - m_priorRoot == emptyRootHash(): from-empty build over the stateless computeTrieRoot core.
+///  - otherwise: path-level incremental rebuild via mergeTrie() (spec §5.3 path 1) — only nodes
+///    on changed key paths are read; untouched subtrees are re-referenced by hash, unread.
+///
+/// @tparam HasherT the node-hash function (Hasher concept), threaded down into mergeTrie's emit
+/// phase and into the emptyRootHash<HasherT>() sentinel; keccak256 by default, SM3 for guomi
+/// deployments. NOTE: the stateless from-empty core (computeTrieRoot) is still keccak-pinned —
+/// a non-keccak instantiation is only correct on the incremental path until that core is
+/// parameterized too.
+template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class HashBuilder
 {
 public:
@@ -91,22 +101,25 @@ public:
         co_return;
     }
 
-    /// Records a key deletion (no-op from an empty trie).
+    /// Records a key deletion (a no-op when the key is absent from the prior trie).
     bcos::task::Task<void> remove(bcos::h256 const& keyHash)
     {
         m_changes[keyHash] = std::nullopt;
         co_return;
     }
 
-    /// Builds the canonical trie from the accumulated changes and returns the 32-byte root.
-    /// @throws MPTInvariantViolation when m_priorRoot != emptyRootHash() (M4 functionality).
+    /// Builds the canonical trie from the accumulated changes and returns the 32-byte root:
+    /// from-empty via the stateless core, incremental via mergeTrie() (reads prior nodes from
+    /// the storage; a missing referenced node throws MPTInvariantViolation).
     bcos::task::Task<bcos::h256> commit()
     {
-        if (m_priorRoot != emptyRootHash())
+        if (m_priorRoot != emptyRootHash<HasherT>())
         {
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                      "HashBuilder incremental rebuild on non-empty root is "
-                                      "implemented in M4 (PR-10)"));
+            auto merged = co_await mergeTrie(m_storage.get(), m_priorRoot, m_changes, m_hasher);
+            m_newNodes = std::move(merged.newNodes);
+            m_obsoleted = std::move(merged.obsoletedNodes);
+            co_await flushNewNodes();
+            co_return merged.root;
         }
 
         // Resolve deletes (no-op from an empty trie); m_changes is sorted, so survivors stay
@@ -125,18 +138,7 @@ public:
         auto result = computeTrieRootFromSorted(survivors);
         m_newNodes = std::move(result.newNodes);
 
-        // Flush the new nodes into the storage in one batched writeSome — a single storage-layer
-        // round-trip instead of one per node (a real win for a RocksDB-backed store). m_newNodes is
-        // retained for drainNewNodes(), so the batch copies the entries; for a from-empty build the
-        // node set is bounded.
-        std::vector<std::tuple<bcos::h256, bcos::bytes>> batch;
-        batch.reserve(m_newNodes.size());
-        for (auto const& [hash, raw] : m_newNodes)
-        {
-            batch.emplace_back(hash, raw);
-        }
-        co_await bcos::storage2::writeSome(m_storage.get(), std::move(batch));
-
+        co_await flushNewNodes();
         co_return result.root;
     }
 
@@ -150,8 +152,27 @@ public:
     std::unordered_set<bcos::h256> drainObsoletedNodes() { return std::exchange(m_obsoleted, {}); }
 
 private:
+    /// Flush m_newNodes into the storage in one batched writeSome — a single storage-layer
+    /// round-trip instead of one per node (a real win for a RocksDB-backed store). m_newNodes is
+    /// retained for drainNewNodes(), so the batch copies the entries.
+    bcos::task::Task<void> flushNewNodes()
+    {
+        std::vector<std::tuple<bcos::h256, bcos::bytes>> batch;
+        batch.reserve(m_newNodes.size());
+        for (auto const& [hash, raw] : m_newNodes)
+        {
+            batch.emplace_back(hash, raw);
+        }
+        co_await bcos::storage2::writeSome(m_storage.get(), std::move(batch));
+    }
+
     std::reference_wrapper<Storage> m_storage;
     bcos::h256 m_priorRoot;
+    /// One hasher context per builder, injected down into mergeTrie's emit phase and reused for
+    /// every node hashed by this builder (single-threaded, like the builder itself). The
+    /// from-empty path does not use it: the stateless computeTrieRoot core owns its hasher so
+    /// independent inputs can build concurrently.
+    HasherT m_hasher;
     /// key → value, or nullopt for a recorded delete. Sorted by 32-byte key == 64-nibble path.
     std::map<bcos::h256, std::optional<bcos::bytes>> m_changes;
     std::unordered_map<bcos::h256, bcos::bytes> m_newNodes;
