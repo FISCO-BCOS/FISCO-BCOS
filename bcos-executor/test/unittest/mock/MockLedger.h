@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MockBlock.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
@@ -162,7 +163,8 @@ public:
                     [&promise](auto&& e, std::optional<storage::Entry> entry) {
                         promise.set_value(entry.value());
                     });
-                auto entry = promise.get_future().get().getObject<ledger::SystemConfigEntry>();
+                auto rawEntry = promise.get_future().get();
+                auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(rawEntry.get());
                 _onGetConfig(nullptr, std::get<0>(entry), std::get<1>(entry));
                 return;
             }

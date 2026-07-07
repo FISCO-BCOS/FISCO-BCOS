@@ -305,7 +305,7 @@ void TableManagerPrecompiled::openTable(
     {
         // file exists, try to get type
         auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
-        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        if (typeEntry && typeEntry->get() == FS_TYPE_LINK)
         {
             // if link
             auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);

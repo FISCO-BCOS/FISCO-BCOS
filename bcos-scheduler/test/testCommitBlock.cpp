@@ -162,7 +162,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     auto table = prom.get_future().get();
     auto entry = table.getRow(SYS_KEY_CURRENT_NUMBER);
     BOOST_CHECK_EQUAL(entry.has_value(), true);
-    auto blockNumber = entry->getField("value");
+    auto blockNumber = entry->get();
     BOOST_CHECK_EQUAL(blockNumber, "100");
 }
 

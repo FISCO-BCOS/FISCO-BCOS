@@ -22,6 +22,7 @@
  */
 
 #include "bcos-ledger/Ledger.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "../../mock/MockKeyFactor.h"
 #include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
@@ -585,7 +586,7 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     m_storage->asyncGetRow(
         tool::FS_ROOT, tool::FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
             std::map<std::string, std::string> bfsInfos;
-            auto&& out = asBytes(std::string(_entry->getField(0)));
+            auto&& out = asBytes(std::string(_entry->get()));
             codec::scale::decode(bfsInfos, gsl::make_span(out));
             for (const auto& item : v)
             {
@@ -707,7 +708,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromBinary);
+                std::string(hashEntry->get()), bcos::crypto::HashType::FromBinary);
 
             Entry numberEntry;
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER,
@@ -1341,12 +1342,12 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    auto [txCountLimit, enableNum] = oldEntry->getObject<SystemConfigEntry>();
+    auto [txCountLimit, enableNum] = bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
     BOOST_CHECK_EQUAL(txCountLimit, "1000");
     BOOST_CHECK_EQUAL(enableNum, 0);
 
     Entry newEntry = table.newEntry();
-    newEntry.setObject(SystemConfigEntry{"2000", 5});
+    newEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"2000", 5}));
 
     table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 
@@ -1440,22 +1441,22 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         SystemConfigEntry config;
 
         config = {"12", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
 
         config = {"100", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD}, value);
 
         config = {"200", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_GAS_LIMIT}, value);
 
         config = {"3.8.1", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION}, value);
 
@@ -1468,12 +1469,12 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         // co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
 
         config = {"1", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_SWITCH}, value);
 
         config = {"12345", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
 
@@ -1645,8 +1646,7 @@ BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
                           magic_enum::enum_name(ledger::SystemConfig::executor_version)));
         BOOST_REQUIRE(value);
 
-        ledger::SystemConfigEntry entry;
-        value->getObject(entry);
+        auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(value->get());
         using namespace std::string_view_literals;
         BOOST_CHECK_EQUAL(std::get<0>(entry), "10086"sv);
     }());

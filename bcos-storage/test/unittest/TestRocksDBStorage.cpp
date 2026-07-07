@@ -163,7 +163,7 @@ struct TestRocksDBStorageFixture
                         BOOST_CHECK_EQUAL(entries.size(), tableEntries);
                         for (size_t i = 0; i < tableEntries; ++i)
                         {
-                            BOOST_CHECK_EQUAL(entries[i]->getField(0), "value_delete");
+                            BOOST_CHECK_EQUAL(entries[i]->get(), "value_delete");
                         }
                     });
             });
@@ -424,13 +424,13 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!abc" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!abc" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -466,7 +466,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table1Keys[i][3]);
                     }
                 });
@@ -489,7 +489,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!abc") + table2Keys[i][3]);
                     }
                 });
@@ -647,7 +647,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
             state->asyncGetRow(
                 "test_table1", key, [&num](Error::UniquePtr error, std::optional<Entry> entry) {
                     BOOST_CHECK(!error);
-                    num = boost::lexical_cast<size_t>(entry->getField(0));
+                    num = boost::lexical_cast<size_t>(entry->get());
                 });
 
             BOOST_CHECK_EQUAL(num, i);
@@ -671,7 +671,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
                 auto [it, inserted] = keySet->emplace(key);
                 boost::ignore_unused(it);
                 BOOST_CHECK(inserted);
-                auto num = boost::lexical_cast<size_t>(entry.getField(0));
+                auto num = boost::lexical_cast<size_t>(entry.get());
                 BOOST_CHECK_EQUAL(i + 100, num);
             });
             return true;

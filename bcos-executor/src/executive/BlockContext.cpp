@@ -25,6 +25,7 @@
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-task/Wait.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
@@ -91,7 +92,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             auto entry = table->getRow(key);
             if (entry)
             {
-                auto [value, enableNumber] = entry->getObject<ledger::SystemConfigEntry>();
+                auto [value, enableNumber] = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
                 if (current.number() >= enableNumber)
                 {
                     m_features.set(key);

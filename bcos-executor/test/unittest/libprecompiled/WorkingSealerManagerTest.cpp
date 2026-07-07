@@ -1,4 +1,5 @@
 #include "bcos-crypto/interfaces/crypto/Hash.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-crypto/signature/key/KeyImpl.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
@@ -65,7 +66,7 @@ BOOST_AUTO_TEST_CASE(testRotate)
         // Should rotate
         storage::Entry notifyRotateEntry;
         ledger::SystemConfigEntry systemConfigEntry{"1", 0};
-        notifyRotateEntry.setObject(systemConfigEntry);
+        notifyRotateEntry.set(bcos::storage::serialize::encode(systemConfigEntry));
         co_await storage2::writeOne(storage,
             executor_v1::StateKey{
                 ledger::SYS_CONFIG, ledger::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE},

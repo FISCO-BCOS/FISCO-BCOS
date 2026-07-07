@@ -93,7 +93,7 @@ std::string HostContext::get(const std::string_view& _key)
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        return std::string(entry->getField(0));
+        return std::string(entry->get());
     }
     return {};
 }
@@ -534,7 +534,7 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
         {
             // set abi in abi table
             auto codeEntry = m_executive->storage().getRow(m_tableName, ACCOUNT_CODE_HASH);
-            auto codeHash = codeEntry->getField(0);
+            auto codeHash = codeEntry->get();
 
             if (c_fileLogLevel <= TRACE) [[unlikely]]
             {
@@ -660,7 +660,7 @@ evmc_bytes32 HostContext::store(const evmc_bytes32* key)
     auto entry = m_executive->storage().getRow(m_tableName, keyView);
     if (entry)
     {
-        auto field = entry->getField(0);
+        auto field = entry->get();
         std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
     }
     else
@@ -690,7 +690,7 @@ evmc_bytes32 HostContext::getTransientStorage(const evmc_bytes32* key)
     auto entry = readAccessor.value()->getRow(m_tableName, keyView);
     if (!entry.first && entry.second.has_value())
     {
-        auto field = entry.second->getField(0);
+        auto field = entry.second->get();
         std::uninitialized_copy_n(field.data(), sizeof(result), result.bytes);
     }
     else

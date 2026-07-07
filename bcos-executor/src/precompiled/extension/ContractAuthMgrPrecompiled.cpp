@@ -229,7 +229,7 @@ void ContractAuthMgrPrecompiled::getAdmin(
                                << LOG_KV("path", path);
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("Contract Admin row not found."));
     }
-    std::string adminStr = std::string(entry->getField(0));
+    std::string adminStr = std::string(entry->get());
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                            << LOG_DESC("getAdmin success") << LOG_KV("admin", adminStr);
     _callParameters->setExecResult(codec.encode(adminStr));
@@ -287,7 +287,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
         }
     }
     auto newEntry = table->newEntry();
-    newEntry.setField(SYS_VALUE, admin);
+    newEntry.set(admin);
     table->setRow(ADMIN_FIELD, std::move(newEntry));
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
@@ -341,7 +341,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
         return;
     }
 
-    std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
+    std::string authTypeStr = std::string(entry->get());
     std::map<bytes, uint8_t> methAuthTypeMap;
     if (!authTypeStr.empty())
     {
@@ -350,7 +350,7 @@ void ContractAuthMgrPrecompiled::setMethodAuthType(
     }
     // covered writing
     methAuthTypeMap[func] = type;
-    entry->setField(SYS_VALUE, asString(codec::scale::encode(methAuthTypeMap)));
+    entry->set(asString(codec::scale::encode(methAuthTypeMap)));
     table->setRow(METHOD_AUTH_TYPE, std::move(entry.value()));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
@@ -573,7 +573,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
                                << LOG_DESC("auth row not found, try to set new one")
                                << LOG_KV("path", path) << LOG_KV("Type", getTypeStr);
         entry = table->newEntry();
-        entry->setField(SYS_VALUE, "");
+        entry->set("");
     }
 
     bool access = _isClose ? (authType == (int)AuthType::BLACK_LIST_MODE) :
@@ -582,7 +582,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     auto userAuth = std::make_pair(account, access);
 
     MethodAuthMap authMap;
-    if (entry->getField(SYS_VALUE).empty())
+    if (entry->get().empty())
     {
         // first insert func
         authMap.insert({func, {std::move(userAuth)}});
@@ -591,7 +591,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
     {
         try
         {
-            auto&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
+            auto&& out = asBytes(std::string(entry->get()));
             codec::scale::decode(authMap, gsl::make_span(out));
             if (authMap.find(func) != authMap.end())
             {
@@ -611,7 +611,7 @@ void ContractAuthMgrPrecompiled::setMethodAuth(
             return;
         }
     }
-    entry->setField(SYS_VALUE, asString(codec::scale::encode(authMap)));
+    entry->set(asString(codec::scale::encode(authMap)));
     table->setRow(getTypeStr, std::move(entry.value()));
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
@@ -622,7 +622,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
 {
     auto table = _executive->storage().openTable(_path);
     if (!table || !table->getRow(METHOD_AUTH_TYPE) ||
-        table->getRow(METHOD_AUTH_TYPE)->getField(SYS_VALUE).empty()) [[unlikely]]
+        table->getRow(METHOD_AUTH_TYPE)->get().empty()) [[unlikely]]
     {
         PRECOMPILED_LOG(TRACE)
             << LOG_BADGE("ContractAuthMgrPrecompiled")
@@ -630,7 +630,7 @@ int32_t ContractAuthMgrPrecompiled::getMethodAuthType(
         return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
     }
     auto entry = table->getRow(METHOD_AUTH_TYPE);
-    std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
+    std::string authTypeStr = std::string(entry->get());
     std::map<bytes, uint8_t> authTypeMap;
     try
     {
@@ -668,14 +668,14 @@ MethodAuthMap ContractAuthMgrPrecompiled::getMethodAuth(
 
     auto entry = table->getRow(getTypeStr);
     MethodAuthMap authMap = {};
-    if (!entry || entry->getField(SYS_VALUE).empty())
+    if (!entry || entry->get().empty())
     {
         PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthMgrPrecompiled")
                                << LOG_DESC("auth row not found, no method set acl")
                                << LOG_KV("path", path) << LOG_KV("authType", getTypeStr);
         return authMap;
     }
-    bytes&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
+    bytes&& out = asBytes(std::string(entry->get()));
     codec::scale::decode(authMap, gsl::make_span(out));
     return authMap;
 }

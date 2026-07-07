@@ -1743,7 +1743,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                         continue;
                                     }
 
-                                    auto codeHash = entry->getField(0);
+                                    auto codeHash = entry->get();
 
                                     // get abi according to codeHash
                                     auto abiTable =
@@ -1765,14 +1765,14 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                         }
                                     }
                                     tmpEntry = std::move(*abiEntry);
-                                    abiStr = tmpEntry.getField(0);
+                                    abiStr = tmpEntry.get();
                                 }
                                 else
                                 {
                                     // old logic
                                     auto entry = table->getRow(ACCOUNT_ABI);
                                     tmpEntry = std::move(*entry);
-                                    abiStr = tmpEntry.getField(0);
+                                    abiStr = tmpEntry.get();
                                 }
                                 bool isSmCrypto =
                                     m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash;
@@ -2152,7 +2152,7 @@ void TransactionExecutor::getCode(
                     return;
                 }
 
-                auto code = entry->getField(0);
+                auto code = entry->get();
                 EXECUTOR_NAME_LOG(INFO) << "Get code success" << LOG_KV("code size", code.size());
 
                 auto codeBytes = bcos::bytes(code.begin(), code.end());
@@ -2195,7 +2195,7 @@ void TransactionExecutor::getCode(
                     return;
                 }
 
-                auto code = entry->getField(0);
+                auto code = entry->get();
                 if ((features.get(ledger::Features::Flag::bugfix_eoa_as_contract) &&
                         bcos::precompiled::isDynamicPrecompiledAccountCode(code)) ||
                     (features.get(ledger::Features::Flag::bugfix_eoa_match_failed) &&
@@ -2281,7 +2281,7 @@ void TransactionExecutor::getABI(
                     callback(nullptr, std::string());
                     return;
                 }
-                auto abi = entry->getField(0);
+                auto abi = entry->get();
                 EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
                 callback(nullptr, std::string(abi));
             });
@@ -2323,7 +2323,7 @@ void TransactionExecutor::getABI(
                     return;
                 }
 
-                auto abi = entry->getField(0);
+                auto abi = entry->get();
                 EXECUTOR_NAME_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
                 callback(nullptr, std::string(abi));
             });
@@ -3068,7 +3068,7 @@ std::string TransactionExecutor::getCodeHash(
                 codeHashPromise.set_value(std::string());
                 return;
             }
-            auto codeHash = std::string(entry->getField(0));
+            auto codeHash = std::string(entry->get());
             codeHashPromise.set_value(std::move(codeHash));
         });
     return codeHashPromise.get_future().get();

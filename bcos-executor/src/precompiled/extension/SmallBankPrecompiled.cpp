@@ -170,7 +170,7 @@ void SmallBankPrecompiled::updateBalanceCall(
 
         // user not exist, insert user into it.
         auto newEntry = table->newEntry();
-        newEntry.setField(SMALLBANK_TRANSFER_FIELD_BALANCE, amount.str());
+        newEntry.set(amount.str());
         // std::cout << "SmallBank  ---------- user message has insert tableName: " << m_tableName
         // << ", userName is" << user << ", balance is " << amount.str() << std::endl;
         table->setRow(user, newEntry);
@@ -238,7 +238,7 @@ void SmallBankPrecompiled::sendPaymentCall(
             break;
         }
 
-        fromUserBalance = u256(entry->getField(SMALLBANK_TRANSFER_FIELD_BALANCE));
+        fromUserBalance = u256(entry->get());
         if (fromUserBalance < amount)
         {
             strErrorMsg = "from user insufficient balance";
@@ -251,13 +251,13 @@ void SmallBankPrecompiled::sendPaymentCall(
         {
             // If to user not exist, add it first.
             auto newEntry = table->newEntry();
-            newEntry.setField(SMALLBANK_TRANSFER_FIELD_BALANCE, u256(0).str());
+            newEntry.set(u256(0).str());
             table->setRow(toUser, newEntry);
             toUserBalance = 0;
         }
         else
         {
-            toUserBalance = u256(entry->getField(SMALLBANK_TRANSFER_FIELD_BALANCE));
+            toUserBalance = u256(entry->get());
         }
 
         // overflow check
@@ -277,12 +277,12 @@ void SmallBankPrecompiled::sendPaymentCall(
         // toUserBalance is" << toUserBalance << ", newToUserBalance is "<< newToUserBalance <<
         // std::endl; update fromUser balance info.
         entry = table->newEntry();
-        entry->setField(SMALLBANK_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
+        entry->set(newFromUserBalance.str());
         table->setRow(fromUser, *entry);
 
         // update toUser balance info.
         entry = table->newEntry();
-        entry->setField(SMALLBANK_TRANSFER_FIELD_BALANCE, newToUserBalance.str());
+        entry->set(newToUserBalance.str());
         table->setRow(toUser, *entry);
         // end with success
         ret = 0;

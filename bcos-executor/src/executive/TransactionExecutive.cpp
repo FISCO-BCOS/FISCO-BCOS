@@ -494,7 +494,7 @@ crypto::HashType TransactionExecutive::getCodeHash(const std::string_view& contr
     auto entry = storage().getRow(contractTableName, ACCOUNT_CODE_HASH);
     if (entry)
     {
-        auto code = entry->getField(0);
+        auto code = entry->get();
         return crypto::HashType(code, crypto::HashType::StringDataType::FromBinary);
     }
 

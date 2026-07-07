@@ -7,21 +7,24 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <proxy/proxy.h>
-#include <boost/archive/basic_archive.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <optional>
-#include <type_traits>
 #include <range/v3/range/concepts.hpp>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <type_traits>
+#include <typeindex>
 
 namespace bcos::storage
 {
@@ -40,9 +43,6 @@ concept ByteBuffer = requires(const T& t) {
 template <typename T>
 constexpr bool IsByteBufferViewV = ::ranges::view_<std::remove_cvref_t<T>>;
 
-constexpr static int32_t ARCHIVE_FLAG =
-    boost::archive::no_header | boost::archive::no_codecvt | boost::archive::no_tracking;
-
 // ─── Status enum at namespace scope ────────────────────────────────
 // Defined before buffer models and facade so they can use it as a
 // non-type template parameter and convention return type.  Values MUST
@@ -56,41 +56,46 @@ enum EntryStatus : int8_t
     ENTRY_MODIFIED = 3,  // dirty() can use status
 };
 
-// ─── Proxy-based type-erased byte-buffer facade ────────────────────
-// Replaces the previous AnyHolder + AnyBufferVTableExt hand-rolled vtable
-// with proxy's facade-builder, which achieves the same zero-virtual-overhead
-// dispatch (data/size/status) through its own vtable mechanism.
+// ─── Proxy-based type-erased entry facade ──────────────────────────
+// Unified facade for both byte-buffer and typed models.
+// Byte-buffer models: data/size/status return buffer content; encodeTo
+//   returns a copy of raw bytes; getTypedPtr returns nullptr.
+// Typed models: data returns nullptr; encodeTo calls T::encode();
+//   getTypedPtr returns the concrete object pointer.
 
-// Maximum inline buffer size for the proxy's small-buffer optimization.
-// Must accommodate the largest buffer model (currently BufferModel<T> / SmallBuffer etc.).
 inline constexpr size_t MAX_PROXY_BUFFER_SIZE = 32;
 
 PRO_DEF_MEM_DISPATCH(MemData, data);
 PRO_DEF_MEM_DISPATCH(MemSize, size);
 PRO_DEF_MEM_DISPATCH(MemStatus, status);
+PRO_DEF_MEM_DISPATCH(MemEncode, encode);
+// TODO(#5312): MemEncode convention is fixed to std::function<void(bytesConstRef)>,
+// so every encodeToBytes() call constructs a std::function temporary.
+// Future work: template the sink to eliminate type-erasure overhead,
+// or add an owning std::string overload to decodeFromBytes for zero-copy.
+PRO_DEF_MEM_DISPATCH(MemGetTypedPtr, getTypedPtr);
+PRO_DEF_MEM_DISPATCH(MemTypeIndex, typeIndex);
 
-struct AnyBufferFacade
+struct AnyEntryFacade
   : pro::facade_builder ::add_convention<MemData, const char*() const noexcept>::add_convention<
         MemSize, size_t() const noexcept>::add_convention<MemStatus,
-        EntryStatus() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
+        EntryStatus() const noexcept>::add_convention<MemEncode,
+        void(std::function<void(bytesConstRef)>) const>::add_convention<MemGetTypedPtr,
+        const void*() const noexcept>::add_convention<MemTypeIndex,
+        std::type_index() const noexcept>::support_copy<pro::constraint_level::nontrivial>::
         support_relocation<pro::constraint_level::nothrow>::support_destruction<
             pro::constraint_level::nothrow>::restrict_layout<MAX_PROXY_BUFFER_SIZE, 8>::build
 {
 };
 
-// Buffer models no longer need a common base class — proxy dispatches
-// through the facade conventions above. Each model only needs data(),
-// size() and status() member functions with the signatures declared in
-// AnyBufferFacade.
-//
-// Every buffer model is templated on EntryStatus so the status is
-// encoded in the *type* rather than stored as a runtime field.  This
-// removes the 8-byte m_status member from Entry (reducing sizeof(Entry)
-// from 48 → 40).  Status transitions reconstruct the proxy with a
-// different template argument.
+// ─── Buffer models ─────────────────────────────────────────────────
+// Every model implements the full AnyEntryFacade convention set.
+// Byte-buffer models: data/size/status return buffer content; encode
+//   feeds raw bytes to sink; getTypedPtr returns nullptr.
+// Typed models: data returns nullptr; encode calls T::encode() then
+//   feeds the result to sink; getTypedPtr returns the object pointer.
 
-// Stores ≤31 bytes inline.  Repurposes 1 byte for the length so the
-// total data-member footprint stays at 32 bytes (saving 8 B vs size_t).
+// Stores ≤31 bytes inline.
 template <EntryStatus S>
 class SmallBuffer
 {
@@ -104,12 +109,20 @@ public:
     {
         std::memcpy(m_buffer.data(), data, size);
     }
-    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
-    [[nodiscard]] size_t size() const noexcept { return m_size; }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    const char* data() const noexcept { return m_buffer.data(); }
+    size_t size() const noexcept { return m_size; }
+    EntryStatus status() const noexcept { return S; }
+
+    void encode(std::function<void(bytesConstRef)> sink) const
+    {
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
+    }
+
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// Stores exactly 32 bytes inline — no size field needed.
+// Stores exactly 32 bytes inline.
 template <EntryStatus S>
 class Fixed32Buffer
 {
@@ -119,13 +132,20 @@ class Fixed32Buffer
 public:
     Fixed32Buffer() = default;
     Fixed32Buffer(const char* data, size_t) { std::memcpy(m_buffer.data(), data, CAPACITY); }
-    [[nodiscard]] const char* data() const noexcept { return m_buffer.data(); }
-    [[nodiscard]] size_t size() const noexcept { return CAPACITY; }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+    const char* data() const noexcept { return m_buffer.data(); }
+    size_t size() const noexcept { return CAPACITY; }
+    EntryStatus status() const noexcept { return S; }
+
+    void encode(std::function<void(bytesConstRef)> sink) const
+    {
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
+    }
+
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// Adapts any ByteBuffer-conforming type T (std::string, std::vector<char>,
-// std::array<char,N>, etc.). Owns the value by move/copy.
+// Adapts any ByteBuffer-conforming type T.
 template <ByteBuffer T, EntryStatus S>
     requires(sizeof(T) <= MAX_PROXY_BUFFER_SIZE)
 class BufferModel
@@ -134,16 +154,20 @@ class BufferModel
 
 public:
     explicit BufferModel(T value) : m_value(std::move(value)) {}
-    [[nodiscard]] const char* data() const noexcept
+    const char* data() const noexcept { return reinterpret_cast<const char*>(m_value.data()); }
+    size_t size() const noexcept { return m_value.size(); }
+    EntryStatus status() const noexcept { return S; }
+
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
-        return reinterpret_cast<const char*>(m_value.data());
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
     }
-    [[nodiscard]] size_t size() const noexcept { return m_value.size(); }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// Adapts a shared_ptr-wrapped ByteBuffer type. Shares ownership of the
-// underlying buffer — no copy on clone().
+// Adapts a shared_ptr-wrapped ByteBuffer type.
 template <ByteBuffer T, EntryStatus S>
 class SharedBufferModel
 {
@@ -151,30 +175,103 @@ class SharedBufferModel
 
 public:
     explicit SharedBufferModel(std::shared_ptr<T> ptr) : m_ptr(std::move(ptr)) {}
-    [[nodiscard]] const char* data() const noexcept
+    const char* data() const noexcept { return reinterpret_cast<const char*>(m_ptr->data()); }
+    size_t size() const noexcept { return m_ptr->size(); }
+    EntryStatus status() const noexcept { return S; }
+
+    void encode(std::function<void(bytesConstRef)> sink) const
     {
-        return reinterpret_cast<const char*>(m_ptr->data());
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(data()), size()));
     }
-    [[nodiscard]] size_t size() const noexcept { return m_ptr->size(); }
-    [[nodiscard]] EntryStatus status() const noexcept { return S; }
+
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
 };
 
-// ─── Deleted sentinel model ────────────────────────────────────────
-// Encodes the DELETED status purely as a type tag — no data is stored.
-// This avoids the value copy/move that the old setStatus(DELETED) path
-// incurred.  The proxy still satisfies has_value()==true, but data()
-// returns a pointer to an empty string and size() returns 0, so the
-// observable behaviour is identical to the previous DELETED state.
+// Deleted sentinel model.
 class DeletedModel
 {
 public:
-    [[nodiscard]] const char* data() const noexcept
+    const char* data() const noexcept
     {
         static constexpr const char* empty = "";
         return empty;
     }
-    [[nodiscard]] size_t size() const noexcept { return 0; }
-    [[nodiscard]] EntryStatus status() const noexcept { return ENTRY_DELETED; }
+    size_t size() const noexcept { return 0; }
+    EntryStatus status() const noexcept { return ENTRY_DELETED; }
+
+    void encode(std::function<void(bytesConstRef)>) const {}
+
+    std::type_index typeIndex() const noexcept { return typeid(void); }
+    const void* getTypedPtr() const noexcept { return nullptr; }
+};
+
+// ─── tag_invoke infrastructure ─────────────────────────────────────
+// ADL anchor declared in bcos::storage.  Users must overload tag_invoke
+// in their own namespaces to provide encode/decode for their types.
+void tag_invoke();  // not defined — poison pill to prevent unqualified calls
+
+// ─── Encode customization point object ────────────────────────────
+// Requires: tag_invoke(encode_t, const T&, Sink) where Sink is callable
+// with bytesConstRef, to be defined in T's associated namespace.
+struct encode_t
+{
+    template <typename T, typename Sink>
+    void operator()(const T& v, Sink&& sink) const
+    {
+        tag_invoke(*this, v, std::forward<Sink>(sink));
+    }
+};
+inline constexpr encode_t encode{};
+
+// ─── Decode customization point object ────────────────────────────
+// Requires: tag_invoke(decode_t, std::type_identity<T>, bytesConstRef)
+// to be defined in T's associated namespace.
+struct decode_t
+{
+    template <typename T>
+    T operator()(std::type_identity<T>, bytesConstRef data) const
+    {
+        return tag_invoke(*this, std::type_identity<T>{}, data);
+    }
+};
+inline constexpr decode_t decode{};
+
+// ─── Encodable concept ─────────────────────────────────────────────
+// Satisfied when tag_invoke(encode_t, v, sink) and
+// tag_invoke(decode_t, type_identity<T>{}, bytes) are well-formed.
+template <typename T>
+concept Encodable = requires(const T& v, bytesConstRef bytes) {
+    {
+        encode(v, [](bytesConstRef) {})
+    } -> std::same_as<void>;
+    { decode(std::type_identity<T>{}, bytes) } -> std::same_as<T>;
+};
+
+// ─── Typed holder model ────────────────────────────────────────────
+// Stores T directly by value.  If sizeof(T) ≤ 32, the proxy keeps it
+// inline (SBO); larger types are heap-allocated transparently.
+template <Encodable T>
+class TypedHolderModel
+{
+    T m_value;
+
+public:
+    explicit TypedHolderModel(T value) : m_value(std::move(value)) {}
+    const char* data() const noexcept { return nullptr; }
+    size_t size() const noexcept { return 0; }
+    // TODO(#5312): Typed entries are always MODIFIED→dirty(), which collides
+    // with the commit path's hash-if-dirty logic.  Eventually degrade to byte
+    // semantics: hash() should hash encodeToBytes(), setStatus() should
+    // materialize encoded bytes before changing status.
+    EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
+
+    void encode(std::function<void(bytesConstRef)> sink) const
+    {
+        bcos::storage::encode(m_value, std::move(sink));
+    }
+    const void* getTypedPtr() const noexcept { return &m_value; }
+    std::type_index typeIndex() const noexcept { return typeid(T); }
 };
 
 class Entry
@@ -190,96 +287,80 @@ public:
     };
 
     constexpr static int32_t SMALL_SIZE = 31;
-    static constexpr size_t INLINE_BUFFER_SIZE = 40;
 
-    using Holder = pro::proxy<AnyBufferFacade>;
+    using Holder = pro::proxy<AnyEntryFacade>;
 
     Entry() = default;
     explicit Entry(auto input) { set(std::move(input)); }
 
-    Entry(const Entry& other);
-    Entry(Entry&&) noexcept = default;
-    bcos::storage::Entry& operator=(const Entry& other);
-    bcos::storage::Entry& operator=(Entry&&) noexcept = default;
+    Entry(const Entry& other) : m_buffer(other.m_buffer)
+    {
+        // Propagate TYPED state so copies of typed entries hit the fast path.
+        // LOCKED state is not copied — the source must not be under concurrent
+        // mutation during copy (that would be UB regardless).
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
+    }
+    Entry(Entry&& other) noexcept : m_buffer(std::move(other.m_buffer))
+    {
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
+    }
+    bcos::storage::Entry& operator=(const Entry& other)
+    {
+        m_buffer = other.m_buffer;
+        // Propagate TYPED state; if other is BYTE we keep current state.
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
+        return *this;
+    }
+    bcos::storage::Entry& operator=(Entry&& other) noexcept
+    {
+        m_buffer = std::move(other.m_buffer);
+        if (other.m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+            m_decodeState.store(DECODE_TYPED, std::memory_order_relaxed);
+        return *this;
+    }
     ~Entry() noexcept = default;
 
-    template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
-        int flag = ARCHIVE_FLAG>
-    void getObject(Out& out) const
-    {
-        auto view = get();
-        boost::iostreams::stream<boost::iostreams::array_source> inputStream(
-            view.data(), view.size());
-        InputArchive archive(inputStream, flag);
-        archive >> out;
-    }
-
-    template <typename Out, typename InputArchive = boost::archive::binary_iarchive,
-        int flag = ARCHIVE_FLAG>
-    Out getObject() const
-    {
-        Out out;
-        getObject<Out, InputArchive, flag>(out);
-        return out;
-    }
-
-    template <typename In, typename OutputArchive = boost::archive::binary_oarchive,
-        int flag = ARCHIVE_FLAG>
-    void setObject(const In& input)
-    {
-        std::string value;
-        boost::iostreams::stream<boost::iostreams::back_insert_device<std::string>> outputStream(
-            value);
-        OutputArchive archive(outputStream, flag);
-        archive << input;
-        outputStream.flush();
-        setField(0, std::move(value));
-    }
-
     // ── Accessors ──────────────────────────────────────────────────
+    // NOTE: get()/data()/size() do not participate in the decode state
+    // machine.  They read m_buffer directly without acquiring DECODE_LOCKED.
+    // Concurrent get() + getTyped() (slow path) on the same Entry is a data
+    // race — callers must ensure external synchronization or use getTyped()
+    // exclusively once typed access begins.
 
     std::string_view get() const&;
-
-    std::string_view getField(size_t index) const&;
-
     const char* data() const&;
     int32_t size() const;
 
     // ── Mutators ───────────────────────────────────────────────────
-
-    template <typename T>
-    void setField(size_t index, T&& input)
-    {
-        if (index > 0)
-        {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(-1, "Set field index: " + boost::lexical_cast<std::string>(index) +
-                                   " failed, index out of range"));
-        }
-        set(std::forward<T>(input));
-    }
 
     void set(ByteBuffer auto value)
     {
         using RawType = std::remove_cvref_t<decltype(value)>;
         if constexpr (IsByteBufferViewV<RawType>)
         {
-            // Non-owning views (string_view, span, etc.): deep-copy the content
             setImplCopy(reinterpret_cast<const char*>(value.data()), value.size());
         }
         else
         {
-            // Owning types (string, vector, etc.): store the value directly
-            auto sz = value.size();
-            if (sz <= SMALL_SIZE)
-                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                    SmallBuffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
-            else if (sz == static_cast<decltype(sz)>(SMALL_SIZE + 1))
-                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
-                    Fixed32Buffer<ENTRY_MODIFIED>{reinterpret_cast<const char*>(value.data()), sz});
+            auto valueSize = value.size();
+            if (valueSize <= SMALL_SIZE)
+            {
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<ENTRY_MODIFIED>{
+                    reinterpret_cast<const char*>(value.data()), valueSize});
+            }
+            else if (valueSize == static_cast<decltype(valueSize)>(SMALL_SIZE + 1))
+            {
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<ENTRY_MODIFIED>{
+                    reinterpret_cast<const char*>(value.data()), valueSize});
+            }
             else
-                m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+            {
+                m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
                     BufferModel<RawType, ENTRY_MODIFIED>{std::forward<decltype(value)>(value)});
+            }
         }
     }
 
@@ -293,10 +374,28 @@ public:
     template <ByteBuffer T>
     void set(std::shared_ptr<T> value)
     {
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             SharedBufferModel<T, ENTRY_MODIFIED>{std::move(value)});
     }
 
+    // ── Typed storage API ──────────────────────────────────────────
+    template <Encodable T>
+    void setTyped(T value);
+
+    template <Encodable T>
+    const T* getTyped() const;
+
+    template <Encodable T>
+    bool holdsType() const noexcept;
+
+    // Encode for persistence via the facade's encodeTo convention.
+    // TODO(#5312): encodeToBytes() materializes a std::string per call.
+    // For the RocksDB hot path this adds one copy vs the old zero-copy
+    // approach.  Future optimization: template the sink, or add a
+    // RocksDB-specific encode that writes directly to a Slice.
+    std::string encodeToBytes() const;
+    // Reconstruct from raw bytes (no type tag needed — caller knows the type).
+    static Entry decodeFromBytes(std::string_view bytes);
     // ── Status ─────────────────────────────────────────────────────
 
     Status status() const;
@@ -311,7 +410,7 @@ public:
             BOOST_THROW_EXCEPTION(
                 BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
         }
-        setField(0, std::move(*values.begin()));
+        set(std::move(*values.begin()));
     }
 
     bool valid() const;
@@ -329,36 +428,163 @@ public:
 private:
     void setImplCopy(const char* data, size_t sz);
 
-    // Helper: construct a buffer with the given status, preserving data.
-    // Used by setStatus() for NORMAL ↔ MODIFIED transitions.
     static Holder makeBuffer(EntryStatus es, const char* data, size_t sz);
 
     template <EntryStatus S>
     static Holder makeBufferImpl(const char* data, size_t sz)
     {
         if (sz <= SMALL_SIZE)
-            return pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<S>{data, sz});
-        else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-            return pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<S>{data, sz});
-        else
-            return pro::make_proxy_inplace<AnyBufferFacade>(
-                BufferModel<std::string, S>{std::string(data, sz)});
+        {
+            return pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<S>{data, sz});
+        }
+        if (sz == static_cast<size_t>(SMALL_SIZE + 1))
+        {
+            return pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<S>{data, sz});
+        }
+        return pro::make_proxy_inplace<AnyEntryFacade>(
+            BufferModel<std::string, S>{std::string(data, sz)});
     }
 
-    Holder m_buffer;
+    mutable Holder m_buffer;
 
-    // Unit-test accessor: exposes the internal proxy holder for inspection
-    // (buffer model type can be verified via decltype and size checks).
+    // ── Decode synchronization ────────────────────────────────────
+    // Tri-state atomic for lazy-decode in getTyped<T>().
+    //
+    // acquire-release ordering: store(DECODE_TYPED, release) pairs with
+    // load(acquire)==DECODE_TYPED in the fast path, guaranteeing visibility
+    // of m_buffer writes on weakly-ordered architectures.
+    static constexpr int DECODE_BYTE = 0;    // m_buffer holds a byte model (unlocked)
+    static constexpr int DECODE_LOCKED = 1;  // decode in progress — m_buffer being written
+    static constexpr int DECODE_TYPED =
+        2;  // m_buffer holds TypedHolderModel<T> (stable, immutable)
+    mutable std::atomic<int> m_decodeState{DECODE_BYTE};
+
+    // CAS-spin to acquire exclusive access to m_buffer.
+    // Returns the state that was replaced: DECODE_BYTE or DECODE_TYPED.
+    // Spins with backoff if another thread holds DECODE_LOCKED.
+    int acquireDecodeLock() const
+    {
+        int spins = 0;
+        while (true)
+        {
+            int expected = m_decodeState.load(std::memory_order_relaxed);
+            if (expected != DECODE_LOCKED)
+            {
+                if (m_decodeState.compare_exchange_weak(expected, DECODE_LOCKED,
+                        std::memory_order_acquire, std::memory_order_relaxed))
+                {
+                    return expected;
+                }
+                continue;
+            }
+            if (++spins > 64)
+            {
+                spins = 0;
+                std::this_thread::yield();
+            }
+        }
+    }
+
+    // Unit-test accessor.
     friend const Holder& entryTestHolder(const Entry& e) noexcept { return e.m_buffer; }
 };
 
-}  // namespace bcos::storage
+// ─── Template implementations ──────────────────────────────────────
 
-namespace boost::serialization
+template <Encodable T>
+void Entry::setTyped(T value)
 {
-template <typename Archive, typename... Types>
-void serialize(Archive& ar, std::tuple<Types...>& t, const unsigned int)
-{
-    std::apply([&](auto&... element) { ((ar & element), ...); }, t);
+    acquireDecodeLock();  // CAS BYTE→LOCKED or TYPED→LOCKED; spin-waits if LOCKED
+    m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(value)});
+    m_decodeState.store(DECODE_TYPED, std::memory_order_release);
 }
-}  // namespace boost::serialization
+
+template <Encodable T>
+const T* Entry::getTyped() const
+{
+    if (!m_buffer.has_value())
+    {
+        return nullptr;
+    }
+
+    // ── Fast path: already typed, lock-free ───────────────────────
+    // DECODE_TYPED: m_buffer is typed AND immutable (no concurrent
+    // writer will ever modify it).  acquire-load synchronizes with the
+    // release-store in setTyped() or the slow-path decode completion,
+    // guaranteeing full visibility of the TypedHolderModel<T> inline data.
+    if (m_decodeState.load(std::memory_order_acquire) == DECODE_TYPED)
+    {
+        auto* ptr = m_buffer->getTypedPtr();
+        if (ptr != nullptr && m_buffer->typeIndex() == std::type_index(typeid(T)))
+        {
+            return static_cast<const T*>(ptr);
+        }
+        // Rare edge case: DECODE_TYPED but getTypedPtr() is null.
+        // Can happen if set() overwrites a previously-typed entry
+        // (m_buffer now holds bytes, state is stale).  Fall through
+        // to the CAS loop which resets state→DECODE_BYTE and retries.
+    }
+
+    // ── Slow path: CAS-based synchronization ──────────────────────
+    int prevState = acquireDecodeLock();
+
+    // RAII guard: on exception (e.g. T ctor throws on corrupt data),
+    // reset state to DECODE_BYTE so future callers can retry.
+    struct StateGuard
+    {
+        std::atomic<int>* state;
+        bool dismissed = false;
+        ~StateGuard()
+        {
+            if (!dismissed) [[unlikely]]
+                state->store(DECODE_BYTE, std::memory_order_release);
+        }
+    } guard{std::addressof(m_decodeState)};
+
+    // Double-check m_buffer regardless of prevState.  Handles:
+    // - Another thread finished decoding while we waited (prevState==TYPED).
+    // - Copy/move of a typed entry where state is stale BYTE (prevState==BYTE
+    //   but m_buffer already holds TypedHolderModel).
+    if (const auto* ptr = m_buffer->getTypedPtr(); ptr != nullptr)
+    {
+        if (m_buffer->typeIndex() == std::type_index(typeid(T)))
+        {
+            guard.dismissed = true;
+            m_decodeState.store(DECODE_TYPED, std::memory_order_release);
+            return static_cast<const T*>(ptr);
+        }
+        // Typed, but wrong type — immutable.
+        guard.dismissed = true;
+        m_decodeState.store(DECODE_TYPED, std::memory_order_release);
+        return nullptr;
+    }
+
+    // Not typed — must be byte-buffer.  Perform the lazy decode.
+    auto view = get();
+    if (view.empty())
+    {
+        guard.dismissed = true;
+        m_decodeState.store(DECODE_BYTE, std::memory_order_release);
+        return nullptr;
+    }
+
+    auto obj = decode(std::type_identity<T>{},
+        bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
+    m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
+
+    guard.dismissed = true;
+    m_decodeState.store(DECODE_TYPED, std::memory_order_release);
+    return static_cast<const T*>(m_buffer->getTypedPtr());
+}
+
+template <Encodable T>
+bool Entry::holdsType() const noexcept
+{
+    if (!m_buffer.has_value())
+    {
+        return false;
+    }
+    return m_buffer->typeIndex() == std::type_index(typeid(T));
+}
+
+}  // namespace bcos::storage

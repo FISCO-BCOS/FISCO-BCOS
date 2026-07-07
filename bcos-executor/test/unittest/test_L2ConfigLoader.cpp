@@ -100,7 +100,7 @@ void putSlot(FakeSlotStorage& storage, std::string_view configKey,
     std::copy(low192.begin(), low192.end(), packed.begin() + 8);
 
     bcos::storage::Entry entry;
-    entry.setField(0, std::string(reinterpret_cast<char const*>(packed.data()), packed.size()));
+    entry.set(std::string(reinterpret_cast<char const*>(packed.data()), packed.size()));
 
     StateKey stateKey(systemConfigTable(),
         std::string_view(reinterpret_cast<char const*>(slot.data()), slot.size()));

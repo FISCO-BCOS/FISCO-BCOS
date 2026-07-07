@@ -729,7 +729,7 @@ protocol::BlockNumber Initializer::getCurrentBlockNumber(
                 try
                 {
                     auto blockNumber =
-                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->getField(0));
+                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
                     blockNumberFuture.set_value(blockNumber);
                 }
                 catch (boost::bad_lexical_cast& e)
@@ -737,7 +737,7 @@ protocol::BlockNumber Initializer::getCurrentBlockNumber(
                     // Ignore the exception
                     LEDGER_LOG(INFO)
                         << "Cast blockNumber failed, may be empty, set to default value 0"
-                        << LOG_KV("blockNumber str", entry->getField(0));
+                        << LOG_KV("blockNumber str", entry->get());
                     blockNumberFuture.set_value(0);
                 }
             }

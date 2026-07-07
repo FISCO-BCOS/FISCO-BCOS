@@ -20,6 +20,7 @@
 
 #pragma once
 #include "bcos-codec/scale/Scale.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
@@ -99,7 +100,7 @@ public:
         ledger->setBlockNumber(header->number() - 1);
         std::promise<bool> p;
         Entry authEntry;
-        authEntry.setObject(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0));
+        authEntry.set(bcos::storage::serialize::encode(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0)));
         storage->asyncSetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
             std::move(authEntry), [&p](auto&& e) { p.set_value(true); });
         p.get_future().get();
@@ -210,14 +211,14 @@ private:
                 });
             auto table = promise1.get_future().get();
             auto entry = table->newEntry();
-            entry.setObject(SystemConfigEntry{"3000000", 0});
+            entry.set(bcos::storage::serialize::encode(SystemConfigEntry{"3000000", 0}));
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
 
             // for each feature
             for (auto& feature : features)
             {
                 Entry featureEntry;
-                featureEntry.setObject(SystemConfigEntry{"1", 0});
+                featureEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"1", 0}));
                 table->setRow(feature, std::move(featureEntry));
             }
         }
