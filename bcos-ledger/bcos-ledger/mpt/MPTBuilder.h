@@ -23,6 +23,7 @@
 #include "AccountDelta.h"
 #include "Errors.h"
 #include "HashBuilder.h"
+#include "MPTDeltaLayer.h"
 #include "MPTReadView.h"
 #include "PreheatManifest.h"
 #include "StorageValueCodec.h"
@@ -43,21 +44,10 @@
 namespace bcos::ledger::mpt
 {
 
-/// One block's MPT build product: the new state root plus the node delta the commit path must
-/// persist alongside the flat state. The two node sets carry the same contract as
-/// HashBuilder::drainNewNodes()/drainObsoletedNodes(); PR-13's MPTDeltaLayer will absorb this
-/// shape (the card's forward-declared return type cannot be returned by value, so the struct
-/// lives here until then).
-struct MPTBuildOutput
-{
-    bcos::h256 stateRoot;
-    std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    std::unordered_set<bcos::h256> obsoletedNodes;
-    /// Accounts whose preheat manifest record was consumed by this build (first-touch path 2b).
-    /// The commit flow (PR-14b) deletes each record via PreheatManifest::remove in the same
-    /// batch that persists the block — a consumed root must not seed a second first-touch.
-    std::vector<bcos::Address> preheatManifestsToDelete;
-};
+/// The builder-side name for the block's node delta. The struct itself lives in
+/// MPTDeltaLayer.h — it is the contract with the commit flow / MultiLayerStorage (spec §5.7),
+/// not a builder detail; the alias keeps every existing buildAndCollect call site unchanged.
+using MPTBuildOutput = MPTDeltaLayer;
 
 /// An account's baseline nonce/balance/codeHash as stored in the flat KV, for first-touch
 /// fields the block did not update (a first-touch account has no parent MPT leaf to merge onto).
