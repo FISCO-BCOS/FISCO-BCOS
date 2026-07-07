@@ -760,7 +760,10 @@ BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)
     entry.setTyped(TestValueA{55, "world"});
 
     // Encode to bytes — should match what TestValueA::encode produces
-    auto bytes = entry.encodeToBytes();
+    std::string bytes;
+    entry.encode([&bytes](bytesConstRef data) {
+        bytes.append(reinterpret_cast<const char*>(data.data()), data.size());
+    });
     TestValueA expected{55, "world"};
     std::string expectedBytes;
     encode(expected, [&expectedBytes](bytesConstRef d) {
