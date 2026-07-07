@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @file MPTBuilder.h
- * @brief Commit-time MPT entry point — subsequent-touch and first-touch paths
- *        (spec §5.3 paths 1–2, §5.4, §5.11)
+ * @brief Commit-time MPT entry point — subsequent-touch, first-touch and tombstone paths
+ *        (spec §5.3, §5.4, §5.11)
  */
 #pragma once
 
@@ -91,9 +91,9 @@ struct MPTBuilderBackends
 /// baseline reads (parent account leaves, prior storage-trie nodes) and node flushes all go
 /// through @p Storage.
 ///
-/// SCOPE (M4.4): the subsequent-touch path (account already in the parent MPT) and the
-/// first-touch path (account absent from the parent MPT — bootstrap from the flat KV, or from
-/// a preheat-manifest hit). tombstone deltas throw MPTInvariantViolation until PR-12 lands.
+/// Covers all three delta shapes (spec §5.3): subsequent-touch (account already in the parent
+/// MPT), first-touch (absent from the parent MPT — bootstrap from the flat KV, or from a
+/// preheat-manifest hit) and tombstone (SELFDESTRUCT — the account leaf is removed).
 ///
 /// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
 /// slotKeyHash and both HashBuilder instantiations; keccak256 by default, SM3 for guomi
@@ -117,10 +117,9 @@ public:
     {}
 
     /// Apply every AccountDelta in @p input and return the new state root plus the node delta.
-    /// @throws MPTInvariantViolation on tombstone deltas (PR-12 scope), on a first-touch delta
-    ///         whose required backend callback is missing, on a subsequent-touch account
-    ///         missing from the parent state, and on a Deleted field state outside a tombstone
-    ///         (spec §5.4 treats that as an error).
+    /// @throws MPTInvariantViolation on a first-touch delta whose required backend callback is
+    ///         missing, on a subsequent-touch account missing from the parent state, and on a
+    ///         Deleted field state outside a tombstone (spec §5.4 treats that as an error).
     bcos::task::Task<MPTBuildOutput> buildAndCollect(MPTBuildInput const& input)
     {
         MPTBuildOutput output;
@@ -135,8 +134,19 @@ public:
             // delta carries both flags (spec §5.4 priority).
             if (delta.tombstone)
             {
-                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                          "MPTBuilder: tombstone path is PR-12 (M4.5) scope"));
+                // storageChanges/field states are ignored on a tombstone (classify already
+                // folded the account's fate). Record the prior storage root for future pathdb
+                // pruning — the full subtree walk is deferred to the pruning spec, the root
+                // hash is the ledger entry.
+                auto prior = co_await view.readAccount(addr);
+                if (prior && prior->storageRoot != emptyRootHash<HasherT>())
+                {
+                    output.obsoletedNodes.insert(prior->storageRoot);
+                }
+                // Absent prior account (the pathological tombstone+firstTouch input): removing
+                // an absent key is a no-op in HashBuilder — same net effect, no special case.
+                co_await accountBuilder.remove(accountKeyHash(addr));
+                continue;
             }
             if (delta.firstTouch)
             {
@@ -201,7 +211,11 @@ private:
                                           "MPTBuilder: first-touch needs flatSlotScanner"));
             }
             HashBuilder<Storage, HasherT> bootstrap(m_storage.get(), emptyRootHash<HasherT>());
-            for (auto& [slot, value] : co_await m_backends.flatSlotScanner(addr))
+            // Bind the awaited result to a local before iterating: iterating a co_await
+            // temporary directly is the same GCC template-coroutine hazard class as the member
+            // access noted in MPTReadView::hasAccount.
+            auto flatSlots = co_await m_backends.flatSlotScanner(addr);
+            for (auto& [slot, value] : flatSlots)
             {
                 auto encoded = encodeStorageValue(bcos::ref(value));
                 if (encoded.empty())

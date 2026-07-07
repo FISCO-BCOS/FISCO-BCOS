@@ -33,7 +33,6 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 #include <map>
 #include <optional>
@@ -344,16 +343,37 @@ BOOST_AUTO_TEST_CASE(PreheatManifestHitDoesNotCallScanner)
 BOOST_AUTO_TEST_CASE(TombstonePriorityOverFirstTouch)
 {
     NodeStorage storage;
-    MPTBuildInput input;
-    auto& delta = input.perAccount[makeAddress(0xA5)];
-    delta.tombstone = true;
-    delta.firstTouch = true;  // pathological input: tombstone must win (spec §5.4)
+    auto const addr = makeAddress(0xA5);
 
-    MPTBuilder builder(storage, emptyRootHash());
-    BOOST_CHECK_EXCEPTION(bcos::task::syncWait(builder.buildAndCollect(input)),
-        MPTInvariantViolation, [](MPTInvariantViolation const& e) {
-            return boost::diagnostic_information(e).find("PR-12") != std::string::npos;
-        });
+    // The account exists with storage, and a pathological delta carries both flags. Tombstone
+    // wins (spec §5.4): the leaf is removed and the first-touch machinery never runs.
+    HashBuilder storageTrie(storage, emptyRootHash());
+    bcos::task::syncWait(storageTrie.put(
+        slotKeyHash(slotKeyAt(0)), encodeStorageValue(bcos::ref(bcos::bytes{0x42}))));
+    Account account;
+    account.storageRoot = bcos::task::syncWait(storageTrie.commit());
+    HashBuilder stateTrie(storage, emptyRootHash());
+    bcos::task::syncWait(stateTrie.put(accountKeyHash(addr), account.encode()));
+    auto const parentRoot = bcos::task::syncWait(stateTrie.commit());
+
+    bool scannerCalled = false;
+    MPTBuilderBackends backends;
+    backends.flatSlotScanner = failingScanner(scannerCalled);
+
+    MPTBuildInput input;
+    auto& delta = input.perAccount[addr];
+    delta.tombstone = true;
+    delta.firstTouch = true;
+
+    MPTBuilder builder(storage, parentRoot, std::move(backends));
+    auto output = bcos::task::syncWait(builder.buildAndCollect(input));
+
+    BOOST_CHECK(!scannerCalled);
+    BOOST_CHECK(output.stateRoot == emptyRootHash());  // sole account gone
+    BOOST_CHECK(output.obsoletedNodes.contains(account.storageRoot));
+    MPTReadView<NodeStorage> view(storage, output.stateRoot);
+    auto gone = bcos::task::syncWait(view.readAccount(addr));
+    BOOST_CHECK(!gone.has_value());
 }
 
 BOOST_AUTO_TEST_CASE(FirstTouchWithoutScannerThrows)

@@ -237,22 +237,17 @@ BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
     BOOST_CHECK(output.stateRoot == computeTrieRoot(stateEntries).root);
 }
 
-BOOST_AUTO_TEST_CASE(FirstTouchAndTombstoneThrowUntilTheirPRs)
+BOOST_AUTO_TEST_CASE(FirstTouchWithoutBackendsThrows)
 {
     NodeStorage storage;
     auto const addr = makeAddress(0x01);
     auto const parentRoot = buildStateTrie(storage, {{addr, Account{}}});
-    MPTBuilder builder(storage, parentRoot);
+    MPTBuilder builder(storage, parentRoot);  // 2-arg ctor: no backends, no first-touch
 
     MPTBuildInput firstTouch;
     firstTouch.perAccount[addr].firstTouch = true;
     BOOST_CHECK_THROW(
         bcos::task::syncWait(builder.buildAndCollect(firstTouch)), MPTInvariantViolation);
-
-    MPTBuildInput tombstone;
-    tombstone.perAccount[addr].tombstone = true;
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(builder.buildAndCollect(tombstone)), MPTInvariantViolation);
 }
 
 BOOST_AUTO_TEST_CASE(DeletedFieldOutsideTombstoneThrows)
