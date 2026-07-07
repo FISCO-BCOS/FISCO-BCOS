@@ -20,13 +20,10 @@
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/Entry.h"
+#include "bcos-framework/storage/Serialize.h"
 #include "bcos-framework/storage2/MemoryStorage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
-// Entry::setObject/getObject serialize through boost archives; Entry.h only pulls the
-// basic_archive types, the concrete archives are the consumer's include.
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
 #include <magic_enum/magic_enum.hpp>
 
@@ -42,7 +39,7 @@ task::Task<void> writeFlagAt(
     ConfigStorage& storage, std::string_view flagName, protocol::BlockNumber enableNumber)
 {
     storage::Entry entry;
-    entry.setObject(SystemConfigEntry{std::string{"1"}, enableNumber});
+    entry.set(storage::serialize::encode(SystemConfigEntry{std::string{"1"}, enableNumber}));
     co_await storage2::writeOne(
         storage, executor_v1::StateKey(SYS_CONFIG, flagName), std::move(entry));
 }
