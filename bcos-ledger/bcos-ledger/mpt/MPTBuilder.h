@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file MPTBuilder.h
- * @brief Commit-time MPT entry point — subsequent-touch path (spec §5.3 path 1, §5.4)
+ * @brief Commit-time MPT entry point — subsequent-touch and first-touch paths
+ *        (spec §5.3 paths 1–2, §5.4, §5.11)
  */
 #pragma once
 
@@ -23,6 +24,7 @@
 #include "Errors.h"
 #include "HashBuilder.h"
 #include "MPTReadView.h"
+#include "PreheatManifest.h"
 #include "StorageValueCodec.h"
 // Named directly for the HasherT default template argument (also reachable transitively).
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -31,9 +33,12 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
+#include <functional>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -48,6 +53,37 @@ struct MPTBuildOutput
     bcos::h256 stateRoot;
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
     std::unordered_set<bcos::h256> obsoletedNodes;
+    /// Accounts whose preheat manifest record was consumed by this build (first-touch path 2b).
+    /// The commit flow (PR-14b) deletes each record via PreheatManifest::remove in the same
+    /// batch that persists the block — a consumed root must not seed a second first-touch.
+    std::vector<bcos::Address> preheatManifestsToDelete;
+};
+
+/// An account's baseline nonce/balance/codeHash as stored in the flat KV, for first-touch
+/// fields the block did not update (a first-touch account has no parent MPT leaf to merge onto).
+struct FlatAccountMeta
+{
+    bcos::u256 nonce{};
+    bcos::u256 balance{};
+    bcos::h256 codeHash{};
+};
+
+/// Injected flat-KV access the first-touch path needs (spec §5.3 path 2). All callbacks are
+/// optional: default-constructed backends keep MPTBuilder in subsequent-touch-only mode, and
+/// each callback is only required by the sub-path that actually consumes it.
+struct MPTBuilderBackends
+{
+    /// Enumerate ALL existing storage slots of an account from the flat KV:
+    /// (raw 32-byte slot key → raw stored value). Required on a manifest miss (path 2a).
+    std::function<bcos::task::Task<std::vector<std::pair<bcos::h256, bcos::bytes>>>(
+        bcos::Address const&)>
+        flatSlotScanner;
+    /// Baseline nonce/balance/codeHash from the flat KV. Required when a first-touch delta
+    /// leaves any of the three fields Unchanged.
+    std::function<bcos::task::Task<FlatAccountMeta>(bcos::Address const&)> flatAccountMeta;
+    /// Preheat manifest KV reader (PreheatManifest::read is called over it). Unset = no
+    /// manifest lookup; every first-touch takes the flat-scan path 2a.
+    PreheatManifest::BackendReader manifestReader;
 };
 
 /// Builds the post-block MPT from a classify()-produced MPTBuildInput on top of the parent
@@ -55,8 +91,9 @@ struct MPTBuildOutput
 /// baseline reads (parent account leaves, prior storage-trie nodes) and node flushes all go
 /// through @p Storage.
 ///
-/// SCOPE (M4.3): only the subsequent-touch path — the account already exists in the parent MPT.
-/// firstTouch and tombstone deltas throw MPTInvariantViolation until PR-11/PR-12 land.
+/// SCOPE (M4.4): the subsequent-touch path (account already in the parent MPT) and the
+/// first-touch path (account absent from the parent MPT — bootstrap from the flat KV, or from
+/// a preheat-manifest hit). tombstone deltas throw MPTInvariantViolation until PR-12 lands.
 ///
 /// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
 /// slotKeyHash and both HashBuilder instantiations; keccak256 by default, SM3 for guomi
@@ -73,10 +110,17 @@ public:
       : m_storage(storage), m_parentStateRoot(parentStateRoot)
     {}
 
+    /// As above, plus the flat-KV backends the first-touch path reads through. Without them
+    /// (the 2-arg ctor) any first-touch delta throws for lack of a scanner.
+    MPTBuilder(Storage& storage, bcos::h256 parentStateRoot, MPTBuilderBackends backends)
+      : m_storage(storage), m_parentStateRoot(parentStateRoot), m_backends(std::move(backends))
+    {}
+
     /// Apply every AccountDelta in @p input and return the new state root plus the node delta.
-    /// @throws MPTInvariantViolation on firstTouch/tombstone deltas (PR-11/12 scope), on a
-    ///         subsequent-touch account missing from the parent state, and on a Deleted field
-    ///         state outside a tombstone (spec §5.4 treats that as an error).
+    /// @throws MPTInvariantViolation on tombstone deltas (PR-12 scope), on a first-touch delta
+    ///         whose required backend callback is missing, on a subsequent-touch account
+    ///         missing from the parent state, and on a Deleted field state outside a tombstone
+    ///         (spec §5.4 treats that as an error).
     bcos::task::Task<MPTBuildOutput> buildAndCollect(MPTBuildInput const& input)
     {
         MPTBuildOutput output;
@@ -87,15 +131,17 @@ public:
 
         for (auto const& [addr, delta] : input.perAccount)
         {
-            if (delta.firstTouch)
-            {
-                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                          "MPTBuilder: first-touch path is PR-11 (M4.4) scope"));
-            }
+            // Tombstone before firstTouch: destruction wins over creation when a pathological
+            // delta carries both flags (spec §5.4 priority).
             if (delta.tombstone)
             {
                 BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
                                           "MPTBuilder: tombstone path is PR-12 (M4.5) scope"));
+            }
+            if (delta.firstTouch)
+            {
+                co_await buildFirstTouch(addr, delta, accountBuilder, output);
+                continue;
             }
 
             // Subsequent-touch baseline: the parent block's account leaf must exist —
@@ -124,6 +170,97 @@ public:
     }
 
 private:
+    /// The first-touch path (spec §5.3 path 2): the account has no parent-MPT leaf, so its
+    /// baseline storage trie comes from either a preheat-manifest hit (2b — the recorded root,
+    /// pre-built nodes already in storage) or a full flat-KV slot scan (2a — bootstrap from the
+    /// empty root). This block's slot changes then apply over that baseline, and account fields
+    /// the block left Unchanged come from the flat KV via flatAccountMeta.
+    bcos::task::Task<void> buildFirstTouch(bcos::Address const& addr, AccountDelta const& delta,
+        HashBuilder<Storage, HasherT>& accountBuilder, MPTBuildOutput& output)
+    {
+        auto baselineStorageRoot = emptyRootHash<HasherT>();
+        bool manifestHit = false;
+        if (m_backends.manifestReader)
+        {
+            auto preheated = co_await PreheatManifest::read(m_backends.manifestReader, addr);
+            if (preheated.has_value())
+            {
+                // Path 2b: the preheat run already built and flushed this account's storage
+                // trie; adopt its root and schedule the consumed record for deletion.
+                baselineStorageRoot = *preheated;
+                output.preheatManifestsToDelete.push_back(addr);
+                manifestHit = true;
+            }
+        }
+        if (!manifestHit)
+        {
+            // Path 2a: bootstrap the storage trie from every existing flat slot.
+            if (!m_backends.flatSlotScanner)
+            {
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                          "MPTBuilder: first-touch needs flatSlotScanner"));
+            }
+            HashBuilder<Storage, HasherT> bootstrap(m_storage.get(), emptyRootHash<HasherT>());
+            for (auto& [slot, value] : co_await m_backends.flatSlotScanner(addr))
+            {
+                auto encoded = encodeStorageValue(bcos::ref(value));
+                if (encoded.empty())
+                {
+                    continue;  // zero value: never part of the storage trie
+                }
+                co_await bootstrap.put(slotKeyHash(slot, m_hasher), std::move(encoded));
+            }
+            baselineStorageRoot = co_await bootstrap.commit();
+            mergeNodeDelta(bootstrap, output);
+        }
+
+        Account updated;  // default storageRoot/codeHash — a fresh EOA until proven otherwise
+        updated.storageRoot = co_await applyStorageChanges(baselineStorageRoot, delta, output);
+
+        // Fields the block left Unchanged have no parent leaf to fall back on: fetch the flat
+        // baseline, once, only when actually needed.
+        std::optional<FlatAccountMeta> flatMeta;
+        if (delta.nonceState == AccountDelta::FieldState::Unchanged ||
+            delta.balanceState == AccountDelta::FieldState::Unchanged ||
+            delta.codeHashState == AccountDelta::FieldState::Unchanged)
+        {
+            if (!m_backends.flatAccountMeta)
+            {
+                BOOST_THROW_EXCEPTION(
+                    MPTInvariantViolation{} << bcos::errinfo_comment(
+                        "MPTBuilder: first-touch with Unchanged fields needs flatAccountMeta"));
+            }
+            flatMeta = co_await m_backends.flatAccountMeta(addr);
+        }
+        FlatAccountMeta const meta = flatMeta.value_or(FlatAccountMeta{});
+        applyFirstTouchField(delta.nonceState, delta.nonce, meta.nonce, updated.nonce);
+        applyFirstTouchField(delta.balanceState, delta.balance, meta.balance, updated.balance);
+        applyFirstTouchField(delta.codeHashState, delta.codeHash, meta.codeHash, updated.codeHash);
+
+        co_await accountBuilder.put(accountKeyHash(addr), updated.encode());
+    }
+
+    /// First-touch counterpart of applyField(): Updated takes the delta value, Unchanged takes
+    /// the flat-KV baseline (only reachable with flatMeta fetched), Deleted outside a tombstone
+    /// throws — same rule as applyField.
+    template <typename Field>
+    static void applyFirstTouchField(AccountDelta::FieldState state, Field const& deltaValue,
+        Field const& flatValue, Field& field)
+    {
+        switch (state)
+        {
+        case AccountDelta::FieldState::Unchanged:
+            field = flatValue;
+            break;
+        case AccountDelta::FieldState::Updated:
+            field = deltaValue;
+            break;
+        case AccountDelta::FieldState::Deleted:
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                      "MPTBuilder: field Deleted outside a tombstone"));
+        }
+    }
+
     /// Overwrite @p field from @p value when the block updated it. A Deleted state outside a
     /// tombstone means classify() and the builder disagree about the account's fate — throw.
     template <typename Field>
@@ -186,6 +323,9 @@ private:
 
     std::reference_wrapper<Storage> m_storage;
     bcos::h256 m_parentStateRoot;
+    /// Flat-KV access for the first-touch path; default-constructed (all callbacks empty) for
+    /// subsequent-touch-only usage via the 2-arg ctor.
+    MPTBuilderBackends m_backends;
     /// One hash context per builder, reused for every slot-key transform of this block
     /// (slotKeyHash injection form). Single-threaded, like buildAndCollect itself.
     HasherT m_hasher;
