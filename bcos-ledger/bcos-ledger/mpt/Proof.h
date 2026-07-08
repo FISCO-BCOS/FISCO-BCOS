@@ -322,20 +322,25 @@ template <bcos::crypto::hasher::Hasher HasherT>
 std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
     std::span<bcos::bytes const> proofNodes, bcos::bytes const& path, HasherT& hasher)
 {
-    if (proofNodes.empty())
-    {
-        return std::nullopt;  // proving anything needs at least the root node
-    }
-    bcos::h256 expected = expectedRoot;
-    size_t idx = 0;                        // next proof item to consume
-    size_t pos = 0;                        // nibbles consumed so far
-    std::optional<bcos::bytes> concluded;  // set once the walk terminates
+    size_t idx = 0;  // next proof item to consume
+    size_t pos = 0;  // nibbles consumed so far
 
-    while (!concluded)
-    {
+    // A malformed node makes the chain invalid — never an escaping exception.
+    auto decodeChecked = [](bcos::bytesConstRef raw) -> std::optional<TrieNode> {
+        try
+        {
+            return decodeNode(raw);
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+    };
+    // Consume the next proof item; it must hash to the pending reference.
+    auto takeNode = [&](bcos::h256 const& expected) -> std::optional<TrieNode> {
         if (idx >= proofNodes.size())
         {
-            return std::nullopt;  // a hash ref is pending but the proof ran out of items
+            return std::nullopt;  // dangling ref: the proof ran out of items
         }
         bcos::h256 got;
         bcos::crypto::hasher::hash(hasher, bcos::ref(proofNodes[idx]), got);
@@ -343,110 +348,74 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
         {
             return std::nullopt;  // broken hash link
         }
-        TrieNode node;
-        try
+        return decodeChecked(bcos::ref(proofNodes[idx++]));
+    };
+    // Every terminal exit: the result only stands if the proof was consumed exactly
+    // (trailing items = padded proof, rejected).
+    auto finish = [&](bcos::bytes value) -> std::optional<bcos::bytes> {
+        if (idx != proofNodes.size())
         {
-            node = decodeNode(bcos::ref(proofNodes[idx]));
+            return std::nullopt;
         }
-        catch (...)
-        {
-            return std::nullopt;  // malformed node: invalid, never an escaping exception
-        }
-        ++idx;
+        return value;
+    };
 
-        // Descend through this proof item, expanding inline children embedded in it, until the
-        // walk terminates or reaches the next hash-referenced node.
-        bool needNextItem = false;
-        while (!needNextItem && !concluded)
-        {
-            if (std::holds_alternative<EmptyNode>(node))
-            {
-                concluded.emplace();  // dead end: exclusion
-                break;
-            }
-            if (auto const* leaf = std::get_if<LeafNode>(&node))
-            {
-                if (path.size() - pos == leaf->keyNibbles.size() &&
-                    std::equal(
-                        leaf->keyNibbles.begin(), leaf->keyNibbles.end(), path.begin() + pos))
-                {
-                    concluded = leaf->value;
-                }
-                else
-                {
-                    concluded.emplace();  // diverging leaf: exclusion
-                }
-                break;
-            }
-            if (auto const* ext = std::get_if<ExtensionNode>(&node))
-            {
-                if (path.size() - pos < ext->sharedNibbles.size() ||
-                    !std::equal(
-                        ext->sharedNibbles.begin(), ext->sharedNibbles.end(), path.begin() + pos))
-                {
-                    concluded.emplace();  // path diverges inside the extension: exclusion
-                    break;
-                }
-                pos += ext->sharedNibbles.size();
-                if (ext->child.size() == HASH_REF_ENCODED_SIZE &&
-                    ext->child[0] == RLP_HASH_REF_PREFIX)
-                {
-                    expected = bcos::h256(ext->child.data() + 1, bcos::h256::SIZE);
-                    needNextItem = true;
-                }
-                else
-                {
-                    TrieNode next;
-                    try
-                    {
-                        next = decodeNode(bcos::ref(ext->child));
-                    }
-                    catch (...)
-                    {
-                        return std::nullopt;
-                    }
-                    node = std::move(next);
-                }
-                continue;
-            }
-            auto const& branch = std::get<BranchNode>(node);
-            if (pos == path.size())
-            {
-                concluded = branch.value;  // empty branch value = exclusion
-                break;
-            }
-            NodeRef const& child = branch.children.at(path.at(pos));
-            ++pos;
-            if (child.kind == NodeRef::Kind::Hash)
-            {
-                expected = child.hash;
-                needNextItem = true;
-            }
-            else if (child.inlineBytes.empty())
-            {
-                concluded.emplace();  // absent child: exclusion
-            }
-            else
-            {
-                TrieNode next;
-                try
-                {
-                    next = decodeNode(bcos::ref(child.inlineBytes));
-                }
-                catch (...)
-                {
-                    return std::nullopt;
-                }
-                node = std::move(next);
-            }
-        }
-    }
-
-    if (idx != proofNodes.size())
+    // One loop over a single "current node" state; the loop body only answers "where does
+    // the next node come from" — a hash ref advances via takeNode (consumes a proof item),
+    // an inline child via decodeChecked on the bytes embedded in the current item. Any
+    // failure empties node and the loop exits. Lambda return values materialize before the
+    // assignment overwrites node, so decoding an inline child that lives inside the current
+    // variant is safe by construction (proofWalk needs a comment to enforce the same).
+    auto node = takeNode(expectedRoot);
+    while (node)
     {
-        return std::nullopt;  // trailing unused items: reject padded proofs
+        if (std::holds_alternative<EmptyNode>(*node))
+        {
+            return finish({});  // dead end: exclusion
+        }
+        if (auto const* leaf = std::get_if<LeafNode>(&*node))
+        {
+            bool const match =
+                path.size() - pos == leaf->keyNibbles.size() &&
+                std::equal(leaf->keyNibbles.begin(), leaf->keyNibbles.end(), path.begin() + pos);
+            return finish(match ? leaf->value : bcos::bytes{});  // value, or a diverging leaf
+        }
+        if (auto const* ext = std::get_if<ExtensionNode>(&*node))
+        {
+            if (path.size() - pos < ext->sharedNibbles.size() ||
+                !std::equal(
+                    ext->sharedNibbles.begin(), ext->sharedNibbles.end(), path.begin() + pos))
+            {
+                return finish({});  // path diverges inside the extension: exclusion
+            }
+            pos += ext->sharedNibbles.size();
+            node = (ext->child.size() == HASH_REF_ENCODED_SIZE &&
+                       ext->child[0] == RLP_HASH_REF_PREFIX) ?
+                       takeNode(bcos::h256(ext->child.data() + 1, bcos::h256::SIZE)) :
+                       decodeChecked(bcos::ref(ext->child));  // inline child: same proof item
+            continue;
+        }
+        auto const& branch = std::get<BranchNode>(*node);
+        if (pos == path.size())
+        {
+            return finish(branch.value);  // path exhausted at a branch (empty = exclusion)
+        }
+        NodeRef const& child = branch.children.at(path.at(pos));
+        ++pos;
+        if (child.kind == NodeRef::Kind::Hash)
+        {
+            node = takeNode(child.hash);
+        }
+        else if (child.inlineBytes.empty())
+        {
+            return finish({});  // absent child: exclusion
+        }
+        else
+        {
+            node = decodeChecked(bcos::ref(child.inlineBytes));
+        }
     }
-    return concluded;
+    return std::nullopt;  // hash mismatch, malformed node, or dangling ref
 }
 }  // namespace detail
 
