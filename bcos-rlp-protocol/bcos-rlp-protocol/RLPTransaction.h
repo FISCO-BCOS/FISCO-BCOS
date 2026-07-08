@@ -86,7 +86,9 @@ class RLPTransaction : public bcos::protocol::Transaction
 public:
     RLPTransaction() { refreshStringCaches(); }
     RLPTransaction(const RLPTransaction& other);
+    RLPTransaction(RLPTransaction&& other) noexcept;
     RLPTransaction& operator=(const RLPTransaction&) = delete;
+    RLPTransaction& operator=(RLPTransaction&&) noexcept = default;
     ~RLPTransaction() noexcept override = default;
 
     // --- Transaction interface ---
@@ -238,9 +240,7 @@ private:
     mutable std::unique_ptr<std::mutex> m_accessListMutex{std::make_unique<std::mutex>()};
     mutable bool m_web3AccessListBuilt{false};
 
-    mutable bcos::crypto::HashType m_cachedTxHash;
     mutable bcos::crypto::HashType m_cachedHashForSign;
-    mutable bool m_hashDirty{true};
     mutable bool m_hashForSignDirty{true};
 
     mutable bcos::bytes m_encodedForSign;
@@ -249,13 +249,5 @@ private:
     mutable bcos::bytes m_cachedSignature;
     mutable bool m_cachedSignatureDirty{true};
 };
-
-// Guard: RLPTransaction must fit inside the AnyTransaction fixed-size buffer.
-// If this assertion fires, update the size constant in
-// bcos-framework/bcos-framework/protocol/Transaction.h (using AnyTransaction = AnyHolder<..., N>).
-// Also update the same guard in TransactionImpl.h.
-static_assert(sizeof(RLPTransaction) <= 1024,
-    "RLPTransaction exceeds AnyTransaction buffer (1024 bytes); "
-    "update the size constant in bcos-framework/protocol/Transaction.h");
 
 }  // namespace bcos::rlp

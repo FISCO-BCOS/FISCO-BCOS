@@ -19,8 +19,14 @@
 
 #include "RLPTransaction.h"
 
-// Workaround: provide missing definition for toCompactBigEndian(byte)
-// (declared but not defined in bcos-utilities/DataConvertUtility.h)
+// Workaround: provide inline definition for toCompactBigEndian(byte)
+// (declared inline but not defined in bcos-utilities/DataConvertUtility.h).
+// The real definition lives in bcos-utilities/DataConvertUtility.cpp as a
+// non-inline external symbol, which does not satisfy the inline requirement
+// for this TU.  Providing an inline definition here is safe because:
+//   - DataConvertUtility.h already declares it inline
+//   - The linker will use the external definition from DataConvertUtility.cpp
+//     for inter-TU references (no ODR violation).
 namespace bcos
 {
 inline bytes toCompactBigEndian(byte _val, unsigned _min)
@@ -135,9 +141,7 @@ RLPTransaction::RLPTransaction(const RLPTransaction& other)
     m_version(other.m_version),
     m_blockLimit(other.m_blockLimit),
     m_web3AccessListBuilt(false),
-    m_cachedTxHash(other.m_cachedTxHash),
     m_cachedHashForSign(other.m_cachedHashForSign),
-    m_hashDirty(other.m_hashDirty),
     m_hashForSignDirty(other.m_hashForSignDirty),
     m_encodedForSignBuilt(false),
     m_cachedSignature(other.m_cachedSignature),
@@ -178,8 +182,14 @@ void RLPTransaction::refreshSignatureCache() const
     if (!m_cachedSignatureDirty)
         return;
     m_cachedSignature.clear();
-    m_cachedSignature.reserve(m_signatureR.size() + m_signatureS.size() + 1);
+    m_cachedSignature.reserve(65);  // r(32) + s(32) + v(1)
+    // Left-pad r to 32 bytes (RLP decode strips leading zeros)
+    if (m_signatureR.size() < 32)
+        m_cachedSignature.insert(m_cachedSignature.end(), 32 - m_signatureR.size(), 0);
     m_cachedSignature.insert(m_cachedSignature.end(), m_signatureR.begin(), m_signatureR.end());
+    // Left-pad s to 32 bytes (RLP decode strips leading zeros)
+    if (m_signatureS.size() < 32)
+        m_cachedSignature.insert(m_cachedSignature.end(), 32 - m_signatureS.size(), 0);
     m_cachedSignature.insert(m_cachedSignature.end(), m_signatureS.begin(), m_signatureS.end());
     m_cachedSignature.push_back(static_cast<byte>(m_signatureV & 0xFF));
     m_cachedSignatureDirty = false;
@@ -534,7 +544,6 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
     }
 
     setTainted(true);
-    m_hashDirty = true;
     m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
     m_cachedSignatureDirty = true;
@@ -548,14 +557,9 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
 
 bcos::crypto::HashType RLPTransaction::hash() const
 {
-    if (m_hashDirty)
-    {
-        bcos::bytes encoded;
-        encode(encoded);
-        m_cachedTxHash = bcos::crypto::keccak256Hash(bcos::ref(encoded));
-        m_hashDirty = false;
-    }
-    return m_cachedTxHash;
+    bcos::bytes encoded;
+    encode(encoded);
+    return bcos::crypto::keccak256Hash(bcos::ref(encoded));
 }
 
 bcos::crypto::HashType RLPTransaction::txHash() const
@@ -573,8 +577,14 @@ bcos::crypto::HashType RLPTransaction::hashForSign() const
 
 void RLPTransaction::calculateHash(const bcos::crypto::Hash& /*hashImpl*/)
 {
-    m_cachedHashForSign = hashForSign();
-    m_hashForSignDirty = false;
+    // Precompute the transaction hash (same as hash()).
+    // Note: hash() always computes fresh (no caching), so this is a
+    // best-effort precomputation for callers that want to warm the cache.
+    // Currently the hash is not cached; this exists to satisfy the
+    // base-class contract.
+    bcos::bytes encoded;
+    encode(encoded);
+    (void)bcos::crypto::keccak256Hash(bcos::ref(encoded));
 }
 
 bcos::bytes RLPTransaction::encodeForSign() const
@@ -635,7 +645,6 @@ void RLPTransaction::setNonce(std::string nonce)
         m_nonce = 0;
     }
     refreshStringCaches();  // Use formatted hex, not raw input
-    m_hashDirty = true;
     m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
@@ -650,9 +659,7 @@ void RLPTransaction::forceSender(const bcos::bytes& _sender)
 void RLPTransaction::clearSenderAndHash()
 {
     m_sender.clear();
-    m_cachedTxHash = {};
     m_cachedHashForSign = {};
-    m_hashDirty = true;
     m_hashForSignDirty = true;
     setTainted(true);
 }
@@ -661,7 +668,7 @@ void RLPTransaction::setChainId(std::optional<uint64_t> id)
 {
     m_chainId = id;
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -669,7 +676,7 @@ void RLPTransaction::setWeb3TxType(Web3TxType t)
 {
     m_web3TypedTxKind = static_cast<uint8_t>(t);
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -677,14 +684,14 @@ void RLPTransaction::setToAddress(std::optional<Address> addr)
 {
     m_to = addr;
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
 void RLPTransaction::setInputData(bcos::bytes data)
 {
     m_input = std::move(data);
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -692,7 +699,7 @@ void RLPTransaction::setValueU256(u256 v)
 {
     m_value = v;
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -700,14 +707,14 @@ void RLPTransaction::setNonceU64(uint64_t n)
 {
     m_nonce = n;
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
 void RLPTransaction::setGasLimitU64(uint64_t g)
 {
     m_gasLimit = g;
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -715,7 +722,7 @@ void RLPTransaction::setMaxFeePerGasU256(u256 v)
 {
     m_maxFeePerGas = v;
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -723,21 +730,21 @@ void RLPTransaction::setMaxPriorityFeePerGasU256(u256 v)
 {
     m_maxPriorityFeePerGas = v;
     refreshStringCaches();
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
 void RLPTransaction::setMaxFeePerBlobGasU256(u256 v)
 {
     m_maxFeePerBlobGas = v;
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
 void RLPTransaction::setBlobVersionedHashes(h256s hashes)
 {
     m_blobVersionedHashes = std::move(hashes);
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 
@@ -745,28 +752,25 @@ void RLPTransaction::setSignatureR(bcos::bytes r)
 {
     m_signatureR = std::move(r);
     m_cachedSignatureDirty = true;
-    m_hashDirty = true;
 }
 
 void RLPTransaction::setSignatureS(bcos::bytes s)
 {
     m_signatureS = std::move(s);
     m_cachedSignatureDirty = true;
-    m_hashDirty = true;
 }
 
 void RLPTransaction::setSignatureV(uint64_t v)
 {
     m_signatureV = v;
     m_cachedSignatureDirty = true;
-    m_hashDirty = true;
 }
 
 void RLPTransaction::setAccessListEth(std::vector<EthAccessListEntry> list)
 {
     m_accessList = std::move(list);
     m_web3AccessListBuilt = false;
-    m_hashDirty = m_hashForSignDirty = true;
+    m_hashForSignDirty = true;
     m_encodedForSignBuilt = false;
 }
 

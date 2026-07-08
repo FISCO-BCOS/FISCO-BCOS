@@ -80,8 +80,14 @@ bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(
         // Verify secp256k1 signature
         auto const hashForSign = tx->hashForSign();
         bcos::bytes sigBytes;
-        sigBytes.reserve(tx->signatureR().size() + tx->signatureS().size() + 1);
+        sigBytes.reserve(65);  // r(32) + s(32) + v(1)
+        // Left-pad r to 32 bytes (RLP decode strips leading zeros)
+        if (tx->signatureR().size() < 32)
+            sigBytes.insert(sigBytes.end(), 32 - tx->signatureR().size(), 0);
         sigBytes.insert(sigBytes.end(), tx->signatureR().begin(), tx->signatureR().end());
+        // Left-pad s to 32 bytes (RLP decode strips leading zeros)
+        if (tx->signatureS().size() < 32)
+            sigBytes.insert(sigBytes.end(), 32 - tx->signatureS().size(), 0);
         sigBytes.insert(sigBytes.end(), tx->signatureS().begin(), tx->signatureS().end());
         sigBytes.push_back(static_cast<byte>(tx->signatureV() & 0xFF));
 
