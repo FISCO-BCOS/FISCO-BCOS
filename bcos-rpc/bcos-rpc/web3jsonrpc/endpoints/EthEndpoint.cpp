@@ -26,6 +26,7 @@
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-executor/src/Common.h>
+#include <bcos-ledger/mpt/Proof.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/util.h>
 #include <bcos-rpc/web3jsonrpc/Web3JsonRpcImpl.h>
@@ -40,7 +41,10 @@
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
+#include <span>
 #include <string>
+#include <variant>
+#include <vector>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -865,6 +869,122 @@ task::Task<void> EthEndpoint::maxPriorityFeePerGas(
     buildJsonContent(result, response);
     co_return;
 }
+
+/// eth_getProof custom error code (spec §5.9): both request-level proof failures — dormant
+/// account and unknown/uncommitted state root — map to -32004; the message distinguishes them.
+constexpr int32_t EthGetProofUnavailable = -32004;
+
+task::Task<void> EthEndpoint::getProof(const Json::Value& request, Json::Value& response)
+{
+    // params: address(DATA 20B), storageKeys(DATA[] of 32B), blockNumber(QTY|TAG)  (EIP-1186)
+    // result: {address, balance, nonce, codeHash, storageHash, accountProof[], storageProof[]}
+    Address address;
+    try
+    {
+        address = Address(toView(request[0U]), Address::FromHex, Address::AlignRight);
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid address"));
+    }
+    auto const& keysJson = request[1U];
+    if (!keysJson.isNull() && !keysJson.isArray())
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "storageKeys must be an array"));
+    }
+    std::vector<h256> slots;
+    slots.reserve(keysJson.size());
+    for (auto const& key : keysJson)
+    {
+        try
+        {
+            slots.emplace_back(toView(key), h256::FromHex, h256::AlignRight);
+        }
+        catch (...)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Invalid storage key"));
+        }
+    }
+    auto const blockTag = toView(request[2U]);
+    auto [blockNumber, _] = co_await getBlockNumberByTag(blockTag);
+    if (c_fileLogLevel == TRACE)
+    {
+        WEB3_LOG(TRACE) << "eth_getProof" << LOG_KV("address", address.hexPrefixed())
+                        << LOG_KV("slotCount", slots.size()) << LOG_KV("blockTag", blockTag)
+                        << LOG_KV("blockNumber", blockNumber);
+    }
+
+    // Resolve the block's stateRoot from its header.
+    auto const ledger = m_nodeService->ledger();
+    auto const block = co_await ledger::getBlockData(*ledger, blockNumber, bcos::ledger::HEADER);
+    if (!block || !block->blockHeader()) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InvalidParams, "Block not found"));
+    }
+    auto const stateRoot = block->blockHeader()->stateRoot();
+
+    // The MPT node reader is wired by the initializer (PR-18); unset means the node does not
+    // maintain an MPT state root — a configuration matter, hence -32603 rather than -32004.
+    auto const mptReader = m_nodeService->mptNodeReader();
+    if (!mptReader) [[unlikely]]
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(InternalError, "MPT not enabled on this node"));
+    }
+
+    auto result = co_await ledger::mpt::generateProof(
+        *mptReader, stateRoot, address, std::span<h256 const>(slots));
+    if (auto const* errorCode = std::get_if<ledger::mpt::ProofErrorCode>(&result))
+    {
+        auto const* message = (*errorCode == ledger::mpt::ProofErrorCode::AccountNotInMPT) ?
+                                  "Account not in trie (dormant in scenario A)" :
+                                  "Block stateRoot not in MPT node storage";
+        BOOST_THROW_EXCEPTION(JsonRpcException(EthGetProofUnavailable, message));
+    }
+    auto& proof = std::get<ledger::mpt::EIP1186Proof>(result);
+
+    Json::Value output = Json::objectValue;
+    output["address"] = address.hexPrefixed();
+    output["balance"] = toQuantity(proof.balance);
+    output["nonce"] = toQuantity(proof.nonce);
+    output["codeHash"] = proof.codeHash.hexPrefixed();
+    output["storageHash"] = proof.storageHash.hexPrefixed();
+    Json::Value accountProof = Json::arrayValue;
+    for (auto const& node : proof.accountProof)
+    {
+        accountProof.append(toHexStringWithPrefix(node));
+    }
+    output["accountProof"] = std::move(accountProof);
+    Json::Value storageProof = Json::arrayValue;
+    for (auto& entry : proof.storageProof)
+    {
+        Json::Value entryJson = Json::objectValue;
+        entryJson["key"] = entry.key.hexPrefixed();
+        // The trie leaf stores RLP(big-endian-trimmed slot value); EIP-1186 "value" is the
+        // slot's QUANTITY. Strip the RLP string header to recover the payload bytes and render
+        // them as a quantity — 0x0 when the slot is absent (empty leaf value).
+        bcos::bytes payload;
+        if (!entry.value.empty())
+        {
+            auto valueRef = bcos::ref(entry.value);
+            if (auto error = codec::rlp::decode(valueRef, payload); error != nullptr) [[unlikely]]
+            {
+                BOOST_THROW_EXCEPTION(
+                    JsonRpcException(InternalError, "Malformed storage leaf RLP"));
+            }
+        }
+        entryJson["value"] = toQuantity(payload);
+        Json::Value proofJson = Json::arrayValue;
+        for (auto const& node : entry.proof)
+        {
+            proofJson.append(toHexStringWithPrefix(node));
+        }
+        entryJson["proof"] = std::move(proofJson);
+        storageProof.append(std::move(entryJson));
+    }
+    output["storageProof"] = std::move(storageProof);
+    buildJsonContent(output, response);
+}
+
 bcos::rpc::EthEndpoint::EthEndpoint(
     NodeService::Ptr nodeService, FilterSystem::Ptr filterSystem, bool syncTransaction)
   : m_nodeService(std::move(nodeService)),
