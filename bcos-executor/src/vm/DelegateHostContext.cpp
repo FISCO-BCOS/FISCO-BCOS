@@ -27,7 +27,7 @@ std::optional<storage::Entry> DelegateHostContext::code()
 bool DelegateHostContext::setCode(bytes code)
 {
     storage::Entry codeEntry;
-    codeEntry.importFields({code});
+    codeEntry.set(code);
     m_code = codeEntry;
     if (m_codeHash == h256{})
     {

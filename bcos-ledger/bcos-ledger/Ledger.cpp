@@ -161,7 +161,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         // sys contract deploy
         /// NOTE: write block number for 2pc storage
         Entry numberEntry;
-        numberEntry.importFields({"0"});
+        numberEntry.set("0");
         storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
             [callback](Error::Ptr&& error) {
                 if (error)
@@ -213,13 +213,13 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
 
     // number 2 hash
     Entry hashEntry;
-    hashEntry.importFields({header->hash().asBytes()});
+    hashEntry.set(header->hash().asBytes());
     storage->asyncSetRow(SYS_NUMBER_2_HASH, blockNumberStr, std::move(hashEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // hash 2 number
     Entry hash2NumberEntry;
-    hash2NumberEntry.importFields({blockNumberStr});
+    hash2NumberEntry.set(blockNumberStr);
     storage->asyncSetRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(header->hash()),
         std::move(hash2NumberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
@@ -229,7 +229,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     header->encode(headerBuffer);
 
     Entry number2HeaderEntry;
-    number2HeaderEntry.importFields({std::move(headerBuffer)});
+    number2HeaderEntry.set(std::move(headerBuffer));
     storage->asyncSetRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr, std::move(number2HeaderEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
@@ -258,13 +258,13 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     nonceBlock->encode(nonceBuffer);
 
     Entry number2NonceEntry;
-    number2NonceEntry.importFields({std::move(nonceBuffer)});
+    number2NonceEntry.set(std::move(nonceBuffer));
     storage->asyncSetRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberStr, std::move(number2NonceEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
     // current number
     Entry numberEntry;
-    numberEntry.importFields({blockNumberStr});
+    numberEntry.set(blockNumberStr);
     storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
@@ -297,7 +297,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
     transactionsBlock->encode(transactionsBuffer);
 
     Entry number2TransactionHashesEntry;
-    number2TransactionHashesEntry.importFields({std::move(transactionsBuffer)});
+    number2TransactionHashesEntry.set(std::move(transactionsBuffer));
     storage->asyncSetRow(SYS_NUMBER_2_TXS, blockNumberStr, std::move(number2TransactionHashesEntry),
         [setRowCallback](auto&& error) { setRowCallback(std::forward<decltype(error)>(error)); });
 
@@ -372,7 +372,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             }
             auto totalTxsCount = total + totalCount;
             Entry totalEntry;
-            totalEntry.importFields({boost::lexical_cast<std::string>(totalTxsCount)});
+            totalEntry.set(boost::lexical_cast<std::string>(totalTxsCount));
             storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_TRANSACTION_COUNT,
                 std::move(totalEntry), [setRowCallback](auto&& error) {
                     setRowCallback(std::forward<decltype(error)>(error));
@@ -381,7 +381,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             if (failedCount != 0)
             {
                 Entry failedEntry;
-                failedEntry.importFields({boost::lexical_cast<std::string>(failedTxs)});
+                failedEntry.set(boost::lexical_cast<std::string>(failedTxs));
                 storage->asyncSetRow(SYS_CURRENT_STATE, SYS_KEY_TOTAL_FAILED_TRANSACTION,
                     std::move(failedEntry), [setRowCallback](auto&& error) {
                         setRowCallback(std::forward<decltype(error)>(error));
@@ -2247,19 +2247,19 @@ bool Ledger::buildGenesisBlock(
         }
 
         Entry currentNumber;
-        currentNumber.importFields({"0"});
+        currentNumber.set("0");
         stateTable->setRow(SYS_KEY_CURRENT_NUMBER, std::move(currentNumber));
 
         Entry txNumber;
-        txNumber.importFields({"0"});
+        txNumber.set("0");
         stateTable->setRow(SYS_KEY_TOTAL_TRANSACTION_COUNT, std::move(txNumber));
 
         Entry txFailedNumber;
-        txFailedNumber.importFields({"0"});
+        txFailedNumber.set("0");
         stateTable->setRow(SYS_KEY_TOTAL_FAILED_TRANSACTION, std::move(txFailedNumber));
 
         Entry archivedNumber;
-        archivedNumber.importFields({"0"});
+        archivedNumber.set("0");
         stateTable->setRow(SYS_KEY_ARCHIVED_NUMBER, std::move(archivedNumber));
 
         // The op-geth genesis state root lives in the genesis block header's
@@ -2334,7 +2334,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     {
         rootSubMap.insert(std::make_pair(sub, FS_TYPE_DIR));
     }
-    rootSubEntry.importFields({asString(codec::scale::encode(rootSubMap))});
+    rootSubEntry.set(asString(codec::scale::encode(rootSubMap)));
     std::promise<Error::UniquePtr> setPromise;
     m_stateStorage->asyncSetRow(
         bcos::tool::FS_ROOT, FS_KEY_SUB, std::move(rootSubEntry), [&setPromise](auto&& error) {
@@ -2360,7 +2360,7 @@ void Ledger::createFileSystemTables(uint32_t blockVersion)
     {
         sysSubMap.insert(std::make_pair(contract, FS_TYPE_CONTRACT));
     }
-    sysSubEntry.importFields({asString(codec::scale::encode(sysSubMap))});
+    sysSubEntry.set(asString(codec::scale::encode(sysSubMap)));
     sysTable->setRow(FS_KEY_SUB, std::move(sysSubEntry));
 }
 
@@ -2390,12 +2390,12 @@ std::optional<storage::Table> Ledger::buildDir(
     Entry aclBEntry;
     Entry extraEntry;
     std::map<std::string, std::string> newSubMap;
-    newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-    tEntry.importFields({std::string(FS_TYPE_DIR)});
-    aclTypeEntry.importFields({"0"});
-    aclWEntry.importFields({""});
-    aclBEntry.importFields({""});
-    extraEntry.importFields({""});
+    newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+    tEntry.set(std::string(FS_TYPE_DIR));
+    aclTypeEntry.set("0");
+    aclWEntry.set("");
+    aclBEntry.set("");
+    extraEntry.set("");
     table->setRow(FS_KEY_TYPE, std::move(tEntry));
     table->setRow(FS_KEY_SUB, std::move(newSubEntry));
     table->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));

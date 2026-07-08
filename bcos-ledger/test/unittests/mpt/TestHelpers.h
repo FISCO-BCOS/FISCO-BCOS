@@ -69,7 +69,7 @@ inline bcos::Address makeAddress(uint8_t firstByte)
 inline bcos::storage::Entry makeEntry(std::string_view value)
 {
     bcos::storage::Entry entry;
-    entry.set(std::string{value});
+    entry.set(std::string(value));
     return entry;
 }
 

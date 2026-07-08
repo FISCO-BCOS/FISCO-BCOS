@@ -74,7 +74,7 @@ void ContractShardUtils::setShard(bcos::storage::StorageWrapper& storage,
     }
 
     Entry shardEntry;
-    shardEntry.importFields({std::string(shard)});
+    shardEntry.set(std::string(shard));
     storage.setRow(contractTableName, ACCOUNT_SHARD, std::move(shardEntry));
     return;
 }

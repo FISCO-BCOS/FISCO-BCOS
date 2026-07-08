@@ -506,7 +506,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         {
             auto entry = table->newEntry();
             Entry CallerEntry;
-            CallerEntry.importFields({"1"});
+            CallerEntry.set("1");
             _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
         }
         return;
@@ -518,7 +518,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         if (!entry)
         {
             Entry CallerEntry;
-            CallerEntry.importFields({"1"});
+            CallerEntry.set("1");
             _executive->storage().setRow(SYS_BALANCE_CALLER, address.hex(), std::move(CallerEntry));
         }
     }

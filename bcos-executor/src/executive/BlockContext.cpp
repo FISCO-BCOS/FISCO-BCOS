@@ -223,12 +223,12 @@ void BlockContext::killSuicides()
         {
             // set codeHash
             bcos::storage::Entry emptyCodeHashEntry;
-            emptyCodeHashEntry.importFields({emptyCodeHash.asBytes()});
+            emptyCodeHashEntry.set(emptyCodeHash.asBytes());
             contractTable->setRow(ACCOUNT_CODE_HASH, std::move(emptyCodeHashEntry));
 
             // delete binary
             bcos::storage::Entry emptyCodeEntry;
-            emptyCodeEntry.importFields({""});
+            emptyCodeEntry.set("");
             contractTable->setRow(ACCOUNT_CODE, std::move(emptyCodeEntry));
         }
 

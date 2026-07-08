@@ -693,9 +693,9 @@ void BFSPrecompiled::linkAdaptCNS(const std::shared_ptr<executor::TransactionExe
         {
             // contract name and version exist, overwrite address and abi
             auto addressEntry = linkTable->newEntry();
-            addressEntry.importFields({contractAddress});
+            addressEntry.set(contractAddress);
             auto abiEntry = linkTable->newEntry();
-            abiEntry.importFields({contractAbi});
+            abiEntry.set(contractAbi);
             _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
             _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
@@ -1262,12 +1262,12 @@ bool BFSPrecompiled::recursiveBuildDir(
             _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
-            tEntry.importFields({FS_TYPE_DIR});
-            newSubEntry.importFields({asString(codec::scale::encode(newSubMap))});
-            aclTypeEntry.importFields({"0"});
-            aclWEntry.importFields({""});
-            aclBEntry.importFields({""});
-            extraEntry.importFields({""});
+            tEntry.set(FS_TYPE_DIR);
+            newSubEntry.set(asString(codec::scale::encode(newSubMap)));
+            aclTypeEntry.set("0");
+            aclWEntry.set("");
+            aclBEntry.set("");
+            extraEntry.set("");
             _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
             _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
             _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));

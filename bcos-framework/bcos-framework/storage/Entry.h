@@ -70,9 +70,9 @@ PRO_DEF_MEM_DISPATCH(MemSize, size);
 PRO_DEF_MEM_DISPATCH(MemStatus, status);
 PRO_DEF_MEM_DISPATCH(MemEncode, encode);
 // TODO(#5312): MemEncode convention is fixed to std::function<void(bytesConstRef)>,
-// so every encodeToBytes() call constructs a std::function temporary.
+// so every encode() call constructs a std::function temporary.
 // Future work: template the sink to eliminate type-erasure overhead,
-// or add an owning std::string overload to decodeFromBytes for zero-copy.
+// or add an owning std::string overload to decode for zero-copy.
 PRO_DEF_MEM_DISPATCH(MemGetTypedPtr, getTypedPtr);
 PRO_DEF_MEM_DISPATCH(MemTypeIndex, typeIndex);
 
@@ -262,7 +262,7 @@ public:
     size_t size() const noexcept { return 0; }
     // TODO(#5312): Typed entries are always MODIFIED→dirty(), which collides
     // with the commit path's hash-if-dirty logic.  Eventually degrade to byte
-    // semantics: hash() should hash encodeToBytes(), setStatus() should
+    // semantics: hash() should hash encoded bytes, setStatus() should
     // materialize encoded bytes before changing status.
     EntryStatus status() const noexcept { return ENTRY_MODIFIED; }
 
@@ -388,30 +388,22 @@ public:
     template <Encodable T>
     bool holdsType() const noexcept;
 
-    // Encode for persistence via the facade's encodeTo convention.
-    // TODO(#5312): encodeToBytes() materializes a std::string per call.
-    // For the RocksDB hot path this adds one copy vs the old zero-copy
-    // approach.  Future optimization: template the sink, or add a
-    // RocksDB-specific encode that writes directly to a Slice.
-    std::string encodeToBytes() const;
+    // Encode for persistence via the facade's encode convention.
+    // Passes raw bytes through the sink callback, avoiding intermediate
+    // string allocation compared to the old encodeToBytes().
+    void encode(auto&& sink) const
+    {
+        if (!m_buffer.has_value())
+            return;
+        m_buffer->encode(std::forward<decltype(sink)>(sink));
+    }
     // Reconstruct from raw bytes (no type tag needed — caller knows the type).
-    static Entry decodeFromBytes(std::string_view bytes);
+    static Entry decode(bytesConstRef data);
     // ── Status ─────────────────────────────────────────────────────
 
     Status status() const;
     void setStatus(Status status);
     bool dirty() const;
-
-    template <typename Input>
-    void importFields(std::initializer_list<Input> values)
-    {
-        if (values.size() != 1)
-        {
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(StorageError::UnknownEntryType, "Import fields not equal to 1"));
-        }
-        set(std::move(*values.begin()));
-    }
 
     bool valid() const;
 
@@ -568,7 +560,7 @@ const T* Entry::getTyped() const
         return nullptr;
     }
 
-    auto obj = decode(std::type_identity<T>{},
+    auto obj = bcos::storage::decode(std::type_identity<T>{},
         bytesConstRef(reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
     m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(TypedHolderModel<T>{std::move(obj)});
 

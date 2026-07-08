@@ -274,7 +274,7 @@ void TableManagerPrecompiled::appendColumns(
     Entry newEntry;
     auto newField = boost::join(originFields, ",");
 
-    newEntry.importFields({std::move(newField)});
+    newEntry.set(std::move(newField));
     _executive->storage().setRow(StorageInterface::SYS_TABLES, tableName, std::move(newEntry));
     gasPricer->appendOperation(InterfaceOpcode::Set, 1);
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));

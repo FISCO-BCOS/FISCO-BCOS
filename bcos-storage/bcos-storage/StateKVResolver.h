@@ -1,6 +1,7 @@
 #pragma once
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-utilities/Common.h>
 #include <fmt/format.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/throw_exception.hpp>
@@ -14,37 +15,32 @@ struct InvalidStateKey : public Error
 
 struct StateValueResolver
 {
-    static auto encode(const storage::Entry& entry) -> std::string
+    static void encode(const storage::Entry& entry, auto&& sink)
     {
-        return entry.encodeToBytes();
-    }
-    static auto encode(storage::Entry&& entry) -> std::string
-    {
-        return entry.encodeToBytes();
+        entry.encode(std::forward<decltype(sink)>(sink));
     }
     static storage::Entry decode(std::string_view view)
     {
-        return storage::Entry::decodeFromBytes(view);
+        return storage::Entry::decode(bytesConstRef(
+            reinterpret_cast<const bcos::byte*>(view.data()), view.size()));
     }
     static storage::Entry decode(std::string buffer)
     {
-        return storage::Entry::decodeFromBytes(buffer);
+        return storage::Entry::decode(bytesConstRef(
+            reinterpret_cast<const bcos::byte*>(buffer.data()), buffer.size()));
     }
 };
 
 struct StateKeyResolver
 {
-    static std::string_view encode(const executor_v1::StateKey& stateKey)
+    static void encode(const executor_v1::StateKey& stateKey, auto&& sink)
     {
-        return {stateKey.data(), stateKey.size()};
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(stateKey.data()), stateKey.size()));
     }
-    static executor_v1::StateKey encode(executor_v1::StateKey&& stateKey)
+    static void encode(const executor_v1::StateKeyView& stateKeyView, auto&& sink)
     {
-        return std::move(stateKey);
-    }
-    static executor_v1::StateKey encode(const executor_v1::StateKeyView& stateKeyView)
-    {
-        return executor_v1::StateKey(stateKeyView);
+        auto stateKey = executor_v1::StateKey(stateKeyView);
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(stateKey.data()), stateKey.size()));
     }
     static executor_v1::StateKey decode(std::string_view view)
     {

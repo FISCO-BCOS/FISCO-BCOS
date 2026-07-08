@@ -173,7 +173,7 @@ public:
         blockHeader->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
-        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        number2HeaderEntry.set(std::move(headerBuffer));
         task::syncWait(storage2::writeOne(backendStorage,
             StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
             std::move(number2HeaderEntry)));
@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE(call)
     blockHeader->encode(headerBuffer);
 
     storage::Entry number2HeaderEntry;
-    number2HeaderEntry.importFields({std::move(headerBuffer)});
+    number2HeaderEntry.set(std::move(headerBuffer));
     task::syncWait(storage2::writeOne(backendStorage,
         StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
         std::move(number2HeaderEntry)));

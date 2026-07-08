@@ -546,11 +546,11 @@ bool TransactionExecutive::setCode(std::string_view contractTableName,
         std::visit(
             [&codeHash, &codeEntry, this](auto&& code) {
                 codeHash = m_hashImpl->hash(code);
-                codeEntry.importFields({std::move(code)});
+                codeEntry.set(std::move(code));
             },
             code);
         Entry codeHashEntry;
-        codeHashEntry.importFields({codeHash.asBytes()});
+        codeHashEntry.set(codeHash.asBytes());
 
         // not exist in code binary table, set it
         if (!storage().getRow(bcos::ledger::SYS_CODE_BINARY, codeHash.toRawString()))
@@ -572,7 +572,7 @@ void TransactionExecutive::setAbiByCodeHash(std::string_view codeHash, std::stri
     if (!storage().getRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash))
     {
         Entry abiEntry;
-        abiEntry.importFields({std::move(abi)});
+        abiEntry.set(std::move(abi));
 
         storage().setRow(bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry));
     }
@@ -1010,7 +1010,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         m_storageWrapper->createTable(newAddress, std::string(STORAGE_VALUE));
         /// set code field
         Entry entry = {};
-        entry.importFields({codeString});
+        entry.set(codeString);
         m_storageWrapper->setRow(newAddress, ACCOUNT_CODE, std::move(entry));
     }
     else
@@ -1054,13 +1054,13 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         {
             /// set code field
             Entry entry = {};
-            entry.importFields({std::move(codeString)});
+            entry.set(std::move(codeString));
             m_storageWrapper->setRow(codeTable, ACCOUNT_CODE, std::move(entry));
             if (!callParameters->abi.empty() &&
                 blockContext().blockVersion() != (uint32_t)protocol::BlockVersion::V3_0_VERSION)
             {
                 Entry abiEntry = {};
-                abiEntry.importFields({std::move(callParameters->abi)});
+                abiEntry.set(std::move(callParameters->abi));
                 m_storageWrapper->setRow(codeTable, ACCOUNT_ABI, std::move(abiEntry));
             }
         }
@@ -1069,10 +1069,10 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
         {
             /// set link data
             Entry addressEntry = {};
-            addressEntry.importFields({newAddress});
+            addressEntry.set(newAddress);
             m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
             Entry typeEntry = {};
-            typeEntry.importFields({FS_TYPE_LINK});
+            typeEntry.set(FS_TYPE_LINK);
             m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
         }
         else

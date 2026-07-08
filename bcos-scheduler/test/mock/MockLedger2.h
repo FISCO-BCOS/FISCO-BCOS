@@ -19,7 +19,7 @@ public:
         auto header = mutableBlock->blockHeader();
         auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
         storage::Entry numberEntry;
-        numberEntry.importFields({blockNumberStr});
+        numberEntry.set(blockNumberStr);
         storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER,
             std::move(numberEntry), [callback = std::move(callback)](auto&& error) {
                 if (error)

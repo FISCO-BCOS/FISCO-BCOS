@@ -278,7 +278,7 @@ void ContractAuthMgrPrecompiled::resetAdmin(
             // exist contract but not init auth table
             table = _executive->storage().createTable(path, "value");
             Entry statusEntry;
-            statusEntry.importFields({std::string{CONTRACT_NORMAL}});
+            statusEntry.set(std::string{CONTRACT_NORMAL});
             table->setRow(STATUS_FIELD, std::move(statusEntry));
         }
         else
@@ -732,7 +732,7 @@ void ContractAuthMgrPrecompiled::setContractStatus(
     }
     auto status = isFreeze ? CONTRACT_FROZEN : CONTRACT_NORMAL;
     Entry entry = {};
-    entry.importFields({std::string(status)});
+    entry.set(std::string(status));
     table->setRow("status", std::move(entry));
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }
@@ -792,7 +792,7 @@ void ContractAuthMgrPrecompiled::setContractStatus32(
     }
 
     Entry entry = {};
-    entry.importFields({std::string(statusStr)});
+    entry.set(std::string(statusStr));
     table->setRow(STATUS_FIELD, std::move(entry));
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
 }

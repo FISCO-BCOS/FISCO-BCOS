@@ -1637,7 +1637,7 @@ BOOST_AUTO_TEST_CASE(rebuildBfsTest)
     {
         bfsInfo.insert({"test" + std::to_string(i), std::string(tool::FS_TYPE_DIR)});
     }
-    subEntry->importFields({asString(codec::scale::encode(bfsInfo))});
+    subEntry->set(asString(codec::scale::encode(bfsInfo)));
     temp4T->setRow(tool::FS_KEY_SUB, std::move(subEntry.value()));
     boost::log::core::get()->set_logging_enabled(true);
 
@@ -1813,7 +1813,7 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     //    {
     //        bfsInfo.insert({"test" + std::to_string(i), std::string(tool::FS_TYPE_DIR)});
     //    }
-    //    subEntry->importFields({asString(codec::scale::encode(bfsInfo))});
+    //    subEntry->set(asString(codec::scale::encode(bfsInfo)));
     //    temp4T->setRow(tool::FS_KEY_SUB, std::move(subEntry.value()));
     //    stateStorage->parallelTraverse(
     //        false, [this](auto const& table, auto const& key, auto const& entry) -> bool {
@@ -1841,7 +1841,7 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
     {
         bfsInfo.insert({"test" + std::to_string(i), std::string(tool::FS_TYPE_DIR)});
     }
-    subEntry->importFields({asString(codec::scale::encode(bfsInfo))});
+    subEntry->set(asString(codec::scale::encode(bfsInfo)));
     temp4T->setRow(tool::FS_KEY_SUB, std::move(subEntry.value()));
     boost::log::core::get()->set_logging_enabled(true);
 
