@@ -449,7 +449,7 @@ BOOST_AUTO_TEST_CASE(sharedBuffer_arrayChar)
 BOOST_AUTO_TEST_CASE(set_coverage)
 {
     Entry e1;
-        e1.set(std::string("via set"));
+    e1.set(std::string("via set"));
     BOOST_CHECK_EQUAL(e1.get(), "via set");
     BOOST_TEST(entryTestHolder(e1).has_value());
 

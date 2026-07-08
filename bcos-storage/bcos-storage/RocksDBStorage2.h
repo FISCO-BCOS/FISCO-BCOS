@@ -72,6 +72,10 @@ public:
     ::rocksdb::DB const& rocksDB() const noexcept { return rocksDBRef(); }
 
     // Helper: encode an item into a std::string via the resolver's sink-based encode.
+    // NOTE: This allocates a std::string for RocksDB Slice compatibility on read
+    // paths (readSomeRaw / readOneRaw / range).  Zero-copy optimization in this PR
+    // covers the write path, where the sink-based encode() feeds bytes directly to
+    // rocksdb::Slice construction without an intermediate string allocation.
     template <typename Resolver, typename Item>
     static auto encodeToBuffer(Resolver& resolver, Item&& item) -> std::string
     {
