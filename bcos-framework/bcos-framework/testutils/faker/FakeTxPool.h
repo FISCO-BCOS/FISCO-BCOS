@@ -21,7 +21,7 @@
 #pragma once
 #include "../../protocol/CommonError.h"
 #include "../../txpool/TxPoolInterface.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 using namespace bcos;
 using namespace bcos::txpool;
@@ -36,11 +36,11 @@ class FakeTxPool : public TxPoolInterface
 {
 public:
     using Ptr = std::shared_ptr<FakeTxPool>;
-    FakeTxPool() { m_worker = std::make_shared<ThreadPool>("txpool", 1); }
+    FakeTxPool() { m_worker = std::make_shared<IOServicePool>(1, "txpool"); m_strand = std::make_unique<Strand>(m_worker); }
     ~FakeTxPool() override {}
 
     void start() override {}
-    void stop() override { m_worker->stop(); }
+    void stop() override { m_worker.reset(); }
 
     // useless for PBFT, maybe needed by RPC
     task::Task<protocol::TransactionSubmitResult::Ptr> submitTransaction(
@@ -91,7 +91,7 @@ public:
     void asyncVerifyBlock(PublicPtr, protocol::Block::ConstPtr,
         std::function<void(Error::Ptr, bool)> _onVerifyFinished) override
     {
-        m_worker->enqueue([this, _onVerifyFinished]() {
+        m_strand->post([this, _onVerifyFinished]() {
             if (m_verifyResult)
             {
                 _onVerifyFinished(nullptr, m_verifyResult);
@@ -110,6 +110,7 @@ public:
 
 private:
     bool m_verifyResult = true;
-    std::shared_ptr<ThreadPool> m_worker = nullptr;
+    std::shared_ptr<IOServicePool> m_worker = nullptr;
+    std::unique_ptr<Strand> m_strand;
 };
 }  // namespace bcos::test

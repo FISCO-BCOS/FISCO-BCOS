@@ -95,7 +95,8 @@ void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)>
     try
     {
         auto self = std::weak_ptr<ExecutiveStackFlow>(shared_from_this());
-        asyncTo([self, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+        // Capture callbacks by value to keep them alive even if asyncTo throws
+        asyncTo([self, onTxReturn, onFinished]() {
             try
             {
                 auto flow = self.lock();

@@ -72,3 +72,57 @@ std::shared_ptr<IOServicePool::IOService>& IOServicePool::getIOService()
 bcos::IOServicePool::IOServiceContext::IOServiceContext(std::shared_ptr<IOService> _ioService)
   : ioService(std::move(_ioService)), work(this->ioService->get_executor())
 {}
+
+void Strand::Impl::kick()
+{
+    auto self = pool.lock();
+    if (!self)
+    {
+        // Pool is gone — clear queue and reset count.
+        std::lock_guard<std::mutex> lock(mutex);
+        queue.clear();
+        count_.store(0, std::memory_order_release);
+        return;
+    }
+    // Capture a shared_ptr to Impl so that the queue / mutex / count_ stay
+    // alive even if the owning Strand is destroyed before this handler runs.
+    std::shared_ptr<Impl> impl = shared_from_this();
+    self->post([impl]() { impl->drain(); });
+}
+
+void Strand::Impl::drain()
+{
+    std::function<void()> task;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        // Defensive: queue could be empty if kick() was called after
+        // the pool expired and cleared everything.  ~Strand() no longer
+        // clears the queue, so under normal operation this guard never
+        // triggers; it only protects against pool-lifetime edge cases.
+        if (queue.empty())
+        {
+            return;
+        }
+        task = std::move(queue.front());
+        queue.pop_front();
+    }
+    IOServicePool::safeExecute(std::move(task));
+
+    // Atomically release our "running" slot.  fetch_sub returns the value
+    // *before* subtraction.
+    if (auto prev = count_.fetch_sub(1, std::memory_order_acq_rel); prev == 1)
+    {
+        // Only our running slot existed — no new tasks were posted during
+        // execution.  If a post() snuck in between fetch_sub and this
+        // return, its fetch_add will see prev==0 and kick() a new drain
+        // itself, so we don't need to re-check the queue under lock.
+        // (The lock-based re-check with fetch_add(1) restore had a race:
+        //  post()'s lock+enqueue could land between our fetch_sub and lock,
+        //  but its fetch_add could land after our fetch_add(1), causing
+        //  neither side to kick — permanently stalling the strand.)
+        return;
+    }
+    // prev > 1: more tasks were definitely enqueued during our execution.
+    // No lock needed here — just kick the next drain.
+    kick();
+}

@@ -22,6 +22,7 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"
@@ -227,7 +228,7 @@ static int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _ex
     auto entry = storage.getRow(SYS_CONSENSUS, "key");
     if (entry)
     {
-        consensusList = entry->getObject<ConsensusNodeList>();
+        consensusList = bcos::storage::serialize::decode<ConsensusNodeList>(entry->get());
     }
     else
     {
@@ -253,7 +254,7 @@ static int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _ex
         return CODE_LAST_SEALER;
     }
 
-    entry->setObject(consensusList);
+    entry->set(bcos::storage::serialize::encode(consensusList));
     storage.setRow(SYS_CONSENSUS, "key", std::move(*entry));
 
     return 0;

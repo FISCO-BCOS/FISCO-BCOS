@@ -132,11 +132,11 @@ static size_t selectByValueCond(const std::shared_ptr<executor::TransactionExecu
         if (toLexicographic)
         {
             entryTuple = {
-                toLexicographicOrder(key), tableEntry->getObject<std::vector<std::string>>()};
+                toLexicographicOrder(key), bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
         }
         else
         {
-            entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+            entryTuple = {key, bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
         }
 
         if (valueCondition->isValid(std::get<1>(entryTuple)))
@@ -454,7 +454,7 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
         _callParameters->setExecResult(codec.encode(std::move(emptyEntry)));
         return;
     }
-    auto values = entry->getObject<std::vector<std::string>>();
+    auto values = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
 
     // update the memory gas and the computation gas
     gasPricer->updateMemUsed(values.size());
@@ -500,7 +500,7 @@ void TablePrecompiled::selectByCondition(const std::string& tableName,
     for (auto& key : tableKeyList)
     {
         auto tableEntry = _executive->storage().getRow(tableName, key);
-        EntryTuple entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+        EntryTuple entryTuple = {key, bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
         entries.emplace_back(std::move(entryTuple));
     }
 
@@ -570,11 +570,11 @@ void TablePrecompiled::selectByConditionV32(const std::string& tableName,
                 if (_isNumericalOrder)
                 {
                     entryTuple = {toLexicographicOrder(key),
-                        tableEntry->getObject<std::vector<std::string>>()};
+                        bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
                 }
                 else
                 {
-                    entryTuple = {key, tableEntry->getObject<std::vector<std::string>>()};
+                    entryTuple = {key, bcos::storage::serialize::decode<std::vector<std::string>>(tableEntry->get())};
                 }
                 entries.emplace_back(std::move(entryTuple));
             }
@@ -757,7 +757,7 @@ void TablePrecompiled::insert(const std::string& tableName,
     }
 
     Entry entry;
-    entry.setObject(std::move(values));
+    entry.set(bcos::storage::serialize::encode(std::move(values)));
 
     gasPricer->appendOperation(InterfaceOpcode::Insert);
     gasPricer->updateMemUsed(entry.size());
@@ -814,7 +814,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         return;
     }
 
-    auto values = existEntry->getObject<std::vector<std::string>>();
+    auto values = bcos::storage::serialize::decode<std::vector<std::string>>(existEntry->get());
     for (const auto& kv : updateFields)
     {
         auto& field = std::get<0>(kv);
@@ -841,7 +841,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         values[index] = value;
     }
     Entry updateEntry;
-    updateEntry.setObject(std::move(values));
+    updateEntry.set(bcos::storage::serialize::encode(std::move(values)));
     _executive->storage().setRow(tableName, key, std::move(updateEntry));
 
     gasPricer->appendOperation(InterfaceOpcode::Update);
@@ -916,12 +916,12 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     for (size_t i = 0; i < entries.size(); ++i)
     {
         auto&& entry = entries[i];
-        auto values = entry->getObject<std::vector<std::string>>();
+        auto values = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         for (auto& kv : updateValue)
         {
             values[kv.first] = kv.second;
         }
-        entry->setObject(std::move(values));
+        entry->set(bcos::storage::serialize::encode(std::move(values)));
         _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
@@ -1017,7 +1017,7 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
                         values[kv.first] = kv.second;
                     }
                     storage::Entry entry;
-                    entry.setObject(values);
+                    entry.set(bcos::storage::serialize::encode(values));
                     _executive->storage().setRow(
                         tableName, std::get<0>(entryTuple), std::move(entry));
                 }
@@ -1034,12 +1034,12 @@ void TablePrecompiled::updateByConditionV32(const std::string& tableName,
             for (size_t i = 0; i < entries.size(); ++i)
             {
                 auto&& entry = entries[i];
-                auto values = entry->getObject<std::vector<std::string>>();
+                auto values = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
                 for (auto& kv : updateValue)
                 {
                     values[kv.first] = kv.second;
                 }
-                entry->setObject(std::move(values));
+                entry->set(bcos::storage::serialize::encode(std::move(values)));
                 _executive->storage().setRow(tableName, tableKeyList[i], std::move(entry.value()));
             }
             affectedRows = tableKeyList.size();

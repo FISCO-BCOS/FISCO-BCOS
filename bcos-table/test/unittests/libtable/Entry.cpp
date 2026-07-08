@@ -23,6 +23,7 @@
 #include "bcos-framework/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/archive/binary_iarchive.hpp>
@@ -69,7 +70,7 @@ BOOST_AUTO_TEST_CASE(copyFrom)
     auto entry1 = std::make_shared<Entry>();
     auto entry2 = std::make_shared<Entry>();
     BOOST_CHECK_EQUAL(entry1->dirty(), false);
-    entry1->setField(0, "value");
+    entry1->set("value");
     BOOST_TEST(entry1->dirty() == true);
     BOOST_TEST(entry1->size() == 5);
 
@@ -78,7 +79,7 @@ BOOST_AUTO_TEST_CASE(copyFrom)
     {
         auto entry3 = Entry(*entry1);
 
-        entry3.setField(0, "i am key2");
+        entry3.set("i am key2");
 
         auto entry4(std::move(entry3));
 
@@ -87,27 +88,27 @@ BOOST_AUTO_TEST_CASE(copyFrom)
         auto entry6(std::move(entry5));
     }
 
-    BOOST_CHECK_EQUAL(entry2->getField(0), "value"sv);
+    BOOST_CHECK_EQUAL(entry2->get(), "value"sv);
 
-    entry2->setField(0, "value2");
+    entry2->set("value2");
 
-    BOOST_CHECK_EQUAL(entry2->getField(0), "value2");
-    BOOST_CHECK_EQUAL(entry1->getField(0), "value");
+    BOOST_CHECK_EQUAL(entry2->get(), "value2");
+    BOOST_CHECK_EQUAL(entry1->get(), "value");
 
-    entry2->setField(0, "value3");
+    entry2->set("value3");
     BOOST_TEST(entry2->size() == 6);
-    BOOST_TEST(entry2->getField(0) == "value3");
+    BOOST_TEST(entry2->get() == "value3");
     *entry2 = *entry2;
     BOOST_TEST(entry2->dirty() == true);
     // entry2->setDirty(false);
     entry2->setStatus(Entry::Status::NORMAL);
     BOOST_TEST(entry2->dirty() == false);
     // test setField lValue and rValue
-    entry2->setField(0, string("value2"));
+    entry2->set(string("value2"));
     BOOST_TEST(entry2->dirty() == true);
     BOOST_TEST(entry2->size() == 6);
     auto value2 = "value2";
-    entry2->setField(0, value2);
+    entry2->set(value2);
 }
 
 BOOST_AUTO_TEST_CASE(functions)
@@ -130,12 +131,12 @@ BOOST_AUTO_TEST_CASE(BytesField)
 
     entry.importFields({std::string(value)});
 
-    BOOST_CHECK_EQUAL(entry.getField(0), value);
+    BOOST_CHECK_EQUAL(entry.get(), value);
 
     Entry entry2;
     entry2.importFields({data});
 
-    BOOST_CHECK_EQUAL(entry2.getField(0), value);
+    BOOST_CHECK_EQUAL(entry2.get(), value);
 }
 
 BOOST_AUTO_TEST_CASE(capacity)
@@ -144,8 +145,7 @@ BOOST_AUTO_TEST_CASE(capacity)
 
     entry.importFields({std::string("abc")});
 
-    entry.setField(
-        0, std::string("abdflsakdjflkasjdfoiqwueroi!!!!sdlkfjsldfbclsadflaksjdfpqweioruaaa"));
+    entry.set(std::string("abdflsakdjflkasjdfoiqwueroi!!!!sdlkfjsldfbclsadflaksjdfpqweioruaaa"));
 
     BOOST_CHECK_LT(entry.size(), 100);
     BOOST_CHECK_GT(entry.size(), 0);
@@ -156,9 +156,10 @@ BOOST_AUTO_TEST_CASE(object)
     std::tuple<int, std::string, std::string> value = std::make_tuple(100, "hello", "world");
 
     Entry entry;
-    entry.setObject(value);
+    entry.set(bcos::storage::serialize::encode(value));
 
-    auto out = entry.getObject<std::tuple<int, std::string, std::string>>();
+    auto out =
+        bcos::storage::serialize::decode<std::tuple<int, std::string, std::string>>(entry.get());
 
     BOOST_CHECK(out == value);
 }
@@ -166,9 +167,9 @@ BOOST_AUTO_TEST_CASE(object)
 BOOST_AUTO_TEST_CASE(largeObject)
 {
     Entry entry;
-    entry.setField(0, std::string(1024, 'a'));
+    entry.set(std::string(1024, 'a'));
 
-    BOOST_CHECK_EQUAL(entry.getField(0), std::string(1024, 'a'));
+    BOOST_CHECK_EQUAL(entry.get(), std::string(1024, 'a'));
 }
 
 BOOST_AUTO_TEST_CASE(stringView)
@@ -190,7 +191,7 @@ BOOST_AUTO_TEST_CASE(entryHash)
 
     Entry entry;
     entry.setStatus(Entry::MODIFIED);
-    entry.setField(0, data);
+    entry.set(data);
 
     auto sm3 = std::make_shared<bcos::crypto::SM3>();
     auto oldHash = entry.hash(table, key, *sm3, 0);
@@ -210,7 +211,7 @@ BOOST_AUTO_TEST_CASE(entryHash)
     BOOST_CHECK_EQUAL(deletedHash, deletedExpect);
 
     entry.setStatus(Entry::MODIFIED);
-    entry.setField(0, data);
+    entry.set(data);
     auto modifyHash =
         entry.hash(table, key, *sm3, (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION);
     hasher = sm3->hasher();
@@ -240,7 +241,7 @@ BOOST_AUTO_TEST_CASE(smallBuffer_stdString)
     entry.set(value);
     BOOST_CHECK_EQUAL(entry.get(), value);
     BOOST_CHECK_EQUAL(entry.size(), 5);
-    BOOST_CHECK_EQUAL(entry.getField(0), value);
+    BOOST_CHECK_EQUAL(entry.get(), value);
     BOOST_CHECK_EQUAL(entry.status(), Entry::MODIFIED);
     // Verify holder has a value and data is inline (modifying source doesn't affect entry)
     BOOST_TEST(entryTestHolder(entry).has_value());
@@ -521,15 +522,16 @@ BOOST_AUTO_TEST_CASE(viewDeepCopy_stringView)
     original.clear();
     original.shrink_to_fit();
 
-    BOOST_CHECK_EQUAL(entry.get(), "string_view deep copy - entry owns its data after source destroyed");
+    BOOST_CHECK_EQUAL(
+        entry.get(), "string_view deep copy - entry owns its data after source destroyed");
     BOOST_CHECK_EQUAL(entry.size(), 66);
     BOOST_TEST(entryTestHolder(entry).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(viewDeepCopy_spanConstChar)
 {
-    std::vector<char> original = {'s', 'p', 'a', 'n', '_', 'd', 'e', 'e', 'p', '_',
-                                  'c', 'o', 'p', 'y', '_', 't', 'e', 's', 't'};
+    std::vector<char> original = {'s', 'p', 'a', 'n', '_', 'd', 'e', 'e', 'p', '_', 'c', 'o', 'p',
+        'y', '_', 't', 'e', 's', 't'};
     std::span<const char> sp(original.data(), original.size());
 
     Entry entry;
@@ -567,8 +569,7 @@ BOOST_AUTO_TEST_CASE(viewDeepCopy_spanChar)
 BOOST_AUTO_TEST_CASE(viewDeepCopy_bytesConstRef)
 {
     std::string original = "bytesConstRef deep copy test";
-    auto ref =
-        bytesConstRef(reinterpret_cast<const bcos::byte*>(original.data()), original.size());
+    auto ref = bytesConstRef(reinterpret_cast<const bcos::byte*>(original.data()), original.size());
 
     Entry entry;
     entry.set(ref);
@@ -597,6 +598,197 @@ BOOST_AUTO_TEST_CASE(viewDeepCopy_constructFromView)
     BOOST_CHECK_EQUAL(entry.get(), "constructed from string_view");
     BOOST_CHECK_EQUAL(entry.size(), 28);
     BOOST_TEST(entryTestHolder(entry).has_value());
+}
+
+// ─── Encodable test types for typed Entry tests ────────────────────
+// Must be ≤ 32 bytes to satisfy proxy's restrict_layout<SBO=32, align=8>.
+
+struct TestValueA
+{
+    int32_t id = 0;
+    int32_t nameLen = 0;
+    std::array<char, 24> nameBuf{};
+
+    TestValueA() = default;
+    TestValueA(int32_t i, std::string_view n) : id(i)
+    {
+        nameLen = static_cast<int32_t>(std::min(n.size(), nameBuf.size()));
+        std::memcpy(nameBuf.data(), n.data(), nameLen);
+    }
+    TestValueA(bytesConstRef data)
+    {
+        if (data.size() < 8)
+            return;
+        std::memcpy(&id, data.data(), 4);
+        std::memcpy(&nameLen, data.data() + 4, 4);
+        auto actualLen = std::min(static_cast<size_t>(nameLen), nameBuf.size());
+        if (data.size() >= 8 + actualLen)
+            std::memcpy(nameBuf.data(), data.data() + 8, actualLen);
+    }
+    void encode(auto&& sink) const
+    {
+        uint8_t buf[32];
+        std::memcpy(buf, &id, 4);
+        std::memcpy(buf + 4, &nameLen, 4);
+        std::memcpy(buf + 8, nameBuf.data(), nameLen);
+        sink(bytesConstRef(buf, 8 + static_cast<size_t>(nameLen)));
+    }
+    std::string nameStr() const { return std::string(nameBuf.data(), nameLen); }
+    bool operator==(const TestValueA& o) const
+    {
+        return id == o.id && nameLen == o.nameLen &&
+               std::memcmp(nameBuf.data(), o.nameBuf.data(), nameLen) == 0;
+    }
+};
+static_assert(sizeof(TestValueA) <= 32);
+
+struct TestValueB
+{
+    int64_t value = 0;
+
+    TestValueB() = default;
+    explicit TestValueB(int64_t v) : value(v) {}
+    TestValueB(bytesConstRef data)
+    {
+        if (data.size() >= 8)
+            std::memcpy(&value, data.data(), 8);
+    }
+    void encode(auto&& sink) const
+    {
+        sink(bytesConstRef(reinterpret_cast<const bcos::byte*>(&value), 8));
+    }
+    bool operator==(const TestValueB& o) const { return value == o.value; }
+};
+static_assert(sizeof(TestValueB) <= 32);
+
+// ─── tag_invoke overloads for Encodable test types ────────────────
+
+template <typename Sink>
+void tag_invoke(bcos::storage::encode_t, const TestValueA& v, Sink&& sink)
+{
+    v.encode(std::forward<Sink>(sink));
+}
+TestValueA tag_invoke(
+    bcos::storage::decode_t, std::type_identity<TestValueA>, bytesConstRef data)
+{
+    return TestValueA{data};
+}
+
+template <typename Sink>
+void tag_invoke(bcos::storage::encode_t, const TestValueB& v, Sink&& sink)
+{
+    v.encode(std::forward<Sink>(sink));
+}
+TestValueB tag_invoke(
+    bcos::storage::decode_t, std::type_identity<TestValueB>, bytesConstRef data)
+{
+    return TestValueB{data};
+}
+
+// ─── Typed Entry tests ─────────────────────────────────────────────
+
+BOOST_AUTO_TEST_CASE(setTypedGetTypedSameType)
+{
+    Entry entry;
+    TestValueA original{42, "hello"};
+    entry.setTyped(original);
+
+    // getTyped should return a valid pointer with matching data
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr != nullptr);
+    BOOST_CHECK_EQUAL(ptr->id, 42);
+    BOOST_CHECK_EQUAL(ptr->nameStr(), "hello");
+
+    // holdsType should be correct
+    BOOST_TEST(entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+}
+
+BOOST_AUTO_TEST_CASE(setTypedGetTypedDifferentType)
+{
+    Entry entry;
+    entry.setTyped(TestValueA{7, "test"});
+
+    // getTyped<TestValueB> on an Entry holding TestValueA should fail
+    auto* ptr = entry.getTyped<TestValueB>();
+    BOOST_TEST(ptr == nullptr);
+
+    // But getTyped<TestValueA> still works
+    auto* ptrA = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptrA != nullptr);
+    BOOST_CHECK_EQUAL(ptrA->id, 7);
+
+    // holdsType should distinguish
+    BOOST_TEST(entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+}
+
+BOOST_AUTO_TEST_CASE(lazyDecodeFromByteMode)
+{
+    // Start with a byte-mode Entry (simulating data from RocksDB)
+    Entry entry;
+    TestValueA original{99, "lazy"};
+    std::string encoded;
+    encode(original, [&encoded](bytesConstRef d) {
+        encoded.append(reinterpret_cast<const char*>(d.data()), d.size());
+    });
+    entry.set(encoded);
+
+    // Entry is in byte-mode; holdsType should be false for any type
+    BOOST_TEST(!entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+
+    // First getTyped triggers lazy decode
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr != nullptr);
+    BOOST_CHECK_EQUAL(ptr->id, 99);
+    BOOST_CHECK_EQUAL(ptr->nameStr(), "lazy");
+
+    // After lazy decode, entry holds the typed model
+    BOOST_TEST(entry.holdsType<TestValueA>());
+    BOOST_TEST(!entry.holdsType<TestValueB>());
+
+    // Second getTyped is O(1) — no re-decode
+    auto* ptr2 = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr2 != nullptr);
+    BOOST_CHECK(ptr == ptr2);  // Same pointer, same TypedHolderModel instance
+}
+
+BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)
+{
+    Entry entry;
+    entry.setTyped(TestValueA{55, "world"});
+
+    // Encode to bytes — should match what TestValueA::encode produces
+    auto bytes = entry.encodeToBytes();
+    TestValueA expected{55, "world"};
+    std::string expectedBytes;
+    encode(expected, [&expectedBytes](bytesConstRef d) {
+        expectedBytes.append(reinterpret_cast<const char*>(d.data()), d.size());
+    });
+    BOOST_CHECK_EQUAL(bytes, expectedBytes);
+}
+
+BOOST_AUTO_TEST_CASE(setTypedMoveSemantics)
+{
+    Entry entry;
+    TestValueA original{1, "move-test-name"};
+    auto originalName = original.nameStr();
+
+    entry.setTyped(std::move(original));
+
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_REQUIRE(ptr != nullptr);
+    BOOST_CHECK_EQUAL(ptr->id, 1);
+    BOOST_CHECK_EQUAL(ptr->nameStr(), originalName);
+}
+
+BOOST_AUTO_TEST_CASE(emptyEntryGetTyped)
+{
+    Entry entry;
+    auto* ptr = entry.getTyped<TestValueA>();
+    BOOST_TEST(ptr == nullptr);
+    BOOST_TEST(!entry.holdsType<TestValueA>());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

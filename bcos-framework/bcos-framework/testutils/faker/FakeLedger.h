@@ -23,7 +23,7 @@
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
 #include "FakeBlock.h"
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 
 #include <map>
 #include <range/v3/view/concat.hpp>
@@ -135,7 +135,8 @@ public:
         m_sealerList(std::move(std::move(_sealerList)))
     {
         init(_blockNumber, _txsSize, 0);
-        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
+        m_worker = std::make_shared<IOServicePool>(1, "ledgerWorker");
+        m_strand = std::make_unique<Strand>(m_worker);
     }
     ~FakeLedger() override
     {
@@ -150,10 +151,7 @@ public:
     }
     void stop()
     {
-        if (m_worker)
-        {
-            m_worker->stop();
-        }
+        m_worker.reset();
     }
 
     FakeLedger(
@@ -163,7 +161,8 @@ public:
         auto sigImpl = m_blockFactory->cryptoSuite()->signatureImpl();
         m_sealerList = fakeSealerList(m_keyPairVec, sigImpl, 4);
         init(_blockNumber, _txsSize, _receiptsSize);
-        m_worker = std::make_shared<ThreadPool>("ledgerWorker", 1);
+        m_worker = std::make_shared<IOServicePool>(1, "ledgerWorker");
+        m_strand = std::make_unique<Strand>(m_worker);
     }
 
     void init(size_t _blockNumber, size_t _txsSize, int64_t _timestamp = utcTime())
@@ -518,7 +517,7 @@ public:
         }
 
         auto self = std::weak_ptr<FakeLedger>(shared_from_this());
-        m_worker->enqueue([nonConstHeader, _onCommitBlock, self]() {
+        m_strand->post([nonConstHeader, _onCommitBlock, self]() {
             auto ledger = self.lock();
             if (!self.lock())
             {
@@ -579,7 +578,8 @@ private:
 
     std::map<std::string, std::string, std::less<>> m_systemConfig;
     std::vector<bytes> m_sealerList;
-    std::shared_ptr<ThreadPool> m_worker = nullptr;
+    std::shared_ptr<IOServicePool> m_worker = nullptr;
+    std::unique_ptr<Strand> m_strand;
     std::unordered_map<std::string, ledger::StorageState> m_storageState = {};
     std::string eoaInLedger;
     std::string eoaInLedgerNonce;

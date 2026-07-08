@@ -24,8 +24,8 @@
 #include <bcos-framework/gateway/GatewayInterface.h>
 #include <bcos-framework/rpc/RPCInterface.h>
 #include <bcos-tool/NodeTimeMaintenance.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/Timer.h>
-#include <boost/asio/io_context.hpp>
 #include <fisco-bcos-tars-service/Common/TarsUtils.h>
 
 namespace bcos
@@ -43,7 +43,7 @@ public:
         bcos::storage::StorageInterface::Ptr _storage,
         std::shared_ptr<bcos::front::FrontServiceInterface> _frontService,
         bcos::tool::NodeTimeMaintenance::Ptr _nodeTimeMaintenance,
-        boost::asio::io_context& _ioContext);
+        bcos::IOServicePool::Ptr _ioServicePool);
 
     virtual ~ProPBFTInitializer() { stop(); }
 

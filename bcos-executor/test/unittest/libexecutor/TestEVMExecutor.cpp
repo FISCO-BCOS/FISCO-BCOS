@@ -20,6 +20,7 @@
  */
 
 #include "../mock/MockLedger.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
@@ -262,7 +263,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     auto entry = table.getRow("code");
     BOOST_CHECK(entry);
-    BOOST_CHECK_GT(entry->getField(0).size(), 0);
+    BOOST_CHECK_GT(entry->get().size(), 0);
 
     // start new block
     auto blockHeader2 = std::make_shared<bcostars::protocol::BlockHeaderImpl>(
@@ -369,7 +370,7 @@ BOOST_AUTO_TEST_CASE(externalCall)
 
     ledger::SystemConfigEntry se = {"1", 0};
     storage::Entry entry;
-    entry.setObject(se);
+    entry.set(bcos::storage::serialize::encode(se));
     backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
     std::string ABin =
         "608060405234801561001057600080fd5b5061037f806100206000396000f3fe60806040523480156100105760"
@@ -1944,8 +1945,8 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2167,8 +2168,8 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2275,8 +2276,8 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2377,8 +2378,8 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2467,8 +2468,8 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
         std::make_shared<MockTransactionalStorage>(hashImpl);
     Entry entry;
     bcos::protocol::BlockNumber blockNumber = 0;
-    entry.setObject(
-        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber});
+    entry.set(bcos::storage::serialize::encode(
+        ledger::SystemConfigEntry{boost::lexical_cast<std::string>((int)1), blockNumber}));
     newStorage->asyncSetRow(ledger::SYS_CONFIG, "feature_evm_cancun", entry,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
     // check feature_evm_cancun whether is on
@@ -2610,7 +2611,7 @@ contract HelloFactory {
 
     ledger::SystemConfigEntry se = {"1", 0};
     storage::Entry entry;
-    entry.setObject(se);
+    entry.set(bcos::storage::serialize::encode(se));
     backend->setRow(ledger::SYS_CONFIG, "feature_evm_address", entry);
     bytes input;
     boost::algorithm::unhex(helloFactory, std::back_inserter(input));

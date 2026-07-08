@@ -3,11 +3,11 @@
 #include "TarsStruct.h"
 #include <ostream>
 
-namespace std
+namespace bcostars::protocol::impl
 {
-ostream& operator<<(ostream& os, bcostars::protocol::impl::TarsStruct auto const& st)
+inline std::ostream& operator<<(std::ostream& os, TarsStruct auto const& st)
 {
     st.displaySimple(os);
     return os;
 }
-}  // namespace std
+}  // namespace bcostars::protocol::impl

@@ -24,7 +24,6 @@
 #include <bcos-cpp-sdk/SdkFactory.h>
 #include <bcos-cpp-sdk/amop/AMOP.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <memory>
 #include <set>

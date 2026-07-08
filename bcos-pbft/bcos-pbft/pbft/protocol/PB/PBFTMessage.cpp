@@ -58,16 +58,20 @@ void PBFTMessage::deserializeToObject()
     PBFTBaseMessage::decode(baseMessageData);
 
     // decode the proposals
+    // Use aliasing shared_ptrs: sub-messages live in m_pbftRawMessage's arena,
+    // so we share ownership with m_pbftRawMessage rather than taking ownership
+    // from the arena (which would lead to a double-free).
     m_proposals->clear();
     if (m_pbftRawMessage->has_consensusproposal())
     {
-        auto* consensusProposal = m_pbftRawMessage->mutable_consensusproposal();
-        std::shared_ptr<PBFTRawProposal> rawConsensusProposal(consensusProposal);
+        auto* rawPtr = m_pbftRawMessage->mutable_consensusproposal();
+        std::shared_ptr<PBFTRawProposal> rawConsensusProposal(m_pbftRawMessage, rawPtr);
         m_consensusProposal = std::make_shared<PBFTProposal>(rawConsensusProposal);
     }
     for (int i = 0; i < m_pbftRawMessage->proposals_size(); i++)
     {
-        std::shared_ptr<PBFTRawProposal> rawProposal(m_pbftRawMessage->mutable_proposals(i));
+        auto* rawPtr = m_pbftRawMessage->mutable_proposals(i);
+        std::shared_ptr<PBFTRawProposal> rawProposal(m_pbftRawMessage, rawPtr);
         m_proposals->push_back(std::make_shared<PBFTProposal>(rawProposal));
     }
 }

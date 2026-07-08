@@ -25,6 +25,7 @@ find_package(TBB REQUIRED)
 
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
+    bcos-framework/ledger/L2ConfigLoader.cpp
     bcos-framework/multigroup/ChainNodeInfo.cpp
     bcos-framework/multigroup/GroupInfo.cpp
     bcos-framework/protocol/Protocol.cpp
@@ -43,6 +44,9 @@ target_link_libraries(bcos-framework PUBLIC
     fmt::fmt
     TBB::tbb)
 set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
+# Entry.cpp uses namespace bcos::storage which conflicts with unity build
+# namespace stacking from other translation units in the same batch.
+set_source_files_properties(bcos-framework/storage/Entry.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 
 if (TESTS)
     enable_testing()

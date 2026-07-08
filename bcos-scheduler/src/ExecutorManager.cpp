@@ -12,9 +12,9 @@
 using namespace bcos;
 using namespace bcos::scheduler;
 
-ExecutorManager::ExecutorManager()
+ExecutorManager::ExecutorManager(boost::asio::io_context& _ioService)
 {
-    m_timer = std::make_shared<Timer>(EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
+    m_timer = std::make_shared<Timer>(_ioService, EXECUTOR_MANAGER_CHECK_PERIOD, "executorMgr");
     m_timer->registerTimeoutHandler([this]() { checkExecutorStatus(); });
 }
 

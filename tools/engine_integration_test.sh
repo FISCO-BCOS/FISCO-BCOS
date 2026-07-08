@@ -156,7 +156,6 @@ cat > "${WORK_DIR}/config.ini" << CONFIG_INI_EOF
 [rpc]
 listen_ip=0.0.0.0
 listen_port=21200
-thread_count=2
 disable_ssl=true
 sm_ssl=false
 
@@ -164,7 +163,6 @@ sm_ssl=false
 enable=true
 listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
-thread_count=2
 
 [p2p]
 listen_ip=0.0.0.0

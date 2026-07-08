@@ -48,6 +48,7 @@ enum class SystemConfig
     balance_transfer,
     executor_version,
 };
+
 struct SystemConfigs
 {
 public:
@@ -102,7 +103,7 @@ public:
     static auto supportConfigs()
     {
         return ::ranges::views::iota(
-               std::size_t{0}, std::size_t{magic_enum::enum_count<SystemConfig>()}) |
+                   std::size_t{0}, std::size_t{magic_enum::enum_count<SystemConfig>()}) |
                ::ranges::views::transform([](size_t index) {
                    auto flag = magic_enum::enum_value<SystemConfig>(index);
                    return magic_enum::enum_name(flag);

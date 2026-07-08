@@ -1,3 +1,4 @@
+#include <bcos-utilities/IOServicePool.h>
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-executor/test/unittest/mock/MockTxPool.h"
 #include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
@@ -78,11 +79,12 @@ struct ShardingBlockExecutiveFixture
 {
     ShardingBlockExecutiveFixture()
     {
+        ioServicePool = std::make_shared<bcos::IOServicePool>(1, "test-sched");
         hashImpl = std::make_shared<Keccak256>();
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
         ledger = std::make_shared<MockLedger3>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>();
+        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -107,11 +109,13 @@ struct ShardingBlockExecutiveFixture
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>();
         scheduler = std::make_shared<bcos::scheduler::SchedulerImpl>(executorManager, ledger,
             storage, executionMessageFactory, blockFactory, txPool, transactionSubmitResultFactory,
-            hashImpl, false, false, false, 0);
+            hashImpl, false, false, false, 0, ioServicePool);
     }
 
     ~ShardingBlockExecutiveFixture() {}
 
+    boost::asio::io_context ioService;
+    bcos::IOServicePool::Ptr ioServicePool;
     bcos::ledger::LedgerInterface::Ptr ledger;
     bcos::scheduler::ExecutorManager::Ptr executorManager;
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory;

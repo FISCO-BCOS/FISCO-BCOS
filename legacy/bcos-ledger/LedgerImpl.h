@@ -1,0 +1,517 @@
+#pragma once
+
+#include <bcos-ledger/Ledger.h>
+#include "bcos-framework/ledger/Ledger.h"
+#include "bcos-task/Task.h"
+#include <bcos-concepts/Basic.h>
+#include <bcos-concepts/ByteBuffer.h>
+#include <bcos-concepts/Hash.h>
+#include "../concepts/bcos-concepts/ledger/Ledger.h"
+#include "../concepts/bcos-concepts/storage/Storage.h"
+#include <bcos-crypto/hasher/Hasher.h>
+#include <bcos-crypto/merkle/Merkle.h>
+#include <bcos-executor/src/Common.h>
+#include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-table/src/StateStorageFactory.h>
+#include <bcos-tool/VersionConverter.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/traits.hpp>
+#include <range/v3/view/transform.hpp>
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+#include <boost/lexical_cast.hpp>
+#include <boost/throw_exception.hpp>
+#include <type_traits>
+
+namespace bcos::ledger
+{
+
+template <bcos::crypto::hasher::Hasher Hasher, bcos::concepts::storage::Storage Storage>
+class LedgerImpl : public bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>,
+                   public Ledger
+{
+    friend bcos::concepts::ledger::LedgerBase<LedgerImpl<Hasher, Storage>>;
+    template <class T>
+    friend class bcos::concepts::ledger::LedgerBase;
+
+public:
+    LedgerImpl(Hasher hasher, Storage storage, bcos::protocol::BlockFactory::Ptr blockFactory,
+        bcos::storage::StorageInterface::Ptr storageInterface, size_t blockLimit,
+        bcos::storage::StorageInterface::Ptr blockStorage = nullptr)
+      : Ledger(std::move(blockFactory), storageInterface, blockLimit, blockStorage),
+        m_hasher(std::move(hasher)),
+        m_backupStorage(storageInterface),
+        m_storage{std::move(storage)},
+        m_merkle{m_hasher.clone()}
+    {}
+
+    void setKeyPageSize(size_t keyPageSize) { m_keyPageSize = keyPageSize; }
+
+protected:
+    template <bcos::concepts::block::Block BlockType>
+    void checkParentBlock(BlockType parentBlock, BlockType block)
+    {
+        std::array<std::byte, Hasher::HASH_SIZE> parentHash;
+        bcos::concepts::hash::calculate(parentBlock, m_hasher.clone(), parentHash);
+
+        if (::ranges::empty(block.blockHeader.data.parentInfo) ||
+            (block.blockHeader.data.parentInfo[0].blockNumber !=
+                parentBlock.blockHeader.data.blockNumber) ||
+            !bcos::concepts::bytebuffer::equalTo(
+                block.blockHeader.data.parentInfo[0].blockHash, parentHash))
+        {
+            LEDGER_LOG(ERROR) << "ParentHash mismatch!";
+            BOOST_THROW_EXCEPTION(MismatchParentHash{} << errinfo_comment{"No match parentHash!"});
+        }
+    }
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> impl_getBlock(bcos::concepts::block::BlockNumber auto blockNumber,
+        bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(INFO) << "getBlock: " << blockNumber;
+
+        auto blockNumberStr = boost::lexical_cast<std::string>(blockNumber);
+        (co_await getBlockData<Flags>(blockNumberStr, block), ...);
+    }
+    template <bcos::concepts::ledger::DataFlag... Flags>
+    task::Task<void> impl_setBlock(bcos::concepts::block::Block auto block)
+    {
+        LEDGER_LOG(INFO) << "setBlock: " << block.blockHeader.data.blockNumber;
+
+        auto blockNumberStr = boost::lexical_cast<std::string>(block.blockHeader.data.blockNumber);
+        (co_await setBlockData<Flags>(blockNumberStr, block), ...);
+        co_return;
+    }
+
+    task::Task<void> impl_getBlockNumberByHash(
+        bcos::concepts::bytebuffer::ByteBuffer auto const& hash, std::integral auto& number)
+    {
+        LEDGER_LOG(INFO) << "getBlockNumberByHash request";
+
+        auto entry = storage().getRow(SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(hash));
+
+        if (!entry)
+        {
+            number = -1;
+            co_return;
+        }
+
+        try
+        {
+            number = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
+        }
+        catch (boost::bad_lexical_cast& e)
+        {
+            // Ignore the exception
+            LEDGER_LOG(INFO) << "Cast blockNumber failed, may be empty, set to default value -1"
+                             << LOG_KV("blockNumber str", entry->get());
+            number = -1;
+        }
+    }
+
+    task::Task<void> impl_getBlockHashByNumber(
+        std::integral auto number, bcos::concepts::bytebuffer::ByteBuffer auto& hash)
+    {
+        LEDGER_LOG(INFO) << "getBlockHashByNumber request" << LOG_KV("blockNumber", number);
+
+        auto key = boost::lexical_cast<std::string>(number);
+        auto entry = storage().getRow(SYS_NUMBER_2_HASH, key);
+        if (!entry)
+        {
+            LEDGER_LOG(DEBUG) << "Not found block number: " << number;
+            co_return;
+        }
+
+        auto hashStr = entry->get();
+        bcos::concepts::bytebuffer::assignTo(hashStr, hash);
+    }
+
+    task::Task<std::string> impl_getABI(std::string _contractAddress)
+    {
+        // try to get compatibilityVersion
+        std::string contractTableName = getContractTableName("/apps/", _contractAddress);
+        auto versionEntry =
+            storage().getRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_COMPATIBILITY_VERSION);
+        auto [compatibilityVersionStr, number] =
+            bcos::storage::serialize::decode<SystemConfigEntry>(versionEntry->get());
+        if (!versionEntry)
+        {
+            LEDGER_LOG(WARNING) << "Not found compatibilityVersion: ";
+            BOOST_THROW_EXCEPTION(
+                GetABIError{} << errinfo_comment{"get compatibilityVersion not found"});
+        }
+        m_compatibilityVersion = bcos::tool::toVersionNumber(compatibilityVersionStr);
+        LEDGER_LOG(TRACE) << "getABI contractAddress is: " << _contractAddress
+                          << ", contractTableName is: " << contractTableName
+                          << ", m_compatibilityVersion is " << m_compatibilityVersion;
+
+        // create keyPageStorage
+        auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(m_keyPageSize);
+        // getABI function begin in version 320
+        auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
+            storage::IGNORED_ARRAY_310.begin(), storage::IGNORED_ARRAY_310.end());
+
+        // 此处为只读操作，不可能写，因此无需关注setRowWithDirtyFlag
+        // This is a read-only operation and it is impossible to write, so there is no need to pay
+        // attention to setRowWithDirtyFlag
+        auto stateStorage = stateStorageFactory->createStateStorage(
+            m_backupStorage, m_compatibilityVersion, false, true, keyPageIgnoreTables);
+
+        // try to get codeHash
+        auto codeHashEntry = stateStorage->getRow(contractTableName, "codeHash");
+        if (!codeHashEntry.second) [[unlikely]]
+        {
+            LEDGER_LOG(WARNING) << "Not found codeHash contractAddress:" << _contractAddress;
+            BOOST_THROW_EXCEPTION(GetABIError{} << errinfo_comment{"Get CodeHash not found"});
+        }
+        auto codeHash = codeHashEntry.second->get();
+
+        // according to codeHash get abi
+        auto entry = stateStorage->getRow(SYS_CONTRACT_ABI, codeHash);
+        if (!entry.second) [[unlikely]]
+        {
+            LEDGER_LOG(WARNING) << "Not found contractAddress abi:" << _contractAddress;
+            BOOST_THROW_EXCEPTION(GetABIError{} << errinfo_comment{"Get Abi not found"});
+        }
+
+        std::string abiStr = std::string(entry.second->get());
+        LEDGER_LOG(TRACE) << "contractAddress is " << _contractAddress
+                          << "ledger impl get abi is: " << abiStr;
+        co_return abiStr;
+    }
+
+    task::Task<void> impl_getTransactions(::ranges::range auto const& hashes, ::ranges::range auto& out)
+    {
+        bcos::concepts::resizeTo(out, ::ranges::size(hashes));
+        using DataType = ::ranges::range_value_t<std::remove_cvref_t<decltype(out)>>;
+
+        constexpr auto tableName =
+            bcos::concepts::transaction::Transaction<DataType> ? SYS_HASH_2_TX : SYS_HASH_2_RECEIPT;
+
+        LEDGER_LOG(INFO) << "getTransactions: " << tableName << " " << ::ranges::size(hashes);
+        auto entries = storage().getRows(std::string_view{tableName}, hashes);
+
+        bcos::concepts::resizeTo(out, ::ranges::size(hashes));
+        tbb::parallel_for(tbb::blocked_range<size_t>(0U, ::ranges::size(entries)),
+            [&entries, &out](const tbb::blocked_range<size_t>& range) {
+                for (auto index = range.begin(); index != range.end(); ++index)
+                {
+                    if (!entries[index])
+                    {
+                        [[unlikely]] BOOST_THROW_EXCEPTION(
+                            NotFoundTransaction{} << errinfo_comment{"Get transaction not found"});
+                    }
+
+                    auto field = entries[index]->get();
+                    auto bytesRef =
+                        bcos::bytesConstRef((const bcos::byte*)field.data(), field.size());
+                    bcos::concepts::serialize::decode(bytesRef, out[index]);
+                }
+            });
+
+        co_return;
+    }
+
+    task::Task<bcos::concepts::ledger::Status> impl_getStatus()
+    {
+        LEDGER_LOG(TRACE) << "getStatus";
+        constexpr static auto keys = std::to_array({SYS_KEY_TOTAL_TRANSACTION_COUNT,
+            SYS_KEY_TOTAL_FAILED_TRANSACTION, SYS_KEY_CURRENT_NUMBER});
+
+        bcos::concepts::ledger::Status status;
+        auto entries = storage().getRows(SYS_CURRENT_STATE, keys);
+        for (auto i = 0U; i < ::ranges::size(entries); ++i)
+        {
+            auto& entry = entries[i];
+
+            int64_t value = 0;
+            if (entry)
+            {
+                [[likely]] value = boost::lexical_cast<int64_t>(entry->get());
+            }
+
+            switch (i)
+            {
+            case 0:
+                status.total = value;
+                break;
+            case 1:
+                status.failed = value;
+                break;
+            case 2:
+                status.blockNumber = value;
+                break;
+            default:
+                BOOST_THROW_EXCEPTION(
+                    UnexpectedRowIndex{} << errinfo_comment{
+                        "Unexpected getRows index: " + boost::lexical_cast<std::string>(i)});
+                break;
+            }
+        }
+        LEDGER_LOG(TRACE) << "getStatus result: " << status.total << " | " << status.failed << " | "
+                          << status.blockNumber;
+
+        co_return status;
+    }
+
+    template <std::same_as<bcos::concepts::ledger::HEADER>>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "getBlockData header: " << blockNumberKey;
+
+        auto entry = storage().getRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey);
+        if (!entry) [[unlikely]]
+        {
+            BOOST_THROW_EXCEPTION(
+                NotFoundBlockHeader{} << errinfo_comment{"Not found block header!"});
+        }
+
+        auto field = entry->get();
+        bcos::concepts::serialize::decode(field, block.blockHeader);
+
+        co_return;
+    }
+
+    template <std::same_as<concepts::ledger::TRANSACTIONS_METADATA>>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "getBlockData transaction metadata: " << blockNumberKey;
+
+        auto entry = storage().getRow(SYS_NUMBER_2_TXS, blockNumberKey);
+        if (!entry) [[unlikely]]
+        {
+            LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
+            co_return;
+        }
+
+        auto field = entry->get();
+        std::remove_reference_t<decltype(block)> metadataBlock;
+        bcos::concepts::serialize::decode(field, metadataBlock);
+        block.transactionsMetaData = std::move(metadataBlock.transactionsMetaData);
+        block.transactionsMerkle = std::move(metadataBlock.transactionsMerkle);
+        block.receiptsMerkle = std::move(metadataBlock.receiptsMerkle);
+    }
+
+    template <class Type>
+        requires std::same_as<Type, concepts::ledger::TRANSACTIONS> ||
+                 std::same_as<Type, concepts::ledger::RECEIPTS>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "getBlockData transactions or receipts: " << blockNumberKey;
+
+        if (::ranges::empty(block.transactionsMetaData))
+        {
+            LEDGER_LOG(INFO) << "GetBlock not found transaction meta data!";
+            co_return;
+        }
+
+        auto hashesRange =
+            block.transactionsMetaData |
+            ::ranges::views::transform(
+                [](typename decltype(block.transactionsMetaData)::value_type const& metaData)
+                    -> auto& { return metaData.hash; });
+        auto outputSize = ::ranges::size(block.transactionsMetaData);
+
+        if constexpr (std::is_same_v<Type, concepts::ledger::TRANSACTIONS>)
+        {
+            bcos::concepts::resizeTo(block.transactions, outputSize);
+            co_await impl_getTransactions(std::move(hashesRange), block.transactions);
+        }
+        else
+        {
+            bcos::concepts::resizeTo(block.receipts, outputSize);
+            co_await impl_getTransactions(std::move(hashesRange), block.receipts);
+        }
+    }
+
+    template <std::same_as<concepts::ledger::NONCES>>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "getBlockData nonce: " << blockNumberKey;
+
+        auto entry = storage().getRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey);
+        if (!entry)
+        {
+            LEDGER_LOG(INFO) << "GetBlock not found nonce data!";
+            co_return;
+        }
+
+        std::remove_reference_t<decltype(block)> nonceBlock;
+        auto field = entry->get();
+        bcos::concepts::serialize::decode(field, nonceBlock);
+        block.nonceList = std::move(nonceBlock.nonceList);
+    }
+
+    template <std::same_as<concepts::ledger::ALL>>
+    task::Task<void> getBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "getBlockData all: " << blockNumberKey;
+
+        try
+        {
+            co_await getBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::TRANSACTIONS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::RECEIPTS>(blockNumberKey, block);
+            co_await getBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+        }
+        catch (std::exception const& e)
+        {
+            LEDGER_LOG(ERROR) << "getBlockData all failed";
+            BOOST_THROW_EXCEPTION(
+                GetBlockDataError{} << errinfo_comment{"getBlockData all failed!"});
+        }
+    }
+
+    template <std::same_as<bcos::concepts::ledger::HEADER>>
+    task::Task<void> setBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "setBlockData header: " << blockNumberKey;
+
+        // number 2 header
+        bcos::storage::Entry number2HeaderEntry;
+        std::vector<bcos::byte> number2HeaderBuffer;
+        bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
+        number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
+        storage().setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
+
+        // number 2 block hash
+        bcos::storage::Entry hashEntry;
+        hashEntry.importFields({block.blockHeader.dataHash});
+        storage().setRow(SYS_NUMBER_2_HASH, blockNumberKey, std::move(hashEntry));
+
+        // block hash 2 number
+        bcos::storage::Entry hash2NumberEntry;
+        hash2NumberEntry.importFields({std::string(blockNumberKey)});
+        storage().setRow(SYS_HASH_2_NUMBER,
+            std::string_view{block.blockHeader.dataHash.data(), block.blockHeader.dataHash.size()},
+            std::move(hash2NumberEntry));
+
+        // current number
+        bcos::storage::Entry numberEntry;
+        numberEntry.importFields({std::string(blockNumberKey)});
+        storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
+
+        co_return;
+    }
+
+    template <std::same_as<concepts::ledger::NONCES>>
+    task::Task<void> setBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "setBlockData nonce " << blockNumberKey;
+
+        std::remove_cvref_t<decltype(block)> blockNonceList;
+        blockNonceList.nonceList = std::move(block.nonceList);
+        bcos::storage::Entry number2NonceEntry;
+        std::vector<bcos::byte> number2NonceBuffer;
+        bcos::concepts::serialize::encode(blockNonceList, number2NonceBuffer);
+        number2NonceEntry.importFields({std::move(number2NonceBuffer)});
+        storage().setRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey, std::move(number2NonceEntry));
+
+        co_return;
+    }
+
+    template <std::same_as<concepts::ledger::TRANSACTIONS_METADATA>>
+    task::Task<void> setBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "setBlockData transaction metadata: " << blockNumberKey;
+
+        if (::ranges::empty(block.transactionsMetaData) && !::ranges::empty(block.transactions))
+        {
+            block.transactionsMetaData.resize(block.transactions.size());
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, block.transactions.size()),
+                [&block, this](const tbb::blocked_range<size_t>& range) {
+                    for (auto i = range.begin(); i < range.end(); ++i)
+                    {
+                        bcos::concepts::hash::calculate(block.transactions[i], m_hasher.clone(),
+                            block.transactionsMetaData[i].hash);
+                    }
+                });
+        }
+
+        if (std::empty(block.transactionsMetaData))
+        {
+            LEDGER_LOG(INFO) << "setBlockData not found transaction meta data!";
+            co_return;
+        }
+
+        std::remove_cvref_t<decltype(block)> transactionsBlock;
+        std::swap(block.transactionsMetaData, transactionsBlock.transactionsMetaData);
+
+        bcos::storage::Entry number2TransactionHashesEntry;
+        std::vector<bcos::byte> number2TransactionHashesBuffer;
+        bcos::concepts::serialize::encode(transactionsBlock, number2TransactionHashesBuffer);
+        number2TransactionHashesEntry.importFields({std::move(number2TransactionHashesBuffer)});
+        storage().setRow(
+            SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
+        std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);
+
+        co_return;
+    }
+
+    template <std::same_as<concepts::ledger::ALL>>
+    task::Task<void> setBlockData(
+        std::string_view blockNumberKey, bcos::concepts::block::Block auto& block)
+    {
+        LEDGER_LOG(DEBUG) << "setBlockData all: " << blockNumberKey;
+
+        co_await setBlockData<concepts::ledger::HEADER>(blockNumberKey, block);
+        co_await setBlockData<concepts::ledger::TRANSACTIONS_METADATA>(blockNumberKey, block);
+        co_await setBlockData<concepts::ledger::NONCES>(blockNumberKey, block);
+    }
+
+    task::Task<void> impl_setupGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        try
+        {
+            decltype(block) currentBlock;
+
+            co_await impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
+            co_return;
+        }
+        catch (NotFoundBlockHeader& e)
+        {
+            LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
+        }
+
+        co_await impl_setBlock<concepts::ledger::HEADER>(std::move(block));
+    }
+
+    task::Task<void> impl_checkGenesisBlock(bcos::concepts::block::Block auto block)
+    {
+        try
+        {
+            decltype(block) currentBlock;
+
+            co_await impl_getBlock<concepts::ledger::HEADER>(0, currentBlock);
+            co_return;
+        }
+        catch (NotFoundBlockHeader& e)
+        {
+            LEDGER_LOG(INFO) << "Not found genesis block, may be not initialized";
+            BOOST_THROW_EXCEPTION(
+                NotFoundBlockHeader{} << errinfo_comment{"Not found genesis block!"});
+        }
+    }
+
+    auto& storage() { return bcos::concepts::getRef(m_storage); }
+
+    Hasher m_hasher;
+    bcos::storage::StorageInterface::Ptr m_backupStorage;
+    Storage m_storage;
+    crypto::merkle::Merkle<Hasher> m_merkle;  // Use the default width 2
+    uint32_t m_compatibilityVersion = 0;
+    size_t m_keyPageSize = 0;
+};
+
+}  // namespace bcos::ledger

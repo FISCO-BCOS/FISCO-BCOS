@@ -22,7 +22,7 @@
 #pragma once
 
 #include "../CallParameters.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/IOServicePool.h"
 
 namespace bcos
 {
@@ -45,21 +45,10 @@ public:
 
     virtual void stop()
     {
-        try
-        {
-            auto pool = getPoolInstance();
-            if (pool)
-            {
-                pool->stop();
-            }
-        }
-        catch (std::exception const& e)
-        {
-            EXECUTOR_LOG(DEBUG) << "ExecutiveFlowInterface stop: " << e.what();
-        }
+        // IOServicePool lifecycle is managed by Initializer, no explicit stop needed
     }
 
-    void setThreadPool(bcos::ThreadPool::Ptr pool)
+    void setThreadPool(bcos::IOServicePool::Ptr pool)
     {
         bcos::RecursiveGuard lock(x_pool);
         m_pool = pool;
@@ -69,32 +58,21 @@ protected:
     template <class F>
     void asyncTo(F f)
     {
-        // f();
-        getPoolInstance()->enqueue([f = std::move(f)]() { f(); });
+        getPoolInstance()->post([f = std::move(f)]() { f(); });
     }
 
 private:
-    bcos::ThreadPool::Ptr getPoolInstance()
+    bcos::IOServicePool::Ptr getPoolInstance()
     {
         if (!m_pool)
         {
-            bcos::RecursiveGuard lock(x_pool);
-            if (!m_pool)
-            {
-                m_pool = std::make_shared<bcos::ThreadPool>(
-                    "ExecutiveFlow", std::thread::hardware_concurrency());
-            }
-        }
-
-        if (m_pool->hasStopped())
-        {
-            throw std::runtime_error("Executive flow has stopped");
+            throw std::runtime_error("ExecutiveFlow pool not initialized");
         }
 
         return m_pool;
     }
 
-    bcos::ThreadPool::Ptr m_pool;
+    bcos::IOServicePool::Ptr m_pool;
     bcos::RecursiveMutex x_pool;
 };
 

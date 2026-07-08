@@ -22,8 +22,8 @@
 #include "bcos-utilities/Worker.h"
 #include "bcos-utilities/Timer.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include <boost/asio/io_context.hpp>
 #include <boost/asio/executor_work_guard.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>

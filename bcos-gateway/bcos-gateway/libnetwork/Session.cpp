@@ -342,6 +342,12 @@ void Session::drop(DisconnectReason _reason)
         return;
     }
 
+    // Capture m_socket into a local shared_ptr BEFORE setting m_active = false.
+    // The test thread may call setSocket(nullptr) as soon as active() returns false,
+    // which creates a data race on m_socket.  Using a local copy guarantees we
+    // hold a valid reference for the entire teardown sequence.
+    auto socket = m_socket;
+
     m_active = false;
 
     int errorCode = P2PExceptionType::Disconnect;
@@ -352,18 +358,18 @@ void Session::drop(DisconnectReason _reason)
         errorMsg = "DuplicateSession";
     }
 
-    SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
-                      << LOG_KV("this", this) << LOG_KV("endpoint", nodeIPEndpoint());
-
-    // Guard against null m_socket (e.g. test sets it to nullptr before destructor)
-    if (!m_socket)
+    // Guard against null socket (e.g. test sets it to nullptr before destructor)
+    if (!socket)
     {
         return;
     }
 
+    SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
+                      << LOG_KV("this", this) << LOG_KV("endpoint", socket->nodeIPEndpoint());
+
     if (m_messageHandler)
     {
-        boost::asio::post(m_socket->ioService(),
+        boost::asio::post(socket->ioService(),
             [self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
                 auto session = self.lock();
                 if (!session)
@@ -375,26 +381,25 @@ void Session::drop(DisconnectReason _reason)
             });
     }
 
-    if (m_socket->isConnected())
+    if (socket->isConnected())
     {
         try
         {
             if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
                 _reason == ClientQuit || _reason == UserReason)
             {
-                SESSION_LOG(DEBUG) << "[drop] closing remote " << m_socket->remoteEndpoint()
+                SESSION_LOG(DEBUG) << "[drop] closing remote " << socket->remoteEndpoint()
                                    << LOG_KV("reason", reasonOf(_reason))
-                                   << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                                   << LOG_KV("endpoint", socket->nodeIPEndpoint());
             }
             else
             {
-                SESSION_LOG(INFO) << "[drop] closing remote " << m_socket->remoteEndpoint()
+                SESSION_LOG(INFO) << "[drop] closing remote " << socket->remoteEndpoint()
                                   << LOG_KV("reason", reasonOf(_reason))
-                                  << LOG_KV("endpoint", m_socket->nodeIPEndpoint());
+                                  << LOG_KV("endpoint", socket->nodeIPEndpoint());
             }
 
             /// if get Host object failed, close the socket directly
-            auto socket = m_socket;
             if (socket->isConnected())
             {
                 socket->close();
@@ -448,7 +453,7 @@ void Session::drop(DisconnectReason _reason)
         }
         catch (...)
         {
-            SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", nodeIPEndpoint());
+            SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", socket->nodeIPEndpoint());
         }
     }
 }
@@ -589,6 +594,17 @@ void Session::doRead()
                     {
                         SESSION_LOG(ERROR) << LOG_DESC("Decode message exception")
                                            << LOG_KV("message", boost::diagnostic_information(e));
+                        session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
+                                               "ProtocolError(decode msg exception)"),
+                            message);
+                        session->drop(UserReason);
+                        break;
+                    }
+                    catch (...)
+                    {
+                        SESSION_LOG(ERROR)
+                            << LOG_DESC("Decode message exception")
+                            << LOG_KV("message", boost::current_exception_diagnostic_information());
                         session->onMessage(NetworkException(P2PExceptionType::ProtocolError,
                                                "ProtocolError(decode msg exception)"),
                             message);

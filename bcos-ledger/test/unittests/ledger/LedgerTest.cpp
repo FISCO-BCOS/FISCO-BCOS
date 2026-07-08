@@ -22,10 +22,11 @@
  */
 
 #include "bcos-ledger/Ledger.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/interfaces/crypto/KeyPairInterface.h"
-#include "bcos-crypto/hasher/OpenSSLHasher.h"
 #include "bcos-crypto/merkle/Merkle.h"
 #include "bcos-framework/ledger/GenesisConfig.h"
 #include "bcos-framework/ledger/Ledger.h"
@@ -57,6 +58,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
+#include <magic_enum/magic_enum.hpp>
 #include <memory>
 
 using namespace bcos;
@@ -67,26 +69,29 @@ using namespace bcos::crypto;
 using namespace bcos::tool;
 using namespace std::string_literals;
 
-namespace std
+namespace bcos::storage
 {
-inline ostream& operator<<(ostream& os, const std::optional<Entry>& entry)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Entry>& entry)
 {
     os << entry.has_value();
     return os;
 }
 
-inline ostream& operator<<(ostream& os, const std::optional<Table>& table)
+inline std::ostream& operator<<(std::ostream& os, const std::optional<Table>& table)
 {
     os << table.has_value();
     return os;
 }
+}  // namespace bcos::storage
 
-inline ostream& operator<<(ostream& os, const std::unique_ptr<Error>& error)
+namespace bcos
+{
+inline std::ostream& operator<<(std::ostream& os, const std::unique_ptr<Error>& error)
 {
     os << error->what();
     return os;
 }
-}  // namespace std
+}  // namespace bcos
 
 namespace bcos::test
 {
@@ -581,7 +586,7 @@ BOOST_AUTO_TEST_CASE(test_3_0_FixtureLedger)
     m_storage->asyncGetRow(
         tool::FS_ROOT, tool::FS_KEY_SUB, [&](Error::UniquePtr, std::optional<Entry> _entry) {
             std::map<std::string, std::string> bfsInfos;
-            auto&& out = asBytes(std::string(_entry->getField(0)));
+            auto&& out = asBytes(std::string(_entry->get()));
             codec::scale::decode(bfsInfos, gsl::make_span(out));
             for (const auto& item : v)
             {
@@ -703,7 +708,7 @@ BOOST_AUTO_TEST_CASE(getBlockNumberByHash)
             BOOST_CHECK(!error);
             BOOST_CHECK(hashEntry);
             auto hash = bcos::crypto::HashType(
-                std::string(hashEntry->getField(0)), bcos::crypto::HashType::FromBinary);
+                std::string(hashEntry->get()), bcos::crypto::HashType::FromBinary);
 
             Entry numberEntry;
             m_storage->asyncSetRow(SYS_HASH_2_NUMBER,
@@ -1337,12 +1342,12 @@ BOOST_AUTO_TEST_CASE(getSystemConfig)
     auto table = tablePromise.get_future().get();
 
     auto oldEntry = table.getRow(SYSTEM_KEY_TX_COUNT_LIMIT);
-    auto [txCountLimit, enableNum] = oldEntry->getObject<SystemConfigEntry>();
+    auto [txCountLimit, enableNum] = bcos::storage::serialize::decode<SystemConfigEntry>(oldEntry->get());
     BOOST_CHECK_EQUAL(txCountLimit, "1000");
     BOOST_CHECK_EQUAL(enableNum, 0);
 
     Entry newEntry = table.newEntry();
-    newEntry.setObject(SystemConfigEntry{"2000", 5});
+    newEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{"2000", 5}));
 
     table.setRow(SYSTEM_KEY_TX_COUNT_LIMIT, newEntry);
 
@@ -1436,22 +1441,22 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         SystemConfigEntry config;
 
         config = {"12", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_COUNT_LIMIT}, value);
 
         config = {"100", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_CONSENSUS_LEADER_PERIOD}, value);
 
         config = {"200", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_TX_GAS_LIMIT}, value);
 
         config = {"3.8.1", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_COMPATIBILITY_VERSION}, value);
 
@@ -1464,12 +1469,12 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         // co_await storage2::writeOne(*m_storage, KeyType{SYS_NUMBER_2_HASH, "10086"}, value);
 
         config = {"1", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_SWITCH}, value);
 
         config = {"12345", 0};
-        value.setObject(config);
+        value.set(bcos::storage::serialize::encode(config));
         co_await storage2::writeOne(
             *m_storage, KeyType{SYS_CONFIG, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM}, value);
 
@@ -1567,6 +1572,61 @@ BOOST_AUTO_TEST_CASE(genesisBlockWithAllocs)
     }());
 }
 
+BOOST_AUTO_TEST_CASE(genesisSystemConfigFeatureFlags)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        auto hashImpl = std::make_shared<Keccak256>();
+        auto memoryStorage = std::make_shared<StateStorage>(nullptr, false);
+        auto storage = std::make_shared<MockStorage>(memoryStorage);
+        auto ledger = std::make_shared<Ledger>(m_blockFactory, storage, 1);
+
+        LedgerConfig param;
+        param.setBlockNumber(0);
+        param.setHash(HashType(""));
+        param.setBlockTxCountLimit(0);
+
+        GenesisConfig genesisConfig;
+        genesisConfig.m_txGasLimit = 3000000000;
+        genesisConfig.m_compatibilityVersion =
+            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_6_VERSION);
+        // enable the L2 feature in genesis
+        genesisConfig.m_features.push_back(
+            ledger::FeatureSet{.flag = Features::Flag::feature_l2_ethereum_compat, .enable = 1});
+        // SystemConfig predeploy at the canonical L2 address (no 0x prefix, 40 hex)
+        genesisConfig.m_allocs.push_back(
+            Alloc{.address = "42000000000000000000000000000000000000c0",
+                .balance = {},
+                .nonce = {},
+                .code = "6080604052",
+                .storage = {}});
+
+        co_await ledger::buildGenesisBlock(*ledger, genesisConfig, param);
+
+        // slot = keccak256(utf8("feature_flags") || be32(101))
+        bcos::bytes slotInput;
+        std::string key = "feature_flags";
+        slotInput.insert(slotInput.end(), key.begin(), key.end());
+        bcos::bytes baseSlot(32, 0);
+        baseSlot[31] = 101;
+        slotInput.insert(slotInput.end(), baseSlot.begin(), baseSlot.end());
+        auto slotHash = hashImpl->hash(bcos::ref(slotInput));
+
+        auto tableName = fmt::format(
+            "{}{}", SYS_DIRECTORY::USER_APPS, "42000000000000000000000000000000000000c0");
+        auto slotView = std::string_view(reinterpret_cast<const char*>(slotHash.data()), 32);
+        auto entry =
+            co_await storage2::readOne(*storage, executor_v1::StateKeyView(tableName, slotView));
+        BOOST_REQUIRE(entry.has_value());
+        auto value = entry->get();
+        BOOST_CHECK_EQUAL(value.size(), 32U);
+
+        // the feature_l2_ethereum_compat bit (= its enum value) must be set in the big-endian value
+        auto idx = static_cast<size_t>(Features::Flag::feature_l2_ethereum_compat);
+        auto theByte = static_cast<uint8_t>(value[value.size() - 1 - (idx / 8)]);
+        BOOST_CHECK(((theByte >> (idx % 8)) & 1U) == 1U);
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
 {
     task::syncWait([this]() -> task::Task<void> {
@@ -1586,8 +1646,7 @@ BOOST_AUTO_TEST_CASE(genesisExecutorVersion)
                           magic_enum::enum_name(ledger::SystemConfig::executor_version)));
         BOOST_REQUIRE(value);
 
-        ledger::SystemConfigEntry entry;
-        value->getObject(entry);
+        auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(value->get());
         using namespace std::string_view_literals;
         BOOST_CHECK_EQUAL(std::get<0>(entry), "10086"sv);
     }());

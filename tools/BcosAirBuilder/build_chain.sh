@@ -1376,7 +1376,6 @@ generate_config_ini() {
 [rpc]
     listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
-    thread_count=4
     ; ssl or sm ssl
     sm_ssl=false
     ; ssl connection switch, if you wan to disable the ssl connection, turn it to false, default: true
@@ -1389,7 +1388,6 @@ generate_config_ini() {
     enable=${enable_web3_rpc}
     listen_ip=0.0.0.0
     listen_port=8545
-    thread_count=8
     request_body_size_limit=10240000
     ; cors config for web3 rpc
     enable_cors=true
@@ -1465,10 +1463,6 @@ generate_common_ini() {
 [txpool]
     ; size of the txpool, default is 15000
     limit=15000
-    ; txs notification threads num, default is 2
-    notify_worker_num=2
-    ; txs verification threads num, default is the number of CPU cores
-    ;verify_worker_num=2
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
     ; permit txs from free node or not, default is false
@@ -1608,7 +1602,6 @@ generate_sm_config_ini() {
 [rpc]
     listen_ip=${rpc_listen_ip}
     listen_port=${rpc_listen_port}
-    thread_count=4
     ; ssl or sm ssl
     sm_ssl=true
     ; ssl connection switch, if you wan to disable the ssl connection, turn it to false, default: true
@@ -1620,7 +1613,6 @@ generate_sm_config_ini() {
     enable=false
     listen_ip=0.0.0.0
     listen_port=8545
-    thread_count=8
     http_body_size_limit=10240000
     ; cors config for web3 rpc
     enable_cors=true
@@ -2563,7 +2555,6 @@ enable_storage_security = false
     listen_ip="0.0.0.0"
     # rpc listen port
     listen_port=${rpc_listen_port}
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port

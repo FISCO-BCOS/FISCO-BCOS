@@ -21,7 +21,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
-#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>
@@ -83,7 +83,7 @@ BOOST_FIXTURE_TEST_SUITE(StateStorageTest, TableFactoryFixture)
 
 BOOST_AUTO_TEST_CASE(constructor)
 {
-    auto threadPool = ThreadPool("a", 1);
+    auto threadPool = IOServicePool(1, "a");
     auto tf = std::make_shared<StateStorage>(memoryStorage, false);
 }
 
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(rollback)
         crypto::HashType("ab98649ca506b076000000000000000000000000000000000000000000000001").hex());
 #endif
     auto entry = std::make_optional(table->newEntry());
-    BOOST_REQUIRE_NO_THROW(entry->setField(0, "Lili"));
+    BOOST_REQUIRE_NO_THROW(entry->set("Lili"));
     BOOST_REQUIRE_NO_THROW(table->setRow("name", *entry));
 
     hash = tableFactory->hash(hashImpl, features);
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     entry = table->getRow("name");
     BOOST_REQUIRE(entry.has_value());
     BOOST_REQUIRE(entry->dirty() == true);
-    BOOST_REQUIRE(entry->getField(0) == "Lili");
+    BOOST_REQUIRE(entry->get() == "Lili");
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
     BOOST_CHECK_EQUAL(hash.hex(),
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     tableFactory->setRecoder(savePoint);
 
     entry = table->newEntry();
-    entry->setField(0, "12345");
+    entry->set("12345");
     table->setRow("id", *entry);
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -165,7 +165,7 @@ BOOST_AUTO_TEST_CASE(rollback)
     tableFactory->setRecoder(savePoint1);
 
     entry = table->newEntry();
-    entry->setField(0, "500");
+    entry->set("500");
     table->setRow("balance", *entry);
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -265,7 +265,7 @@ BOOST_AUTO_TEST_CASE(rollback)
 
     // insert without version
     entry = table->newEntry();
-    entry->setField(0, "new record");
+    entry->set("new record");
     BOOST_REQUIRE_NO_THROW(table->setRow("id", *entry));
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -303,7 +303,7 @@ BOOST_AUTO_TEST_CASE(rollback2)
 #endif
     auto entry = std::make_optional(table->newEntry());
     // entry->setField("key", "name");
-    entry->setField(0, "Lili");
+    entry->set("Lili");
     table->setRow("name", *entry);
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -319,14 +319,14 @@ BOOST_AUTO_TEST_CASE(rollback2)
 #endif
     // BOOST_REQUIRE(table->dirty() == true);
     BOOST_REQUIRE(entry->dirty() == true);
-    BOOST_REQUIRE(entry->getField(0) == "Lili");
+    BOOST_REQUIRE(entry->get() == "Lili");
     // auto savePoint = tableFactory->savepoint();
     auto savePoint = std::make_shared<Recoder>();
     tableFactory->setRecoder(savePoint);
 
     entry = table->newEntry();
     // entry->setField("key", "id");
-    entry->setField(0, "12345");
+    entry->set("12345");
     table->setRow("id", *entry);
     hash = tableFactory->hash(hashImpl, features);
 #if defined(__APPLE__)
@@ -404,14 +404,14 @@ BOOST_AUTO_TEST_CASE(hash)
     auto table = tableFactory->openTable(testTableName);
     auto entry = std::make_optional(table->newEntry());
     // entry->setField("key", "name");
-    entry->setField(0, "Lili");
+    entry->set("Lili");
     BOOST_CHECK_NO_THROW(table->setRow("name", *entry));
     entry = table->getRow("name");
     BOOST_TEST(entry);
 
     entry = std::make_optional(table->newEntry());
     // entry->setField("key", "id");
-    entry->setField(0, "12345");
+    entry->set("12345");
     BOOST_CHECK_NO_THROW(table->setRow("id", *entry));
     entry = table->getRow("id");
     BOOST_TEST(entry);
@@ -448,14 +448,14 @@ BOOST_AUTO_TEST_CASE(hash)
     // getPrimaryKeys and getRows
     entry = table->newEntry();
     // entry->setField("key", "id");
-    entry->setField(0, "12345");
+    entry->set("12345");
     BOOST_CHECK_NO_THROW(table->setRow("id", *entry));
     entry = table->getRow("name");
-    entry->setField(0, "Wang");
+    entry->set("Wang");
     BOOST_CHECK_NO_THROW(table->setRow("name", *entry));
     entry = table->newEntry();
     // entry->setField("key", "balance");
-    entry->setField(0, "12345");
+    entry->set("12345");
     BOOST_CHECK_NO_THROW(table->setRow("balance", *entry));
     BOOST_TEST(entry);
     keys = table->getPrimaryKeys({});
@@ -518,13 +518,13 @@ BOOST_AUTO_TEST_CASE(openAndCommit)
         auto table = tableFactory2->openTable(tableName);
 
         auto entry = std::make_optional(table->newEntry());
-        entry->setField(0, "hello world!");
+        entry->set("hello world!");
         table->setRow(key, *entry);
 
         std::promise<bool> getRow;
         table->asyncGetRow(key, [&](auto&& error, auto&& result) {
             BOOST_CHECK(!error);
-            BOOST_CHECK_EQUAL(result->getField(0), "hello world!");
+            BOOST_CHECK_EQUAL(result->get(), "hello world!");
 
             getRow.set_value(true);
         });
@@ -556,7 +556,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                 auto entry = std::make_optional(table->newEntry());
                 auto key =
                     boost::lexical_cast<std::string>(i) + boost::lexical_cast<std::string>(k);
-                entry->setField(0, boost::lexical_cast<std::string>(i));
+                entry->set(boost::lexical_cast<std::string>(i));
                 BOOST_CHECK_NO_THROW(table->setRow(key, *entry));
             }
         }
@@ -627,7 +627,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                                 BOOST_CHECK_EQUAL(entry->dirty(), false);
                             }
                             BOOST_CHECK_EQUAL(
-                                entry->getField(0), boost::lexical_cast<std::string>(i));
+                                entry->get(), boost::lexical_cast<std::string>(i));
                         }
                     }
                 }
@@ -643,7 +643,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                 // BOOST_CHECK_NE(tableInfo, nullptr);
                 if (table != "s_tables")
                 {
-                    auto i = boost::lexical_cast<int>(entry.getField(0));
+                    auto i = boost::lexical_cast<int>(entry.get());
 
                     BOOST_CHECK_LE(i, index);
                 }
@@ -667,7 +667,7 @@ BOOST_AUTO_TEST_CASE(chainLink)
                 // BOOST_CHECK_NE(tableInfo, nullptr);
                 if (table != "s_tables")
                 {
-                    auto i = boost::lexical_cast<int>(entry.getField(0));
+                    auto i = boost::lexical_cast<int>(entry.get());
 
                     if (i == index)
                     {
@@ -822,7 +822,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     for (auto& it : values3)
     {
         BOOST_CHECK(it);
-        BOOST_CHECK_EQUAL(it->getField(0), "ddd1");
+        BOOST_CHECK_EQUAL(it->get(), "ddd1");
         BOOST_CHECK_EQUAL(it->dirty(), true);
     }
 
@@ -833,7 +833,7 @@ BOOST_AUTO_TEST_CASE(getRows)
     for (auto& it : values4)
     {
         BOOST_CHECK(it);
-        BOOST_CHECK_EQUAL(it->getField(0), "data" + boost::lexical_cast<std::string>(count));
+        BOOST_CHECK_EQUAL(it->get(), "data" + boost::lexical_cast<std::string>(count));
         BOOST_CHECK_EQUAL(it->dirty(), false);
         ++count;
     }
@@ -983,7 +983,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
         BOOST_CHECK(!error);
         BOOST_CHECK(entry);
-        BOOST_CHECK_EQUAL(entry->getField(0), "value2");
+        BOOST_CHECK_EQUAL(entry->get(), "value2");
     });
 
     storage2->rollback(*recoder);
@@ -991,7 +991,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRow)
     storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
         BOOST_CHECK(!error);
         BOOST_CHECK(entry);
-        BOOST_CHECK_EQUAL(entry->getField(0), "value1");
+        BOOST_CHECK_EQUAL(entry->get(), "value1");
     });
 }
 
@@ -1024,7 +1024,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
             BOOST_CHECK(!error);
             BOOST_CHECK_EQUAL(entry.size(), 1);
-            BOOST_CHECK_EQUAL(entry[0].value().getField(0), "value2");
+            BOOST_CHECK_EQUAL(entry[0].value().get(), "value2");
         });
 
     storage2->rollback(*recoder);
@@ -1033,7 +1033,7 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         "table", keys, [](Error::UniquePtr error, std::vector<std::optional<Entry>> entry) {
             BOOST_CHECK(!error);
             BOOST_CHECK_EQUAL(entry.size(), 1);
-            BOOST_CHECK_EQUAL(entry[0].value().getField(0), "value1");
+            BOOST_CHECK_EQUAL(entry[0].value().get(), "value1");
         });
 }
 

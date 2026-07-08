@@ -24,7 +24,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <bcos-utilities/Common.h>
-#include <bcos-utilities/ThreadPool.h>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>

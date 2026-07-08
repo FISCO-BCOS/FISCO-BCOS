@@ -33,10 +33,10 @@ public:
 class JsonRpcFilterSystem : public FilterSystem
 {
 public:
-    JsonRpcFilterSystem(GroupManager::Ptr groupManager, const std::string& groupId,
-        int filterTimeout, int maxBlockProcessPerReq)
-      : FilterSystem(groupManager, groupId, std::make_shared<JsonRpcFilterRequestFactory>(),
-            filterTimeout, maxBlockProcessPerReq)
+    JsonRpcFilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
+        const std::string& groupId, int filterTimeout, int maxBlockProcessPerReq)
+      : FilterSystem(_ioService, groupManager, groupId,
+            std::make_shared<JsonRpcFilterRequestFactory>(), filterTimeout, maxBlockProcessPerReq)
     {}
 
     virtual int32_t InvalidParamsCode() override { return JsonRpcError::InvalidParams; }

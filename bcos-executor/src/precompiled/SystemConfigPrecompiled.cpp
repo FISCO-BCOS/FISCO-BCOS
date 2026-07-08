@@ -27,6 +27,7 @@
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include <bcos-framework/storage/Serialize.h>
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
 #include <boost/archive/binary_iarchive.hpp>
@@ -227,7 +228,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 
             auto entry = table->newEntry();
             auto systemConfigEntry = SystemConfigEntry{configValue, blockContext.number() + 1};
-            entry.setObject(systemConfigEntry);
+            entry.set(bcos::storage::serialize::encode(systemConfigEntry));
 
             table->setRow(configKey, std::move(entry));
 
@@ -368,7 +369,7 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
         auto entry = table->getRow(_key);
         if (entry) [[likely]]
         {
-            auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
+            auto [value, enableNumber] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
             return {value, enableNumber};
         }
 

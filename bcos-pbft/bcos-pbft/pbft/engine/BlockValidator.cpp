@@ -29,7 +29,7 @@ void BlockValidator::asyncCheckBlock(
     Block::Ptr _block, std::function<void(Error::Ptr, bool)> _onVerifyFinish)
 {
     auto self = weak_from_this();
-    m_taskPool->enqueue([self, _block, _onVerifyFinish]() {
+    m_strand.post([self, _block, _onVerifyFinish]() {
         auto blockHeader = _block->blockHeader();
 
         // Separate result computation from callback delivery (FIB-139):
@@ -75,6 +75,13 @@ void BlockValidator::asyncCheckBlock(
                               << LOG_KV("message", boost::diagnostic_information(e));
             verifyResult = false;
         }
+        catch (...)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock unknown exception")
+                              << LOG_KV(
+                                     "message", boost::current_exception_diagnostic_information());
+            verifyResult = false;
+        }
         // Invoke the callback exactly once; catch any exception it may throw so that
         // the worker thread is not terminated and the callback is not double-fired.
         try
@@ -85,6 +92,12 @@ void BlockValidator::asyncCheckBlock(
         {
             PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish exception")
                               << LOG_KV("message", boost::diagnostic_information(e));
+        }
+        catch (...)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("asyncCheckBlock: _onVerifyFinish unknown exception")
+                              << LOG_KV(
+                                     "message", boost::current_exception_diagnostic_information());
         }
     });
 }

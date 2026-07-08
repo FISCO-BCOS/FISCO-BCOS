@@ -52,8 +52,10 @@ if(NOT ONLY_CPP_SDK)
     find_package(ittapi CONFIG REQUIRED)
 endif ()
 
+add_subdirectory(legacy)
+
 if(WITH_LIGHTNODE)
-    add_subdirectory(lightnode)
+    add_subdirectory(legacy/lightnode)
 endif()
 
 if(FULLNODE)
@@ -114,6 +116,10 @@ endif()
 
 if(TOOLS)
   add_subdirectory(tools)
+endif()
+
+if(WITH_L2_CONTRACTS)
+    add_subdirectory(bcos-l2-contracts)
 endif()
 
 # for code coverage

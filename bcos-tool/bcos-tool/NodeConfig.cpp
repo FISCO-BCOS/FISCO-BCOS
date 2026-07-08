@@ -43,6 +43,12 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <cstdint>
+#include <set>
+#include <string_view>
 #include <thread>
 #include <utility>
 
@@ -54,6 +60,62 @@ using namespace bcos::tool;
 using namespace bcos::consensus;
 using namespace bcos::ledger;
 using namespace bcos::protocol;
+
+namespace
+{
+// Trust-boundary helpers for [alloc.N] parsing. Functions are camelCase; no
+// members so no m_ prefix.
+bool isHex(std::string_view sv)
+{
+    return !sv.empty() &&
+           std::all_of(sv.begin(), sv.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
+}
+
+// Require that `value` (the raw config value of `field` in `section`) is a
+// 0x-prefixed hex string. If expectedLen > 0, the hex body (after 0x) must be
+// exactly that many chars; otherwise it must merely be valid hex of even
+// length when `evenLength` is set. Throws InvalidConfig naming section+field.
+void requireHexField(std::string const& section, std::string const& field, std::string const& value,
+    size_t expectedLen, bool evenLength)
+{
+    if (value.rfind("0x", 0) != 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " must be 0x-prefixed: " + value));
+    }
+    std::string_view body{value};
+    body.remove_prefix(2);
+    if (expectedLen > 0 && body.size() != expectedLen)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " must be " +
+                                  std::to_string(expectedLen) + " hex chars: " + value));
+    }
+    if (!isHex(body))
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[" + section + "]." + field + " is not valid hex: " + value));
+    }
+    if (evenLength && (body.size() % 2) != 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be even-length hex: " + value));
+    }
+}
+
+void requireDecimalField(
+    std::string const& section, std::string const& field, std::string const& value)
+{
+    if (value.empty() || !std::all_of(value.begin(), value.end(),
+                             [](unsigned char c) { return std::isdigit(c) != 0; }))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "[" + section + "]." + field + " must be decimal digits: " + value));
+    }
+}
+}  // namespace
 
 NodeConfig::NodeConfig(KeyFactory::Ptr _keyFactory)
   : m_keyFactory(std::move(_keyFactory)), m_ledgerConfig(std::make_shared<LedgerConfig>())
@@ -137,6 +199,132 @@ void NodeConfig::loadGenesisConfig(boost::property_tree::ptree const& _genesisCo
 
     loadLedgerConfig(_genesisConfig);
     loadExecutorConfig(_genesisConfig);
+
+    // === A6.5: L2 genesis allocs; L2 mode is gated by feature_l2_ethereum_compat ===
+    loadAllocs(_genesisConfig);
+    validateL2Invariants();
+}
+
+void NodeConfig::loadAllocs(boost::property_tree::ptree const& _genesisConfig)
+{
+    // NOTE on boost read_ini representation (verified empirically):
+    // [alloc.0] becomes a FLAT top-level ptree key literally named "alloc.0"
+    // (NOT nested alloc->0), and [alloc.0.storage] is a separate flat key
+    // "alloc.0.storage". Because get_child treats '.' as a path separator,
+    // the storage sub-tree must be fetched with a NUL ('\0') path separator
+    // so the literal dotted key is matched.
+    m_genesisConfig.m_allocs.clear();
+    std::set<std::string> seen;
+    for (auto const& kv : _genesisConfig)
+    {
+        if (kv.first.rfind("alloc.", 0) != 0)
+        {
+            continue;
+        }
+        if (kv.first.find(".storage") != std::string::npos)
+        {
+            continue;
+        }
+        ledger::Alloc alloc;
+        try
+        {
+            alloc.address = kv.second.get<std::string>("address");
+            std::transform(alloc.address.begin(), alloc.address.end(), alloc.address.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+            requireHexField(kv.first, "address", alloc.address, 40, false);
+            if (!seen.insert(alloc.address).second)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig()
+                    << errinfo_comment("[" + kv.first + "].address duplicate: " + alloc.address));
+            }
+            auto balance = kv.second.get<std::string>("balance", "0");
+            requireDecimalField(kv.first, "balance", balance);
+            alloc.balance = u256(balance);
+            alloc.nonce = kv.second.get<std::string>("nonce", "0");
+            requireDecimalField(kv.first, "nonce", alloc.nonce);
+            // nonce is serialized into the genesis allocs hash as a uint64
+            // big-endian field; reject anything that does not fit uint64 here so
+            // the operator gets a clear error instead of a silent truncation /
+            // parse failure at hashing time. requireDecimalField already pinned
+            // the value to decimal digits, so the only remaining failure is
+            // overflow, which lexical_cast reports via bad_lexical_cast.
+            try
+            {
+                boost::lexical_cast<uint64_t>(alloc.nonce);
+            }
+            catch (boost::bad_lexical_cast const&)
+            {
+                BOOST_THROW_EXCEPTION(
+                    InvalidConfig() << errinfo_comment(
+                        "[" + kv.first + "].nonce must fit in uint64: " + alloc.nonce));
+            }
+            alloc.code = kv.second.get<std::string>("code");
+            requireHexField(kv.first, "code", alloc.code, 0, true);
+            // storage section is a sibling flat key "<alloc.N>.storage"; '\0'
+            // separator avoids boost interpreting the dots as a nested path.
+            boost::property_tree::ptree::path_type storagePath(kv.first + ".storage", '\0');
+            if (auto storageNode = _genesisConfig.get_child_optional(storagePath))
+            {
+                for (auto const& slot : *storageNode)
+                {
+                    requireHexField(kv.first + ".storage", "key", slot.first, 64, false);
+                    requireHexField(kv.first + ".storage", "value", slot.second.data(), 64, false);
+                    alloc.storage.emplace_back(slot.first, slot.second.data());
+                }
+            }
+        }
+        catch (InvalidConfig const&)
+        {
+            // already names the offending section + field; surface as-is.
+            throw;
+        }
+        catch (std::exception const& e)
+        {
+            // boost ptree (missing key, bad data) and u256 parse failures land
+            // here; name the failing [alloc.N] section so the operator can find it.
+            BOOST_THROW_EXCEPTION(
+                InvalidConfig() << errinfo_comment("[" + kv.first + "] malformed: " + e.what()));
+        }
+        NodeConfig_LOG(INFO) << LOG_DESC("loadAllocs") << LOG_KV("section", kv.first)
+                             << LOG_KV("address", alloc.address)
+                             << LOG_KV("storageSlots", alloc.storage.size());
+        m_genesisConfig.m_allocs.push_back(std::move(alloc));
+    }
+}
+
+void NodeConfig::validateL2Invariants()
+{
+    auto const& genesis = m_genesisConfig;
+    // L2 mode is signalled by the feature_l2_ethereum_compat flag in [features];
+    // there is no separate chain_mode. allocs and the flag must agree.
+    bool l2Enabled = std::any_of(genesis.m_features.begin(), genesis.m_features.end(),
+        [](ledger::FeatureSet const& featureSet) {
+            return featureSet.flag == ledger::Features::Flag::feature_l2_ethereum_compat &&
+                   featureSet.enable > 0;
+        });
+    if (l2Enabled && genesis.m_allocs.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "feature_l2_ethereum_compat requires a non-empty [alloc.*] "
+                                  "section in config.genesis"));
+    }
+    if (!l2Enabled && !genesis.m_allocs.empty())
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "[alloc.*] section requires feature_l2_ethereum_compat enabled "
+                                  "in [features]"));
+    }
+    // L2 predeploys/genesis are EVM-only (loadExecutorConfig at ~201 already set
+    // m_isWasm before this runs). The WASM executor builds a different precompiled
+    // map and has no L2 ethereum-compat path, so reject the combination up front.
+    // Reuses the l2Enabled bit already computed above.
+    if (l2Enabled && genesis.m_isWasm)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "feature_l2_ethereum_compat requires the EVM executor; "
+                                  "is_wasm=true is not supported"));
+    }
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -402,7 +590,6 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     */
     std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("rpc.listen_port", 20200);
-    int threadCount = _pt.get<int>("rpc.thread_count", 8);
     int filterTimeout = _pt.get<int>("rpc.filter_timeout", 300);
     int maxProcessBlock = _pt.get<int>("rpc.filter_max_process_block", 10);
     bool smSsl = _pt.get<bool>("rpc.sm_ssl", false);
@@ -414,9 +601,16 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     }
     bool needRetInput = _pt.get<bool>("rpc.return_input_params", true);
 
+    // Deprecation warning for removed rpc.thread_count
+    if (_pt.get_optional<int>("rpc.thread_count"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadRpcConfig: rpc.thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     m_rpcListenIP = listenIP;
     m_rpcListenPort = listenPort;
-    m_rpcThreadPoolSize = threadCount;
     m_rpcDisableSsl = disableSsl;
     m_rpcSmSsl = smSsl;
     m_rpcFilterTimeout = filterTimeout * 1000;  // to milliseconds
@@ -454,7 +648,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     */
     const std::string listenIP = _pt.get<std::string>("web3_rpc.listen_ip", "127.0.0.1");
     const int listenPort = _pt.get<int>("web3_rpc.listen_port", 8545);
-    const int threadCount = _pt.get<int>("web3_rpc.thread_count", 8);
     const int filterTimeout = _pt.get<int>("web3_rpc.filter_timeout", 300);
     const int maxProcessBlock = _pt.get<int>("web3_rpc.filter_max_process_block", 10);
     const bool enableWeb3Rpc = _pt.get<bool>("web3_rpc.enable", false);
@@ -470,9 +663,16 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
         "web3_rpc.cors_allowed_headers", "Content-Type, Authorization, X-Requested-With");
     const int32_t corsMaxAge = _pt.get<int32_t>("web3_rpc.cors_max_age", 86400);
 
+    // Deprecation warning for removed web3_rpc.thread_count
+    if (_pt.get_optional<int>("web3_rpc.thread_count"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadWeb3RpcConfig: web3_rpc.thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     m_web3RpcListenIP = listenIP;
     m_web3RpcListenPort = listenPort;
-    m_web3RpcThreadSize = threadCount;
     m_enableWeb3Rpc = enableWeb3Rpc;
     m_web3FilterTimeout = filterTimeout * 1000;  // to milliseconds
     m_web3MaxProcessBlock = maxProcessBlock;
@@ -488,7 +688,6 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadWeb3RpcConfig") << LOG_KV("enableWeb3Rpc", enableWeb3Rpc)
                          << LOG_KV("listenIP", listenIP) << LOG_KV("listenPort", listenPort)
-                         << LOG_KV("listenPort", listenPort) << LOG_KV("threadCount", threadCount)
                          << LOG_KV("filterTimeout", filterTimeout)
                          << LOG_KV("maxProcessBlock", maxProcessBlock)
                          << LOG_KV("batchRequestSizeLimit", batchRequestSizeLimit)
@@ -602,24 +801,25 @@ void NodeConfig::loadCertConfig(boost::property_tree::ptree const& _pt)
 // load the txpool related params
 void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
 {
+    // Deprecation warnings for removed txpool thread config keys
+    if (_pt.get_optional<std::string>("txpool.notify_worker_num"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadTxPoolConfig: txpool.notify_worker_num is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+    if (_pt.get_optional<std::string>("txpool.verify_worker_num"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadTxPoolConfig: txpool.verify_worker_num is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
     m_txpoolLimit = checkAndGetValue(_pt, "txpool.limit", "15000");
     if (m_txpoolLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfig() << errinfo_comment("Please set txpool.limit to positive !"));
-    }
-    m_notifyWorkerNum = checkAndGetValue(_pt, "txpool.notify_worker_num", "2");
-    if (m_notifyWorkerNum <= 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set txpool.notify_worker_num to positive !"));
-    }
-    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num",
-        std::to_string(std::min(8U, std::thread::hardware_concurrency() + 1)));
-    if (m_verifierWorkerNum <= 0)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "Please set txpool.verify_worker_num to positive !"));
     }
     // the txs expiration time, in second
     auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
@@ -648,8 +848,6 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     }
     m_preStoreMaxInflight = static_cast<size_t>(preStoreCap);
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
-                         << LOG_KV("notifierWorkers", m_notifyWorkerNum)
-                         << LOG_KV("verifierWorkers", m_verifierWorkerNum)
                          << LOG_KV("checkBlockLimit", m_checkBlockLimit)
                          << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime)
                          << LOG_KV("enableTxsFromFreeNode", m_enableTxsFromFreeNode)
@@ -1021,13 +1219,29 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     m_vmCacheSize = _pt.get<int>("executor.vm_cache_size", 1024);
     m_baselineSchedulerConfig.grainSize =
         _pt.get<int>("executor.baseline_scheduler_chunksize", 100);
-    m_baselineSchedulerConfig.maxThread = _pt.get<int>("executor.baseline_scheduler_maxthread", 16);
     m_baselineSchedulerConfig.parallel =
         _pt.get<bool>("executor.baseline_scheduler_parallel", false);
 
+    // Deprecation warning for removed config keys
+    if (_pt.get_optional<std::string>("executor.baseline_scheduler_maxthread"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadOthersConfig: executor.baseline_scheduler_maxthread is deprecated, "
+                        "use thread_pool.tbb_thread_count instead");
+    }
+    if (_pt.get_optional<std::string>("rpc.tars_rpc_thread_count"))
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC("loadOthersConfig: rpc.tars_rpc_thread_count is deprecated, "
+                        "use thread_pool.io_thread_count instead");
+    }
+
+    m_ioThreadCount = checkAndGetValue(_pt, "thread_pool.io_thread_count",
+        std::to_string(std::thread::hardware_concurrency() + 1));
+    m_tbbThreadCount = checkAndGetValue(_pt, "thread_pool.tbb_thread_count", "0");
+
     m_tarsRPCConfig.host = _pt.get<std::string>("rpc.tars_rpc_host", "127.0.0.1");
     m_tarsRPCConfig.port = _pt.get<int>("rpc.tars_rpc_port", 0);
-    m_tarsRPCConfig.threadCount = _pt.get<int>("rpc.tars_rpc_thread_count", 8);
 
     m_checkTransactionSignature = _pt.get<bool>("experimental.check_transaction_signature", true);
     m_checkParallelConflict = _pt.get<bool>("experimental.check_parallel_conflict", true);
@@ -1040,6 +1254,8 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
 
     NodeConfig_LOG(INFO) << LOG_DESC("loadOthersConfig") << LOG_KV("sendTxTimeout", m_sendTxTimeout)
                          << LOG_KV("vmCacheSize", m_vmCacheSize)
+                         << LOG_KV("ioThreadCount", m_ioThreadCount)
+                         << LOG_KV("tbbThreadCount", m_tbbThreadCount)
                          << LOG_KV("checkTransactionSignature", m_checkTransactionSignature)
                          << LOG_KV("checkParallelConflict", m_checkParallelConflict)
                          << LOG_KV("singlePointConsensus", m_singlePointConsensus)
@@ -1372,16 +1588,6 @@ size_t NodeConfig::txpoolLimit() const
     return m_txpoolLimit;
 }
 
-size_t NodeConfig::notifyWorkerNum() const
-{
-    return m_notifyWorkerNum;
-}
-
-size_t NodeConfig::verifierWorkerNum() const
-{
-    return m_verifierWorkerNum;
-}
-
 int64_t NodeConfig::txsExpirationTime() const
 {
     return m_txsExpirationTime;
@@ -1672,11 +1878,6 @@ uint16_t NodeConfig::rpcListenPort() const
     return m_rpcListenPort;
 }
 
-uint32_t NodeConfig::rpcThreadPoolSize() const
-{
-    return m_rpcThreadPoolSize;
-}
-
 uint32_t NodeConfig::rpcFilterTimeout() const
 {
     return m_rpcFilterTimeout;
@@ -1710,11 +1911,6 @@ const std::string& NodeConfig::web3RpcListenIP() const
 uint16_t NodeConfig::web3RpcListenPort() const
 {
     return m_web3RpcListenPort;
-}
-
-uint32_t NodeConfig::web3RpcThreadSize() const
-{
-    return m_web3RpcThreadSize;
 }
 
 uint32_t NodeConfig::web3FilterTimeout() const
@@ -2022,6 +2218,16 @@ bool NodeConfig::preStoreBackpressureEnabled() const
 size_t NodeConfig::preStoreMaxInflight() const
 {
     return m_preStoreMaxInflight;
+}
+
+size_t NodeConfig::ioThreadCount() const
+{
+    return m_ioThreadCount;
+}
+
+size_t NodeConfig::tbbThreadCount() const
+{
+    return m_tbbThreadCount;
 }
 
 void NodeConfig::loadAlloc(boost::property_tree::ptree const& ptree)

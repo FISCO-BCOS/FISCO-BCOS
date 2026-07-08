@@ -62,7 +62,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_nodeInitializer->initConfig(_configFilePath, _genesisFile, "", true);
 
     auto ioServicePool =
-        std::make_shared<bcos::IOServicePool>(std::thread::hardware_concurrency() + 1, "io");
+        std::make_shared<bcos::IOServicePool>(nodeConfig->ioThreadCount(), "io");
     m_nodeInitializer->setIOServicePool(ioServicePool);
 
     // create gateway
@@ -107,11 +107,11 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // tars rpc
     if (!nodeConfig->tarsRPCConfig().host.empty() && nodeConfig->tarsRPCConfig().port > 0 &&
-        nodeConfig->tarsRPCConfig().threadCount > 0)
+        nodeConfig->ioThreadCount() > 0)
     {
         m_tarsApplication.emplace(nodeService);
         m_tarsConfig.emplace(RPCApplication::generateTarsConfig(nodeConfig->tarsRPCConfig().host,
-            nodeConfig->tarsRPCConfig().port, nodeConfig->tarsRPCConfig().threadCount));
+            nodeConfig->tarsRPCConfig().port, nodeConfig->ioThreadCount()));
     }
 }
 
@@ -167,7 +167,6 @@ void AirNodeInitializer::stop()
             m_tarsApplication->terminate();
             m_tarsThread->join();
         }
-
     }
     catch (std::exception const& e)
     {

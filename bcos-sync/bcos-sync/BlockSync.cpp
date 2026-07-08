@@ -39,14 +39,15 @@ using namespace bcos::ledger;
 using namespace bcos::tool;
 
 BlockSync::BlockSync(
-    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext, unsigned _idleWaitMs)
+    BlockSyncConfig::Ptr _config, boost::asio::io_context& _ioContext,
+    bcos::IOServicePool::Ptr _ioServicePool, unsigned _idleWaitMs)
   : Worker(_ioContext, "syncWorker", _idleWaitMs),
     m_config(_config),
     m_syncStatus(std::make_shared<SyncPeerStatus>(_config)),
-    m_downloadingQueue(std::make_shared<DownloadingQueue>(_config))
+    m_downloadingQueue(std::make_shared<DownloadingQueue>(_config)),
+    m_downloadStrand(_ioServicePool),
+    m_sendStrand(_ioServicePool)
 {
-    m_downloadBlockProcessor = std::make_shared<bcos::ThreadPool>("Download", 1);
-    m_sendBlockProcessor = std::make_shared<bcos::ThreadPool>("SyncSend", 1);
     m_downloadingTimer =
         std::make_shared<Timer>(_ioContext, m_config->downloadTimeout(), "downloadTimer");
 
@@ -162,14 +163,6 @@ void BlockSync::stop()
         return;
     }
     BLKSYNC_LOG(INFO) << LOG_DESC("Stop BlockSync");
-    if (m_downloadBlockProcessor)
-    {
-        m_downloadBlockProcessor->stop();
-    }
-    if (m_sendBlockProcessor)
-    {
-        m_sendBlockProcessor->stop();
-    }
     if (m_downloadingTimer)
     {
         m_downloadingTimer->destroy();
@@ -180,7 +173,6 @@ void BlockSync::stop()
     {
         // stop the worker thread
         stopWorking();
-        terminate();
     }
 }
 
@@ -221,25 +213,31 @@ void BlockSync::executeWorker()
     }
     // maintain the connections between observers/sealers
     maintainPeersConnection();
-    m_downloadBlockProcessor->enqueue([this]() {
+    auto self = weak_from_this();
+    m_downloadStrand.post([self]() {
+        auto sync = self.lock();
+        if (!sync)
+        {
+            return;
+        }
         try
         {
             // flush downloaded buffer into downloading queue
-            maintainDownloadingBuffer();
-            maintainDownloadingQueue();
+            sync->maintainDownloadingBuffer();
+            sync->maintainDownloadingQueue();
 
             // send block-download-request to peers if this node is behind others
-            tryToRequestBlocks();
+            sync->tryToRequestBlocks();
 
-            if (m_config->syncArchivedBlockBody())
+            if (sync->m_config->syncArchivedBlockBody())
             {
-                auto archivedBlockNumber = m_config->archiveBlockNumber();
+                auto archivedBlockNumber = sync->m_config->archiveBlockNumber();
                 if (archivedBlockNumber == 0)
                 {
                     return;
                 }
-                syncArchivedBlockBody(archivedBlockNumber);
-                verifyAndCommitArchivedBlock(archivedBlockNumber);
+                sync->syncArchivedBlockBody(archivedBlockNumber);
+                sync->verifyAndCommitArchivedBlock(archivedBlockNumber);
             }
         }
         catch (std::exception const& e)
@@ -250,10 +248,15 @@ void BlockSync::executeWorker()
         }
     });
     // send block to other nodes
-    m_sendBlockProcessor->enqueue([this]() {
+    m_sendStrand.post([self]() {
+        auto sync = self.lock();
+        if (!sync)
+        {
+            return;
+        }
         try
         {
-            maintainBlockRequest();
+            sync->maintainBlockRequest();
         }
         catch (std::exception const& e)
         {
@@ -1180,11 +1183,9 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
         BLKSYNC_LOG(ERROR) << LOG_DESC("BlockSync verify archived block failed")
                            << LOG_KV("number", topBlockNumber)
                            << LOG_KV("transactionRoot", toHex(transactionRoot))
-                           << LOG_KV(
-                                  "localTransactionRoot", toHex(localBlockHeader->txsRoot()))
+                           << LOG_KV("localTransactionRoot", toHex(localBlockHeader->txsRoot()))
                            << LOG_KV("receiptRoot", toHex(receiptRoot))
-                           << LOG_KV("localReceiptRoot",
-                                  toHex(localBlockHeader->receiptsRoot()))
+                           << LOG_KV("localReceiptRoot", toHex(localBlockHeader->receiptsRoot()))
                            << LOG_KV("reason", "transactionRoot or receiptRoot not match");
         WriteGuard lock(x_archivedBlockQueue);
         m_archivedBlockQueue.pop();
@@ -1206,7 +1207,7 @@ void BlockSync::verifyAndCommitArchivedBlock(bcos::protocol::BlockNumber archive
     {
         WriteGuard lock(x_archivedBlockQueue);
         for (auto topNumber = m_archivedBlockQueue.top()->blockHeader()->number();
-            topNumber >= topBlockNumber;)
+             topNumber >= topBlockNumber;)
         {
             m_archivedBlockQueue.pop();
             if (!m_archivedBlockQueue.empty())

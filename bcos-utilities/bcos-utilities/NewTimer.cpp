@@ -28,53 +28,81 @@ bcos::timer::TimerTask bcos::timer::Timer::timerTask() const
 }
 void bcos::timer::Timer::start()
 {
-    if (m_running)
+    if (bool running = false; !m_running.compare_exchange_strong(running, true))
     {
         return;
     }
-    m_running = true;
 
-    if (m_delayMS > 0)
-    {  // delay handle
-        startDelayTask();
-    }
-    else if (m_periodMS > 0)
+    // For direct execution (no steady_timer involved), execute synchronously.
+    // This preserves the original behavior and avoids unnecessary dispatch.
+    if (m_delayMS <= 0 && m_periodMS <= 0)
     {
-        // periodic task handle
-        startPeriodTask();
-    }
-    else
-    {
-        // execute the task directly
         executeTask();
+        return;
     }
+
+    // Dispatch to io_context thread for thread safety (steady_timer is not
+    // thread-safe).  If already on the io_context thread this runs
+    // synchronously; otherwise it posts asynchronously.
+    boost::asio::dispatch(*m_ioService, [weak = weak_from_this()]() {
+        auto self = weak.lock();
+        if (!self || !self->m_running)
+        {
+            return;
+        }
+
+        if (self->m_delayMS > 0)
+        {
+            self->startDelayTask();
+        }
+        else if (self->m_periodMS > 0)
+        {
+            self->startPeriodTask();
+        }
+    });
 }
 void bcos::timer::Timer::stop()
 {
-    if (!m_running)
+    if (bool running = true; !m_running.compare_exchange_strong(running, false))
     {
         return;
     }
 
-    if (m_delayHandler)
-    {
-        m_delayHandler->cancel();
-    }
+    // Dispatch cancel to io_context thread to avoid racing with async_wait
+    // handlers.  Lifecycle protected by weak_ptr.
+    boost::asio::dispatch(*m_ioService, [weak = weak_from_this()]() {
+        auto self = weak.lock();
+        if (!self)
+        {
+            return;
+        }
 
-    if (m_timerHandler)
-    {
-        m_timerHandler->cancel();
-    }
+        if (self->m_delayHandler.has_value())
+        {
+            self->m_delayHandler->cancel();
+        }
+
+        if (self->m_timerHandler.has_value())
+        {
+            self->m_timerHandler->cancel();
+        }
+    });
 }
 void bcos::timer::Timer::startDelayTask()
 {
-    m_delayHandler = std::make_shared<boost::asio::steady_timer>(*(m_ioService));
+    m_delayHandler.emplace(*m_ioService);
 
     auto self = weak_from_this();
     m_delayHandler->expires_after(std::chrono::milliseconds(m_delayMS));
-    m_delayHandler->async_wait([self](const boost::system::error_code& e) {
+    m_delayHandler->async_wait([self](const boost::system::error_code& error) {
+        // The timer has been cancelled
+        if (error == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+
         auto timer = self.lock();
-        if (!timer)
+        if (!timer || !timer->m_running)
         {
             return;
         }
@@ -91,18 +119,29 @@ void bcos::timer::Timer::startDelayTask()
 }
 void bcos::timer::Timer::startPeriodTask()
 {
-    m_timerHandler = std::make_shared<boost::asio::steady_timer>(*m_ioService);
+    m_timerHandler.emplace(*m_ioService);
     auto self = weak_from_this();
     m_timerHandler->expires_after(std::chrono::milliseconds(m_periodMS));
-    m_timerHandler->async_wait([self](const boost::system::error_code& e) {
+    m_timerHandler->async_wait([self](const boost::system::error_code& error) {
+        // The timer has been cancelled
+        if (error == boost::asio::error::operation_aborted)
+        {
+            return;
+        }
+
         auto timer = self.lock();
-        if (!timer)
+        if (!timer || !timer->m_running)
         {
             return;
         }
 
         timer->executeTask();
-        timer->startPeriodTask();
+        // Only re-arm if still running (stop() may have been called during
+        // executeTask())
+        if (timer->m_running)
+        {
+            timer->startPeriodTask();
+        }
     });
 }
 void bcos::timer::Timer::executeTask()
@@ -123,75 +162,9 @@ void bcos::timer::Timer::executeTask()
 bcos::timer::TimerFactory::TimerFactory(std::shared_ptr<boost::asio::io_context> _ioService)
   : m_ioService(std::move(_ioService))
 {}
-bcos::timer::TimerFactory::TimerFactory() : m_ioService(std::make_shared<boost::asio::io_context>())
-{
-    // No io_service object is provided, create io_service and the worker thread
-    startThread();
-}
-bcos::timer::TimerFactory::~TimerFactory()
-{
-    stopThread();
-}
 bcos::timer::Timer::Ptr bcos::timer::TimerFactory::createTimer(
     TimerTask&& _task, int _periodMS, int _delayMS)  // NOLINT
 {
     auto timer = std::make_shared<Timer>(m_ioService, std::move(_task), _periodMS, _delayMS);
     return timer;
-}
-void bcos::timer::TimerFactory::startThread()
-{
-    if (m_worker)
-    {
-        return;
-    }
-    m_running = true;
-
-    BCOS_LOG(INFO) << LOG_BADGE("startThread") << LOG_DESC("start the timer thread");
-
-    m_worker = std::make_unique<std::thread>([this]() {
-        bcos::pthread_setThreadName(m_threadName);
-        BCOS_LOG(INFO) << LOG_BADGE("startThread") << LOG_DESC("the timer thread start")
-                       << LOG_KV("threadName", m_threadName);
-        while (m_running)
-        {
-            try
-            {
-                auto work = boost::asio::make_work_guard(*m_ioService);
-                m_ioService->run();
-                if (!m_running)
-                {
-                    break;
-                }
-            }
-            catch (std::exception const& e)
-            {
-                BCOS_LOG(WARNING) << LOG_BADGE("startThread")
-                                  << LOG_DESC("Exception in Worker Thread of timer")
-                                  << LOG_KV("message", boost::diagnostic_information(e));
-            }
-            m_ioService->stop();
-        }
-
-        BCOS_LOG(INFO) << LOG_BADGE("startThread") << LOG_DESC("the timer thread stop");
-    });
-}
-void bcos::timer::TimerFactory::stopThread()
-{
-    if (!m_worker)
-    {
-        return;
-    }
-    m_running = false;
-    BCOS_LOG(INFO) << LOG_BADGE("stopThread") << LOG_DESC("stop the timer thread");
-
-    m_ioService->stop();
-    if (m_worker->get_id() != std::this_thread::get_id())
-    {
-        m_worker->join();
-        m_worker.reset();
-    }
-    else
-    {
-        m_worker->detach();
-    }
 }

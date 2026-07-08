@@ -78,13 +78,10 @@ private:
     void removeEdge(VertexID source, VertexID target, Seq seq);
 };
 
+bool operator<(const GraphKeyLocks::Vertex& lhs,
+    const GraphKeyLocks::KeyLockView& rhs);
+
+bool operator<(const GraphKeyLocks::KeyLockView& lhs,
+    const GraphKeyLocks::Vertex& rhs);
+
 }  // namespace bcos::scheduler
-
-namespace std
-{
-bool operator<(const bcos::scheduler::GraphKeyLocks::Vertex& lhs,
-    const bcos::scheduler::GraphKeyLocks::KeyLockView& rhs);
-
-bool operator<(const bcos::scheduler::GraphKeyLocks::KeyLockView& lhs,
-    const bcos::scheduler::GraphKeyLocks::Vertex& rhs);
-}  // namespace std

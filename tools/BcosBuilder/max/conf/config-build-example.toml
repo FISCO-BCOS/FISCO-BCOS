@@ -51,7 +51,6 @@ enable_storage_security = false
     deploy_ip=["127.0.0.1"]
     listen_ip="0.0.0.0"
     listen_port=20200
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -101,7 +100,6 @@ enable_storage_security = false
     deploy_ip=["127.0.0.1"]
     listen_ip="0.0.0.0"
     listen_port=20220
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -150,7 +148,6 @@ enable_storage_security = false
     deploy_ip=["127.0.0.1"]
     listen_ip="0.0.0.0"
     listen_port=20240
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port
@@ -198,7 +195,6 @@ enable_storage_security = false
     deploy_ip=["127.0.0.1"]
     listen_ip="0.0.0.0"
     listen_port=20260
-    thread_count=4
     # rpc tars server listen ip
     tars_listen_ip="0.0.0.0"
     # rpc tars server listen port

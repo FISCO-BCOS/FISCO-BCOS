@@ -8,8 +8,9 @@ using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::rpc::filter;
 
-FilterSystem::FilterSystem(GroupManager::Ptr groupManager, std::string groupId,
-    FilterRequestFactory::Ptr factory, int filterTimeout, int maxBlockProcessPerReq)
+FilterSystem::FilterSystem(boost::asio::io_context& _ioService, GroupManager::Ptr groupManager,
+    std::string groupId, FilterRequestFactory::Ptr factory, int filterTimeout,
+    int maxBlockProcessPerReq)
   : m_filterTimeout(filterTimeout),
     m_maxBlockProcessPerReq(maxBlockProcessPerReq),
     m_groupManager(std::move(groupManager)),
@@ -19,7 +20,8 @@ FilterSystem::FilterSystem(GroupManager::Ptr groupManager, std::string groupId,
     m_filters(CPU_CORES)
 {
     // Trigger a filter cleanup operation every 3s
-    m_cleanUpTimer = std::make_shared<Timer>(CLEANUP_FILTER_TIME, "filter_system_timer");
+    m_cleanUpTimer =
+        std::make_shared<Timer>(_ioService, CLEANUP_FILTER_TIME, "filter_system_timer");
     m_cleanUpTimer->registerTimeoutHandler([this] { cleanUpExpiredFilters(); });
     m_cleanUpTimer->start();
 }

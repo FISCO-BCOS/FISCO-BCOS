@@ -70,8 +70,15 @@ void GatewayInitializer::init(std::string const& _configPath)
     auto protocolInitializer = std::make_shared<bcos::initializer::ProtocolInitializer>();
     protocolInitializer->init(nodeConfig);
 
+    // Create IOServicePool for the MAX/TARS gateway service.
+    // In AIR mode this pool is shared across all modules; here each service
+    // runs in its own process and needs its own pool.
+    m_ioServicePool = std::make_shared<bcos::IOServicePool>(
+        std::thread::hardware_concurrency(), "gateway-io");
+
     bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName(),
         protocolInitializer->getKeyEncryptionByType(nodeConfig->keyEncryptionType()));
+    factory.setIOServicePool(m_ioServicePool);
     auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
                              << LOG_KV("certPath", m_gatewayConfig->certPath())

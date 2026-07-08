@@ -1,3 +1,4 @@
+#include <bcos-utilities/IOServicePool.h>
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
@@ -34,12 +35,13 @@ struct BlockExecutiveFixture
 {
     BlockExecutiveFixture()
     {
+        ioServicePool = std::make_shared<bcos::IOServicePool>(1, "test-sched");
         hashImpl = std::make_shared<Keccak256>();
         signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
 
         ledger = std::make_shared<MockLedger2>();
-        executorManager = std::make_shared<scheduler::ExecutorManager>();
+        executorManager = std::make_shared<scheduler::ExecutorManager>(ioService);
 
         // create RocksDBStorage
         rocksdb::DB* db;
@@ -81,6 +83,8 @@ struct BlockExecutiveFixture
         }
     }
 
+    boost::asio::io_context ioService;
+    bcos::IOServicePool::Ptr ioServicePool;
     ledger::LedgerInterface::Ptr ledger;
     scheduler::ExecutorManager::Ptr executorManager;
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory;
@@ -158,7 +162,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     auto table = prom.get_future().get();
     auto entry = table.getRow(SYS_KEY_CURRENT_NUMBER);
     BOOST_CHECK_EQUAL(entry.has_value(), true);
-    auto blockNumber = entry->getField("value");
+    auto blockNumber = entry->get();
     BOOST_CHECK_EQUAL(blockNumber, "100");
 }
 

@@ -139,9 +139,9 @@ struct TestTiKVStorageFixture
                         BOOST_CHECK_EQUAL(entries.size(), tableEntries);
                         for (size_t i = 0; i < tableEntries; ++i)
                         {
-                            // BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
+                            // BOOST_CHECK_EQUAL(entries[i]->get(), std::string("value3"));
                             BOOST_CHECK_EQUAL(
-                                entries[i]->getField(0), std::string("value_") + keys[i].substr(3));
+                                entries[i]->get(), std::string("value_") + keys[i].substr(3));
                         }
                     });
             });
@@ -404,13 +404,13 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -440,7 +440,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table1Keys[i][3]);
                     }
                 });
@@ -463,7 +463,7 @@ BOOST_AUTO_TEST_CASE(asyncPrepare)
 
                     for (size_t i = 0; i < 10; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table2Keys[i][3]);
                     }
                 });
@@ -508,13 +508,13 @@ BOOST_AUTO_TEST_CASE(asyncPrepareTimeout)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -575,13 +575,13 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table1Keys[i].substr(3));
                     }
                 });
@@ -660,7 +660,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -723,7 +723,7 @@ BOOST_AUTO_TEST_CASE(singleStorageRollback)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
     }
     auto params1 = bcos::protocol::TwoPCParams();
@@ -783,13 +783,13 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -869,7 +869,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
     }
@@ -949,13 +949,13 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -1050,7 +1050,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table1Keys[i].substr(3));
                     }
                 });
@@ -1073,7 +1073,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -1091,7 +1091,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
                     for (size_t i = 0; i < total; ++i)
                     {
                         auto value = "value_" + keys[i].substr(3);
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0), value);
+                        BOOST_CHECK_EQUAL(entries[i]->get(), value);
                     }
                 });
         });
@@ -1174,13 +1174,13 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     {
         auto entry = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
-        entry.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry.set("hello world!" + boost::lexical_cast<std::string>(i));
         table1->setRow(key1, entry);
         table1Keys.push_back(key1);
 
         auto entry2 = table2->newEntry();
         auto key2 = "key" + boost::lexical_cast<std::string>(i);
-        entry2.setField(0, "hello world!" + boost::lexical_cast<std::string>(i));
+        entry2.set("hello world!" + boost::lexical_cast<std::string>(i));
         table2->setRow(key2, entry2);
         table2Keys.push_back(key2);
     }
@@ -1262,7 +1262,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table1Keys[i].substr(3));
                     }
                 });
@@ -1285,7 +1285,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
 
                     for (size_t i = 0; i < tableEntries; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0),
+                        BOOST_CHECK_EQUAL(entries[i]->get(),
                             std::string("hello world!") + table2Keys[i].substr(3));
                     }
                 });
@@ -1302,7 +1302,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
                     for (size_t i = 0; i < total; ++i)
                     {
                         auto value = "value_" + keys[i].substr(3);
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0), value);
+                        BOOST_CHECK_EQUAL(entries[i]->get(), value);
                     }
                 });
         });
@@ -1353,7 +1353,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
                     // for (size_t i = 0; i < tableEntries; ++i)
                     // {
                     //     BOOST_CHECK_EQUAL(keys[i], "");
-                    //     BOOST_CHECK_EQUAL(entries[i]->getField(0), "");
+                    //     BOOST_CHECK_EQUAL(entries[i]->get(), "");
                     // }
                 });
         });

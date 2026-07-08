@@ -43,6 +43,21 @@ BOOST_AUTO_TEST_CASE(EmptyCodeHashLiteralPinned)
         emptyCodeHash().hex(), "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
 }
 
+// The constants are computed on first use from the hasher's definition (HasherT({0x80}) and
+// HasherT("")). The two literal-pinning cases above prove the keccak instantiation; this case
+// covers the parameterization itself: a non-default hasher (SM3) yields its own distinct,
+// stable values rather than the keccak literals.
+BOOST_AUTO_TEST_CASE(NonDefaultHasherYieldsOwnConstants)
+{
+    using SM3 = bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher;
+    BOOST_CHECK(emptyRootHash<SM3>() != emptyRootHash());
+    BOOST_CHECK(emptyCodeHash<SM3>() != emptyCodeHash());
+    BOOST_CHECK(emptyRootHash<SM3>() != emptyCodeHash<SM3>());
+    // Meyers-singleton stability: repeated calls return the same cached value.
+    BOOST_CHECK(emptyRootHash<SM3>() == emptyRootHash<SM3>());
+    BOOST_CHECK(emptyCodeHash<SM3>() == emptyCodeHash<SM3>());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test

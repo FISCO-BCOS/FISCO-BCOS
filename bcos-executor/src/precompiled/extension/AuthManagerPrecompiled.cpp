@@ -550,7 +550,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
             return {};
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         typeStr.assign(fields[2]);
     }
     else
@@ -576,7 +576,7 @@ u256 AuthManagerPrecompiled::getDeployAuthType(
                     << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
                 return {};
             }
-            auto fields = entry->getObject<std::vector<std::string>>();
+            auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
             typeStr.assign(fields[2]);
         }
     }
@@ -640,9 +640,9 @@ void AuthManagerPrecompiled::setDeployType(
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         fields[2] = boost::lexical_cast<std::string>(type);
-        entry->setObject(fields);
+        entry->set(bcos::storage::serialize::encode(fields));
         _executive->storage().setRow(
             tool::FS_ROOT, tool::FS_APPS.substr(1), std::move(entry.value()));
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
@@ -695,7 +695,7 @@ void AuthManagerPrecompiled::setDeployAuth(
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
 
         const auto insertIndex = (type == (int)AuthType::WHITE_LIST_MODE) ? 3 : 4;
 
@@ -708,7 +708,7 @@ void AuthManagerPrecompiled::setDeployAuth(
         // covered writing
         aclMap[account] = access;
         fields[insertIndex] = asString(codec::scale::encode(aclMap));
-        entry->setObject(fields);
+        entry->set(bcos::storage::serialize::encode(fields));
 
         _executive->storage().setRow(
             tool::FS_ROOT, tool::FS_APPS.substr(1), std::move(entry.value()));
@@ -719,7 +719,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     auto getAclStr =
         (type == (int)AuthType::BLACK_LIST_MODE) ? tool::FS_ACL_BLACK : tool::FS_ACL_WHITE;
     auto entry = _executive->storage().getRow(tool::FS_APPS, getAclStr);
-    auto mapStr = std::string(entry->getField(0));
+    auto mapStr = std::string(entry->get());
     if (!mapStr.empty())
     {
         auto&& out = asBytes(mapStr);
@@ -727,7 +727,7 @@ void AuthManagerPrecompiled::setDeployAuth(
     }
     // covered writing
     aclMap[account] = access;
-    entry->setField(0, asString(codec::scale::encode(aclMap)));
+    entry->set(asString(codec::scale::encode(aclMap)));
     _executive->storage().setRow(tool::FS_APPS, getAclStr, std::move(entry.value()));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);
@@ -776,7 +776,7 @@ bool AuthManagerPrecompiled::checkDeployAuth(
             PRECOMPILED_LOG(FATAL)
                 << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("apps not exist");
         }
-        auto fields = entry->getObject<std::vector<std::string>>();
+        auto fields = bcos::storage::serialize::decode<std::vector<std::string>>(entry->get());
         auto getAclIndex = (type == (int)AuthType::WHITE_LIST_MODE) ? 3 : 4;
         aclMapStr.assign(fields.at(getAclIndex));
     }

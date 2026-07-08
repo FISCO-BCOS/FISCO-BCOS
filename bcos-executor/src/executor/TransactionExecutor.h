@@ -36,7 +36,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorageFactory.h"
-#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/IOServicePool.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <tbb/concurrent_hash_map.h>
 #include <boost/function.hpp>
@@ -93,7 +93,8 @@ public:
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
         bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
-        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name);
+        std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name,
+        bcos::IOServicePool::Ptr ioServicePool);
 
     ~TransactionExecutor() override = default;
 
@@ -178,6 +179,11 @@ public:
 
     // only for test, do not use in formal environment
     void setKeyPageIgnoreTable(auto ignoreTable) { m_keyPageIgnoreTables = std::move(ignoreTable); }
+
+    // only for test: exposes the real precompiled map built by initEvmEnvironment/
+    // initWasmEnvironment so the disabledInL2() invariant can be checked against the
+    // production registration sites (a dropped predicate is otherwise invisible).
+    const executor::PrecompiledMap* precompiledMapForTest() const { return m_precompiled.get(); }
 
 protected:
     void executeTransactionsInternal(std::string contractAddress,
@@ -322,7 +328,6 @@ protected:
     int64_t m_schedulerTermId = -1;
     std::shared_ptr<std::set<std::string, std::less<>>> m_keyPageIgnoreTables;
 
-    bcos::ThreadPool::Ptr m_threadPool;
     mutable RecursiveMutex x_resetEnvironmentLock;
 
     void setBlockVersion(uint32_t blockVersion);
@@ -334,6 +339,7 @@ protected:
 
     LedgerCache::Ptr m_ledgerCache;
     std::shared_ptr<VMFactory> m_vmFactory;
+    bcos::IOServicePool::Ptr m_ioServicePool;
 };
 
 }  // namespace executor

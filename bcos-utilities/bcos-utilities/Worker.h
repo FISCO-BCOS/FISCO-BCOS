@@ -28,11 +28,8 @@ namespace bcos
 {
 enum class WorkerState
 {
-    Starting,
-    Started,
-    Stopping,
     Stopped,
-    Killing
+    Started
 };
 
 class Worker
@@ -45,7 +42,7 @@ protected:
         m_threadName(std::move(_threadName)),
         m_idleWaitMs(_idleWaitMs)
     {}
-    virtual ~Worker() { terminate(); }
+    virtual ~Worker();
 
     /**
      * @brief Set thread name for the worker
@@ -53,6 +50,9 @@ protected:
      */
     void setName(std::string const& _threadName)
     {
+        // m_threadName is read by the io_context thread in every log line
+        // (LOG_KV("threadName", m_threadName)).  Only allow writes while
+        // the worker is not running to avoid a data race on std::string.
         if (!isWorking())
             m_threadName = _threadName;
     }
@@ -78,8 +78,6 @@ protected:
 
     // Called when is to be stopped
     virtual void finishWorker() {}
-    // stop the worker and cancel the timer
-    void terminate();
 
     // Wake up the worker immediately (cancel current timer, re-schedule)
     void notify();
@@ -100,13 +98,7 @@ private:
 
     unsigned m_idleWaitMs = 0;
 
-    std::mutex x_work;
-    std::atomic<WorkerState> m_workerState = {WorkerState::Starting};
-
-    // Shared alive flag captured by all async handlers. terminate() sets it to
-    // false; handlers check it before accessing `this`, so they can safely bail
-    // even if the handler was already posted before Worker destruction.
-    std::shared_ptr<std::atomic<bool>> m_aliveFlag = std::make_shared<std::atomic<bool>>(true);
+    std::atomic<WorkerState> m_workerState = {WorkerState::Stopped};
 };
 
 }  // namespace bcos

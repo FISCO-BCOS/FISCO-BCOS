@@ -96,6 +96,7 @@ public:
 
         nodeConfig->loadConfigFromString(configini);
         factory->setNodeConfig(nodeConfig);
+        factory->setIOServicePool(ioServicePool);
 
         auto blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
@@ -118,7 +119,7 @@ public:
 
         scheduler = std::make_shared<FakeScheduler2>(m_ledger, m_blockFactory);
         txPoolFactory->setScheduler(scheduler);
-        txPool = txPoolFactory->createTxPool(*ioServicePool->getIOService());
+        txPool = txPoolFactory->createTxPool(*ioServicePool->getIOService(), ioServicePool);
         txPool->init();
         txPool->start();
 

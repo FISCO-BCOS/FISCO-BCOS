@@ -153,7 +153,8 @@ struct FIB140Fixture : public TestPromptFixture
         pbftFixture->init();
         auto config = pbftFixture->pbftConfig();
         auto cacheProcessor = pbftFixture->pbftEngine()->cacheProcessor();
-        logSync = std::make_shared<FakePBFTLogSync>(config, cacheProcessor);
+        logSync = std::make_shared<FakePBFTLogSync>(config, cacheProcessor,
+            std::make_shared<IOServicePool>(1, "fib140"));
         nodeID = cryptoSuite->signatureImpl()->generateKeyPair()->publicKey();
     }
 

@@ -5,16 +5,8 @@
 
 namespace bcos::storage
 {
-Entry::Entry(const Entry& other) = default;
-
-bcos::storage::Entry& Entry::operator=(const Entry& other)
-{
-    if (this != &other)
-    {
-        m_buffer = other.m_buffer;
-    }
-    return *this;
-}
+DERIVE_BCOS_EXCEPTION(TypedEntryStatusChange);
+DERIVE_BCOS_EXCEPTION(TypedEntryHashCall);
 
 std::string_view Entry::get() const&
 {
@@ -35,18 +27,6 @@ int32_t Entry::size() const
     return m_buffer.has_value() ? static_cast<int32_t>(m_buffer->size()) : 0;
 }
 
-std::string_view Entry::getField(size_t index) const&
-{
-    if (index > 0)
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Get field index: " + boost::lexical_cast<std::string>(index) +
-                               " failed, index out of range"));
-    }
-
-    return get();
-}
-
 Entry::Status Entry::status() const
 {
     if (!m_buffer.has_value()) [[unlikely]]
@@ -56,14 +36,19 @@ Entry::Status Entry::status() const
 
 void Entry::setStatus(Status status)
 {
+    // Typed entries are immutable — refuse status mutation.
+    if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(TypedEntryStatusChange{});
+    }
+
     auto cur = this->status();
     if (cur == status)
         return;
 
     if (status == DELETED)
     {
-        // Encode DELETED purely as a type tag — no data stored.
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(DeletedModel{});
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(DeletedModel{});
     }
     else if (status == EMPTY)
     {
@@ -71,7 +56,7 @@ void Entry::setStatus(Status status)
     }
     else
     {
-        // NORMAL or MODIFIED: preserve existing data, change status tag.
+        // NORMAL or MODIFIED: preserve data, change status tag.
         if (m_buffer.has_value())
         {
             auto view = get();
@@ -89,7 +74,6 @@ bool Entry::dirty() const
     if (!m_buffer.has_value()) [[unlikely]]
         return false;
     auto s = m_buffer->status();
-
     return s == ENTRY_MODIFIED || s == ENTRY_DELETED;
 }
 
@@ -103,12 +87,11 @@ bool Entry::valid() const
 void Entry::setImplCopy(const char* data, size_t sz)
 {
     if (sz <= SMALL_SIZE)
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(SmallBuffer<ENTRY_MODIFIED>{data, sz});
     else if (sz == static_cast<size_t>(SMALL_SIZE + 1))
-        m_buffer =
-            pro::make_proxy_inplace<AnyBufferFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(Fixed32Buffer<ENTRY_MODIFIED>{data, sz});
     else
-        m_buffer = pro::make_proxy_inplace<AnyBufferFacade>(
+        m_buffer = pro::make_proxy_inplace<AnyEntryFacade>(
             BufferModel<std::string, ENTRY_MODIFIED>{std::string(data, sz)});
 }
 
@@ -125,10 +108,33 @@ Entry::Holder Entry::makeBuffer(EntryStatus es, const char* data, size_t sz)
     }
 }
 
+std::string Entry::encodeToBytes() const
+{
+    if (!m_buffer.has_value())
+        return {};
+    std::string result;
+    m_buffer->encode([&result](bytesConstRef data) {
+        result.append(reinterpret_cast<const char*>(data.data()), data.size());
+    });
+    return result;
+}
+
+/* static */ Entry Entry::decodeFromBytes(std::string_view bytes)
+{
+    Entry entry;
+    entry.set(bytes);
+    return entry;
+}
+
 crypto::HashType Entry::hash(std::string_view table, std::string_view key,
     const bcos::crypto::Hash& hashImpl, uint32_t blockVersion,
     std::optional<bcos::ledger::Features> const& features) const
 {
+    if (m_buffer.has_value() && m_buffer->getTypedPtr() != nullptr)
+    {
+        BOOST_THROW_EXCEPTION(TypedEntryHashCall{});
+    }
+
     const bool enableHashCollisionFix =
         features.has_value() &&
         features->get(bcos::ledger::Features::Flag::bugfix_statestorage_hash_v3_17);
