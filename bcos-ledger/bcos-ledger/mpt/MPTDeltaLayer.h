@@ -34,8 +34,9 @@ namespace bcos::ledger::mpt
 /// under its original name, MPTBuildOutput); consumed by the commit flow (PR-14b) and passed to
 /// CommitObserver after the block's WriteBatch lands.
 ///
-/// The two node sets are DISJOINT (buildAndCollect end-subtracts, mirroring mergeTrie): a
-/// consumer never has to order a write against a delete of the same node.
+/// newNodes and obsoletedNodes are DISJOINT (buildAndCollect end-subtracts, mirroring mergeTrie):
+/// a consumer never has to order a write against a delete of the same node. The subtracted hashes
+/// are not lost — they move to intraBlockObsoleted so the pruning spec keeps full information.
 struct MPTDeltaLayer
 {
     /// The post-block MPT state root.
@@ -44,10 +45,17 @@ struct MPTDeltaLayer
     /// HashBuilder::drainNewNodes(). The commit flow writes these under /mpt/<hash> keys in the
     /// SAME WriteBatch as the flat state (single db->Write, spec §5.6).
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    /// Nodes this block made unreachable, same contract as HashBuilder::drainObsoletedNodes().
-    /// Contract (spec §4.8): an input ledger for the future pathdb pruning spec ONLY — the
-    /// commit flow does not read it and issues no deletes from it.
+    /// Nodes this block made unreachable, disjoint from newNodes. Contract (spec §4.8): an input
+    /// ledger for the future pathdb pruning spec ONLY — the commit flow does not read it and
+    /// issues no deletes from it.
     std::unordered_set<bcos::h256> obsoletedNodes;
+    /// Nodes produced AND obsoleted within this same block (a first-touch bootstrap node the
+    /// same block's apply then superseded). They are in newNodes — written to disk — so they are
+    /// deliberately kept OUT of obsoletedNodes (a consumer must not delete a node it also writes
+    /// in one batch). Parked here rather than dropped so the pruning spec can decide their fate
+    /// with full information; erasing them would orphan them permanently on a migration-heavy
+    /// scenario-A chain.
+    std::unordered_set<bcos::h256> intraBlockObsoleted;
     /// Accounts whose preheat manifest record was consumed by this build (first-touch path 2b,
     /// spec §5.11). The commit flow deletes each record via PreheatManifest::remove in the same
     /// WriteBatch — a consumed root must not seed a second first-touch.

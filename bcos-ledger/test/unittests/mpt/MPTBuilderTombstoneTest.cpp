@@ -125,6 +125,11 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     BOOST_CHECK(output.obsoletedNodes.contains(accountA.storageRoot));
     BOOST_CHECK(output.obsoletedNodes.contains(parentRoot));
 
+    // A destruct schedules the account's preheat-manifest record for deletion, so a later
+    // CREATE2 re-creation cannot adopt the pre-destruct storage root (SELFDESTRUCT+redeploy fork).
+    BOOST_REQUIRE_EQUAL(output.preheatManifestsToDelete.size(), 1U);
+    BOOST_CHECK(output.preheatManifestsToDelete.front() == addrA);
+
     // The new state trie is exactly a from-scratch build over the survivors.
     BOOST_CHECK(output.stateRoot == stateRootOracle({{addrB, accountB}}));
 }
@@ -217,7 +222,10 @@ BOOST_AUTO_TEST_CASE(TombstoneOfAccountAbsentFromParentIsNoop)
     BOOST_CHECK(!scannerCalled);
     BOOST_CHECK(output.stateRoot == parentRoot);
     BOOST_CHECK(output.obsoletedNodes.empty());
-    BOOST_CHECK(output.preheatManifestsToDelete.empty());
+    // Even an absent-account tombstone schedules a manifest deletion — harmlessly, since deleting
+    // an absent record is a no-op; scheduling unconditionally is what closes the redeploy fork.
+    BOOST_REQUIRE_EQUAL(output.preheatManifestsToDelete.size(), 1U);
+    BOOST_CHECK(output.preheatManifestsToDelete.front() == absent);
 }
 
 BOOST_AUTO_TEST_CASE(RebornNextBlockWalksFirstTouchWithIndependentStorage)

@@ -35,6 +35,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace bcos::ledger::mpt
@@ -55,13 +56,20 @@ using MPTBuildOutput = MPTDeltaLayer;
 /// preheat-manifest hit) and tombstone (SELFDESTRUCT — the account leaf is removed).
 ///
 /// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
-/// slotKeyHash and both HashBuilder instantiations; keccak256 by default, SM3 for guomi
-/// deployments (same end-to-end caveat as HashBuilder: the from-empty core, accountKeyHash and
-/// Account's default storageRoot/codeHash still need parameterizing before SM3 is complete).
+/// slotKeyHash and both HashBuilder instantiations. Pinned to keccak256 by the static_assert
+/// below: the first-touch bootstrap always drives HashBuilder's from-empty path, whose stateless
+/// core (computeTrieRootFromSorted) is not yet hasher-parameterized and always hashes with
+/// keccak. An SM3 instantiation would silently mix SM3 account/slot hashing with keccak bootstrap
+/// nodes — a root no SM3 verifier can reproduce. Lift the assert once the stateless core, along
+/// with accountKeyHash and Account's default storageRoot/codeHash, are parameterized on HasherT.
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTBuilder
 {
+    static_assert(std::is_same_v<HasherT, bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>,
+        "MPTBuilder is keccak-only until HashBuilder's from-empty stateless core is parameterized "
+        "on HasherT; see the @tparam note. A non-keccak instantiation would silently fork.");
+
 public:
     /// @param storage         node storage shared by reads and writes.
     /// @param parentStateRoot the parent block's MPT state root (emptyRootHash() = empty state).
@@ -103,13 +111,26 @@ public:
                 {
                     output.obsoletedNodes.insert(prior->storageRoot);
                 }
-                // Absent prior account (the pathological tombstone+firstTouch input): removing
-                // an absent key is a no-op in HashBuilder — same net effect, no special case.
+                // A preheat manifest written before the destruct must not survive to seed a later
+                // re-creation's first-touch with the destroyed storage root (SELFDESTRUCT then
+                // CREATE2 redeploy). Deleting an absent record is a no-op, so schedule it
+                // unconditionally. Same reasoning covers removing the (possibly absent) leaf.
+                output.preheatManifestsToDelete.push_back(addr);
                 co_await accountBuilder.remove(accountKeyHash(addr));
                 continue;
             }
             if (delta.firstTouch)
             {
+                // classify() only sets firstTouch when the parent MPT lacks the account. A leaf
+                // present here means classify and the builder disagree — overwriting it would
+                // silently discard the account's existing storage trie (a fork the old blanket
+                // throw caught). Symmetric with the subsequent-touch missing-leaf guard below.
+                if (co_await view.hasAccount(addr))
+                {
+                    BOOST_THROW_EXCEPTION(
+                        MPTInvariantViolation{} << bcos::errinfo_comment(
+                            "MPTBuilder: first-touch account already present in parent state"));
+                }
                 co_await buildFirstTouch(addr, delta, accountBuilder, output);
                 continue;
             }
@@ -140,12 +161,17 @@ public:
         // MPTBuildOutput aggregates several HashBuilder commits (a first-touch bootstrap plus
         // the same block's apply, plus the account trie), so unlike a single mergeTrie() result
         // the two sets can intersect: a node emitted by one commit and obsoleted by a later one.
-        // Re-establish disjointness the way mergeTrie() does (end-subtraction): the node stays
-        // in newNodes — it is already flushed and may be referenced by another trie — and leaves
-        // the prune ledger, so a consumer never writes and deletes the same node in one batch.
+        // Re-establish disjointness the way mergeTrie() does (end-subtraction): the node stays in
+        // newNodes — it is already flushed and may be referenced by another trie — and leaves the
+        // prune ledger, so a consumer never writes and deletes the same node in one batch. The
+        // subtracted hashes move to intraBlockObsoleted rather than vanishing, so the pruning
+        // spec can still reclaim them (they would otherwise orphan permanently).
         for (auto const& [hash, raw] : output.newNodes)
         {
-            output.obsoletedNodes.erase(hash);
+            if (output.obsoletedNodes.erase(hash) != 0U)
+            {
+                output.intraBlockObsoleted.insert(hash);
+            }
         }
         co_return output;
     }
@@ -179,34 +205,32 @@ private:
                         "MPTBuilder: first-touch with Unchanged fields needs flatAccountMeta"));
             }
             flatMeta = co_await m_backends.flatAccountMeta(addr);
+            // A code-less account's flat baseline must carry emptyCodeHash(), never a zero h256
+            // (FlatAccountMeta doc): a zero encodes a wrong leaf and forks. The default is zero
+            // and nothing downstream re-derives it, so enforce the contract at the seam. Only the
+            // Unchanged path reads meta.codeHash; an Updated codeHash overwrites it below.
+            if (delta.codeHashState == AccountDelta::FieldState::Unchanged &&
+                flatMeta->codeHash == bcos::h256{})
+            {
+                BOOST_THROW_EXCEPTION(
+                    MPTInvariantViolation{} << bcos::errinfo_comment(
+                        "MPTBuilder: flatAccountMeta returned a zero codeHash for a first-touch "
+                        "account (must be emptyCodeHash())"));
+            }
         }
+
+        // Seed every field from the flat baseline (FlatAccountMeta{} = zeros when nothing was
+        // Unchanged), then let the shared applyField overwrite the Updated ones — same helper and
+        // same Deleted-outside-tombstone rule as the subsequent-touch path, one definition.
         FlatAccountMeta const meta = flatMeta.value_or(FlatAccountMeta{});
-        applyFirstTouchField(delta.nonceState, delta.nonce, meta.nonce, updated.nonce);
-        applyFirstTouchField(delta.balanceState, delta.balance, meta.balance, updated.balance);
-        applyFirstTouchField(delta.codeHashState, delta.codeHash, meta.codeHash, updated.codeHash);
+        updated.nonce = meta.nonce;
+        updated.balance = meta.balance;
+        updated.codeHash = meta.codeHash;
+        applyField(delta.nonceState, delta.nonce, updated.nonce);
+        applyField(delta.balanceState, delta.balance, updated.balance);
+        applyField(delta.codeHashState, delta.codeHash, updated.codeHash);
 
         co_await accountBuilder.put(accountKeyHash(addr), updated.encode());
-    }
-
-    /// First-touch counterpart of applyField(): Updated takes the delta value, Unchanged takes
-    /// the flat-KV baseline (only reachable with flatMeta fetched), Deleted outside a tombstone
-    /// throws — same rule as applyField.
-    template <typename Field>
-    static void applyFirstTouchField(AccountDelta::FieldState state, Field const& deltaValue,
-        Field const& flatValue, Field& field)
-    {
-        switch (state)
-        {
-        case AccountDelta::FieldState::Unchanged:
-            field = flatValue;
-            break;
-        case AccountDelta::FieldState::Updated:
-            field = deltaValue;
-            break;
-        case AccountDelta::FieldState::Deleted:
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                      "MPTBuilder: field Deleted outside a tombstone"));
-        }
     }
 
     /// Overwrite @p field from @p value when the block updated it. A Deleted state outside a

@@ -17,9 +17,7 @@
  * @brief Flat-KV → MPT migration: preheat-manifest schema implementation (spec §5.11)
  */
 #include "FlatToMPT.h"
-#include "Errors.h"
-#include <bcos-utilities/Exceptions.h>
-#include <boost/throw_exception.hpp>
+#include <bcos-utilities/BoostLog.h>
 
 namespace bcos::ledger::mpt
 {
@@ -27,26 +25,30 @@ namespace bcos::ledger::mpt
 std::string PreheatManifest::makeKey(bcos::Address const& addr)
 {
     std::string key;
-    key.reserve(keyPrefix.size() + bcos::Address::SIZE * 2);
+    key.reserve(keyPrefix.size() + (bcos::Address::SIZE * 2));
     key.append(keyPrefix);
     key.append(addr.hex());  // toHex uses hex_lower: 40 lowercase chars, no 0x
     return key;
 }
 
-bcos::task::Task<std::optional<bcos::h256>> PreheatManifest::read(
+bcos::task::Task<PreheatManifest::Record> PreheatManifest::read(
     BackendReader const& reader, bcos::Address const& addr)
 {
     auto raw = co_await reader(makeKey(addr));
     if (!raw)
     {
-        co_return std::nullopt;
+        co_return Record{Lookup::Miss, {}};
     }
     if (raw->size() != bcos::h256::SIZE)
     {
-        BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                  "PreheatManifest: record value must be a 32-byte storage root"));
+        // Fail loud in the log, but do not throw: the caller treats Corrupt as a miss and
+        // rebuilds from the flat scan, so one mis-written record cannot deadlock the chain.
+        BCOS_LOG(WARNING) << LOG_BADGE("PreheatManifest")
+                          << LOG_DESC("corrupt manifest record ignored; rebuilding from flat scan")
+                          << LOG_KV("addr", addr.hex()) << LOG_KV("size", raw->size());
+        co_return Record{Lookup::Corrupt, {}};
     }
-    co_return bcos::h256{bcos::bytesConstRef{raw->data(), raw->size()}};
+    co_return Record{Lookup::Hit, bcos::h256{bcos::bytesConstRef{raw->data(), raw->size()}}};
 }
 
 bcos::task::Task<void> PreheatManifest::remove(

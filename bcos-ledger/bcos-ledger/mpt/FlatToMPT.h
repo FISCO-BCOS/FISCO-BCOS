@@ -28,6 +28,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -70,11 +71,24 @@ public:
     using BackendReader = std::function<bcos::task::Task<std::optional<bcos::bytes>>(std::string)>;
     using BackendDeleter = std::function<bcos::task::Task<void>(std::string)>;
 
-    /// The recorded storage root for @p addr, or nullopt when no manifest record exists.
-    /// @throws MPTInvariantViolation when a record is present but not exactly 32 bytes —
-    ///         a corrupt manifest must fail loudly, not seed a bogus baseline root.
-    static bcos::task::Task<std::optional<bcos::h256>> read(
-        BackendReader const& reader, bcos::Address const& addr);
+    /// Outcome of reading one manifest record.
+    enum class Lookup : uint8_t
+    {
+        Hit,      ///< a valid 32-byte storage root was found (Record::root is meaningful)
+        Miss,     ///< no record exists for the address
+        Corrupt,  ///< a record exists but is not a 32-byte root (partial write / CLI bug)
+    };
+    struct Record
+    {
+        Lookup status = Lookup::Miss;
+        bcos::h256 root;  ///< meaningful only when status == Hit
+    };
+
+    /// Read @p addr's manifest record. A size-mismatched record is reported as Corrupt (and
+    /// logged) rather than thrown: the manifest is a pure accelerator, so the caller falls
+    /// through to the flat scan (ground truth) and schedules the bad record's deletion — chain
+    /// liveness must not hinge on an operator's offline tool never mis-writing a record.
+    static bcos::task::Task<Record> read(BackendReader const& reader, bcos::Address const& addr);
 
     /// Delete @p addr's manifest record. A consumed record must not seed a second first-touch:
     /// the recorded root goes stale the moment the block's changes commit. Scheduled by the
@@ -128,13 +142,19 @@ bcos::task::Task<bcos::h256> resolveFirstTouchBaseline(Storage& storage,
 {
     if (backends.manifestReader)
     {
-        auto preheated = co_await PreheatManifest::read(backends.manifestReader, addr);
-        if (preheated.has_value())
+        auto record = co_await PreheatManifest::read(backends.manifestReader, addr);
+        if (record.status == PreheatManifest::Lookup::Hit)
         {
             // The preheat run already built and flushed this account's storage trie; adopt its
             // root and schedule the consumed record for deletion.
             output.preheatManifestsToDelete.push_back(addr);
-            co_return *preheated;
+            co_return record.root;
+        }
+        if (record.status == PreheatManifest::Lookup::Corrupt)
+        {
+            // The manifest is a pure accelerator, so a corrupt record must not halt the chain:
+            // fall through to the flat scan (ground truth) and schedule the bad record's removal.
+            output.preheatManifestsToDelete.push_back(addr);
         }
     }
 

@@ -30,18 +30,22 @@ namespace bcos::ledger::mpt
 class CommitObserver
 {
 public:
-    virtual ~CommitObserver() = default;
     CommitObserver() = default;
-    CommitObserver(CommitObserver const&) = default;
-    CommitObserver(CommitObserver&&) = default;
-    CommitObserver& operator=(CommitObserver const&) = default;
-    CommitObserver& operator=(CommitObserver&&) = default;
+    virtual ~CommitObserver() = default;
 
     /// Timing contract (spec §5.6): the commit flow calls this AFTER the block's WriteBatch
     /// has landed on disk and BEFORE lastCommittedBlockNumber advances, so the delta the
     /// observer sees is exactly the persisted state. Runs on the commit path — implementations
     /// must not throw and must not block on slow work (hand off to their own executor instead).
     virtual void onCommit(bcos::protocol::BlockNumber blockNumber, MPTDeltaLayer const& delta) = 0;
+
+protected:
+    // Protected, not public: derived observers keep their own defaults, but outside code cannot
+    // slice a CommitObserver through a base reference (Core Guidelines C.67).
+    CommitObserver(CommitObserver const&) = default;
+    CommitObserver(CommitObserver&&) = default;
+    CommitObserver& operator=(CommitObserver const&) = default;
+    CommitObserver& operator=(CommitObserver&&) = default;
 };
 
 /// The default observer until the pruning spec lands: receives and ignores every delta.

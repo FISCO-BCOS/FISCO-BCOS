@@ -133,14 +133,55 @@ BOOST_AUTO_TEST_CASE(PreheatManifestKeyFormat)
     BOOST_CHECK_EQUAL(PreheatManifest::makeKey(makeAddress(0xAB)), expected);
 }
 
-BOOST_AUTO_TEST_CASE(ManifestValueWrongSizeThrows)
+BOOST_AUTO_TEST_CASE(ManifestValueWrongSizeIsCorruptNotThrow)
 {
+    // A size-mismatched record is reported as Corrupt (logged), not thrown — chain liveness must
+    // not hinge on the manifest, which is a pure accelerator.
     PreheatManifest::BackendReader reader =
         [](std::string) -> bcos::task::Task<std::optional<bcos::bytes>> {
         co_return bcos::bytes{0x01, 0x02};  // not a 32-byte storage root
     };
-    BOOST_CHECK_THROW(bcos::task::syncWait(PreheatManifest::read(reader, makeAddress(0x01))),
-        MPTInvariantViolation);
+    auto record = bcos::task::syncWait(PreheatManifest::read(reader, makeAddress(0x01)));
+    BOOST_CHECK(record.status == PreheatManifest::Lookup::Corrupt);
+}
+
+BOOST_AUTO_TEST_CASE(CorruptManifestFallsThroughToFlatScan)
+{
+    NodeStorage storage;
+    auto const addr = makeAddress(0xAC);
+
+    // A dormant account with two flat slots, plus a corrupt (2-byte) manifest record for it.
+    std::map<bcos::h256, bcos::bytes> const flatSlots{
+        {slotKeyAt(0), bcos::bytes{0x10}}, {slotKeyAt(1), bcos::bytes{0x11}}};
+    FlatToMPTBackends backends;
+    backends.flatSlotScanner = [&flatSlots](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
+        co_return FlatSlots(flatSlots.begin(), flatSlots.end());
+    };
+    backends.manifestReader = [](std::string) -> bcos::task::Task<std::optional<bcos::bytes>> {
+        co_return bcos::bytes{0x01, 0x02};  // corrupt: not a 32-byte root
+    };
+
+    MPTBuildInput input;
+    auto& delta = input.perAccount[addr];
+    delta.firstTouch = true;
+    delta.nonceState = AccountDelta::FieldState::Updated;
+    delta.nonce = 1;
+    delta.balanceState = AccountDelta::FieldState::Updated;
+    delta.balance = 1;
+    delta.codeHashState = AccountDelta::FieldState::Updated;
+    delta.codeHash = makeHash(0xC0);
+
+    MPTBuilder builder(storage, emptyRootHash(), std::move(backends));
+    auto output = bcos::task::syncWait(builder.buildAndCollect(input));
+
+    // The corrupt record is scheduled for deletion, and the storage root is the flat-scan
+    // ground truth — not a stall, not a dangling root.
+    BOOST_REQUIRE_EQUAL(output.preheatManifestsToDelete.size(), 1U);
+    BOOST_CHECK(output.preheatManifestsToDelete.front() == addr);
+    MPTReadView<NodeStorage> view(storage, output.stateRoot);
+    auto account = bcos::task::syncWait(view.readAccount(addr));
+    BOOST_REQUIRE(account.has_value());
+    BOOST_CHECK(account->storageRoot == storageRootOracle(flatSlots));
 }
 
 BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
@@ -284,6 +325,14 @@ BOOST_AUTO_TEST_CASE(FirstTouchEqualsSubsequentTouchAfterPreheat)
     {
         BOOST_CHECK_MESSAGE(!outputA.newNodes.contains(hash),
             "node " << hash.hex() << " is in both newNodes and obsoletedNodes");
+    }
+    // A bootstrap trie superseded by the apply guarantees at least one such intra-block node;
+    // it must be parked (written to disk AND recorded for the pruning spec), not erased.
+    BOOST_CHECK(!outputA.intraBlockObsoleted.empty());
+    for (auto const& hash : outputA.intraBlockObsoleted)
+    {
+        BOOST_CHECK(outputA.newNodes.contains(hash));
+        BOOST_CHECK(!outputA.obsoletedNodes.contains(hash));
     }
 
     // And every slot reads back identically through both node stores.
@@ -454,6 +503,61 @@ BOOST_AUTO_TEST_CASE(UnchangedMetaFieldsComeFromFlat)
     MPTBuilder builder2(storage2, emptyRootHash(), std::move(noMeta));
     BOOST_CHECK_THROW(
         bcos::task::syncWait(builder2.buildAndCollect(input2)), MPTInvariantViolation);
+}
+
+BOOST_AUTO_TEST_CASE(FirstTouchOfAccountAlreadyInParentThrows)
+{
+    NodeStorage storage;
+    auto const addr = makeAddress(0xA8);
+
+    // The account already exists in the parent MPT, yet the delta is (wrongly) marked firstTouch.
+    // Overwriting the leaf would silently discard its storage trie; the builder must halt loudly.
+    Account existing;
+    existing.nonce = 3;
+    HashBuilder stateTrie(storage, emptyRootHash());
+    bcos::task::syncWait(stateTrie.put(accountKeyHash(addr), existing.encode()));
+    auto const parentRoot = bcos::task::syncWait(stateTrie.commit());
+
+    bool scannerCalled = false;
+    FlatToMPTBackends backends;
+    backends.flatSlotScanner = failingScanner(scannerCalled);
+
+    MPTBuildInput input;
+    input.perAccount[addr].firstTouch = true;
+
+    MPTBuilder builder(storage, parentRoot, std::move(backends));
+    BOOST_CHECK_THROW(bcos::task::syncWait(builder.buildAndCollect(input)), MPTInvariantViolation);
+    BOOST_CHECK(!scannerCalled);  // halted before any migration work
+}
+
+BOOST_AUTO_TEST_CASE(FirstTouchZeroCodeHashFromFlatThrows)
+{
+    NodeStorage storage;
+    auto const addr = makeAddress(0xA9);
+
+    // flatAccountMeta violates its contract: a code-less account must carry emptyCodeHash(),
+    // never a zero h256. With codeHash Unchanged, that zero would encode a forking leaf — the
+    // builder must reject it at the seam rather than silently commit a wrong account.
+    FlatToMPTBackends backends;
+    backends.flatSlotScanner = [](bcos::Address const&) -> bcos::task::Task<FlatSlots> {
+        co_return FlatSlots{};
+    };
+    backends.flatAccountMeta = [](bcos::Address const&) -> bcos::task::Task<FlatAccountMeta> {
+        FlatAccountMeta meta;
+        meta.nonce = 1;
+        meta.codeHash = bcos::h256{};  // contract violation: zero instead of emptyCodeHash()
+        co_return meta;
+    };
+
+    MPTBuildInput input;
+    auto& delta = input.perAccount[addr];
+    delta.firstTouch = true;
+    delta.balanceState = AccountDelta::FieldState::Updated;
+    delta.balance = 10;
+    // nonce / codeHash stay Unchanged: codeHash is sourced from the (zero) flat baseline.
+
+    MPTBuilder builder(storage, emptyRootHash(), std::move(backends));
+    BOOST_CHECK_THROW(bcos::task::syncWait(builder.buildAndCollect(input)), MPTInvariantViolation);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
