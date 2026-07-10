@@ -17,6 +17,7 @@
  * @brief Fixed-size NodeRef: sizeof budget + inline/hash/absent round-trips (spec §5.5, M12)
  */
 
+#include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/NodeDecoder.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieMerge.h>
@@ -32,8 +33,10 @@ namespace bcos::ledger::mpt::test
 // representation held bytes(24) + h256(32) + kind side by side → 64 bytes and one heap
 // allocation per inline child; BranchNode carried 16 of them.
 static_assert(sizeof(NodeRef) <= 40, "NodeRef must stay pointer-free and ~33 bytes");
-static_assert(sizeof(BranchNode) <= 576, "BranchNode = 16 x NodeRef + value bytes");
-static_assert(sizeof(TrieNode) <= 640, "TrieNode variant is bounded by BranchNode");
+// With children moved behind a vector (one 16 x 33B heap block), the BranchNode struct is just
+// vector + bytes, and the TrieNode variant no longer pays BranchNode's inline footprint.
+static_assert(sizeof(BranchNode) <= 56, "BranchNode struct = children vector + value bytes");
+static_assert(sizeof(TrieNode) <= 64, "TrieNode variant must stay small (~56 bytes)");
 
 BOOST_AUTO_TEST_SUITE(TrieNodeSizeSuite)
 
@@ -53,12 +56,25 @@ BOOST_AUTO_TEST_CASE(AbsentChildSemantics)
         BOOST_CHECK_EQUAL(raw[i], 0x80);
     }
 
-    // ... and decodes back to 16 absent children.
+    // ... and decodes back to exactly 16 absent children (the invariant every consumer relies
+    // on now that children is a vector).
     TrieNode const decoded = decodeNode(bcos::ref(raw));
+    BOOST_REQUIRE_EQUAL(std::get<BranchNode>(decoded).children.size(), NIBBLE_RANGE);
     for (auto const& child : std::get<BranchNode>(decoded).children)
     {
         BOOST_CHECK(child.isAbsent());
     }
+}
+
+// The 16-slot invariant is convention now: default construction yields 16 slots, and the
+// encoder must reject any other width instead of silently emitting a wrong-arity list.
+BOOST_AUTO_TEST_CASE(BranchChildrenWidthInvariant)
+{
+    BOOST_CHECK_EQUAL(BranchNode{}.children.size(), NIBBLE_RANGE);
+
+    BranchNode malformed;
+    malformed.children.pop_back();
+    BOOST_CHECK_THROW(encodeRaw(TrieNode{std::move(malformed)}), MPTInvariantViolation);
 }
 
 // Inline form survives encoder → decoder: a tiny leaf child comes back byte-identical.

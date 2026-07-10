@@ -124,10 +124,17 @@ struct NodeRef
 };
 
 /// A branch node: 16 child references (one per hex nibble) plus an optional value.
+///
+/// children is a vector (one heap block of 16 x 33B) rather than std::array so the TrieNode
+/// variant itself stays small — every LeafNode/ExtensionNode instance, by-value TrieNode move
+/// and Task<TrieNode> coroutine frame would otherwise pay BranchNode's full inline footprint.
+/// The "exactly NIBBLE_RANGE slots" invariant moves from the type to convention: the default
+/// member initializer below makes every default-constructed branch 16-wide (each slot the
+/// absent-child sentinel), and NodeEncoder rejects any other size before encoding.
 struct BranchNode
 {
-    /// Default-constructed = absent child (len == 0)
-    std::array<NodeRef, NIBBLE_RANGE> children;
+    /// Always NIBBLE_RANGE entries; default-constructed entries = absent child (len == 0)
+    std::vector<NodeRef> children = std::vector<NodeRef>(NIBBLE_RANGE);
     ///< Typically empty for internal branch nodes
     bcos::bytes value;
 };

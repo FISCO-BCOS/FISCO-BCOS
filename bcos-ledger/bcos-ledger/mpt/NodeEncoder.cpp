@@ -19,6 +19,7 @@
 
 #include "NodeEncoder.h"
 #include "Constants.h"
+#include "Errors.h"
 #include "HexPrefix.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-codec/rlp/Common.h>
@@ -89,6 +90,15 @@ static void encodeExtension(ExtensionNode const& node, bcos::bytes& out)
 static void encodeBranch(BranchNode const& node, bcos::bytes& out)
 {
     using namespace bcos::codec::rlp;
+
+    // children is a vector, so the 16-slot invariant is convention (default member initializer
+    // in TrieNode.h) rather than type-enforced — a malformed size must fail loudly here instead
+    // of silently mis-encoding a list with the wrong item count.
+    if (node.children.size() != NIBBLE_RANGE)
+    {
+        BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                  "BranchNode.children must hold exactly NIBBLE_RANGE entries"));
+    }
 
     // RLP list header needs payload length up front, so the 17-item payload is built into a
     // local buffer first. Once sealed, the payload is spliced into `out` — caller pays one
