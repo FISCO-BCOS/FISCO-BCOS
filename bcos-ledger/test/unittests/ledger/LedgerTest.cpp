@@ -653,7 +653,7 @@ BOOST_AUTO_TEST_CASE(getBlockHashByNumber)
     auto oldHashEntry = getRowPromise.get_future().get();
 
     Entry hashEntry;
-    hashEntry.importFields({""});
+    hashEntry.set("");
 
     // deal with version conflict
     std::promise<Error::UniquePtr> setRowPromise;
@@ -1492,7 +1492,7 @@ BOOST_AUTO_TEST_CASE(getLedgerConfig)
         blockHeader->encode(headerBuffer);
 
         storage::Entry number2HeaderEntry;
-        number2HeaderEntry.importFields({std::move(headerBuffer)});
+        number2HeaderEntry.set(std::move(headerBuffer));
         co_await storage2::writeOne(*m_storage,
             KeyType{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(blockHeader->number())},
             std::move(number2HeaderEntry));

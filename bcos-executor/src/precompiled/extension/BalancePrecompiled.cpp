@@ -456,7 +456,7 @@ void BalancePrecompiled::registerCaller(
         std::string tableStr(SYS_BALANCE_CALLER);
         _executive->storage().createTable(tableStr, "value");
         Entry CallerEntry;
-        CallerEntry.importFields({"1"});
+        CallerEntry.set("1");
         _executive->storage().setRow(SYS_BALANCE_CALLER, accountStr, std::move(CallerEntry));
         auto entry = _executive->storage().getRow(SYS_BALANCE_CALLER, accountStr);
         PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("registerCaller")
@@ -484,7 +484,7 @@ void BalancePrecompiled::registerCaller(
         BOOST_THROW_EXCEPTION(protocol::PrecompiledError{} << errinfo_comment("caller already exist"));
     }
     Entry CallerEntry;
-    CallerEntry.importFields({"1"});
+    CallerEntry.set("1");
     _executive->storage().setRow(SYS_BALANCE_CALLER, accountStr, std::move(CallerEntry));
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
     PRECOMPILED_LOG(INFO) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("BalancePrecompiled")

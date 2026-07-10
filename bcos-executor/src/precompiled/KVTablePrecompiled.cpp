@@ -147,7 +147,7 @@ void KVTablePrecompiled::set(const std::string& tableName,
         value, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
 
     Entry entry;
-    entry.importFields({value});
+    entry.set(value);
     _executive->storage().setRow(tableName, key, std::move(entry));
     callResult->setExecResult(codec.encode(int32_t(1)));
     gasPricer->setMemUsed(1);

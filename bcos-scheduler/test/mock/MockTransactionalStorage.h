@@ -42,15 +42,15 @@ public:
             // Return 3 dataes
             std::vector<std::optional<storage::Entry>> result;
             storage::Entry entry1;
-            entry1.importFields({"100"});
+            entry1.set("100");
             result.emplace_back(std::move(entry1));
 
             storage::Entry entry2;
-            entry2.importFields({"200"});
+            entry2.set("200");
             result.emplace_back(std::move(entry2));
 
             storage::Entry entry3;
-            entry3.importFields({"300"});
+            entry3.set("300");
             result.emplace_back(std::move(entry3));
 
             _callback(nullptr, std::move(result));

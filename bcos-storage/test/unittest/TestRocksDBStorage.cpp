@@ -101,7 +101,7 @@ struct TestRocksDBStorageFixture
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
             Entry entry;
-            entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+            entry.set("value_" + boost::lexical_cast<std::string>(i));
             rocksDBStorage->asyncSetRow(testTableName, key, entry,
                 [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
         }
@@ -132,7 +132,7 @@ struct TestRocksDBStorageFixture
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
             Entry entry;
-            entry.importFields({"value_delete"});
+            entry.set("value_delete");
             testTable->setRow(key, std::move(entry));
         }
 
@@ -277,7 +277,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i);
         auto entry = Entry();
-        entry.importFields({"value12345"});
+        entry.set("value12345");
 
         rocksDBStorage->asyncSetRow(tableInfo->name(), key, entry,
             [&](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
@@ -619,7 +619,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
     for (size_t keyIndex = 0; keyIndex < 100; ++keyIndex)
     {
         Entry entry;
-        entry.importFields({boost::lexical_cast<std::string>(100)});
+        entry.set(boost::lexical_cast<std::string>(100));
 
         auto key = fmt::format("key_{}", keyIndex);
         initState->asyncSetRow("test_table1", key, std::move(entry),
@@ -655,7 +655,7 @@ BOOST_AUTO_TEST_CASE(commitAndCheck)
             num += 100;
 
             Entry newEntry;
-            newEntry.importFields({boost::lexical_cast<std::string>(num)});
+            newEntry.set(boost::lexical_cast<std::string>(num));
 
             state->asyncSetRow("test_table1", key, std::move(newEntry),
                 [](Error::UniquePtr error) { BOOST_CHECK(!error); });

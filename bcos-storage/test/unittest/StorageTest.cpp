@@ -16,7 +16,7 @@ BOOST_FIXTURE_TEST_SUITE(StorageSyncWrapperTest, StorageSyncWrapperFixture)
 BOOST_AUTO_TEST_CASE(getRow)
 {
     Entry entry;
-    entry.importFields({"Hello world!"});
+    entry.set("Hello world!");
     storage.setRow("table", "key", std::move(entry));
 
     auto gotEntry = storage.getRow("table", "key");

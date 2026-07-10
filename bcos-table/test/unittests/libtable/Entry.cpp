@@ -129,12 +129,12 @@ BOOST_AUTO_TEST_CASE(BytesField)
     std::vector<char> data;
     data.assign(value.begin(), value.end());
 
-    entry.importFields({std::string(value)});
+    entry.set(std::string(value));
 
     BOOST_CHECK_EQUAL(entry.get(), value);
 
     Entry entry2;
-    entry2.importFields({data});
+    entry2.set(data);
 
     BOOST_CHECK_EQUAL(entry2.get(), value);
 }
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(capacity)
 {
     Entry entry;
 
-    entry.importFields({std::string("abc")});
+    entry.set(std::string("abc"));
 
     entry.set(std::string("abdflsakdjflkasjdfoiqwueroi!!!!sdlkfjsldfbclsadflaksjdfpqweioruaaa"));
 
@@ -445,17 +445,17 @@ BOOST_AUTO_TEST_CASE(sharedBuffer_arrayChar)
     BOOST_TEST(entryTestHolder(entry).has_value());
 }
 
-// importFields with various types
-BOOST_AUTO_TEST_CASE(importFields_coverage)
+// set() with various types
+BOOST_AUTO_TEST_CASE(set_coverage)
 {
     Entry e1;
-    e1.importFields({std::string("via importFields")});
-    BOOST_CHECK_EQUAL(e1.get(), "via importFields");
+    e1.set(std::string("via set"));
+    BOOST_CHECK_EQUAL(e1.get(), "via set");
     BOOST_TEST(entryTestHolder(e1).has_value());
 
     Entry e2;
     std::vector<char> vec = {'i', 'm', 'p', 'o', 'r', 't'};
-    e2.importFields({std::move(vec)});
+    e2.set(std::move(vec));
     BOOST_CHECK_EQUAL(e2.get(), std::string_view("import"));
     BOOST_TEST(entryTestHolder(e2).has_value());
 }
@@ -760,7 +760,10 @@ BOOST_AUTO_TEST_CASE(encodeToBytesAfterSetTyped)
     entry.setTyped(TestValueA{55, "world"});
 
     // Encode to bytes — should match what TestValueA::encode produces
-    auto bytes = entry.encodeToBytes();
+    std::string bytes;
+    entry.encode([&bytes](bytesConstRef data) {
+        bytes.append(reinterpret_cast<const char*>(data.data()), data.size());
+    });
     TestValueA expected{55, "world"};
     std::string expectedBytes;
     encode(expected, [&expectedBytes](bytesConstRef d) {

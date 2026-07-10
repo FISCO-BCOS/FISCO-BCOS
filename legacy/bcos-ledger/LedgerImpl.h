@@ -380,24 +380,24 @@ protected:
         bcos::storage::Entry number2HeaderEntry;
         std::vector<bcos::byte> number2HeaderBuffer;
         bcos::concepts::serialize::encode(block.blockHeader, number2HeaderBuffer);
-        number2HeaderEntry.importFields({std::move(number2HeaderBuffer)});
+        number2HeaderEntry.set(std::move(number2HeaderBuffer));
         storage().setRow(SYS_NUMBER_2_BLOCK_HEADER, blockNumberKey, std::move(number2HeaderEntry));
 
         // number 2 block hash
         bcos::storage::Entry hashEntry;
-        hashEntry.importFields({block.blockHeader.dataHash});
+        hashEntry.set(block.blockHeader.dataHash);
         storage().setRow(SYS_NUMBER_2_HASH, blockNumberKey, std::move(hashEntry));
 
         // block hash 2 number
         bcos::storage::Entry hash2NumberEntry;
-        hash2NumberEntry.importFields({std::string(blockNumberKey)});
+        hash2NumberEntry.set(std::string(blockNumberKey));
         storage().setRow(SYS_HASH_2_NUMBER,
             std::string_view{block.blockHeader.dataHash.data(), block.blockHeader.dataHash.size()},
             std::move(hash2NumberEntry));
 
         // current number
         bcos::storage::Entry numberEntry;
-        numberEntry.importFields({std::string(blockNumberKey)});
+        numberEntry.set(std::string(blockNumberKey));
         storage().setRow(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER, std::move(numberEntry));
 
         co_return;
@@ -414,7 +414,7 @@ protected:
         bcos::storage::Entry number2NonceEntry;
         std::vector<bcos::byte> number2NonceBuffer;
         bcos::concepts::serialize::encode(blockNonceList, number2NonceBuffer);
-        number2NonceEntry.importFields({std::move(number2NonceBuffer)});
+        number2NonceEntry.set(std::move(number2NonceBuffer));
         storage().setRow(SYS_BLOCK_NUMBER_2_NONCES, blockNumberKey, std::move(number2NonceEntry));
 
         co_return;
@@ -451,7 +451,7 @@ protected:
         bcos::storage::Entry number2TransactionHashesEntry;
         std::vector<bcos::byte> number2TransactionHashesBuffer;
         bcos::concepts::serialize::encode(transactionsBlock, number2TransactionHashesBuffer);
-        number2TransactionHashesEntry.importFields({std::move(number2TransactionHashesBuffer)});
+        number2TransactionHashesEntry.set(std::move(number2TransactionHashesBuffer));
         storage().setRow(
             SYS_NUMBER_2_TXS, blockNumberKey, std::move(number2TransactionHashesEntry));
         std::swap(transactionsBlock.transactionsMetaData, block.transactionsMetaData);

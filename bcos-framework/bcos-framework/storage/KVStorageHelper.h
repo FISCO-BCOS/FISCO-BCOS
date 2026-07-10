@@ -68,7 +68,7 @@ public:
         std::function<void(Error::UniquePtr&&)> _callback)
     {
         Entry value;
-        value.importFields({std::move(_value)});
+        value.set(std::move(_value));
 
         m_storage->asyncSetRow(_columnFamily, _key, std::move(value), std::move(_callback));
     }

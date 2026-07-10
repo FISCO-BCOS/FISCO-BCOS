@@ -154,7 +154,7 @@ public:
                 result["status"] = "success";
                 // update SYS_CURRENT_STATE SYS_KEY_ARCHIVED_NUMBER
                 storage::Entry archivedNumber;
-                archivedNumber.importFields({std::to_string(endBlock)});
+                archivedNumber.set(std::to_string(endBlock));
                 m_storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_ARCHIVED_NUMBER,
                     archivedNumber, [](Error::UniquePtr err) {
                         if (err)

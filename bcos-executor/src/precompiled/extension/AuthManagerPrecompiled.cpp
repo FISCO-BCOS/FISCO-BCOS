@@ -649,7 +649,7 @@ void AuthManagerPrecompiled::setDeployType(
         return;
     }
     Entry entry;
-    entry.importFields({boost::lexical_cast<std::string>(type)});
+    entry.set(boost::lexical_cast<std::string>(type));
     _executive->storage().setRow(tool::FS_APPS, tool::FS_ACL_TYPE, std::move(entry));
 
     getErrorCodeOut(_callParameters->mutableExecResult(), CODE_SUCCESS, codec);

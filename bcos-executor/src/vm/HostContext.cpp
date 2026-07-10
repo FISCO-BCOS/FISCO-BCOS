@@ -102,7 +102,7 @@ void HostContext::set(const std::string_view& _key, std::string _value)
 {
     auto start = utcTimeUs();
     Entry entry;
-    entry.importFields({std::move(_value)});
+    entry.set(std::move(_value));
 
     m_executive->storage().setRow(m_tableName, _key, std::move(entry));
 }
@@ -512,11 +512,11 @@ bool HostContext::setCode(bytes code)
     {
         Entry codeHashEntry;
         auto codeHash = hashImpl()->hash(code);
-        codeHashEntry.importFields({codeHash.asBytes()});
+        codeHashEntry.set(codeHash.asBytes());
         m_executive->storage().setRow(m_tableName, ACCOUNT_CODE_HASH, std::move(codeHashEntry));
 
         Entry codeEntry;
-        codeEntry.importFields({std::move(code)});
+        codeEntry.set(std::move(code));
         m_executive->storage().setRow(m_tableName, ACCOUNT_CODE, std::move(codeEntry));
         return true;
     }
@@ -548,7 +548,7 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
                                  abiEntry && abiEntry->size() == 0))
             {
                 abiEntry = std::make_optional<Entry>();
-                abiEntry->importFields({std::move(abi)});
+                abiEntry->set(std::move(abi));
 
                 m_executive->storage().setRow(
                     bcos::ledger::SYS_CONTRACT_ABI, codeHash, std::move(abiEntry.value()));
@@ -560,7 +560,7 @@ void HostContext::setCodeAndAbi(bytes code, string abi)
 
         // old logic
         Entry abiEntry;
-        abiEntry.importFields({std::move(abi)});
+        abiEntry.set(std::move(abi));
         m_executive->storage().setRow(m_tableName, ACCOUNT_ABI, abiEntry);
     }
 }
@@ -706,7 +706,7 @@ void HostContext::setStore(const evmc_bytes32* key, const evmc_bytes32* value)
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
     Entry entry;
-    entry.importFields({std::move(valueBytes)});
+    entry.set(std::move(valueBytes));
     m_executive->storage().setRow(m_tableName, keyView, std::move(entry));
 }
 
@@ -716,7 +716,7 @@ void HostContext::setTransientStorage(const evmc_bytes32* key, const evmc_bytes3
     bytes valueBytes(value->bytes, value->bytes + sizeof(value->bytes));
 
     Entry entry;
-    entry.importFields({std::move(valueBytes)});
+    entry.set(std::move(valueBytes));
 
     bcos::storage::StateStorageInterface::Ptr transientStorage =
         m_executive->getTransientStateStorage(m_executive->contextID());

@@ -79,7 +79,7 @@ struct TestTiKVStorageFixture
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
             Entry entry;
-            entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+            entry.set("value_" + boost::lexical_cast<std::string>(i));
             storage->asyncSetRow(testTableName, key, entry,
                 [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
         }
@@ -108,7 +108,7 @@ struct TestTiKVStorageFixture
         {
             std::string key = "key" + boost::lexical_cast<std::string>(i);
             Entry entry;
-            entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+            entry.set("value_" + boost::lexical_cast<std::string>(i));
             testTable->setRow(key, std::move(entry));
         }
 
@@ -261,7 +261,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     {
         std::string key = "newkey" + boost::lexical_cast<std::string>(i);
         auto entry = Entry();
-        entry.importFields({"value12345"});
+        entry.set("value12345");
 
         storage->asyncSetRow(tableInfo->name(), key, entry,
             [&](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
@@ -550,7 +550,7 @@ BOOST_AUTO_TEST_CASE(multiStorageCommit)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         Entry entry;
-        entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+        entry.set("value_" + boost::lexical_cast<std::string>(i));
         testTable->setRow(key, std::move(entry));
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
@@ -758,7 +758,7 @@ BOOST_AUTO_TEST_CASE(multiStorageRollback)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         Entry entry;
-        entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+        entry.set("value_" + boost::lexical_cast<std::string>(i));
         testTable->setRow(key, std::move(entry));
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
@@ -852,7 +852,7 @@ BOOST_AUTO_TEST_CASE(secondaryRollbackAndPrimaryCommit)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         Entry entry;
-        entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+        entry.set("value_" + boost::lexical_cast<std::string>(i));
         testTable->setRow(key, std::move(entry));
     }
     auto stateStorage1 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
@@ -924,7 +924,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         Entry entry;
-        entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+        entry.set("value_" + boost::lexical_cast<std::string>(i));
         testTable->setRow(key, std::move(entry));
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);
@@ -1149,7 +1149,7 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     {
         std::string key = "key" + boost::lexical_cast<std::string>(i);
         Entry entry;
-        entry.importFields({"value_" + boost::lexical_cast<std::string>(i)});
+        entry.set("value_" + boost::lexical_cast<std::string>(i));
         testTable->setRow(key, std::move(entry));
     }
     auto stateStorage2 = std::make_shared<bcos::storage::StateStorage>(storage2, false);

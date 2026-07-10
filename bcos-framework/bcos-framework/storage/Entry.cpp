@@ -108,21 +108,11 @@ Entry::Holder Entry::makeBuffer(EntryStatus es, const char* data, size_t sz)
     }
 }
 
-std::string Entry::encodeToBytes() const
-{
-    if (!m_buffer.has_value())
-        return {};
-    std::string result;
-    m_buffer->encode([&result](bytesConstRef data) {
-        result.append(reinterpret_cast<const char*>(data.data()), data.size());
-    });
-    return result;
-}
-
-/* static */ Entry Entry::decodeFromBytes(std::string_view bytes)
+/* static */ Entry Entry::decode(bytesConstRef data)
 {
     Entry entry;
-    entry.set(bytes);
+    entry.set(std::string_view(
+        reinterpret_cast<const char*>(data.data()), data.size()));
     return entry;
 }
 

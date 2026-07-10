@@ -176,16 +176,16 @@ void AccountPrecompiled::setAccountStatus(const std::string& accountTableName,
     {
         // first time
         Entry lastStatusEntry;
-        lastStatusEntry.importFields({"0"});
+        lastStatusEntry.set("0");
         _executive->storage().setRow(
             accountTableName, ACCOUNT_LAST_STATUS, std::move(lastStatusEntry));
     }
     // set status and lastUpdateNumber
     Entry statusEntry;
-    statusEntry.importFields({boost::lexical_cast<std::string>(status)});
+    statusEntry.set(boost::lexical_cast<std::string>(status));
     _executive->storage().setRow(accountTableName, ACCOUNT_STATUS, std::move(statusEntry));
     Entry lastUpdateEntry;
-    lastUpdateEntry.importFields({boost::lexical_cast<std::string>(blockContext.number())});
+    lastUpdateEntry.set(boost::lexical_cast<std::string>(blockContext.number()));
     _executive->storage().setRow(accountTableName, ACCOUNT_LAST_UPDATE, std::move(lastUpdateEntry));
     _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
 }
@@ -355,14 +355,14 @@ void AccountPrecompiled::addAccountBalance(const std::string& accountTableName,
         }
         balance += value;
         Entry Balance;
-        Balance.importFields({boost::lexical_cast<std::string>(balance)});
+        Balance.set(boost::lexical_cast<std::string>(balance));
         _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
     }
     else
     {
         // first time
         Entry Balance;
-        Balance.importFields({boost::lexical_cast<std::string>(value)});
+        Balance.set(boost::lexical_cast<std::string>(value));
         _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
     }
     PRECOMPILED_LOG(TRACE) << BLOCK_NUMBER(blockContext.number()) << LOG_BADGE("AccountPrecompiled")
@@ -426,7 +426,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
         {
             balance -= value;
             Entry Balance;
-            Balance.importFields({boost::lexical_cast<std::string>(balance)});
+            Balance.set(boost::lexical_cast<std::string>(balance));
             _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
             _callParameters->setExecResult(codec.encode(int32_t(CODE_SUCCESS)));
             return;
@@ -436,7 +436,7 @@ void AccountPrecompiled::subAccountBalance(const std::string& accountTableName,
     {
         // table exist, but ACCOUNT_BALANCE filed not exist
         Entry Balance;
-        Balance.importFields({boost::lexical_cast<std::string>(0)});
+        Balance.set(boost::lexical_cast<std::string>(0));
         _executive->storage().setRow(accountTableName, ACCOUNT_BALANCE, std::move(Balance));
         BOOST_THROW_EXCEPTION(
             NotEnoughCashError{} << errinfo_comment("Account balance is not enough!"));
