@@ -27,6 +27,8 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 #include <algorithm>
+#include <map>
+#include <optional>
 #include <random>
 #include <set>
 #include <unordered_map>
@@ -71,10 +73,12 @@ std::vector<std::pair<bcos::h256, bcos::bytes>> purityKvs(size_t count, uint32_t
 }
 }  // namespace
 
-// Spec §5.6 hard requirement: the same input set, fed in different (shuffled) orders across many
-// runs, MUST produce a byte-identical 32-byte root AND a byte-identical new-node set. This is the
-// precondition for crash-replay convergence — two nodes that replay the same change-set in any
-// order must land on the same state root and persist the same nodes. Do NOT reduce 1000.
+// Spec §5.6 hard requirement: the same input set, fed in different (shuffled) map-fill orders
+// across many runs, MUST produce a byte-identical 32-byte root AND a byte-identical new-node
+// set. This is the precondition for crash-replay convergence — two nodes that replay the same
+// change-set in any order must land on the same state root and persist the same nodes.
+// commitTrie is a pure function of (priorRoot, changes); this pins that property. Do NOT
+// reduce 1000.
 BOOST_AUTO_TEST_CASE(SameInputProducesByteIdenticalRootOver1000Runs)
 {
     auto const entries = purityKvs(100, /*seed=*/0x9176AB);
@@ -88,28 +92,28 @@ BOOST_AUTO_TEST_CASE(SameInputProducesByteIdenticalRootOver1000Runs)
         std::mt19937 orderRng{run};
         std::shuffle(shuffled.begin(), shuffled.end(), orderRng);
 
-        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-        HashBuilder hb(storage, emptyRootHash());
+        std::map<bcos::h256, std::optional<bcos::bytes>> changes;
         for (auto const& [key, value] : shuffled)
         {
-            bcos::task::syncWait(hb.put(key, value));
+            changes[key] = value;
         }
-        auto const root = bcos::task::syncWait(hb.commit());
-        auto nodes = hb.drainNewNodes();
+        bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
+        auto result = bcos::task::syncWait(commitTrie(storage, emptyRootHash(), changes));
 
         if (run == 0)
         {
-            referenceRootHash = root;
-            referenceNodes = std::move(nodes);
+            referenceRootHash = result.root;
+            referenceNodes = std::move(result.newNodes);
         }
         else
         {
             // unordered_map operator== is content/order-independent: this is a byte-identical
             // check of the entire produced node set, not just the root.
-            BOOST_REQUIRE_MESSAGE(root == referenceRootHash,
-                "root drift at run " << run << " got=" << root.hex()
+            BOOST_REQUIRE_MESSAGE(result.root == referenceRootHash,
+                "root drift at run " << run << " got=" << result.root.hex()
                                      << " expected=" << referenceRootHash.hex());
-            BOOST_REQUIRE_MESSAGE(nodes == referenceNodes, "node-set drift at run " << run);
+            BOOST_REQUIRE_MESSAGE(
+                result.newNodes == referenceNodes, "node-set drift at run " << run);
         }
     }
 }
@@ -120,10 +124,10 @@ BOOST_AUTO_TEST_CASE(EmptyInputDeterministicallyEmptyRoot)
     for (int run = 0; run < 8; ++run)
     {
         bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-        HashBuilder hb(storage, emptyRootHash());
-        auto const root = bcos::task::syncWait(hb.commit());
-        BOOST_CHECK_EQUAL(root, emptyRootHash());
-        BOOST_CHECK(hb.drainNewNodes().empty());
+        auto result = bcos::task::syncWait(commitTrie(
+            storage, emptyRootHash(), std::map<bcos::h256, std::optional<bcos::bytes>>{}));
+        BOOST_CHECK_EQUAL(result.root, emptyRootHash());
+        BOOST_CHECK(result.newNodes.empty());
     }
 }
 

@@ -22,13 +22,17 @@
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage/Entry.h>
 #include <bcos-ledger/mpt/Constants.h>
+#include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/Nibble.h>
 #include <bcos-ledger/mpt/NodeEncoder.h>
 #include <bcos-ledger/mpt/TrieNode.h>
 #include <bcos-task/Task.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <map>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <string_view>
@@ -51,6 +55,32 @@ inline bcos::h256 makeHash(uint8_t firstByte)
 inline std::mt19937 seededRng(uint32_t s)
 {
     return std::mt19937{s};
+}
+
+/// Synchronous test wrapper around commitTrie(): commit @p changes over @p priorRoot AND flush
+/// the produced nodes into @p storage. Production flushes once per block from the aggregated
+/// MPTBuildOutput; tests flush per build so readback (Trie / MPTReadView) works immediately.
+template <typename Storage>
+TrieMergeResult commitTrieFlushed(Storage& storage, bcos::h256 priorRoot,
+    std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
+{
+    auto result = bcos::task::syncWait(commitTrie(storage, priorRoot, changes));
+    bcos::task::syncWait(flushTrieNodes(storage, result.newNodes));
+    return result;
+}
+
+/// commitTrieFlushed over insert-only entries (no deletes) — the common baseline-building shape.
+/// A distinct name, not an overload: a braced-init-list argument could match either map type.
+template <typename Storage>
+TrieMergeResult seedTrieFlushed(
+    Storage& storage, bcos::h256 priorRoot, std::map<bcos::h256, bcos::bytes> const& entries)
+{
+    std::map<bcos::h256, std::optional<bcos::bytes>> changes;
+    for (auto const& [key, value] : entries)
+    {
+        changes[key] = value;
+    }
+    return commitTrieFlushed(storage, priorRoot, changes);
 }
 
 // ---------------------------------------------------------------------------

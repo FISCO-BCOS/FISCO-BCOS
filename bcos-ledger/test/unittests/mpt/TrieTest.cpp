@@ -59,12 +59,10 @@ bcos::h256 trieKey(bcos::byte fill, bcos::byte tail, size_t tailLen)
 BOOST_AUTO_TEST_CASE(GetExistentKeyReturnsValue)
 {
     bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-    HashBuilder hb(storage, emptyRootHash());
 
     auto const key = makeHash(0xab);
     bcos::bytes const value{0x42};
-    bcos::task::syncWait(hb.put(key, value));
-    auto const root = bcos::task::syncWait(hb.commit());
+    auto const root = seedTrieFlushed(storage, emptyRootHash(), {{key, value}}).root;
 
     Trie trie(storage, root);
     auto got = bcos::task::syncWait(trie.get(key));
@@ -111,12 +109,8 @@ BOOST_AUTO_TEST_CASE(MultiKeyEachKeyResolves)
     kvs.emplace_back(makeHash(0x4f), bcos::bytes{0xc1});
 
     bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-    HashBuilder hb(storage, emptyRootHash());
-    for (auto const& [key, value] : kvs)
-    {
-        bcos::task::syncWait(hb.put(key, value));
-    }
-    auto const root = bcos::task::syncWait(hb.commit());
+    std::map<bcos::h256, bcos::bytes> entries(kvs.begin(), kvs.end());
+    auto const root = seedTrieFlushed(storage, emptyRootHash(), entries).root;
 
     Trie trie(storage, root);
     for (auto const& [key, value] : kvs)

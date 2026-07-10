@@ -167,12 +167,12 @@ ChainCheck verifyProofChain(
 bcos::h256 buildStateTrie(
     MemStorage& storage, std::vector<std::pair<bcos::Address, Account>> const& accounts)
 {
-    HashBuilder builder(storage, emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [addr, account] : accounts)
     {
-        bcos::task::syncWait(builder.put(accountKeyHash(addr), account.encode()));
+        entries[accountKeyHash(addr)] = account.encode();
     }
-    return bcos::task::syncWait(builder.commit());
+    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
 }
 
 }  // namespace
@@ -266,10 +266,10 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
     bcos::bytes const valueB{0x82, 0x13, 0x37};  // RLP(0x1337): 2-byte string
 
     // Build the storage trie into the SAME node storage; its root becomes account.storageRoot.
-    HashBuilder storageTrieBuilder(storage, emptyRootHash());
-    bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slotA), valueA));
-    bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slotB), valueB));
-    auto const storageRoot = bcos::task::syncWait(storageTrieBuilder.commit());
+    auto const storageRoot =
+        seedTrieFlushed(storage, emptyRootHash(),
+            {{slotKeyHash(slotA), valueA}, {slotKeyHash(slotB), valueB}})
+            .root;
 
     bcos::Address const addr = makeAddress(0xab);
     Account account;
@@ -361,9 +361,8 @@ BOOST_AUTO_TEST_CASE(DeterministicOutput)
     bcos::h256 const slot = makeHash(0x01);
     bcos::bytes const slotValue{0x2a};
 
-    HashBuilder storageTrieBuilder(storage, emptyRootHash());
-    bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slot), slotValue));
-    auto const storageRoot = bcos::task::syncWait(storageTrieBuilder.commit());
+    auto const storageRoot =
+        seedTrieFlushed(storage, emptyRootHash(), {{slotKeyHash(slot), slotValue}}).root;
 
     std::vector<std::pair<bcos::Address, Account>> accounts;
     for (uint8_t i = 1; i <= 20; ++i)

@@ -51,25 +51,25 @@ using FlatSlots = std::vector<std::pair<bcos::h256, bcos::bytes>>;
 // Build one account's storage trie from (slotKey → raw value) and return its root.
 bcos::h256 buildStorageTrie(NodeStorage& storage, std::map<bcos::h256, bcos::bytes> const& slots)
 {
-    HashBuilder builder(storage, emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [slot, value] : slots)
     {
         auto encoded = encodeStorageValue(bcos::ref(value));
         BOOST_REQUIRE(!encoded.empty());
-        bcos::task::syncWait(builder.put(slotKeyHash(slot), std::move(encoded)));
+        entries[slotKeyHash(slot)] = std::move(encoded);
     }
-    return bcos::task::syncWait(builder.commit());
+    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
 }
 
 // Build the parent state trie over (address → Account) and return its root.
 bcos::h256 buildStateTrie(NodeStorage& storage, std::map<bcos::Address, Account> const& accounts)
 {
-    HashBuilder builder(storage, emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [addr, account] : accounts)
     {
-        bcos::task::syncWait(builder.put(accountKeyHash(addr), account.encode()));
+        entries[accountKeyHash(addr)] = account.encode();
     }
-    return bcos::task::syncWait(builder.commit());
+    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
 }
 
 // The from-scratch oracle for the state trie root over the surviving accounts.

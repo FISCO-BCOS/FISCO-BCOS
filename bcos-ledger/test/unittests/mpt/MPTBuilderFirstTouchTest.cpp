@@ -298,12 +298,12 @@ BOOST_AUTO_TEST_CASE(FirstTouchEqualsSubsequentTouchAfterPreheat)
     // storage, record its root in the manifest, then run first-touch with a scanner that must
     // never fire.
     NodeStorage storageB;
-    HashBuilder baseline(storageB, emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> baselineEntries;
     for (auto const& [slot, value] : flatSlots)
     {
-        bcos::task::syncWait(baseline.put(slotKeyHash(slot), encodeStorageValue(bcos::ref(value))));
+        baselineEntries[slotKeyHash(slot)] = encodeStorageValue(bcos::ref(value));
     }
-    auto const baselineRoot = bcos::task::syncWait(baseline.commit());
+    auto const baselineRoot = seedTrieFlushed(storageB, emptyRootHash(), baselineEntries).root;
 
     bool scannerCalled = false;
     FlatToMPTBackends backendsB;
@@ -360,12 +360,12 @@ BOOST_AUTO_TEST_CASE(PreheatManifestHitDoesNotCallScanner)
     // Preheated baseline: two slots already in the node store, root in the manifest.
     std::map<bcos::h256, bcos::bytes> const baselineSlots{
         {slotKeyAt(0), bcos::bytes{0x10}}, {slotKeyAt(1), bcos::bytes{0x11}}};
-    HashBuilder baseline(storage, emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> baselineEntries;
     for (auto const& [slot, value] : baselineSlots)
     {
-        bcos::task::syncWait(baseline.put(slotKeyHash(slot), encodeStorageValue(bcos::ref(value))));
+        baselineEntries[slotKeyHash(slot)] = encodeStorageValue(bcos::ref(value));
     }
-    auto const baselineRoot = bcos::task::syncWait(baseline.commit());
+    auto const baselineRoot = seedTrieFlushed(storage, emptyRootHash(), baselineEntries).root;
 
     bool scannerCalled = false;
     FlatToMPTBackends backends;
@@ -405,14 +405,12 @@ BOOST_AUTO_TEST_CASE(TombstonePriorityOverFirstTouch)
 
     // The account exists with storage, and a pathological delta carries both flags. Tombstone
     // wins (spec §5.4): the leaf is removed and the first-touch machinery never runs.
-    HashBuilder storageTrie(storage, emptyRootHash());
-    bcos::task::syncWait(storageTrie.put(
-        slotKeyHash(slotKeyAt(0)), encodeStorageValue(bcos::ref(bcos::bytes{0x42}))));
     Account account;
-    account.storageRoot = bcos::task::syncWait(storageTrie.commit());
-    HashBuilder stateTrie(storage, emptyRootHash());
-    bcos::task::syncWait(stateTrie.put(accountKeyHash(addr), account.encode()));
-    auto const parentRoot = bcos::task::syncWait(stateTrie.commit());
+    account.storageRoot = seedTrieFlushed(storage, emptyRootHash(),
+        {{slotKeyHash(slotKeyAt(0)), encodeStorageValue(bcos::ref(bcos::bytes{0x42}))}})
+                              .root;
+    auto const parentRoot =
+        seedTrieFlushed(storage, emptyRootHash(), {{accountKeyHash(addr), account.encode()}}).root;
 
     bool scannerCalled = false;
     FlatToMPTBackends backends;
@@ -514,9 +512,8 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfAccountAlreadyInParentThrows)
     // Overwriting the leaf would silently discard its storage trie; the builder must halt loudly.
     Account existing;
     existing.nonce = 3;
-    HashBuilder stateTrie(storage, emptyRootHash());
-    bcos::task::syncWait(stateTrie.put(accountKeyHash(addr), existing.encode()));
-    auto const parentRoot = bcos::task::syncWait(stateTrie.commit());
+    auto const parentRoot =
+        seedTrieFlushed(storage, emptyRootHash(), {{accountKeyHash(addr), existing.encode()}}).root;
 
     bool scannerCalled = false;
     FlatToMPTBackends backends;

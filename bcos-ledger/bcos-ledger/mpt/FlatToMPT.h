@@ -163,7 +163,7 @@ bcos::task::Task<bcos::h256> resolveFirstTouchBaseline(Storage& storage,
         BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
                                   "FlatToMPT: first-touch needs flatSlotScanner"));
     }
-    HashBuilder<Storage, HasherT> bootstrap(storage, emptyRootHash<HasherT>());
+    std::map<bcos::h256, std::optional<bcos::bytes>> bootstrapChanges;
     // Bind the awaited result to a local before iterating: iterating a co_await temporary
     // directly is the same GCC template-coroutine hazard class as the member access noted in
     // MPTReadView::hasAccount.
@@ -175,10 +175,13 @@ bcos::task::Task<bcos::h256> resolveFirstTouchBaseline(Storage& storage,
         {
             continue;  // zero value: never part of the storage trie
         }
-        co_await bootstrap.put(slotKeyHash(slot, hasher), std::move(encoded));
+        bootstrapChanges[slotKeyHash(slot, hasher)] = std::move(encoded);
     }
-    auto baselineRoot = co_await bootstrap.commit();
-    absorbNodeDelta(bootstrap, output);
+    auto merged = co_await commitTrie(storage, emptyRootHash<HasherT>(), bootstrapChanges);
+    auto const baselineRoot = merged.root;
+    // Flushed immediately: the caller's apply pass merge-reads these nodes right after.
+    co_await flushTrieNodes(storage, merged.newNodes);
+    absorbNodeDelta(std::move(merged), output);
     co_return baselineRoot;
 }
 

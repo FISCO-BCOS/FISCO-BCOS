@@ -41,9 +41,9 @@ struct MPTDeltaLayer
 {
     /// The post-block MPT state root.
     bcos::h256 stateRoot;
-    /// Every newly produced node (hash → raw RLP), same contract as
-    /// HashBuilder::drainNewNodes(). The commit flow writes these under /mpt/<hash> keys in the
-    /// SAME WriteBatch as the flat state (single db->Write, spec §5.6).
+    /// Every newly produced node (hash → raw RLP), aggregated from every commitTrie() result of
+    /// this block. The commit flow writes these under /mpt/<hash> keys in the SAME WriteBatch as
+    /// the flat state (single db->Write, spec §5.6).
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
     /// Nodes this block made unreachable, disjoint from newNodes. Contract (spec §4.8): an input
     /// ledger for the future pathdb pruning spec ONLY — the commit flow does not read it and
@@ -62,17 +62,18 @@ struct MPTDeltaLayer
     std::vector<bcos::Address> preheatManifestsToDelete;
 };
 
-/// Drain a builder's produced node delta into @p delta: newNodes overwrite-insert, obsoleted
-/// hashes merge. Duck-typed on the drainNewNodes()/drainObsoletedNodes() interface HashBuilder
-/// defines, so this pure-data header does not depend on the builder template.
-template <typename Builder>
-void absorbNodeDelta(Builder& builder, MPTDeltaLayer& delta)
+/// Absorb one commitTrie() result into @p delta: newNodes overwrite-insert, obsoleted hashes
+/// merge. Taken by value (moved from): the result is consumed. Duck-typed on the
+/// newNodes/obsoletedNodes members TrieMergeResult defines, so this pure-data header does not
+/// depend on the trie headers.
+template <typename NodeDelta>
+void absorbNodeDelta(NodeDelta merged, MPTDeltaLayer& delta)
 {
-    for (auto& [hash, raw] : builder.drainNewNodes())
+    for (auto& [hash, raw] : merged.newNodes)
     {
         delta.newNodes.insert_or_assign(hash, std::move(raw));
     }
-    delta.obsoletedNodes.merge(builder.drainObsoletedNodes());
+    delta.obsoletedNodes.merge(std::move(merged.obsoletedNodes));
 }
 
 }  // namespace bcos::ledger::mpt

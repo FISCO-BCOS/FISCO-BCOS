@@ -56,18 +56,18 @@ using MPTBuildOutput = MPTDeltaLayer;
 /// preheat-manifest hit) and tombstone (SELFDESTRUCT — the account leaf is removed).
 ///
 /// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
-/// slotKeyHash and both HashBuilder instantiations. Pinned to keccak256 by the static_assert
-/// below: the first-touch bootstrap always drives HashBuilder's from-empty path, whose stateless
-/// core (computeTrieRootFromSorted) is not yet hasher-parameterized and always hashes with
-/// keccak. An SM3 instantiation would silently mix SM3 account/slot hashing with keccak bootstrap
-/// nodes — a root no SM3 verifier can reproduce. Lift the assert once the stateless core, along
-/// with accountKeyHash and Account's default storageRoot/codeHash, are parameterized on HasherT.
+/// slotKeyHash. Pinned to keccak256 by the static_assert below: commitTrie's from-empty path
+/// rides a stateless core (computeTrieRootFromSorted) that is not yet hasher-parameterized and
+/// always hashes with keccak. An SM3 instantiation would silently mix SM3 account/slot hashing
+/// with keccak trie nodes — a root no SM3 verifier can reproduce. Lift the assert once the
+/// stateless core, along with accountKeyHash and Account's default storageRoot/codeHash, are
+/// parameterized on HasherT.
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
     bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
 class MPTBuilder
 {
     static_assert(std::is_same_v<HasherT, bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>,
-        "MPTBuilder is keccak-only until HashBuilder's from-empty stateless core is parameterized "
+        "MPTBuilder is keccak-only until commitTrie's from-empty stateless core is parameterized "
         "on HasherT; see the @tparam note. A non-keccak instantiation would silently fork.");
 
 public:
@@ -92,9 +92,8 @@ public:
     {
         MPTBuildOutput output;
         MPTReadView<Storage> view(m_storage.get(), m_parentStateRoot);
-        // Spelled explicitly (no CTAD): CTAD would silently fall back to the default keccak
-        // hasher even when this MPTBuilder is instantiated with another HasherT.
-        HashBuilder<Storage, HasherT> accountBuilder(m_storage.get(), m_parentStateRoot);
+        // The account-trie change-set, committed once through commitTrie at the end.
+        std::map<bcos::h256, std::optional<bcos::bytes>> accountChanges;
 
         for (auto const& [addr, delta] : input.perAccount)
         {
@@ -116,7 +115,7 @@ public:
                 // CREATE2 redeploy). Deleting an absent record is a no-op, so schedule it
                 // unconditionally. Same reasoning covers removing the (possibly absent) leaf.
                 output.preheatManifestsToDelete.push_back(addr);
-                co_await accountBuilder.remove(accountKeyHash(addr));
+                accountChanges[accountKeyHash(addr)] = std::nullopt;
                 continue;
             }
             if (delta.firstTouch)
@@ -131,7 +130,7 @@ public:
                         MPTInvariantViolation{} << bcos::errinfo_comment(
                             "MPTBuilder: first-touch account already present in parent state"));
                 }
-                co_await buildFirstTouch(addr, delta, accountBuilder, output);
+                co_await buildFirstTouch(addr, delta, accountChanges, output);
                 continue;
             }
 
@@ -152,11 +151,13 @@ public:
             applyField(delta.balanceState, delta.balance, updated.balance);
             applyField(delta.codeHashState, delta.codeHash, updated.codeHash);
 
-            co_await accountBuilder.put(accountKeyHash(addr), updated.encode());
+            accountChanges[accountKeyHash(addr)] = updated.encode();
         }
 
-        output.stateRoot = co_await accountBuilder.commit();
-        absorbNodeDelta(accountBuilder, output);
+        auto merged = co_await commitTrie(m_storage.get(), m_parentStateRoot, accountChanges);
+        output.stateRoot = merged.root;
+        co_await flushTrieNodes(m_storage.get(), merged.newNodes);
+        absorbNodeDelta(std::move(merged), output);
 
         // MPTBuildOutput aggregates several HashBuilder commits (a first-touch bootstrap plus
         // the same block's apply, plus the account trie), so unlike a single mergeTrie() result
@@ -183,7 +184,7 @@ private:
     /// over that baseline, and account fields the block left Unchanged come from the flat KV
     /// via flatAccountMeta.
     bcos::task::Task<void> buildFirstTouch(bcos::Address const& addr, AccountDelta const& delta,
-        HashBuilder<Storage, HasherT>& accountBuilder, MPTBuildOutput& output)
+        std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTBuildOutput& output)
     {
         auto baselineStorageRoot =
             co_await resolveFirstTouchBaseline(m_storage.get(), m_backends, addr, m_hasher, output);
@@ -230,7 +231,7 @@ private:
         applyField(delta.balanceState, delta.balance, updated.balance);
         applyField(delta.codeHashState, delta.codeHash, updated.codeHash);
 
-        co_await accountBuilder.put(accountKeyHash(addr), updated.encode());
+        accountChanges[accountKeyHash(addr)] = updated.encode();
     }
 
     /// Overwrite @p field from @p value when the block updated it. A Deleted state outside a
@@ -260,7 +261,7 @@ private:
         {
             co_return priorStorageRoot;
         }
-        HashBuilder<Storage, HasherT> storageBuilder(m_storage.get(), priorStorageRoot);
+        std::map<bcos::h256, std::optional<bcos::bytes>> changes;
         for (auto const& [slot, valueOpt] : delta.storageChanges)
         {
             auto const keyHash = slotKeyHash(slot, m_hasher);
@@ -272,15 +273,17 @@ private:
             }
             if (encoded.empty())
             {
-                co_await storageBuilder.remove(keyHash);
+                changes[keyHash] = std::nullopt;
             }
             else
             {
-                co_await storageBuilder.put(keyHash, std::move(encoded));
+                changes[keyHash] = std::move(encoded);
             }
         }
-        auto newRoot = co_await storageBuilder.commit();
-        absorbNodeDelta(storageBuilder, output);
+        auto merged = co_await commitTrie(m_storage.get(), priorStorageRoot, changes);
+        auto const newRoot = merged.root;
+        co_await flushTrieNodes(m_storage.get(), merged.newNodes);
+        absorbNodeDelta(std::move(merged), output);
         co_return newRoot;
     }
 
