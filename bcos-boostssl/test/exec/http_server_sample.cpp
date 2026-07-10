@@ -86,10 +86,11 @@ int main(int argc, char** argv)
     wsInitializer->initWsService(wsService);
 
     auto server = wsService->httpServer();
-    server->setHttpReqHandler([](std::string_view _req, const HttpRequestMeta& _meta,
+    server->setHttpReqHandler([](const bcos::boostssl::http::HttpRequest& _req,
                                   std::function<void(bcos::bytes)> _callback) {
-        BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req)
-                       << LOG_KV("method", _meta.method) << LOG_KV("target", _meta.target);
+        BCOS_LOG(INFO) << LOG_BADGE(" [Main] ===>>>> ") << LOG_KV("request", _req.body())
+                       << LOG_KV("method", std::string(_req.method_string()))
+                       << LOG_KV("target", std::string(_req.target()));
         _callback(bcos::bytes(_req.begin(), _req.end()));
         });
     wsService->start();

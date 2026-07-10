@@ -26,25 +26,19 @@
 using namespace bcos;
 using namespace bcos::rpc;
 
-bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
-    bcos::rpc::GroupManager::Ptr _groupManager,
-    bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-    std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
-    bool syncTransaction)
-  : m_groupManager(std::move(_groupManager)),
-    m_gatewayInterface(std::move(_gatewayInterface)),
-    m_wsService(std::move(_wsService)),
-    m_groupId(std::move(_groupId)),
-    m_batchRequestSizeLimit(_batchRequestSizeLimit),
-    m_endpoints(
-        m_groupManager->getNodeService(m_groupId, ""), std::move(filterSystem), syncTransaction)
+bcos::rpc::Web3JsonRpcImpl::Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
+    bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem, 
+    bool syncTransaction, bool _enableOPEngine)
+  : m_endpoints(
+        _groupManager->getNodeService(_groupId, ""), std::move(filterSystem), syncTransaction),
+    m_endpointsMapping(_enableOPEngine),
+    m_batchRequestSizeLimit(_batchRequestSizeLimit)
 {
     RPC_LOG(INFO) << LOG_KV("[NEWOBJ][Web3JsonRpcImpl]", this);
 }
 
-void Web3JsonRpcImpl::handleRequest(Json::Value _request,
-    std::shared_ptr<boostssl::ws::WsSession> _session,
-    const std::function<void(Json::Value)>& _callback)
+task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
+    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     Json::Value response;
     try
@@ -65,10 +59,10 @@ void Web3JsonRpcImpl::handleRequest(Json::Value _request,
         std::string method = _request["method"].asString();
         response["id"] = _request["id"];
 
-        if (m_web3Subscribe->isSubscribeRequest(method))
+        if (m_web3Subscribe && m_web3Subscribe->isSubscribeRequest(method))
         {
-            handleSubscribeRequest(_request, std::move(method), std::move(_session), _callback);
-            return;
+            auto result = handleSubscribeRequest(std::move(_request), std::move(method), std::move(_session));
+            co_return result;
         }
 
         auto optHandler = m_endpointsMapping.findHandler(method);
@@ -77,43 +71,21 @@ void Web3JsonRpcImpl::handleRequest(Json::Value _request,
             BOOST_THROW_EXCEPTION(JsonRpcException(MethodNotFound, "Method not found"));
         }
 
-        task::wait([](Web3JsonRpcImpl* self, EndpointsMapping::Handler _handler,
-                       Json::Value _request, std::function<void(Json::Value)> _callback,
-                       decltype(startT) startT) -> task::Task<void> {
-            Json::Value resp;
-            try
-            {
-                Json::Value const& params = _request["params"];
+        Json::Value const& params = _request["params"];
+        Json::Value result;
+        co_await (m_endpoints.*optHandler.value())(params, result);
+        buildJsonContent(result, response);
 
-                co_await (self->m_endpoints.*_handler)(params, resp);
-                resp["id"] = _request["id"];
-            }
-            catch (const JsonRpcException& e)
-            {
-                buildJsonError(_request, e.code(), e.msg(), resp);
-            }
-            catch (bcos::Error const& e)
-            {
-                buildJsonError(_request, InternalError, e.errorMessage(), resp);
-            }
-            catch (...)
-            {
-                buildJsonError(_request, InternalError,
-                    boost::current_exception_diagnostic_information(), resp);
-            }
-            if (c_fileLogLevel == TRACE) [[unlikely]]
-            {
-                auto endT = utcTime();
-                WEB3_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("end")
-                                << LOG_KV("costMs", endT - startT)
-                                << LOG_KV("request", printJson(_request))
-                                << LOG_KV("response", printJson(resp));
-            }
+        if (c_fileLogLevel == TRACE) [[unlikely]]
+        {
+            auto endT = utcTime();
+            WEB3_LOG(TRACE) << LOG_BADGE("handleRequest") << LOG_DESC("end")
+                            << LOG_KV("costMs", endT - startT)
+                            << LOG_KV("request", printJson(_request))
+                            << LOG_KV("response", printJson(response));
+        }
 
-            _callback(std::move(resp));
-        }(this, optHandler.value(), std::move(_request), _callback, startT));
-
-        return;
+        co_return response;
     }
     catch (const JsonRpcException& e)
     {
@@ -129,22 +101,13 @@ void Web3JsonRpcImpl::handleRequest(Json::Value _request,
             _request, InternalError, boost::current_exception_diagnostic_information(), response);
     }
 
-    _callback(std::move(response));
+    co_return response;
 }
 
-void Web3JsonRpcImpl::handleRequest(
-    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
+task::Task<Json::Value> Web3JsonRpcImpl::handleBatchRequest(
+    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    handleRequest(std::move(_request), std::move(_session), [_sender](Json::Value _response) {
-        auto respBytes = toBytesResponse(_response);
-        _sender(std::move(respBytes));
-    });
-}
-
-void Web3JsonRpcImpl::handleBatchRequest(
-    Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
-{
-    auto respJsonValuePtr = std::make_shared<Json::Value>(Json::arrayValue);
+    auto responses = Json::Value(Json::arrayValue);
     auto requestSize = _request.size();
 
     auto startT = utcTime();
@@ -156,40 +119,30 @@ void Web3JsonRpcImpl::handleBatchRequest(
 
     for (auto& reqItem : _request)
     {
-        handleRequest(std::move(reqItem), _session,
-            [respJsonValuePtr, requestSize, _sender, startT](Json::Value response) {
-                respJsonValuePtr->append(std::move(response));
-                if (respJsonValuePtr->size() < requestSize)
-                {
-                    return;
-                }
-
-                auto respBytes = toBytesResponse(*respJsonValuePtr);
-                _sender(std::move(respBytes));
-
-                auto endT = utcTime();
-                if (c_fileLogLevel == TRACE) [[unlikely]]
-                {
-                    WEB3_LOG(TRACE) << LOG_BADGE("handleBatchRequest") << LOG_DESC("end")
-                                    << LOG_KV("costMs", endT - startT)
-                                    << LOG_KV("response", printJson(*respJsonValuePtr));
-                }
-            });
+        auto result = co_await handleRequest(std::move(reqItem), _session);
+        responses.append(std::move(result));
     }
+
+    if (c_fileLogLevel == TRACE) [[unlikely]]
+    {
+        auto endT = utcTime();
+        WEB3_LOG(TRACE) << LOG_BADGE("handleBatchRequest") << LOG_DESC("end")
+                        << LOG_KV("costMs", endT - startT)
+                        << LOG_KV("response", printJson(responses));
+    }
+
+    co_return responses;
 }
 
-void Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request, std::string _method,
-    std::shared_ptr<boostssl::ws::WsSession> _session,
-    const std::function<void(Json::Value)>& _callback)
+Json::Value Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request, std::string _method,
+    std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     if (!_session)
     {
-        // Note: eth_subscribe request only support websocket protocol
         BOOST_THROW_EXCEPTION(
             JsonRpcException(InvalidRequest, "Subscribe request only support websocket protocol"));
     }
 
-    // https://ethereum.org/en/developers/tutorials/using-websockets/#subscription-api
     Json::Value response;
     if (_request.isObject() && _request.isMember("id"))
     {
@@ -211,7 +164,7 @@ void Web3JsonRpcImpl::handleSubscribeRequest(Json::Value _request, std::string _
         BOOST_THROW_EXCEPTION(JsonRpcException(InvalidRequest, "Invalid subscribe method"));
     }
 
-    _callback(std::move(response));
+    return response;
 }
 
 void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& _sender)
@@ -219,12 +172,33 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody, const Sender& 
     onRPCRequest(_requestBody, nullptr, _sender);
 }
 
+void Web3JsonRpcImpl::onRPCRequest(const bcos::boostssl::http::HttpRequest& _request, const Sender& _sender)
+{
+    assert(m_jwtVerifier && "m_jwtVerifier is not set");
+
+    std::string authorization;
+    if (auto it = _request.find(boost::beast::http::field::authorization); it != _request.end())
+    {
+        authorization = std::string(it->value());
+    }
+     auto verifyResult = m_jwtVerifier->verify(authorization);
+    if (!verifyResult)
+    {
+        Json::Value request;
+        Json::Value response;
+        buildJsonError(request, bcos::rpc::toJsonRpcJwtErrorCode(verifyResult.error),
+            "JWT authentication failed: " + verifyResult.errorMessage, response);
+        _sender(toBytesResponse(response));
+        return;
+    }
+
+    onRPCRequest(_request.body(), nullptr, _sender);
+}
+
 void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
     std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender)
 {
     auto startT = utcTime();
-    auto batchRequestSizeLimit = m_batchRequestSizeLimit;
-
     Json::Value request;
     Json::Value response;
     try
@@ -247,7 +221,6 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
             response["id"] = request["id"];
         }
 
-        bool isBatchRequest = false;
         if (request.isArray())
         {
             if (request.size() == 0)
@@ -256,37 +229,32 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
                     JsonRpcException(InvalidRequest, "The request array is empty"));
             }
 
-            if (request.size() > batchRequestSizeLimit)
+            if (request.size() > m_batchRequestSizeLimit)
             {
                 BOOST_THROW_EXCEPTION(JsonRpcException(
                     InvalidRequest, "The requested array size exceeds the limit size: " +
-                                        std::to_string(batchRequestSizeLimit)));
+                                        std::to_string(m_batchRequestSizeLimit)));
             }
 
-            // handle batch request, https://www.jsonrpc.org/specification#batch
             if (request.size() > 1)
             {
-                isBatchRequest = true;
+                task::wait([this, request = std::move(request), session = std::move(_session),
+                               sender = _sender]() mutable -> task::Task<void> {
+                    auto result = co_await this->handleBatchRequest(std::move(request), session);
+                    sender(toBytesResponse(result));
+                }());
+                return;
             }
 
-            // single request
-            if (request.size() == 1)
-            {
-                request = std::move(request[0]);
-            }
+            // single request in array
+            request = std::move(request[0]);
         }
 
-        if (isBatchRequest)
-        {
-            // handle batch request
-            handleBatchRequest(std::move(request), _session, _sender);
-        }
-        else
-        {
-            // handle single request
-            handleRequest(std::move(request), _session, _sender);
-        }
-
+        task::wait([this, request = std::move(request), session = std::move(_session),
+                       sender = _sender]() mutable -> task::Task<void> {
+            auto result = co_await this->handleRequest(std::move(request), session);
+            sender(toBytesResponse(result));
+        }());
         return;
     }
     catch (const JsonRpcException& e)

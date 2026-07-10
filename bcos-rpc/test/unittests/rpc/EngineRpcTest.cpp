@@ -14,16 +14,16 @@
  *  limitations under the License.
  *
  * @file EngineRpcTest.cpp
- * @brief Unit tests for OPEngineEndpoints (openginerpc)
+ * @brief Unit tests for Engine API through Endpoints/EngineEndpoint
  */
 
 #include "../common/RPCFixture.h"
 #include <bcos-framework/engine/AnyEngineService.h>
-#include <bcos-rpc/openginerpc/Common.h>
-#include <bcos-rpc/openginerpc/endpoints/OPEngineEndpoints.h>
+#include <bcos-rpc/web3jsonrpc/utils/Common.h>
+#include <bcos-rpc/web3jsonrpc/endpoints/Endpoints.h>
 #include <bcos-codec/wrapper/CodecWrapper.h>
-
 #include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-task/Wait.h>
 #include <json/json.h>
 #include <memory>
 
@@ -33,9 +33,6 @@ using namespace bcos::crypto;
 
 namespace bcos::test
 {
-/// A minimal mock EngineService that captures call parameters and returns
-/// pre-configured results.  Uses a shared State so that the same state is
-/// visible through AnyEngineService's proxy copy.
 class MockOpEngineService
 {
 public:
@@ -70,7 +67,7 @@ public:
 
     task::Task<engine::ForkchoiceUpdatedResult> updateForkchoice(
         const engine::ForkchoiceState& forkchoiceState,
-        const engine::PayloadAttributes* /*payloadAttributes*/, std::uint32_t version)
+        const engine::PayloadAttributes*, std::uint32_t version)
     {
         m_state->capturedForkchoiceState = forkchoiceState;
         m_state->capturedForkchoiceVersion = static_cast<int>(version);
@@ -93,14 +90,8 @@ public:
         co_return m_state->forkchoiceUpdatedResult.payloadStatus;
     }
 
-    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const
-    {
-        return std::nullopt;
-    }
-    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const
-    {
-        return std::nullopt;
-    }
+    std::optional<bcos::protocol::BlockNumber> getSafeBlockNumber() const { return std::nullopt; }
+    std::optional<bcos::protocol::BlockNumber> getFinalizedBlockNumber() const { return std::nullopt; }
 };
 
 class EngineRpcTestFixture : public RPCFixture
@@ -108,22 +99,22 @@ class EngineRpcTestFixture : public RPCFixture
 public:
     EngineRpcTestFixture()
     {
-        // Set a mock engine service so endpoints have something to call
         nodeService->engineService() =
             std::make_shared<bcos::engine::AnyEngineService>(mockService);
-
-        // Build the OPEngineEndpoints from the same NodeService.
-        // The OPE ndpoints have a default engineService extracted from NodeService.
-        endpoints = std::make_unique<OPEngineEndpoints>(nodeService);
+        endpoints = std::make_unique<Endpoints>(
+            nodeService, nullptr, false);
     }
 
-    std::unique_ptr<OPEngineEndpoints> endpoints;
+    std::unique_ptr<Endpoints> endpoints;
     MockOpEngineService mockService;
 };
 
-// ================================================================
-// exchangeCapabilities
-// ================================================================
+// Helper macro: call an EngineEndpoint method through Endpoints
+#define CALL_ENGINE(method, params, response) \
+    task::wait([&](Endpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> { \
+        co_await ep->method(p, r); \
+    }(endpoints.get(), params, response))
+
 BOOST_FIXTURE_TEST_SUITE(EngineRpcTest, EngineRpcTestFixture)
 
 BOOST_AUTO_TEST_CASE(exchangeCapabilities)
@@ -133,9 +124,7 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilities)
     params.append("engine_newPayloadV3");
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await ep->exchangeCapabilities(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(exchangeCapabilities, params, response);
 
     BOOST_CHECK(response.isArray());
     BOOST_CHECK_EQUAL(response.size(), 2);
@@ -143,9 +132,6 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilities)
     BOOST_CHECK_EQUAL(response[1u].asString(), "engine_newPayloadV3");
 }
 
-// ================================================================
-// forkchoiceUpdated
-// ================================================================
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV1)
 {
     Json::Value params(Json::arrayValue);
@@ -156,16 +142,13 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV1)
     params.append(fc);
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await ep->forkchoiceUpdatedV1(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(forkchoiceUpdatedV1, params, response);
 
     BOOST_CHECK(response.isMember("payloadStatus"));
     BOOST_CHECK_EQUAL(response["payloadStatus"]["status"].asString(), "VALID");
     BOOST_CHECK(response.isMember("payloadId"));
     BOOST_CHECK(response["payloadId"].isNull());
 
-    // Verify mock captured the state
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceState.has_value());
     BOOST_CHECK_EQUAL(
         mockService.m_state->capturedForkchoiceState->headBlockHash.hex(),
@@ -189,9 +172,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
     params.append(attrs);
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await ep->forkchoiceUpdatedV2(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(forkchoiceUpdatedV2, params, response);
 
     BOOST_CHECK(response.isMember("payloadStatus"));
     BOOST_CHECK_EQUAL(response["payloadStatus"]["status"].asString(), "VALID");
@@ -216,9 +197,7 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     params.append(attrs);
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await ep->forkchoiceUpdatedV3(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(forkchoiceUpdatedV3, params, response);
 
     BOOST_CHECK(response.isMember("payloadStatus"));
     BOOST_CHECK_EQUAL(response["payloadStatus"]["status"].asString(), "VALID");
@@ -237,21 +216,14 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
     params.append(fc);
 
     Json::Value response;
-        {
-        OPEngineEndpointsMapping mapping;
-        auto handler = mapping.findHandler("engine_forkchoiceUpdatedV4");
-        BOOST_REQUIRE(handler.has_value());
-        Json::Value response;
-        BOOST_CHECK_THROW(handler.value()(*endpoints, params, response), JsonRpcException);
-    }
+    CALL_ENGINE(forkchoiceUpdatedV4, params, response);
+
+    BOOST_CHECK(response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
 }
 
-// ================================================================
-// getPayload
-// ================================================================
 BOOST_AUTO_TEST_CASE(getPayloadV1)
 {
-    // Prepare a minimal payload in the mock
     mockService.m_state->getPayloadResult.executionPayload.parentHash =
         h256("1111111111111111111111111111111111111111111111111111111111111111");
     mockService.m_state->getPayloadResult.executionPayload.blockHash =
@@ -261,14 +233,11 @@ BOOST_AUTO_TEST_CASE(getPayloadV1)
     params.append("0x0000000021f32cc1");
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await ep->getPayloadV1(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(getPayloadV1, params, response);
 
     BOOST_CHECK(response.isMember("parentHash"));
     BOOST_CHECK_EQUAL(response["parentHash"].asString(),
         "0x1111111111111111111111111111111111111111111111111111111111111111");
-
     BOOST_REQUIRE(mockService.m_state->capturedPayloadId.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedPayloadId, "0x0000000021f32cc1");
     BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
@@ -287,15 +256,12 @@ BOOST_AUTO_TEST_CASE(getPayloadV3)
     params.append("0x0000000021f32cc1");
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await ep->getPayloadV3(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(getPayloadV3, params, response);
 
     BOOST_CHECK(response.isMember("executionPayload"));
     BOOST_CHECK(response.isMember("blockValue"));
     BOOST_CHECK(response.isMember("blobsBundle"));
     BOOST_CHECK(response.isMember("shouldOverrideBuilder"));
-
     BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 3);
 }
@@ -306,20 +272,12 @@ BOOST_AUTO_TEST_CASE(getPayloadV4)
     params.append("0x0000000021f32cc1");
 
     Json::Value response;
-        {
-        OPEngineEndpointsMapping mapping;
-        auto handler = mapping.findHandler("engine_getPayloadV4");
-        BOOST_REQUIRE(handler.has_value());
-        Json::Value params(Json::arrayValue);
-        params.append("0x0000000021f32cc1");
-        Json::Value response;
-        BOOST_CHECK_THROW(handler.value()(*endpoints, params, response), JsonRpcException);
-    }
+    CALL_ENGINE(getPayloadV4, params, response);
+
+    BOOST_CHECK(response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
 }
 
-// ================================================================
-// newPayload
-// ================================================================
 BOOST_AUTO_TEST_CASE(newPayloadV1)
 {
     Json::Value params(Json::arrayValue);
@@ -341,9 +299,7 @@ BOOST_AUTO_TEST_CASE(newPayloadV1)
     params.append(ep);
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await epObj->newPayloadV1(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(newPayloadV1, params, response);
 
     BOOST_CHECK(response.isMember("status"));
     BOOST_CHECK_EQUAL(response["status"].asString(), "VALID");
@@ -353,7 +309,6 @@ BOOST_AUTO_TEST_CASE(newPayloadV1)
 
 BOOST_AUTO_TEST_CASE(newPayloadV2)
 {
-    // Build a transaction
     auto tx = m_blockFactory->transactionFactory()->createTransaction(
         0, "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
         chainId, groupId, static_cast<int64_t>(utcTime()));
@@ -380,25 +335,18 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
     ep["blockHash"] = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     ep["transactions"] = Json::Value(Json::arrayValue);
     ep["transactions"].append(encodedTxHex);
-
-    // Withdrawals
     Json::Value w;
     w["index"] = "0x1";
     w["validatorIndex"] = "0x2";
     w["address"] = "0x7777777777777777777777777777777777777777";
     w["amount"] = largeQuantity;
     ep["withdrawals"].append(w);
-
-    // Blob gas for V2 parsing — spec says V2 may have blob fields
     ep["blobGasUsed"] = largeQuantity;
     ep["excessBlobGas"] = largeQuantity;
-
     params.append(ep);
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await epObj->newPayloadV2(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(newPayloadV2, params, response);
 
     BOOST_CHECK(response.isMember("status"));
     BOOST_CHECK_EQUAL(response["status"].asString(), "VALID");
@@ -410,11 +358,9 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
     BOOST_CHECK_EQUAL(capturedReq.executionPayload.withdrawals->front().amount,
         fromBigQuantity(largeQuantity));
     BOOST_REQUIRE(capturedReq.executionPayload.blobGasUsed.has_value());
-    BOOST_CHECK_EQUAL(
-        *capturedReq.executionPayload.blobGasUsed, fromBigQuantity(largeQuantity));
+    BOOST_CHECK_EQUAL(*capturedReq.executionPayload.blobGasUsed, fromBigQuantity(largeQuantity));
     BOOST_REQUIRE(capturedReq.executionPayload.excessBlobGas.has_value());
-    BOOST_CHECK_EQUAL(
-        *capturedReq.executionPayload.excessBlobGas, fromBigQuantity(largeQuantity));
+    BOOST_CHECK_EQUAL(*capturedReq.executionPayload.excessBlobGas, fromBigQuantity(largeQuantity));
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 2);
 }
@@ -450,18 +396,13 @@ BOOST_AUTO_TEST_CASE(newPayloadV3)
     ep["excessBlobGas"] = "0x0";
     params.append(ep);
 
-    // expectedBlobVersionedHashes
     Json::Value blobHashes(Json::arrayValue);
     blobHashes.append("0x000657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014");
     params.append(blobHashes);
-
-    // parentBeaconBlockRoot
     params.append("0x169630f535b4a41330164c6e5c92b1224c0c407f582d407d0ac3d206cd32fd52");
 
     Json::Value response;
-    task::wait([&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await epObj->newPayloadV3(p, r);
-    }(endpoints.get(), params, response));
+    CALL_ENGINE(newPayloadV3, params, response);
 
     BOOST_CHECK(response.isMember("status"));
     BOOST_CHECK_EQUAL(response["status"].asString(), "VALID");
@@ -472,90 +413,13 @@ BOOST_AUTO_TEST_CASE(newPayloadV3)
 BOOST_AUTO_TEST_CASE(newPayloadV4)
 {
     Json::Value params(Json::arrayValue);
-    Json::Value ep;
-    ep["parentHash"] = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    ep["feeRecipient"] = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    ep["stateRoot"] = "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
-    ep["receiptsRoot"] = "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
-    ep["logsBloom"] = "0x" + std::string(512, '0');
-    ep["prevRandao"] = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-    ep["blockNumber"] = "0x1";
-    ep["gasLimit"] = "0x5208";
-    ep["gasUsed"] = "0x0";
-    ep["timestamp"] = "0x1";
-    ep["extraData"] = "0x1234";
-    ep["baseFeePerGas"] = "0x1";
-    ep["blockHash"] = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-    ep["transactions"] = Json::Value(Json::arrayValue);
-    ep["withdrawals"] = Json::Value(Json::arrayValue);
-    ep["blobGasUsed"] = "0x0";
-    ep["excessBlobGas"] = "0x0";
-    params.append(ep);
-    params.append(Json::Value(Json::arrayValue));
-    params.append("0x0000000000000000000000000000000000000000000000000000000000000000");
-    params.append(Json::Value(Json::arrayValue));
-
     Json::Value response;
-    BOOST_CHECK_THROW(
-        task::wait([&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await epObj->newPayloadV4(p, r);
-        }(endpoints.get(), params, response)),
-        JsonRpcException);
+    CALL_ENGINE(newPayloadV4, params, response);
+
+    BOOST_CHECK(response.isMember("error"));
+    BOOST_CHECK_EQUAL(response["error"]["code"].asInt(), EngineError::UnsupportedFork);
 }
 
-// ================================================================
-// Error cases
-// ================================================================
-
-BOOST_AUTO_TEST_CASE(engineNotAvailable)
-{
-    // Create endpoints without setting engine service (default from NodeService is null)
-    auto nullNodeService = std::make_shared<rpc::NodeService>(
-        m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory, nullptr);
-    OPEngineEndpoints nullEndpoints(nullNodeService);
-
-    Json::Value params(Json::arrayValue);
-    params.append("test");
-    Json::Value response;
-
-    BOOST_CHECK_THROW(
-        task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await ep->exchangeCapabilities(p, r);
-        }(&nullEndpoints, params, response)),
-        JsonRpcException);
-}
-
-BOOST_AUTO_TEST_CASE(getPayloadInvalidParams)
-{
-    Json::Value params(Json::arrayValue);
-    params.append(42);  // not a string
-
-    Json::Value response;
-    BOOST_CHECK_THROW(
-        task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await ep->getPayloadV1(p, r);
-        }(endpoints.get(), params, response)),
-        JsonRpcException);
-}
-
-BOOST_AUTO_TEST_CASE(exchangeCapabilitiesNonString)
-{
-    Json::Value params(Json::arrayValue);
-    params.append(123);  // number, not a string
-
-    Json::Value response;
-    BOOST_CHECK_THROW(
-        task::wait([&](OPEngineEndpoints* ep, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await ep->exchangeCapabilities(p, r);
-        }(endpoints.get(), params, response)),
-        JsonRpcException);
-}
-
-// ================================================================
-// Round-trip test: newPayloadV2 → getPayloadV2
-// Matches the scope of handleEngineV2PayloadParsingAndSerializationTest
-// in Web3RpcTest.cpp.
-// ================================================================
 BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
 {
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
@@ -598,9 +462,7 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     params.append(ep);
 
     Json::Value newPayloadResponse;
-    task::wait([&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
-        co_await epObj->newPayloadV2(p, r);
-    }(endpoints.get(), params, newPayloadResponse));
+    CALL_ENGINE(newPayloadV2, params, newPayloadResponse);
 
     BOOST_CHECK(newPayloadResponse.isMember("status"));
     BOOST_CHECK_EQUAL(newPayloadResponse["status"].asString(), "VALID");
@@ -625,14 +487,12 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
         *mockService.m_state->capturedNewPayloadRequest->executionPayload.excessBlobGas,
         expectedLargeValue);
 
-    // Verify encoded tx round-trips correctly
     bytes decodedEncodedTx;
     mockService.m_state->capturedNewPayloadRequest->executionPayload.transactions.front()->encode(
         decodedEncodedTx);
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(decodedEncodedTx), encodedTxHex);
 
     // --- engine_getPayloadV2 ---
-    // Feed the captured payload back as the getPayload result
     mockService.m_state->getPayloadResult.executionPayload =
         mockService.m_state->capturedNewPayloadRequest->executionPayload;
     mockService.m_state->getPayloadResult.blockValue = expectedLargeValue;
@@ -641,10 +501,7 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     getPayloadParams.append("payload-id-1");
 
     Json::Value getPayloadResponse;
-    task::wait(
-        [&](OPEngineEndpoints* epObj, Json::Value p, Json::Value& r) -> task::Task<void> {
-            co_await epObj->getPayloadV2(p, r);
-        }(endpoints.get(), getPayloadParams, getPayloadResponse));
+    CALL_ENGINE(getPayloadV2, getPayloadParams, getPayloadResponse);
 
     BOOST_REQUIRE(mockService.m_state->capturedPayloadId.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedPayloadId, "payload-id-1");

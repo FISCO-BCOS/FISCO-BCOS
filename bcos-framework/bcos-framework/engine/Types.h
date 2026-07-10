@@ -50,8 +50,8 @@ struct WithdrawalV1
 {
     u256 index = 0;
     u256 validatorIndex = 0;
-    Address address;
     u256 amount = 0;
+    Address address;
 };
 
 struct BlobsBundleV1
@@ -71,9 +71,9 @@ struct ForkchoiceState
 struct PayloadAttributes
 {
     // Required by PayloadAttributesV1/V2/V3/V4.
-    std::uint64_t timestamp = 0;
     h256 prevRandao;
     Address suggestedFeeRecipient;
+    std::uint64_t timestamp = 0;
 
     // Required by PayloadAttributesV2/V3/V4.
     std::optional<std::vector<WithdrawalV1>> withdrawals;
@@ -89,20 +89,20 @@ struct PayloadAttributes
 struct ExecutionPayload
 {
     // Required by ExecutionPayloadV1/V2/V3/V4.
+    Bloom logsBloom{};
     h256 parentHash;
-    Address feeRecipient;
     h256 stateRoot;
     h256 receiptsRoot;
-    Bloom logsBloom{};
     h256 prevRandao;
-    bcos::protocol::BlockNumber blockNumber = 0;
     u256 gasLimit = 0;
     u256 gasUsed = 0;
-    std::uint64_t timestamp = 0;
-    bytes extraData;
     u256 baseFeePerGas = 0;
     h256 blockHash;
     bcos::protocol::Transactions transactions;
+    bytes extraData;
+    Address feeRecipient;
+    std::uint64_t timestamp = 0;
+    bcos::protocol::BlockNumber blockNumber = 0;
 
     // Required by ExecutionPayloadV2/V3/V4.
     std::optional<std::vector<WithdrawalV1>> withdrawals;
@@ -140,9 +140,9 @@ enum class PayloadValidationStatus : std::uint8_t
 
 struct PayloadStatus
 {
-    PayloadValidationStatus status = PayloadValidationStatus::Syncing;
     std::optional<h256> latestValidHash;
     std::optional<std::string> validationError;
+    PayloadValidationStatus status = PayloadValidationStatus::Syncing;
 };
 
 struct ForkchoiceUpdatedResult

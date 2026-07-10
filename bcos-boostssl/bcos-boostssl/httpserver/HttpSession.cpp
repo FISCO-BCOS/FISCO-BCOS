@@ -193,16 +193,7 @@ void bcos::boostssl::http::HttpSession::handleRequest(const HttpRequest& _httpRe
 
     if (m_httpReqHandler)
     {
-        const std::string& request = _httpRequest.body();
-        HttpRequestMeta meta;
-        meta.method = std::string(_httpRequest.method_string());
-        meta.target = std::string(_httpRequest.target());
-        for (auto const& header : _httpRequest)
-        {
-            meta.headers.emplace(std::string(header.name_string()), std::string(header.value()));
-        }
-
-        m_httpReqHandler(request, meta,
+        m_httpReqHandler(_httpRequest,
             [session = shared_from_this(), version, startT,
                 keepAlive = _httpRequest.keep_alive()](bcos::bytes _content) {
             auto status = selectHttpStatusFromJsonRpcResponse(_content);

@@ -17,14 +17,13 @@
  * @author: kyonGuo
  * @date 2024/3/21
  */
-
 #pragma once
-#include "bcos-boostssl/websocket/WsService.h"
-#include "bcos-framework/gateway/GatewayInterface.h"
 #include "bcos-rpc/groupmgr/GroupManager.h"
+#include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
 #include "bcos-rpc/web3jsonrpc/endpoints/Endpoints.h"
 #include "bcos-rpc/web3jsonrpc/endpoints/EndpointsMapping.h"
+#include <bcos-task/Task.h>
 #include <json/json.h>
 namespace bcos::rpc
 {
@@ -34,28 +33,19 @@ public:
     using Ptr = std::shared_ptr<Web3JsonRpcImpl>;
     using WeakPtr = std::weak_ptr<Web3JsonRpcImpl>;
     using Sender = std::function<void(bcos::bytes)>;
-    Web3JsonRpcImpl(std::string _groupId, uint32_t _batchRequestSizeLimit,
-        bcos::rpc::GroupManager::Ptr _groupManager,
-        bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
-        std::shared_ptr<boostssl::ws::WsService> _wsService, FilterSystem::Ptr filterSystem,
-        bool syncTransaction);
+    Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
+        bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem,
+        bool syncTransaction, bool _enableOPEngine = false);
     ~Web3JsonRpcImpl() = default;
+
+    void setJwtVerifier(bcos::rpc::JwtVerifier::Ptr _jwtVerifier) { m_jwtVerifier = std::move(_jwtVerifier);}
 
     void onRPCRequest(std::string_view _requestBody, const Sender& _sender);
 
     void onRPCRequest(std::string_view _requestBody,
         std::shared_ptr<boostssl::ws::WsSession> _session, const Sender& _sender);
 
-    void handleRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
-        const Sender& _sender);
-    void handleRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
-        const std::function<void(Json::Value)>& _callback);
-    void handleBatchRequest(Json::Value _request, std::shared_ptr<boostssl::ws::WsSession> _session,
-        const Sender& _sender);
-
-    void handleSubscribeRequest(Json::Value _request, std::string _method,
-        std::shared_ptr<boostssl::ws::WsSession> _session,
-        const std::function<void(Json::Value)>& _callback);
+    void onRPCRequest(const bcos::boostssl::http::HttpRequest& _request, const Sender& _sender);
 
     void setWeb3Subscribe(Web3Subscribe::Ptr _web3Subscribe)
     {
@@ -66,14 +56,18 @@ public:
     Endpoints& endpoints() { return m_endpoints; }
 
 private:
-    // Note: only use in one group
-    GroupManager::Ptr m_groupManager;
-    bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
-    std::shared_ptr<boostssl::ws::WsService> m_wsService;
-    Web3Subscribe::Ptr m_web3Subscribe;
-    std::string m_groupId;
-    uint32_t m_batchRequestSizeLimit;
+    task::Task<Json::Value> handleRequest(Json::Value _request,
+        std::shared_ptr<boostssl::ws::WsSession> _session = nullptr);
+    task::Task<Json::Value> handleBatchRequest(Json::Value _request,
+        std::shared_ptr<boostssl::ws::WsSession> _session);
+    Json::Value handleSubscribeRequest(Json::Value _request, std::string _method,
+        std::shared_ptr<boostssl::ws::WsSession> _session);
+
     Endpoints m_endpoints;
     EndpointsMapping m_endpointsMapping;
+    bcos::rpc::JwtVerifier::Ptr m_jwtVerifier;
+    // Note: only use in one group
+    Web3Subscribe::Ptr m_web3Subscribe;
+    uint32_t m_batchRequestSizeLimit;
 };
 }  // namespace bcos::rpc

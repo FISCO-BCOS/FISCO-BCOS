@@ -32,19 +32,28 @@ public:
     explicit EngineEndpoint(NodeService::Ptr nodeService);
     ~EngineEndpoint() = default;
 
-protected:
     task::Task<void> exchangeCapabilities(const Json::Value&, Json::Value&);
     task::Task<void> forkchoiceUpdatedV1(const Json::Value&, Json::Value&);
     task::Task<void> forkchoiceUpdatedV2(const Json::Value&, Json::Value&);
     task::Task<void> forkchoiceUpdatedV3(const Json::Value&, Json::Value&);
+    task::Task<void> forkchoiceUpdatedV4(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV1(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> getPayloadV3(const Json::Value&, Json::Value&);
+    task::Task<void> getPayloadV4(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV1(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV2(const Json::Value&, Json::Value&);
     task::Task<void> newPayloadV3(const Json::Value&, Json::Value&);
+    task::Task<void> newPayloadV4(const Json::Value&, Json::Value&);
 
 private:
+    task::Task<void> handleForkchoiceUpdated(
+        engine::ApiVersion version, const Json::Value&, Json::Value&);
+    task::Task<void> handleGetPayload(
+        engine::ApiVersion version, const Json::Value&, Json::Value&);
+    task::Task<void> handleNewPayload(
+        engine::ApiVersion version, const Json::Value&, Json::Value&);
+
     NodeService::Ptr m_nodeService;
 };
 }  // namespace bcos::rpc

@@ -26,7 +26,6 @@
 
 namespace bcos::rpc
 {
-
 class Web3JsonRpcImpl;
 using Web3JsonRpcImplWeakPtr = std::weak_ptr<Web3JsonRpcImpl>;
 

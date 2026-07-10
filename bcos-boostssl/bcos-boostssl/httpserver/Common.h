@@ -27,7 +27,6 @@
 #include <functional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 
 #define HTTP_LISTEN(LEVEL) BCOS_LOG(LEVEL) << "[HTTP][LISTEN]"
@@ -44,14 +43,7 @@ using HttpResponse = boost::beast::http::response<boost::beast::http::vector_bod
 using HttpRequestPtr = std::shared_ptr<HttpRequest>;
 using HttpResponsePtr = std::shared_ptr<HttpResponse>;
 
-struct HttpRequestMeta
-{
-    std::string method;
-    std::string target;
-    std::unordered_map<std::string, std::string> headers;
-};
-
-using HttpReqHandler = std::function<void(const std::string_view req, const HttpRequestMeta& meta,
+using HttpReqHandler = std::function<void(const HttpRequest& req,
     std::function<void(bcos::bytes)>)>;
 using WsUpgradeHandler =
     std::function<void(std::shared_ptr<HttpStream>, HttpRequest&&, std::shared_ptr<std::string>)>;
