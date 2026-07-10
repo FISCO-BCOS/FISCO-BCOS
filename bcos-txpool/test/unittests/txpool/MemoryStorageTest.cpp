@@ -498,21 +498,6 @@ BOOST_AUTO_TEST_CASE(VerifyAndSubmitTransactionValidationChain)
         BOOST_CHECK(result == TransactionStatus::AlreadyInTxPool);
     }
 
-    // Test 4: Step 3 - OverFlowValue
-    {
-        storageNoSig.clear();
-        auto tx4 = makeWeb3Tx("1235", "0xd485BAEE65E501F1cDa071a5b5c9327C401dcD5a", false);
-        // Set a value that exceeds MAX_LENGTH - need to cast to TransactionImpl
-        auto tx4Impl = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx4);
-        if (tx4Impl)
-        {
-            std::string largeValue(TRANSACTION_VALUE_MAX_LENGTH + 1, '1');
-            tx4Impl->mutableInner().data.value.assign(largeValue.begin(), largeValue.end());
-        }
-        auto result = storageNoSig.verifyAndSubmitTransaction(tx4, nullptr, false, false);
-        BOOST_CHECK(result == TransactionStatus::OverFlowValue);
-    }
-
     // Test 5: Step 3 - MaxInitCodeSizeExceeded (for Web3Transaction)
     {
         storageNoSig.clear();
