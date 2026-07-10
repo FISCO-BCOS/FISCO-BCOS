@@ -86,7 +86,7 @@ class RLPTransaction : public bcos::protocol::Transaction
 public:
     RLPTransaction() { refreshStringCaches(); }
     RLPTransaction(const RLPTransaction& other);
-    RLPTransaction(RLPTransaction&& other) noexcept;
+    RLPTransaction(RLPTransaction&&) noexcept = default;
     RLPTransaction& operator=(const RLPTransaction&) = delete;
     RLPTransaction& operator=(RLPTransaction&&) noexcept = default;
     ~RLPTransaction() noexcept override = default;
@@ -98,6 +98,7 @@ public:
 
     bcos::crypto::HashType hash() const override;
     void calculateHash(const bcos::crypto::Hash& hashImpl) override;
+    void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl) override;
     bcos::bytesConstRef extraTransactionBytes() const override;
 
     uint8_t web3TypedTxKind() const override { return m_web3TypedTxKind; }
@@ -198,6 +199,8 @@ private:
     void encodePayload(bcos::bytes& out) const;
     /// Compute the total payload length of base fields (no header, no signature).
     size_t basePayloadLength() const;
+    /// Compute the total signed payload length including signature fields (shared by encode/size).
+    size_t signedPayloadLength() const;
     /// Write base fields into out. Call basePayloadLength() first to reserve.
     void encodeBaseFields(bcos::bytes& out) const;
 
@@ -235,7 +238,7 @@ private:
     int32_t m_version{0};
     int64_t m_blockLimit{std::numeric_limits<int64_t>::max()};
 
-    // --- Mutable caches ---
+    // --- Mutable caches (protected by m_cacheMutex) ---
     mutable bcos::protocol::Web3AccessList m_web3AccessListCache;
     mutable std::unique_ptr<std::mutex> m_accessListMutex{std::make_unique<std::mutex>()};
     mutable bool m_web3AccessListBuilt{false};
@@ -244,10 +247,9 @@ private:
     mutable bool m_hashForSignDirty{true};
 
     mutable bcos::bytes m_encodedForSign;
-    mutable bool m_encodedForSignBuilt{false};
+    mutable std::mutex m_cacheMutex;
 
     mutable bcos::bytes m_cachedSignature;
-    mutable bool m_cachedSignatureDirty{true};
 };
 
 }  // namespace bcos::rlp

@@ -18,8 +18,6 @@
  */
 
 #include "RLPTransactionFactory.h"
-#include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-utilities/BoostLog.h>
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
@@ -75,26 +73,19 @@ bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(
     tx->setTainted(tainted);
     tx->decode(txData);
 
-    if (checkSig && !tx->signatureR().empty() && !tx->signatureS().empty())
+    if (checkSig)
     {
-        // Verify secp256k1 signature
-        auto const hashForSign = tx->hashForSign();
-        bcos::bytes sigBytes;
-        sigBytes.reserve(65);  // r(32) + s(32) + v(1)
-        // Left-pad r to 32 bytes (RLP decode strips leading zeros)
-        if (tx->signatureR().size() < 32)
-            sigBytes.insert(sigBytes.end(), 32 - tx->signatureR().size(), 0);
-        sigBytes.insert(sigBytes.end(), tx->signatureR().begin(), tx->signatureR().end());
-        // Left-pad s to 32 bytes (RLP decode strips leading zeros)
-        if (tx->signatureS().size() < 32)
-            sigBytes.insert(sigBytes.end(), 32 - tx->signatureS().size(), 0);
-        sigBytes.insert(sigBytes.end(), tx->signatureS().begin(), tx->signatureS().end());
-        sigBytes.push_back(static_cast<byte>(tx->signatureV() & 0xFF));
+        // Reject empty signatures when verification is explicitly requested
+        if (tx->signatureR().empty() || tx->signatureS().empty())
+            BOOST_THROW_EXCEPTION(
+                std::invalid_argument("RLPTransactionFactory: checkSig=true but signature empty"));
 
-        bcos::crypto::Keccak256 keccak;
-        bcos::crypto::Secp256k1Crypto secp256k1;
+        // Verify secp256k1 signature using injected crypto suite
+        auto const hashForSign = tx->hashForSign();
+        auto const sigBytes = tx->signatureData();
         auto [recovered, sender] =
-            secp256k1.recoverAddress(keccak, hashForSign, bcos::ref(sigBytes));
+            m_cryptoSuite->signatureImpl()->recoverAddress(
+                *m_cryptoSuite->hashImpl(), hashForSign, sigBytes);
 
         if (!recovered)
         {
