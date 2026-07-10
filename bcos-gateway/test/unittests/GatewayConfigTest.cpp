@@ -488,9 +488,11 @@ BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
         config->initP2PConfig(pt, false);
         BOOST_CHECK_EQUAL(config->maxConcurrentSessions(), 1024U);
         BOOST_CHECK_EQUAL(config->maxSessionsPerIP(), 32U);
-        // FIB-186: handshake admission cap + timeout defaults (global cap only, no per-IP)
+        // FIB-186: handshake admission cap + timeout + accept-rate defaults (global cap only, no
+        // per-IP)
         BOOST_CHECK_EQUAL(config->maxPendingHandshakes(), 64U);
         BOOST_CHECK_EQUAL(config->handshakeTimeout(), 10000);
+        BOOST_CHECK_EQUAL(config->maxConnectionsPerSecond(), 100U);
     }
     // parsed when present
     {
@@ -498,14 +500,25 @@ BOOST_AUTO_TEST_CASE(test_sessionCapsFromConfig)
         boost::property_tree::ptree pt;
         pt.put("p2p.max_concurrent_sessions", 256);
         pt.put("p2p.max_sessions_per_ip", 8);
-        // FIB-186: handshake admission cap + timeout are read from [p2p], not hardcoded
+        // FIB-186: handshake admission cap + timeout + accept rate are read from [p2p], not
+        // hardcoded
         pt.put("p2p.max_pending_handshakes", 16);
         pt.put("p2p.handshake_timeout_ms", 3000);
+        pt.put("p2p.max_connections_per_second", 50);
         config->initP2PConfig(pt, false);
         BOOST_CHECK_EQUAL(config->maxConcurrentSessions(), 256U);
         BOOST_CHECK_EQUAL(config->maxSessionsPerIP(), 8U);
         BOOST_CHECK_EQUAL(config->maxPendingHandshakes(), 16U);
         BOOST_CHECK_EQUAL(config->handshakeTimeout(), 3000);
+        BOOST_CHECK_EQUAL(config->maxConnectionsPerSecond(), 50U);
+    }
+    // FIB-186: 0 disables the accept-rate limiter (unlimited)
+    {
+        auto config = std::make_shared<GatewayConfig>();
+        boost::property_tree::ptree pt;
+        pt.put("p2p.max_connections_per_second", 0);
+        config->initP2PConfig(pt, false);
+        BOOST_CHECK_EQUAL(config->maxConnectionsPerSecond(), 0U);
     }
 }
 

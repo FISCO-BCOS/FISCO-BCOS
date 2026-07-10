@@ -153,7 +153,11 @@ public:
 
     std::size_t maxPendingHandshakes() const { return m_maxPendingHandshakes; }
     void setMaxPendingHandshakes(std::size_t _limit) { m_maxPendingHandshakes = _limit; }
-    std::size_t currentPendingHandshakes() const { return m_pendingHandshakes.load(); }
+    std::size_t currentPendingHandshakes() const
+    {
+        std::lock_guard<std::mutex> lock(x_pendingHandshakes);
+        return m_pendingHandshakes;
+    }
     int handshakeTimeout() const { return m_handshakeTimeout; }
     void setHandshakeTimeout(int _timeoutMs) { m_handshakeTimeout = _timeoutMs; }
 
@@ -186,7 +190,17 @@ public:
     // would add code and config for no measurable protection (validated on a 3-node churn harness).
     constexpr static uint32_t DEFAULT_MAX_CONNECTIONS_PER_SECOND = 100;
     uint32_t maxConnectionsPerSecond() const { return m_maxConnectionsPerSecond; }
-    void setMaxConnectionsPerSecond(uint32_t _limit) { m_maxConnectionsPerSecond = _limit; }
+    // NOTE: this and the other cap setters are called by GatewayFactory during construction, before
+    // Host::start(), so they need no locking and tryAcquireConnectionToken()'s lock-free read of
+    // m_maxConnectionsPerSecond is race-free.
+    void setMaxConnectionsPerSecond(uint32_t _limit)
+    {
+        m_maxConnectionsPerSecond = _limit;
+        // Keep the token bucket consistent with the configured rate: m_connectionTokens is default-
+        // initialized to the compile-time default, so without this a non-default rate would start
+        // with the wrong burst capacity until the first refill (~1s).
+        m_connectionTokens = static_cast<double>(_limit);
+    }
     bool tryAcquireConnectionToken();
 
 protected:
@@ -270,8 +284,10 @@ protected:
     // path). Global count only -- see the comment on DEFAULT_MAX_PENDING_HANDSHAKES for why there
     // is no per-IP cap.
     std::size_t m_maxPendingHandshakes{DEFAULT_MAX_PENDING_HANDSHAKES};
-    std::atomic<std::size_t> m_pendingHandshakes{0};
-    std::mutex x_pendingHandshakes;
+    // Plain counter, not atomic: every access is under x_pendingHandshakes (the diagnostic getter
+    // currentPendingHandshakes() takes the mutex too), so an atomic would be redundant.
+    std::size_t m_pendingHandshakes{0};
+    mutable std::mutex x_pendingHandshakes;
     int m_handshakeTimeout{DEFAULT_HANDSHAKE_TIMEOUT_MS};
 
     // FIB-186: token bucket for the new-connection accept rate (dedicated mutex). Starts full so a

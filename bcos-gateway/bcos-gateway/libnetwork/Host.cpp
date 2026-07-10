@@ -106,27 +106,38 @@ void Host::startAccept(boost::system::error_code boost_error)
                 // PBFT reads, halting consensus. Over the cap, drop the socket and re-arm accept
                 // without running the (CPU-heavy) TLS handshake.
                 std::string remoteAddress = socket->nodeIPEndpoint().address();
-                // FIB-186: rate-limit accepted connections before anything else, so a churn flood
-                // is dropped cheaply (accept + close) instead of paying the CPU-heavy TLS
-                // handshake. This bounds handshake CPU per unit time, which the concurrency caps
-                // below do not.
-                if (!tryAcquireConnectionToken())
-                {
-                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
-                                    << LOG_DESC("connection accept-rate limit reached, reject")
-                                    << LOG_KV("address", remoteAddress)
-                                    << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
-                    socket->close();
-                    startAccept();
-                    return;
-                }
+                // FIB-186: bound admission of new connections BEFORE the CPU-heavy TLS handshake,
+                // so connection churn from a low-trust peer cannot flood the shared I/O pool with
+                // accept / handshake / teardown work and starve inter-validator PBFT reads (the
+                // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
+                // in-flight-handshake slot first because it is the refundable check: if the
+                // accept-rate limiter below then rejects, we release the slot and no rate token is
+                // spent. Checking the rate token first would instead waste a token whenever the
+                // handshake cap is already saturated, needlessly lowering the effective accept rate
+                // for legitimate peers arriving in that window.
                 if (!tryAcquireHandshakeSlot())
                 {
                     HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
                                     << LOG_DESC("pending-handshake cap reached, reject connection")
                                     << LOG_KV("address", remoteAddress)
-                                    << LOG_KV("pendingHandshakes", m_pendingHandshakes.load())
+                                    << LOG_KV("pendingHandshakes", currentPendingHandshakes())
                                     << LOG_KV("maxPendingHandshakes", m_maxPendingHandshakes);
+                    socket->close();
+                    startAccept();
+                    return;
+                }
+                // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
+                // paying handshake CPU, which the concurrency cap alone does not. On rejection the
+                // handshake slot reserved just above must be released so it is not leaked -- the
+                // HandshakeSlotGuard that normally releases it is only created once both checks
+                // pass.
+                if (!tryAcquireConnectionToken())
+                {
+                    releaseHandshakeSlot();
+                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                    << LOG_DESC("connection accept-rate limit reached, reject")
+                                    << LOG_KV("address", remoteAddress)
+                                    << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
                     socket->close();
                     startAccept();
                     return;
@@ -506,11 +517,11 @@ void Host::releaseSessionSlot(std::string const& _address)
 bool Host::tryAcquireHandshakeSlot()
 {
     std::lock_guard<std::mutex> lock(x_pendingHandshakes);
-    if (m_pendingHandshakes.load(std::memory_order_relaxed) >= m_maxPendingHandshakes)
+    if (m_pendingHandshakes >= m_maxPendingHandshakes)
     {
         return false;
     }
-    m_pendingHandshakes.fetch_add(1, std::memory_order_relaxed);
+    ++m_pendingHandshakes;
     return true;
 }
 
@@ -519,9 +530,9 @@ bool Host::tryAcquireHandshakeSlot()
 void Host::releaseHandshakeSlot()
 {
     std::lock_guard<std::mutex> lock(x_pendingHandshakes);
-    if (m_pendingHandshakes.load(std::memory_order_relaxed) > 0)
+    if (m_pendingHandshakes > 0)
     {
-        m_pendingHandshakes.fetch_sub(1, std::memory_order_relaxed);
+        --m_pendingHandshakes;
     }
 }
 
@@ -531,6 +542,8 @@ void Host::releaseHandshakeSlot()
 // handshake. 0 = unlimited. Bounds handshake CPU per unit time (the concurrency caps do not).
 bool Host::tryAcquireConnectionToken()
 {
+    // Lock-free read: m_maxConnectionsPerSecond is set once by GatewayFactory before start() (see
+    // setMaxConnectionsPerSecond), so no writer races with this fast-path check.
     if (m_maxConnectionsPerSecond == 0)
     {
         return true;
