@@ -14,29 +14,23 @@
  *  limitations under the License.
  *
  * @file ClassifyTest.cpp
- * @brief Unit tests for classify(): flat key→Entry delta into per-account
- *        AccountDelta with first-touch / subsequent / tombstone classification
- *        (spec §5.2)
+ * @brief Unit tests for the flat-state key parsers: parseAccountTable / classifyRowKey /
+ *        extractTouchedAccounts (spec §5.2, Revision 2026-07-09b)
  */
 
 #include "TestHelpers.h"
 #include <bcos-ledger/mpt/Classify.h>
-#include <bcos-ledger/mpt/Errors.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
-#include <utility>
-#include <vector>
+#include <string_view>
 
 namespace bcos::ledger::mpt::test
 {
 
 namespace
 {
-// The flat-state delta classify() consumes: a range of (key, Entry) pairs.
-using ClassifyFlatDelta = std::vector<std::pair<std::string, bcos::storage::Entry>>;
-
 // A fixed 40-hex account address and the matching 20-byte Address value.
 constexpr std::string_view CLASSIFY_TEST_ADDR_HEX = "00112233445566778899aabbccddeeff00112233";
 constexpr std::string_view CLASSIFY_TEST_TABLE = "/apps/00112233445566778899aabbccddeeff00112233";
@@ -45,182 +39,87 @@ bcos::Address classifyTestAddress()
 {
     return bcos::Address(std::string{CLASSIFY_TEST_ADDR_HEX}, bcos::Address::FromHex);
 }
-
-// Build "<table>:<row>" for a named field row.
-std::string classifyFieldKey(std::string_view row)
-{
-    std::string key{CLASSIFY_TEST_TABLE};
-    key.push_back(':');
-    key.append(row);
-    return key;
-}
-
-// Build "<table>:<32-byte-binary-slot>" for a storage slot.
-std::string classifySlotKey(bcos::h256 const& slot)
-{
-    std::string key{CLASSIFY_TEST_TABLE};
-    key.push_back(':');
-    key.append(reinterpret_cast<char const*>(slot.data()), slot.size());
-    return key;
-}
 }  // namespace
 
 BOOST_AUTO_TEST_SUITE(ClassifySuite)
 
-// ---------------------------------------------------------------------------
-// Test 1: a single account with nonce + balance writes groups under one address,
-// both fields Updated, firstTouch true (mock hasAccount returns false).
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(GroupsByAddressFirstTouch)
+BOOST_AUTO_TEST_CASE(ParseAccountTableAcceptsAppsAddressOnly)
 {
-    ClassifyFlatDelta delta;
-    // nonce/balance are stored as decimal ASCII strings by the executor, not big-endian binary.
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("1"));
-    delta.emplace_back(classifyFieldKey(ROW_BALANCE), makeEntry("100"));
+    auto parsed = parseAccountTable(CLASSIFY_TEST_TABLE);
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK(*parsed == classifyTestAddress());
 
-    MockReadView view;  // address unset → hasAccount false → firstTouch true
-
-    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
-
-    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
-    auto const it = result.perAccount.find(classifyTestAddress());
-    BOOST_REQUIRE(it != result.perAccount.end());
-    auto const& account = it->second;
-
-    BOOST_CHECK(account.firstTouch);
-    BOOST_CHECK(account.nonceState == AccountDelta::FieldState::Updated);
-    BOOST_CHECK(account.balanceState == AccountDelta::FieldState::Updated);
-    BOOST_CHECK_EQUAL(account.nonce, 1);
-    BOOST_CHECK_EQUAL(account.balance, 100);
-    BOOST_CHECK(account.codeHashState == AccountDelta::FieldState::Unchanged);
-    BOOST_CHECK(!account.tombstone);
+    BOOST_CHECK(!parseAccountTable("/sys/s_tables").has_value());
+    BOOST_CHECK(!parseAccountTable("/tables/foo").has_value());
+    BOOST_CHECK(!parseAccountTable("/apps/short").has_value());  // BCOS private short-name table
+    // 40 chars but not hex — must not throw, just reject.
+    BOOST_CHECK(!parseAccountTable("/apps/zz112233445566778899aabbccddeeff001122").has_value());
 }
 
-// ---------------------------------------------------------------------------
-// Test 2: a storage slot write lands in storageChanges keyed by the 32-byte slot.
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(StorageSlotEntersStorageChanges)
+BOOST_AUTO_TEST_CASE(AccountTableNameRoundTrips)
 {
-    bcos::h256 const slot = makeHash(0x05);
-    ClassifyFlatDelta delta;
-    delta.emplace_back(classifySlotKey(slot), makeEntry("\xde\xad"));
-
-    MockReadView view;
-    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
-
-    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
-    auto const& account = result.perAccount.begin()->second;
-    BOOST_REQUIRE_EQUAL(account.storageChanges.size(), 1U);
-    auto const slotIt = account.storageChanges.find(slot);
-    BOOST_REQUIRE(slotIt != account.storageChanges.end());
-    BOOST_REQUIRE(slotIt->second.has_value());
-    BOOST_CHECK_EQUAL(slotIt->second->size(), 2U);
+    auto const addr = classifyTestAddress();
+    auto const table = accountTableName(addr);
+    BOOST_CHECK_EQUAL(table, std::string{CLASSIFY_TEST_TABLE});
+    auto parsed = parseAccountTable(table);
+    BOOST_REQUIRE(parsed.has_value());
+    BOOST_CHECK(*parsed == addr);
 }
 
-// ---------------------------------------------------------------------------
-// Test 2b: a codeHash write is read back as the raw 32-byte digest (the executor stores it via
-// codeHash.asBytes(), not decimal ASCII), with state Updated.
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(CodeHashUpdatedReadsRawBytes)
+BOOST_AUTO_TEST_CASE(ClassifyRowKeyKinds)
 {
-    bcos::h256 const expected = makeHash(0x42);
-    ClassifyFlatDelta delta;
-    delta.emplace_back(classifyFieldKey(ROW_CODE_HASH),
-        makeEntry(
-            std::string_view(reinterpret_cast<char const*>(expected.data()), expected.size())));
+    BOOST_CHECK(classifyRowKey(ROW_NONCE) == RowKind::Nonce);
+    BOOST_CHECK(classifyRowKey(ROW_BALANCE) == RowKind::Balance);
+    BOOST_CHECK(classifyRowKey(ROW_CODE_HASH) == RowKind::CodeHash);
+    BOOST_CHECK(classifyRowKey(ROW_CODE) == RowKind::Code);
 
-    MockReadView view;
-    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
+    // Any 32-byte binary row key is a storage slot — no field name is 32 bytes long.
+    auto const slot = makeHash(0x05);
+    std::string_view const slotRow{reinterpret_cast<char const*>(slot.data()), slot.size()};
+    BOOST_CHECK(classifyRowKey(slotRow) == RowKind::StorageSlot);
 
-    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
-    auto const& account = result.perAccount.begin()->second;
-    BOOST_CHECK(account.codeHashState == AccountDelta::FieldState::Updated);
-    BOOST_CHECK_EQUAL(account.codeHash, expected);
-    BOOST_CHECK(account.nonceState == AccountDelta::FieldState::Unchanged);
+    // Every other named row is a BCOS extension (skipped in scenario A, throws in scenario B).
+    BOOST_CHECK(classifyRowKey("abi") == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey("alive") == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey("frozen") == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey("shard") == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey("status") == RowKind::BcosExtension);
+    // 31 and 33 bytes are NOT slots.
+    BOOST_CHECK(classifyRowKey(std::string(31, 'x')) == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey(std::string(33, 'x')) == RowKind::BcosExtension);
 }
 
-// ---------------------------------------------------------------------------
-// Test 3 (Scenario A, l2Mode=false): BCOS extension rows are silently skipped;
-// nonce is kept, storageChanges stays empty.
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(BcosExtensionSkippedWhenNotL2)
+BOOST_AUTO_TEST_CASE(ExtractTouchedAccountsSortsAndDeduplicates)
 {
-    ClassifyFlatDelta delta;
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("1"));
-    delta.emplace_back(classifyFieldKey("abi"), makeEntry("\xde\xad\xbe\xef"));
-    delta.emplace_back(classifyFieldKey("alive"), makeEntry("\x01"));
-    delta.emplace_back(classifyFieldKey("frozen"), makeEntry("\x00"));
-    delta.emplace_back(classifyFieldKey("shard"), makeEntry("g1"));
-    delta.emplace_back(classifyFieldKey("code"), makeEntry("\x60\x60"));
+    auto const addrA = makeAddress(0x0B);  // written second, must sort first? (0x0B > 0x0A)
+    auto const addrB = makeAddress(0x0A);
 
-    MockReadView view;
-    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
+    FlatMutableStorage delta;
+    // Several rows for A (dedup), one row for B, plus rows extraction must skip.
+    writeFlatRow(delta, accountFieldKey(addrA, ROW_NONCE), makeEntry("1"));
+    writeFlatRow(delta, accountFieldKey(addrA, ROW_BALANCE), makeEntry("2"));
+    writeFlatRow(delta, accountSlotKey(addrA, makeHash(0x01)), makeEntry("\x2a"));
+    writeFlatRow(delta, accountFieldKey(addrB, ROW_NONCE), makeEntry("3"));
+    writeFlatRow(delta, bcos::executor_v1::StateKey{"/sys/s_tables", "value"}, makeEntry("x"));
+    writeFlatRow(delta, bcos::executor_v1::StateKey{"/apps/short_name", "nonce"}, makeEntry("y"));
 
-    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
-    auto const& account = result.perAccount.begin()->second;
-    BOOST_CHECK(account.nonceState == AccountDelta::FieldState::Updated);
-    BOOST_CHECK(account.balanceState == AccountDelta::FieldState::Unchanged);
-    BOOST_CHECK(account.codeHashState == AccountDelta::FieldState::Unchanged);
-    BOOST_CHECK(account.storageChanges.empty());
-    BOOST_CHECK(!account.tombstone);
+    auto touched = bcos::task::syncWait(extractTouchedAccounts(delta));
+    BOOST_REQUIRE_EQUAL(touched.size(), 2U);
+    BOOST_CHECK(touched[0] == addrB);  // 0x0A... sorts before 0x0B...
+    BOOST_CHECK(touched[1] == addrA);
 }
 
-// ---------------------------------------------------------------------------
-// Test 4 (Scenario B, l2Mode=true): a BCOS extension row throws.
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(BcosExtensionThrowsWhenL2)
+BOOST_AUTO_TEST_CASE(ExtractTouchedAccountsSeesLogicallyDeletedRows)
 {
-    ClassifyFlatDelta delta;
-    delta.emplace_back(classifyFieldKey("abi"), makeEntry("\xde\xad\xbe\xef"));
+    // A tombstone account's rows are deletions — logical deletion keeps the key in the delta
+    // layer, and extraction must still report the account (key-only parsing).
+    auto const addr = makeAddress(0x0C);
+    FlatMutableStorage delta;
+    bcos::task::syncWait(bcos::storage2::removeOne(delta, accountFieldKey(addr, ROW_NONCE)));
 
-    MockReadView view;
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(classify(delta, view, /*l2Mode=*/true)), UnexpectedBCOSFieldInL2);
-}
-
-// ---------------------------------------------------------------------------
-// Test 5: SELFDESTRUCT → tombstone. All three core fields DELETED, account
-// already exists (mock hasAccount returns true → firstTouch false).
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(SelfdestructTombstone)
-{
-    ClassifyFlatDelta delta;
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeDeletedEntry());
-    delta.emplace_back(classifyFieldKey(ROW_BALANCE), makeDeletedEntry());
-    delta.emplace_back(classifyFieldKey(ROW_CODE_HASH), makeDeletedEntry());
-
-    MockReadView view;
-    view.setHasAccount(classifyTestAddress(), true);  // tombstone needs a pre-existing account
-
-    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
-
-    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
-    auto const& account = result.perAccount.begin()->second;
-    BOOST_CHECK(account.tombstone);
-    BOOST_CHECK(!account.firstTouch);
-    BOOST_CHECK(account.nonceState == AccountDelta::FieldState::Deleted);
-    BOOST_CHECK(account.balanceState == AccountDelta::FieldState::Deleted);
-    BOOST_CHECK(account.codeHashState == AccountDelta::FieldState::Deleted);
-}
-
-// ---------------------------------------------------------------------------
-// Test 6: rows under a non-/apps/ table (and keys with no separator) are ignored.
-// ---------------------------------------------------------------------------
-BOOST_AUTO_TEST_CASE(NonAccountRowsIgnored)
-{
-    ClassifyFlatDelta delta;
-    delta.emplace_back("/sys/s_tables:value", makeEntry("\x01"));
-    delta.emplace_back("/tables/foo:nonce", makeEntry("\x01"));
-    delta.emplace_back("no_colon_key", makeEntry("\x01"));
-    delta.emplace_back(classifyFieldKey(ROW_NONCE), makeEntry("7"));  // the only real account row
-
-    MockReadView view;
-    auto const result = bcos::task::syncWait(classify(delta, view, /*l2Mode=*/false));
-
-    BOOST_REQUIRE_EQUAL(result.perAccount.size(), 1U);
-    auto const& account = result.perAccount.begin()->second;
-    BOOST_CHECK(account.nonceState == AccountDelta::FieldState::Updated);
-    BOOST_CHECK_EQUAL(account.nonce, 7);
+    auto touched = bcos::task::syncWait(extractTouchedAccounts(delta));
+    BOOST_REQUIRE_EQUAL(touched.size(), 1U);
+    BOOST_CHECK(touched.front() == addr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

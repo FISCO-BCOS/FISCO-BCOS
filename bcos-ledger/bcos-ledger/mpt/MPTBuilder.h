@@ -14,29 +14,34 @@
  *  limitations under the License.
  *
  * @file MPTBuilder.h
- * @brief Commit-time MPT entry point — subsequent-touch, first-touch and tombstone paths
- *        (spec §5.3, §5.4, §5.11)
+ * @brief Commit-time MPT entry point — subsequent-touch, first-touch and tombstone paths over
+ *        the block's fork view (spec §5.2–§5.4, Revisions 2026-07-09/09b)
  */
 #pragma once
 
 #include "Account.h"
-#include "AccountDelta.h"
+#include "Classify.h"
 #include "Errors.h"
 #include "FlatToMPT.h"
 #include "HashBuilder.h"
 #include "MPTDeltaLayer.h"
 #include "MPTReadView.h"
 #include "StorageValueCodec.h"
-// Named directly for the HasherT default template argument (also reachable transitively).
+// Named directly for the m_hasher member (also reachable transitively).
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
+#include <map>
 #include <optional>
-#include <type_traits>
+#include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -46,127 +51,77 @@ namespace bcos::ledger::mpt
 /// not a builder detail; the alias keeps every existing buildAndCollect call site unchanged.
 using MPTBuildOutput = MPTDeltaLayer;
 
-/// Builds the post-block MPT from a classify()-produced MPTBuildInput on top of the parent
-/// block's state root. Templated on the same storage2 ReadWriteStorage the trie primitives use:
-/// baseline reads (parent account leaves, prior storage-trie nodes) and node flushes all go
-/// through @p Storage.
+/// Builds the post-block MPT from the block's fork view on top of the parent block's state root
+/// (spec §5.2, Revision 2026-07-09b): for each touched account the builder prefix-ranges the
+/// view's top mutable layer — the block's flat delta — and reads every changed Entry in place;
+/// there is no intermediate value-copy layer (design3 §4.1 rule 6).
 ///
-/// Covers all three delta shapes (spec §5.3): subsequent-touch (account already in the parent
-/// MPT), first-touch (absent from the parent MPT — bootstrap from the flat KV, or from a
-/// preheat-manifest hit) and tombstone (SELFDESTRUCT — the account leaf is removed).
+/// Covers all three per-account shapes (spec §5.3), decided from the data itself rather than
+/// classify-time flags:
+///  - tombstone: the delta holds all three core-field rows (nonce/balance/codeHash) deleted —
+///    the SELFDESTRUCT convention — and the account leaf is removed;
+///  - first-touch: the parent MPT has no leaf (readAccount nullopt). The storage trie starts
+///    from emptyRootHash() and only holds THIS BLOCK's written slots — cold flat slots are never
+///    back-filled (slot-level commitment, spec §4.2); unwritten core fields come from the flat
+///    KV via one O(1) metadata read (FlatToMPT.h);
+///  - subsequent-touch: the parent leaf is the baseline and the storage trie updates
+///    incrementally.
 ///
-/// @tparam HasherT the node/key hash function (Hasher concept), owned here and threaded into
-/// slotKeyHash. Pinned to keccak256 by the static_assert below: commitTrie's from-empty path
-/// rides a stateless core (computeTrieRootFromSorted) that is not yet hasher-parameterized and
-/// always hashes with keccak. An SM3 instantiation would silently mix SM3 account/slot hashing
-/// with keccak trie nodes — a root no SM3 verifier can reproduce. Lift the assert once the
-/// stateless core, along with accountKeyHash and Account's default storageRoot/codeHash, are
-/// parameterized on HasherT.
-template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
-    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
+/// Keccak-pinned like commitTrie itself (its from-empty stateless core is not yet
+/// hasher-parameterized); the m_hasher member exists only to reuse one hash context across the
+/// block's slot-key transforms.
+///
+/// @tparam Storage the trie-node storage (storage2 ReadWriteStorage over h256 → RLP bytes):
+/// commitTrie merge-reads prior-version nodes through it, and buildAndCollect batch-flushes the
+/// block's aggregated newNodes into it once at the end.
+template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 class MPTBuilder
 {
-    static_assert(std::is_same_v<HasherT, bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>,
-        "MPTBuilder is keccak-only until commitTrie's from-empty stateless core is parameterized "
-        "on HasherT; see the @tparam note. A non-keccak instantiation would silently fork.");
-
 public:
-    /// @param storage         node storage shared by reads and writes.
+    /// @param storage         node storage shared by reads and the end-of-build flush.
     /// @param parentStateRoot the parent block's MPT state root (emptyRootHash() = empty state).
     MPTBuilder(Storage& storage, bcos::h256 parentStateRoot)
       : m_storage(storage), m_parentStateRoot(parentStateRoot)
     {}
 
-    /// As above, plus the flat-KV backends the first-touch migration reads through (FlatToMPT.h,
-    /// scenario A). Without them (the 2-arg ctor) any first-touch delta throws for lack of a
-    /// scanner.
-    MPTBuilder(Storage& storage, bcos::h256 parentStateRoot, FlatToMPTBackends backends)
-      : m_storage(storage), m_parentStateRoot(parentStateRoot), m_backends(std::move(backends))
-    {}
-
-    /// Apply every AccountDelta in @p input and return the new state root plus the node delta.
-    /// @throws MPTInvariantViolation on a first-touch delta whose required backend callback is
-    ///         missing, on a subsequent-touch account missing from the parent state, and on a
-    ///         Deleted field state outside a tombstone (spec §5.4 treats that as an error).
-    bcos::task::Task<MPTBuildOutput> buildAndCollect(MPTBuildInput const& input)
+    /// Apply the block's flat delta to the MPT and return the new state root plus the node
+    /// delta.
+    ///
+    /// @param flatView        the block's fork of the flat MultiLayerStorage (the same view
+    ///                        coCommitBlock forks for prewrite): its top mutable layer is the
+    ///                        block's delta, ranged per account; reads for first-touch metadata
+    ///                        go through the whole view (delta first, then parent state).
+    /// @param touchedAccounts extractTouchedAccounts(mutableStorage(flatView)) — passed in
+    ///                        rather than recomputed so the caller can log/meter the set.
+    /// @param l2Mode          scenario B (Ethereum-compatible chain): a BCOS extension row in
+    ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
+    /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone
+    ///         (spec §5.4 treats that as an error).
+    bcos::task::Task<MPTBuildOutput> buildAndCollect(
+        auto& flatView, std::vector<bcos::Address> const& touchedAccounts, bool l2Mode)
     {
         MPTBuildOutput output;
-        MPTReadView<Storage> view(m_storage.get(), m_parentStateRoot);
+        MPTReadView<Storage> parentView(m_storage.get(), m_parentStateRoot);
         // The account-trie change-set, committed once through commitTrie at the end.
         std::map<bcos::h256, std::optional<bcos::bytes>> accountChanges;
 
-        for (auto const& [addr, delta] : input.perAccount)
+        for (auto const& addr : touchedAccounts)
         {
-            // Tombstone before firstTouch: destruction wins over creation when a pathological
-            // delta carries both flags (spec §5.4 priority).
-            if (delta.tombstone)
-            {
-                // storageChanges/field states are ignored on a tombstone (classify already
-                // folded the account's fate). Record the prior storage root for future pathdb
-                // pruning — the full subtree walk is deferred to the pruning spec, the root
-                // hash is the ledger entry.
-                auto prior = co_await view.readAccount(addr);
-                if (prior && prior->storageRoot != emptyRootHash<HasherT>())
-                {
-                    output.obsoletedNodes.insert(prior->storageRoot);
-                }
-                // A preheat manifest written before the destruct must not survive to seed a later
-                // re-creation's first-touch with the destroyed storage root (SELFDESTRUCT then
-                // CREATE2 redeploy). Deleting an absent record is a no-op, so schedule it
-                // unconditionally. Same reasoning covers removing the (possibly absent) leaf.
-                output.preheatManifestsToDelete.push_back(addr);
-                accountChanges[accountKeyHash(addr)] = std::nullopt;
-                continue;
-            }
-            if (delta.firstTouch)
-            {
-                // classify() only sets firstTouch when the parent MPT lacks the account. A leaf
-                // present here means classify and the builder disagree — overwriting it would
-                // silently discard the account's existing storage trie (a fork the old blanket
-                // throw caught). Symmetric with the subsequent-touch missing-leaf guard below.
-                if (co_await view.hasAccount(addr))
-                {
-                    BOOST_THROW_EXCEPTION(
-                        MPTInvariantViolation{} << bcos::errinfo_comment(
-                            "MPTBuilder: first-touch account already present in parent state"));
-                }
-                co_await buildFirstTouch(addr, delta, accountChanges, output);
-                continue;
-            }
-
-            // Subsequent-touch baseline: the parent block's account leaf must exist —
-            // classify() only clears firstTouch when readView.hasAccount() was true.
-            auto baseline = co_await view.readAccount(addr);
-            if (!baseline)
-            {
-                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                          "MPTBuilder: subsequent-touch account missing from "
-                                          "parent state"));
-            }
-
-            Account updated = *baseline;
-            updated.storageRoot =
-                co_await applyStorageChanges(baseline->storageRoot, delta, output);
-            applyField(delta.nonceState, delta.nonce, updated.nonce);
-            applyField(delta.balanceState, delta.balance, updated.balance);
-            applyField(delta.codeHashState, delta.codeHash, updated.codeHash);
-
-            accountChanges[accountKeyHash(addr)] = updated.encode();
+            co_await buildOneAccount(addr, flatView, parentView, l2Mode, accountChanges, output);
         }
 
         auto merged = co_await commitTrie(m_storage.get(), m_parentStateRoot, accountChanges);
         output.stateRoot = merged.root;
-        co_await flushTrieNodes(m_storage.get(), merged.newNodes);
         absorbNodeDelta(std::move(merged), output);
 
-        // MPTBuildOutput aggregates several HashBuilder commits (a first-touch bootstrap plus
-        // the same block's apply, plus the account trie), so unlike a single mergeTrie() result
-        // the two sets can intersect: a node emitted by one commit and obsoleted by a later one.
-        // Re-establish disjointness the way mergeTrie() does (end-subtraction): the node stays in
-        // newNodes — it is already flushed and may be referenced by another trie — and leaves the
-        // prune ledger, so a consumer never writes and deletes the same node in one batch. The
-        // subtracted hashes move to intraBlockObsoleted rather than vanishing, so the pruning
-        // spec can still reclaim them (they would otherwise orphan permanently).
+        // MPTBuildOutput aggregates one commitTrie result per touched storage trie plus the
+        // account trie. Unlike a single mergeTrie() result the union is not disjoint by
+        // construction: identical RLP encodings hash identically ACROSS tries, so a node one
+        // account's rebuild obsoletes can byte-match a node another account's build emits.
+        // Re-establish disjointness the way mergeTrie() does (end-subtraction): the node stays
+        // in newNodes — it is flushed and referenced by the new version — and leaves the prune
+        // ledger; the subtracted hashes move to intraBlockObsoleted rather than vanishing, so
+        // the pruning spec keeps full information.
         for (auto const& [hash, raw] : output.newNodes)
         {
             if (output.obsoletedNodes.erase(hash) != 0U)
@@ -174,127 +129,212 @@ public:
                 output.intraBlockObsoleted.insert(hash);
             }
         }
+
+        // One batched flush for the whole block (spec §5.4): nothing inside this build reads a
+        // node it produced — storage-trie merges read parent-version nodes only, and the account
+        // trie never dereferences a storage root.
+        co_await flushTrieNodes(m_storage.get(), output.newNodes);
         co_return output;
     }
 
 private:
-    /// The first-touch path (spec §5.3 path 2): the account has no parent-MPT leaf, so its
-    /// baseline storage-trie root comes from the flat→MPT migration (FlatToMPT.h — a
-    /// preheat-manifest hit or a full flat-KV bootstrap). This block's slot changes then apply
-    /// over that baseline, and account fields the block left Unchanged come from the flat KV
-    /// via flatAccountMeta.
-    bcos::task::Task<void> buildFirstTouch(bcos::Address const& addr, AccountDelta const& delta,
+    /// One core-field row's fate in the block's delta layer.
+    template <typename ValueT>
+    struct CoreFieldRow
+    {
+        bool deleted = false;
+        std::optional<ValueT> value;  ///< engaged when the block wrote the row
+
+        /// Deleted outside a tombstone means the delta is not a shape the executor produces
+        /// (spec §5.4) — fail loudly instead of guessing a field value.
+        void requireNotDeleted() const
+        {
+            if (deleted)
+            {
+                BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                          "MPTBuilder: core-field row deleted outside a "
+                                          "tombstone"));
+            }
+        }
+    };
+
+    bcos::task::Task<void> buildOneAccount(bcos::Address const& addr, auto& flatView,
+        MPTReadView<Storage> const& parentView, bool l2Mode,
         std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTBuildOutput& output)
     {
-        auto baselineStorageRoot =
-            co_await resolveFirstTouchBaseline(m_storage.get(), m_backends, addr, m_hasher, output);
+        auto const table = accountTableName(addr);
+        CoreFieldRow<bcos::u256> nonceRow;
+        CoreFieldRow<bcos::u256> balanceRow;
+        CoreFieldRow<bcos::h256> codeHashRow;
+        // This account's storage-trie change-set: slotKeyHash → RLP(value) or delete.
+        std::map<bcos::h256, std::optional<bcos::bytes>> storageChanges;
 
-        Account updated;  // default storageRoot/codeHash — a fresh EOA until proven otherwise
-        updated.storageRoot = co_await applyStorageChanges(baselineStorageRoot, delta, output);
-
-        // Fields the block left Unchanged have no parent leaf to fall back on: fetch the flat
-        // baseline, once, only when actually needed.
-        std::optional<FlatAccountMeta> flatMeta;
-        if (delta.nonceState == AccountDelta::FieldState::Unchanged ||
-            delta.balanceState == AccountDelta::FieldState::Unchanged ||
-            delta.codeHashState == AccountDelta::FieldState::Unchanged)
+        auto& flatDelta = mutableStorage(flatView);
+        auto iterator = co_await bcos::storage2::range(
+            flatDelta, bcos::storage2::RANGE_SEEK, executor_v1::StateKeyView{table, {}});
+        while (true)
         {
-            if (!m_backends.flatAccountMeta)
+            auto keyValue = co_await iterator.next();
+            if (!keyValue)
             {
-                BOOST_THROW_EXCEPTION(
-                    MPTInvariantViolation{} << bcos::errinfo_comment(
-                        "MPTBuilder: first-touch with Unchanged fields needs flatAccountMeta"));
+                break;
             }
-            flatMeta = co_await m_backends.flatAccountMeta(addr);
-            // A code-less account's flat baseline must carry emptyCodeHash(), never a zero h256
-            // (FlatAccountMeta doc): a zero encodes a wrong leaf and forks. The default is zero
-            // and nothing downstream re-derives it, so enforce the contract at the seam. Only the
-            // Unchanged path reads meta.codeHash; an Updated codeHash overwrites it below.
-            if (delta.codeHashState == AccountDelta::FieldState::Unchanged &&
-                flatMeta->codeHash == bcos::h256{})
+            auto const& [stateKey, dataValue] = *keyValue;
+            executor_v1::StateKeyView const keyView{stateKey};
+            if (keyView.m_table != table)
             {
-                BOOST_THROW_EXCEPTION(
-                    MPTInvariantViolation{} << bcos::errinfo_comment(
-                        "MPTBuilder: flatAccountMeta returned a zero codeHash for a first-touch "
-                        "account (must be emptyCodeHash())"));
+                break;  // rows are (table, key)-ordered: past this account's table
+            }
+
+            // A row is "deleted" through either signal: storage-level logical deletion
+            // (removeSome on the LOGICAL_DELETION mutable layer) or an Entry written with
+            // status DELETED (spec §5.2's selfdestruct convention). NOT_EXISTS never sits in a
+            // container; skip it defensively.
+            bcos::storage::Entry const* entry =
+                std::get_if<bcos::storage::Entry>(std::addressof(dataValue));
+            bool const deleted =
+                std::holds_alternative<bcos::storage2::DELETED_TYPE>(dataValue) ||
+                (entry != nullptr && entry->status() == bcos::storage::Entry::DELETED);
+            if (entry == nullptr && !deleted)
+            {
+                continue;
+            }
+
+            switch (classifyRowKey(keyView.m_key))
+            {
+            case RowKind::Nonce:
+                nonceRow.deleted = deleted;
+                if (!deleted)
+                {
+                    nonceRow.value = detail::entryToU256(*entry);
+                }
+                break;
+            case RowKind::Balance:
+                balanceRow.deleted = deleted;
+                if (!deleted)
+                {
+                    balanceRow.value = detail::entryToU256(*entry);
+                }
+                break;
+            case RowKind::CodeHash:
+                codeHashRow.deleted = deleted;
+                if (!deleted)
+                {
+                    codeHashRow.value = detail::entryToH256(*entry);
+                }
+                break;
+            case RowKind::StorageSlot:
+            {
+                auto const slot = bcos::h256(
+                    bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(keyView.m_key.data()),
+                        keyView.m_key.size()));
+                auto const keyHash = slotKeyHash(slot, m_hasher);
+                if (deleted)
+                {
+                    storageChanges[keyHash] = std::nullopt;
+                    break;
+                }
+                // A value that trims to nothing (all-zero slot) also leaves the trie.
+                std::string_view const raw = entry->get();
+                auto encoded = encodeStorageValue(bcos::bytesConstRef(
+                    reinterpret_cast<bcos::byte const*>(raw.data()), raw.size()));
+                if (encoded.empty())
+                {
+                    storageChanges[keyHash] = std::nullopt;
+                }
+                else
+                {
+                    storageChanges[keyHash] = std::move(encoded);
+                }
+                break;
+            }
+            case RowKind::Code:
+                break;  // represented by the paired codeHash row
+            case RowKind::BcosExtension:
+                if (l2Mode)
+                {
+                    BOOST_THROW_EXCEPTION(
+                        UnexpectedBCOSFieldInL2{} << bcos::errinfo_comment(
+                            "MPTBuilder: BCOS extension field present in L2 "
+                            "(Ethereum-compatible) mode; key=" +
+                            std::string{keyView.m_table} + ":" + std::string{keyView.m_key}));
+                }
+                break;  // native BCOS chain: not part of the Ethereum 4-tuple
             }
         }
 
-        // Seed every field from the flat baseline (FlatAccountMeta{} = zeros when nothing was
-        // Unchanged), then let the shared applyField overwrite the Updated ones — same helper and
-        // same Deleted-outside-tombstone rule as the subsequent-touch path, one definition.
-        FlatAccountMeta const meta = flatMeta.value_or(FlatAccountMeta{});
-        updated.nonce = meta.nonce;
-        updated.balance = meta.balance;
-        updated.codeHash = meta.codeHash;
-        applyField(delta.nonceState, delta.nonce, updated.nonce);
-        applyField(delta.balanceState, delta.balance, updated.balance);
-        applyField(delta.codeHashState, delta.codeHash, updated.codeHash);
+        // Tombstone (spec §5.3 path 3): all three core rows deleted = SELFDESTRUCT. Slot rows
+        // in the same delta are ignored — the whole leaf goes away.
+        if (nonceRow.deleted && balanceRow.deleted && codeHashRow.deleted)
+        {
+            // Record the prior storage root for future pathdb pruning — the full subtree walk
+            // is deferred to the pruning spec, the root hash is the ledger entry. Removing an
+            // absent leaf is a legal no-op (commitTrie treats it as such).
+            auto prior = co_await parentView.readAccount(addr);
+            if (prior && prior->storageRoot != emptyRootHash())
+            {
+                output.obsoletedNodes.insert(prior->storageRoot);
+            }
+            accountChanges[accountKeyHash(addr)] = std::nullopt;
+            co_return;
+        }
+        nonceRow.requireNotDeleted();
+        balanceRow.requireNotDeleted();
+        codeHashRow.requireNotDeleted();
 
+        // Path selection is the readAccount result itself (Revision 2026-07-09b): a parent leaf
+        // means subsequent-touch, none means first-touch — no flag to disagree with.
+        auto baseline = co_await parentView.readAccount(addr);
+        Account updated;
+        bcos::h256 priorStorageRoot = emptyRootHash();
+        if (baseline)
+        {
+            updated = *baseline;
+            priorStorageRoot = baseline->storageRoot;
+        }
+        else if (!nonceRow.value || !balanceRow.value || !codeHashRow.value)
+        {
+            // First-touch fields the block left unwritten have no parent leaf to fall back on:
+            // one O(1) flat metadata read through the fork view (spec §5.3 path 2).
+            auto meta = co_await readFlatAccountMeta(flatView, addr);
+            updated.nonce = meta.nonce;
+            updated.balance = meta.balance;
+            updated.codeHash = meta.codeHash;
+        }
+
+        if (!storageChanges.empty())
+        {
+            // First-touch: priorStorageRoot == emptyRootHash() — the trie holds exactly this
+            // block's written slots (spec §4.2); deletes of never-written slots are no-ops.
+            auto merged = co_await commitTrie(m_storage.get(), priorStorageRoot, storageChanges);
+            updated.storageRoot = merged.root;
+            absorbNodeDelta(std::move(merged), output);
+        }
+        else
+        {
+            updated.storageRoot = priorStorageRoot;
+        }
+
+        if (nonceRow.value)
+        {
+            updated.nonce = *nonceRow.value;
+        }
+        if (balanceRow.value)
+        {
+            updated.balance = *balanceRow.value;
+        }
+        if (codeHashRow.value)
+        {
+            updated.codeHash = *codeHashRow.value;
+        }
         accountChanges[accountKeyHash(addr)] = updated.encode();
-    }
-
-    /// Overwrite @p field from @p value when the block updated it. A Deleted state outside a
-    /// tombstone means classify() and the builder disagree about the account's fate — throw.
-    template <typename Field>
-    static void applyField(AccountDelta::FieldState state, Field const& value, Field& field)
-    {
-        switch (state)
-        {
-        case AccountDelta::FieldState::Unchanged:
-            break;
-        case AccountDelta::FieldState::Updated:
-            field = value;
-            break;
-        case AccountDelta::FieldState::Deleted:
-            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                      "MPTBuilder: field Deleted outside a tombstone"));
-        }
-    }
-
-    /// Rebuild the account's storage trie from its prior root with this block's slot changes
-    /// applied (spec §5.3 path 1). No changes → the prior root stands, nothing is read.
-    bcos::task::Task<bcos::h256> applyStorageChanges(
-        bcos::h256 priorStorageRoot, AccountDelta const& delta, MPTBuildOutput& output)
-    {
-        if (delta.storageChanges.empty())
-        {
-            co_return priorStorageRoot;
-        }
-        std::map<bcos::h256, std::optional<bcos::bytes>> changes;
-        for (auto const& [slot, valueOpt] : delta.storageChanges)
-        {
-            auto const keyHash = slotKeyHash(slot, m_hasher);
-            // nullopt and a value that trims to nothing both mean "slot leaves the trie".
-            bcos::bytes encoded;
-            if (valueOpt.has_value())
-            {
-                encoded = encodeStorageValue(bcos::ref(*valueOpt));
-            }
-            if (encoded.empty())
-            {
-                changes[keyHash] = std::nullopt;
-            }
-            else
-            {
-                changes[keyHash] = std::move(encoded);
-            }
-        }
-        auto merged = co_await commitTrie(m_storage.get(), priorStorageRoot, changes);
-        auto const newRoot = merged.root;
-        co_await flushTrieNodes(m_storage.get(), merged.newNodes);
-        absorbNodeDelta(std::move(merged), output);
-        co_return newRoot;
     }
 
     std::reference_wrapper<Storage> m_storage;
     bcos::h256 m_parentStateRoot;
-    /// Flat-KV access for the first-touch migration (FlatToMPT.h); default-constructed (all
-    /// callbacks empty) for subsequent-touch-only usage via the 2-arg ctor.
-    FlatToMPTBackends m_backends;
     /// One hash context per builder, reused for every slot-key transform of this block
     /// (slotKeyHash injection form). Single-threaded, like buildAndCollect itself.
-    HasherT m_hasher;
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

@@ -32,7 +32,7 @@ BOOST_AUTO_TEST_CASE(EmptyLayerDefaults)
     MPTDeltaLayer layer;
     BOOST_CHECK(layer.newNodes.empty());
     BOOST_CHECK(layer.obsoletedNodes.empty());
-    BOOST_CHECK(layer.preheatManifestsToDelete.empty());
+    BOOST_CHECK(layer.intraBlockObsoleted.empty());
     BOOST_CHECK(layer.stateRoot == bcos::h256{});
 }
 
@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(CustomObserverReceivesDeltaOnCommit)
     layer.stateRoot =
         bcos::h256{"0x00000000000000000000000000000000000000000000000000000000000000aa"};
     layer.newNodes[layer.stateRoot] = bcos::bytes{0x01, 0x02};
-    layer.preheatManifestsToDelete.push_back(bcos::Address{});
+    layer.intraBlockObsoleted.insert(layer.stateRoot);
 
     CapturingObserver observer;
     CommitObserver& iface = observer;  // dispatch through the virtual interface
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(CustomObserverReceivesDeltaOnCommit)
     BOOST_REQUIRE(observer.lastDelta.has_value());
     BOOST_CHECK(observer.lastDelta->stateRoot == layer.stateRoot);
     BOOST_CHECK_EQUAL(observer.lastDelta->newNodes.size(), 1U);
-    BOOST_CHECK_EQUAL(observer.lastDelta->preheatManifestsToDelete.size(), 1U);
+    BOOST_CHECK_EQUAL(observer.lastDelta->intraBlockObsoleted.size(), 1U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

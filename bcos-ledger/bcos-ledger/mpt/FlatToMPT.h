@@ -14,175 +14,124 @@
  *  limitations under the License.
  *
  * @file FlatToMPT.h
- * @brief Flat-KV → MPT migration: first-touch baseline construction and the preheat manifest
- *        (spec §5.3 path 2, §5.10, §5.11)
+ * @brief Flat-KV → MPT value translation: the first-touch O(1) account-metadata read plus the
+ *        Entry decoders for the executor's flat encodings (spec §5.3 path 2, Revision 2026-07-09)
  */
 #pragma once
 
+#include "Classify.h"
+#include "Constants.h"
 #include "Errors.h"
-#include "HashBuilder.h"
-#include "MPTDeltaLayer.h"
-#include "StorageValueCodec.h"
+#include <bcos-framework/storage/Entry.h>
 #include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/throw_exception.hpp>
-#include <cstdint>
-#include <functional>
-#include <optional>
-#include <string>
+#include <cassert>
 #include <string_view>
-#include <utility>
-#include <vector>
 
 namespace bcos::ledger::mpt
 {
 
-// Everything in this header serves scenario A — a legacy chain activating
-// feature_mpt_state_root mid-flight (spec §5.10): only there does an account own flat-KV state
-// that predates the MPT and must be migrated into it. The migration is lazy (spec §5.3 path 2):
-// an account enters the MPT the first time a block touches it; dormant accounts stay in the
-// flat KV indefinitely. A scenario-B chain (L2, MPT from genesis) has no pre-MPT state; its
-// first-touch deltas only ever see an empty scan and never profit from preheating.
+// This header serves scenario A — a legacy chain activating feature_mpt_state_root mid-flight
+// (spec §5.10): only there does an account own flat-KV state that predates the MPT. Under the
+// slot-level commitment model (Revision 2026-07-09) the only migration step left is reading the
+// account's nonce/balance/codeHash once when a first-touch block leaves a field unwritten —
+// storage slots are NEVER back-filled: a first-touch storage trie starts from emptyRootHash()
+// and only ever holds slots written after activation (spec §4.2). The former bootstrap
+// prefix-scan, preheat manifest and mpt-preheat CLI are deleted with the revision.
 
-/// The preheat manifest is one flat-KV record per pre-built account storage trie:
-///   key   = "__mpt_preheat:" + lowercase-hex address (40 chars, no 0x)
-///   value = the 32-byte storage root the preheat run committed for that account
-/// A hit lets the first-touch path adopt the recorded root as its baseline instead of scanning
-/// every flat slot (spec §5.3 path 2b). This class owns the schema plus the read/remove side;
-/// the manifest-writing CLI is Plan C scope and does not exist yet.
-///
-/// Preheating moves a large account's one-off migration cost off the consensus commit path into
-/// an operator-chosen offline window. It is purely an accelerator — correctness never depends on
-/// a manifest being present.
-///
-/// Backend access is via injected callbacks rather than a storage type: manifest records live in
-/// the string-keyed flat KV space, not the h256-keyed node space the MPT templates are built
-/// over, and the eventual owner (MultiLayerStorage / ledger) supplies read/delete lambdas.
-class PreheatManifest
+namespace detail
 {
-public:
-    static constexpr std::string_view keyPrefix = "__mpt_preheat:";
 
-    /// The manifest key for @p addr: keyPrefix + 40 lowercase hex chars.
-    static std::string makeKey(bcos::Address const& addr);
-
-    using BackendReader = std::function<bcos::task::Task<std::optional<bcos::bytes>>(std::string)>;
-    using BackendDeleter = std::function<bcos::task::Task<void>(std::string)>;
-
-    /// Outcome of reading one manifest record.
-    enum class Lookup : uint8_t
+/// Parse an Entry's stored value as a u256. The executor stores nonce and balance as DECIMAL
+/// ASCII strings, NOT big-endian binary: balance is written with boost::lexical_cast<string> and
+/// read with u256(string) (AccountPrecompiled.cpp), nonce with u256::convert_to<string>()
+/// (TransactionExecutive/EVMAccount). An empty value decodes as 0 (the executor's value_or("0")
+/// convention). Reading these bytes big-endian would corrupt the value (e.g. "100" -> 0x313030).
+inline bcos::u256 entryToU256(bcos::storage::Entry const& entry)
+{
+    std::string_view const value = entry.get();
+    if (value.empty())
     {
-        Hit,      ///< a valid 32-byte storage root was found (Record::root is meaningful)
-        Miss,     ///< no record exists for the address
-        Corrupt,  ///< a record exists but is not a 32-byte root (partial write / CLI bug)
-    };
-    struct Record
-    {
-        Lookup status = Lookup::Miss;
-        bcos::h256 root;  ///< meaningful only when status == Hit
-    };
+        return bcos::u256{0};
+    }
+    // boost::multiprecision::number has a string_view constructor (number.hpp) that takes the
+    // length explicitly, so no NUL terminator and no std::string copy are needed.
+    return bcos::u256{value};
+}
 
-    /// Read @p addr's manifest record. A size-mismatched record is reported as Corrupt (and
-    /// logged) rather than thrown: the manifest is a pure accelerator, so the caller falls
-    /// through to the flat scan (ground truth) and schedules the bad record's deletion — chain
-    /// liveness must not hinge on an operator's offline tool never mis-writing a record.
-    static bcos::task::Task<Record> read(BackendReader const& reader, bcos::Address const& addr);
+/// Copy an Entry's stored bytes into a 32-byte hash. Unlike nonce/balance, codeHash is stored as
+/// the RAW 32-byte digest: TransactionExecutive writes the digest bytes verbatim, so the value
+/// bytes ARE the hash and are read directly. A value whose length is not 32 would be silently
+/// zero-padded/truncated by the h256 ctor; callers only reach here for a non-deleted codeHash
+/// row, which is always 32 raw bytes, so assert the invariant rather than mask a corrupt entry.
+inline bcos::h256 entryToH256(bcos::storage::Entry const& entry)
+{
+    std::string_view const value = entry.get();
+    assert(value.size() == static_cast<size_t>(bcos::h256::SIZE) &&
+           "codeHash entry must be exactly 32 raw bytes");
+    return bcos::h256(
+        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(value.data()), value.size()));
+}
 
-    /// Delete @p addr's manifest record. A consumed record must not seed a second first-touch:
-    /// the recorded root goes stale the moment the block's changes commit. Scheduled by the
-    /// commit flow (PR-14b) off MPTDeltaLayer::preheatManifestsToDelete; the interface lives
-    /// here so the schema has a single owner.
-    static bcos::task::Task<void> remove(BackendDeleter const& deleter, bcos::Address const& addr);
-};
+}  // namespace detail
 
-/// An account's baseline nonce/balance/codeHash as stored in the flat KV, for first-touch
-/// fields the block did not update (a first-touch account has no parent MPT leaf to merge onto).
+/// An account's baseline nonce/balance/codeHash as stored in the flat KV, for first-touch fields
+/// the block did not write (a first-touch account has no parent MPT leaf to merge onto).
 struct FlatAccountMeta
 {
     bcos::u256 nonce{};
     bcos::u256 balance{};
-    /// Implementations MUST return emptyCodeHash() — the hash of empty code — for accounts
-    /// without code, never a zero h256: the account leaf encodes this field verbatim
-    /// (Yellow Paper §4.1), and a zero here would produce a wrong leaf hash.
-    bcos::h256 codeHash{};
+    bcos::h256 codeHash;  ///< emptyCodeHash() when the account has no codeHash row (EOA)
 };
 
-/// Injected flat-KV access the migration needs (spec §5.3 path 2). All callbacks are optional:
-/// default-constructed backends keep MPTBuilder in subsequent-touch-only mode, and each callback
-/// is only required by the sub-path that actually consumes it.
-struct FlatToMPTBackends
+/// Read @p addr's nonce/balance/codeHash once from the flat state through @p flatView — the fork
+/// view, so each read resolves against this block's delta layer first and falls through to the
+/// parent flat state (spec §5.3 path 2: delta 层无该字段行的取 flat 值). Three O(1) named-row
+/// reads; NEVER a slot scan (spec §4.2).
+///
+/// Missing rows take the Yellow Paper defaults: nonce/balance 0, codeHash = emptyCodeHash() —
+/// the account leaf encodes codeHash verbatim, so a zero h256 here would produce a wrong leaf
+/// hash. A codeHash row that is present but decodes to zero violates the executor contract
+/// (codeHash = keccak(code), never zero) and throws rather than committing a forking leaf.
+bcos::task::Task<FlatAccountMeta> readFlatAccountMeta(auto& flatView, bcos::Address const& addr)
 {
-    /// Enumerate ALL existing storage slots of an account from the flat KV:
-    /// (raw 32-byte slot key → raw stored value). Required on a manifest miss (path 2a).
-    std::function<bcos::task::Task<std::vector<std::pair<bcos::h256, bcos::bytes>>>(
-        bcos::Address const&)>
-        flatSlotScanner;
-    /// Baseline nonce/balance/codeHash from the flat KV. Required when a first-touch delta
-    /// leaves any of the three fields Unchanged.
-    std::function<bcos::task::Task<FlatAccountMeta>(bcos::Address const&)> flatAccountMeta;
-    /// Preheat manifest KV reader (PreheatManifest::read is called over it). Unset = no
-    /// manifest lookup; every first-touch takes the flat-scan path 2a.
-    PreheatManifest::BackendReader manifestReader;
-};
+    auto const table = accountTableName(addr);
+    FlatAccountMeta meta;
 
-/// Resolve a first-touch account's baseline storage-trie root — the migration step proper.
-/// Path 2b (manifest hit): adopt the recorded root (its nodes were flushed by the preheat run)
-/// and schedule the consumed record for deletion via @p output. Path 2a (miss): bootstrap the
-/// trie from a full flat-KV slot scan, building from the empty root; produced nodes are flushed
-/// through @p storage and absorbed into @p output. The caller (MPTBuilder) then applies the
-/// block's own slot changes over the returned root.
-/// @throws MPTInvariantViolation on a manifest miss without a flatSlotScanner.
-template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage,
-    bcos::crypto::hasher::Hasher HasherT>
-bcos::task::Task<bcos::h256> resolveFirstTouchBaseline(Storage& storage,
-    FlatToMPTBackends const& backends, bcos::Address const& addr, HasherT& hasher,
-    MPTDeltaLayer& output)
-{
-    if (backends.manifestReader)
+    auto nonceEntry =
+        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_NONCE});
+    if (nonceEntry)
     {
-        auto record = co_await PreheatManifest::read(backends.manifestReader, addr);
-        if (record.status == PreheatManifest::Lookup::Hit)
+        meta.nonce = detail::entryToU256(*nonceEntry);
+    }
+    auto balanceEntry =
+        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_BALANCE});
+    if (balanceEntry)
+    {
+        meta.balance = detail::entryToU256(*balanceEntry);
+    }
+    auto codeHashEntry =
+        co_await bcos::storage2::readOne(flatView, executor_v1::StateKeyView{table, ROW_CODE_HASH});
+    if (codeHashEntry)
+    {
+        meta.codeHash = detail::entryToH256(*codeHashEntry);
+        if (meta.codeHash == bcos::h256{})
         {
-            // The preheat run already built and flushed this account's storage trie; adopt its
-            // root and schedule the consumed record for deletion.
-            output.preheatManifestsToDelete.push_back(addr);
-            co_return record.root;
-        }
-        if (record.status == PreheatManifest::Lookup::Corrupt)
-        {
-            // The manifest is a pure accelerator, so a corrupt record must not halt the chain:
-            // fall through to the flat scan (ground truth) and schedule the bad record's removal.
-            output.preheatManifestsToDelete.push_back(addr);
+            BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                      "FlatToMPT: flat codeHash row decodes to a zero h256 for "
+                                      "account " +
+                                      addr.hex() + " (must be keccak(code) or absent)"));
         }
     }
-
-    if (!backends.flatSlotScanner)
+    else
     {
-        BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
-                                  "FlatToMPT: first-touch needs flatSlotScanner"));
+        meta.codeHash = emptyCodeHash();
     }
-    std::map<bcos::h256, std::optional<bcos::bytes>> bootstrapChanges;
-    // Bind the awaited result to a local before iterating: iterating a co_await temporary
-    // directly is the same GCC template-coroutine hazard class as the member access noted in
-    // MPTReadView::hasAccount.
-    auto flatSlots = co_await backends.flatSlotScanner(addr);
-    for (auto& [slot, value] : flatSlots)
-    {
-        auto encoded = encodeStorageValue(bcos::ref(value));
-        if (encoded.empty())
-        {
-            continue;  // zero value: never part of the storage trie
-        }
-        bootstrapChanges[slotKeyHash(slot, hasher)] = std::move(encoded);
-    }
-    auto merged = co_await commitTrie(storage, emptyRootHash<HasherT>(), bootstrapChanges);
-    auto const baselineRoot = merged.root;
-    // Flushed immediately: the caller's apply pass merge-reads these nodes right after.
-    co_await flushTrieNodes(storage, merged.newNodes);
-    absorbNodeDelta(std::move(merged), output);
-    co_return baselineRoot;
+    co_return meta;
 }
 
 }  // namespace bcos::ledger::mpt

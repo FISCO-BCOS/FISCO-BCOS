@@ -24,7 +24,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -49,17 +48,13 @@ struct MPTDeltaLayer
     /// ledger for the future pathdb pruning spec ONLY — the commit flow does not read it and
     /// issues no deletes from it.
     std::unordered_set<bcos::h256> obsoletedNodes;
-    /// Nodes produced AND obsoleted within this same block (a first-touch bootstrap node the
-    /// same block's apply then superseded). They are in newNodes — written to disk — so they are
+    /// Nodes produced AND obsoleted within this same block (identical RLP encodings hash
+    /// identically across the block's per-account trie builds, so one build's new node can
+    /// byte-match another's obsoleted one). They are in newNodes — written to disk — so they are
     /// deliberately kept OUT of obsoletedNodes (a consumer must not delete a node it also writes
     /// in one batch). Parked here rather than dropped so the pruning spec can decide their fate
-    /// with full information; erasing them would orphan them permanently on a migration-heavy
-    /// scenario-A chain.
+    /// with full information; erasing them would orphan them permanently.
     std::unordered_set<bcos::h256> intraBlockObsoleted;
-    /// Accounts whose preheat manifest record was consumed by this build (first-touch path 2b,
-    /// spec §5.11). The commit flow deletes each record via PreheatManifest::remove in the same
-    /// WriteBatch — a consumed root must not seed a second first-touch.
-    std::vector<bcos::Address> preheatManifestsToDelete;
 };
 
 /// Absorb one commitTrie() result into @p delta: newNodes overwrite-insert, obsoleted hashes

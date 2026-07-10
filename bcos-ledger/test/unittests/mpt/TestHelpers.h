@@ -21,6 +21,11 @@
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-framework/storage2/MemoryStorage.h>
+#include <bcos-framework/storage2/MultiLayerStorage.h>
+#include <bcos-framework/storage2/Storage.h>
+#include <bcos-framework/transaction-executor/StateKey.h>
+#include <bcos-ledger/mpt/Classify.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
 #include <bcos-ledger/mpt/Nibble.h>
@@ -111,29 +116,67 @@ inline bcos::storage::Entry makeDeletedEntry()
     return entry;
 }
 
-/// Minimal stand-in for the PR-09 MPTReadView: classify() only needs
-/// `task::Task<bool> hasAccount(Address) const`. Unset addresses default to
-/// "absent" (hasAccount → false → firstTouch true).
-struct MockReadView
+// ---------------------------------------------------------------------------
+// Flat-state fixture (Revision 2026-07-09b): MPTBuilder consumes the block's fork view, so the
+// tests feed it the production-shaped layers instead of hand-filled AccountDelta structs.
+// ---------------------------------------------------------------------------
+
+/// The block's delta layer — same MemoryStorage shape as production
+/// (libinitializer/GlobalStateStorageInitializer.h:14-17).
+using FlatMutableStorage =
+    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+        bcos::executor_v1::StateValue,
+        bcos::storage2::memory_storage::ORDERED | bcos::storage2::memory_storage::LOGICAL_DELETION>;
+/// The parent flat state the view reads through to (first-touch metadata).
+using FlatBackendStorage =
+    bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
+        bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
+/// The production View template over the two layers (what coCommitBlock forks).
+using FlatStateView = bcos::storage2::View<FlatMutableStorage, void, FlatBackendStorage>;
+
+/// A view over @p backend with a fresh mutable delta layer, ready for this block's writes.
+inline FlatStateView makeFlatView(FlatBackendStorage& backend)
 {
-    std::unordered_map<bcos::Address, bool> hasMap;
+    FlatStateView view(&backend);
+    view.newMutable();
+    return view;
+}
 
-    void setHasAccount(bcos::Address address, bool present) { hasMap[address] = present; }
+/// "<table>:<row>" StateKey for a named account field row.
+inline bcos::executor_v1::StateKey accountFieldKey(bcos::Address const& addr, std::string_view row)
+{
+    return bcos::executor_v1::StateKey{accountTableName(addr), row};
+}
 
-    bcos::task::Task<bool> hasAccount(bcos::Address address) const
-    {
-        auto const it = hasMap.find(address);
-        co_return it != hasMap.end() && it->second;
-    }
-};
+/// "<table>:<32-byte-binary-slot>" StateKey for a storage slot row.
+inline bcos::executor_v1::StateKey accountSlotKey(bcos::Address const& addr, bcos::h256 const& slot)
+{
+    return bcos::executor_v1::StateKey{accountTableName(addr),
+        std::string_view{reinterpret_cast<char const*>(slot.data()), bcos::h256::SIZE}};
+}
+
+/// Write one row into @p target (a view's delta layer or a backend flat state).
+inline void writeFlatRow(auto& target, bcos::executor_v1::StateKey key, bcos::storage::Entry entry)
+{
+    bcos::task::syncWait(bcos::storage2::writeOne(target, std::move(key), std::move(entry)));
+}
+
+/// Delete one row via storage-level logical deletion (the removeSome path): the delta layer
+/// keeps the key with a DELETED_TYPE marker — the second deletion signal MPTBuilder accepts
+/// besides an Entry written with status DELETED.
+inline void deleteFlatRowLogically(FlatStateView& view, bcos::executor_v1::StateKey key)
+{
+    bcos::task::syncWait(bcos::storage2::removeOne(mutableStorage(view), std::move(key)));
+}
 
 // ---------------------------------------------------------------------------
 // Independent reference trie (correctness oracle).
 //
-// This is deliberately a DIFFERENT algorithm than HashBuilder: it inserts keys one at a time into
-// a mutable pointer tree (leaf-split-on-first-differing-nibble, descend through extension/branch),
-// then encodes the finished tree through the trusted NodeEncoder and hashes the root exactly like
-// HashBuilder::commit(). A bug shared by both implementations is therefore unlikely.
+// This is deliberately a DIFFERENT algorithm than commitTrie's build cores: it inserts keys one
+// at a time into a mutable pointer tree (leaf-split-on-first-differing-nibble, descend through
+// extension/branch), then encodes the finished tree through the trusted NodeEncoder and hashes
+// the root exactly like commitTrie does. A bug shared by both implementations is therefore
+// unlikely.
 // ---------------------------------------------------------------------------
 namespace reftrie
 {

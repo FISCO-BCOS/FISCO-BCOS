@@ -14,13 +14,13 @@
  *  limitations under the License.
  *
  * @file MPTBuilderSubsequentTouchTest.cpp
- * @brief MPTBuilder subsequent-touch path (spec §5.3 path 1, §5.4) — M4.3
+ * @brief MPTBuilder subsequent-touch path over the fork view (spec §5.3 path 1, §5.4) — M4.3
  */
 #include "TestHelpers.h"
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-ledger/mpt/Account.h>
-#include <bcos-ledger/mpt/AccountDelta.h>
+#include <bcos-ledger/mpt/Classify.h>
 #include <bcos-ledger/mpt/Constants.h>
 #include <bcos-ledger/mpt/Errors.h>
 #include <bcos-ledger/mpt/HashBuilder.h>
@@ -34,6 +34,8 @@
 #include <boost/test/unit_test.hpp>
 #include <map>
 #include <optional>
+#include <string_view>
+#include <vector>
 
 namespace bcos::ledger::mpt::test
 {
@@ -83,10 +85,22 @@ bcos::h256 storageRootOracle(std::map<bcos::h256, bcos::bytes> const& slots)
     return computeTrieRoot(entries).root;
 }
 
+// A raw-bytes Entry for a storage slot value.
+bcos::storage::Entry slotEntry(bcos::bytes const& value)
+{
+    return makeEntry(std::string_view{reinterpret_cast<char const*>(value.data()), value.size()});
+}
+
 // A 32-byte slot key with one marker byte.
 bcos::h256 slotKey(uint8_t marker)
 {
     return makeHash(marker);
+}
+
+// extractTouchedAccounts over the view's delta layer — the production feeding order.
+std::vector<bcos::Address> touchedOf(FlatStateView& view)
+{
+    return bcos::task::syncWait(extractTouchedAccounts(mutableStorage(view)));
 }
 }  // namespace
 
@@ -107,24 +121,28 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
     prior.storageRoot = buildStorageTrie(storage, priorSlots);
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
-    // This block: bump the nonce, overwrite slot 0, delete slot 1, add slot 3.
-    MPTBuildInput input;
-    auto& delta = input.perAccount[addr];
-    delta.nonceState = AccountDelta::FieldState::Updated;
-    delta.nonce = 2;
-    delta.storageChanges[slotKey(0x00)] = bcos::bytes{0xFF};
-    delta.storageChanges[slotKey(0x01)] = std::nullopt;
-    delta.storageChanges[slotKey(0x03)] = bcos::bytes{0x33};
+    // This block's delta: bump the nonce, overwrite slot 0, delete slot 1 (storage-level
+    // logical deletion), add slot 3.
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("2"));
+    writeFlatRow(view, accountSlotKey(addr, slotKey(0x00)), slotEntry(bcos::bytes{0xFF}));
+    deleteFlatRowLogically(view, accountSlotKey(addr, slotKey(0x01)));
+    writeFlatRow(view, accountSlotKey(addr, slotKey(0x03)), slotEntry(bcos::bytes{0x33}));
+
+    auto const touched = touchedOf(view);
+    BOOST_REQUIRE_EQUAL(touched.size(), 1U);
+    BOOST_CHECK(touched.front() == addr);
 
     MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(input));
+    auto output = bcos::task::syncWait(builder.buildAndCollect(view, touched, /*l2Mode=*/false));
 
     BOOST_CHECK(output.stateRoot != parentRoot);
     BOOST_REQUIRE(!output.newNodes.empty());
 
     // Read the updated account back through the new root.
-    MPTReadView<NodeStorage> view(storage, output.stateRoot);
-    auto updated = bcos::task::syncWait(view.readAccount(addr));
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
     BOOST_REQUIRE(updated.has_value());
     BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(2));
     BOOST_CHECK_EQUAL(updated->balance, bcos::u256(100));  // untouched field keeps its baseline
@@ -169,14 +187,17 @@ BOOST_AUTO_TEST_CASE(ZeroValueWriteLeavesTheTrieLikeADelete)
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
     // Writing an all-zero value trims to nothing — same trie effect as a delete (spec §5.3).
-    MPTBuildInput input;
-    input.perAccount[addr].storageChanges[slotKey(0x01)] = bcos::bytes{0x00, 0x00, 0x00};
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(
+        view, accountSlotKey(addr, slotKey(0x01)), slotEntry(bcos::bytes{0x00, 0x00, 0x00}));
 
     MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(input));
+    auto output =
+        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
 
-    MPTReadView<NodeStorage> view(storage, output.stateRoot);
-    auto updated = bcos::task::syncWait(view.readAccount(addr));
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
     BOOST_REQUIRE(updated.has_value());
     BOOST_CHECK(updated->storageRoot == storageRootOracle({{slotKey(0x00), bcos::bytes{0x10}}}));
 }
@@ -190,16 +211,16 @@ BOOST_AUTO_TEST_CASE(NoStorageChangesKeepsPriorStorageRoot)
     prior.storageRoot = buildStorageTrie(storage, {{slotKey(0x00), bcos::bytes{0x42}}});
     auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
-    MPTBuildInput input;
-    auto& delta = input.perAccount[addr];
-    delta.balanceState = AccountDelta::FieldState::Updated;
-    delta.balance = 8;
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("8"));
 
     MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(input));
+    auto output =
+        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
 
-    MPTReadView<NodeStorage> view(storage, output.stateRoot);
-    auto updated = bcos::task::syncWait(view.readAccount(addr));
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
     BOOST_REQUIRE(updated.has_value());
     BOOST_CHECK_EQUAL(updated->balance, bcos::u256(8));
     BOOST_CHECK(updated->storageRoot == prior.storageRoot);
@@ -216,15 +237,16 @@ BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
     priorB.balance = 50;
     auto const parentRoot = buildStateTrie(storage, {{addrA, priorA}, {addrB, priorB}});
 
-    MPTBuildInput input;
-    auto& deltaA = input.perAccount[addrA];
-    deltaA.nonceState = AccountDelta::FieldState::Updated;
-    deltaA.nonce = 2;
-    auto& deltaB = input.perAccount[addrB];
-    deltaB.storageChanges[slotKey(0x05)] = bcos::bytes{0x55};
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addrA, ROW_NONCE), makeEntry("2"));
+    writeFlatRow(view, accountSlotKey(addrB, slotKey(0x05)), slotEntry(bcos::bytes{0x55}));
+
+    auto const touched = touchedOf(view);
+    BOOST_REQUIRE_EQUAL(touched.size(), 2U);
 
     MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(input));
+    auto output = bcos::task::syncWait(builder.buildAndCollect(view, touched, /*l2Mode=*/false));
 
     Account expectedA = priorA;
     expectedA.nonce = 2;
@@ -237,43 +259,55 @@ BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
     BOOST_CHECK(output.stateRoot == computeTrieRoot(stateEntries).root);
 }
 
-BOOST_AUTO_TEST_CASE(FirstTouchWithoutBackendsThrows)
-{
-    NodeStorage storage;
-    auto const addr = makeAddress(0x01);
-    auto const parentRoot = buildStateTrie(storage, {{addr, Account{}}});
-    MPTBuilder builder(storage, parentRoot);  // 2-arg ctor: no backends, no first-touch
-
-    MPTBuildInput firstTouch;
-    firstTouch.perAccount[addr].firstTouch = true;
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(builder.buildAndCollect(firstTouch)), MPTInvariantViolation);
-}
-
 BOOST_AUTO_TEST_CASE(DeletedFieldOutsideTombstoneThrows)
 {
     NodeStorage storage;
     auto const addr = makeAddress(0x02);
     auto const parentRoot = buildStateTrie(storage, {{addr, Account{}}});
-    MPTBuilder builder(storage, parentRoot);
 
-    MPTBuildInput input;
-    input.perAccount[addr].nonceState = AccountDelta::FieldState::Deleted;
-    BOOST_CHECK_THROW(bcos::task::syncWait(builder.buildAndCollect(input)), MPTInvariantViolation);
+    // Only the nonce row is deleted — not the all-three-core-rows selfdestruct shape (spec
+    // §5.4 treats a partial deletion as an error). Exercise the Entry-status flavor here.
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeDeletedEntry());
+
+    MPTBuilder builder(storage, parentRoot);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false)),
+        MPTInvariantViolation);
 }
 
-BOOST_AUTO_TEST_CASE(SubsequentTouchAccountMissingFromParentThrows)
+BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
 {
     NodeStorage storage;
-    auto const known = makeAddress(0x03);
-    auto const parentRoot = buildStateTrie(storage, {{known, Account{}}});
-    MPTBuilder builder(storage, parentRoot);
+    auto const addr = makeAddress(0x03);
+    Account prior;
+    prior.nonce = 4;
+    auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
 
-    MPTBuildInput input;
-    auto& delta = input.perAccount[makeAddress(0x04)];  // never in the parent state
-    delta.nonceState = AccountDelta::FieldState::Updated;
-    delta.nonce = 1;
-    BOOST_CHECK_THROW(bcos::task::syncWait(builder.buildAndCollect(input)), MPTInvariantViolation);
+    // A BCOS extension row ("abi") plus a real nonce write. "code" is skipped in BOTH modes —
+    // it enters the MPT indirectly via its paired codeHash row.
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, "abi"), makeEntry("[]"));
+    writeFlatRow(view, accountFieldKey(addr, ROW_CODE), makeEntry("\x60\x60"));
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
+    auto const touched = touchedOf(view);
+
+    // Scenario A (native chain): the extension row is ignored, the nonce lands.
+    MPTBuilder builder(storage, parentRoot);
+    auto output = bcos::task::syncWait(builder.buildAndCollect(view, touched, /*l2Mode=*/false));
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(updated.has_value());
+    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(5));
+
+    // Scenario B (Ethereum-compatible): the same delta throws — an unrecognized row must not
+    // silently fall out of the state commitment.
+    MPTBuilder builderL2(storage, parentRoot);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(builderL2.buildAndCollect(view, touched, /*l2Mode=*/true)),
+        UnexpectedBCOSFieldInL2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
