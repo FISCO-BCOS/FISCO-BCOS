@@ -21,7 +21,9 @@
 #include "Nibble.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <algorithm>
 #include <array>
+#include <cassert>
 #include <variant>
 #include <vector>
 
@@ -52,9 +54,13 @@ struct ExtensionNode
 };
 
 /// A node reference used inside BranchNode children.
-/// - Inline: the referenced subtree's complete RLP encoding is short (<32 bytes) and is stored
-///   directly; inlineBytes may be empty, which represents an absent child (treated as empty).
-/// - Hash:   the referenced subtree is ≥32 bytes; only the 32-byte keccak256 digest is stored.
+/// - Inline: the referenced subtree's complete RLP encoding is short (< 32 bytes by the Yellow
+///   Paper §D 32-byte rule) and is stored directly; a zero-length inline ref encodes as RLP-empty
+///   (0x80) and represents an absent branch child.
+/// - Hash:   the referenced subtree's RLP is ≥ 32 bytes; only the 32-byte digest is stored.
+///
+/// Both forms fit one fixed 32-byte buffer, so NodeRef is 33 bytes flat (no heap allocation) —
+/// `len` alone discriminates: 0 = absent, 1..31 = inline RLP of that length, 32 = hash.
 struct NodeRef
 {
     enum class Kind : uint8_t
@@ -63,22 +69,64 @@ struct NodeRef
         Hash
     };
 
-    Kind kind{Kind::Inline};
-    /// Valid when kind == Inline. An empty inlineBytes with kind == Inline encodes as RLP-empty
-    /// (0x80) and represents an absent branch child.
-    [[no_unique_address]] bcos::bytes inlineBytes;
-    /// Valid when kind == Hash; keccak256(child RLP)
-    [[no_unique_address]] bcos::h256 hash;
+    /// Inline: the first `len` bytes are the child's complete RLP; the tail is zero.
+    /// Hash: all 32 bytes are the digest of the child's RLP.
+    std::array<bcos::byte, bcos::h256::SIZE> payload{};
+    /// 0 = absent child; 1..31 = inline RLP length; 32 = hash.
+    uint8_t len = 0;
 
-    /// Explicit factory for the absent-child sentinel (Inline + empty inlineBytes).
-    /// Identical to default-construction; named for self-documenting call sites.
-    static NodeRef absent() { return NodeRef{}; }
+    [[nodiscard]] Kind kind() const noexcept
+    {
+        return len == bcos::h256::SIZE ? Kind::Hash : Kind::Inline;
+    }
+    /// Absent child sentinel (inline, zero length); encodes as RLP-empty (0x80).
+    [[nodiscard]] bool isAbsent() const noexcept { return len == 0; }
+
+    /// Valid when kind() == Inline: view of the child's complete RLP encoding.
+    [[nodiscard]] bcos::bytesConstRef inlineRef() const noexcept { return {payload.data(), len}; }
+    /// Valid when kind() == Hash: the 32-byte digest, copied out.
+    [[nodiscard]] bcos::h256 hash() const noexcept
+    {
+        return bcos::h256{payload.data(), payload.size()};
+    }
+
+    /// Caller guarantees raw.size() < 32 (Yellow Paper rule; untrusted inputs are rejected
+    /// upstream in NodeDecoder / refFromRawBytes before reaching here).
+    void setInline(bcos::bytesConstRef raw) noexcept
+    {
+        assert(raw.size() < bcos::h256::SIZE);
+        std::copy(raw.begin(), raw.end(), payload.begin());
+        std::fill(payload.begin() + raw.size(), payload.end(), bcos::byte{0});
+        len = static_cast<uint8_t>(raw.size());
+    }
+    void setHash(bcos::h256 const& digest) noexcept
+    {
+        std::copy(digest.begin(), digest.end(), payload.begin());
+        len = static_cast<uint8_t>(bcos::h256::SIZE);
+    }
+
+    static NodeRef fromInline(bcos::bytesConstRef raw) noexcept
+    {
+        NodeRef ref;
+        ref.setInline(raw);
+        return ref;
+    }
+    static NodeRef fromHash(bcos::h256 const& digest) noexcept
+    {
+        NodeRef ref;
+        ref.setHash(digest);
+        return ref;
+    }
+
+    /// Explicit factory for the absent-child sentinel. Identical to default-construction;
+    /// named for self-documenting call sites.
+    static NodeRef absent() noexcept { return NodeRef{}; }
 };
 
 /// A branch node: 16 child references (one per hex nibble) plus an optional value.
 struct BranchNode
 {
-    /// Default-constructed = Inline + empty (absent child)
+    /// Default-constructed = absent child (len == 0)
     std::array<NodeRef, NIBBLE_RANGE> children;
     ///< Typically empty for internal branch nodes
     bcos::bytes value;

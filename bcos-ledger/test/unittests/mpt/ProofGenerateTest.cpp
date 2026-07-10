@@ -144,18 +144,18 @@ ChainCheck verifyProofChain(
             }
             NodeRef const& child = branch.children.at(path.at(pos));
             ++pos;
-            if (child.kind == NodeRef::Kind::Hash)
+            if (child.kind() == NodeRef::Kind::Hash)
             {
-                expected = child.hash;
+                expected = child.hash();
                 needNextItem = true;
             }
-            else if (child.inlineBytes.empty())
+            else if (child.isAbsent())
             {
                 return finish();  // absent child: dead end
             }
             else
             {
-                TrieNode next = decodeNode(bcos::ref(child.inlineBytes));
+                TrieNode next = decodeNode(child.inlineRef());
                 node = std::move(next);
             }
         }

@@ -33,26 +33,27 @@ namespace bcos::ledger::mpt
 // ---------------------------------------------------------------------------
 
 // Appends the RLP encoding of a NodeRef child into dst.
-// - Default (Inline + empty bytes) → RLP empty string 0x80 (absent child)
-// - Inline non-empty              → splice the raw bytes as-is (already a complete RLP item)
-// - Hash                          → encode the 32-byte hash as an RLP byte-string (33 bytes)
+// - Absent (len == 0)   → RLP empty string 0x80
+// - Inline (len 1..31)  → splice the raw bytes as-is (already a complete RLP item)
+// - Hash   (len == 32)  → encode the 32-byte hash as an RLP byte-string (33 bytes)
 static void appendChildRef(bcos::bytes& dst, NodeRef const& ref)
 {
-    if (ref.kind == NodeRef::Kind::Inline)
+    if (ref.kind() == NodeRef::Kind::Inline)
     {
-        if (ref.inlineBytes.empty())
+        if (ref.isAbsent())
         {
             dst.push_back(RLP_EMPTY_STRING);  // absent child
         }
         else
         {
-            dst.insert(dst.end(), ref.inlineBytes.begin(), ref.inlineBytes.end());
+            auto const raw = ref.inlineRef();
+            dst.insert(dst.end(), raw.begin(), raw.end());
         }
     }
     else
     {
         // Hash kind: emit as 33-byte RLP byte-string [0xa0, hash[0..31]]
-        bcos::codec::rlp::encode(dst, ref.hash);
+        bcos::codec::rlp::encode(dst, ref.hash());
     }
 }
 

@@ -129,11 +129,9 @@ BOOST_AUTO_TEST_CASE(RoundTripBranchMixedChildren)
 
     BranchNode branch;
     // children[0] absent (default)
-    branch.children[3].kind = NodeRef::Kind::Hash;
-    branch.children[3].hash =
-        bcos::h256("0x2222222222222222222222222222222222222222222222222222222222222222");
-    branch.children[10].kind = NodeRef::Kind::Inline;
-    branch.children[10].inlineBytes = tinyRaw;
+    branch.children[3].setHash(
+        bcos::h256("0x2222222222222222222222222222222222222222222222222222222222222222"));
+    branch.children[10].setInline(bcos::ref(tinyRaw));
     // value left empty
 
     bcos::bytes raw = encodeRaw(TrieNode{branch});
@@ -142,14 +140,14 @@ BOOST_AUTO_TEST_CASE(RoundTripBranchMixedChildren)
     BOOST_REQUIRE(std::holds_alternative<BranchNode>(decoded));
     auto const& got = std::get<BranchNode>(decoded);
     // child 0 absent
-    BOOST_CHECK(got.children[0].kind == NodeRef::Kind::Inline);
-    BOOST_CHECK(got.children[0].inlineBytes.empty());
+    BOOST_CHECK(got.children[0].kind() == NodeRef::Kind::Inline);
+    BOOST_CHECK(got.children[0].isAbsent());
     // child 3 hash
-    BOOST_CHECK(got.children[3].kind == NodeRef::Kind::Hash);
-    BOOST_CHECK(got.children[3].hash == branch.children[3].hash);
+    BOOST_CHECK(got.children[3].kind() == NodeRef::Kind::Hash);
+    BOOST_CHECK(got.children[3].hash() == branch.children[3].hash());
     // child 10 inline
-    BOOST_CHECK(got.children[10].kind == NodeRef::Kind::Inline);
-    BOOST_CHECK(got.children[10].inlineBytes == tinyRaw);
+    BOOST_CHECK(got.children[10].kind() == NodeRef::Kind::Inline);
+    BOOST_CHECK(got.children[10].inlineRef().toBytes() == tinyRaw);
     BOOST_CHECK(got.value.empty());
     BOOST_CHECK(encodeRaw(decoded) == raw);
 }

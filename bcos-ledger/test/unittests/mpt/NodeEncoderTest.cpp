@@ -47,8 +47,8 @@ BOOST_AUTO_TEST_CASE(EncodeLeafShort)
 
     BOOST_CHECK(!raw.empty());
     BOOST_CHECK(raw.size() < 32);
-    BOOST_CHECK(ref.kind == NodeRef::Kind::Inline);
-    BOOST_CHECK(ref.inlineBytes == raw);
+    BOOST_CHECK(ref.kind() == NodeRef::Kind::Inline);
+    BOOST_CHECK(ref.inlineRef().toBytes() == raw);
 }
 
 // ---------------------------------------------------------------------------
@@ -65,17 +65,16 @@ BOOST_AUTO_TEST_CASE(EncodeBranchHashedWhenLarge)
 
     BranchNode branch;
     // Set children[0] to a Hash-kind ref with a dummy 32-byte hash
-    branch.children[0].kind = NodeRef::Kind::Hash;
-    branch.children[0].hash =
-        bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111");
+    branch.children[0].setHash(
+        bcos::h256("0x1111111111111111111111111111111111111111111111111111111111111111"));
 
     auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{branch});
 
     // 33 (hash child) + 15 × 1 (absent children) + 1 (empty value) = 49 payload → 50 total
     BOOST_CHECK(raw.size() >= 32);
-    BOOST_CHECK(ref.kind == NodeRef::Kind::Hash);
+    BOOST_CHECK(ref.kind() == NodeRef::Kind::Hash);
     // Hash must be exactly 32 bytes
-    BOOST_CHECK_EQUAL(ref.hash.size(), 32u);
+    BOOST_CHECK_EQUAL(ref.hash().size(), 32u);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,8 +121,8 @@ BOOST_AUTO_TEST_CASE(InlineThresholdAt31Bytes)
 
         auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{leaf});
         BOOST_CHECK_EQUAL(raw.size(), 31u);
-        BOOST_CHECK(ref.kind == NodeRef::Kind::Inline);
-        BOOST_CHECK(ref.inlineBytes == raw);
+        BOOST_CHECK(ref.kind() == NodeRef::Kind::Inline);
+        BOOST_CHECK(ref.inlineRef().toBytes() == raw);
     }
 
     // 32-byte encoding → Hash
@@ -134,9 +133,9 @@ BOOST_AUTO_TEST_CASE(InlineThresholdAt31Bytes)
 
         auto [raw, ref] = NodeEncoder<>::encodeAndRef(TrieNode{leaf});
         BOOST_CHECK_EQUAL(raw.size(), 32u);
-        BOOST_CHECK(ref.kind == NodeRef::Kind::Hash);
-        BOOST_CHECK_EQUAL(ref.hash.size(), 32u);
-        BOOST_CHECK(ref.inlineBytes.empty());
+        BOOST_CHECK(ref.kind() == NodeRef::Kind::Hash);
+        BOOST_CHECK_EQUAL(ref.hash().size(), 32u);
+        BOOST_CHECK(!ref.isAbsent());
     }
 }
 
