@@ -91,7 +91,7 @@ task::Task<protocol::TransactionStatus> TxValidator::checkSenderBalance(
             co_return protocol::TransactionStatus::InsufficientFunds;
         }
 
-        auto txValue = u256(_tx.value());
+        auto txValue = _tx.value();
         auto gasCost = (_tx.gasLimit() > 0) ? u256(_tx.gasLimit()) * txGasPrice : u256(0);
         auto totalRequired = txValue + gasCost;
         if (balanceValue < totalRequired || balanceValue == 0)

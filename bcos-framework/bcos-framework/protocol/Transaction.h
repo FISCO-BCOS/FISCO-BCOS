@@ -106,7 +106,7 @@ public:
     virtual std::string_view abi() const = 0;
 
     // balance
-    virtual std::string_view value() const = 0;
+    virtual u256 value() const = 0;
     virtual std::string_view gasPrice() const = 0;
     virtual int64_t gasLimit() const = 0;
     virtual std::string_view maxFeePerGas() const = 0;

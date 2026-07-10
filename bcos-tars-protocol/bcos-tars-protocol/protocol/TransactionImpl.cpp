@@ -123,9 +123,9 @@ std::string_view bcostars::protocol::TransactionImpl::abi() const
     return m_inner()->data.abi;
 }
 
-std::string_view bcostars::protocol::TransactionImpl::value() const
+bcos::u256 bcostars::protocol::TransactionImpl::value() const
 {
-    return m_inner()->data.value;
+    return bcos::hex2u(m_inner()->data.value);
 }
 
 std::string_view bcostars::protocol::TransactionImpl::gasPrice() const

@@ -50,7 +50,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         result["type"] = toQuantity(0);
         // web3 tools do not compatible with too long hex
         result["nonce"] = "0x" + std::string(tx.nonce());
-        result["value"] = std::string(tx.value().empty() ? "0x0" : tx.value());
+        result["value"] = toQuantity(tx.value());
         result["maxPriorityFeePerGas"] =
             std::string(tx.maxPriorityFeePerGas().empty() ? "0x0" : tx.maxPriorityFeePerGas());
         result["maxFeePerGas"] = std::string(tx.maxFeePerGas().empty() ? "0x0" : tx.maxFeePerGas());
