@@ -131,10 +131,10 @@ std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
            << "to=" << transaction.to() << ", "
            << "abi=" << transaction.abi() << ", "
            << "value=" << transaction.value() << ", "
-           << "gasPrice=" << transaction.gasPrice() << ", "
+           << "gasPrice=" << transaction.gasPrice().value_or(0) << ", "
            << "gasLimit=" << transaction.gasLimit() << ", "
-           << "maxFeePerGas=" << transaction.maxFeePerGas() << ", "
-           << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas() << ", "
+           << "maxFeePerGas=" << transaction.maxFeePerGas().value_or(0) << ", "
+           << "maxPriorityFeePerGas=" << transaction.maxPriorityFeePerGas().value_or(0) << ", "
            << "extension=" << toHex(transaction.extension()) << ", "
            << "extraData=" << transaction.extraData() << ", "
            << "sender=" <<
@@ -153,22 +153,10 @@ std::ostream& operator<<(std::ostream& stream, const Transaction& transaction)
 
 u256 effectiveGasPrice(Transaction const& tx)
 {
-    try
+    if (auto price = tx.gasPrice(); price.has_value() && *price > 0)
     {
-        if (const auto price = tx.gasPrice(); !price.empty())
-        {
-            if (auto value = u256(price); value > 0)
-            {
-                return value;
-            }
-        }
-        if (const auto mfg = tx.maxFeePerGas(); !mfg.empty())
-        {
-            return u256(mfg);
-        }
+        return *price;
     }
-    catch (...)
-    {}
-    return {0};
+    return tx.maxFeePerGas().value_or(0);
 }
 }  // namespace bcos::protocol
