@@ -23,6 +23,10 @@
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
+#include "test/unittests/txpool/TxPoolFixture.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-tars-protocol/protocol/TransactionImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
@@ -97,6 +101,41 @@ BOOST_AUTO_TEST_CASE(acceptValidTo)
     // web3 transaction with prefixed address
     BOOST_CHECK(validator->validateTransaction(*makeTxWithTo("0x" + std::string(40, 'b'),
                     protocol::TransactionType::Web3Transaction)) == TransactionStatus::None);
+}
+
+BOOST_AUTO_TEST_CASE(enforceImportRejectsInvalidTo)
+{
+    // proposal verification path: a transaction missing from the local pool is imported
+    // via MemoryStorage::enforceSubmitTransaction, which bypasses validateTransaction() —
+    // a malicious/unfixed leader could otherwise smuggle a malformed `to` into a block
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+    auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
+    bcos::crypto::KeyPairInterface::Ptr keyPair = signatureImpl->generateKeyPair();
+    auto fakeGateWay = std::make_shared<FakeGateWay>();
+    auto faker = std::make_shared<TxPoolFixture>(keyPair->publicKey(), cryptoSuite,
+        "group_test_for_txpool", "chain_test_for_txpool", 10, fakeGateWay, false, false);
+    faker->init();
+    auto txpoolStorage = faker->txpool()->txpoolStorage();
+
+    // build transactions that pass the ledger nonce / blockLimit checks of the enforce
+    // path, so a rejection can only come from the `to` validation under test
+    auto blockLimit = faker->ledger()->blockNumber() + 5;
+    auto makeEnforceTx = [&](std::string_view toField, const std::string& nonce) {
+        return fakeTransaction(cryptoSuite, keyPair, toField, asBytes("issue5318"), nonce,
+            blockLimit, "chain_test_for_txpool", "group_test_for_txpool");
+    };
+
+    // positive control: a valid `to` is imported through the same path
+    auto validTxs = std::make_shared<protocol::Transactions>();
+    validTxs->emplace_back(makeEnforceTx(std::string(40, 'a'), "10086100861"));
+    BOOST_CHECK(txpoolStorage->batchVerifyAndSubmitTransaction(nullptr, validTxs));
+
+    auto poisonTxs = std::make_shared<protocol::Transactions>();
+    poisonTxs->emplace_back(makeEnforceTx("HelloWorld", "10086100862"));
+    BOOST_CHECK(!txpoolStorage->batchVerifyAndSubmitTransaction(nullptr, poisonTxs));
+
+    txpoolStorage->clear();
 }
 
 BOOST_AUTO_TEST_CASE(wasmChainSkipsAddressCheck)

@@ -36,14 +36,12 @@ using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
 
-namespace
+bool bcos::txpool::isValidToField(std::string_view toField)
 {
-// Issue #5318: `to` must be empty (deployment) or a 20-byte hex address with an optional
-// 0x/0X prefix. Anything else used to pass admission, get packed into a block and
-// deterministically fail execution (BASELINE_SCHEDULER throws while hex-decoding `to`),
-// which PBFT re-proposes forever — halting the whole chain.
-bool isValidToAddress(std::string_view toField)
-{
+    if (toField.empty() || g_BCOSConfig.isWasm())
+    {
+        return true;
+    }
     if (toField.starts_with("0x") || toField.starts_with("0X"))
     {
         toField.remove_prefix(2);
@@ -53,7 +51,6 @@ bool isValidToAddress(std::string_view toField)
            std::ranges::all_of(
                toField, [](unsigned char character) { return std::isxdigit(character) != 0; });
 }
-}  // namespace
 
 TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
 {
@@ -164,8 +161,7 @@ bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
 TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
     // Issue #5318: reject a malformed `to` at admission time so it can never reach a block.
-    // WASM chains are exempt: their `to` is a BFS path (e.g. /apps/HelloWorld), not an address.
-    if (!_tx.to().empty() && !g_BCOSConfig.isWasm() && !isValidToAddress(_tx.to()))
+    if (!isValidToField(_tx.to()))
     {
         TX_VALIDATOR_CHECKER_LOG(WARNING)
             << LOG_BADGE("ValidateTransaction") << LOG_DESC("RejectTransactionWithInvalidTo")
