@@ -22,6 +22,7 @@
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -29,10 +30,30 @@
 #include "bcos-utilities/DataConvertUtility.h"
 
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <cctype>
 
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
+
+namespace
+{
+// Issue #5318: `to` must be empty (deployment) or a 20-byte hex address with an optional
+// 0x/0X prefix. Anything else used to pass admission, get packed into a block and
+// deterministically fail execution (BASELINE_SCHEDULER throws while hex-decoding `to`),
+// which PBFT re-proposes forever — halting the whole chain.
+bool isValidToAddress(std::string_view toField)
+{
+    if (toField.starts_with("0x") || toField.starts_with("0X"))
+    {
+        toField.remove_prefix(2);
+    }
+    constexpr size_t addressHexLength = 40;
+    return toField.size() == addressHexLength &&
+           std::ranges::all_of(
+               toField, [](unsigned char character) { return std::isxdigit(character) != 0; });
+}
+}  // namespace
 
 TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
 {
@@ -142,6 +163,15 @@ bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
 
 TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
+    // Issue #5318: reject a malformed `to` at admission time so it can never reach a block.
+    // WASM chains are exempt: their `to` is a BFS path (e.g. /apps/HelloWorld), not an address.
+    if (!_tx.to().empty() && !g_BCOSConfig.isWasm() && !isValidToAddress(_tx.to()))
+    {
+        TX_VALIDATOR_CHECKER_LOG(WARNING)
+            << LOG_BADGE("ValidateTransaction") << LOG_DESC("RejectTransactionWithInvalidTo")
+            << LOG_KV("to", _tx.to()) << LOG_KV("hash", _tx.hash().abridged());
+        return TransactionStatus::Malformed;
+    }
     if (_tx.value().length() > TRANSACTION_VALUE_MAX_LENGTH)
     {
         return TransactionStatus::OverFlowValue;
