@@ -128,9 +128,13 @@ bcos::u256 bcostars::protocol::TransactionImpl::value() const
     return bcos::hex2u(m_inner()->data.value);
 }
 
-std::string_view bcostars::protocol::TransactionImpl::gasPrice() const
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::gasPrice() const
 {
-    return m_inner()->data.gasPrice;
+    if (m_inner()->data.gasPrice.empty())
+    {
+        return std::nullopt;
+    }
+    return bcos::hex2u(m_inner()->data.gasPrice);
 }
 
 int64_t bcostars::protocol::TransactionImpl::gasLimit() const
@@ -138,14 +142,22 @@ int64_t bcostars::protocol::TransactionImpl::gasLimit() const
     return m_inner()->data.gasLimit;
 }
 
-std::string_view bcostars::protocol::TransactionImpl::maxFeePerGas() const
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerGas() const
 {
-    return m_inner()->data.maxFeePerGas;
+    if (m_inner()->data.maxFeePerGas.empty())
+    {
+        return std::nullopt;
+    }
+    return bcos::hex2u(m_inner()->data.maxFeePerGas);
 }
 
-std::string_view bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxPriorityFeePerGas() const
 {
-    return m_inner()->data.maxPriorityFeePerGas;
+    if (m_inner()->data.maxPriorityFeePerGas.empty())
+    {
+        return std::nullopt;
+    }
+    return bcos::hex2u(m_inner()->data.maxPriorityFeePerGas);
 }
 
 bcos::bytesConstRef bcostars::protocol::TransactionImpl::extension() const

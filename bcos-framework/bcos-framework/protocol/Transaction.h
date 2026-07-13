@@ -107,10 +107,10 @@ public:
 
     // balance
     virtual u256 value() const = 0;
-    virtual std::string_view gasPrice() const = 0;
+    virtual std::optional<u256> gasPrice() const = 0;
     virtual int64_t gasLimit() const = 0;
-    virtual std::string_view maxFeePerGas() const = 0;
-    virtual std::string_view maxPriorityFeePerGas() const = 0;
+    virtual std::optional<u256> maxFeePerGas() const = 0;
+    virtual std::optional<u256> maxPriorityFeePerGas() const = 0;
 
     // v2
     virtual bcos::bytesConstRef extension() const = 0;

@@ -232,10 +232,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
     if (transaction.version() >= int32_t(bcos::protocol::TransactionVersion::V1_VERSION))
     {
         jResp["value"] = toQuantity(transaction.value());
-        jResp["gasPrice"] = std::string(transaction.gasPrice());
+        // match tars hash: nullopt → "", otherwise hex quantity
+        jResp["gasPrice"] = transaction.gasPrice() ? toQuantity(*transaction.gasPrice()) : "";
         jResp["gasLimit"] = transaction.gasLimit();
-        jResp["maxFeePerGas"] = std::string(transaction.maxFeePerGas());
-        jResp["maxPriorityFeePerGas"] = std::string(transaction.maxPriorityFeePerGas());
+        jResp["maxFeePerGas"] = transaction.maxFeePerGas() ? toQuantity(*transaction.maxFeePerGas()) : "";
+        jResp["maxPriorityFeePerGas"] = transaction.maxPriorityFeePerGas() ? toQuantity(*transaction.maxPriorityFeePerGas()) : "";
     }
     if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
