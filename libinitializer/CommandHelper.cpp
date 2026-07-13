@@ -73,6 +73,54 @@ void bcos::initializer::initCommandLine(int argc, char* argv[])
     }
 }
 
+bcos::initializer::Params bcos::initializer::initConsoleCommandLine(int argc, const char* argv[])
+{
+    boost::program_options::options_description console_options(
+        "Usage: fisco-bcos console [OPTIONS]");
+    console_options.add_options()("help,h", "print console help information")(
+        "version,v", "version of FISCO BCOS")("config,c",
+        boost::program_options::value<std::string>()->default_value("./config.toml"),
+        "config.toml file path (like console's config.toml)")("group,g",
+        boost::program_options::value<std::string>(), "default group ID to connect to")("pem",
+        boost::program_options::value<std::string>(), "path to PEM key file for signing")("p12",
+        boost::program_options::value<std::string>(), "path to P12 key file for signing");
+
+    boost::program_options::variables_map vm;
+    try
+    {
+        boost::program_options::store(
+            boost::program_options::parse_command_line(argc, argv, console_options), vm);
+    }
+    catch (...)
+    {
+        std::cout << "invalid parameters" << std::endl;
+        std::cout << console_options << std::endl;
+        exit(0);
+    }
+
+    if (vm.count("help") || vm.count("h"))
+    {
+        std::cout << console_options << std::endl;
+        exit(0);
+    }
+    if (vm.count("version") || vm.count("v"))
+    {
+        printVersion();
+        exit(0);
+    }
+
+    bcos::initializer::Params params;
+    params.isConsole = true;
+    params.configFilePath = vm["config"].as<std::string>();
+    params.consoleConfigPath = params.configFilePath;
+
+    if (vm.count("group"))
+    {
+        params.snapshotPath = vm["group"].as<std::string>();
+    }
+    return params;
+}
+
 bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     int argc, const char* argv[], bool _autoSendTx)
 {
@@ -191,5 +239,5 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         snapshotPath = vm["import"].as<std::string>();
     }
 
-    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, op};
+    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, false, {}, op};
 }

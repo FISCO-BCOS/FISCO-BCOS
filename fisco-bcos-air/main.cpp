@@ -25,6 +25,7 @@
 #include "AirNodeInitializer.h"
 #include "Common.h"
 #include "libinitializer/CommandHelper.h"
+#include <bcos-console/ConsoleApp.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -56,6 +57,30 @@ int main(int argc, const char* argv[])
     auto initializer = std::make_shared<AirNodeInitializer>();
     try
     {
+        // Check for the "console" subcommand before normal node startup
+        if (argc >= 2 && std::string_view(argv[1]) == "console")
+        {
+            // Shift arguments: rebuild argv without argv[1] ("console")
+            std::vector<const char*> consoleArgv;
+            consoleArgv.push_back(argv[0]);  // program name
+            for (int i = 2; i < argc; ++i)
+            {
+                consoleArgv.push_back(argv[i]);
+            }
+            auto consoleParam = bcos::initializer::initConsoleCommandLine(
+                static_cast<int>(consoleArgv.size()), consoleArgv.data());
+
+            std::cout << "Starting FISCO BCOS console..." << '\n';
+            auto app = std::make_shared<bcos::console::ConsoleApp>();
+            if (!app->init(consoleParam.consoleConfigPath))
+            {
+                std::cerr << "Failed to initialize console" << '\n';
+                return -1;
+            }
+            app->start();
+            return 0;
+        }
+
         auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         if (param.op != bcos::initializer::Params::operation::None)
         {
