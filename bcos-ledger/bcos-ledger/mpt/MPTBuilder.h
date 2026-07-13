@@ -46,11 +46,6 @@
 namespace bcos::ledger::mpt
 {
 
-/// The builder-side name for the block's node delta. The struct itself lives in
-/// MPTDeltaLayer.h — it is the contract with the commit flow / MultiLayerStorage (spec §5.7),
-/// not a builder detail; the alias keeps every existing buildAndCollect call site unchanged.
-using MPTBuildOutput = MPTDeltaLayer;
-
 /// Builds the post-block MPT from the block's fork view on top of the parent block's state root
 /// (spec §5.2, Revision 2026-07-09b): for each touched account the builder prefix-ranges the
 /// view's top mutable layer — the block's flat delta — and reads every changed Entry in place;
@@ -97,14 +92,19 @@ public:
     ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
     /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone
     ///         (spec §5.4 treats that as an error).
-    bcos::task::Task<MPTBuildOutput> buildAndCollect(
+    bcos::task::Task<MPTDeltaLayer> buildAndCollect(
         auto& flatView, std::vector<bcos::Address> const& touchedAccounts, bool l2Mode)
     {
-        MPTBuildOutput output;
+        MPTDeltaLayer output;
         MPTReadView<Storage> parentView(m_storage.get(), m_parentStateRoot);
-        // The account-trie change-set, committed once through commitTrie at the end.
+        // The account-trie change-set, committed once through commitTrie at the end. std::map
+        // on purpose (commitTrie's signature requires it): the type itself guarantees ascending
+        // iteration and unique keys, and h256 lexicographic order IS 64-nibble path order — the
+        // ordering the trie build relies on.
         std::map<bcos::h256, std::optional<bcos::bytes>> accountChanges;
 
+        // Per account: commit its storage trie (nodes go into output) and record its new leaf
+        // encoding — or its removal — into accountChanges.
         for (auto const& addr : touchedAccounts)
         {
             co_await buildOneAccount(addr, flatView, parentView, l2Mode, accountChanges, output);
@@ -112,9 +112,9 @@ public:
 
         auto merged = co_await commitTrie(m_storage.get(), m_parentStateRoot, accountChanges);
         output.stateRoot = merged.root;
-        absorbNodeDelta(std::move(merged), output);
+        mergeNodeDelta(std::move(merged), output);
 
-        // MPTBuildOutput aggregates one commitTrie result per touched storage trie plus the
+        // MPTDeltaLayer aggregates one commitTrie result per touched storage trie plus the
         // account trie. Unlike a single mergeTrie() result the union is not disjoint by
         // construction: identical RLP encodings hash identically ACROSS tries, so a node one
         // account's rebuild obsoletes can byte-match a node another account's build emits.
@@ -160,7 +160,7 @@ private:
 
     bcos::task::Task<void> buildOneAccount(bcos::Address const& addr, auto& flatView,
         MPTReadView<Storage> const& parentView, bool l2Mode,
-        std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTBuildOutput& output)
+        std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTDeltaLayer& output)
     {
         auto const table = accountTableName(addr);
         CoreFieldRow<bcos::u256> nonceRow;
@@ -200,6 +200,10 @@ private:
                 continue;
             }
 
+            // Not a double dispatch: the string compares happen once inside classifyRowKey and
+            // the switch is a jump on the enum. Kept as enum + switch (no default) so adding a
+            // RowKind makes -Wswitch flag this spot, and the key-format knowledge stays
+            // unit-tested in Classify.h.
             switch (classifyRowKey(keyView.m_key))
             {
             case RowKind::Nonce:
@@ -289,8 +293,8 @@ private:
         bcos::h256 priorStorageRoot = emptyRootHash();
         if (baseline)
         {
-            updated = *baseline;
             priorStorageRoot = baseline->storageRoot;
+            updated = std::move(*baseline);
         }
         else if (!nonceRow.value || !balanceRow.value || !codeHashRow.value)
         {
@@ -308,7 +312,7 @@ private:
             // block's written slots (spec §4.2); deletes of never-written slots are no-ops.
             auto merged = co_await commitTrie(m_storage.get(), priorStorageRoot, storageChanges);
             updated.storageRoot = merged.root;
-            absorbNodeDelta(std::move(merged), output);
+            mergeNodeDelta(std::move(merged), output);
         }
         else
         {

@@ -29,9 +29,8 @@ namespace bcos::ledger::mpt
 {
 
 /// One block's MPT build product: the new state root plus the node delta the commit path must
-/// persist alongside the flat state. Produced by MPTBuilder::buildAndCollect (which returns it
-/// under its original name, MPTBuildOutput); consumed by the commit flow (PR-14b) and passed to
-/// CommitObserver after the block's WriteBatch lands.
+/// persist alongside the flat state. Produced by MPTBuilder::buildAndCollect; consumed by the
+/// commit flow (PR-14b) and passed to CommitObserver after the block's WriteBatch lands.
 ///
 /// newNodes and obsoletedNodes are DISJOINT (buildAndCollect end-subtracts, mirroring mergeTrie):
 /// a consumer never has to order a write against a delete of the same node. The subtracted hashes
@@ -57,12 +56,12 @@ struct MPTDeltaLayer
     std::unordered_set<bcos::h256> intraBlockObsoleted;
 };
 
-/// Absorb one commitTrie() result into @p delta: newNodes overwrite-insert, obsoleted hashes
-/// merge. Taken by value (moved from): the result is consumed. Duck-typed on the
-/// newNodes/obsoletedNodes members TrieMergeResult defines, so this pure-data header does not
-/// depend on the trie headers.
+/// Merge one commitTrie() result into @p delta: newNodes overwrite-insert, obsoleted hashes
+/// merge. Taken by value (moved from): the result is consumed, buffers are moved not copied.
+/// Duck-typed on the newNodes/obsoletedNodes members TrieMergeResult defines, so this pure-data
+/// header does not depend on the trie headers.
 template <typename NodeDelta>
-void absorbNodeDelta(NodeDelta merged, MPTDeltaLayer& delta)
+void mergeNodeDelta(NodeDelta merged, MPTDeltaLayer& delta)
 {
     for (auto& [hash, raw] : merged.newNodes)
     {

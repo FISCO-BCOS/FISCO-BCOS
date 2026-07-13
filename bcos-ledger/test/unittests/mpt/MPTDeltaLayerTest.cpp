@@ -18,10 +18,8 @@
  */
 #include "bcos-ledger/mpt/MPTDeltaLayer.h"
 #include "bcos-ledger/mpt/CommitObserver.h"
-#include "bcos-ledger/mpt/MPTBuilder.h"
 #include <boost/test/unit_test.hpp>
 #include <optional>
-#include <type_traits>
 
 using namespace bcos::ledger::mpt;
 
@@ -34,15 +32,6 @@ BOOST_AUTO_TEST_CASE(EmptyLayerDefaults)
     BOOST_CHECK(layer.obsoletedNodes.empty());
     BOOST_CHECK(layer.intraBlockObsoleted.empty());
     BOOST_CHECK(layer.stateRoot == bcos::h256{});
-}
-
-BOOST_AUTO_TEST_CASE(BuilderOutputIsTheDeltaLayer)
-{
-    // MPTBuildOutput (the #5310 name every builder test uses) and MPTDeltaLayer (the
-    // MultiLayerStorage-facing contract, spec §5.7) must stay the SAME type — two structs
-    // with identical fields would drift apart silently.
-    static_assert(std::is_same_v<MPTBuildOutput, MPTDeltaLayer>);
-    BOOST_CHECK(true);
 }
 
 BOOST_AUTO_TEST_CASE(NoopObserverDoesNothing)

@@ -118,7 +118,7 @@ bcos::task::Task<TrieMergeResult> commitTrie(Storage& storage, bcos::h256 priorR
 
 /// Batch-write @p nodes (hash → raw RLP) into @p storage in one writeSome round-trip — the flush
 /// counterpart of commitTrie for the caller that owns node persistence (MPTBuilder flushes its
-/// aggregated MPTBuildOutput.newNodes once per block; tests flush per build).
+/// aggregated MPTDeltaLayer.newNodes once per block; tests flush per build).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<void> flushTrieNodes(
     Storage& storage, std::unordered_map<bcos::h256, bcos::bytes> const& nodes)

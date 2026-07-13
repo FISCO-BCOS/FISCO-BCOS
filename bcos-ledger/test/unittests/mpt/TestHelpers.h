@@ -64,7 +64,7 @@ inline std::mt19937 seededRng(uint32_t s)
 
 /// Synchronous test wrapper around commitTrie(): commit @p changes over @p priorRoot AND flush
 /// the produced nodes into @p storage. Production flushes once per block from the aggregated
-/// MPTBuildOutput; tests flush per build so readback (Trie / MPTReadView) works immediately.
+/// MPTDeltaLayer; tests flush per build so readback (Trie / MPTReadView) works immediately.
 template <typename Storage>
 TrieMergeResult commitTrieFlushed(Storage& storage, bcos::h256 priorRoot,
     std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
