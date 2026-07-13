@@ -161,7 +161,20 @@ void RemoteRpcConnection::sendJsonRpc(
 
         if (root.isMember("result"))
         {
-            respFunc(nullptr, root["result"]);
+            auto& result = root["result"];
+            // If the result is a JSON string, parse it into a real object
+            if (result.isString())
+            {
+                Json::Value parsed;
+                Json::Reader r2;
+                auto const& str = result.asString();
+                if (r2.parse(str.data(), str.data() + str.size(), parsed))
+                {
+                    respFunc(nullptr, parsed);
+                    return;
+                }
+            }
+            respFunc(nullptr, result);
             return;
         }
 
