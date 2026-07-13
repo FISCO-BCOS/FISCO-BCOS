@@ -602,6 +602,25 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
         _pt.get<std::size_t>("p2p.max_concurrent_sessions", defaultMaxConcurrentSessions);
     m_maxSessionsPerIP = _pt.get<std::size_t>("p2p.max_sessions_per_ip", defaultMaxSessionsPerIP);
 
+    // FIB-186: cap concurrent in-flight TLS handshakes. Unlike the session caps above (enforced
+    // only after the handshake), this bounds accept/handshake work so connection churn cannot
+    // saturate the shared I/O pool and starve consensus message delivery. Global only (a per-IP cap
+    // is trivially bypassed by source-IP rotation; see Host.h).
+    constexpr static std::size_t defaultMaxPendingHandshakes = 64;
+    m_maxPendingHandshakes =
+        _pt.get<std::size_t>("p2p.max_pending_handshakes", defaultMaxPendingHandshakes);
+    // FIB-186: bound how long a single in-flight handshake may run before its admission slot is
+    // reclaimed, so a stalled / slow-loris handshake cannot hold a slot (and keep Host alive)
+    // indefinitely.
+    constexpr static int defaultHandshakeTimeoutMs = 10000;
+    m_handshakeTimeout = _pt.get<int>("p2p.handshake_timeout_ms", defaultHandshakeTimeoutMs);
+
+    // FIB-186: bound the RATE of accepted new connections so a churn flood cannot consume unbounded
+    // handshake CPU (asymmetric crypto). 0 = unlimited.
+    constexpr static uint32_t defaultMaxConnectionsPerSecond = 100;
+    m_maxConnectionsPerSecond =
+        _pt.get<uint32_t>("p2p.max_connections_per_second", defaultMaxConnectionsPerSecond);
+
     constexpr static uint32_t defaultMaxReadDataSize = 40 * 1024;
     m_maxReadDataSize = _pt.get<uint32_t>("p2p.session_max_read_data_size", defaultMaxReadDataSize);
 
@@ -628,6 +647,8 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("p2p.session_max_send_data_size", m_maxSendDataSize)
                              << LOG_KV("p2p.session_max_send_msg_count", m_maxSendMsgCount)
                              << LOG_KV("p2p.thread_count", m_threadPoolSize)
+                             << LOG_KV("p2p.max_pending_handshakes", m_maxPendingHandshakes)
+                             << LOG_KV("p2p.max_connections_per_second", m_maxConnectionsPerSecond)
                              << LOG_KV("p2p.nodes_path", m_nodePath)
                              << LOG_KV("p2p.nodes_file", m_nodeFileName)
                              << LOG_KV("p2p.readonly", m_readonly)

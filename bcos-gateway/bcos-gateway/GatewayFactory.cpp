@@ -613,7 +613,27 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 
     // init ASIOInterface
     auto asioInterface = std::make_shared<ASIOInterface>();
-    auto ioServicePool = std::make_shared<IOServicePool>();
+    // FIB-186: size the P2P I/O pool from p2p.thread_count (previously ignored: IOServicePool() was
+    // built with no args, always defaulting to hardware_concurrency()+1). A single shared pool
+    // carries the acceptor, inbound + outbound sessions, TLS handshakes and timers.
+    //
+    // We deliberately do NOT add a second, acceptor-only pool to isolate inbound churn. A
+    // boost::asio SSL stream is welded to its io_context for life, so a connection's handshake and
+    // the reads of the session that follows run on the same pool; and an inbound churn connection
+    // is indistinguishable from an inbound validator connection at accept time (identity is known
+    // only after the handshake). So no pool assignment can separate attacker handshakes from
+    // validator consensus reads -- both always land on the same pool. A pool split would only move
+    // which thread the handshake CPU lands on, not off a thread that also carries consensus reads:
+    // thread isolation is not CPU isolation, and once that thread saturates consensus halts anyway
+    // (a split merely delays the onset). What actually prevents the halt is keeping the expensive
+    // handshake from running at all -- rejecting churn cheaply BEFORE the handshake via the
+    // accept-rate limit and the in-flight-handshake cap (Host), tuned small enough that admitted
+    // handshake CPU cannot saturate the pool. This was validated on a 3-node churn harness: with
+    // those caps on, a dedicated acceptor pool made no measurable difference; with them off, both
+    // the single-pool and the split-pool builds halted. See
+    // Host::DEFAULT_MAX_CONNECTIONS_PER_SECOND.
+    auto ioServicePool =
+        std::make_shared<IOServicePool>(std::max<uint32_t>(1U, _config->threadPoolSize()));
     asioInterface->setIOServicePool(ioServicePool);
     asioInterface->setSrvContext(srvCtx);
     asioInterface->setClientContext(clientCtx);
@@ -652,6 +672,10 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // FIB-184: apply the configured inbound-session caps (no longer hardcoded in Host)
     host->setMaxConcurrentSessions(_config->maxConcurrentSessions());
     host->setMaxSessionsPerIP(_config->maxSessionsPerIP());
+    // FIB-186: bound in-flight TLS handshakes so connection churn cannot starve consensus reads.
+    host->setMaxPendingHandshakes(_config->maxPendingHandshakes());
+    host->setHandshakeTimeout(_config->handshakeTimeout());
+    host->setMaxConnectionsPerSecond(_config->maxConnectionsPerSecond());
     // init Service
     bool enableRIPProtocol = _config->enableRIPProtocol();
     Service::Ptr service = nullptr;

@@ -23,6 +23,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <set>
@@ -32,6 +33,28 @@
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
+
+namespace
+{
+// FIB-186: RAII guard bound to an in-flight TLS handshake. Constructed after a handshake slot is
+// acquired and moved into the handshake completion handler; its destructor releases the slot when
+// the handler runs (success / failure / abort) or is destroyed on shutdown. Held via weak_ptr so a
+// Host torn down before the handshake completes does not crash the guard.
+struct HandshakeSlotGuard
+{
+    std::weak_ptr<Host> host;
+    explicit HandshakeSlotGuard(std::weak_ptr<Host> _host) : host(std::move(_host)) {}
+    HandshakeSlotGuard(const HandshakeSlotGuard&) = delete;
+    HandshakeSlotGuard& operator=(const HandshakeSlotGuard&) = delete;
+    ~HandshakeSlotGuard()
+    {
+        if (auto h = host.lock())
+        {
+            h->releaseHandshakeSlot();
+        }
+    }
+};
+}  // namespace
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -73,13 +96,87 @@ void Host::startAccept(boost::system::error_code boost_error)
 
                 /// if the connected peer over the limitation, drop socket
                 socket->setNodeIPEndpoint(endpoint);
-                HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
+                // FIB-186: DEBUG, not INFO — under connection churn this fires on every accept and
+                // would flood the log, letting a low-trust peer fill the disk.
+                HOST_LOG(DEBUG) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
+                // FIB-186: bound concurrent in-flight TLS handshakes (global cap) BEFORE starting
+                // the handshake. The FIB-184 session caps apply only after the handshake completes,
+                // so connection churn from a low-trust peer would otherwise flood the shared I/O
+                // thread-pool with accept / handshake / teardown work and starve inter-validator
+                // PBFT reads, halting consensus. Over the cap, drop the socket and re-arm accept
+                // without running the (CPU-heavy) TLS handshake.
+                std::string remoteAddress = socket->nodeIPEndpoint().address();
+                // FIB-186: bound admission of new connections BEFORE the CPU-heavy TLS handshake,
+                // so connection churn from a low-trust peer cannot flood the shared I/O pool with
+                // accept / handshake / teardown work and starve inter-validator PBFT reads (the
+                // FIB-184 session caps apply only AFTER the handshake completes). Reserve the
+                // in-flight-handshake slot first because it is the refundable check: if the
+                // accept-rate limiter below then rejects, we release the slot and no rate token is
+                // spent. Checking the rate token first would instead waste a token whenever the
+                // handshake cap is already saturated, needlessly lowering the effective accept rate
+                // for legitimate peers arriving in that window.
+                if (!tryAcquireHandshakeSlot())
+                {
+                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                    << LOG_DESC("pending-handshake cap reached, reject connection")
+                                    << LOG_KV("address", remoteAddress)
+                                    << LOG_KV("pendingHandshakes", currentPendingHandshakes())
+                                    << LOG_KV("maxPendingHandshakes", m_maxPendingHandshakes);
+                    socket->close();
+                    startAccept();
+                    return;
+                }
+                // Accept-rate token bucket: drops a churn flood cheaply (accept + close) before
+                // paying handshake CPU, which the concurrency cap alone does not. On rejection the
+                // handshake slot reserved just above must be released so it is not leaked -- the
+                // HandshakeSlotGuard that normally releases it is only created once both checks
+                // pass.
+                if (!tryAcquireConnectionToken())
+                {
+                    releaseHandshakeSlot();
+                    HOST_LOG(DEBUG) << LOG_BADGE("startAccept")
+                                    << LOG_DESC("connection accept-rate limit reached, reject")
+                                    << LOG_KV("address", remoteAddress)
+                                    << LOG_KV("maxConnectionsPerSecond", m_maxConnectionsPerSecond);
+                    socket->close();
+                    startAccept();
+                    return;
+                }
+                // Release the slot exactly once when the handshake completes (success, failure, or
+                // abort): the guard rides the completion handler and is destroyed with it.
+                auto handshakeGuard = std::make_shared<HandshakeSlotGuard>(weak_from_this());
+                // FIB-186: bound the handshake's lifetime. A stalled / slow TLS handshake would
+                // otherwise never complete, so its admission slot (above) would never be released
+                // and this Host (kept alive by the completion handler's shared_from_this) could
+                // never be destroyed. On timeout close the socket; that completes async_handshake
+                // with an error, so the completion handler runs, the guard is destroyed and the
+                // slot released. The timer and the handshake completion run on the socket's single
+                // io_context thread, so they are serialised (no race on close/cancel). Same pattern
+                // as the outbound connectTimer.
+                auto handshakeTimer = std::make_shared<boost::asio::deadline_timer>(
+                    socket->ioService(), boost::posix_time::milliseconds(m_handshakeTimeout));
+                handshakeTimer->async_wait([socket](const boost::system::error_code& timerError) {
+                    if (timerError == boost::asio::error::operation_aborted)
+                    {
+                        return;
+                    }
+                    if (socket->isConnected())
+                    {
+                        HOST_LOG(WARNING) << LOG_BADGE("startAccept")
+                                          << LOG_DESC("in-flight handshake timed out, close socket")
+                                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
+                        socket->close();
+                    }
+                });
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
                 m_asioInterface->setVerifyCallback(socket, newVerifyCallback(endpointPublicKey));
                 m_asioInterface->asyncHandshake(socket, ba::ssl::stream_base::server,
-                    boost::bind(&Host::handshakeServer, shared_from_this(), ba::placeholders::error,
-                        endpointPublicKey, socket));
+                    [self = shared_from_this(), endpointPublicKey, socket, handshakeGuard,
+                        handshakeTimer](const boost::system::error_code& handshakeError) {
+                        handshakeTimer->cancel();
+                        self->handshakeServer(handshakeError, endpointPublicKey, socket);
+                    });
 
                 startAccept();
             },
@@ -411,6 +508,58 @@ void Host::releaseSessionSlot(std::string const& _address)
     {
         m_sessionCount.fetch_sub(1, std::memory_order_relaxed);
     }
+}
+
+// FIB-186: reserve an in-flight-handshake slot under the global cap. Returns false when the cap is
+// reached; the caller must then close the socket and re-arm accept without starting the (CPU-heavy)
+// TLS handshake. Uses a dedicated mutex so it does not contend with the session-cap path. Global
+// count only -- a per-IP cap is trivially bypassed by source-IP rotation (see Host.h).
+bool Host::tryAcquireHandshakeSlot()
+{
+    std::lock_guard<std::mutex> lock(x_pendingHandshakes);
+    if (m_pendingHandshakes >= m_maxPendingHandshakes)
+    {
+        return false;
+    }
+    ++m_pendingHandshakes;
+    return true;
+}
+
+// FIB-186: release a previously reserved handshake slot. Runs from the HandshakeSlotGuard bound to
+// the handshake completion handler, i.e. exactly once when the handshake finishes or is aborted.
+void Host::releaseHandshakeSlot()
+{
+    std::lock_guard<std::mutex> lock(x_pendingHandshakes);
+    if (m_pendingHandshakes > 0)
+    {
+        --m_pendingHandshakes;
+    }
+}
+
+// FIB-186: token-bucket rate limiter for accepted new connections. Refills at
+// m_maxConnectionsPerSecond (also the burst cap), consumes one token per accepted connection, and
+// returns false once the bucket is empty so the caller drops the connection before the TLS
+// handshake. 0 = unlimited. Bounds handshake CPU per unit time (the concurrency caps do not).
+bool Host::tryAcquireConnectionToken()
+{
+    // Lock-free read: m_maxConnectionsPerSecond is set once by GatewayFactory before start() (see
+    // setMaxConnectionsPerSecond), so no writer races with this fast-path check.
+    if (m_maxConnectionsPerSecond == 0)
+    {
+        return true;
+    }
+    std::lock_guard<std::mutex> lock(x_connectionRate);
+    auto now = std::chrono::steady_clock::now();
+    double elapsed = std::chrono::duration<double>(now - m_lastTokenRefill).count();
+    m_lastTokenRefill = now;
+    m_connectionTokens = std::min<double>(
+        m_maxConnectionsPerSecond, m_connectionTokens + elapsed * m_maxConnectionsPerSecond);
+    if (m_connectionTokens >= 1.0)
+    {
+        m_connectionTokens -= 1.0;
+        return true;
+    }
+    return false;
 }
 
 namespace
