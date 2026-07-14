@@ -25,6 +25,7 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -36,6 +37,22 @@ using namespace bcos::console;
 bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::Ptr jsonRpc,
     std::string_view defaultGroup)
 {
+    // --- Initialize Boost.Log to write to logs/ only (no terminal output) ---
+    static bool logInitialized = false;
+    if (!logInitialized)
+    {
+        boost::property_tree::ptree logPt;
+        logPt.put("log.enable", "true");
+        logPt.put("log.enable_console_output", "false");
+        logPt.put("log.log_path", "logs");
+        logPt.put("log.level", "info");
+        logPt.put("log.max_log_file_size", "200");
+        auto logInit = std::make_shared<bcos::BoostLogInitializer>();
+        logInit->initLog(logPt, bcos::FileLogger, "console");
+        static auto s_logInit = logInit;
+        logInitialized = true;
+    }
+
     m_configPath = configPath;
 
     if (jsonRpc)
@@ -1073,7 +1090,12 @@ void ConsoleApp::start()
 
         auto line = m_repl.readLine();
         if (line.empty())
-            break;  // EOF (pipe) or Ctrl-D (TTY)
+        {
+            // In pipe mode, empty line = EOF. In TTY mode, just re-display prompt.
+            if (!isTTY)
+                break;
+            continue;
+        }
 
         m_running = processCommand(line);
     }

@@ -108,7 +108,9 @@ static bool readSeq(std::string_view seq, int fd)
     char c;
     for (size_t i = 0; i < seq.size(); ++i)
     {
-        if (read(fd, &c, 1) != 1 || c != seq[i])
+        ssize_t n;
+        while ((n = read(fd, &c, 1)) == -1 && errno == EINTR) {}
+        if (n != 1 || c != seq[i])
             return false;
     }
     return true;
@@ -143,19 +145,23 @@ std::string ConsoleRepl::readLine()
         char c = 0;
         if (read(STDIN_FILENO, &c, 1) != 1)
         {
-            if (errno == EAGAIN) continue;
+            if (errno == EAGAIN || errno == EINTR) continue;
             break;
         }
 
         if (c == '\x1b')  // ESC — possible arrow key or other sequence
         {
             char c2 = 0;
-            if (read(STDIN_FILENO, &c2, 1) != 1) continue;
+            ssize_t n2;
+            while ((n2 = read(STDIN_FILENO, &c2, 1)) == -1 && errno == EINTR) {}
+            if (n2 != 1) continue;
 
             if (c2 == '[')
             {
                 char c3 = 0;
-                if (read(STDIN_FILENO, &c3, 1) != 1) continue;
+                ssize_t n3;
+                while ((n3 = read(STDIN_FILENO, &c3, 1)) == -1 && errno == EINTR) {}
+                if (n3 != 1) continue;
 
                 switch (c3)
                 {

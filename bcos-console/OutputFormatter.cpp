@@ -58,7 +58,19 @@ void OutputFormatter::printBlankLine()
 
 void OutputFormatter::printJson(Json::Value const& value)
 {
-    printJson(value, [](std::string_view s) { std::cout << s; });
+    printJson(value, [](std::string_view s) {
+        // Replace \n with \r\n for correct rendering in raw terminal mode
+        std::string out;
+        out.reserve(s.size() + 16);
+        for (char ch : s)
+        {
+            if (ch == '\n')
+                out += "\r\n";
+            else
+                out += ch;
+        }
+        std::cout << out;
+    });
 }
 
 void OutputFormatter::printJson(

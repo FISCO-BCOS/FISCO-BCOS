@@ -50,6 +50,9 @@ if(SOLC_EXECUTABLE)
     target_compile_definitions(bcos-console PUBLIC SOLC_PATH="${SOLC_EXECUTABLE}")
 endif()
 
+# Suppress Boost.Log's default console sink (we use file logging only)
+target_compile_definitions(bcos-console PUBLIC BOOST_LOG_WITHOUT_DEFAULT_SINK)
+
 set_target_properties(bcos-console PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON

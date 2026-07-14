@@ -20,8 +20,12 @@
 #include "SdkRpcConnection.h"
 #include "../config/ConsoleConfig.h"
 
-#include <bcos-cpp-sdk/SdkFactory.h>
+#include <bcos-boostssl/websocket/WsInitializer.h>
+#include <bcos-cpp-sdk/multigroup/JsonGroupInfoCodec.h>
+#include <bcos-cpp-sdk/rpc/JsonRpcRequest.h>
+#include <bcos-framework/multigroup/GroupInfoFactory.h>
 #include <bcos-utilities/Common.h>
+#include <bcos-utilities/IOServicePool.h>
 #include <iostream>
 
 namespace bcos::console
@@ -34,20 +38,51 @@ namespace bcos::console
 bcos::cppsdk::jsonrpc::RespFunc adaptCallback(RpcRespFunc consoleCallback)
 {
     return [cb = std::move(consoleCallback)](bcos::Error::Ptr error, bcos::bytes resp) mutable {
+        Json::Value result;  // must be lvalue for RpcRespFunc signature
         if (error)
         {
-            Json::Value nullResult;
-            cb(std::move(error), nullResult);
+            cb(std::move(error), result);
             return;
         }
-        // Parse bytes as JSON
+        // SDK returns the raw JSON-RPC response bytes.
+        // Parse it and extract the "result" or "error" field.
         std::string jsonStr(resp.begin(), resp.end());
-        Json::Value result;
+        Json::Value root;
         Json::Reader reader;
-        if (!reader.parse(jsonStr, result))
+        if (!reader.parse(jsonStr, root))
         {
-            // If not valid JSON, return the raw string in a Value
             result = jsonStr;
+            cb(BCOS_ERROR_PTR(-1, "Invalid JSON response"), result);
+            return;
+        }
+        // Check for JSON-RPC error
+        if (root.isMember("error") && !root["error"].isNull())
+        {
+            auto& jErr = root["error"];
+            result = jErr;
+            cb(BCOS_ERROR_PTR(jErr.get("code", -1).asInt(),
+                   jErr.get("message", "RPC error").asString()),
+                result);
+            return;
+        }
+        // Extract result field
+        if (!root.isMember("result"))
+        {
+            result = root;
+            cb(BCOS_ERROR_PTR(-1, "Missing 'result' in response"), result);
+            return;
+        }
+        result = root["result"];
+        // Some RPCs return a JSON string that needs double-parsing
+        if (result.isString())
+        {
+            Json::Value inner;
+            Json::Reader r2;
+            auto const& str = result.asString();
+            if (r2.parse(str.data(), str.data() + str.size(), inner))
+            {
+                result = std::move(inner);
+            }
         }
         cb(nullptr, result);
     };
@@ -129,9 +164,74 @@ bool SdkRpcConnection::configure(const ConsoleConfig& config)
     try
     {
         auto wsConfig = buildWsConfig(config);
-        auto factory = std::make_shared<bcos::cppsdk::SdkFactory>();
-        m_service = factory->buildService(wsConfig);
-        m_jsonRpc = factory->buildJsonRpc(m_service, true);
+
+        auto ioPool = std::make_shared<bcos::IOServicePool>(1, "console-sdk");
+
+        // --- Build Service (SdkFactory::buildService inlined, with IOServicePool fix) ---
+        auto groupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
+        auto groupInfoFactory = std::make_shared<bcos::group::GroupInfoFactory>();
+        m_service = std::make_shared<bcos::cppsdk::service::Service>(
+            groupInfoCodec, groupInfoFactory);
+
+        auto initializer = std::make_shared<bcos::boostssl::ws::WsInitializer>();
+        initializer->setConfig(wsConfig);
+        initializer->setIOServicePool(ioPool);
+        initializer->initWsService(m_service);
+
+        auto weakService = std::weak_ptr<bcos::cppsdk::service::Service>(m_service);
+        m_service->registerMsgHandler(
+            bcos::protocol::MessageType::BLOCK_NOTIFY,
+            [weakService](auto&& _msg, auto&& _session) {
+                auto svc = weakService.lock();
+                if (svc)
+                    svc->onRecvBlockNotifier(
+                        std::string(_msg->payload().begin(), _msg->payload().end()));
+            });
+        m_service->registerMsgHandler(
+            bcos::protocol::MessageType::GROUP_NOTIFY,
+            [weakService](auto&& _msg, auto&& _session) {
+                auto svc = weakService.lock();
+                if (svc)
+                    svc->onNotifyGroupInfo(
+                        std::string(_msg->payload().begin(), _msg->payload().end()),
+                        _session->endPoint());
+            });
+
+        // --- Build JsonRpcImpl (SdkFactory::buildJsonRpc inlined) ---
+        auto rpcGroupInfoCodec = std::make_shared<bcos::group::JsonGroupInfoCodec>();
+        m_jsonRpc = std::make_shared<bcos::cppsdk::jsonrpc::JsonRpcImpl>(rpcGroupInfoCodec);
+        m_jsonRpc->setFactory(
+            std::make_shared<bcos::cppsdk::jsonrpc::JsonRpcRequestFactory>());
+        m_jsonRpc->setService(m_service);
+        m_jsonRpc->setSendRequestToHighestBlockNode(true);
+
+        auto weakSvc = std::weak_ptr<bcos::cppsdk::service::Service>(m_service);
+        m_jsonRpc->setSender(
+            [weakSvc](const std::string& _group, const std::string& _node,
+                const std::string& _request, bcos::cppsdk::jsonrpc::RespFunc _respFunc) {
+                auto svc = weakSvc.lock();
+                if (!svc)
+                {
+                    if (_respFunc)
+                        _respFunc(BCOS_ERROR_PTR(-1, "service destroyed"), {});
+                    return;
+                }
+                auto data = bcos::bytes(_request.begin(), _request.end());
+                auto msg = svc->messageFactory()->buildMessage();
+                msg->setSeq(svc->messageFactory()->newSeq());
+                msg->setPacketType(bcos::protocol::MessageType::RPC_REQUEST);
+                msg->setPayload(std::move(data));
+                svc->asyncSendMessageByGroupAndNode(_group, _node, msg,
+                    bcos::boostssl::ws::Options(),
+                    [_respFunc = std::move(_respFunc)](
+                        bcos::Error::Ptr _error,
+                        std::shared_ptr<bcos::boostssl::MessageFace> _msg,
+                        std::shared_ptr<bcos::boostssl::ws::WsSession>) {
+                        _respFunc(_error ? std::move(_error) : nullptr,
+                            _msg ? _msg->payload().toBytes() : bcos::bytes{});
+                    });
+            });
+
         m_configured = true;
         return true;
     }
