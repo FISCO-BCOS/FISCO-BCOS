@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include "bcos-task/Wait.h"
+#include "bcos-txpool/txpool/validator/TxValidator.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/ITTAPI.h"
 #include <oneapi/tbb/blocked_range.h>
@@ -36,8 +37,8 @@
 #include <memory>
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/remove_if.hpp>
-#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 #include <variant>
@@ -137,7 +138,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
             // This lambda may outlive the Awaitable (e.g. stored in a Transaction callback),
             // so it must NOT capture 'this'.
             auto completeOnce = [state = m_state, handle](Error::Ptr error,
-                                     bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
+                                    bcos::protocol::TransactionSubmitResult::Ptr result) mutable {
                 bool expected = false;
                 if (!state->m_resumed.compare_exchange_strong(
                         expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
@@ -161,8 +162,8 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
 
             try
             {
-                auto result = m_self->verifyAndSubmitTransaction(
-                    m_transaction, completeOnce, true, true);
+                auto result =
+                    m_self->verifyAndSubmitTransaction(m_transaction, completeOnce, true, true);
 
                 if (result != TransactionStatus::None)
                 {
@@ -171,8 +172,7 @@ task::Task<protocol::TransactionSubmitResult::Ptr> MemoryStorage::submitTransact
                         << LOG_KV("TxHash", m_transaction ? m_transaction->hash().hex() : "")
                         << LOG_KV("result", result);
                     completeOnce(
-                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)),
-                        nullptr);
+                        BCOS_ERROR_PTR((int32_t)result, bcos::protocol::toString(result)), nullptr);
                 }
             }
             catch (std::exception& e)
@@ -274,6 +274,19 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(
 TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
     auto txHash = _tx->hash();
+    // Issue #5318: transactions on this path come from another node's proposal and bypass
+    // validateTransaction(), so re-check `to` here — otherwise a proposal carrying a
+    // malformed `to` is imported, passes verification and deterministically fails
+    // execution, halting consensus. Rejecting it fails the proposal verification instead,
+    // and PBFT view-changes to a leader with a clean proposal.
+    if (!isValidToField(_tx->to()))
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for malformed to field")
+                            << LOG_KV("to", _tx->to()) << LOG_KV("importTxHash", txHash.abridged())
+                            << LOG_KV("importBatchId", _tx->batchId())
+                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+        return TransactionStatus::Malformed;
+    }
     // the transaction has already onChain, reject it
     // check ledger tx
     // check web3 tx
