@@ -369,7 +369,14 @@ void Session::drop(DisconnectReason _reason)
 
     if (m_messageHandler)
     {
-        m_server.get().asyncTo(
+        // FIB-186 (vector D): post the teardown notification onto the dedicated teardown executor,
+        // NOT m_asyncGroup. This handler drives Service::onMessage's error path -> onDisconnect ->
+        // onRemoveNodeIDs -> syncLatestNodeIDList; running it on the shared m_asyncGroup let a
+        // persistent bulk-disconnect flood starve inter-validator message delivery (which also runs
+        // on m_asyncGroup) and permanently halt consensus. postTeardown keeps it off the delivery
+        // reactor. Ordering vs message delivery is unchanged: onDisconnect already ran
+        // asynchronously and unordered relative to delivery.
+        m_server.get().postTeardown(
             [self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
                 auto session = self.lock();
                 if (!session)

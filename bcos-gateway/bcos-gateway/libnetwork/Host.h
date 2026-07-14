@@ -106,6 +106,16 @@ public:
         m_asyncGroup.run(std::move(f));
     }
 
+    // FIB-186 (vector D): run a session-teardown notification on the dedicated teardown executor
+    // instead of m_asyncGroup. Teardown of established sessions (Service::onMessage's error path ->
+    // onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList) and inbound P2P message delivery
+    // both ran on the shared m_asyncGroup, so a persistent bulk-disconnect flooded that reactor and
+    // starved inter-validator consensus-message delivery -- consensus halted and never recovered
+    // (CertiK FIB-186 vector D). Keeping teardown on its own single-threaded executor keeps it off
+    // the delivery reactor; the single thread also bounds teardown concurrency so a disconnect
+    // flood cannot itself swamp the node.
+    void postTeardown(std::function<void()> f);
+
     void setEnableSslVerify(bool _enableSSLVerify);
 
     // FIB-184: caps on concurrent inbound sessions to bound memory under TLS connect/close
@@ -241,6 +251,10 @@ protected:
 
     tbb::task_arena m_taskArena;
     tbb::task_group m_asyncGroup;
+    // FIB-186 (vector D): dedicated single-thread executor for session-teardown notifications, kept
+    // separate from m_asyncGroup so a bulk-disconnect flood cannot starve inbound-message delivery.
+    // See postTeardown.
+    std::shared_ptr<ThreadPool> m_teardownPool;
     std::shared_ptr<SessionCallbackManagerInterface> m_sessionCallbackManager;
 
     bcos::crypto::Hash::Ptr m_hashImpl;

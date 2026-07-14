@@ -20,6 +20,7 @@
 #include "bcos-gateway/libnetwork/Common.h"
 #include "bcos-gateway/libnetwork/Session.h"
 #include "bcos-gateway/libnetwork/SocketFace.h"
+#include "bcos-utilities/ThreadPool.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -800,6 +801,12 @@ void Host::stop()
         m_asioInterface->stop();
     }
     m_asyncGroup.wait();
+    // FIB-186 (vector D): drain the dedicated teardown executor after the network is down, so no
+    // teardown notification outlives the Host.
+    if (m_teardownPool)
+    {
+        m_teardownPool->stop();
+    }
 }
 bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,
@@ -807,7 +814,17 @@ bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
   : m_hashImpl(std::move(_hash)),
     m_asioInterface(std::move(_asioInterface)),
     m_sessionFactory(std::move(_sessionFactory)),
-    m_messageFactory(std::move(_messageFactory)) {};
+    m_messageFactory(std::move(_messageFactory))
+{
+    // FIB-186 (vector D): a single dedicated thread for session-teardown notifications, off the
+    // shared m_asyncGroup that carries inbound-message delivery. See postTeardown / Host.h.
+    m_teardownPool = std::make_shared<ThreadPool>("p2pTeardown", 1);
+}
+
+void bcos::gateway::Host::postTeardown(std::function<void()> f)
+{
+    m_teardownPool->enqueue(std::move(f));
+}
 bcos::gateway::Host::~Host()
 {
     stop();
