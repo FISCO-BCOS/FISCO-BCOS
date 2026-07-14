@@ -19,7 +19,7 @@
 
 #include "ConsoleApp.h"
 #include "connection/LocalRpcConnection.h"
-#include "connection/RemoteRpcConnection.h"
+#include "connection/SdkRpcConnection.h"
 #include "contract/ContractCompiler.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -50,15 +50,22 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
     }
     else
     {
-        // Remote mode — parse config.toml
+        // Remote mode — parse config.toml and use SDK WebSocket connection
         if (!loadConsoleConfig(configPath, m_consoleConfig))
         {
             std::cerr << "Failed to load config from: " << configPath << '\n';
             return false;
         }
         m_currentGroup = m_consoleConfig.defaultGroup;
-        auto remoteConn = std::make_shared<RemoteRpcConnection>(m_consoleConfig);
-        m_connection = remoteConn;
+
+        // Use SDK-based WebSocket connection
+        auto sdkConn = std::make_shared<SdkRpcConnection>();
+        if (!sdkConn->configure(m_consoleConfig))
+        {
+            std::cerr << "Failed to configure SDK connection\n";
+            return false;
+        }
+        m_connection = sdkConn;
     }
 
     // Connect
@@ -105,6 +112,13 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
             m_keyManager->loadPemKey(accounts[0].keyFile);
         }
     }
+
+    // Initialize ABI encoder for precompiled contracts
+    m_precompiled = std::make_shared<precompiled::PrecompiledContract>(hashImpl);
+
+    // Initialize transaction pipeline for signing and sending
+    m_txPipeline = std::make_shared<TransactionPipeline>(
+        m_connection, m_keyManager, m_currentGroup);
 
     // Register commands
     registerCommands();
@@ -794,26 +808,85 @@ void ConsoleApp::registerCommands()
     CommandCategory consensusCat;
     consensusCat.name = "Consensus Governance";
 
+    // Helper: validate, encode, sign, and send a precompiled governance tx
+    auto sendGovTx = [this](precompiled::PrecompiledType contract,
+                          std::string_view method, std::string_view jsonParams) -> bool {
+        auto keyPair = m_keyManager->currentKeyPair();
+        if (!keyPair)
+        {
+            std::cout << "No account loaded. Use loadAccount <path> first.\n";
+            return false;
+        }
+        try
+        {
+            auto data = m_precompiled->encode(contract, method, jsonParams);
+            auto [ok, result] = m_txPipeline->sendSync(
+                precompiled::PrecompiledContract::address(contract),
+                data, precompiled::PrecompiledContract::abi(contract));
+            if (ok)
+                std::cout << "Tx sent. Hash: 0x" << result << '\n';
+            else
+                std::cout << "Failed: " << result << '\n';
+        }
+        catch (std::exception const& e)
+        {
+            std::cout << "Error: " << e.what() << '\n';
+            // Show the expected ABI signature on failure
+            std::cout << "Usage: "
+                      << m_precompiled->getUsage(contract, method) << '\n';
+            return false;
+        }
+        return true;
+    };
+
     consensusCat.commands.push_back({"addSealer", {}, 2, 2, true, true, true,
         "addSealer <nodeID> <weight>: Add a consensus sealer node",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
-            std::cout << "addSealer: This command requires sending a governance transaction.\n"
-                      << "Full implementation will use precompiled contract call.\n"
-                      << "Params: nodeID=" << params[0] << " weight=" << params[1] << '\n';
-            return true;
+        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+            return sendGovTx(precompiled::PrecompiledType::Consensus, "addSealer",
+                "[\"" + params[0] + "\", \"" + params[1] + "\"]");
         }});
 
     consensusCat.commands.push_back({"addObserver", {}, 1, 1, true, true, true,
         "addObserver <nodeID>: Add an observer node",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
-            std::cout << "addObserver: nodeID=" << params[0] << " (precompiled impl pending)\n";
-            return true;
+        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+            return sendGovTx(precompiled::PrecompiledType::Consensus, "addObserver",
+                "[\"" + params[0] + "\"]");
         }});
 
     consensusCat.commands.push_back({"removeNode", {}, 1, 1, true, true, true,
         "removeNode <nodeID>: Remove a node from the group",
+        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+            return sendGovTx(precompiled::PrecompiledType::Consensus, "remove",
+                "[\"" + params[0] + "\"]");
+        }});
+
+    consensusCat.commands.push_back({"setWeight", {}, 2, 2, true, true, true,
+        "setWeight <nodeID> <weight>: Set consensus weight for a node",
+        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+            return sendGovTx(precompiled::PrecompiledType::Consensus, "setWeight",
+                "[\"" + params[0] + "\", \"" + params[1] + "\"]");
+        }});
+
+    // Command to show precompiled ABI details
+    consensusCat.commands.push_back({"abiInfo", {}, 0, 1, false, false, true,
+        "abiInfo [methodName]: Show ABI details for Consensus precompiled",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
-            std::cout << "removeNode: nodeID=" << params[0] << " (precompiled impl pending)\n";
+            if (params.empty())
+            {
+                auto methods = m_precompiled->listMethods(
+                    precompiled::PrecompiledType::Consensus);
+                std::cout << "Consensus precompiled methods:\n";
+                for (auto& m : methods)
+                {
+                    std::cout << "  " << m_precompiled->getUsage(
+                        precompiled::PrecompiledType::Consensus, m) << "\n\n";
+                }
+            }
+            else
+            {
+                std::cout << m_precompiled->getUsage(
+                    precompiled::PrecompiledType::Consensus, params[0]) << '\n';
+            }
             return true;
         }});
 

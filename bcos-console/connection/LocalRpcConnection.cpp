@@ -21,10 +21,9 @@
 
 using namespace bcos::console;
 
-LocalRpcConnection::LocalRpcConnection(bcos::rpc::JsonRpcInterface::Ptr jsonRpc,
-    std::string defaultGroup, std::string defaultNodeName)
-  : m_jsonRpc(std::move(jsonRpc)),
-    m_defaultGroup(std::move(defaultGroup))
+LocalRpcConnection::LocalRpcConnection(
+    bcos::rpc::JsonRpcInterface::Ptr jsonRpc, std::string defaultGroup, std::string defaultNodeName)
+  : m_jsonRpc(std::move(jsonRpc)), m_defaultGroup(std::move(defaultGroup))
 {
     if (!defaultNodeName.empty())
     {
@@ -39,9 +38,8 @@ void LocalRpcConnection::call(std::string_view groupID, std::string_view nodeNam
     auto gid = groupID.empty() ? m_defaultGroup : groupID;
     auto nname = nodeName.empty() ? m_defaultNodeName : nodeName;
     m_jsonRpc->call(gid, nname, to, data,
-        [respFunc = std::move(respFunc)](bcos::Error::Ptr error, Json::Value& result) {
-            respFunc(std::move(error), result);
-        });
+        [respFunc = std::move(respFunc)](
+            bcos::Error::Ptr error, Json::Value& result) { respFunc(std::move(error), result); });
 }
 
 void LocalRpcConnection::call(std::string_view groupID, std::string_view nodeName,
@@ -51,9 +49,8 @@ void LocalRpcConnection::call(std::string_view groupID, std::string_view nodeNam
     auto gid = groupID.empty() ? m_defaultGroup : groupID;
     auto nname = nodeName.empty() ? m_defaultNodeName : nodeName;
     m_jsonRpc->call(gid, nname, to, data, sign,
-        [respFunc = std::move(respFunc)](bcos::Error::Ptr error, Json::Value& result) {
-            respFunc(std::move(error), result);
-        });
+        [respFunc = std::move(respFunc)](
+            bcos::Error::Ptr error, Json::Value& result) { respFunc(std::move(error), result); });
 }
 
 void LocalRpcConnection::sendTransaction(std::string_view groupID, std::string_view nodeName,
@@ -63,9 +60,8 @@ void LocalRpcConnection::sendTransaction(std::string_view groupID, std::string_v
     auto gid = groupID.empty() ? m_defaultGroup : groupID;
     auto nname = nodeName.empty() ? m_defaultNodeName : nodeName;
     m_jsonRpc->sendTransaction(gid, nname, data, requireProof,
-        [respFunc = std::move(respFunc)](bcos::Error::Ptr error, Json::Value& result) {
-            respFunc(std::move(error), result);
-        });
+        [respFunc = std::move(respFunc)](
+            bcos::Error::Ptr error, Json::Value& result) { respFunc(std::move(error), result); });
 }
 
 void LocalRpcConnection::getTransaction(std::string_view groupID, std::string_view nodeName,
@@ -101,11 +97,12 @@ void LocalRpcConnection::getBlockByNumber(std::string_view groupID, std::string_
     std::lock_guard lock(m_mutex);
     auto gid = groupID.empty() ? m_defaultGroup : groupID;
     auto nname = nodeName.empty() ? m_defaultNodeName : nodeName;
-    m_jsonRpc->getBlockByNumber(gid, nname, blockNumber, onlyHeader, onlyTxHash, std::move(respFunc));
+    m_jsonRpc->getBlockByNumber(
+        gid, nname, blockNumber, onlyHeader, onlyTxHash, std::move(respFunc));
 }
 
-void LocalRpcConnection::getBlockHashByNumber(std::string_view groupID,
-    std::string_view nodeName, int64_t blockNumber, RpcRespFunc respFunc)
+void LocalRpcConnection::getBlockHashByNumber(
+    std::string_view groupID, std::string_view nodeName, int64_t blockNumber, RpcRespFunc respFunc)
 {
     std::lock_guard lock(m_mutex);
     auto gid = groupID.empty() ? m_defaultGroup : groupID;
@@ -194,8 +191,8 @@ void LocalRpcConnection::getSyncStatus(
     m_jsonRpc->getSyncStatus(gid, nname, std::move(respFunc));
 }
 
-void LocalRpcConnection::getSystemConfigByKey(std::string_view groupID, std::string_view nodeName,
-    std::string_view key, RpcRespFunc respFunc)
+void LocalRpcConnection::getSystemConfigByKey(
+    std::string_view groupID, std::string_view nodeName, std::string_view key, RpcRespFunc respFunc)
 {
     std::lock_guard lock(m_mutex);
     auto gid = groupID.empty() ? m_defaultGroup : groupID;

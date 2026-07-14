@@ -18,10 +18,12 @@ add_library(bcos-console
     OutputFormatter.cpp
     config/ConsoleConfig.cpp
     connection/LocalRpcConnection.cpp
-    connection/RemoteRpcConnection.cpp
+    connection/SdkRpcConnection.cpp
     keymanager/KeyManager.cpp
     keymanager/Secp256k1Adapter.cpp
     contract/ContractCompiler.cpp
+    precompiled/PrecompiledContract.cpp
+    transaction/TransactionPipeline.cpp
 )
 
 target_include_directories(bcos-console PUBLIC
@@ -29,6 +31,7 @@ target_include_directories(bcos-console PUBLIC
     ${CMAKE_SOURCE_DIR}/bcos-rpc
     ${CMAKE_SOURCE_DIR}/bcos-framework
     ${CMAKE_SOURCE_DIR}/bcos-protocol
+    ${CMAKE_SOURCE_DIR}/bcos-sdk
 )
 
 target_link_libraries(bcos-console PUBLIC
@@ -38,6 +41,7 @@ target_link_libraries(bcos-console PUBLIC
     bcos-boostssl
     bcos-utilities
     bcos-framework
+    bcos-cpp-sdk
     tomlplusplus::tomlplusplus
     OpenSSL::SSL OpenSSL::Crypto
 )

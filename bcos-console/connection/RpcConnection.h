@@ -34,7 +34,7 @@ namespace bcos::console
 using RpcRespFunc = std::function<void(bcos::Error::Ptr error, Json::Value& result)>;
 
 // Abstract RPC connection used by all console commands.
-// Implementations: LocalRpcConnection (in-process), RemoteRpcConnection (WebSocket+SSL).
+// Implementations: LocalRpcConnection (in-process), SdkRpcConnection (WebSocket).
 class RpcConnection
 {
 public:

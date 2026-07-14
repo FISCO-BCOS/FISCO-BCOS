@@ -26,6 +26,9 @@
 #include "connection/RpcConnection.h"
 #include "connection/LocalRpcConnection.h"
 #include "keymanager/KeyManager.h"
+#include "precompiled/PrecompiledContract.h"
+#include "precompiled/PrecompiledContractInfo.h"
+#include "transaction/TransactionPipeline.h"
 
 #include <memory>
 #include <string>
@@ -90,6 +93,8 @@ private:
     ConsoleConfig m_consoleConfig;
     KeyManager::Ptr m_keyManager;
     ConsoleRepl m_repl;
+    precompiled::PrecompiledContract::Ptr m_precompiled;
+    TransactionPipeline::Ptr m_txPipeline;
 };
 
 }  // namespace bcos::console
