@@ -94,8 +94,15 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
         boost::bind(&GatewayNodeManager::onReceiveNodeStatus, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
     m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
-    // broadcast seq periodically
-    m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });
+    // broadcast seq periodically; also flush a coalesced node-list sync if peers dropped since the
+    // last tick (FIB-186 vector D: one sync per period instead of one per dropped session)
+    m_timer->registerTimeoutHandler([this]() {
+        if (m_nodeIDListDirty.exchange(false, std::memory_order_acq_rel))
+        {
+            syncLatestNodeIDList();
+        }
+        broadcastStatusSeq();
+    });
 }
 
 void GatewayNodeManager::stop()
@@ -313,8 +320,11 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
         m_p2pID2Seq.erase(_p2pID);
     }
     m_peersRouterTable->removeP2PID(_p2pID);
-    // notify nodeIDs to front service
-    syncLatestNodeIDList();
+    // FIB-186 (vector D): mark the node list dirty instead of syncing inline. A persistent
+    // bulk-disconnect would otherwise drive one full syncLatestNodeIDList (a node-list broadcast to
+    // every front) per dropped session on the teardown executor; the seqSync timer coalesces the
+    // burst into at most one sync per SEQ_SYNC_PERIOD.
+    m_nodeIDListDirty.store(true, std::memory_order_relaxed);
 }
 
 
