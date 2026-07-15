@@ -259,14 +259,14 @@ inline NodeRef refEncode(
     {
         NodeRef const childRef = refEncode(node->extChild, hasher);
         bcos::bytes childRaw;
-        if (childRef.kind == NodeRef::Kind::Inline)
+        if (childRef.kind() == NodeRef::Kind::Inline)
         {
-            childRaw = childRef.inlineBytes;
+            childRaw = childRef.inlineRef().toBytes();
         }
         else
         {
             childRaw.push_back(0xa0);
-            childRaw.insert(childRaw.end(), childRef.hash.begin(), childRef.hash.end());
+            childRaw.insert(childRaw.end(), childRef.payload.begin(), childRef.payload.end());
         }
         ExtensionNode ext;
         ext.sharedNibbles = node->path;
@@ -302,13 +302,13 @@ inline bcos::h256 referenceRoot(std::vector<std::pair<bcos::h256, bcos::bytes>> 
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
     NodeRef const rootRef = reftrie::refEncode(rootNode, hasher);
     bcos::h256 root;
-    if (rootRef.kind == NodeRef::Kind::Hash)
+    if (rootRef.kind() == NodeRef::Kind::Hash)
     {
-        root = rootRef.hash;
+        root = rootRef.hash();
     }
     else
     {
-        bcos::crypto::hasher::hash(hasher, bcos::ref(rootRef.inlineBytes), root);
+        bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
     }
     return root;
 }

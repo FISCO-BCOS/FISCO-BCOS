@@ -151,9 +151,9 @@ std::unordered_set<bcos::h256> reachableHashes(NodeStorage& storage, bcos::h256 
         {
             for (auto const& child : branch->children)
             {
-                if (child.kind == NodeRef::Kind::Hash)
+                if (child.kind() == NodeRef::Kind::Hash)
                 {
-                    queue.push_back(child.hash);
+                    queue.push_back(child.hash());
                 }
             }
         }
@@ -352,8 +352,8 @@ BOOST_AUTO_TEST_CASE(BranchCollapseKeepsUntouchedBranchUnrebuilt)
     BOOST_REQUIRE(rootRaw.has_value());
     auto const rootNode = decodeNode(bcos::ref(*rootRaw));
     auto const& rootBranch = std::get<BranchNode>(rootNode);
-    BOOST_REQUIRE(rootBranch.children[1].kind == NodeRef::Kind::Hash);
-    auto const untouchedChild = rootBranch.children[1].hash;
+    BOOST_REQUIRE(rootBranch.children[1].kind() == NodeRef::Kind::Hash);
+    auto const untouchedChild = rootBranch.children[1].hash();
 
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
     std::unordered_set<bcos::h256> obsoleted;

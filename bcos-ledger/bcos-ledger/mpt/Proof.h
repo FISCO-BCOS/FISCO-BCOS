@@ -174,9 +174,9 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
         }
         NodeRef const& child = branch.children.at(path.at(pos));
         ++pos;
-        if (child.kind == NodeRef::Kind::Hash)
+        if (child.kind() == NodeRef::Kind::Hash)
         {
-            bcos::h256 const childHash = child.hash;
+            bcos::h256 const childHash = child.hash();
             auto childRaw = co_await bcos::storage2::readOne(storage, childHash);
             if (!childRaw)
             {
@@ -187,14 +187,14 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
             TrieNode next = decodeNode(bcos::ref(out.nodes.back()));
             node = std::move(next);
         }
-        else if (child.inlineBytes.empty())
+        else if (child.isAbsent())
         {
             co_return out;  // absent child: dead end
         }
         else
         {
             // Inline child: embedded in this branch's encoding, not a separate proof item.
-            TrieNode next = decodeNode(bcos::ref(child.inlineBytes));
+            TrieNode next = decodeNode(child.inlineRef());
             node = std::move(next);
         }
     }

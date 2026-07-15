@@ -126,13 +126,18 @@ TrieNode decodeNode(bcos::bytesConstRef rawInput)
             }
             else if (!child.isList && child.content.size() == bcos::h256::SIZE)  // 0xa0 + 32 bytes
             {
-                branch.children[i].kind = NodeRef::Kind::Hash;
-                branch.children[i].hash = bcos::h256{child.content.data(), child.content.size()};
+                branch.children[i].setHash(bcos::h256{child.content.data(), child.content.size()});
             }
-            else  // inline subtree (a list) → keep the raw span
+            else  // inline subtree (a list) → keep the raw bytes
             {
-                branch.children[i].kind = NodeRef::Kind::Inline;
-                branch.children[i].inlineBytes = toBytes(child.raw);
+                // Yellow Paper §D 32-byte rule: an embedded (inline) node's RLP is < 32 bytes;
+                // anything larger must be hash-referenced, so reject it as malformed.
+                if (child.raw.size() >= bcos::h256::SIZE)
+                {
+                    BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
+                                              "branch child embeds an inline node of >= 32 bytes"));
+                }
+                branch.children[i].setInline(child.raw);
             }
         }
         branch.value = toBytes(items[NIBBLE_RANGE].content);

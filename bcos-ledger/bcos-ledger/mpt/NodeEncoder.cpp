@@ -19,6 +19,7 @@
 
 #include "NodeEncoder.h"
 #include "Constants.h"
+#include "Errors.h"
 #include "HexPrefix.h"
 #include "bcos-utilities/Overloaded.h"
 #include <bcos-codec/rlp/Common.h>
@@ -33,26 +34,27 @@ namespace bcos::ledger::mpt
 // ---------------------------------------------------------------------------
 
 // Appends the RLP encoding of a NodeRef child into dst.
-// - Default (Inline + empty bytes) → RLP empty string 0x80 (absent child)
-// - Inline non-empty              → splice the raw bytes as-is (already a complete RLP item)
-// - Hash                          → encode the 32-byte hash as an RLP byte-string (33 bytes)
+// - Absent (len == 0)   → RLP empty string 0x80
+// - Inline (len 1..31)  → splice the raw bytes as-is (already a complete RLP item)
+// - Hash   (len == 32)  → encode the 32-byte hash as an RLP byte-string (33 bytes)
 static void appendChildRef(bcos::bytes& dst, NodeRef const& ref)
 {
-    if (ref.kind == NodeRef::Kind::Inline)
+    if (ref.kind() == NodeRef::Kind::Inline)
     {
-        if (ref.inlineBytes.empty())
+        if (ref.isAbsent())
         {
             dst.push_back(RLP_EMPTY_STRING);  // absent child
         }
         else
         {
-            dst.insert(dst.end(), ref.inlineBytes.begin(), ref.inlineBytes.end());
+            auto const raw = ref.inlineRef();
+            dst.insert(dst.end(), raw.begin(), raw.end());
         }
     }
     else
     {
         // Hash kind: emit as 33-byte RLP byte-string [0xa0, hash[0..31]]
-        bcos::codec::rlp::encode(dst, ref.hash);
+        bcos::codec::rlp::encode(dst, ref.hash());
     }
 }
 
@@ -88,6 +90,15 @@ static void encodeExtension(ExtensionNode const& node, bcos::bytes& out)
 static void encodeBranch(BranchNode const& node, bcos::bytes& out)
 {
     using namespace bcos::codec::rlp;
+
+    // children is a vector, so the 16-slot invariant is convention (default member initializer
+    // in TrieNode.h) rather than type-enforced — a malformed size must fail loudly here instead
+    // of silently mis-encoding a list with the wrong item count.
+    if (node.children.size() != NIBBLE_RANGE)
+    {
+        BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                  "BranchNode.children must hold exactly NIBBLE_RANGE entries"));
+    }
 
     // RLP list header needs payload length up front, so the 17-item payload is built into a
     // local buffer first. Once sealed, the payload is spliced into `out` — caller pays one

@@ -72,16 +72,15 @@ public:
         NodeRef ref;
         if (raw.size() < bcos::h256::SIZE)
         {
-            ref.kind = NodeRef::Kind::Inline;
-            ref.inlineBytes = raw;
+            ref.setInline(bcos::bytesConstRef(raw.data(), raw.size()));
         }
         else
         {
-            ref.kind = NodeRef::Kind::Hash;
-            bcos::crypto::hasher::hash(
-                hasher, bcos::bytesConstRef(raw.data(), raw.size()), ref.hash);
+            bcos::h256 digest;
+            bcos::crypto::hasher::hash(hasher, bcos::bytesConstRef(raw.data(), raw.size()), digest);
+            ref.setHash(digest);
         }
-        return {std::move(raw), std::move(ref)};
+        return {std::move(raw), ref};
     }
 
     /// Convenience overload: constructs a fresh HasherT per call. Use only for one-off or

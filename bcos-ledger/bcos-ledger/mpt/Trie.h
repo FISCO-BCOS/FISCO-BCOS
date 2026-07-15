@@ -55,12 +55,12 @@ bcos::task::Task<TrieNode> trieLoadByHash(Storage& storage, bcos::h256 const& ha
 template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
 bcos::task::Task<TrieNode> trieLoadFromRef(Storage& storage, NodeRef const& ref)
 {
-    if (ref.kind == NodeRef::Kind::Hash)
+    if (ref.kind() == NodeRef::Kind::Hash)
     {
-        co_return co_await trieLoadByHash(storage, ref.hash);
+        co_return co_await trieLoadByHash(storage, ref.hash());
     }
     // Inline (non-empty): the child's complete RLP encoding is stored directly.
-    co_return decodeNode(bcos::ref(ref.inlineBytes));
+    co_return decodeNode(ref.inlineRef());
 }
 
 /// Resolve an ExtensionNode.child, which is kept as a raw RLP child reference: EITHER the 33-byte
@@ -148,8 +148,7 @@ public:
             }
             bcos::byte const nib = path.at(pos);
             NodeRef const& child = children.at(nib);
-            // Absent child == Inline with empty inlineBytes.
-            if (child.kind == NodeRef::Kind::Inline && child.inlineBytes.empty())
+            if (child.isAbsent())
             {
                 co_return std::nullopt;
             }
