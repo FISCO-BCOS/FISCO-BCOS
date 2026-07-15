@@ -324,7 +324,7 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     return wsConfig;
 }
 
-template<bool _enableOPEngine = false>
+template<bool _enableOPEngine>
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConfig(
     const bcos::tool::NodeConfig::Ptr& _nodeConfig)
 {
@@ -410,7 +410,7 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     return jsonRpcInterface;
 }
 
-template<bool _enableOPEngine = false>
+template<bool _enableOPEngine>
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
     FilterSystem::Ptr _filterSystem)

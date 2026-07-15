@@ -313,12 +313,12 @@ BOOST_AUTO_TEST_CASE(forkchoice_with_payload_attributes_builds_retrievable_paylo
     BOOST_REQUIRE(result.payloadId.has_value());
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
-    BOOST_CHECK_EQUAL(payload.executionPayload.parentHash, forkchoiceState.headBlockHash);
-    BOOST_CHECK_EQUAL(payload.executionPayload.blockNumber, c_initialBlockNumber + 1);
-    BOOST_CHECK_EQUAL(payload.executionPayload.timestamp, c_timestamp);
-    BOOST_CHECK(payload.executionPayload.withdrawals.has_value());
-    BOOST_CHECK(!payload.executionPayload.blobGasUsed.has_value());
-    BOOST_CHECK(payload.executionPayload.transactions.empty());
+    BOOST_CHECK_EQUAL(payload->executionPayload.parentHash, forkchoiceState.headBlockHash);
+    BOOST_CHECK_EQUAL(payload->executionPayload.blockNumber, c_initialBlockNumber + 1);
+    BOOST_CHECK_EQUAL(payload->executionPayload.timestamp, c_timestamp);
+    BOOST_CHECK(payload->executionPayload.withdrawals.has_value());
+    BOOST_CHECK(!payload->executionPayload.blobGasUsed.has_value());
+    BOOST_CHECK(payload->executionPayload.transactions.empty());
     auto fetched = memPool.get(std::vector{tx->hash()});
     BOOST_CHECK_EQUAL(fetched.size(), 1);
     BOOST_CHECK(!fetched[0]);
@@ -339,15 +339,15 @@ BOOST_AUTO_TEST_CASE(forkchoice_v3_tracks_safe_and_finalized_block_numbers)
     BOOST_REQUIRE(initialResult.payloadId.has_value());
     auto builtPayload = task::syncWait(engineService.getPayload(*initialResult.payloadId, 3));
     globalStateStorageFixture.setBlockNumber(
-        builtPayload.executionPayload.blockHash, c_trackedNextBlockNumber);
+        builtPayload->executionPayload.blockHash, c_trackedNextBlockNumber);
 
-    auto request = makeNewPayloadRequestV3(builtPayload.executionPayload);
+    auto request = makeNewPayloadRequestV3(builtPayload->executionPayload);
     auto newPayloadStatus = task::syncWait(engineService.newPayload(request, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(newPayloadStatus.status),
         static_cast<int>(PayloadValidationStatus::Valid));
 
-    ForkchoiceState trackedForkchoice{builtPayload.executionPayload.blockHash,
-        builtPayload.executionPayload.blockHash, builtPayload.executionPayload.blockHash};
+    ForkchoiceState trackedForkchoice{builtPayload->executionPayload.blockHash,
+        builtPayload->executionPayload.blockHash, builtPayload->executionPayload.blockHash};
     auto trackedResult =
         task::syncWait(engineService.updateForkchoice(trackedForkchoice, nullptr, 3));
     BOOST_CHECK_EQUAL(static_cast<int>(trackedResult.payloadStatus.status),
@@ -377,7 +377,7 @@ BOOST_AUTO_TEST_CASE(new_payload_rejects_missing_required_v3_fields)
 
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 3));
     NewPayloadRequest request;
-    request.executionPayload = payload.executionPayload;
+    request.executionPayload = payload->executionPayload;
 
     auto status = task::syncWait(engineService.newPayload(request, 3));
 
@@ -568,11 +568,11 @@ BOOST_AUTO_TEST_CASE(build_payload_aggregates_receipt_blooms)
     auto payload = task::syncWait(engineService.getPayload(*result.payloadId, 2));
 
     // Verify bloom aggregation: bloom1[255]=0x01 | bloom2[255]=0x02 = 0x03
-    BOOST_CHECK_EQUAL(static_cast<int>(payload.executionPayload.logsBloom[255]), 0x03);
+    BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[255]), 0x03);
     // Other bytes remain zero (only the last byte was set in both blooms)
     for (size_t i = 0; i < 255; ++i)
     {
-        BOOST_CHECK_EQUAL(static_cast<int>(payload.executionPayload.logsBloom[i]), 0);
+        BOOST_CHECK_EQUAL(static_cast<int>(payload->executionPayload.logsBloom[i]), 0);
     }
 }
 
