@@ -92,11 +92,6 @@ private:
     // cors config
     http::CorsConfig m_corsConfig;
 
-    bool m_enableJWT{false};
-    std::string m_jwtSecretFile;
-    int64_t m_jwtClockSkewSecs{60};
-    std::string m_jwtAllowedAlgorithms{"HS256"};
-
 public:
     void setModel(WsModel _model);
     WsModel model() const;

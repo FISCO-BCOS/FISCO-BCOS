@@ -61,7 +61,7 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
 
         if (m_web3Subscribe && m_web3Subscribe->isSubscribeRequest(method))
         {
-            auto result = handleSubscribeRequest(std::move(_request), std::move(method), std::move(_session));
+            auto result = handleSubscribeRequest(_request, std::move(method), std::move(_session));
             co_return result;
         }
 
@@ -74,7 +74,8 @@ task::Task<Json::Value> Web3JsonRpcImpl::handleRequest(
         Json::Value const& params = _request["params"];
         Json::Value result;
         co_await (m_endpoints.*optHandler.value())(params, result);
-        buildJsonContent(result, response);
+        result["id"] = _request["id"];
+        response = std::move(result);
 
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
@@ -188,7 +189,10 @@ void Web3JsonRpcImpl::onRPCRequest(const bcos::boostssl::http::HttpRequest& _req
         Json::Value response;
         buildJsonError(request, bcos::rpc::toJsonRpcJwtErrorCode(verifyResult.error),
             "JWT authentication failed: " + verifyResult.errorMessage, response);
-        _sender(toBytesResponse(response));
+        auto httpStatus = (verifyResult.error == bcos::rpc::JwtError::SecretReadFailed) ?
+            boost::beast::http::status::internal_server_error :
+            boost::beast::http::status::unauthorized;
+        _sender(toBytesResponse(response), httpStatus);
         return;
     }
 
@@ -241,7 +245,7 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
                 task::wait([this, request = std::move(request), session = std::move(_session),
                                sender = _sender]() mutable -> task::Task<void> {
                     auto result = co_await this->handleBatchRequest(std::move(request), session);
-                    sender(toBytesResponse(result));
+                    sender(toBytesResponse(result), boost::beast::http::status::ok);
                 }());
                 return;
             }
@@ -253,7 +257,7 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
         task::wait([this, request = std::move(request), session = std::move(_session),
                        sender = _sender]() mutable -> task::Task<void> {
             auto result = co_await this->handleRequest(std::move(request), session);
-            sender(toBytesResponse(result));
+            sender(toBytesResponse(result), boost::beast::http::status::ok);
         }());
         return;
     }
@@ -283,5 +287,5 @@ void Web3JsonRpcImpl::onRPCRequest(std::string_view _requestBody,
                         << LOG_KV("costMs", endT - startT);
     }
 
-    _sender(std::move(respBytes));
+    _sender(std::move(respBytes), boost::beast::http::status::ok);
 }

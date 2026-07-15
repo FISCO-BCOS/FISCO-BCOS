@@ -18,6 +18,7 @@
  * @date 2024/3/21
  */
 #pragma once
+#include <boost/beast/http/status.hpp>
 #include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-rpc/jwtAuth/JwtVerifier.h>
 #include "bcos-rpc/web3jsonrpc/Web3Subscribe.h"
@@ -32,7 +33,7 @@ class Web3JsonRpcImpl : public std::enable_shared_from_this<Web3JsonRpcImpl>
 public:
     using Ptr = std::shared_ptr<Web3JsonRpcImpl>;
     using WeakPtr = std::weak_ptr<Web3JsonRpcImpl>;
-    using Sender = std::function<void(bcos::bytes)>;
+    using Sender = std::function<void(bcos::bytes, boost::beast::http::status)>;
     Web3JsonRpcImpl(std::string const& _groupId, uint32_t _batchRequestSizeLimit,
         bcos::rpc::GroupManager::Ptr const& _groupManager, FilterSystem::Ptr filterSystem,
         bool syncTransaction, bool _enableOPEngine = false);

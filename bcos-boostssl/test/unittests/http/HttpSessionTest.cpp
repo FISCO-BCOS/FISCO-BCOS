@@ -333,11 +333,11 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerReceivesHeaders)
     session.setQueue(std::move(queue));
 
     session.setRequestHandler([this](const bcos::boostssl::http::HttpRequest& req,
-                                std::function<void(bcos::bytes)> sender) {
+                                std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         BOOST_CHECK_EQUAL(req.body(), R"({"jsonrpc":"2.0","method":"eth_chainId","params":[]})");
         capturedMethod = std::string(req.method_string());
         capturedTarget = std::string(req.target());
-        sender(stringToBytes(R"({"result":"ok"})"));
+        sender(stringToBytes(R"({"result":"ok"})"), boost::beast::http::status::ok);
     });
 
     session.handleRequest(request);
@@ -364,13 +364,12 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtUnauthorizedTo401)
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
     session.setQueue(std::move(queue));
 
-    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes)> sender) {
+    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         sender(bcos::bytes{'{', '"', 'j', 's', 'o', 'n', 'r', 'p', 'c', '"', ':', '"', '2', '.',
             '0', '"', ',', '"', 'i', 'd', '"', ':', '1', ',', '"', 'e', 'r', 'r', 'o', 'r', '"',
             ':', '{', '"', 'c', 'o', 'd', 'e', '"', ':', '-', '3', '2', '0', '1', '0', ',',
             '"', 'm', 'e', 's', 's', 'a', 'g', 'e', '"', ':', '"', 'u', 'n', 'a', 'u', 't', 'h',
-            'o', 'r', 'i', 'z', 'e', 'd', '"', '}', '}'});
-    });
+            'o', 'r', 'i', 'z', 'e', 'd', '"', '}', '}'}, boost::beast::http::status::unauthorized);
 
     session.handleRequest(request);
 
@@ -393,13 +392,12 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtForbiddenTo403)
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
     session.setQueue(std::move(queue));
 
-    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes)> sender) {
+    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         sender(bcos::bytes{'{', '"', 'j', 's', 'o', 'n', 'r', 'p', 'c', '"', ':', '"', '2', '.',
             '0', '"', ',', '"', 'i', 'd', '"', ':', '1', ',', '"', 'e', 'r', 'r', 'o', 'r', '"',
             ':', '{', '"', 'c', 'o', 'd', 'e', '"', ':', '-', '3', '2', '0', '1', '1', ',',
             '"', 'm', 'e', 's', 's', 'a', 'g', 'e', '"', ':', '"', 'f', 'o', 'r', 'b', 'i', 'd',
-            'd', 'e', 'n', '"', '}', '}'});
-    });
+            'd', 'e', 'n', '"', '}', '}'}, boost::beast::http::status::forbidden);
 
     session.handleRequest(request);
 
@@ -422,10 +420,10 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerKeeps200ForNonJwtJsonRpcError)
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
     session.setQueue(std::move(queue));
 
-    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes)> sender) {
+    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         auto payload = std::string(R"({"jsonrpc":"2.0","id":1,"error":{"code":)") +
                        std::to_string(bcos::rpc::MethodNotFound) + R"(,"message":"not found"}})";
-        sender(bcos::bytes(payload.begin(), payload.end()));
+        sender(bcos::bytes(payload.begin(), payload.end()), boost::beast::http::status::ok);
     });
 
     session.handleRequest(request);

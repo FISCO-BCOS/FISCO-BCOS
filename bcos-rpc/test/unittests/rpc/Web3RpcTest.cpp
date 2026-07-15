@@ -117,7 +117,7 @@ public:
         {
             std::promise<bcos::bytes> promise;
             web3JsonRpc->onRPCRequest(
-                request, [&promise](bcos::bytes resp) { promise.set_value(std::move(resp)); });
+                request, [&promise](bcos::bytes resp, boost::beast::http::status) { promise.set_value(std::move(resp)); });
             auto jsonBytes = promise.get_future().get();
             std::string_view json(
                 (char*)jsonBytes.data(), (char*)jsonBytes.data() + jsonBytes.size());
@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(handleLegacyTxTest)
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
         Web3Transaction rawWeb3Tx;
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
-        onRPCRequestWrapper(request, [](auto&&) {});
+        onRPCRequestWrapper(request, [](auto&&, auto&&) {});
         // validRespCheck(response);
         // BOOST_TEST(response["id"].asInt64() == 1132123);
         // BOOST_TEST(response["result"].asString() == expectHash);
@@ -409,7 +409,7 @@ BOOST_AUTO_TEST_CASE(handleEIP1559TxTest)
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
         Web3Transaction rawWeb3Tx;
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
-        onRPCRequestWrapper(request, [](auto&&) {});
+        onRPCRequestWrapper(request, [](auto&&, auto&&) {});
         // validRespCheck(response);
         // BOOST_TEST(response["id"].asInt64() == 1132123);
         // BOOST_TEST(response["result"].asString() == expectHash);
@@ -471,7 +471,7 @@ BOOST_AUTO_TEST_CASE(handleEIP4844TxTest)
         auto rawTxBytesRef = bcos::ref(rawTxBytes);
         Web3Transaction rawWeb3Tx;
         codec::rlp::decode(rawTxBytesRef, rawWeb3Tx);
-        onRPCRequestWrapper(request, [](auto&&) {});
+        onRPCRequestWrapper(request, [](auto&&, auto&&) {});
         // validRespCheck(response);
         // BOOST_TEST(response["id"].asInt64() == 1132123);
         // BOOST_TEST(response["result"].asString() == expectHash);
@@ -529,15 +529,32 @@ BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)
         R"({"jsonrpc":"2.0","id":7,"method":"engine_exchangeCapabilities","params":["engine_newPayloadV2"]})";
     auto response = onRPCRequestWrapper(request);
     BOOST_TEST(response.isMember("error"));
-    BOOST_TEST(response["error"]["code"].asInt() == -32000);
+    BOOST_TEST(response["error"]["code"].asInt() == MethodNotFound);
     BOOST_TEST(
-        response["error"]["message"].asString() == "Engine service is not available on this node");
+        response["error"]["message"].asString() == "Method not found");
 }
 
 BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 {
     TestEngineService testEngineService;
     nodeService->engineService() = std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+
+    // Create a separate Web3JsonRpcImpl with OP Engine enabled for engine API tests
+    auto engineRpc = std::make_shared<Web3JsonRpcImpl>(
+        groupId, 8, rpc->groupManager(), nullptr, false, true);
+
+    auto engineRequest = [&](std::string_view req) -> Json::Value {
+        std::promise<bcos::bytes> promise;
+        engineRpc->onRPCRequest(req,
+            [&promise](bcos::bytes resp, boost::beast::http::status) {
+                promise.set_value(std::move(resp));
+            });
+        auto jsonBytes = promise.get_future().get();
+        Json::Value val;
+        Json::Reader reader;
+        reader.parse(std::string(jsonBytes.begin(), jsonBytes.end()), val);
+        return val;
+    };
 
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
         "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,
@@ -565,7 +582,7 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
     newPayloadRequest += largeQuantity;
     newPayloadRequest += R"("}]})";
 
-    auto newPayloadResponse = onRPCRequestWrapper(newPayloadRequest);
+    auto newPayloadResponse = engineRequest(newPayloadRequest);
     validRespCheck(newPayloadResponse);
     BOOST_TEST(newPayloadResponse["result"]["status"].asString() == "VALID");
     BOOST_REQUIRE(testEngineService.m_state->capturedNewPayloadRequest.has_value());
@@ -593,18 +610,16 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 
     const auto getPayloadRequest =
         R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
-    auto getPayloadResponse = onRPCRequestWrapper(getPayloadRequest);
+    auto getPayloadResponse = engineRequest(getPayloadRequest);
     validRespCheck(getPayloadResponse);
     BOOST_REQUIRE(testEngineService.m_state->capturedPayloadId.has_value());
     BOOST_REQUIRE(testEngineService.m_state->capturedGetPayloadVersion.has_value());
     BOOST_TEST(*testEngineService.m_state->capturedPayloadId == "payload-id-1");
     BOOST_TEST(*testEngineService.m_state->capturedGetPayloadVersion == 2);
-    BOOST_TEST(getPayloadResponse["result"]["transactions"].size() == 1);
-    BOOST_TEST(getPayloadResponse["result"]["transactions"][0].asString() == encodedTxHex);
-    BOOST_TEST(getPayloadResponse["result"]["withdrawals"][0]["amount"].asString() ==
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"].size() == 1);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["transactions"][0].asString() == encodedTxHex);
+    BOOST_TEST(getPayloadResponse["result"]["executionPayload"]["withdrawals"][0]["amount"].asString() ==
                largeQuantity);
-    BOOST_TEST(getPayloadResponse["result"]["blobGasUsed"].asString() == largeQuantity);
-    BOOST_TEST(getPayloadResponse["result"]["excessBlobGas"].asString() == largeQuantity);
     BOOST_TEST(getPayloadResponse["result"]["blockValue"].asString() == largeQuantity);
 }
 

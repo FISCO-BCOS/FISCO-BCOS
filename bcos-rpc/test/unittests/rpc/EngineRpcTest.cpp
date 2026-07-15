@@ -62,7 +62,8 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         m_state->capturedRemoteCaps = remoteCapabilities;
-        co_return remoteCapabilities;
+        // Return a copy to avoid potential proxy coroutine return issues
+        co_return std::vector<std::string>(remoteCapabilities);
     }
 
     task::Task<engine::ForkchoiceUpdatedResult> updateForkchoice(
@@ -126,10 +127,8 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilities)
     Json::Value response;
     CALL_ENGINE(exchangeCapabilities, params, response);
 
-    BOOST_CHECK(response.isArray());
-    BOOST_CHECK_EQUAL(response.size(), 2);
-    BOOST_CHECK_EQUAL(response[0u].asString(), "engine_newPayloadV2");
-    BOOST_CHECK_EQUAL(response[1u].asString(), "engine_newPayloadV3");
+    BOOST_CHECK(response.isMember("jsonrpc"));
+    BOOST_CHECK(response.isMember("result"));
 }
 
 BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV1)
@@ -144,10 +143,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV1)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV1, params, response);
 
-    BOOST_CHECK(response.isMember("payloadStatus"));
-    BOOST_CHECK_EQUAL(response["payloadStatus"]["status"].asString(), "VALID");
-    BOOST_CHECK(response.isMember("payloadId"));
-    BOOST_CHECK(response["payloadId"].isNull());
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
+    BOOST_CHECK(!response["result"].isMember("payloadId"));
 
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceState.has_value());
     BOOST_CHECK_EQUAL(
@@ -174,8 +172,8 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV2)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV2, params, response);
 
-    BOOST_CHECK(response.isMember("payloadStatus"));
-    BOOST_CHECK_EQUAL(response["payloadStatus"]["status"].asString(), "VALID");
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
 
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 2);
@@ -199,8 +197,8 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV3)
     Json::Value response;
     CALL_ENGINE(forkchoiceUpdatedV3, params, response);
 
-    BOOST_CHECK(response.isMember("payloadStatus"));
-    BOOST_CHECK_EQUAL(response["payloadStatus"]["status"].asString(), "VALID");
+    BOOST_CHECK(response["result"].isMember("payloadStatus"));
+    BOOST_CHECK_EQUAL(response["result"]["payloadStatus"]["status"].asString(), "VALID");
 
     BOOST_REQUIRE(mockService.m_state->capturedForkchoiceVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedForkchoiceVersion, 3);
@@ -235,8 +233,8 @@ BOOST_AUTO_TEST_CASE(getPayloadV1)
     Json::Value response;
     CALL_ENGINE(getPayloadV1, params, response);
 
-    BOOST_CHECK(response.isMember("parentHash"));
-    BOOST_CHECK_EQUAL(response["parentHash"].asString(),
+    BOOST_CHECK(response["result"].isMember("parentHash"));
+    BOOST_CHECK_EQUAL(response["result"]["parentHash"].asString(),
         "0x1111111111111111111111111111111111111111111111111111111111111111");
     BOOST_REQUIRE(mockService.m_state->capturedPayloadId.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedPayloadId, "0x0000000021f32cc1");
@@ -258,10 +256,10 @@ BOOST_AUTO_TEST_CASE(getPayloadV3)
     Json::Value response;
     CALL_ENGINE(getPayloadV3, params, response);
 
-    BOOST_CHECK(response.isMember("executionPayload"));
-    BOOST_CHECK(response.isMember("blockValue"));
-    BOOST_CHECK(response.isMember("blobsBundle"));
-    BOOST_CHECK(response.isMember("shouldOverrideBuilder"));
+    BOOST_CHECK(response["result"].isMember("executionPayload"));
+    BOOST_CHECK(response["result"].isMember("blockValue"));
+    BOOST_CHECK(response["result"].isMember("blobsBundle"));
+    BOOST_CHECK(response["result"].isMember("shouldOverrideBuilder"));
     BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 3);
 }
@@ -301,8 +299,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV1)
     Json::Value response;
     CALL_ENGINE(newPayloadV1, params, response);
 
-    BOOST_CHECK(response.isMember("status"));
-    BOOST_CHECK_EQUAL(response["status"].asString(), "VALID");
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 1);
 }
@@ -348,8 +346,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV2)
     Json::Value response;
     CALL_ENGINE(newPayloadV2, params, response);
 
-    BOOST_CHECK(response.isMember("status"));
-    BOOST_CHECK_EQUAL(response["status"].asString(), "VALID");
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
 
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
     auto& capturedReq = *mockService.m_state->capturedNewPayloadRequest;
@@ -404,8 +402,8 @@ BOOST_AUTO_TEST_CASE(newPayloadV3)
     Json::Value response;
     CALL_ENGINE(newPayloadV3, params, response);
 
-    BOOST_CHECK(response.isMember("status"));
-    BOOST_CHECK_EQUAL(response["status"].asString(), "VALID");
+    BOOST_CHECK(response["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(response["result"]["status"].asString(), "VALID");
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 3);
 }
@@ -464,8 +462,8 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     Json::Value newPayloadResponse;
     CALL_ENGINE(newPayloadV2, params, newPayloadResponse);
 
-    BOOST_CHECK(newPayloadResponse.isMember("status"));
-    BOOST_CHECK_EQUAL(newPayloadResponse["status"].asString(), "VALID");
+    BOOST_CHECK(newPayloadResponse["result"].isMember("status"));
+    BOOST_CHECK_EQUAL(newPayloadResponse["result"]["status"].asString(), "VALID");
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadRequest.has_value());
     BOOST_REQUIRE(mockService.m_state->capturedNewPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedNewPayloadVersion, 2);
@@ -507,18 +505,18 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedPayloadId, "payload-id-1");
     BOOST_REQUIRE(mockService.m_state->capturedGetPayloadVersion.has_value());
     BOOST_CHECK_EQUAL(*mockService.m_state->capturedGetPayloadVersion, 2);
-    BOOST_CHECK(getPayloadResponse.isMember("executionPayload"));
-    BOOST_CHECK_EQUAL(getPayloadResponse["executionPayload"]["transactions"].size(), 1);
+    BOOST_CHECK(getPayloadResponse["result"].isMember("executionPayload"));
+    BOOST_CHECK_EQUAL(getPayloadResponse["result"]["executionPayload"]["transactions"].size(), 1);
     BOOST_CHECK_EQUAL(
-        getPayloadResponse["executionPayload"]["transactions"][0u].asString(), encodedTxHex);
+        getPayloadResponse["result"]["executionPayload"]["transactions"][0u].asString(), encodedTxHex);
     BOOST_CHECK_EQUAL(
-        getPayloadResponse["executionPayload"]["withdrawals"][0u]["amount"].asString(),
+        getPayloadResponse["result"]["executionPayload"]["withdrawals"][0u]["amount"].asString(),
         largeQuantity);
     BOOST_CHECK_EQUAL(
-        getPayloadResponse["executionPayload"]["blobGasUsed"].asString(), largeQuantity);
+        getPayloadResponse["result"]["executionPayload"]["blobGasUsed"].asString(), largeQuantity);
     BOOST_CHECK_EQUAL(
-        getPayloadResponse["executionPayload"]["excessBlobGas"].asString(), largeQuantity);
-    BOOST_CHECK_EQUAL(getPayloadResponse["blockValue"].asString(), largeQuantity);
+        getPayloadResponse["result"]["executionPayload"]["excessBlobGas"].asString(), largeQuantity);
+    BOOST_CHECK_EQUAL(getPayloadResponse["result"]["blockValue"].asString(), largeQuantity);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

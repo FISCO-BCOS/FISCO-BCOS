@@ -457,7 +457,7 @@ bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
 
                 // RPC_LOG(INFO) << "web3 websocket request" << LOG_KV("request", strRequest);
 
-                web3JsonRpc->onRPCRequest(strRequest, session, [session, msg](bcos::bytes _respData) {
+                web3JsonRpc->onRPCRequest(strRequest, session, [session, msg](bcos::bytes _respData, boost::beast::http::status) {
                     msg->setPayload(bcos::bytes(std::move(_respData)));
                     session->asyncSendMessage(msg);
                 });

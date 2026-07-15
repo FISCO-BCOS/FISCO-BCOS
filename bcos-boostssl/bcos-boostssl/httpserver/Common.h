@@ -44,7 +44,7 @@ using HttpRequestPtr = std::shared_ptr<HttpRequest>;
 using HttpResponsePtr = std::shared_ptr<HttpResponse>;
 
 using HttpReqHandler = std::function<void(const HttpRequest& req,
-    std::function<void(bcos::bytes)>)>;
+    std::function<void(bcos::bytes, boost::beast::http::status)>)>;
 using WsUpgradeHandler =
     std::function<void(std::shared_ptr<HttpStream>, HttpRequest&&, std::shared_ptr<std::string>)>;
 
