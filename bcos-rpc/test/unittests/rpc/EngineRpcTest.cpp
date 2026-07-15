@@ -50,7 +50,7 @@ public:
         };
         std::optional<engine::ForkchoiceState> capturedForkchoiceState;
         std::optional<int> capturedForkchoiceVersion;
-        engine::GetPayloadResult getPayloadResult;
+        engine::GetPayloadResult getPayloadResult = std::make_unique<engine::GetPayloadData>();
         std::optional<engine::PayloadID> capturedPayloadId;
         std::optional<std::uint32_t> capturedGetPayloadVersion;
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
@@ -79,7 +79,7 @@ public:
     {
         m_state->capturedPayloadId = payloadId;
         m_state->capturedGetPayloadVersion = version;
-        co_return m_state->getPayloadResult;
+        co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
 
     task::Task<engine::PayloadStatus> newPayload(
@@ -224,9 +224,9 @@ BOOST_AUTO_TEST_CASE(forkchoiceUpdatedV4)
 
 BOOST_AUTO_TEST_CASE(getPayloadV1)
 {
-    mockService.m_state->getPayloadResult.executionPayload.parentHash =
+    mockService.m_state->getPayloadResult->executionPayload.parentHash =
         h256("1111111111111111111111111111111111111111111111111111111111111111");
-    mockService.m_state->getPayloadResult.executionPayload.blockHash =
+    mockService.m_state->getPayloadResult->executionPayload.blockHash =
         h256("2222222222222222222222222222222222222222222222222222222222222222");
 
     Json::Value params(Json::arrayValue);
@@ -246,11 +246,11 @@ BOOST_AUTO_TEST_CASE(getPayloadV1)
 
 BOOST_AUTO_TEST_CASE(getPayloadV3)
 {
-    mockService.m_state->getPayloadResult.executionPayload.parentHash =
+    mockService.m_state->getPayloadResult->executionPayload.parentHash =
         h256("1111111111111111111111111111111111111111111111111111111111111111");
-    mockService.m_state->getPayloadResult.executionPayload.blockHash =
+    mockService.m_state->getPayloadResult->executionPayload.blockHash =
         h256("2222222222222222222222222222222222222222222222222222222222222222");
-    mockService.m_state->getPayloadResult.blockValue = u256(100);
+    mockService.m_state->getPayloadResult->blockValue = u256(100);
 
     Json::Value params(Json::arrayValue);
     params.append("0x0000000021f32cc1");
@@ -493,9 +493,9 @@ BOOST_AUTO_TEST_CASE(newPayloadAndGetPayloadRoundTrip)
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(decodedEncodedTx), encodedTxHex);
 
     // --- engine_getPayloadV2 ---
-    mockService.m_state->getPayloadResult.executionPayload =
+    mockService.m_state->getPayloadResult->executionPayload =
         mockService.m_state->capturedNewPayloadRequest->executionPayload;
-    mockService.m_state->getPayloadResult.blockValue = expectedLargeValue;
+    mockService.m_state->getPayloadResult->blockValue = expectedLargeValue;
 
     Json::Value getPayloadParams(Json::arrayValue);
     getPayloadParams.append("payload-id-1");

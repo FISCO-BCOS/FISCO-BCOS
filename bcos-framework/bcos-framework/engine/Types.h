@@ -151,7 +151,7 @@ struct ForkchoiceUpdatedResult
     std::optional<PayloadID> payloadId;
 };
 
-struct GetPayloadResult
+struct GetPayloadData
 {
     // Required by engine_getPayloadV1/V2/V3/V4/V6.
     ExecutionPayload executionPayload;
@@ -168,5 +168,7 @@ struct GetPayloadResult
     // Required by engine_getPayloadV4/V6.
     std::optional<std::vector<bytes>> executionRequests;
 };
+
+using GetPayloadResult = std::unique_ptr<GetPayloadData>;
 
 }  // namespace bcos::engine

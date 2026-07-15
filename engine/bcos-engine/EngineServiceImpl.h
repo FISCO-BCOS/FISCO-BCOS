@@ -344,12 +344,12 @@ private:
                     "Payload version is incompatible with requested method version"});
         }
 
-        return GetPayloadResult{
+        return std::make_unique<GetPayloadData>(GetPayloadData{
             .executionPayload = it->second.executionPayload,
             .blockValue = it->second.blockValue,
             .blobsBundle = it->second.blobsBundle,
             .shouldOverrideBuilder = it->second.shouldOverrideBuilder,
-        };
+        });
     }
 
     bcos::task::Task<PayloadStatus> handleNewPayload(

@@ -36,7 +36,7 @@ struct MockEngineService
             .latestValidHash = std::nullopt,
             .validationError = std::nullopt},
         .payloadId = std::nullopt};
-    GetPayloadResult m_getPayloadResult;
+    GetPayloadResult m_getPayloadResult = std::make_unique<GetPayloadData>();
     PayloadStatus m_payloadStatus{.status = PayloadValidationStatus::Valid,
         .latestValidHash = std::nullopt,
         .validationError = std::nullopt};
@@ -70,7 +70,7 @@ struct MockEngineService
     {
         m_capturedPayloadId = payloadId;
         m_capturedGetPayloadVersion = version;
-        co_return m_getPayloadResult;
+        co_return std::make_unique<GetPayloadData>(*m_getPayloadResult);
     }
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest& request, std::uint32_t version)

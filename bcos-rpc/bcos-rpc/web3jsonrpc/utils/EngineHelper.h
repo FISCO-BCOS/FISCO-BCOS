@@ -314,12 +314,12 @@ inline void combineGetPayloadResponse(
 {
     if (version == engine::ApiVersion::V1)
     {
-        _result = serializeExecutionPayload(_response.executionPayload, version);
+        _result = serializeExecutionPayload(_response->executionPayload, version);
         return;
     }
 
-    _result["executionPayload"] = serializeExecutionPayload(_response.executionPayload, version);
-    _result["blockValue"] = toQuantity(_response.blockValue);
+    _result["executionPayload"] = serializeExecutionPayload(_response->executionPayload, version);
+    _result["blockValue"] = toQuantity(_response->blockValue);
 
     if (version == engine::ApiVersion::V2)
     {
@@ -331,30 +331,30 @@ inline void combineGetPayloadResponse(
     blobsBundle["commitments"] = Json::Value(Json::arrayValue);
     blobsBundle["proofs"] = Json::Value(Json::arrayValue);
     blobsBundle["blobs"] = Json::Value(Json::arrayValue);
-    if (_response.blobsBundle.has_value())
+    if (_response->blobsBundle.has_value())
     {
         Json::Value commitments(Json::arrayValue);
-        for (auto const& commitment : _response.blobsBundle->commitments)
+        for (auto const& commitment : _response->blobsBundle->commitments)
         {
             commitments.append(toHexStringWithPrefix(commitment));
         }
         blobsBundle["commitments"] = std::move(commitments);
 
         Json::Value proofs(Json::arrayValue);
-        for (auto const& proof : _response.blobsBundle->proofs)
+        for (auto const& proof : _response->blobsBundle->proofs)
         {
             proofs.append(toHexStringWithPrefix(proof));
         }
         blobsBundle["proofs"] = std::move(proofs);
 
         Json::Value blobs(Json::arrayValue);
-        for (auto const& blob : _response.blobsBundle->blobs)
+        for (auto const& blob : _response->blobsBundle->blobs)
         {
             blobs.append(toHexStringWithPrefix(blob));
         }
         blobsBundle["blobs"] = std::move(blobs);
     }
     _result["blobsBundle"] = std::move(blobsBundle);
-    _result["shouldOverrideBuilder"] = _response.shouldOverrideBuilder;
+    _result["shouldOverrideBuilder"] = _response->shouldOverrideBuilder;
 }
 }  // namespace bcos::rpc

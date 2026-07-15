@@ -59,7 +59,7 @@ public:
         engine::PayloadStatus payloadStatusResult{
             .status = engine::PayloadValidationStatus::Valid,
             .latestValidHash = std::nullopt, .validationError = std::nullopt};
-        engine::GetPayloadResult getPayloadResult;
+        engine::GetPayloadResult getPayloadResult = std::make_unique<engine::GetPayloadData>();
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;
         std::optional<engine::PayloadID> capturedPayloadId;
@@ -85,7 +85,7 @@ public:
     {
         m_state->capturedPayloadId = payloadId;
         m_state->capturedGetPayloadVersion = version;
-        co_return m_state->getPayloadResult;
+        co_return std::make_unique<engine::GetPayloadData>(*m_state->getPayloadResult);
     }
 
     task::Task<engine::PayloadStatus> newPayload(
@@ -587,9 +587,9 @@ BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
         decodedEncodedTx);
     BOOST_TEST(toHexStringWithPrefix(decodedEncodedTx) == encodedTxHex);
 
-    testEngineService.m_state->getPayloadResult.executionPayload =
+    testEngineService.m_state->getPayloadResult->executionPayload =
         testEngineService.m_state->capturedNewPayloadRequest->executionPayload;
-    testEngineService.m_state->getPayloadResult.blockValue = expectedLargeValue;
+    testEngineService.m_state->getPayloadResult->blockValue = expectedLargeValue;
 
     const auto getPayloadRequest =
         R"({"jsonrpc":"2.0","id":9,"method":"engine_getPayloadV2","params":["payload-id-1"]})";
