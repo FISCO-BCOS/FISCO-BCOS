@@ -23,6 +23,7 @@
 #include "bcos-utilities/Error.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
+#include <range/v3/view/any_view.hpp>
 #include <utility>
 
 // THANKS TO: RLP implement based on silkworm: https://github.com/erigontech/silkworm.git
@@ -151,6 +152,16 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, bcos::concepts::ByteBuffer 
     {
         to = FixedBytes<20>{from.getCroppedData(0, header.payloadLength)};
     }
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, bcos::FixedBytes<8>>)
+    {
+        to = FixedBytes<8>{from.getCroppedData(0, header.payloadLength)};
+    }
+    else if constexpr (std::same_as<std::decay_t<decltype(to)>, std::array<bcos::byte, 256>>)
+    {
+        to = std::array<bcos::byte, 256>{}; 
+        auto copyLen = std::min<size_t>(header.payloadLength, to.size());
+        std::memcpy(to.data(), from.data(), copyLen);  
+    }
     else
     {
         static_assert(!sizeof(to), "Unsupported type");
@@ -223,29 +234,44 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, std::vector<T>& to) noexcep
     return nullptr;
 }
 
-template <typename Arg1, typename Arg2>
-inline bcos::Error::UniquePtr decodeItems(bytesRef& from, Arg1& arg1, Arg2& arg2) noexcept
+template <typename T>
+inline bcos::Error::UniquePtr decode(bytesRef& from, std::optional<T>& to) noexcept
 {
-    if (auto error = decode(from, arg1); error != nullptr)
+    if (from.empty() || from[0] == BYTES_HEAD_BASE || from[0] == LIST_HEAD_BASE)
     {
-        return error;
+        to.reset();
+        if (!from.empty()) 
+        {
+            from = from.getCroppedData(1);
+        }
+        return nullptr;
     }
-    return decode(from, arg2);
+    T value;
+    if (auto decodeError = decode(from, value); decodeError != nullptr)
+    {
+        return decodeError;
+    }
+    to = std::move(value);
+    return nullptr;
 }
 
-template <typename Arg1, typename Arg2, typename... Args>
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
 inline bcos::Error::UniquePtr decodeItems(
-    bytesRef& from, Arg1& arg1, Arg2& arg2, Args&... args) noexcept
+    bytesRef& from, Args&... args) noexcept
 {
-    if (auto error = decode(from, arg1); error != nullptr)
+    bcos::Error::UniquePtr decodeError; 
+    ((decodeError = decode(from, args)) || ...);
+    if (decodeError != nullptr)
     {
-        return error;
+        return decodeError;
     }
-    return decodeItems(from, arg2, args...);
+    return nullptr;
 }
 
-template <typename Arg1, typename Arg2, typename... Args>
-inline bcos::Error::UniquePtr decode(bytesRef& from, Arg1& arg1, Arg2& arg2, Args&... args) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline bcos::Error::UniquePtr decode(bytesRef& from, Args&... args) noexcept
 {
     auto&& [error, header] = decodeHeader(from);
     if (error)
@@ -258,9 +284,9 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Arg1& arg1, Arg2& arg2, Arg
     }
     const uint64_t leftover{from.size() - header.payloadLength};
 
-    if (auto decodeError = decodeItems(from, arg1, arg2, args...); decodeError != nullptr)
+    if (auto decodeError = decodeItems(from, args...); decodeError != nullptr)
     {
-        return decodeError;
+        return std::move(decodeError);
     }
 
     if (from.size() != leftover)
@@ -268,7 +294,23 @@ inline bcos::Error::UniquePtr decode(bytesRef& from, Arg1& arg1, Arg2& arg2, Arg
         return BCOS_ERROR_UNIQUE_PTR(
             DecodingError::UnexpectedListElements, "Unexpected list elements");
     }
-    return {};
+    return nullptr;
+}
+
+/// Decode the next full RLP item, advance the input bytesRef past the header,
+/// and return a view of the FULL item bytes (header + payload).
+inline std::tuple<bcos::Error::UniquePtr, bcos::bytesConstRef> decodeItemRlp(bytesRef& from) noexcept
+{
+    auto saved = from;
+    auto [err, header] = decodeHeader(from);
+    if (err)
+    {
+        return {std::move(err), bcos::bytesConstRef{}};
+    }
+    auto consumed = static_cast<size_t>(from.data() - saved.data());
+    auto item = saved.getCroppedData(0, consumed + header.payloadLength);
+    from = saved.getCroppedData(item.size());
+    return {nullptr, item};
 }
 
 }  // namespace bcos::codec::rlp

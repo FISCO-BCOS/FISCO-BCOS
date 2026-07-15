@@ -29,10 +29,10 @@ namespace bcos::codec::rlp
 {
 /// based on length threshold, the head of the rlp encoding is different
 /// if the length of the payload is less than 56, the head is 0x80 + length
-/// if the length of the payload is greater than or equal to 56, the head is 0xb7 +
-/// lengthBytes.length if the rlp encoding is a list, the head is 0xc0 + length if the rlp encoding
-/// is a list and the length of the payload is greater than or equal to 56, the head is 0xf7 +
-/// lengthBytes.length
+/// if the length of the payload is greater than or equal to 56, the head is 0xb7 + lengthBytes.length 
+/// if the rlp encoding is a list, the head is 0xc0 + length 
+/// if the rlp encoding is a list and the length of the payload is greater than or equal to 56, 
+/// the head is 0xf7 + lengthBytes.length
 constexpr static uint8_t LENGTH_THRESHOLD{0x38};      // 56
 constexpr static uint8_t BYTES_HEAD_BASE{0x80};       // 128
 constexpr static uint8_t LONG_BYTES_HEAD_BASE{0xb7};  // 183
@@ -81,7 +81,7 @@ inline size_t lengthOfLength(std::unsigned_integral auto payloadLength) noexcept
         return 1 + significantBytes;
     }
 }
-// get the length of the rlp encoding
+// get the length of the rlp encoding for single object
 inline size_t length(bytesConstRef const& bytes) noexcept
 {
     size_t len = bytes.size();
@@ -156,9 +156,13 @@ inline size_t length(const bcos::FixedBytes<N>& v) noexcept
 }
 
 template <typename T>
-    requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
-inline size_t length(const std::vector<T>& v) noexcept;
+inline size_t length(const std::optional<T>& v) noexcept
+{
+    return v.has_value() ? length(*v) : 1;
+}
 
+// get the length of the rlp encoding for list of objects;
+// lengthOfItems is the sum of the length of the objects without the header of list;
 template <typename T>
 inline size_t lengthOfItems(const std::span<const T>& v) noexcept
 {
@@ -174,34 +178,24 @@ inline size_t length(const std::span<const T>& v) noexcept
 }
 
 template <typename T>
-inline size_t lengthOfItems(const std::vector<T>& v) noexcept
-{
-    return lengthOfItems(std::span<const T>{v.data(), v.size()});
-}
-
-template <typename T>
     requires(!std::same_as<std::remove_cvref_t<T>, bcos::byte>)
 inline size_t length(const std::vector<T>& v) noexcept
 {
     return length(std::span<const T>{v.data(), v.size()});
 }
 
-template <typename Arg1, typename Arg2>
-inline size_t lengthOfItems(const Arg1& arg1, const Arg2& arg2) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline size_t lengthOfItems(const Args&... args) noexcept
 {
-    return length(arg1) + length(arg2);
+    return (... + length(args));
 }
 
-template <typename Arg1, typename Arg2, typename... Args>
-inline size_t lengthOfItems(const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
+template <typename... Args>
+    requires(sizeof...(Args) > 1)
+inline size_t length(const Args&... args) noexcept
 {
-    return length(arg1) + lengthOfItems(arg2, args...);
-}
-
-template <typename Arg1, typename Arg2, typename... Args>
-inline size_t length(const Arg1& arg1, const Arg2& arg2, const Args&... args) noexcept
-{
-    const size_t payload_length = lengthOfItems(arg1, arg2, args...);
+    const size_t payload_length = lengthOfItems(args...);
     return lengthOfLength(payload_length) + payload_length;
 }
 

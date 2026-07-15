@@ -114,15 +114,10 @@ public:
     void decodeScale(codec::scale::ScaleDecoderStream& _s, T& _t, U&... _u) const
     {
         _s >> _t;
-        decodeScale(_s, _u...);
+        if constexpr(sizeof...(_u) > 0) {
+            decodeScale(_s, _u...);
+        }
     }
-    template <typename T>
-    void decodeScale(codec::scale::ScaleDecoderStream& _s, T& _t) const
-    {
-        _s >> _t;
-    }
-
-    void decodeScale(codec::scale::ScaleDecoderStream&) const {}
 
 private:
     VMType m_type = VMType::UNDEFINED;
