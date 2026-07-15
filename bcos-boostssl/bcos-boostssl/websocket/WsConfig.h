@@ -133,17 +133,5 @@ public:
 
     http::CorsConfig corsConfig() const;
     void setCorsConfig(http::CorsConfig _corsConfig);
-
-    bool enableJWT() const;
-    void setEnableJWT(bool _enableJWT);
-
-    const std::string& jwtSecretFile() const;
-    void setJwtSecretFile(std::string _jwtSecretFile);
-
-    int64_t jwtClockSkewSecs() const;
-    void setJwtClockSkewSecs(int64_t _jwtClockSkewSecs);
-
-    const std::string& jwtAllowedAlgorithms() const;
-    void setJwtAllowedAlgorithms(std::string _jwtAllowedAlgorithms);
 };
 }  // namespace bcos::boostssl::ws

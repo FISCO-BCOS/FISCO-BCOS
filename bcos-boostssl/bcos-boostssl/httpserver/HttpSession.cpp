@@ -2,8 +2,6 @@
 #include <bcos-utilities/BoostLog.h>
 #include <boost/system/error_code.hpp>
 
-
-
 bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)
   : m_httpBodySizeLimit(_httpBodySizeLimit), m_corsConfig(std::move(_corsConfig))
 {
