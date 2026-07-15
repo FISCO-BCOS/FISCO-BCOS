@@ -184,6 +184,7 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_precompiled_feature_gate",
         "bugfix_evm_storage_status",
         "bugfix_statestorage_hash_v3_17",
+        "bugfix_nonce_ordering",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -365,14 +366,14 @@ BOOST_AUTO_TEST_CASE(upgrade)
         bcos::protocol::BlockVersion::V3_16_5_VERSION);
     BOOST_CHECK_EQUAL(validFlags(features14).size(), 0);
 
-    // 3.16.4 to 3.17.0: the six consolidated audit flags
+    // 3.16.4 to 3.17.0: the six consolidated audit flags plus bugfix_nonce_ordering
     Features features15;
     features15.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_4_VERSION,
         bcos::protocol::BlockVersion::V3_17_0_VERSION);
-    auto expect12 =
-        std::to_array<std::string_view>({"bugfix_auth_check", "bugfix_v1_error_handling",
-            "bugfix_gas_payment_balance_precheck", "bugfix_precompiled_feature_gate",
-            "bugfix_evm_storage_status", "bugfix_statestorage_hash_v3_17"});
+    auto expect12 = std::to_array<std::string_view>(
+        {"bugfix_auth_check", "bugfix_v1_error_handling", "bugfix_gas_payment_balance_precheck",
+            "bugfix_precompiled_feature_gate", "bugfix_evm_storage_status",
+            "bugfix_statestorage_hash_v3_17", "bugfix_nonce_ordering"});
     BOOST_CHECK_EQUAL(validFlags(features15).size(), expect12.size());
     for (auto feature : expect12)
     {
@@ -557,13 +558,13 @@ BOOST_AUTO_TEST_CASE(genesis)
     }
     BOOST_CHECK_EQUAL(features3_16_5.get(bcos::ledger::Features::Flag::bugfix_revert_logs), true);
 
-    // 3.17.0: everything in 3.16.5 plus the six consolidated audit flags
+    // 3.17.0: everything in 3.16.5 plus the six consolidated audit flags and bugfix_nonce_ordering
     Features features3_17_0;
     features3_17_0.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
-    auto extra3_17_0 =
-        std::to_array<std::string_view>({"bugfix_auth_check", "bugfix_v1_error_handling",
-            "bugfix_gas_payment_balance_precheck", "bugfix_precompiled_feature_gate",
-            "bugfix_evm_storage_status", "bugfix_statestorage_hash_v3_17"});
+    auto extra3_17_0 = std::to_array<std::string_view>(
+        {"bugfix_auth_check", "bugfix_v1_error_handling", "bugfix_gas_payment_balance_precheck",
+            "bugfix_precompiled_feature_gate", "bugfix_evm_storage_status",
+            "bugfix_statestorage_hash_v3_17", "bugfix_nonce_ordering"});
     BOOST_CHECK_EQUAL(validFlags(features3_17_0).size(), expect3_16_5.size() + extra3_17_0.size());
     for (auto feature : expect3_16_5)
     {
