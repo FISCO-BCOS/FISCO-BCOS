@@ -88,3 +88,5 @@ bcos-evm/vcpkg-configuration.json
 bcos-evm/spike/
 # bcos-evm module README (kept locally, not tracked)
 bcos-evm/README.md
+# bcos-evm 7702 vector generator (kept locally, not tracked)
+bcos-evm/test/opstack/scripts/gen_7702_vectors.py
