@@ -29,21 +29,21 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
 {
     auto const& ep = params[0u];
     bcos::engine::ExecutionPayload payload{
+        .logsBloom = {},
         .parentHash = parseH256(ep["parentHash"].asString()),
-        .feeRecipient = parseAddress(ep["feeRecipient"].asString()),
         .stateRoot = parseH256(ep["stateRoot"].asString()),
         .receiptsRoot = parseH256(ep["receiptsRoot"].asString()),
-        .logsBloom = {},
         .prevRandao = parseH256(ep["prevRandao"].asString()),
-        .blockNumber = static_cast<bcos::protocol::BlockNumber>(
-            fromQuantity(ep["blockNumber"].asString())),
         .gasLimit = fromBigQuantity(ep["gasLimit"].asString()),
         .gasUsed = fromBigQuantity(ep["gasUsed"].asString()),
-        .timestamp = fromQuantity(std::string(ep["timestamp"].asString())),
-        .extraData = {},
         .baseFeePerGas = fromBigQuantity(ep["baseFeePerGas"].asString()),
         .blockHash = parseH256(ep["blockHash"].asString()),
         .transactions = {},
+        .extraData = {},
+        .feeRecipient = parseAddress(ep["feeRecipient"].asString()),
+        .timestamp = fromQuantity(std::string(ep["timestamp"].asString())),
+        .blockNumber = static_cast<bcos::protocol::BlockNumber>(
+            fromQuantity(ep["blockNumber"].asString())),
         .withdrawals = std::nullopt,
         .blobGasUsed = std::nullopt,
         .excessBlobGas = std::nullopt,
@@ -82,8 +82,8 @@ bcos::engine::NewPayloadRequest bcos::rpc::parseNewPayloadRequest(
             withdrawals.push_back(bcos::engine::WithdrawalV1{
                 .index = fromBigQuantity(w["index"].asString()),
                 .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
-                .address = parseAddress(w["address"].asString()),
                 .amount = fromBigQuantity(w["amount"].asString()),
+                .address = parseAddress(w["address"].asString()),
             });
         }
         payload.withdrawals = std::move(withdrawals);
@@ -170,9 +170,9 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
     }
     auto const& pa = params[1];
     bcos::engine::PayloadAttributes attrs{
-        .timestamp = fromQuantity(std::string(pa["timestamp"].asString())),
         .prevRandao = parseH256(pa["prevRandao"].asString()),
         .suggestedFeeRecipient = parseAddress(pa["suggestedFeeRecipient"].asString()),
+        .timestamp = fromQuantity(std::string(pa["timestamp"].asString())),
         .withdrawals = std::nullopt,
         .parentBeaconBlockRoot = std::nullopt,
         .slotNumber = std::nullopt,
@@ -186,8 +186,8 @@ std::optional<bcos::engine::PayloadAttributes> bcos::rpc::parsePayloadAttributes
             withdrawals.push_back(bcos::engine::WithdrawalV1{
                 .index = fromBigQuantity(w["index"].asString()),
                 .validatorIndex = fromBigQuantity(w["validatorIndex"].asString()),
-                .address = parseAddress(w["address"].asString()),
                 .amount = fromBigQuantity(w["amount"].asString()),
+                .address = parseAddress(w["address"].asString()),
             });
         }
         attrs.withdrawals = std::move(withdrawals);
