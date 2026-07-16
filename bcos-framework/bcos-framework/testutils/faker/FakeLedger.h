@@ -19,6 +19,7 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "../../ledger/Features.h"
 #include "../../ledger/LedgerConfig.h"
 #include "../../ledger/LedgerInterface.h"
 #include "../../protocol/Block.h"
@@ -149,10 +150,7 @@ public:
         std::map<HashType, bytesConstPtr> emptyTxsData;
         m_txsHashToData.swap(emptyTxsData);
     }
-    void stop()
-    {
-        m_worker.reset();
-    }
+    void stop() { m_worker.reset(); }
 
     FakeLedger(
         BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t _receiptsSize)
@@ -544,6 +542,13 @@ public:
         fakeStorageEntryMaps[tableName][_key] = std::move(_data);
     }
 
+    void setFeatures(bcos::ledger::Features _features) { m_features = _features; }
+
+    task::Task<bcos::ledger::Features> fetchAllFeatures(protocol::BlockNumber) override
+    {
+        co_return m_features;
+    }
+
     task::Task<std::optional<storage::Entry>> getStorageAt(std::string_view _address,
         std::string_view _key, protocol::BlockNumber _blockNumber) override
     {
@@ -586,6 +591,8 @@ private:
     std::shared_ptr<FakeStorage> m_fakeStorage;
     std::map<std::string, std::map<std::string, std::optional<storage::Entry>>>
         fakeStorageEntryMaps;
+    // Empty by default, matching LedgerInterface's default fetchAllFeatures.
+    bcos::ledger::Features m_features;
 };
 }  // namespace test
 }  // namespace bcos
