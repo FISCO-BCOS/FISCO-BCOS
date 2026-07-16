@@ -76,3 +76,15 @@ test/*
 CLAUDE.local.md
 .claude/worktrees
 .claude/agents
+
+# bcos-evm module docs (kept locally, not tracked)
+bcos-evm/docs/
+# bcos-evm module scripts (kept locally, not tracked)
+bcos-evm/scripts/
+# bcos-evm module vcpkg manifest (standalone-only, kept locally, not tracked)
+bcos-evm/vcpkg.json
+bcos-evm/vcpkg-configuration.json
+# bcos-evm module spike tools (standalone-only, kept locally, not tracked)
+bcos-evm/spike/
+# bcos-evm module README (kept locally, not tracked)
+bcos-evm/README.md
