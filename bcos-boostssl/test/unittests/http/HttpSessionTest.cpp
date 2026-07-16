@@ -370,6 +370,7 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtUnauthorizedTo401)
             ':', '{', '"', 'c', 'o', 'd', 'e', '"', ':', '-', '3', '2', '0', '1', '0', ',',
             '"', 'm', 'e', 's', 's', 'a', 'g', 'e', '"', ':', '"', 'u', 'n', 'a', 'u', 't', 'h',
             'o', 'r', 'i', 'z', 'e', 'd', '"', '}', '}'}, boost::beast::http::status::unauthorized);
+    });
 
     session.handleRequest(request);
 
@@ -398,6 +399,7 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtForbiddenTo403)
             ':', '{', '"', 'c', 'o', 'd', 'e', '"', ':', '-', '3', '2', '0', '1', '1', ',',
             '"', 'm', 'e', 's', 's', 'a', 'g', 'e', '"', ':', '"', 'f', 'o', 'r', 'b', 'i', 'd',
             'd', 'e', 'n', '"', '}', '}'}, boost::beast::http::status::forbidden);
+    });
 
     session.handleRequest(request);
 

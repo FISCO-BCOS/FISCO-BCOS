@@ -324,15 +324,14 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     return wsConfig;
 }
 
-template<bool _enableOPEngine>
 std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initWeb3RpcServiceConfig(
-    const bcos::tool::NodeConfig::Ptr& _nodeConfig)
+    const bcos::tool::NodeConfig::Ptr& _nodeConfig, bool _enableOPEngine)
 {
     auto wsConfig = std::make_shared<boostssl::ws::WsConfig>();
     wsConfig->setModel(bcos::boostssl::ws::WsModel::Server);
     wsConfig->setDisableSsl(true);
 
-    if constexpr (_enableOPEngine) 
+    if (_enableOPEngine) 
     {
         wsConfig->setListenIP(_nodeConfig->opEngineRpcListenIP());
         wsConfig->setListenPort(_nodeConfig->opEngineRpcListenPort());
@@ -410,17 +409,16 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(int sendTxTimeout,
     return jsonRpcInterface;
 }
 
-template<bool _enableOPEngine>
 bcos::rpc::Web3JsonRpcImpl::Ptr RpcFactory::buildWeb3JsonRpc(
     int sendTxTimeout, boostssl::ws::WsService::Ptr _wsService, GroupManager::Ptr _groupManager,
-    FilterSystem::Ptr _filterSystem)
+    FilterSystem::Ptr _filterSystem, bool _enableOPEngine)
 {
     auto web3JsonRpc = std::make_shared<Web3JsonRpcImpl>(m_nodeConfig->groupId(),
         m_nodeConfig->web3BatchRequestSizeLimit(), std::move(_groupManager),
         std::move(_filterSystem), m_nodeConfig->web3SyncTransaction(), _enableOPEngine);
 
     // if enable op engine, set jwt verifier and register op engine json http request handler
-    if constexpr (_enableOPEngine)
+    if (_enableOPEngine)
     {
         auto jwtConfig = std::make_shared<bcos::rpc::JwtConfig>();
         jwtConfig->setSecretFile(m_nodeConfig->opEngineJwtSecretFile());
@@ -514,10 +512,10 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
 
     if (m_nodeConfig->enableOpEngineRpc())
     {
-        auto opEngineConfig = initWeb3RpcServiceConfig<true>(m_nodeConfig);
+        auto opEngineConfig = initWeb3RpcServiceConfig(m_nodeConfig, true);
         auto opEngineWsService = buildWsService(std::move(opEngineConfig));
-        auto opEngineJsonRpc = buildWeb3JsonRpc<true>(
-            m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, web3FilterSystem);
+        auto opEngineJsonRpc = buildWeb3JsonRpc(
+            m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, web3FilterSystem, true);
 
         rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
     }
