@@ -183,7 +183,17 @@ public:
                 }
                 auto nonceInStorage = co_await account.nonce();
                 auto storageNonce = u256(nonceInStorage.value_or("0"));
-                u256 newNonce = std::max(callNonce, storageNonce) + 1;
+                // bugfix_nonce_ordering: make the committed nonce independent of the intra-block
+                // execution order of a sender's transactions. The sealer packs same-sender txs in
+                // hash order, so a lower-nonce tx may execute after a higher-nonce one has already
+                // raised the storage nonce; the legacy max(callNonce, storageNonce) + 1 then reads
+                // the raised value and over-increments. max(callNonce + 1, storageNonce) yields the
+                // identical result for in-order execution but stays stable when storageNonce is
+                // already ahead of callNonce.
+                u256 newNonce = m_data->m_ledgerConfig.get().features().get(
+                                    ledger::Features::Flag::bugfix_nonce_ordering) ?
+                                    std::max(callNonce + 1, storageNonce) :
+                                    std::max(callNonce, storageNonce) + 1;
                 co_await account.setNonce(newNonce.convert_to<std::string>());
                 co_return true;
             }

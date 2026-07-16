@@ -84,6 +84,7 @@ public:
         bugfix_precompiled_feature_gate,      // FIB-84
         bugfix_evm_storage_status,            // FIB-94
         bugfix_statestorage_hash_v3_17,       // FIB-99/105
+        bugfix_nonce_ordering,  // web3 EOA nonce must be independent of intra-block tx order
         feature_dmc2serial,
         feature_sharding,
         feature_rpbft,
