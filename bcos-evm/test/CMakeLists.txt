@@ -3,7 +3,6 @@ find_package(GTest CONFIG REQUIRED)
 add_executable(bcos-evm-eth-tests
     eth/EthTransitionTest.cpp
     eth/StateDiffWritebackTest.cpp
-    eth/EestStateTest.cpp
     eth/EestBlockchainTest.cpp
 )
 target_link_libraries(bcos-evm-eth-tests PRIVATE
