@@ -1,0 +1,17 @@
+# M6 upstream diff manifest — bcos-evm-ref 照抄面 ↔ evmone REF (see EVMONE_REF).
+# Columns: id  ref_file  ref_begin  ref_end  upstream_file  up_begin  up_end
+# Update line ranges when editing copy surfaces; re-run with --regenerate-goldens after intentional forks.
+#
+# bcos-evm-ref/opstack/OpTransition.cpp (evmone test/state/state.cpp)
+auth_constants	bcos-evm-ref/opstack/OpTransition.cpp	23	28	test/state/state.cpp	20	25
+build_message	bcos-evm-ref/opstack/OpExecCommon.cpp	11	31	test/state/state.cpp	180	199
+auth_list_shared	bcos-evm-ref/opstack/OpTransition.cpp	81	134	test/state/state.cpp	124	177
+transition_buy_gas	bcos-evm-ref/opstack/OpTransition.cpp	154	164	test/state/state.cpp	574	584
+# D-14a: transition_access/transition_delegate/transition_gas_settle 合并搬迁至
+# OpExecCommon.cpp::executeMessage（共享执行核，供 opTransition 与后续 runDeposit 复用）。
+exec_common_body	bcos-evm-ref/opstack/OpExecCommon.cpp	38	71	test/state/state.cpp	599	636
+#
+# bcos-evm-ref/opstack/OpHost.cpp (evmone test/state/host.cpp)
+apply_call_value	bcos-evm-ref/opstack/OpHost.cpp	54	66	test/state/host.cpp	345	364
+call_depth_guard	bcos-evm-ref/opstack/OpHost.cpp	127	132	test/state/host.cpp	224	226
+call_03_quirk	bcos-evm-ref/opstack/OpHost.cpp	142	151	test/state/host.cpp	390	400
