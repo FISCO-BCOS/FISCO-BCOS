@@ -18,14 +18,26 @@
 
 
 find_package(Boost REQUIRED serialization)
+find_package(RocksDB REQUIRED)
 
 file(GLOB_RECURSE SRCS bcos-ledger/*.cpp)
+# halfcommit/ builds as its own lean static lib (framework + RocksDB, no ledger)
+# so node startup (PR-29) and the offline CLI (tools/half-commit-check) can link
+# the scanner without dragging in the full ledger target
+file(GLOB_RECURSE HALFCOMMIT_SRCS bcos-ledger/halfcommit/*.cpp)
+list(REMOVE_ITEM SRCS ${HALFCOMMIT_SRCS})
 add_library(ledger ${SRCS})
 target_include_directories(ledger PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-ledger>)
 target_link_libraries(ledger PUBLIC tool protocol-tars codec table bcos-concepts bcos-crypto Boost::serialization)
 set_target_properties(ledger PROPERTIES UNITY_BUILD "ON")
+
+add_library(halfcommit-checker ${HALFCOMMIT_SRCS})
+target_include_directories(halfcommit-checker PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/bcos-ledger>)
+target_link_libraries(halfcommit-checker PUBLIC bcos-framework bcos-crypto RocksDB::rocksdb)
 
 # test related
 if (TESTS)
@@ -35,5 +47,5 @@ if (TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS ledger EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS ledger halfcommit-checker EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY "bcos-ledger" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" FILES_MATCHING PATTERN "*.h")
