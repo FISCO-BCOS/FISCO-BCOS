@@ -92,3 +92,5 @@ bcos-evm/README.md
 bcos-evm/test/opstack/scripts/gen_7702_vectors.py
 # bcos-evm EEST fixtures version pin (kept locally, not tracked)
 bcos-evm/test/EEST_VERSION
+# bcos-evm IWYU mapping (kept locally, not tracked)
+bcos-evm/iwyu-bcos-evm.imp
