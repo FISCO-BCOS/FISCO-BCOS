@@ -142,4 +142,39 @@ BOOST_AUTO_TEST_CASE(ReverseIndexClearedOnRemovalAndIdempotent)
     BOOST_CHECK(table.queryP2pIDs("group1", "n1") == S({"B"}));
 }
 
+// The reverse index aliases m_groupNodeList's key strings by pointer. A group/node fully erased and
+// later recreated must not corrupt routing: the recreated node owns fresh key objects, and no stale
+// reverse entry may reference the freed ones. (Without ASan this is a probabilistic stress of the
+// lifetime invariant, not a proof; the invariant itself is argued on m_p2pID2GroupNodes.)
+BOOST_AUTO_TEST_CASE(GroupErasedAndRecreatedKeepsRoutingCorrect)
+{
+    ExposedPeersRouterTable table;
+
+    // P is the sole holder of group9{n1,n2}; removing P erases both nodes and the whole group.
+    table.batchInsertNodeList("P", {makeGroupNodeInfo("group9", {"n1", "n2"})});
+    BOOST_CHECK(table.queryP2pIDs("group9", "n1") == S({"P"}));
+    table.removeP2PIDFromGroupNodeList("P");
+    BOOST_CHECK(table.queryP2pIDsByGroupID("group9").empty());
+
+    // Churn many unrelated groups so the allocator is likely to reuse the memory the erased group9
+    // key strings occupied.
+    for (int i = 0; i < 64; ++i)
+    {
+        table.batchInsertNodeList(
+            "X", {makeGroupNodeInfo("churn" + std::to_string(i), {"a", "b"})});
+    }
+
+    // Recreate group9 through a different peer Q; its keys are fresh objects at (possibly) reused
+    // addresses.
+    table.batchInsertNodeList("Q", {makeGroupNodeInfo("group9", {"n1"})});
+    BOOST_CHECK(table.queryP2pIDs("group9", "n1") == S({"Q"}));
+
+    // Removing X keys off X's own churn entries only; Q's recreated group9 entry is untouched.
+    table.removeP2PIDFromGroupNodeList("X");
+    BOOST_CHECK(table.queryP2pIDs("churn0", "a").empty());
+    BOOST_CHECK(table.queryP2pIDs("group9", "n1") == S({"Q"}));
+    table.removeP2PIDFromGroupNodeList("Q");
+    BOOST_CHECK(table.queryP2pIDsByGroupID("group9").empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

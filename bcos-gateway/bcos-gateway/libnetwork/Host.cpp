@@ -807,6 +807,10 @@ void Host::stop()
     {
         m_teardownPool->stop();
     }
+    // A teardown notification that was still running on the pool when it stopped could have posted
+    // follow-up work onto m_asyncGroup after the wait() above returned; drain m_asyncGroup once
+    // more so no such task outlives Host::stop(). wait() on an already-idle group is a cheap no-op.
+    m_asyncGroup.wait();
 }
 bcos::gateway::Host::Host(bcos::crypto::Hash::Ptr _hash,
     std::shared_ptr<ASIOInterface> _asioInterface, std::shared_ptr<SessionFactory> _sessionFactory,

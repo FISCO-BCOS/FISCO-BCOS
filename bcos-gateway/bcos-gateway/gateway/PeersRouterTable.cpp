@@ -105,14 +105,15 @@ void PeersRouterTable::batchInsertNodeList(
         int64_t i = 0;
         for (auto const& nodeID : nodeIDList)
         {
-            if (!m_groupNodeList.count(groupID) || !m_groupNodeList.at(groupID).count(nodeID))
-            {
-                m_groupNodeList[groupID][nodeID] = std::set<P2pID>();
-            }
-            m_groupNodeList[groupID][nodeID].insert(_p2pNodeID);
+            // Capture the map iterators so the reverse index can alias the stable key strings owned
+            // by these nodes (try_emplace leaves an existing entry untouched, inserts otherwise).
+            auto groupIt = m_groupNodeList.try_emplace(groupID).first;
+            auto nodeIt = groupIt->second.try_emplace(nodeID).first;
+            nodeIt->second.insert(_p2pNodeID);
             // FIB-186 (vector D): mirror the insert into the reverse index so the matching removal
-            // is O(K) instead of a full-map scan. std::set dedups repeated (groupID, nodeID) pairs.
-            m_p2pID2GroupNodes[_p2pNodeID].emplace(groupID, nodeID);
+            // is O(K) instead of a full-map scan. Store pointers to the key strings (not copies);
+            // see the lifetime invariant on m_p2pID2GroupNodes. std::set dedups repeated pairs.
+            m_p2pID2GroupNodes[_p2pNodeID].emplace(&groupIt->first, &nodeIt->first);
             if (it->protocol(i))
             {
                 m_nodeProtocolInfo[nodeID] = it->protocol(i);
@@ -151,14 +152,14 @@ void PeersRouterTable::removeP2PIDFromGroupNodeList(const P2pID& _p2pID)
     {
         return;
     }
-    for (auto const& [groupID, nodeID] : revIt->second)
+    for (auto const& [groupIDPtr, nodeIDPtr] : revIt->second)
     {
-        auto groupIt = m_groupNodeList.find(groupID);
+        auto groupIt = m_groupNodeList.find(*groupIDPtr);
         if (groupIt == m_groupNodeList.end())
         {
             continue;
         }
-        auto nodeIt = groupIt->second.find(nodeID);
+        auto nodeIt = groupIt->second.find(*nodeIDPtr);
         if (nodeIt == groupIt->second.end())
         {
             continue;

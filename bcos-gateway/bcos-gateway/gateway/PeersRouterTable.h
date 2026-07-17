@@ -90,7 +90,16 @@ private:
     // (Gateway::asyncSendMessageByNodeID). This index lets removal touch only the entries a peer
     // actually holds, bounding the WriteLock hold time to O(K). Maintained under x_groupNodeList
     // together with m_groupNodeList (same lock, so the two are always consistent).
-    std::map<P2pID, std::set<std::pair<std::string, std::string>>> m_p2pID2GroupNodes;
+    //
+    // Each entry stores POINTERS to the (groupID, nodeID) key strings owned by m_groupNodeList's
+    // nodes, not copies, to avoid duplicating every groupID/nodeID string.
+    // Lifetime invariant: std::map/std::set keep a node's key object at a stable address until that
+    // element is erased, and removeP2PIDFromGroupNodeList erases a (group)/(node) element only when
+    // its p2pID set empties -- i.e. when no peer (including this one) still references it -- so a
+    // pointer stored here always outlives the reverse entry holding it. This REQUIRES
+    // m_groupNodeList to remain a node-based container: do NOT switch it to a flat/vector-backed
+    // map whose keys move on insert/rehash, or these pointers dangle.
+    std::map<P2pID, std::set<std::pair<const std::string*, const std::string*>>> m_p2pID2GroupNodes;
     std::map<std::string, bcos::protocol::ProtocolInfo::ConstPtr> m_nodeProtocolInfo;
     mutable SharedMutex x_groupNodeList;
 
