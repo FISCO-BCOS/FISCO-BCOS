@@ -369,16 +369,37 @@ void Session::drop(DisconnectReason _reason)
 
     if (m_messageHandler)
     {
-        m_server.get().asyncTo(
-            [self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
-                auto session = self.lock();
-                if (!session)
-                {
-                    return;
-                }
-                session->m_messageHandler(
-                    NetworkException(errorCode, errorMsg), session, Message::Ptr());
-            });
+        // FIB-186 (vector D): run the teardown notification on the dedicated teardown executor, NOT
+        // m_asyncGroup. This handler drives Service::onMessage's error path -> onDisconnect ->
+        // onRemoveNodeIDs -> syncLatestNodeIDList; running it on the shared m_asyncGroup let a
+        // persistent bulk-disconnect flood starve inter-validator message delivery (which also runs
+        // on m_asyncGroup) and permanently halt consensus. postTeardown keeps it off the delivery
+        // reactor. Ordering vs message delivery is unchanged: onDisconnect already ran
+        // asynchronously and unordered relative to delivery.
+        auto notifyDisconnect = [self = weak_from_this(), errorCode,
+                                    errorMsg = std::move(errorMsg)]() {
+            auto session = self.lock();
+            if (!session)
+            {
+                return;
+            }
+            session->m_messageHandler(
+                NetworkException(errorCode, errorMsg), session, Message::Ptr());
+        };
+        // FIB-186 (vector D): on shutdown Host::stop() has already stopped the teardown executor
+        // (its io_context is stopped and the worker joined), so a postTeardown() here would enqueue
+        // onto a dead pool and the disconnect notification would be silently dropped. Run it inline
+        // instead, mirroring the socket-teardown path below which also switches to inline on
+        // shutdown. haveNetwork() (== Host::m_run) is cleared at the very start of Host::stop(),
+        // before the pool is stopped, so this branch is taken for every drop during shutdown.
+        if (m_server.get().haveNetwork())
+        {
+            m_server.get().postTeardown(std::move(notifyDisconnect));
+        }
+        else
+        {
+            notifyDisconnect();
+        }
     }
 
     // FIB-184: serialize the SSL/socket teardown onto the socket's own (single-threaded)

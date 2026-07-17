@@ -788,17 +788,35 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         auto gatewayNodeManagerWeakPtr = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(
-            [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
+            [gatewayNodeManagerWeakPtr, serviceWeakPtr = std::weak_ptr<Service>(service)](
+                NetworkException e, P2PSession::Ptr p2pSession) {
                 if (e.errorCode() == P2PExceptionType::DuplicateSession ||
                     e.errorCode() == P2PExceptionType::Success)
                 {
                     return;
                 }
                 auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
-                if (gatewayNodeManager && p2pSession)
+                if (!gatewayNodeManager || !p2pSession)
                 {
-                    gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
+                    return;
                 }
+                // FIB-186 (vector D): the teardown notification that drives this handler can be
+                // delayed on the dedicated teardown executor while the SAME peer reconnects -- a
+                // new session for the same p2pID is inserted and its status re-populates the
+                // routing table. removeP2PID keys only on p2pID, so a stale teardown would erase
+                // the new session's routing entries and blank the unicast route until the next
+                // status broadcast. Only remove when this dropped session is still the session of
+                // record for its p2pID (or none is): if a different, current session already owns
+                // the p2pID the peer has reconnected and its entries must be kept.
+                if (auto service = serviceWeakPtr.lock())
+                {
+                    auto current = service->getP2PSessionByNodeId(p2pSession->p2pID());
+                    if (current && current != p2pSession)
+                    {
+                        return;
+                    }
+                }
+                gatewayNodeManager->onRemoveNodeIDs(p2pSession->p2pID());
             });
 
         service->registerUnreachableHandler(
