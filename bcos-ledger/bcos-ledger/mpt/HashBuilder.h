@@ -29,7 +29,10 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <map>
 #include <optional>
+#include <range/v3/range.hpp>
+#include <range/v3/view/transform.hpp>
 #include <span>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -116,20 +119,18 @@ bcos::task::Task<TrieMergeResult> commitTrie(Storage& storage, bcos::h256 priorR
         .root = built.root, .newNodes = std::move(built.newNodes), .obsoletedNodes = {}};
 }
 
-/// Batch-write @p nodes (hash → raw RLP) into @p storage in one writeSome round-trip — the flush
-/// counterpart of commitTrie for the caller that owns node persistence (MPTBuilder flushes its
-/// aggregated MPTDeltaLayer.newNodes once per block; tests flush per build).
+/// Batch-write @p nodes — any input range of (hash → raw RLP) pairs — into @p storage in one
+/// writeSome round-trip, the flush counterpart of commitTrie for the caller that owns node
+/// persistence (MPTBuilder flushes its aggregated MPTDeltaLayer.newNodes once per block; tests
+/// flush per build). @p nodes is read through a reference view — elements are copied into
+/// storage, never moved from: the caller's delta must stay intact for the commit flow and
+/// CommitObserver.
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
-bcos::task::Task<void> flushTrieNodes(
-    Storage& storage, std::unordered_map<bcos::h256, bcos::bytes> const& nodes)
+bcos::task::Task<void> flushTrieNodes(Storage& storage, ::ranges::input_range auto const& nodes)
 {
-    std::vector<std::tuple<bcos::h256, bcos::bytes>> batch;
-    batch.reserve(nodes.size());
-    for (auto const& [hash, raw] : nodes)
-    {
-        batch.emplace_back(hash, raw);
-    }
-    co_await bcos::storage2::writeSome(storage, std::move(batch));
+    co_await bcos::storage2::writeSome(
+        storage, nodes | ::ranges::views::transform(
+                             [](auto const& node) { return std::tie(node.first, node.second); }));
 }
 
 }  // namespace bcos::ledger::mpt
