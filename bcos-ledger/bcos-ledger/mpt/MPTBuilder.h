@@ -38,6 +38,7 @@
 #include <boost/throw_exception.hpp>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <variant>
@@ -82,6 +83,12 @@ public:
     /// Apply the block's flat delta to the MPT and return the new state root plus the node
     /// delta.
     ///
+    /// The build mirrors Ethereum's two-level trie-of-tries, bottom-up: first each touched
+    /// account commits its own STORAGE trie (slotKeyHash → RLP(value)) and embeds the resulting
+    /// root in its leaf encoding; then ONE account-trie commit over the collected leaves
+    /// (accountKeyHash → RLP(leaf)) yields the block's state root. All N+1 commitTrie results
+    /// accumulate into the returned delta; nothing is written until the single flush at the end.
+    ///
     /// @param flatView        the block's fork of the flat MultiLayerStorage (the same view
     ///                        coCommitBlock forks for prewrite): its top mutable layer is the
     ///                        block's delta, ranged per account; reads for first-touch metadata
@@ -97,7 +104,9 @@ public:
     {
         MPTDeltaLayer output;
         MPTReadView<Storage> parentView(m_storage.get(), m_parentStateRoot);
-        // The account-trie change-set, committed once through commitTrie at the end. std::map
+        // The ACCOUNT trie's change-set: accountKeyHash(addr) → the account's new leaf encoding
+        // (nullopt = tombstone removal). Slot changes never appear here — each account digests
+        // its slots into a storage-trie root first, and only that root reaches the leaf. std::map
         // on purpose (commitTrie's signature requires it): the type itself guarantees ascending
         // iteration and unique keys, and h256 lexicographic order IS 64-nibble path order — the
         // ordering the trie build relies on.
@@ -110,6 +119,9 @@ public:
             co_await buildOneAccount(addr, flatView, parentView, l2Mode, accountChanges, output);
         }
 
+        // Second trie level: commit the account trie over the collected leaf encodings. Runs
+        // after the loop by necessity — every leaf embeds its storage-trie root, so the storage
+        // tries must be committed first. This root is the block's new MPT state root.
         auto merged = co_await commitTrie(m_storage.get(), m_parentStateRoot, accountChanges);
         output.stateRoot = merged.root;
         mergeNodeDelta(std::move(merged), output);
@@ -122,7 +134,7 @@ public:
         // in newNodes — it is flushed and referenced by the new version — and leaves the prune
         // ledger; the subtracted hashes move to intraBlockObsoleted rather than vanishing, so
         // the pruning spec keeps full information.
-        for (auto const& [hash, raw] : output.newNodes)
+        for (const auto& hash : output.newNodes | std::views::keys)
         {
             if (output.obsoletedNodes.erase(hash) != 0U)
             {
@@ -308,6 +320,8 @@ private:
 
         if (!storageChanges.empty())
         {
+            // First trie level: commit THIS account's storage trie; the new root is embedded in
+            // the leaf encoded below, which is how it reaches the account trie.
             // First-touch: priorStorageRoot == emptyRootHash() — the trie holds exactly this
             // block's written slots (spec §4.2); deletes of never-written slots are no-ops.
             auto merged = co_await commitTrie(m_storage.get(), priorStorageRoot, storageChanges);
