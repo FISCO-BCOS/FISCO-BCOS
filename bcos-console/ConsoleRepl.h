@@ -13,17 +13,22 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: built-in REPL with line editing, history, and tab completion
+ * @brief: REPL wrapper using replxx — line editing, history, and tab completion
  * @file: ConsoleRepl.h
  */
 
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <termios.h>
+
+namespace replxx
+{
+class Replxx;
+}
 
 namespace bcos::console
 {
@@ -31,8 +36,9 @@ namespace bcos::console
 // Callback type: given a prefix, returns completion candidates.
 using CompletionCallback = std::function<std::vector<std::string>(std::string_view)>;
 
-// Built-in REPL with terminal raw-mode line editing and history.
-// No external dependencies — uses ANSI escape sequences and termios.
+// REPL backed by the replxx library (BSD-licensed, cross-platform).
+// Provides line editing, persistent history, tab completion, hints, and
+// Ctrl‑R history search out of the box.
 class ConsoleRepl
 {
 public:
@@ -48,8 +54,7 @@ public:
     // Set the history file path for persistence.
     void setHistoryFile(std::string_view path) { m_historyFile = path; }
 
-    // Read one line from the user. Returns the raw input (may be empty on Ctrl-D).
-    // Throws on terminal errors.
+    // Read one line from the user. Returns the input, or an empty string on EOF.
     std::string readLine();
 
     // Load history from the configured history file.
@@ -58,32 +63,14 @@ public:
     // Save history to the configured history file.
     void saveHistory();
 
-    // Add a line to the in-memory history.
+    // Add a line to the in-memory history (deduplicates consecutive duplicates).
     void addHistory(std::string_view line);
 
 private:
-    void enableRawMode();
-    void disableRawMode();
-    void refreshLine();
-    void handleCompletion();
-
+    std::unique_ptr<replxx::Replxx> m_rx;
     std::string m_prompt;
     CompletionCallback m_completer;
-
-    std::string m_buffer;          // current input line
-    size_t m_cursor = 0;          // cursor position in m_buffer
-    std::vector<std::string> m_history;
-    int m_historyIndex = -1;      // -1 = not navigating history
-    std::string m_savedLine;      // saved line before history navigation
-
     std::string m_historyFile;
-
-    // Terminal dimensions
-    int m_termCols = 80;
-
-    // Original terminal settings (system ::termios, not namespaced)
-    ::termios* m_origTermios = nullptr;
-    bool m_rawMode = false;
 };
 
 }  // namespace bcos::console

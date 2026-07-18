@@ -2,6 +2,7 @@
 # Depends on: bcos-rpc, bcos-crypto, bcos-boostssl, bcos-utilities, tomlplusplus
 
 find_package(tomlplusplus CONFIG REQUIRED)
+find_package(replxx CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 # Detect solc binary at configure time
@@ -35,14 +36,15 @@ target_include_directories(bcos-console PUBLIC
 )
 
 target_link_libraries(bcos-console PUBLIC
-    rpc
     bcos-crypto
     codec
     bcos-boostssl
     bcos-utilities
     bcos-framework
+    rpc
     bcos-cpp-sdk
     tomlplusplus::tomlplusplus
+    replxx::replxx
     OpenSSL::SSL OpenSSL::Crypto
 )
 

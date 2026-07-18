@@ -23,13 +23,12 @@
 #include "ConsoleRepl.h"
 #include "OutputFormatter.h"
 #include "config/ConsoleConfig.h"
-#include "connection/RpcConnection.h"
 #include "connection/LocalRpcConnection.h"
+#include "connection/RpcConnection.h"
 #include "keymanager/KeyManager.h"
 #include "precompiled/PrecompiledContract.h"
 #include "precompiled/PrecompiledContractInfo.h"
 #include "transaction/TransactionPipeline.h"
-
 #include <memory>
 #include <string>
 
@@ -45,8 +44,7 @@ public:
     // Initialize the console from a config file path.
     // If jsonRpc is provided (non-null), use local in-process mode.
     // Otherwise connect remotely via WebSocket using the config.
-    bool init(std::string_view configPath,
-        ::bcos::rpc::JsonRpcInterface::Ptr jsonRpc = nullptr,
+    bool init(std::string_view configPath, ::bcos::rpc::JsonRpcInterface::Ptr jsonRpc = nullptr,
         std::string_view defaultGroup = {});
 
     // Start the REPL loop. Blocks until user quits.

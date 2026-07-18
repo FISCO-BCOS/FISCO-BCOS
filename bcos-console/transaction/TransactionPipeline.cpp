@@ -13,15 +13,14 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: TransactionPipeline implementation
+ * @brief: TransactionPipeline — coroutine-based send with Awaitable bridges
  * @file: TransactionPipeline.cpp
  */
 
 #include "TransactionPipeline.h"
-#include <bcos-utilities/DataConvertUtility.h>
-#include <condition_variable>
+#include <bcos-utilities/Error.h>
+#include <coroutine>
 #include <iostream>
-#include <mutex>
 
 namespace bcos::console
 {
@@ -36,110 +35,121 @@ TransactionPipeline::TransactionPipeline(RpcConnection::Ptr connection, KeyManag
     m_txBuilder = std::make_unique<bcos::cppsdk::utilities::TransactionBuilder>();
 }
 
-int64_t TransactionPipeline::fetchBlockNumber()
+// ---- Awaitable bridges (analogous to LedgerMethods pattern) ----
+
+namespace
 {
-    std::mutex mtx;
-    std::condition_variable cv;
+
+/// Suspend until getBlockNumber completes; resume stores the value.
+struct AwaitBlockNumber
+{
+    RpcConnection& conn;
+    std::string_view groupID;
+    std::string_view nodeName;
     int64_t result = -1;
-    bool done = false;
+    bcos::Error::Ptr error;
 
-    m_connection->getBlockNumber(
-        m_groupID, m_connection->defaultNodeName(), [&](bcos::Error::Ptr error, Json::Value& r) {
-            std::lock_guard<std::mutex> lock(mtx);
-            if (!error)
-            {
-                result = r.asInt64();
-            }
-            done = true;
-            cv.notify_one();
-        });
+    static constexpr bool await_ready() noexcept { return false; }
+    void await_suspend(std::coroutine_handle<> handle)
+    {
+        conn.getBlockNumber(
+            groupID, nodeName, [this, handle](bcos::Error::Ptr err, Json::Value& r) {
+                if (err)
+                    error = std::move(err);
+                else
+                    result = r.asInt64();
+                handle.resume();
+            });
+    }
+    int64_t await_resume() const { return result; }
+};
 
-    std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&] { return done; });
-    return result;
-}
-
-void TransactionPipeline::send(std::string_view contractAddr, const bcos::bytes& data,
-    std::string_view abi, TxResultCallback callback)
+/// Suspend until sendTransaction completes; error (if any) stored in member.
+struct AwaitSendTx
 {
-    // Validate we have a key for signing
+    RpcConnection& conn;
+    std::string_view groupID;
+    std::string_view nodeName;
+    std::string txHex;
+    bool requireProof = false;
+    bcos::Error::Ptr error;
+
+    static constexpr bool await_ready() noexcept { return false; }
+    void await_suspend(std::coroutine_handle<> handle)
+    {
+        conn.sendTransaction(groupID, nodeName, txHex, requireProof,
+            [this, handle](bcos::Error::Ptr err, Json::Value& /*result*/) {
+                error = std::move(err);
+                handle.resume();
+            });
+    }
+    void await_resume() const noexcept {}
+};
+
+}  // anonymous namespace
+
+// ---- Public API ----
+
+task::Task<std::pair<bool, std::string>> TransactionPipeline::send(
+    std::string_view contractAddr, const bcos::bytes& data, std::string_view abi)
+{
+    // Validate key
     auto keyPair = m_keyManager->currentKeyPair();
     if (!keyPair)
     {
-        callback(false, "No account loaded for signing. Use loadAccount <path> first.");
-        return;
+        co_return std::pair{
+            false, std::string("No account loaded for signing. Use loadAccount <path> first.")};
     }
 
-    // Get current block number for blockLimit
-    int64_t blockNumber = fetchBlockNumber();
+    // Fetch block number asynchronously
+    auto blockNumber = co_await AwaitBlockNumber{
+        .conn = *m_connection,
+        .groupID = m_groupID,
+        .nodeName = m_connection->defaultNodeName(),
+        .result = -1,
+        .error = nullptr,
+    };
     if (blockNumber < 0)
     {
-        callback(false, "Failed to fetch block number from chain.");
-        return;
+        co_return std::pair{false, std::string("Failed to fetch block number from chain.")};
     }
     int64_t blockLimit = blockNumber + BLOCK_LIMIT_OFFSET;
 
-    // Build the signed transaction
+    // Build signed transaction
     std::pair<std::string, std::string> signedTx;
     try
     {
-        signedTx = m_txBuilder->createSignedTransaction(*keyPair,  // signing key pair
-            m_groupID,                                             // group ID
-            m_chainID,                                             // chain ID
-            std::string(contractAddr),                             // "to" address
-            data,                                                  // ABI-encoded input data (bytes)
-            std::string(abi),                                      // ABI JSON string
-            blockLimit,                                            // block limit
-            0,                                                     // attribute (0 = normal)
-            ""                                                     // extraData
-        );
+        signedTx = m_txBuilder->createSignedTransaction(*keyPair, m_groupID, m_chainID,
+            std::string(contractAddr), data, std::string(abi), blockLimit, 0, "");
     }
     catch (std::exception const& e)
     {
-        callback(false, std::string("Transaction build error: ") + e.what());
-        return;
+        co_return std::pair{false, std::string("Transaction build error: ") + e.what()};
     }
 
-    // signedTx.first  = tx hash (hex, no prefix)
-    // signedTx.second = signed transaction bytes (hex, no prefix)
     auto txHash = signedTx.first;
     auto txHex = signedTx.second;
+    auto nodeName = m_connection->defaultNodeName();
 
     std::cout << "[DEBUG] Signed transaction hash: 0x" << txHash << '\n';
 
-    // Send via JSON-RPC
-    m_connection->sendTransaction(m_groupID, m_connection->defaultNodeName(), txHex,
-        false,  // requireProof
-        [callback = std::move(callback), txHash](bcos::Error::Ptr error, Json::Value& result) {
-            if (error)
-            {
-                callback(false, "Send error: " + error->errorMessage());
-                return;
-            }
-            callback(true, txHash);
-        });
-}
+    // Send transaction asynchronously
+    auto awaitSend = AwaitSendTx{
+        .conn = *m_connection,
+        .groupID = m_groupID,
+        .nodeName = nodeName,
+        .txHex = txHex,
+        .requireProof = false,
+        .error = nullptr,
+    };
+    co_await awaitSend;
 
-std::pair<bool, std::string> TransactionPipeline::sendSync(
-    std::string_view contractAddr, const bcos::bytes& data, std::string_view abi)
-{
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool success = false;
-    std::string result;
-    bool done = false;
+    if (awaitSend.error)
+    {
+        co_return std::pair{false, "Send error: " + awaitSend.error->errorMessage()};
+    }
 
-    send(contractAddr, data, abi, [&](bool ok, std::string msg) {
-        std::lock_guard<std::mutex> lock(mtx);
-        success = ok;
-        result = std::move(msg);
-        done = true;
-        cv.notify_one();
-    });
-
-    std::unique_lock<std::mutex> lock(mtx);
-    cv.wait(lock, [&] { return done; });
-    return {success, result};
+    co_return std::pair{true, std::move(txHash)};
 }
 
 }  // namespace bcos::console

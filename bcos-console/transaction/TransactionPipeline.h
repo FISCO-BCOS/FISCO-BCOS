@@ -22,31 +22,26 @@
 
 #include "../connection/RpcConnection.h"
 #include "../keymanager/KeyManager.h"
-#include "../precompiled/PrecompiledContractInfo.h"
-
-#include <bcos-cpp-sdk/utilities/tx/TransactionBuilder.h>
-#include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
+#include "bcos-cpp-sdk/utilities/tx/TransactionBuilder.h"
+#include <bcos-task/Task.h>
 #include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace bcos::console
 {
-
-/// Callback for transaction result: (success, txHash or error message)
-using TxResultCallback = std::function<void(bool success, std::string txHashOrError)>;
 
 /**
  * @brief Pipeline that takes ABI-encoded precompiled call data, signs it,
  *        and sends the transaction to the chain.
  *
- * The typical flow:
- *   1. User command → PrecompiledContract::encode() → bytes
- *   2. pipeline.send(contractAddr, encodedData, abi, callback)
- *   3. Internally: getBlockNumber() → blockLimit=blockNumber+500
- *      → TransactionBuilder::createSignedTransaction()
- *      → RpcConnection::sendTransaction()
+ * The typical call site uses task::syncWait to block on the coroutine:
+ *   auto [ok, result] = task::syncWait(pipeline.send(addr, data, abi));
+ *
+ * Internally the coroutine suspends on the block-number query and the
+ * send-transaction RPC via the Awaitable pattern (see LedgerMethods).
  */
 class TransactionPipeline
 {
@@ -59,30 +54,16 @@ public:
     ~TransactionPipeline() = default;
 
     /**
-     * @brief Build, sign, and send a precompiled transaction asynchronously.
+     * @brief Coroutine: build, sign, and send a precompiled transaction.
      *
-     * @param contractAddr  Precompiled contract address (no 0x prefix, 40 hex)
-     * @param data          ABI-encoded call data (returned by PrecompiledContract::encode)
-     * @param abi           ABI JSON string for the precompiled contract
-     * @param callback      Called when the send completes: (success, hash|error)
+     * Suspends while fetching the block number and while the send RPC is in
+     * flight.  Callers that are not themselves in a coroutine can block with
+     * bcos::task::syncWait.
+     *
+     * @return pair<success, txHash_or_errorMessage>
      */
-    void send(std::string_view contractAddr, const bcos::bytes& data, std::string_view abi,
-        TxResultCallback callback);
-
-    /**
-     * @brief Synchronous version: blocks until the send completes.
-     * @return pair<success, hash_or_error>
-     */
-    std::pair<bool, std::string> sendSync(
+    task::Task<std::pair<bool, std::string>> send(
         std::string_view contractAddr, const bcos::bytes& data, std::string_view abi);
-
-    /**
-     * @brief Synchronous helper: query current block number.
-     *
-     * Used internally to compute blockLimit.
-     * Blocks until the async call returns.
-     */
-    int64_t fetchBlockNumber();
 
     /// Accessors
     const std::string& groupID() const { return m_groupID; }

@@ -66,17 +66,10 @@ std::vector<std::string> CommandDispatcher::completions(std::string_view prefix)
     std::vector<std::string> result;
     auto lowerPrefix = boost::to_lower_copy(std::string(prefix));
 
-    for (auto const& [name, _] : m_nameIndex)
+    for (auto const& [name, idx] : m_nameIndex)
     {
         if (name.starts_with(lowerPrefix))
-        {
-            // Return the original (mixed-case) primary name
-            auto it = m_nameIndex.find(name);
-            if (it != m_nameIndex.end())
-            {
-                result.emplace_back(m_commands[it->second].name);
-            }
-        }
+            result.emplace_back(m_commands[idx].name);
     }
     // Deduplicate
     std::sort(result.begin(), result.end());

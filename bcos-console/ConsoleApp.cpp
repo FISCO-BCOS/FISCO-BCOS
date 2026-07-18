@@ -25,7 +25,9 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
+#include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLogInitializer.h>
+#include <unistd.h>
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -61,8 +63,7 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
         m_useLocalRpc = true;
         auto group = defaultGroup.empty() ? "group0" : defaultGroup;
         m_currentGroup = group;
-        m_connection = std::make_shared<LocalRpcConnection>(
-            std::move(jsonRpc), std::string(group));
+        m_connection = std::make_shared<LocalRpcConnection>(std::move(jsonRpc), std::string(group));
         m_consoleConfig = buildLocalConsoleConfig(group);
     }
     else
@@ -111,14 +112,13 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
         keyPairFactory = std::make_shared<Secp256k1KeyPairFactoryAdapter>();
         hashImpl = std::make_shared<bcos::crypto::Keccak256>();
     }
-    m_keyManager = std::make_shared<KeyManager>(
-        keyFactory, keyPairFactory, hashImpl, cryptoType);
+    m_keyManager = std::make_shared<KeyManager>(keyFactory, keyPairFactory, hashImpl, cryptoType);
 
     // Auto-load account from config if specified
     if (!m_consoleConfig.accountFilePath.empty())
     {
-        m_keyManager->loadKey(m_consoleConfig.accountFilePath,
-            m_consoleConfig.accountFileFormat, m_consoleConfig.password);
+        m_keyManager->loadKey(m_consoleConfig.accountFilePath, m_consoleConfig.accountFileFormat,
+            m_consoleConfig.password);
     }
     else
     {
@@ -134,8 +134,8 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
     m_precompiled = std::make_shared<precompiled::PrecompiledContract>(hashImpl);
 
     // Initialize transaction pipeline for signing and sending
-    m_txPipeline = std::make_shared<TransactionPipeline>(
-        m_connection, m_keyManager, m_currentGroup);
+    m_txPipeline =
+        std::make_shared<TransactionPipeline>(m_connection, m_keyManager, m_currentGroup);
 
     // Register commands
     registerCommands();
@@ -216,7 +216,8 @@ bool ConsoleApp::processCommand(std::string_view rawLine)
     // Handle CRUD SQL commands — pass raw SQL as a single param
     static const std::vector<std::string> crudCommands = {
         "create", "alter", "insert", "select", "update", "delete", "desc"};
-    bool isCrud = std::find(crudCommands.begin(), crudCommands.end(), cmdName) != crudCommands.end();
+    bool isCrud =
+        std::find(crudCommands.begin(), crudCommands.end(), cmdName) != crudCommands.end();
 
     // Handle special built-in commands
     if (cmdName == "help" || cmdName == "h" || cmdName == "-h" || cmdName == "--help")
@@ -279,8 +280,7 @@ bool ConsoleApp::processCommand(std::string_view rawLine)
     auto cmdInfo = m_dispatcher.findCommand(cmdName);
     if (!cmdInfo)
     {
-        std::cout << "Unknown command: " << cmdName
-                  << ". Type 'help' for available commands.\n";
+        std::cout << "Unknown command: " << cmdName << ". Type 'help' for available commands.\n";
         return true;
     }
 
@@ -371,24 +371,24 @@ void ConsoleApp::registerCommands()
     CommandCategory basicCat;
     basicCat.name = "Basic";
 
-    basicCat.commands.push_back({"help", {"h", "-h", "--help"}, 0, 0, false, false, true,
-        "help: Show this help message",
-        [this](std::vector<std::string> const&, std::string&) -> bool {
-            printHelp();
-            return true;
-        }});
+    basicCat.commands.push_back(
+        {"help", {"h", "-h", "--help"}, 0, 0, false, false, true, "help: Show this help message",
+            [this](std::vector<std::string> const&, std::string&) -> bool {
+                printHelp();
+                return true;
+            }});
 
-    basicCat.commands.push_back({"quit", {"q", "exit"}, 0, 0, false, false, true,
-        "quit: Exit the console",
-        [](std::vector<std::string> const&, std::string&) -> bool { return false; }});
+    basicCat.commands.push_back(
+        {"quit", {"q", "exit"}, 0, 0, false, false, true, "quit: Exit the console",
+            [](std::vector<std::string> const&, std::string&) -> bool { return false; }});
 
-    basicCat.commands.push_back({"switch", {"s"}, 1, 1, false, false, true,
-        "switch <groupID>: Switch to another group",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
-            m_currentGroup = params[0];
-            std::cout << "Switched to group: " << m_currentGroup << '\n';
-            return true;
-        }});
+    basicCat.commands.push_back(
+        {"switch", {"s"}, 1, 1, false, false, true, "switch <groupID>: Switch to another group",
+            [this](std::vector<std::string> const& params, std::string&) -> bool {
+                m_currentGroup = params[0];
+                std::cout << "Switched to group: " << m_currentGroup << '\n';
+                return true;
+            }});
 
     basicCat.commands.push_back({"setNodeName", {}, 1, 1, false, false, true,
         "setNodeName <nodeName>: Set the default node for requests",
@@ -398,13 +398,13 @@ void ConsoleApp::registerCommands()
             return true;
         }});
 
-    basicCat.commands.push_back({"getNodeName", {}, 0, 0, false, false, true,
-        "getNodeName: Get the current default node",
-        [this](std::vector<std::string> const&, std::string&) -> bool {
-            auto name = m_connection->defaultNodeName();
-            std::cout << (name.empty() ? "(random routing)" : name) << '\n';
-            return true;
-        }});
+    basicCat.commands.push_back(
+        {"getNodeName", {}, 0, 0, false, false, true, "getNodeName: Get the current default node",
+            [this](std::vector<std::string> const&, std::string&) -> bool {
+                auto name = m_connection->defaultNodeName();
+                std::cout << (name.empty() ? "(random routing)" : name) << '\n';
+                return true;
+            }});
 
     basicCat.commands.push_back({"clearNodeName", {}, 0, 0, false, false, true,
         "clearNodeName: Clear the default node (random routing)",
@@ -454,11 +454,10 @@ void ConsoleApp::registerCommands()
             return true;
         }});
 
-    statusCat.commands.push_back({"getPeers", {"getpeers"}, 0, 0, false, false, true,
-        "getPeers: Query connected peers",
-        [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getPeers(
-                [](bcos::Error::Ptr error, Json::Value& result) {
+    statusCat.commands.push_back(
+        {"getPeers", {"getpeers"}, 0, 0, false, false, true, "getPeers: Query connected peers",
+            [this](std::vector<std::string> const&, std::string&) -> bool {
+                m_connection->getPeers([](bcos::Error::Ptr error, Json::Value& result) {
                     if (error)
                     {
                         std::cout << "Error: " << error->errorMessage() << '\n';
@@ -466,21 +465,20 @@ void ConsoleApp::registerCommands()
                     }
                     OutputFormatter::printJson(result);
                 });
-            return true;
-        }});
+                return true;
+            }});
 
     statusCat.commands.push_back({"getGroupList", {"getgrouplist"}, 0, 0, false, false, true,
         "getGroupList: List all group IDs",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupList(
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            m_connection->getGroupList([](bcos::Error::Ptr error, Json::Value& result) {
+                if (error)
+                {
+                    std::cout << "Error: " << error->errorMessage() << '\n';
+                    return;
+                }
+                OutputFormatter::printJson(result);
+            });
             return true;
         }});
 
@@ -562,8 +560,7 @@ void ConsoleApp::registerCommands()
     statusCat.commands.push_back({"getTotalTransactionCount", {"gettotaltxcount"}, 0, 0, true,
         false, true, "getTotalTransactionCount: Query total transaction count",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getTotalTransactionCount(
-                m_currentGroup, m_connection->defaultNodeName(),
+            m_connection->getTotalTransactionCount(m_currentGroup, m_connection->defaultNodeName(),
                 [](bcos::Error::Ptr error, Json::Value& result) {
                     if (error)
                     {
@@ -575,22 +572,20 @@ void ConsoleApp::registerCommands()
             return true;
         }});
 
-    statusCat.commands.push_back(
-        {"getSystemConfigByKey", {"getsystemconfigbykey"}, 1, 1, true, false, true,
-            "getSystemConfigByKey <key>: Query system config value",
-            [this](std::vector<std::string> const& params, std::string&) -> bool {
-                m_connection->getSystemConfigByKey(
-                    m_currentGroup, m_connection->defaultNodeName(), params[0],
-                    [](bcos::Error::Ptr error, Json::Value& result) {
-                        if (error)
-                        {
-                            std::cout << "Error: " << error->errorMessage() << '\n';
-                            return;
-                        }
-                        OutputFormatter::printJson(result);
-                    });
-                return true;
-            }});
+    statusCat.commands.push_back({"getSystemConfigByKey", {"getsystemconfigbykey"}, 1, 1, true,
+        false, true, "getSystemConfigByKey <key>: Query system config value",
+        [this](std::vector<std::string> const& params, std::string&) -> bool {
+            m_connection->getSystemConfigByKey(m_currentGroup, m_connection->defaultNodeName(),
+                params[0], [](bcos::Error::Ptr error, Json::Value& result) {
+                    if (error)
+                    {
+                        std::cout << "Error: " << error->errorMessage() << '\n';
+                        return;
+                    }
+                    OutputFormatter::printJson(result);
+                });
+            return true;
+        }});
 
     m_dispatcher.addCategory(statusCat);
     for (auto& cmd : statusCat.commands)
@@ -709,8 +704,8 @@ void ConsoleApp::registerCommands()
     groupCat.commands.push_back({"getGroupInfo", {"getgroupinfo"}, 0, 0, true, false, true,
         "getGroupInfo: Get current group information",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupInfo(m_currentGroup,
-                [](bcos::Error::Ptr error, Json::Value& result) {
+            m_connection->getGroupInfo(
+                m_currentGroup, [](bcos::Error::Ptr error, Json::Value& result) {
                     if (error)
                     {
                         std::cout << "Error: " << error->errorMessage() << '\n';
@@ -724,23 +719,22 @@ void ConsoleApp::registerCommands()
     groupCat.commands.push_back({"getGroupInfoList", {"getgroupinfolist"}, 0, 0, false, false, true,
         "getGroupInfoList: List all group information",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupInfoList(
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            m_connection->getGroupInfoList([](bcos::Error::Ptr error, Json::Value& result) {
+                if (error)
+                {
+                    std::cout << "Error: " << error->errorMessage() << '\n';
+                    return;
+                }
+                OutputFormatter::printJson(result);
+            });
             return true;
         }});
 
     groupCat.commands.push_back({"getGroupPeers", {"getgrouppeers"}, 0, 0, true, false, true,
         "getGroupPeers: List peers in current group",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupPeers(m_currentGroup,
-                [](bcos::Error::Ptr error, Json::Value& result) {
+            m_connection->getGroupPeers(
+                m_currentGroup, [](bcos::Error::Ptr error, Json::Value& result) {
                     if (error)
                     {
                         std::cout << "Error: " << error->errorMessage() << '\n';
@@ -767,8 +761,8 @@ void ConsoleApp::registerCommands()
             auto format = params.size() >= 1 ? params[0] : "pem";
             if (format == "p12")
             {
-                return m_keyManager->newP12Key(m_consoleConfig.keyStoreDir,
-                    params.size() >= 2 ? params[1] : "");
+                return m_keyManager->newP12Key(
+                    m_consoleConfig.keyStoreDir, params.size() >= 2 ? params[1] : "");
             }
             return m_keyManager->newPemKey(m_consoleConfig.keyStoreDir);
         }});
@@ -793,15 +787,14 @@ void ConsoleApp::registerCommands()
             std::vector<std::vector<std::string>> rows;
             for (auto const& acc : accounts)
             {
-                rows.push_back(
-                    {acc.address, acc.format, acc.isCurrent ? "*" : "", acc.keyFile});
+                rows.push_back({acc.address, acc.format, acc.isCurrent ? "*" : "", acc.keyFile});
             }
             OutputFormatter::printTable(headers, rows);
             return true;
         }});
 
-    accountCat.commands.push_back({"getCurrentAccount", {"currentaccount"}, 0, 0, false, false, true,
-        "getCurrentAccount: Show the currently loaded account address",
+    accountCat.commands.push_back({"getCurrentAccount", {"currentaccount"}, 0, 0, false, false,
+        true, "getCurrentAccount: Show the currently loaded account address",
         [this](std::vector<std::string> const&, std::string&) -> bool {
             auto addr = m_keyManager->currentAddress();
             if (addr.empty())
@@ -826,8 +819,8 @@ void ConsoleApp::registerCommands()
     consensusCat.name = "Consensus Governance";
 
     // Helper: validate, encode, sign, and send a precompiled governance tx
-    auto sendGovTx = [this](precompiled::PrecompiledType contract,
-                          std::string_view method, std::string_view jsonParams) -> bool {
+    auto sendGovTx = [this](precompiled::PrecompiledType contract, std::string_view method,
+                         std::string_view jsonParams) -> bool {
         auto keyPair = m_keyManager->currentKeyPair();
         if (!keyPair)
         {
@@ -837,9 +830,9 @@ void ConsoleApp::registerCommands()
         try
         {
             auto data = m_precompiled->encode(contract, method, jsonParams);
-            auto [ok, result] = m_txPipeline->sendSync(
-                precompiled::PrecompiledContract::address(contract),
-                data, precompiled::PrecompiledContract::abi(contract));
+            auto [ok, result] = bcos::task::syncWait(
+                m_txPipeline->send(precompiled::PrecompiledContract::address(contract), data,
+                    precompiled::PrecompiledContract::abi(contract)));
             if (ok)
                 std::cout << "Tx sent. Hash: 0x" << result << '\n';
             else
@@ -849,8 +842,7 @@ void ConsoleApp::registerCommands()
         {
             std::cout << "Error: " << e.what() << '\n';
             // Show the expected ABI signature on failure
-            std::cout << "Usage: "
-                      << m_precompiled->getUsage(contract, method) << '\n';
+            std::cout << "Usage: " << m_precompiled->getUsage(contract, method) << '\n';
             return false;
         }
         return true;
@@ -858,28 +850,28 @@ void ConsoleApp::registerCommands()
 
     consensusCat.commands.push_back({"addSealer", {}, 2, 2, true, true, true,
         "addSealer <nodeID> <weight>: Add a consensus sealer node",
-        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+        [sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
             return sendGovTx(precompiled::PrecompiledType::Consensus, "addSealer",
                 "[\"" + params[0] + "\", \"" + params[1] + "\"]");
         }});
 
-    consensusCat.commands.push_back({"addObserver", {}, 1, 1, true, true, true,
-        "addObserver <nodeID>: Add an observer node",
-        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
-            return sendGovTx(precompiled::PrecompiledType::Consensus, "addObserver",
-                "[\"" + params[0] + "\"]");
-        }});
+    consensusCat.commands.push_back(
+        {"addObserver", {}, 1, 1, true, true, true, "addObserver <nodeID>: Add an observer node",
+            [sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+                return sendGovTx(precompiled::PrecompiledType::Consensus, "addObserver",
+                    "[\"" + params[0] + "\"]");
+            }});
 
     consensusCat.commands.push_back({"removeNode", {}, 1, 1, true, true, true,
         "removeNode <nodeID>: Remove a node from the group",
-        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
-            return sendGovTx(precompiled::PrecompiledType::Consensus, "remove",
-                "[\"" + params[0] + "\"]");
+        [sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+            return sendGovTx(
+                precompiled::PrecompiledType::Consensus, "remove", "[\"" + params[0] + "\"]");
         }});
 
     consensusCat.commands.push_back({"setWeight", {}, 2, 2, true, true, true,
         "setWeight <nodeID> <weight>: Set consensus weight for a node",
-        [this, sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
+        [sendGovTx](std::vector<std::string> const& params, std::string&) -> bool {
             return sendGovTx(precompiled::PrecompiledType::Consensus, "setWeight",
                 "[\"" + params[0] + "\", \"" + params[1] + "\"]");
         }});
@@ -890,19 +882,20 @@ void ConsoleApp::registerCommands()
         [this](std::vector<std::string> const& params, std::string&) -> bool {
             if (params.empty())
             {
-                auto methods = m_precompiled->listMethods(
-                    precompiled::PrecompiledType::Consensus);
+                auto methods = m_precompiled->listMethods(precompiled::PrecompiledType::Consensus);
                 std::cout << "Consensus precompiled methods:\n";
                 for (auto& m : methods)
                 {
-                    std::cout << "  " << m_precompiled->getUsage(
-                        precompiled::PrecompiledType::Consensus, m) << "\n\n";
+                    std::cout << "  "
+                              << m_precompiled->getUsage(precompiled::PrecompiledType::Consensus, m)
+                              << "\n\n";
                 }
             }
             else
             {
                 std::cout << m_precompiled->getUsage(
-                    precompiled::PrecompiledType::Consensus, params[0]) << '\n';
+                                 precompiled::PrecompiledType::Consensus, params[0])
+                          << '\n';
             }
             return true;
         }});
@@ -919,7 +912,7 @@ void ConsoleApp::registerCommands()
 
     contractCat.commands.push_back({"deploy", {}, 1, -1, true, false, true,
         "deploy <contractName/Path> [params...]: Compile and deploy a Solidity contract",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
+        [](std::vector<std::string> const& params, std::string&) -> bool {
             auto result = ContractCompiler::compile(params[0]);
             if (!result.success)
             {
@@ -937,12 +930,11 @@ void ConsoleApp::registerCommands()
 
     contractCat.commands.push_back({"call", {}, 3, -1, true, false, true,
         "call <contractName> <address> <func> [params...]: Call a contract function",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
+        [](std::vector<std::string> const& params, std::string&) -> bool {
             auto cached = ContractCompiler::loadFromCache(params[0]);
             if (!cached.found)
             {
-                std::cerr << "Contract not found in cache: " << params[0]
-                          << ". Deploy it first.\n";
+                std::cerr << "Contract not found in cache: " << params[0] << ". Deploy it first.\n";
                 return false;
             }
             std::cout << "call " << params[0] << " at " << params[1] << " func=" << params[2]
@@ -952,9 +944,10 @@ void ConsoleApp::registerCommands()
 
     contractCat.commands.push_back({"getDeployLog", {}, 0, 1, false, false, true,
         "getDeployLog [recordNumber]: Query last deployment records (default 20)",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
+        [](std::vector<std::string> const& params, std::string&) -> bool {
             int limit = 20;
-            if (!params.empty()) limit = std::stoi(params[0]);
+            if (!params.empty())
+                limit = std::stoi(params[0]);
             auto cached = ContractCompiler::listCached();
             std::vector<std::string> headers = {"Contract", "Address"};
             std::vector<std::vector<std::string>> rows;
@@ -973,7 +966,7 @@ void ConsoleApp::registerCommands()
 
     contractCat.commands.push_back({"listDeployContractAddress", {}, 1, 2, false, false, true,
         "listDeployContractAddress <contractName> [recordNumber]: List deployed addresses",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
+        [](std::vector<std::string> const& params, std::string&) -> bool {
             int limit = params.size() >= 2 ? std::stoi(params[1]) : 20;
             auto addrs = ContractCompiler::getDeployAddresses(params[0], limit);
             if (addrs.empty())
@@ -986,7 +979,7 @@ void ConsoleApp::registerCommands()
 
     contractCat.commands.push_back({"transfer", {}, 2, 3, true, false, true,
         "transfer <toAddress> <amount> [unit]: Transfer balance to an address",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
+        [](std::vector<std::string> const& params, std::string&) -> bool {
             std::cout << "transfer " << params[1] << " to " << params[0]
                       << " (transaction signing integration pending)\n";
             return true;
@@ -1002,54 +995,54 @@ void ConsoleApp::registerCommands()
     CommandCategory bfsCat;
     bfsCat.name = "BFS (Blockchain File System)";
 
-    bfsCat.commands.push_back({"pwd", {}, 0, 0, true, false, true,
-        "pwd: Print current working directory",
-        [this](std::vector<std::string> const&, std::string& pwd) -> bool {
-            std::cout << pwd << '\n';
-            return true;
-        }});
+    bfsCat.commands.push_back(
+        {"pwd", {}, 0, 0, true, false, true, "pwd: Print current working directory",
+            [](std::vector<std::string> const&, std::string& pwd) -> bool {
+                std::cout << pwd << '\n';
+                return true;
+            }});
 
-    bfsCat.commands.push_back({"cd", {}, 1, 1, true, false, true,
-        "cd <path>: Change working directory",
-        [this](std::vector<std::string> const& params, std::string& pwd) -> bool {
-            auto newPath = params[0];
-            if (newPath.starts_with("/"))
-                m_currentPwd = newPath;
-            else if (newPath.starts_with("~"))
-                m_currentPwd = "/apps/" + newPath.substr(1);
-            else
-                m_currentPwd = pwd + "/" + newPath;
-            // Normalize: remove trailing slashes
-            while (m_currentPwd.size() > 1 && m_currentPwd.back() == '/')
-                m_currentPwd.pop_back();
-            std::cout << "Current dir: " << m_currentPwd << '\n';
-            return true;
-        }});
+    bfsCat.commands.push_back(
+        {"cd", {}, 1, 1, true, false, true, "cd <path>: Change working directory",
+            [this](std::vector<std::string> const& params, std::string& pwd) -> bool {
+                auto newPath = params[0];
+                if (newPath.starts_with("/"))
+                    m_currentPwd = newPath;
+                else if (newPath.starts_with("~"))
+                    m_currentPwd = "/apps/" + newPath.substr(1);
+                else
+                    m_currentPwd = pwd + "/" + newPath;
+                // Normalize: remove trailing slashes
+                while (m_currentPwd.size() > 1 && m_currentPwd.back() == '/')
+                    m_currentPwd.pop_back();
+                std::cout << "Current dir: " << m_currentPwd << '\n';
+                return true;
+            }});
 
-    bfsCat.commands.push_back({"ls", {}, 0, 1, true, false, true,
-        "ls [path]: List BFS directory contents",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
-            std::cout << "ls (BFS list via precompiled 0x100e — pending)\n";
-            return true;
-        }});
+    bfsCat.commands.push_back(
+        {"ls", {}, 0, 1, true, false, true, "ls [path]: List BFS directory contents",
+            [](std::vector<std::string> const& params, std::string&) -> bool {
+                std::cout << "ls (BFS list via precompiled 0x100e — pending)\n";
+                return true;
+            }});
 
-    bfsCat.commands.push_back({"mkdir", {}, 1, 1, true, false, true,
-        "mkdir <path>: Create a BFS directory",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
-            std::cout << "mkdir " << params[0] << " (BFS mkdir via precompiled — pending)\n";
-            return true;
-        }});
+    bfsCat.commands.push_back(
+        {"mkdir", {}, 1, 1, true, false, true, "mkdir <path>: Create a BFS directory",
+            [](std::vector<std::string> const& params, std::string&) -> bool {
+                std::cout << "mkdir " << params[0] << " (BFS mkdir via precompiled — pending)\n";
+                return true;
+            }});
 
-    bfsCat.commands.push_back({"tree", {}, 0, 2, true, false, true,
-        "tree [path] [limit]: Tree view of BFS directory",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
-            std::cout << "tree (BFS tree via precompiled — pending)\n";
-            return true;
-        }});
+    bfsCat.commands.push_back(
+        {"tree", {}, 0, 2, true, false, true, "tree [path] [limit]: Tree view of BFS directory",
+            [](std::vector<std::string> const& params, std::string&) -> bool {
+                std::cout << "tree (BFS tree via precompiled — pending)\n";
+                return true;
+            }});
 
     bfsCat.commands.push_back({"ln", {}, 2, 2, true, false, true,
         "ln <path> <contractAddress>: Create a BFS link to a contract",
-        [this](std::vector<std::string> const& params, std::string&) -> bool {
+        [](std::vector<std::string> const& params, std::string&) -> bool {
             std::cout << "ln " << params[0] << " -> " << params[1]
                       << " (BFS link via precompiled — pending)\n";
             return true;
@@ -1072,9 +1065,8 @@ void ConsoleApp::start()
         std::cout << m_promptPrefix << '\n';
 
     // Setup REPL with completion
-    m_repl.setCompleter([this](std::string_view prefix) {
-        return m_dispatcher.completions(prefix);
-    });
+    m_repl.setCompleter(
+        [this](std::string_view prefix) { return m_dispatcher.completions(prefix); });
     m_repl.setHistoryFile(".fisco-bcos-console-history");
     m_repl.loadHistory();
 
