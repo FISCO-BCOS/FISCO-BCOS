@@ -72,7 +72,21 @@ int main(int argc, const char* argv[])
 
             std::cout << "Starting FISCO BCOS console..." << '\n';
             auto app = std::make_shared<bcos::console::ConsoleApp>();
-            if (!app->init(consoleParam.consoleConfigPath))
+
+            bool initOk = false;
+            if (!consoleParam.consolePeer.empty())
+            {
+                // Direct peer mode — bypass config.toml
+                auto group = consoleParam.consoleGroup.empty() ? "group0" :
+                                                                 consoleParam.consoleGroup;
+                initOk = app->init(consoleParam.consolePeer, group);
+            }
+            else
+            {
+                initOk = app->init(consoleParam.consoleConfigPath);
+            }
+
+            if (!initOk)
             {
                 std::cerr << "Failed to initialize console" << '\n';
                 return -1;

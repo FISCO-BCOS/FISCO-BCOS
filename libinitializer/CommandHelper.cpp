@@ -80,7 +80,9 @@ bcos::initializer::Params bcos::initializer::initConsoleCommandLine(int argc, co
     console_options.add_options()("help,h", "print console help information")(
         "version,v", "version of FISCO BCOS")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.toml"),
-        "config.toml file path (like console's config.toml)")("group,g",
+        "config.toml file path (like console's config.toml)")("peer,p",
+        boost::program_options::value<std::string>(),
+        "directly connect to a peer (ip:port), bypasses config.toml")("group,g",
         boost::program_options::value<std::string>(), "default group ID to connect to")("pem",
         boost::program_options::value<std::string>(), "path to PEM key file for signing")("p12",
         boost::program_options::value<std::string>(), "path to P12 key file for signing");
@@ -114,9 +116,13 @@ bcos::initializer::Params bcos::initializer::initConsoleCommandLine(int argc, co
     params.configFilePath = vm["config"].as<std::string>();
     params.consoleConfigPath = params.configFilePath;
 
+    if (vm.count("peer"))
+    {
+        params.consolePeer = vm["peer"].as<std::string>();
+    }
     if (vm.count("group"))
     {
-        params.snapshotPath = vm["group"].as<std::string>();
+        params.consoleGroup = vm["group"].as<std::string>();
     }
     return params;
 }
@@ -239,5 +245,5 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         snapshotPath = vm["import"].as<std::string>();
     }
 
-    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, false, {}, op};
+    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, false, {}, {}, {}, op};
 }

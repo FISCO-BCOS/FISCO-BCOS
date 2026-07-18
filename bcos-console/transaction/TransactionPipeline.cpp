@@ -131,7 +131,7 @@ task::Task<std::pair<bool, std::string>> TransactionPipeline::send(
     auto txHex = signedTx.second;
     auto nodeName = m_connection->defaultNodeName();
 
-    std::cout << "[DEBUG] Signed transaction hash: 0x" << txHash << '\n';
+    std::cout << "[DEBUG] Signed transaction hash: " << txHash << '\n';
 
     // Send transaction asynchronously
     auto awaitSend = AwaitSendTx{

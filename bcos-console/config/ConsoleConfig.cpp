@@ -151,3 +151,18 @@ ConsoleConfig bcos::console::buildLocalConsoleConfig(
     cfg.peers.clear();
     return cfg;
 }
+
+ConsoleConfig bcos::console::buildRemoteConsoleConfig(
+    std::string_view peer, std::string_view groupID)
+{
+    ConsoleConfig cfg;
+    cfg.defaultGroup = groupID;
+    cfg.disableSsl = true;
+    cfg.useSMCrypto = false;
+    cfg.keyStoreDir = "./accounts";
+    cfg.accountFileFormat = "pem";
+    cfg.threadPoolSize = static_cast<int>(std::thread::hardware_concurrency());
+    cfg.peers = {std::string(peer)};
+    cfg.messageTimeout = 10000;
+    return cfg;
+}

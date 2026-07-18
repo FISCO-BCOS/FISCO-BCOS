@@ -47,6 +47,10 @@ public:
     bool init(std::string_view configPath, ::bcos::rpc::JsonRpcInterface::Ptr jsonRpc = nullptr,
         std::string_view defaultGroup = {});
 
+    // Initialize the console with a direct peer "ip:port" (no config.toml needed).
+    // groupID is the default group to connect to.
+    bool init(std::string_view peer, std::string_view groupID);
+
     // Start the REPL loop. Blocks until user quits.
     void start();
 

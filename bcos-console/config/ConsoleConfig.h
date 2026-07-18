@@ -75,4 +75,9 @@ bool loadConsoleConfig(std::string_view configPath, ConsoleConfig& outConfig);
 ConsoleConfig buildLocalConsoleConfig(
     std::string_view groupID, std::string_view nodeName = {});
 
+// Build a minimal config for direct remote connection (no config.toml).
+// peer is "ip:port", groupID is the default group.
+ConsoleConfig buildRemoteConsoleConfig(
+    std::string_view peer, std::string_view groupID = "group0");
+
 }  // namespace bcos::console

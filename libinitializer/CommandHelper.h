@@ -36,6 +36,8 @@ struct Params
     float txSpeed;
     bool isConsole = false;        // true when the "console" subcommand is used
     std::string consoleConfigPath; // path to config.toml for console mode
+    std::string consolePeer;       // direct peer "ip:port" (bypasses config.toml)
+    std::string consoleGroup;      // default group ID for direct peer mode
     enum class operation : int
     {
         None = 0,

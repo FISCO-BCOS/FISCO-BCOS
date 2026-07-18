@@ -29,10 +29,39 @@
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <unistd.h>
 #include <algorithm>
+#include <future>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
+
+namespace
+{
+
+/// Helper: wraps the std::promise/future pattern and error-handling for async RPC calls.
+/// @param call   A callable f(auto callback) that fires the async RPC.
+/// @param onSuccess  Called with Json::Value& result on success; not called on error.
+template <typename RpcCall, typename SuccessFn>
+void syncRpcCall(RpcCall&& call, SuccessFn&& onSuccess)
+{
+    std::promise<void> done;
+    auto fut = done.get_future();
+    std::forward<RpcCall>(call)([&done, onSuccess = std::forward<SuccessFn>(onSuccess)](
+                                    bcos::Error::Ptr error, Json::Value& result) mutable {
+        if (error)
+        {
+            std::cout << "Error: " << error->errorMessage() << '\n';
+        }
+        else
+        {
+            onSuccess(result);
+        }
+        done.set_value();
+    });
+    fut.wait();
+}
+
+}  // anonymous namespace
 
 using namespace bcos::console;
 
@@ -128,6 +157,76 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
         {
             m_keyManager->loadPemKey(accounts[0].keyFile);
         }
+    }
+
+    // Initialize ABI encoder for precompiled contracts
+    m_precompiled = std::make_shared<precompiled::PrecompiledContract>(hashImpl);
+
+    // Initialize transaction pipeline for signing and sending
+    m_txPipeline =
+        std::make_shared<TransactionPipeline>(m_connection, m_keyManager, m_currentGroup);
+
+    // Register commands
+    registerCommands();
+
+    return true;
+}
+
+bool ConsoleApp::init(std::string_view peer, std::string_view groupID)
+{
+    // --- Initialize Boost.Log to write to logs/ only (no terminal output) ---
+    static bool logInitialized = false;
+    if (!logInitialized)
+    {
+        boost::property_tree::ptree logPt;
+        logPt.put("log.enable", "true");
+        logPt.put("log.enable_console_output", "false");
+        logPt.put("log.log_path", "logs");
+        logPt.put("log.level", "info");
+        logPt.put("log.max_log_file_size", "200");
+        auto logInit = std::make_shared<bcos::BoostLogInitializer>();
+        logInit->initLog(logPt, bcos::FileLogger, "console");
+        static auto s_logInit = logInit;
+        logInitialized = true;
+    }
+
+    m_configPath = "(direct peer)";
+    m_useLocalRpc = false;
+    m_currentGroup = groupID;
+
+    // Build minimal config from peer and group
+    m_consoleConfig = buildRemoteConsoleConfig(peer, groupID);
+
+    // Use SDK-based WebSocket connection
+    auto sdkConn = std::make_shared<SdkRpcConnection>();
+    if (!sdkConn->configure(m_consoleConfig))
+    {
+        std::cerr << "Failed to configure SDK connection to peer: " << peer << '\n';
+        return false;
+    }
+    m_connection = sdkConn;
+
+    // Connect
+    m_connection->connect();
+    if (!m_connection->isConnected())
+    {
+        std::cerr << "Failed to connect to peer: " << peer << '\n';
+        return false;
+    }
+
+    // Initialize key manager (default ECDSA for direct peer mode)
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    auto keyPairFactory = std::make_shared<Secp256k1KeyPairFactoryAdapter>();
+    auto hashImpl = std::make_shared<bcos::crypto::Keccak256>();
+
+    m_keyManager = std::make_shared<KeyManager>(
+        keyFactory, keyPairFactory, hashImpl, ConsoleCryptoType::ECDSA);
+
+    // Auto-load account from keyStoreDir if available
+    auto accounts = m_keyManager->listAccounts(m_consoleConfig.keyStoreDir);
+    if (!accounts.empty())
+    {
+        m_keyManager->loadPemKey(accounts[0].keyFile);
     }
 
     // Initialize ABI encoder for precompiled contracts
@@ -427,163 +526,123 @@ void ConsoleApp::registerCommands()
     statusCat.commands.push_back({"getBlockNumber", {"getblocknumber"}, 0, 0, true, false, true,
         "getBlockNumber: Query the latest block number",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getBlockNumber(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    std::cout << result.asInt64() << '\n';
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getBlockNumber(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { std::cout << result.asInt64() << '\n'; });
             return true;
         }});
 
     statusCat.commands.push_back({"getPbftView", {"getpbftview"}, 0, 0, true, false, true,
         "getPbftView: Query the PBFT view",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getPbftView(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    std::cout << result.asInt64() << '\n';
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getPbftView(m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { std::cout << result.asInt64() << '\n'; });
             return true;
         }});
 
     statusCat.commands.push_back(
         {"getPeers", {"getpeers"}, 0, 0, false, false, true, "getPeers: Query connected peers",
             [this](std::vector<std::string> const&, std::string&) -> bool {
-                m_connection->getPeers([](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+                syncRpcCall([this](auto cb) { m_connection->getPeers(cb); },
+                    [](Json::Value& result) { OutputFormatter::printJson(result); });
                 return true;
             }});
 
     statusCat.commands.push_back({"getGroupList", {"getgrouplist"}, 0, 0, false, false, true,
         "getGroupList: List all group IDs",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupList([](bcos::Error::Ptr error, Json::Value& result) {
-                if (error)
-                {
-                    std::cout << "Error: " << error->errorMessage() << '\n';
-                    return;
-                }
-                OutputFormatter::printJson(result);
-            });
+            syncRpcCall([this](auto cb) { m_connection->getGroupList(cb); },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     statusCat.commands.push_back({"getSyncStatus", {"getsyncstatus"}, 0, 0, true, false, true,
         "getSyncStatus: Query sync status",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getSyncStatus(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getSyncStatus(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     statusCat.commands.push_back({"getConsensusStatus", {"getconsensusstatus"}, 0, 0, true, false,
         true, "getConsensusStatus: Query consensus status",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getConsensusStatus(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getConsensusStatus(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     statusCat.commands.push_back({"getSealerList", {"getsealerlist"}, 0, 0, true, false, true,
         "getSealerList: Query sealer list",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getSealerList(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getSealerList(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     statusCat.commands.push_back({"getObserverList", {"getobserverlist"}, 0, 0, true, false, true,
         "getObserverList: Query observer list",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getObserverList(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getObserverList(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     statusCat.commands.push_back({"getPendingTxSize", {"getpendingtxsize"}, 0, 0, true, false, true,
         "getPendingTxSize: Query pending transaction count",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getPendingTxSize(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    std::cout << result.asInt64() << '\n';
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getPendingTxSize(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { std::cout << result.asInt64() << '\n'; });
             return true;
         }});
 
     statusCat.commands.push_back({"getTotalTransactionCount", {"gettotaltxcount"}, 0, 0, true,
         false, true, "getTotalTransactionCount: Query total transaction count",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getTotalTransactionCount(m_currentGroup, m_connection->defaultNodeName(),
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this](auto cb) {
+                    m_connection->getTotalTransactionCount(
+                        m_currentGroup, m_connection->defaultNodeName(), cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     statusCat.commands.push_back({"getSystemConfigByKey", {"getsystemconfigbykey"}, 1, 1, true,
         false, true, "getSystemConfigByKey <key>: Query system config value",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
-            m_connection->getSystemConfigByKey(m_currentGroup, m_connection->defaultNodeName(),
-                params[0], [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this, &params](auto cb) {
+                    m_connection->getSystemConfigByKey(
+                        m_currentGroup, m_connection->defaultNodeName(), params[0], cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
@@ -602,15 +661,12 @@ void ConsoleApp::registerCommands()
         [this](std::vector<std::string> const& params, std::string&) -> bool {
             int64_t number = std::stoll(params[0]);
             bool onlyTxHash = params.size() > 1 && params[1] == "true";
-            m_connection->getBlockByNumber(m_currentGroup, m_connection->defaultNodeName(), number,
-                false, onlyTxHash, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this, number, onlyTxHash](auto cb) {
+                    m_connection->getBlockByNumber(m_currentGroup, m_connection->defaultNodeName(),
+                        number, false, onlyTxHash, cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
@@ -618,15 +674,12 @@ void ConsoleApp::registerCommands()
         "getBlockByHash <blockHash> [onlyHash]: Query block by hash",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
             bool onlyTxHash = params.size() > 1 && params[1] == "true";
-            m_connection->getBlockByHash(m_currentGroup, m_connection->defaultNodeName(), params[0],
-                false, onlyTxHash, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this, &params, onlyTxHash](auto cb) {
+                    m_connection->getBlockByHash(m_currentGroup, m_connection->defaultNodeName(),
+                        params[0], false, onlyTxHash, cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
@@ -634,60 +687,48 @@ void ConsoleApp::registerCommands()
         false, true, "getBlockHashByNumber <blockNumber>: Query block hash by number",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
             int64_t number = std::stoll(params[0]);
-            m_connection->getBlockHashByNumber(m_currentGroup, m_connection->defaultNodeName(),
-                number, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    std::cout << result.asString() << '\n';
-                });
+            syncRpcCall(
+                [this, number](auto cb) {
+                    m_connection->getBlockHashByNumber(
+                        m_currentGroup, m_connection->defaultNodeName(), number, cb);
+                },
+                [](Json::Value& result) { std::cout << result.asString() << '\n'; });
             return true;
         }});
 
     blockCat.commands.push_back({"getTransactionByHash", {"gettransactionbyhash"}, 1, 1, true,
         false, true, "getTransactionByHash <txHash>: Query transaction by hash",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
-            m_connection->getTransaction(m_currentGroup, m_connection->defaultNodeName(), params[0],
-                false, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this, &params](auto cb) {
+                    m_connection->getTransaction(
+                        m_currentGroup, m_connection->defaultNodeName(), params[0], false, cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     blockCat.commands.push_back({"getTransactionReceipt", {"gettransactionreceipt"}, 1, 1, true,
         false, true, "getTransactionReceipt <txHash>: Query transaction receipt by hash",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
-            m_connection->getTransactionReceipt(m_currentGroup, m_connection->defaultNodeName(),
-                params[0], false, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall(
+                [this, &params](auto cb) {
+                    m_connection->getTransactionReceipt(
+                        m_currentGroup, m_connection->defaultNodeName(), params[0], false, cb);
+                },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     blockCat.commands.push_back({"getCode", {"getcode"}, 1, 1, true, false, true,
         "getCode <contractAddress>: Query contract bytecode",
         [this](std::vector<std::string> const& params, std::string&) -> bool {
-            m_connection->getCode(m_currentGroup, m_connection->defaultNodeName(), params[0],
-                [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    std::cout << result.asString() << '\n';
-                });
+            syncRpcCall(
+                [this, &params](auto cb) {
+                    m_connection->getCode(
+                        m_currentGroup, m_connection->defaultNodeName(), params[0], cb);
+                },
+                [](Json::Value& result) { std::cout << result.asString() << '\n'; });
             return true;
         }});
 
@@ -704,44 +745,24 @@ void ConsoleApp::registerCommands()
     groupCat.commands.push_back({"getGroupInfo", {"getgroupinfo"}, 0, 0, true, false, true,
         "getGroupInfo: Get current group information",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupInfo(
-                m_currentGroup, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall([this](auto cb) { m_connection->getGroupInfo(m_currentGroup, cb); },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     groupCat.commands.push_back({"getGroupInfoList", {"getgroupinfolist"}, 0, 0, false, false, true,
         "getGroupInfoList: List all group information",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupInfoList([](bcos::Error::Ptr error, Json::Value& result) {
-                if (error)
-                {
-                    std::cout << "Error: " << error->errorMessage() << '\n';
-                    return;
-                }
-                OutputFormatter::printJson(result);
-            });
+            syncRpcCall([this](auto cb) { m_connection->getGroupInfoList(cb); },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
     groupCat.commands.push_back({"getGroupPeers", {"getgrouppeers"}, 0, 0, true, false, true,
         "getGroupPeers: List peers in current group",
         [this](std::vector<std::string> const&, std::string&) -> bool {
-            m_connection->getGroupPeers(
-                m_currentGroup, [](bcos::Error::Ptr error, Json::Value& result) {
-                    if (error)
-                    {
-                        std::cout << "Error: " << error->errorMessage() << '\n';
-                        return;
-                    }
-                    OutputFormatter::printJson(result);
-                });
+            syncRpcCall([this](auto cb) { m_connection->getGroupPeers(m_currentGroup, cb); },
+                [](Json::Value& result) { OutputFormatter::printJson(result); });
             return true;
         }});
 
@@ -834,7 +855,7 @@ void ConsoleApp::registerCommands()
                 m_txPipeline->send(precompiled::PrecompiledContract::address(contract), data,
                     precompiled::PrecompiledContract::abi(contract)));
             if (ok)
-                std::cout << "Tx sent. Hash: 0x" << result << '\n';
+                std::cout << "Tx sent. Hash: " << result << '\n';
             else
                 std::cout << "Failed: " << result << '\n';
         }
