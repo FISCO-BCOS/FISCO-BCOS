@@ -26,12 +26,12 @@
 
 void bcos::initializer::printVersion()
 {
-    std::cout << "FISCO BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << std::endl;
-    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
+    std::cout << "FISCO BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << '\n';
+    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << '\n';
     std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
-              << FISCO_BCOS_BUILD_TYPE << std::endl;
-    std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
-    std::cout << "Git Commit         : " << FISCO_BCOS_COMMIT_HASH << std::endl;
+              << FISCO_BCOS_BUILD_TYPE << '\n';
+    std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << '\n';
+    std::cout << "Git Commit         : " << FISCO_BCOS_COMMIT_HASH << '\n';
 }
 
 void bcos::initializer::showNodeVersionMetric()
@@ -60,13 +60,13 @@ void bcos::initializer::initCommandLine(int argc, char* argv[])
         printVersion();
     }
     /// help information
-    if (vm.count("help") || vm.count("h"))
+    if (vm.contains("help") || vm.contains("h"))
     {
-        std::cout << main_options << std::endl;
+        std::cout << main_options << '\n';
         exit(0);
     }
     /// version information
-    if (vm.count("version") || vm.count("v"))
+    if (vm.contains("version") || vm.contains("v"))
     {
         printVersion();
         exit(0);
@@ -82,10 +82,10 @@ bcos::initializer::Params bcos::initializer::initConsoleCommandLine(int argc, co
         boost::program_options::value<std::string>()->default_value("./config.toml"),
         "config.toml file path (like console's config.toml)")("peer,p",
         boost::program_options::value<std::string>(),
-        "directly connect to a peer (ip:port), bypasses config.toml")("group,g",
-        boost::program_options::value<std::string>(), "default group ID to connect to")("pem",
-        boost::program_options::value<std::string>(), "path to PEM key file for signing")("p12",
-        boost::program_options::value<std::string>(), "path to P12 key file for signing");
+        "directly connect to a peer (ip:port), bypasses config.toml")(
+        "group,g", boost::program_options::value<std::string>(), "default group ID to connect to")(
+        "pem", boost::program_options::value<std::string>(), "path to PEM key file for signing")(
+        "p12", boost::program_options::value<std::string>(), "path to P12 key file for signing");
 
     boost::program_options::variables_map vm;
     try
@@ -245,5 +245,6 @@ bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
         snapshotPath = vm["import"].as<std::string>();
     }
 
-    return bcos::initializer::Params{configPath, genesisFilePath, snapshotPath, txSpeed, false, {}, {}, {}, op};
+    return bcos::initializer::Params{
+        configPath, genesisFilePath, snapshotPath, txSpeed, false, {}, {}, {}, op};
 }

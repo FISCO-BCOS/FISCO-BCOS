@@ -25,6 +25,9 @@
 namespace bcos::console
 {
 
+/// Default message timeout in milliseconds (10 seconds).
+inline constexpr int64_t CONSOLE_DEFAULT_MSG_TIMEOUT_MS = 10000;
+
 // Parsed config.toml for the console (mirroring Java SDK config-example.toml)
 struct ConsoleConfig
 {
@@ -42,7 +45,7 @@ struct ConsoleConfig
     std::string smEnSslKey;
 
     // [network]
-    int64_t messageTimeout = 10000;  // ms
+    int64_t messageTimeout = CONSOLE_DEFAULT_MSG_TIMEOUT_MS;  // ms
     std::string defaultGroup;
     std::vector<std::string> peers;  // "ip:port" pairs
 
@@ -71,13 +74,8 @@ struct ConsoleConfig
 // Returns true on success. Errors are printed to stderr.
 bool loadConsoleConfig(std::string_view configPath, ConsoleConfig& outConfig);
 
-// Build a quick minimal config for local (in-process) connections.
-ConsoleConfig buildLocalConsoleConfig(
-    std::string_view groupID, std::string_view nodeName = {});
-
 // Build a minimal config for direct remote connection (no config.toml).
 // peer is "ip:port", groupID is the default group.
-ConsoleConfig buildRemoteConsoleConfig(
-    std::string_view peer, std::string_view groupID = "group0");
+ConsoleConfig buildRemoteConsoleConfig(std::string_view peer, std::string_view groupID = "group0");
 
 }  // namespace bcos::console

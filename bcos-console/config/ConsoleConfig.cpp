@@ -19,10 +19,10 @@
 
 #include "ConsoleConfig.h"
 
-#include <toml++/toml.hpp>
 #include <boost/filesystem.hpp>
 #include <iostream>
 #include <thread>
+#include <toml++/toml.hpp>
 
 namespace fs = boost::filesystem;
 using namespace bcos::console;
@@ -32,17 +32,23 @@ static std::string resolveCertPath(
     std::string_view certPath, std::string_view configDir, std::string_view fileName)
 {
     if (fileName.empty())
+    {
         return {};
+    }
 
-    fs::path p(fileName);
-    if (p.is_absolute())
+    fs::path filePath(fileName);
+    if (filePath.is_absolute())
+    {
         return std::string(fileName);
+    }
 
     if (!certPath.empty())
     {
         auto candidate = fs::path(certPath) / fileName;
         if (fs::exists(candidate))
+        {
             return candidate.string();
+        }
     }
 
     auto candidate = fs::path(configDir) / fileName;
@@ -76,19 +82,20 @@ bool bcos::console::loadConsoleConfig(std::string_view configPath, ConsoleConfig
         outConfig.smEnSslKey = tbl["cryptoMaterial"]["smEnSslKey"].value_or("");
 
         // ---- [network] ----
-        outConfig.messageTimeout =
-            std::stoll(tbl["network"]["messageTimeout"].value_or(
-                std::to_string(outConfig.messageTimeout)));
+        outConfig.messageTimeout = std::stoll(
+            tbl["network"]["messageTimeout"].value_or(std::to_string(outConfig.messageTimeout)));
         outConfig.defaultGroup = tbl["network"]["defaultGroup"].value_or("group0");
 
-        if (auto peersArr = tbl["network"]["peers"].as_array())
+        if (auto* peersArr = tbl["network"]["peers"].as_array())
         {
             outConfig.peers.clear();
             for (size_t i = 0; i < peersArr->size(); ++i)
             {
                 auto optVal = (*peersArr)[i].template value<std::string>();
                 if (optVal)
+                {
                     outConfig.peers.push_back(*optVal);
+                }
             }
         }
 
@@ -108,18 +115,20 @@ bool bcos::console::loadConsoleConfig(std::string_view configPath, ConsoleConfig
         // ---- resolve cert paths ----
         std::string certPathBase = outConfig.certPath;
         if (certPathBase.empty())
+        {
             certPathBase = configDir;
+        }
         else if (!fs::path(certPathBase).is_absolute())
+        {
             certPathBase = (fs::path(configDir) / certPathBase).string();
+        }
 
         outConfig.resolvedCaCert = resolveCertPath(certPathBase, configDir, outConfig.caCert);
         outConfig.resolvedSslCert = resolveCertPath(certPathBase, configDir, outConfig.sslCert);
         outConfig.resolvedSslKey = resolveCertPath(certPathBase, configDir, outConfig.sslKey);
         outConfig.resolvedSmCaCert = resolveCertPath(certPathBase, configDir, outConfig.smCaCert);
-        outConfig.resolvedSmSslCert =
-            resolveCertPath(certPathBase, configDir, outConfig.smSslCert);
-        outConfig.resolvedSmSslKey =
-            resolveCertPath(certPathBase, configDir, outConfig.smSslKey);
+        outConfig.resolvedSmSslCert = resolveCertPath(certPathBase, configDir, outConfig.smSslCert);
+        outConfig.resolvedSmSslKey = resolveCertPath(certPathBase, configDir, outConfig.smSslKey);
         outConfig.resolvedSmEnSslCert =
             resolveCertPath(certPathBase, configDir, outConfig.smEnSslCert);
         outConfig.resolvedSmEnSslKey =
@@ -139,19 +148,6 @@ bool bcos::console::loadConsoleConfig(std::string_view configPath, ConsoleConfig
     }
 }
 
-ConsoleConfig bcos::console::buildLocalConsoleConfig(
-    std::string_view groupID, std::string_view /*nodeName*/)
-{
-    ConsoleConfig cfg;
-    cfg.defaultGroup = groupID;
-    cfg.disableSsl = true;
-    cfg.keyStoreDir = "./accounts";
-    cfg.accountFileFormat = "pem";
-    cfg.threadPoolSize = static_cast<int>(std::thread::hardware_concurrency());
-    cfg.peers.clear();
-    return cfg;
-}
-
 ConsoleConfig bcos::console::buildRemoteConsoleConfig(
     std::string_view peer, std::string_view groupID)
 {
@@ -163,6 +159,6 @@ ConsoleConfig bcos::console::buildRemoteConsoleConfig(
     cfg.accountFileFormat = "pem";
     cfg.threadPoolSize = static_cast<int>(std::thread::hardware_concurrency());
     cfg.peers = {std::string(peer)};
-    cfg.messageTimeout = 10000;
+    cfg.messageTimeout = CONSOLE_DEFAULT_MSG_TIMEOUT_MS;
     return cfg;
 }

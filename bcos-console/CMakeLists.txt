@@ -18,7 +18,6 @@ add_library(bcos-console
     CommandDispatcher.cpp
     OutputFormatter.cpp
     config/ConsoleConfig.cpp
-    connection/LocalRpcConnection.cpp
     connection/SdkRpcConnection.cpp
     keymanager/KeyManager.cpp
     keymanager/Secp256k1Adapter.cpp

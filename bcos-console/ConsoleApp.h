@@ -21,13 +21,10 @@
 
 #include "CommandDispatcher.h"
 #include "ConsoleRepl.h"
-#include "OutputFormatter.h"
 #include "config/ConsoleConfig.h"
-#include "connection/LocalRpcConnection.h"
 #include "connection/RpcConnection.h"
 #include "keymanager/KeyManager.h"
 #include "precompiled/PrecompiledContract.h"
-#include "precompiled/PrecompiledContractInfo.h"
 #include "transaction/TransactionPipeline.h"
 #include <memory>
 #include <string>
@@ -41,11 +38,8 @@ public:
     ConsoleApp() = default;
     ~ConsoleApp() = default;
 
-    // Initialize the console from a config file path.
-    // If jsonRpc is provided (non-null), use local in-process mode.
-    // Otherwise connect remotely via WebSocket using the config.
-    bool init(std::string_view configPath, ::bcos::rpc::JsonRpcInterface::Ptr jsonRpc = nullptr,
-        std::string_view defaultGroup = {});
+    // Initialize the console from a config file path, connecting via WebSocket.
+    bool init(std::string_view configPath);
 
     // Initialize the console with a direct peer "ip:port" (no config.toml needed).
     // groupID is the default group to connect to.
@@ -87,7 +81,6 @@ private:
     std::string m_currentPwd = "/apps";
     std::string m_promptPrefix;
     bool m_running = false;
-    bool m_useLocalRpc = false;
 
     // Core components
     CommandDispatcher m_dispatcher;

@@ -18,7 +18,7 @@
  */
 
 #include "ConsoleApp.h"
-#include "connection/LocalRpcConnection.h"
+#include "OutputFormatter.h"
 #include "connection/SdkRpcConnection.h"
 #include "contract/ContractCompiler.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <future>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -65,8 +64,7 @@ void syncRpcCall(RpcCall&& call, SuccessFn&& onSuccess)
 
 using namespace bcos::console;
 
-bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::Ptr jsonRpc,
-    std::string_view defaultGroup)
+bool ConsoleApp::init(std::string_view configPath)
 {
     // --- Initialize Boost.Log to write to logs/ only (no terminal output) ---
     static bool logInitialized = false;
@@ -86,34 +84,21 @@ bool ConsoleApp::init(std::string_view configPath, bcos::rpc::JsonRpcInterface::
 
     m_configPath = configPath;
 
-    if (jsonRpc)
+    // Parse config.toml and use SDK WebSocket connection
+    if (!loadConsoleConfig(configPath, m_consoleConfig))
     {
-        // Local in-process mode
-        m_useLocalRpc = true;
-        auto group = defaultGroup.empty() ? "group0" : defaultGroup;
-        m_currentGroup = group;
-        m_connection = std::make_shared<LocalRpcConnection>(std::move(jsonRpc), std::string(group));
-        m_consoleConfig = buildLocalConsoleConfig(group);
+        std::cerr << "Failed to load config from: " << configPath << '\n';
+        return false;
     }
-    else
-    {
-        // Remote mode — parse config.toml and use SDK WebSocket connection
-        if (!loadConsoleConfig(configPath, m_consoleConfig))
-        {
-            std::cerr << "Failed to load config from: " << configPath << '\n';
-            return false;
-        }
-        m_currentGroup = m_consoleConfig.defaultGroup;
+    m_currentGroup = m_consoleConfig.defaultGroup;
 
-        // Use SDK-based WebSocket connection
-        auto sdkConn = std::make_shared<SdkRpcConnection>();
-        if (!sdkConn->configure(m_consoleConfig))
-        {
-            std::cerr << "Failed to configure SDK connection\n";
-            return false;
-        }
-        m_connection = sdkConn;
+    auto sdkConn = std::make_shared<SdkRpcConnection>();
+    if (!sdkConn->configure(m_consoleConfig))
+    {
+        std::cerr << "Failed to configure SDK connection\n";
+        return false;
     }
+    m_connection = sdkConn;
 
     // Connect
     m_connection->connect();
@@ -191,7 +176,6 @@ bool ConsoleApp::init(std::string_view peer, std::string_view groupID)
     }
 
     m_configPath = "(direct peer)";
-    m_useLocalRpc = false;
     m_currentGroup = groupID;
 
     // Build minimal config from peer and group

@@ -53,11 +53,15 @@ struct AwaitBlockNumber
     void await_suspend(std::coroutine_handle<> handle)
     {
         conn.getBlockNumber(
-            groupID, nodeName, [this, handle](bcos::Error::Ptr err, Json::Value& r) {
+            groupID, nodeName, [this, handle](bcos::Error::Ptr err, Json::Value& resp) {
                 if (err)
+                {
                     error = std::move(err);
+                }
                 else
-                    result = r.asInt64();
+                {
+                    result = resp.asInt64();
+                }
                 handle.resume();
             });
     }
@@ -94,8 +98,8 @@ task::Task<std::pair<bool, std::string>> TransactionPipeline::send(
     std::string_view contractAddr, const bcos::bytes& data, std::string_view abi)
 {
     // Validate key
-    auto keyPair = m_keyManager->currentKeyPair();
-    if (!keyPair)
+    auto const* keyPair = m_keyManager->currentKeyPair();
+    if (keyPair == nullptr)
     {
         co_return std::pair{
             false, std::string("No account loaded for signing. Use loadAccount <path> first.")};
