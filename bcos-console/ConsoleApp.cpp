@@ -25,6 +25,7 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/sm2/SM2KeyPairFactory.h>
+#include <bcos-framework/ledger/SystemConfigs.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <unistd.h>
@@ -627,6 +628,38 @@ void ConsoleApp::registerCommands()
                         m_currentGroup, m_connection->defaultNodeName(), params[0], cb);
                 },
                 [](Json::Value& result) { OutputFormatter::printJson(result); });
+            return true;
+        }});
+
+    statusCat.commands.push_back({"listSystemConfigs", {}, 0, 0, true, false, true,
+        "listSystemConfigs: List all system configuration key-value pairs",
+        [this](std::vector<std::string> const&, std::string&) -> bool {
+            constexpr auto keys = magic_enum::enum_names<ledger::SystemConfig>();
+            std::vector<std::string> headers = {"Key", "Value"};
+            std::vector<std::vector<std::string>> rows;
+            for (auto const& key : keys)
+            {
+                syncRpcCall(
+                    [this, &key](auto cb) {
+                        m_connection->getSystemConfigByKey(
+                            m_currentGroup, m_connection->defaultNodeName(), key, cb);
+                    },
+                    [&rows, &key](Json::Value& result) {
+                        if (result.isNull() || (result.isString() && result.asString().empty()))
+                        {
+                            return;
+                        }
+                        rows.push_back({std::string(key), result.asString()});
+                    });
+            }
+            if (rows.empty())
+            {
+                std::cout << "No system config values found.\n";
+            }
+            else
+            {
+                OutputFormatter::printTable(headers, rows);
+            }
             return true;
         }});
 
