@@ -210,8 +210,6 @@ void checkRateLimiterConfigBase(const std::shared_ptr<GatewayConfig>& config)
     BOOST_CHECK(config->rateLimiterConfig().enableOutRateLimit());
     BOOST_CHECK(config->rateLimiterConfig().enableOutConnRateLimit());
     BOOST_CHECK(config->rateLimiterConfig().enableOutGroupRateLimit());
-    BOOST_CHECK(!config->rateLimiterConfig().allowExceedMaxPermitSize);
-    BOOST_CHECK(config->rateLimiterConfig().timeWindowSec == 1);
 
     BOOST_CHECK(config->rateLimiterConfig().enableInRateLimit());
     BOOST_CHECK(config->rateLimiterConfig().enableInP2pBasicMsgLimit());
@@ -455,7 +453,8 @@ void checkInRateLimiterConfig(const std::shared_ptr<GatewayConfig>& config,
             const std::string& inKey = group + "_" + std::to_string(module);
             auto rateLimiter = std::dynamic_pointer_cast<bcos::ratelimiter::TimeWindowRateLimiter>(
                 rateLimiterManager2->getInRateLimiter(endpoint, packageType, true));
-            BOOST_CHECK(rateLimiter == nullptr);
+            BOOST_CHECK(rateLimiter != nullptr);
+            BOOST_CHECK_EQUAL(rateLimiter->maxPermitsSize(), timeWindowSec * 123);
         }
 
         {
