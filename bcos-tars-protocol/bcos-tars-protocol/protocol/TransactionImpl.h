@@ -69,10 +69,10 @@ public:
     std::string_view abi() const override;
 
     bcos::u256 value() const override;
-    std::string_view gasPrice() const override;
+    std::optional<bcos::u256> gasPrice() const override;
     int64_t gasLimit() const override;
-    std::string_view maxFeePerGas() const override;
-    std::string_view maxPriorityFeePerGas() const override;
+    std::optional<bcos::u256> maxFeePerGas() const override;
+    std::optional<bcos::u256> maxPriorityFeePerGas() const override;
     bcos::bytesConstRef extension() const override;
 
     bcos::bytesConstRef input() const override;

@@ -39,9 +39,7 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
     }
     result["gas"] = toQuantity(tx.gasLimit());
     auto gasPrice = tx.gasPrice();
-
-    // FIXME)): return will case coredump in executor
-    result["gasPrice"] = std::string(gasPrice.empty() ? "0x0" : gasPrice);
+    result["gasPrice"] = toQuantity(gasPrice.value_or(0));
     result["hash"] = tx.hash().hexPrefixed();
     result["input"] = toHexStringWithPrefix(tx.input());
 
@@ -51,9 +49,8 @@ void bcos::rpc::combineTxResponse(Json::Value& result, const bcos::protocol::Tra
         // web3 tools do not compatible with too long hex
         result["nonce"] = "0x" + std::string(tx.nonce());
         result["value"] = toQuantity(tx.value());
-        result["maxPriorityFeePerGas"] =
-            std::string(tx.maxPriorityFeePerGas().empty() ? "0x0" : tx.maxPriorityFeePerGas());
-        result["maxFeePerGas"] = std::string(tx.maxFeePerGas().empty() ? "0x0" : tx.maxFeePerGas());
+        result["maxPriorityFeePerGas"] = toQuantity(tx.maxPriorityFeePerGas().value_or(0));
+        result["maxFeePerGas"] = toQuantity(tx.maxFeePerGas().value_or(0));
         result["chainId"] = "0x0";
     }
     else [[likely]]
