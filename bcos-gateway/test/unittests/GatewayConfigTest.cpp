@@ -298,7 +298,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         bcos::gateway::GatewayConfig::RateLimiterConfig rateLimiterConfig;
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
         BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
@@ -315,7 +314,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 1);
         BOOST_CHECK(!rateLimiterConfig.allowExceedMaxPermitSize);
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
         BOOST_CHECK(!rateLimiterConfig.enableOutRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableInRateLimit());
         BOOST_CHECK(!rateLimiterConfig.enableOutConnRateLimit());
@@ -337,9 +335,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         auto timeWindowSec = rateLimiterConfig.timeWindowSec;
 
         BOOST_CHECK_EQUAL(rateLimiterConfig.timeWindowSec, 3);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 13);
         BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 12345);
 
         BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
@@ -412,13 +407,6 @@ BOOST_AUTO_TEST_CASE(test_initFlowControlConfig)
         config->initFlowControlConfig(pt);
 
         auto rateLimiterConfig = config->rateLimiterConfig();
-
-        BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
-
-        BOOST_CHECK(!rateLimiterConfig.enableDistributedRatelimit);
-        BOOST_CHECK(rateLimiterConfig.enableDistributedRateLimitCache);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.distributedRateLimitCachePercent, 20);
-        BOOST_CHECK_EQUAL(rateLimiterConfig.statInterval, 60000);
 
         BOOST_CHECK(rateLimiterConfig.enableOutRateLimit());
         BOOST_CHECK(rateLimiterConfig.enableOutGroupRateLimit());
