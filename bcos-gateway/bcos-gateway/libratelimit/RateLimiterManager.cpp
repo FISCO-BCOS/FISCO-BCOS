@@ -221,23 +221,10 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLim
                                 << LOG_DESC("group rate limiter not exist")
                                 << LOG_KV("rateLimiterKey", rateLimiterKey)
                                 << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
-                                << LOG_KV("timeWindowS", timeWindowS)
-                                << LOG_KV("enableDistributedRatelimit",
-                                       m_rateLimiterConfig.enableDistributedRatelimit);
+                                << LOG_KV("timeWindowS", timeWindowS);
 
-        if (m_rateLimiterConfig.enableDistributedRatelimit)
-        {
-            rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(*m_ioService,
-                m_rateLimiterFactory->toTokenKey(_group), groupOutgoingBwLimit * timeWindowS,
-                timeWindowS, allowExceedMaxPermitSize,
-                m_rateLimiterConfig.enableDistributedRateLimitCache,
-                m_rateLimiterConfig.distributedRateLimitCachePercent);
-        }
-        else
-        {
-            rateLimiter = m_rateLimiterFactory->buildTimeWindowRateLimiter(
-                groupOutgoingBwLimit * timeWindowS, timeWindowMS, allowExceedMaxPermitSize);
-        }
+        rateLimiter = m_rateLimiterFactory->buildTimeWindowRateLimiter(
+            groupOutgoingBwLimit * timeWindowS, timeWindowMS, allowExceedMaxPermitSize);
 
         auto result = registerRateLimiter(_group, rateLimiter);
         rateLimiter = (result.first ? rateLimiter : result.second);

@@ -75,7 +75,6 @@
         },
         "zstd",
         "cryptopp",
-        "redis-plus-plus",
         "tarscpp",
         "wabt",
         "blst",
@@ -101,7 +100,6 @@
             "tbb"
           ]
         },
-        "redis-plus-plus",
         "zstd",
         "tarscpp"
       ]

@@ -16,13 +16,11 @@ find_package(Boost REQUIRED COMPONENTS log log_setup filesystem chrono thread se
 find_package(ZLIB REQUIRED)
 if(NOT ONLY_CPP_SDK)
     find_package(zstd CONFIG REQUIRED)
-    find_package(redis++ CONFIG REQUIRED)
 endif ()
 
 # aux_source_directory(bcos-utilities SRCS)
 file(GLOB_RECURSE SRCS "bcos-utilities/*.cpp")
 if (ONLY_CPP_SDK)
-    list(REMOVE_ITEM SRCS "${CMAKE_CURRENT_SOURCE_DIR}/bcos-utilities/ratelimiter/DistributedRateLimiter.cpp")
     list(REMOVE_ITEM SRCS "${CMAKE_CURRENT_SOURCE_DIR}/bcos-utilities/ZstdCompress.cpp")
     list(REMOVE_ITEM SRCS "${CMAKE_CURRENT_SOURCE_DIR}/bcos-utilities/ITTAPI.h")
 endif ()
@@ -34,7 +32,7 @@ target_include_directories(bcos-utilities PUBLIC
 if (ONLY_CPP_SDK)
     target_link_libraries(bcos-utilities PUBLIC Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB)
 else ()
-    target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} redis++::redis++_static ZLIB::ZLIB zstd::libzstd_static ittapi)
+    target_link_libraries(bcos-utilities PUBLIC bcos-task Boost::iostreams Boost::log_setup Boost::log Boost::filesystem Boost::chrono Boost::thread Boost::serialization Boost::${BOOST_STACKTRACE_COMPONENT} ZLIB::ZLIB zstd::libzstd_static ittapi)
 endif ()
 set_target_properties(bcos-utilities PROPERTIES UNITY_BUILD "ON")
 
