@@ -402,17 +402,17 @@ std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
         }
         NodeRef const& child = branch.children.at(path.at(pos));
         ++pos;
-        if (child.kind == NodeRef::Kind::Hash)
+        if (child.kind() == NodeRef::Kind::Hash)
         {
-            node = takeNode(child.hash);
+            node = takeNode(child.hash());
         }
-        else if (child.inlineBytes.empty())
+        else if (child.inlineRef().empty())
         {
             return finish({});  // absent child: exclusion
         }
         else
         {
-            node = decodeChecked(bcos::ref(child.inlineBytes));
+            node = decodeChecked(child.inlineRef());
         }
     }
     return std::nullopt;  // hash mismatch, malformed node, or dangling ref

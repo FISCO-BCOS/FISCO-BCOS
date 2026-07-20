@@ -26,7 +26,6 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/IOServicePool.h"
 
-#include <sw/redis++/cxx_utils.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 

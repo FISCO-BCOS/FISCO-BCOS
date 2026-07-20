@@ -153,11 +153,6 @@ GatewayConfig::RateLimiterConfig GatewayConfig::rateLimiterConfig() const
     return m_rateLimiterConfig;
 }
 
-GatewayConfig::RedisConfig GatewayConfig::redisConfig() const
-{
-    return m_redisConfig;
-}
-
 const std::set<NodeIPEndpoint>& GatewayConfig::connectedNodes() const
 {
     return m_connectedNodes;
@@ -780,11 +775,6 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     ; time window for ratelimiter
     time_window_sec=3
     ;
-    ; distributed rate limit switch
-    enable_distributed_ratelimit=true
-    enable_distributed_ratelimit_cache=true
-    distributed_ratelimit_cache_percent=15
-    ;
     ; rate limiter stat reporter interval, unit: ms
     stat_reporter_interval=60000
      */
@@ -792,27 +782,12 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
     int32_t timeWindowSec = _pt.get<int32_t>("flow_control.time_window_sec", 1);
     mustNoLessThan("time_window_sec", timeWindowSec, 0);
 
-    // enable_distributed_ratelimit=false
-    bool enableDistributedRatelimit =
-        _pt.get<bool>("flow_control.enable_distributed_ratelimit", false);
-    // enable_distributed_ratelimit=false
-    bool enableDistributedRateLimitCache =
-        _pt.get<bool>("flow_control.enable_distributed_ratelimit_cache", true);
-    // enable_distributed_ratelimit=false
-    int32_t distributedRateLimitCachePercent =
-        _pt.get<int32_t>("flow_control.distributed_ratelimit_cache_percent", 20);
-    mustNoLessThan("distributed_ratelimit_cache_percent", distributedRateLimitCachePercent, 0);
-
     // stat_reporter_interval=60000
     int32_t statInterval = _pt.get<int32_t>("flow_control.stat_reporter_interval", 60000);
     mustNoLessThan("stat_reporter_interval", statInterval, 0);
 
     // stat_reporter_interval=60000
     bool enableConnectDebugInfo = _pt.get<bool>("flow_control.enable_connect_debug_info", false);
-
-    m_rateLimiterConfig.enableDistributedRatelimit = enableDistributedRatelimit;
-    m_rateLimiterConfig.enableDistributedRateLimitCache = enableDistributedRateLimitCache;
-    m_rateLimiterConfig.distributedRateLimitCachePercent = distributedRateLimitCachePercent;
 
     m_rateLimiterConfig.timeWindowSec = timeWindowSec;
     m_rateLimiterConfig.statInterval = statInterval;
@@ -827,13 +802,7 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                              << LOG_KV("flow_control.enable_connect_debug_info",
                                     m_rateLimiterConfig.enableConnectDebugInfo)
                              << LOG_KV("flow_control.time_window_sec",
-                                    m_rateLimiterConfig.timeWindowSec)
-                             << LOG_KV("flow_control.enable_distributed_ratelimit",
-                                    m_rateLimiterConfig.enableDistributedRatelimit)
-                             << LOG_KV("flow_control.enable_distributed_ratelimit_cache",
-                                    m_rateLimiterConfig.enableDistributedRateLimitCache)
-                             << LOG_KV("flow_control.distributed_ratelimit_cache_percent",
-                                    m_rateLimiterConfig.distributedRateLimitCachePercent);
+                                    m_rateLimiterConfig.timeWindowSec);
 
     // --------------------------------- outgoing begin -------------------------------------------
 
@@ -1185,79 +1154,6 @@ void GatewayConfig::initFlowControlConfig(const boost::property_tree::ptree& _pt
                                   "flow_control.group_outgoing_bw_limit should not greater "
                                   "than flow_control.total_outgoing_bw_limit"));
     }
-
-    if (m_rateLimiterConfig.enableDistributedRatelimit)
-    {
-        GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
-                                 << LOG_DESC(
-                                        "allow distributed ratelimit, load the redis config items");
-
-        initRedisConfig(_pt);
-    }
-}
-
-// loads redis config
-void GatewayConfig::initRedisConfig(const boost::property_tree::ptree& _pt)
-{
-    /*
-    [redis]
-        server_ip=
-        server_port=
-        request_timeout=
-        connection_pool_size=
-        password=
-        db=
-     */
-
-    // server_ip
-    std::string redisServerIP = _pt.get<std::string>("redis.server_ip", "");
-    if (redisServerIP.empty())
-    {
-        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                  "initRedisConfig: invalid redis.server_ip! Must be non-empty!"));
-    }
-
-    if (!isValidIP(redisServerIP))
-    {
-        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
-                                  "initRedisConfig: invalid redis.server_ip! Invalid ip format!"));
-    }
-
-    // server_port
-    uint16_t redisServerPort = _pt.get<uint16_t>("redis.server_port", 0);
-    if (!isValidPort(redisServerPort))
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment("initRedisConfig: invalid redis.server_port! "
-                                                  "redis port must be in range (1024,65535]!"));
-    }
-
-    // request_timeout
-    int32_t redisTimeout = _pt.get<int32_t>("redis.request_timeout", -1);
-
-    // connection_pool_size
-    int32_t redisPoolSize = _pt.get<int32_t>("redis.connection_pool_size", 16);
-
-    // password
-    std::string redisPassword = _pt.get<std::string>("redis.password", "");
-
-    // db
-    int redisDB = _pt.get<int>("redis.db", 0);
-
-    m_redisConfig.host = redisServerIP;
-    m_redisConfig.port = redisServerPort;
-    m_redisConfig.timeout = redisTimeout;
-    m_redisConfig.connectionPoolSize = redisPoolSize;
-    m_redisConfig.password = redisPassword;
-    m_redisConfig.db = redisDB;
-
-    GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initRedisConfig") << LOG_DESC("load redis config items")
-                             << LOG_KV("redis.server_ip", redisServerIP)
-                             << LOG_KV("redis.server_port", redisServerPort)
-                             << LOG_KV("redis.db", redisDB)
-                             << LOG_KV("redis.request_timeout", redisTimeout)
-                             << LOG_KV("redis.connection_pool_size", redisPoolSize)
-                             << LOG_KV("redis.password", redisPassword);
 }
 
 void GatewayConfig::initPeerBlacklistConfig(const boost::property_tree::ptree& _pt)

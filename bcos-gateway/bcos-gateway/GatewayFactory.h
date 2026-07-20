@@ -12,7 +12,6 @@
 #include "bcos-gateway/libamop/AMOPImpl.h"
 #include "bcos-gateway/libratelimit/GatewayRateLimiter.h"
 #include <bcos-utilities/IOServicePool.h>
-#include <sw/redis++/redis++.h>
 #include <boost/asio/ssl.hpp>
 
 namespace bcos::gateway
@@ -68,8 +67,7 @@ public:
 
     //
     std::shared_ptr<ratelimiter::RateLimiterManager> buildRateLimiterManager(
-        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-        std::shared_ptr<sw::redis::Redis> _redis);
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
     // build Service
     std::shared_ptr<Service> buildService(const GatewayConfig::Ptr& _config);
@@ -109,20 +107,10 @@ public:
      * @brief
      *
      * @param _rateLimiterConfig
-     * @param _redisConfig
      * @return std::shared_ptr<ratelimiter::GatewayRateLimiter>
      */
     std::shared_ptr<ratelimiter::GatewayRateLimiter> buildGatewayRateLimiter(
-        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig,
-        const GatewayConfig::RedisConfig& _redisConfig);
-
-    /**
-     * @brief
-     *
-     * @param _redisConfig
-     * @return std::shared_ptr<sw::redis::Redis>
-     */
-    std::shared_ptr<sw::redis::Redis> initRedis(const GatewayConfig::RedisConfig& _redisConfig);
+        const GatewayConfig::RateLimiterConfig& _rateLimiterConfig);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(
