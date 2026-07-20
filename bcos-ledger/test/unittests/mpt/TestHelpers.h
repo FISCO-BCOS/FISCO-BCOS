@@ -108,14 +108,6 @@ inline bcos::storage::Entry makeEntry(std::string_view value)
     return entry;
 }
 
-/// A DELETED Entry (status tombstone, no value).
-inline bcos::storage::Entry makeDeletedEntry()
-{
-    bcos::storage::Entry entry;
-    entry.setStatus(bcos::storage::Entry::DELETED);
-    return entry;
-}
-
 // ---------------------------------------------------------------------------
 // Flat-state fixture (Revision 2026-07-09b): MPTBuilder consumes the block's fork view, so the
 // tests feed it the production-shaped layers instead of hand-filled AccountDelta structs.
@@ -162,8 +154,7 @@ inline void writeFlatRow(auto& target, bcos::executor_v1::StateKey key, bcos::st
 }
 
 /// Delete one row via storage-level logical deletion (the removeSome path): the delta layer
-/// keeps the key with a DELETED_TYPE marker — the second deletion signal MPTBuilder accepts
-/// besides an Entry written with status DELETED.
+/// keeps the key with a DELETED_TYPE marker — the deletion signal MPTBuilder recognizes.
 inline void deleteFlatRowLogically(FlatStateView& view, bcos::executor_v1::StateKey key)
 {
     bcos::task::syncWait(bcos::storage2::removeOne(mutableStorage(view), std::move(key)));

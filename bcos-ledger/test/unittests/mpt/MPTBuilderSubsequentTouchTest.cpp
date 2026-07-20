@@ -134,8 +134,8 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
     BOOST_REQUIRE_EQUAL(touched.size(), 1U);
     BOOST_CHECK(touched.front() == addr);
 
-    MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(view, touched, /*l2Mode=*/false));
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     BOOST_CHECK(output.stateRoot != parentRoot);
     BOOST_REQUIRE(!output.newNodes.empty());
@@ -192,9 +192,8 @@ BOOST_AUTO_TEST_CASE(ZeroValueWriteLeavesTheTrieLikeADelete)
     writeFlatRow(
         view, accountSlotKey(addr, slotKey(0x01)), slotEntry(bcos::bytes{0x00, 0x00, 0x00}));
 
-    MPTBuilder builder(storage, parentRoot);
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(addr));
@@ -215,9 +214,8 @@ BOOST_AUTO_TEST_CASE(NoStorageChangesKeepsPriorStorageRoot)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("8"));
 
-    MPTBuilder builder(storage, parentRoot);
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(addr));
@@ -245,8 +243,8 @@ BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
     auto const touched = touchedOf(view);
     BOOST_REQUIRE_EQUAL(touched.size(), 2U);
 
-    MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(view, touched, /*l2Mode=*/false));
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
     Account expectedA = priorA;
     expectedA.nonce = 2;
@@ -266,14 +264,13 @@ BOOST_AUTO_TEST_CASE(DeletedFieldOutsideTombstoneThrows)
     auto const parentRoot = buildStateTrie(storage, {{addr, Account{}}});
 
     // Only the nonce row is deleted — not the all-three-core-rows selfdestruct shape (spec
-    // §5.4 treats a partial deletion as an error). Exercise the Entry-status flavor here.
+    // §5.4 treats a partial deletion as an error).
     FlatBackendStorage flatBackend;
     auto view = makeFlatView(flatBackend);
-    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeDeletedEntry());
+    deleteFlatRowLogically(view, accountFieldKey(addr, ROW_NONCE));
 
-    MPTBuilder builder(storage, parentRoot);
     BOOST_CHECK_THROW(
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false)),
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
         MPTInvariantViolation);
 }
 
@@ -292,11 +289,9 @@ BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
     writeFlatRow(view, accountFieldKey(addr, "abi"), makeEntry("[]"));
     writeFlatRow(view, accountFieldKey(addr, ROW_CODE), makeEntry("\x60\x60"));
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
-    auto const touched = touchedOf(view);
-
     // Scenario A (native chain): the extension row is ignored, the nonce lands.
-    MPTBuilder builder(storage, parentRoot);
-    auto output = bcos::task::syncWait(builder.buildAndCollect(view, touched, /*l2Mode=*/false));
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto updated = bcos::task::syncWait(readView.readAccount(addr));
     BOOST_REQUIRE(updated.has_value());
@@ -304,9 +299,8 @@ BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
 
     // Scenario B (Ethereum-compatible): the same delta throws — an unrecognized row must not
     // silently fall out of the state commitment.
-    MPTBuilder builderL2(storage, parentRoot);
     BOOST_CHECK_THROW(
-        bcos::task::syncWait(builderL2.buildAndCollect(view, touched, /*l2Mode=*/true)),
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
         UnexpectedBCOSFieldInL2);
 }
 

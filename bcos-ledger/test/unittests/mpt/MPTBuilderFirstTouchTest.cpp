@@ -85,10 +85,6 @@ bcos::storage::Entry codeHashEntry(bcos::h256 const& hash)
         std::string_view{reinterpret_cast<char const*>(hash.data()), bcos::h256::SIZE});
 }
 
-std::vector<bcos::Address> touchedOf(FlatStateView& view)
-{
-    return bcos::task::syncWait(extractTouchedAccounts(mutableStorage(view)));
-}
 }  // namespace
 
 BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
@@ -103,9 +99,8 @@ BOOST_AUTO_TEST_CASE(FirstTouchOfBrandNewAccountWithoutStorage)
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("1000"));
     writeFlatRow(view, accountFieldKey(addr, ROW_CODE_HASH), codeHashEntry(makeHash(0xC0)));
 
-    MPTBuilder builder(storage, emptyRootHash());
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -139,9 +134,8 @@ BOOST_AUTO_TEST_CASE(FirstTouchDoesNotBackfillColdSlots)
     auto const hotSlot = slotKeyAt(500);
     writeFlatRow(view, accountSlotKey(addr, hotSlot), slotEntry(bcos::bytes{0x99}));
 
-    MPTBuilder builder(storage, emptyRootHash());
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -173,9 +167,8 @@ BOOST_AUTO_TEST_CASE(UnwrittenFieldsComeFromFlatWrittenOnesWin)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
 
-    MPTBuilder builder(storage, emptyRootHash());
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -198,9 +191,8 @@ BOOST_AUTO_TEST_CASE(MissingCodeHashRowMeansEmptyCodeHash)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
-    MPTBuilder builder(storage, emptyRootHash());
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -223,9 +215,8 @@ BOOST_AUTO_TEST_CASE(ZeroCodeHashRowInFlatThrows)
     auto view = makeFlatView(flatBackend);
     writeFlatRow(view, accountFieldKey(addr, ROW_BALANCE), makeEntry("10"));
 
-    MPTBuilder builder(storage, emptyRootHash());
     BOOST_CHECK_THROW(
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false)),
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false)),
         MPTInvariantViolation);
 }
 
@@ -241,9 +232,8 @@ BOOST_AUTO_TEST_CASE(DeleteOfNeverWrittenSlotIsNoop)
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("1"));
     deleteFlatRowLogically(view, accountSlotKey(addr, slotKeyAt(3)));
 
-    MPTBuilder builder(storage, emptyRootHash());
     auto output =
-        bcos::task::syncWait(builder.buildAndCollect(view, touchedOf(view), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), view, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, output.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
@@ -271,16 +261,14 @@ BOOST_AUTO_TEST_CASE(NextBlockContinuesIncrementallyOverThePartialTrie)
     // Block N: first-touch with slot A.
     auto viewN = makeFlatView(flatBackend);
     writeFlatRow(viewN, accountSlotKey(addr, slotA), slotEntry(bcos::bytes{0x0A}));
-    MPTBuilder builderN(storage, emptyRootHash());
     auto outputN =
-        bcos::task::syncWait(builderN.buildAndCollect(viewN, touchedOf(viewN), /*l2Mode=*/false));
+        bcos::task::syncWait(buildAndCollect(storage, emptyRootHash(), viewN, /*l2Mode=*/false));
 
     // Block N+1: subsequent-touch with slot B on top of block N's root.
     auto viewN1 = makeFlatView(flatBackend);
     writeFlatRow(viewN1, accountSlotKey(addr, slotB), slotEntry(bcos::bytes{0x0B}));
-    MPTBuilder builderN1(storage, outputN.stateRoot);
-    auto outputN1 = bcos::task::syncWait(
-        builderN1.buildAndCollect(viewN1, touchedOf(viewN1), /*l2Mode=*/false));
+    auto outputN1 =
+        bcos::task::syncWait(buildAndCollect(storage, outputN.stateRoot, viewN1, /*l2Mode=*/false));
 
     MPTReadView<NodeStorage> readView(storage, outputN1.stateRoot);
     auto account = bcos::task::syncWait(readView.readAccount(addr));
