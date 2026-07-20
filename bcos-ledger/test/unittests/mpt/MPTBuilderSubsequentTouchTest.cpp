@@ -224,6 +224,52 @@ BOOST_AUTO_TEST_CASE(NoStorageChangesKeepsPriorStorageRoot)
     BOOST_CHECK(updated->storageRoot == prior.storageRoot);
 }
 
+BOOST_AUTO_TEST_CASE(NonAccountTablesDoNotSplitOrPolluteAccountRuns)
+{
+    // The delta is scanned in one pass, so a foreign table must neither be folded into an
+    // account nor cut a run short. The load-bearing cases are the ones that (table, key) order
+    // places BETWEEN the two accounts: a table whose name is addrA's plus a suffix sorts right
+    // after addrA's run and before addrB's, yet parseAccountTable rejects it (not 40 hex).
+    // "/app", "/apps/shortname" and "/sys/config" cover the head and tail of the scan.
+    NodeStorage storage;
+    auto const addrA = makeAddress(0x0A);
+    auto const addrB = makeAddress(0x0B);
+    Account priorA;
+    priorA.nonce = 1;
+    Account priorB;
+    priorB.balance = 50;
+    auto const parentRoot = buildStateTrie(storage, {{addrA, priorA}, {addrB, priorB}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, bcos::executor_v1::StateKey{"/app", "before"}, makeEntry("x"));
+    writeFlatRow(view, accountFieldKey(addrA, ROW_NONCE), makeEntry("2"));
+    writeFlatRow(view, accountSlotKey(addrB, slotKey(0x05)), slotEntry(bcos::bytes{0x55}));
+    writeFlatRow(view, bcos::executor_v1::StateKey{"/sys/config", "after"}, makeEntry("y"));
+    // A short-name BCOS contract table: inside no account, parseAccountTable rejects it.
+    writeFlatRow(view, bcos::executor_v1::StateKey{"/apps/shortname", "abi"}, makeEntry("z"));
+    // The interleaving pair: same prefix as addrA's table, so they sort between the two
+    // accounts' runs. Were their rows mistaken for account rows, addrB would inherit them.
+    auto const addrATable = accountTableName(addrA);
+    writeFlatRow(view, bcos::executor_v1::StateKey{addrATable + "0", ROW_NONCE}, makeEntry("999"));
+    writeFlatRow(
+        view, bcos::executor_v1::StateKey{addrATable + "zz", ROW_BALANCE}, makeEntry("888"));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    // Exactly the two real accounts moved, with exactly the values their own rows carried.
+    Account expectedA = priorA;
+    expectedA.nonce = 2;
+    Account expectedB = priorB;
+    expectedB.storageRoot = storageRootOracle({{slotKey(0x05), bcos::bytes{0x55}}});
+    std::map<bcos::h256, bcos::bytes> stateEntries{
+        {accountKeyHash(addrA), expectedA.encode()},
+        {accountKeyHash(addrB), expectedB.encode()},
+    };
+    BOOST_CHECK(output.stateRoot == computeTrieRoot(stateEntries).root);
+}
+
 BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
 {
     NodeStorage storage;
