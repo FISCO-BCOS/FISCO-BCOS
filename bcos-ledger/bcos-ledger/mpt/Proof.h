@@ -24,6 +24,7 @@
 #include "MPTReadView.h"
 #include "Nibble.h"
 #include "NodeDecoder.h"
+#include "StorageValueCodec.h"
 #include "TrieNode.h"
 // AnyHasher.h defines the free bcos::crypto::hasher::hash(); OpenSSLHasher.h only defines the
 // hasher type. A unity build can mask a missing include of the former, so keep both explicit.
@@ -42,32 +43,6 @@
 
 namespace bcos::ledger::mpt
 {
-namespace detail
-{
-/// The "secure trie" key transform for storage slots: hash of the raw 32-byte slot key
-/// (keccak256 on Ethereum-compatible chains, SM3 on guomi ones — whatever @p hasher computes).
-/// Mirrors accountKeyHash (MPTReadView.h) for the account trie (spec §5.9).
-/// Kept in detail with the SAME signature as #5310's shared mpt::slotKeyHash
-/// (StorageValueCodec.h) — once both land, this duplicate folds into it mechanically.
-/// detail scoping avoids an ODR clash meanwhile.
-///
-/// Hasher-injection form: the caller owns @p hasher and reuses it across calls
-/// (generateProof hashes one slot key per requested slot).
-template <bcos::crypto::hasher::Hasher HasherT>
-bcos::h256 slotKeyHash(bcos::h256 const& slot, HasherT& hasher)
-{
-    bcos::h256 out;
-    bcos::crypto::hasher::hash(hasher, slot.ref(), out);
-    return out;
-}
-
-/// Convenience overload constructing a fresh keccak256 hasher per call (tests, one-off use).
-inline bcos::h256 slotKeyHash(bcos::h256 const& slot)
-{
-    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    return slotKeyHash(slot, hasher);
-}
-}  // namespace detail
 
 /// Proof for one storage slot (spec §5.9). For an absent slot, EIP-1186 semantics apply: value is
 /// empty (JSON 0x0) and proof holds the nodes visited until the walk dead-ended (exclusion proof).
@@ -199,9 +174,9 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
         }
         NodeRef const& child = branch.children.at(path.at(pos));
         ++pos;
-        if (child.kind == NodeRef::Kind::Hash)
+        if (child.kind() == NodeRef::Kind::Hash)
         {
-            bcos::h256 const childHash = child.hash;
+            bcos::h256 const childHash = child.hash();
             auto childRaw = co_await bcos::storage2::readOne(storage, childHash);
             if (!childRaw)
             {
@@ -212,14 +187,14 @@ bcos::task::Task<ProofWalk> proofWalk(Storage& storage, bcos::h256 root, bcos::b
             TrieNode next = decodeNode(bcos::ref(out.nodes.back()));
             node = std::move(next);
         }
-        else if (child.inlineBytes.empty())
+        else if (child.isAbsent())
         {
             co_return out;  // absent child: dead end
         }
         else
         {
             // Inline child: embedded in this branch's encoding, not a separate proof item.
-            TrieNode next = decodeNode(bcos::ref(child.inlineBytes));
+            TrieNode next = decodeNode(child.inlineRef());
             node = std::move(next);
         }
     }
@@ -288,7 +263,7 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
         entry.key = slot;
         if (account.storageRoot != emptyRootHash())
         {
-            auto const slotHash = detail::slotKeyHash(slot, hasher);
+            auto const slotHash = slotKeyHash(slot, hasher);
             auto slotWalk = co_await detail::proofWalk(
                 storage, account.storageRoot, bytesToNibbles(slotHash.ref()));
             if (slotWalk.rootMissing)
@@ -309,6 +284,216 @@ bcos::task::Task<std::variant<EIP1186Proof, ProofErrorCode>> generateProof(Stora
         out.storageProof.push_back(std::move(entry));
     }
     co_return out;
+}
+
+/// Result of independently verifying an EIP1186Proof against a claimed state root (spec §7.1).
+/// The recovered* fields are what the proof bytes actually commit to; they are only filled when
+/// the account chain verified AND matched the proof's claimed top-level fields.
+struct VerifyResult
+{
+    bool accountValid = false;
+    bcos::u256 recoveredBalance{};
+    bcos::u256 recoveredNonce{};
+    bcos::h256 recoveredCodeHash{};
+    bcos::h256 recoveredStorageRoot{};
+    std::vector<bool> storageValid;  ///< parallel to proof.storageProof
+    /// Raw leaf value bytes recovered from each slot's chain (empty = proven absent). Filled only
+    /// for slots whose hash chain verified.
+    std::vector<bcos::bytes> recoveredStorageValues;
+};
+
+namespace detail
+{
+/// Verify one root→leaf hash chain using ONLY @p proofNodes — no storage access. Re-derives every
+/// hash link: proofNodes[0] must hash to @p expectedRoot, and each hash reference encountered
+/// along @p path must match the hash of the next consumed proof item. Inline children are decoded
+/// in place without consuming an item, mirroring how generateProof embeds them.
+///
+/// This walk is deliberately independent of proofWalk (spec §7.1 cross-validation): the two share
+/// only the low-level decode helpers (decodeNode, nibble utils), so a traversal bug in one cannot
+/// hide in the other.
+///
+/// @param path the full nibble path of the key being proven (64 nibbles for 32-byte key hashes)
+/// @return nullopt   → the chain is INVALID (hash mismatch, malformed node, dangling hash ref,
+///                     or trailing unused proof items — padded proofs are rejected)
+///         empty     → valid EXCLUSION proof: the walk dead-ends, the key is absent
+///         non-empty → the proven leaf/branch value
+template <bcos::crypto::hasher::Hasher HasherT>
+std::optional<bcos::bytes> verifyProofChain(bcos::h256 const& expectedRoot,
+    std::span<bcos::bytes const> proofNodes, bcos::bytes const& path, HasherT& hasher)
+{
+    size_t idx = 0;  // next proof item to consume
+    size_t pos = 0;  // nibbles consumed so far
+
+    // A malformed node makes the chain invalid — never an escaping exception.
+    auto decodeChecked = [](bcos::bytesConstRef raw) -> std::optional<TrieNode> {
+        try
+        {
+            return decodeNode(raw);
+        }
+        catch (...)
+        {
+            return std::nullopt;
+        }
+    };
+    // Consume the next proof item; it must hash to the pending reference.
+    auto takeNode = [&](bcos::h256 const& expected) -> std::optional<TrieNode> {
+        if (idx >= proofNodes.size())
+        {
+            return std::nullopt;  // dangling ref: the proof ran out of items
+        }
+        bcos::h256 got;
+        bcos::crypto::hasher::hash(hasher, bcos::ref(proofNodes[idx]), got);
+        if (got != expected)
+        {
+            return std::nullopt;  // broken hash link
+        }
+        return decodeChecked(bcos::ref(proofNodes[idx++]));
+    };
+    // Every terminal exit: the result only stands if the proof was consumed exactly
+    // (trailing items = padded proof, rejected).
+    auto finish = [&](bcos::bytes value) -> std::optional<bcos::bytes> {
+        if (idx != proofNodes.size())
+        {
+            return std::nullopt;
+        }
+        return value;
+    };
+
+    // One loop over a single "current node" state; the loop body only answers "where does
+    // the next node come from" — a hash ref advances via takeNode (consumes a proof item),
+    // an inline child via decodeChecked on the bytes embedded in the current item. Any
+    // failure empties node and the loop exits. Lambda return values materialize before the
+    // assignment overwrites node, so decoding an inline child that lives inside the current
+    // variant is safe by construction (proofWalk needs a comment to enforce the same).
+    auto node = takeNode(expectedRoot);
+    while (node)
+    {
+        if (std::holds_alternative<EmptyNode>(*node))
+        {
+            return finish({});  // dead end: exclusion
+        }
+        if (auto const* leaf = std::get_if<LeafNode>(&*node))
+        {
+            bool const match =
+                path.size() - pos == leaf->keyNibbles.size() &&
+                std::equal(leaf->keyNibbles.begin(), leaf->keyNibbles.end(), path.begin() + pos);
+            return finish(match ? leaf->value : bcos::bytes{});  // value, or a diverging leaf
+        }
+        if (auto const* ext = std::get_if<ExtensionNode>(&*node))
+        {
+            if (path.size() - pos < ext->sharedNibbles.size() ||
+                !std::equal(
+                    ext->sharedNibbles.begin(), ext->sharedNibbles.end(), path.begin() + pos))
+            {
+                return finish({});  // path diverges inside the extension: exclusion
+            }
+            pos += ext->sharedNibbles.size();
+            node = (ext->child.size() == HASH_REF_ENCODED_SIZE &&
+                       ext->child[0] == RLP_HASH_REF_PREFIX) ?
+                       takeNode(bcos::h256(ext->child.data() + 1, bcos::h256::SIZE)) :
+                       decodeChecked(bcos::ref(ext->child));  // inline child: same proof item
+            continue;
+        }
+        auto const& branch = std::get<BranchNode>(*node);
+        if (pos == path.size())
+        {
+            return finish(branch.value);  // path exhausted at a branch (empty = exclusion)
+        }
+        NodeRef const& child = branch.children.at(path.at(pos));
+        ++pos;
+        if (child.kind() == NodeRef::Kind::Hash)
+        {
+            node = takeNode(child.hash());
+        }
+        else if (child.inlineRef().empty())
+        {
+            return finish({});  // absent child: exclusion
+        }
+        else
+        {
+            node = decodeChecked(child.inlineRef());
+        }
+    }
+    return std::nullopt;  // hash mismatch, malformed node, or dangling ref
+}
+}  // namespace detail
+
+/// Independently verify an EIP-1186 proof against @p claimedRoot (spec §7.1). Pure and
+/// synchronous: consumes ONLY the proof byte arrays — never storage — and re-derives every hash
+/// link via detail::verifyProofChain, the deliberate second implementation cross-validating
+/// generateProof's proofWalk.
+///
+/// accountValid requires all of: the account chain anchors at @p claimedRoot, ends at a present
+/// account leaf, the leaf decodes, and the decoded fields EQUAL the proof's claimed
+/// nonce/balance/codeHash/storageHash. Malformed leaf bytes yield accountValid=false, never an
+/// exception. On any account-side failure the function returns immediately with every
+/// storageValid false — slot chains hang off proof.storageHash, which an invalid account side
+/// has not established.
+///
+/// Per slot i: against an empty storage root, valid iff value and proof are both empty (matching
+/// generateProof's empty-trie output); otherwise the slot chain must verify against
+/// proof.storageHash and its recovered value must equal storageProof[i].value (empty = proven
+/// absence).
+template <
+    bcos::crypto::hasher::Hasher HasherT = bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher>
+VerifyResult verifyProof(bcos::h256 claimedRoot, EIP1186Proof const& proof)
+{
+    VerifyResult out;
+    out.storageValid.assign(proof.storageProof.size(), false);
+    out.recoveredStorageValues.assign(proof.storageProof.size(), bcos::bytes{});
+
+    HasherT hasher;  // one hash context, reused for the account chain and every slot
+    auto const accountPath = bytesToNibbles(accountKeyHash(proof.address).ref());
+    auto const accountLeaf = detail::verifyProofChain(
+        claimedRoot, std::span<bcos::bytes const>(proof.accountProof), accountPath, hasher);
+    if (!accountLeaf || accountLeaf->empty())
+    {
+        // Invalid chain, or an exclusion: an EIP-1186 proof for a present account must contain
+        // the account leaf.
+        return out;
+    }
+
+    Account decoded;
+    try
+    {
+        decoded = Account::decode(bcos::ref(*accountLeaf));
+    }
+    catch (...)
+    {
+        return out;  // malformed account leaf: invalid, never an escaping exception
+    }
+    if (decoded.nonce != proof.nonce || decoded.balance != proof.balance ||
+        decoded.codeHash != proof.codeHash || decoded.storageRoot != proof.storageHash)
+    {
+        return out;  // the chain proves a DIFFERENT account state than the proof claims
+    }
+    out.accountValid = true;
+    out.recoveredNonce = decoded.nonce;
+    out.recoveredBalance = decoded.balance;
+    out.recoveredCodeHash = decoded.codeHash;
+    out.recoveredStorageRoot = decoded.storageRoot;
+
+    for (size_t i = 0; i < proof.storageProof.size(); ++i)
+    {
+        auto const& entry = proof.storageProof[i];
+        if (proof.storageHash == emptyRootHash<HasherT>())
+        {
+            // Empty storage trie: generateProof emits empty value + empty proof for every slot.
+            out.storageValid[i] = entry.value.empty() && entry.proof.empty();
+            continue;
+        }
+        auto const slotPath = bytesToNibbles(slotKeyHash(entry.key, hasher).ref());
+        auto recovered = detail::verifyProofChain(
+            proof.storageHash, std::span<bcos::bytes const>(entry.proof), slotPath, hasher);
+        if (!recovered)
+        {
+            continue;  // invalid slot chain: storageValid[i] stays false
+        }
+        out.recoveredStorageValues[i] = std::move(*recovered);
+        out.storageValid[i] = (out.recoveredStorageValues[i] == entry.value);
+    }
+    return out;
 }
 
 }  // namespace bcos::ledger::mpt

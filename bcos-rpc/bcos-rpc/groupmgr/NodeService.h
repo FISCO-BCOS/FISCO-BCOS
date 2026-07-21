@@ -29,9 +29,12 @@
 #include <bcos-framework/multigroup/GroupInfo.h>
 #include <bcos-framework/protocol/BlockFactory.h>
 #include <bcos-framework/protocol/ServiceDesc.h>
+#include <bcos-framework/storage2/AnyStorage.h>
 #include <bcos-framework/sync/BlockSyncInterface.h>
 #include <bcos-framework/txpool/TxPoolInterface.h>
 #include <bcos-tars-protocol/client/LedgerServiceClient.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <servant/Application.h>
 #include <utility>
 
@@ -72,6 +75,22 @@ public:
         return m_engineService;
     }
 
+    /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
+    /// hash, value = the node's raw RLP encoding, physically stored under the /mpt/<hash> key
+    /// prefix of the default column family (bcos-storage KeyPrefixes.h::makeMPTNodeKey).
+    using MPTNodeReader = bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>;
+
+    /// Non-owning: the AnyStorage view holds a raw pointer to the underlying storage, whose
+    /// ownership stays with the Initializer; that storage must outlive this NodeService.
+    /// Default unset — the production wiring arrives with the scheduler-injection PR (PR-18);
+    /// until then nothing sets it and eth_getProof answers "MPT not enabled on this node".
+    /// shared_ptr because AnyStorage itself is move-only and not default-constructible.
+    void setMPTNodeReader(std::shared_ptr<MPTNodeReader> _reader) noexcept
+    {
+        m_mptNodeReader = std::move(_reader);
+    }
+    std::shared_ptr<MPTNodeReader> mptNodeReader() const noexcept { return m_mptNodeReader; }
+
     void setLedgerPrx(bcostars::LedgerServicePrx const& _ledgerPrx) { m_ledgerPrx = _ledgerPrx; }
 
     bool unreachable()
@@ -89,6 +108,9 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
 
     std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
+
+    /// Non-owning MPT node reader; see setMPTNodeReader() for the lifetime contract.
+    std::shared_ptr<MPTNodeReader> m_mptNodeReader;
 
     bcostars::LedgerServicePrx m_ledgerPrx;
 };

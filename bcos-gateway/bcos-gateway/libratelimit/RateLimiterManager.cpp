@@ -221,23 +221,10 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getGroupRateLim
                                 << LOG_DESC("group rate limiter not exist")
                                 << LOG_KV("rateLimiterKey", rateLimiterKey)
                                 << LOG_KV("groupOutgoingBwLimit", groupOutgoingBwLimit)
-                                << LOG_KV("timeWindowS", timeWindowS)
-                                << LOG_KV("enableDistributedRatelimit",
-                                       m_rateLimiterConfig.enableDistributedRatelimit);
+                                << LOG_KV("timeWindowS", timeWindowS);
 
-        if (m_rateLimiterConfig.enableDistributedRatelimit)
-        {
-            rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(*m_ioService,
-                m_rateLimiterFactory->toTokenKey(_group), groupOutgoingBwLimit * timeWindowS,
-                timeWindowS, allowExceedMaxPermitSize,
-                m_rateLimiterConfig.enableDistributedRateLimitCache,
-                m_rateLimiterConfig.distributedRateLimitCachePercent);
-        }
-        else
-        {
-            rateLimiter = m_rateLimiterFactory->buildTimeWindowRateLimiter(
-                groupOutgoingBwLimit * timeWindowS, timeWindowMS, allowExceedMaxPermitSize);
-        }
+        rateLimiter = m_rateLimiterFactory->buildTimeWindowRateLimiter(
+            groupOutgoingBwLimit * timeWindowS, timeWindowMS, allowExceedMaxPermitSize);
 
         auto result = registerRateLimiter(_group, rateLimiter);
         rateLimiter = (result.first ? rateLimiter : result.second);
@@ -313,7 +300,6 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getInRateLimite
     int32_t timeWindowMS = toMillisecond(m_rateLimiterConfig.timeWindowSec);
     bool allowExceedMaxPermitSize = m_rateLimiterConfig.allowExceedMaxPermitSize;
     int64_t QPS = m_rateLimiterConfig.p2pModuleMsgQPS;
-    auto enableDistributedRatelimit = m_rateLimiterConfig.enableDistributedRatelimit;
 
     auto tempQPS = m_rateLimiterConfig.moduleMsg2QPS.at(_moduleID);
     if (tempQPS > 0)
@@ -323,22 +309,10 @@ bcos::ratelimiter::RateLimiterInterface::Ptr RateLimiterManager::getInRateLimite
 
     RATELIMIT_MGR_LOG(INFO) << LOG_BADGE("getInRateLimiter")
                             << LOG_DESC("in rate limiter not exist") << LOG_KV("inKey", inKey)
-                            << LOG_KV("QPS", QPS) << LOG_KV("timeWindowS", timeWindowS)
-                            << LOG_KV("enableDistributedRatelimit",
-                                   m_rateLimiterConfig.enableDistributedRatelimit);
+                            << LOG_KV("QPS", QPS) << LOG_KV("timeWindowS", timeWindowS);
 
-    if (enableDistributedRatelimit)
-    {
-        rateLimiter = m_rateLimiterFactory->buildDistributedRateLimiter(*m_ioService,
-            m_rateLimiterFactory->toTokenKey(inKey), QPS * timeWindowS, timeWindowS,
-            allowExceedMaxPermitSize, m_rateLimiterConfig.enableDistributedRateLimitCache,
-            m_rateLimiterConfig.distributedRateLimitCachePercent);
-    }
-    else
-    {
-        rateLimiter = m_rateLimiterFactory->buildTimeWindowRateLimiter(
-            QPS * timeWindowS, timeWindowMS, allowExceedMaxPermitSize);
-    }
+    rateLimiter = m_rateLimiterFactory->buildTimeWindowRateLimiter(
+        QPS * timeWindowS, timeWindowMS, allowExceedMaxPermitSize);
 
     auto result = registerRateLimiter(inKey, rateLimiter);
     return result.first ? rateLimiter : result.second;

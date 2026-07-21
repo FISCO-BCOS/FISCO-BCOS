@@ -53,9 +53,9 @@ struct HBContext
 NodeRef hbEmit(HBContext& ctx, TrieNode const& node)
 {
     auto [raw, ref] = NodeEncoder<>::encodeAndRef(node, ctx.hasher);
-    if (ref.kind == NodeRef::Kind::Hash)
+    if (ref.kind() == NodeRef::Kind::Hash)
     {
-        ctx.newNodes.emplace(ref.hash, std::move(raw));
+        ctx.newNodes.emplace(ref.hash(), std::move(raw));
     }
     return ref;
 }
@@ -64,14 +64,14 @@ NodeRef hbEmit(HBContext& ctx, TrieNode const& node)
 // 33-byte RLP byte-string 0xa0 + hash.
 bcos::bytes hbRefToRaw(NodeRef const& ref)
 {
-    if (ref.kind == NodeRef::Kind::Inline)
+    if (ref.kind() == NodeRef::Kind::Inline)
     {
-        return ref.inlineBytes;
+        return ref.inlineRef().toBytes();
     }
     bcos::bytes out;
     out.reserve(HASH_REF_ENCODED_SIZE);
     out.push_back(RLP_HASH_REF_PREFIX);
-    out.insert(out.end(), ref.hash.begin(), ref.hash.end());
+    out.insert(out.end(), ref.payload.begin(), ref.payload.end());
     return out;
 }
 
@@ -164,14 +164,14 @@ TrieBuildResult computeTrieRootImpl(
 
     // A trie root is ALWAYS a 32-byte hash, even when the top node encodes to < 32 bytes.
     bcos::h256 root;
-    if (rootRef.kind == NodeRef::Kind::Hash)
+    if (rootRef.kind() == NodeRef::Kind::Hash)
     {
-        root = rootRef.hash;
+        root = rootRef.hash();
     }
     else
     {
-        bcos::crypto::hasher::hash(hasher, bcos::ref(rootRef.inlineBytes), root);
-        newNodes.emplace(root, rootRef.inlineBytes);
+        bcos::crypto::hasher::hash(hasher, rootRef.inlineRef(), root);
+        newNodes.emplace(root, rootRef.inlineRef().toBytes());
     }
 
     return TrieBuildResult{.root = root, .newNodes = std::move(newNodes)};

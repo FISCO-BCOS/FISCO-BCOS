@@ -26,6 +26,7 @@
 #include <bcos-ledger/mpt/MPTReadView.h>
 #include <bcos-ledger/mpt/NodeDecoder.h>
 #include <bcos-ledger/mpt/Proof.h>
+#include <bcos-ledger/mpt/StorageValueCodec.h>
 #include <bcos-task/Task.h>
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/Common.h>
@@ -144,18 +145,18 @@ ChainCheck verifyProofChain(
             }
             NodeRef const& child = branch.children.at(path.at(pos));
             ++pos;
-            if (child.kind == NodeRef::Kind::Hash)
+            if (child.kind() == NodeRef::Kind::Hash)
             {
-                expected = child.hash;
+                expected = child.hash();
                 needNextItem = true;
             }
-            else if (child.inlineBytes.empty())
+            else if (child.isAbsent())
             {
                 return finish();  // absent child: dead end
             }
             else
             {
-                TrieNode next = decodeNode(bcos::ref(child.inlineBytes));
+                TrieNode next = decodeNode(child.inlineRef());
                 node = std::move(next);
             }
         }
@@ -266,8 +267,8 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
 
     // Build the storage trie into the SAME node storage; its root becomes account.storageRoot.
     HashBuilder storageTrieBuilder(storage, emptyRootHash());
-    bcos::task::syncWait(storageTrieBuilder.put(detail::slotKeyHash(slotA), valueA));
-    bcos::task::syncWait(storageTrieBuilder.put(detail::slotKeyHash(slotB), valueB));
+    bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slotA), valueA));
+    bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slotB), valueB));
     auto const storageRoot = bcos::task::syncWait(storageTrieBuilder.commit());
 
     bcos::Address const addr = makeAddress(0xab);
@@ -291,8 +292,7 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
         auto const& entry = proof.storageProof.at(i);
         BOOST_CHECK_EQUAL(entry.key, slots.at(i));
         BOOST_CHECK(entry.value == (i == 0 ? valueA : valueB));
-        auto const check =
-            verifyProofChain(entry.proof, storageRoot, detail::slotKeyHash(entry.key));
+        auto const check = verifyProofChain(entry.proof, storageRoot, slotKeyHash(entry.key));
         BOOST_CHECK(check.hashChainOk);
         BOOST_CHECK(check.allNodesUsed);
         BOOST_REQUIRE(check.value.has_value());
@@ -304,8 +304,7 @@ BOOST_AUTO_TEST_CASE(StorageSlotProofsIncludingExclusion)
     BOOST_CHECK_EQUAL(absent.key, slotMissing);
     BOOST_CHECK(absent.value.empty());
     BOOST_CHECK(!absent.proof.empty());
-    auto const check =
-        verifyProofChain(absent.proof, storageRoot, detail::slotKeyHash(slotMissing));
+    auto const check = verifyProofChain(absent.proof, storageRoot, slotKeyHash(slotMissing));
     BOOST_CHECK(check.hashChainOk);
     BOOST_CHECK(check.allNodesUsed);
     BOOST_CHECK(!check.value.has_value());
@@ -348,11 +347,11 @@ BOOST_AUTO_TEST_CASE(HasherParameterizationKeepsSm3Possible)
 
     bcos::h256 const slot = makeHash(0x01);
     bcos::crypto::hasher::openssl::OpenSSL_SM3_Hasher sm3;
-    auto const sm3Key = detail::slotKeyHash(slot, sm3);
-    BOOST_CHECK(sm3Key != detail::slotKeyHash(slot));  // keccak default != SM3 injection
+    auto const sm3Key = slotKeyHash(slot, sm3);
+    BOOST_CHECK(sm3Key != slotKeyHash(slot));  // keccak default != SM3 injection
 
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher keccakHasher;
-    BOOST_CHECK(detail::slotKeyHash(slot, keccakHasher) == detail::slotKeyHash(slot));
+    BOOST_CHECK(slotKeyHash(slot, keccakHasher) == slotKeyHash(slot));
 }
 
 // Generating the same proof twice yields byte-identical output.
@@ -363,7 +362,7 @@ BOOST_AUTO_TEST_CASE(DeterministicOutput)
     bcos::bytes const slotValue{0x2a};
 
     HashBuilder storageTrieBuilder(storage, emptyRootHash());
-    bcos::task::syncWait(storageTrieBuilder.put(detail::slotKeyHash(slot), slotValue));
+    bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slot), slotValue));
     auto const storageRoot = bcos::task::syncWait(storageTrieBuilder.commit());
 
     std::vector<std::pair<bcos::Address, Account>> accounts;

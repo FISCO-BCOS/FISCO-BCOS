@@ -116,32 +116,32 @@ struct MutableNode
 // complete RLP) into a NodeRef. Inverse of refToRawBytes below.
 inline NodeRef refFromRawBytes(bcos::bytes const& raw)
 {
-    NodeRef ref;
     if (raw.size() == HASH_REF_ENCODED_SIZE && raw[0] == RLP_HASH_REF_PREFIX)
     {
-        ref.kind = NodeRef::Kind::Hash;
-        ref.hash = bcos::h256(bcos::bytesConstRef(raw.data() + 1, bcos::h256::SIZE));
+        return NodeRef::fromHash(bcos::h256(bcos::bytesConstRef(raw.data() + 1, bcos::h256::SIZE)));
     }
-    else
+    // Yellow Paper §D 32-byte rule: an inline child ref's RLP is < 32 bytes; anything else
+    // here means the stored trie is malformed.
+    if (raw.size() >= bcos::h256::SIZE)
     {
-        ref.kind = NodeRef::Kind::Inline;
-        ref.inlineBytes = raw;
+        BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                  "refFromRawBytes: inline child ref of >= 32 bytes"));
     }
-    return ref;
+    return NodeRef::fromInline(bcos::bytesConstRef(raw.data(), raw.size()));
 }
 
 // Turn a NodeRef into the bytes an ExtensionNode.child expects. Mirrors the file-local helper in
 // HashBuilder.cpp (thin glue over the shared NodeEncoder rules; kept local to each TU).
 inline bcos::bytes refToRawBytes(NodeRef const& ref)
 {
-    if (ref.kind == NodeRef::Kind::Inline)
+    if (ref.kind() == NodeRef::Kind::Inline)
     {
-        return ref.inlineBytes;
+        return ref.inlineRef().toBytes();
     }
     bcos::bytes out;
     out.reserve(HASH_REF_ENCODED_SIZE);
     out.push_back(RLP_HASH_REF_PREFIX);
-    out.insert(out.end(), ref.hash.begin(), ref.hash.end());
+    out.insert(out.end(), ref.payload.begin(), ref.payload.end());
     return out;
 }
 
@@ -173,8 +173,7 @@ inline std::unique_ptr<MutableNode> liftNode(TrieNode decoded, std::optional<bco
         MutableBranch mut;
         for (size_t i = 0; i < NIBBLE_RANGE; ++i)
         {
-            if (auto& child = branch->children[i];
-                child.kind == NodeRef::Kind::Inline && child.inlineBytes.empty())
+            if (auto& child = branch->children[i]; child.isAbsent())
             {
                 mut.children[i] = std::monostate{};
             }
@@ -222,22 +221,23 @@ bcos::task::Task<MutableNode*> mergeResolve(MergeContext<Storage>& ctx, MutableC
     auto const& ref = std::get<NodeRef>(slot);
     std::optional<bcos::h256> origin;
     TrieNode decoded;
-    if (ref.kind == NodeRef::Kind::Hash)
+    if (ref.kind() == NodeRef::Kind::Hash)
     {
-        auto raw = co_await bcos::storage2::readOne(ctx.storage.get(), ref.hash);
+        bcos::h256 const refHash = ref.hash();
+        auto raw = co_await bcos::storage2::readOne(ctx.storage.get(), refHash);
         if (!raw)
         {
             BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
                                       "mergeTrie: missing node hash; storage lacks a referenced "
                                       "node"));
         }
-        ctx.resolvedHashes.insert(ref.hash);
-        origin = ref.hash;
+        ctx.resolvedHashes.insert(refHash);
+        origin = refHash;
         decoded = decodeNode(bcos::ref(*raw));
     }
     else
     {
-        decoded = decodeNode(bcos::ref(ref.inlineBytes));
+        decoded = decodeNode(ref.inlineRef());
     }
     slot = liftNode(std::move(decoded), origin);
     co_return std::get<std::unique_ptr<MutableNode>>(slot).get();
@@ -469,9 +469,7 @@ bcos::task::Task<void> mergeNormalize(MergeContext<Storage>& ctx, MutableNode& n
             // Resolved only to learn its shape, never modified: its prior encoding stays live
             // under the new extension. Un-account the resolve and keep the hash reference.
             ctx.resolvedHashes.erase(*boxed->originHash);
-            NodeRef keep;
-            keep.kind = NodeRef::Kind::Hash;
-            keep.hash = *boxed->originHash;
+            NodeRef const keep = NodeRef::fromHash(*boxed->originHash);
             node.node = MutableExtension{.shared = bcos::bytes{static_cast<bcos::byte>(lastNibble)},
                 .child = MutableChild{keep}};
         }
@@ -574,9 +572,9 @@ struct EmitContext
     NodeRef emit(TrieNode const& node)
     {
         auto [raw, ref] = NodeEncoder<HasherT>::encodeAndRef(node, hasher);
-        if (ref.kind == NodeRef::Kind::Hash)
+        if (ref.kind() == NodeRef::Kind::Hash)
         {
-            newNodes.emplace(ref.hash, std::move(raw));
+            newNodes.emplace(ref.hash(), std::move(raw));
         }
         return ref;
     }
@@ -645,8 +643,7 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
     detail::MergeContext<Storage> ctx{.storage = storage, .resolvedHashes = {}};
 
     // The overlay root starts as a clean reference to the prior root node; nothing is read yet.
-    detail::MutableChild root{
-        NodeRef{.kind = NodeRef::Kind::Hash, .inlineBytes = {}, .hash = priorRoot}};
+    detail::MutableChild root{NodeRef::fromHash(priorRoot)};
 
     // Phase 1 — apply. std::map iteration = h256 lexicographic = 64-nibble path order, so keys
     // sharing a prefix arrive consecutively and hit the overlay's memoized nodes.
@@ -690,14 +687,14 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
             detail::emitNode(emitCtx, *std::get<std::unique_ptr<detail::MutableNode>>(root));
         // A trie root is ALWAYS addressed by a 32-byte hash, even when the top node encodes
         // to fewer than 32 bytes (same rule as computeTrieRoot).
-        if (rootRef.kind == NodeRef::Kind::Hash)
+        if (rootRef.kind() == NodeRef::Kind::Hash)
         {
-            result.root = rootRef.hash;
+            result.root = rootRef.hash();
         }
         else
         {
-            bcos::crypto::hasher::hash(emitCtx.hasher, bcos::ref(rootRef.inlineBytes), result.root);
-            emitCtx.newNodes.emplace(result.root, rootRef.inlineBytes);
+            bcos::crypto::hasher::hash(emitCtx.hasher, rootRef.inlineRef(), result.root);
+            emitCtx.newNodes.emplace(result.root, rootRef.inlineRef().toBytes());
         }
         result.newNodes = std::move(emitCtx.newNodes);
     }
