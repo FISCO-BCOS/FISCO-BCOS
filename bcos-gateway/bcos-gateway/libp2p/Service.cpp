@@ -533,10 +533,25 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 {
     try
     {
-        std::shared_lock lock(x_sessions);
-        for (auto const& session : m_sessions)
+        // FIB-186 (vector D): snapshot the session keys under x_sessions and release it BEFORE the
+        // per-session asyncSendMessageByNodeID(), which re-acquires x_sessions(shared) via
+        // getP2PSessionByNodeId. Holding x_sessions across that re-acquisition is a recursive
+        // shared lock: once an onConnect thread is waiting for x_sessions(W), libc++
+        // writer-priority blocks the second lock_shared(), so this thread can neither finish nor
+        // release its first shared lock and every session operation (including all PBFT delivery)
+        // stalls -> consensus halts under connection churn.
+        std::vector<P2pID> nodeIDs;
         {
-            asyncSendMessageByNodeID(session.first, message, {}, options);
+            std::shared_lock lock(x_sessions);
+            nodeIDs.reserve(m_sessions.size());
+            for (auto const& session : m_sessions)
+            {
+                nodeIDs.push_back(session.first);
+            }
+        }
+        for (auto const& nodeID : nodeIDs)
+        {
+            asyncSendMessageByNodeID(nodeID, message, {}, options);
         }
     }
     catch (std::exception& e)
