@@ -78,6 +78,8 @@ file(INSTALL
     "${SOURCE_PATH}/lib/evmone/vm.hpp"
     "${SOURCE_PATH}/lib/evmone/execution_state.hpp"
     "${SOURCE_PATH}/lib/evmone/tracing.hpp"
+    "${SOURCE_PATH}/lib/evmone/constants.hpp"
+    "${SOURCE_PATH}/lib/evmone/delegation.hpp"
     DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone")
 
 # 4c. Install phase-1 precompile crypto headers used directly by FISCO-BCOS.
@@ -89,6 +91,9 @@ file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/bn254.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/ecc.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/hash_types.h"
+    "${SOURCE_PATH}/lib/evmone_precompiles/keccak.h"
+    "${SOURCE_PATH}/lib/evmone_precompiles/keccak.hpp"
+    "${SOURCE_PATH}/lib/evmone_precompiles/secp256k1.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/mulmod.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/secp256r1.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/modexp.hpp"
@@ -136,6 +141,7 @@ if(NOT TARGET evmone::evmone)
             "${CMAKE_CURRENT_LIST_DIR}/../../lib/${_evmone_lib_prefix}evmone_precompiles${_evmone_lib_suffix}"
         INTERFACE_LINK_LIBRARIES "blst"
     )
+
 endif()
 ]=])
 
