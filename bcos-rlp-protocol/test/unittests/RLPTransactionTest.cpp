@@ -113,7 +113,8 @@ BOOST_AUTO_TEST_CASE(testLegacyEIP155Transaction)
     BOOST_CHECK_EQUAL(tx->nonce(), "0xc");
     BOOST_CHECK_EQUAL(tx->maxFeePerGasU256(), u256(20000000000));
     BOOST_CHECK_EQUAL(tx->maxPriorityFeePerGasU256(), u256(20000000000));
-    BOOST_CHECK_EQUAL(tx->gasPrice(), "0x4a817c800");  // 20 gwei
+    BOOST_CHECK(tx->gasPrice().has_value());
+    BOOST_CHECK_EQUAL(tx->gasPrice().value(), u256(20000000000));  // 20 gwei
     BOOST_CHECK_EQUAL(tx->gasLimitU64(), 21000);
     BOOST_CHECK_EQUAL(tx->gasLimit(), 21000);
     BOOST_CHECK(tx->toAddress().has_value());
@@ -121,7 +122,7 @@ BOOST_AUTO_TEST_CASE(testLegacyEIP155Transaction)
         tx->toAddress().value(), Address("0x727fc6a68321b754475c668a6abfb6e9e71c169a"));
     BOOST_CHECK_EQUAL(tx->to(), "0x727fc6a68321b754475c668a6abfb6e9e71c169a");
     BOOST_CHECK_EQUAL(tx->valueU256(), u256(10000000000000000000ull));
-    BOOST_CHECK_EQUAL(tx->value(), "0x8ac7230489e80000");
+    BOOST_CHECK_EQUAL(tx->value(), u256(10000000000000000000ull));
     BOOST_CHECK(!tx->input().empty());
 
     // --- Signature ---
@@ -196,7 +197,8 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     BOOST_CHECK_EQUAL(tx->nonceU64(), 7);
     BOOST_CHECK_EQUAL(tx->maxFeePerGasU256(), u256(30000000000));
     BOOST_CHECK_EQUAL(tx->maxPriorityFeePerGasU256(), u256(30000000000));
-    BOOST_CHECK_EQUAL(tx->gasPrice(), "0x6fc23ac00");
+    BOOST_CHECK(tx->gasPrice().has_value());
+    BOOST_CHECK_EQUAL(tx->gasPrice().value(), u256(30000000000));
     BOOST_CHECK_EQUAL(tx->gasLimitU64(), 5748100);
     BOOST_CHECK(tx->toAddress().has_value());
     BOOST_CHECK_EQUAL(
@@ -213,7 +215,8 @@ BOOST_AUTO_TEST_CASE(testEIP2930Transaction)
     BOOST_CHECK_EQUAL(decoded->maxFeePerGasU256(), u256(30000000000));
 
     // maxFeePerGas equals maxPriorityFeePerGas (EIP-2930 semantics)
-    BOOST_CHECK_EQUAL(tx->maxFeePerGas(), tx->maxPriorityFeePerGas());
+    BOOST_CHECK(tx->maxFeePerGas().has_value() && tx->maxPriorityFeePerGas().has_value());
+    BOOST_CHECK_EQUAL(tx->maxFeePerGas().value(), tx->maxPriorityFeePerGas().value());
 }
 
 // ----------------------------------------------------------------------------
@@ -252,9 +255,11 @@ BOOST_AUTO_TEST_CASE(testEIP1559Transaction)
     BOOST_CHECK_EQUAL(tx->nonceU64(), 7);
     BOOST_CHECK_EQUAL(tx->maxPriorityFeePerGasU256(), u256(10000000000));
     BOOST_CHECK_EQUAL(tx->maxFeePerGasU256(), u256(30000000000));
-    BOOST_CHECK(tx->gasPrice().empty());  // EIP-1559+ has no gasPrice
-    BOOST_CHECK_EQUAL(tx->maxPriorityFeePerGas(), "0x2540be400");
-    BOOST_CHECK_EQUAL(tx->maxFeePerGas(), "0x6fc23ac00");
+    BOOST_CHECK(!tx->gasPrice().has_value());  // EIP-1559+ has no gasPrice
+    BOOST_CHECK(tx->maxPriorityFeePerGas().has_value());
+    BOOST_CHECK_EQUAL(tx->maxPriorityFeePerGas().value(), u256(10000000000));
+    BOOST_CHECK(tx->maxFeePerGas().has_value());
+    BOOST_CHECK_EQUAL(tx->maxFeePerGas().value(), u256(30000000000));
     BOOST_CHECK_EQUAL(tx->gasLimitU64(), 5748100);
 
     // --- Access list ---
@@ -336,7 +341,7 @@ BOOST_AUTO_TEST_CASE(testEIP4844Transaction)
     BOOST_CHECK_EQUAL(decoded->blobVersionedHashes().size(), 2);
 
     // --- gasPrice is empty for EIP-4844 ---
-    BOOST_CHECK(decoded->gasPrice().empty());
+    BOOST_CHECK(!decoded->gasPrice().has_value());
 
     // --- Signature ---
     BOOST_CHECK_EQUAL(decoded->signatureV(), 0);
@@ -607,7 +612,7 @@ BOOST_AUTO_TEST_CASE(testEIP1559MainnetStyle)
     BOOST_CHECK_EQUAL(decoded->maxFeePerGasU256(), u256(40000000000ull));
     BOOST_CHECK_EQUAL(decoded->gasLimitU64(), 60000);
     BOOST_CHECK_EQUAL(decoded->valueU256(), u256(0));
-    BOOST_CHECK(decoded->gasPrice().empty());  // EIP-1559: no gasPrice
+    BOOST_CHECK(!decoded->gasPrice().has_value());  // EIP-1559: no gasPrice
 
     // --- extraTransactionBytes ---
     auto extra = decoded->extraTransactionBytes();

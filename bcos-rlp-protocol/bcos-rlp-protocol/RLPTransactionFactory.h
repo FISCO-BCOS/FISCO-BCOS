@@ -18,10 +18,8 @@
  */
 #pragma once
 
-#include "RLPTransaction.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/protocol/TransactionFactory.h>
-#include <memory>
 
 namespace bcos::rlp
 {

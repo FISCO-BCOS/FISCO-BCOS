@@ -70,18 +70,12 @@ bytesConstRef trimLeadingZeros(bytesConstRef input)
 std::string toQuantityStr(uint64_t value)
 {
     if (value == 0)
+    {
         return "0x0";
+    }
     std::ostringstream oss;
     oss << "0x" << std::hex << value;
     return oss.str();
-}
-
-/// Format u256 as hex quantity string ("0x...").
-std::string toQuantityStr(u256 const& value)
-{
-    if (value == 0)
-        return "0x0";
-    return "0x" + value.str(0, std::ios_base::hex);
 }
 
 }  // anonymous namespace
@@ -114,13 +108,8 @@ RLPTransaction::RLPTransaction(const RLPTransaction& other)
     m_nonceStr(other.m_nonceStr),
     m_chainIdStr(other.m_chainIdStr),
     m_toStr(other.m_toStr),
-    m_valueStr(other.m_valueStr),
-    m_gasPriceStr(other.m_gasPriceStr),
-    m_maxFeePerGasStr(other.m_maxFeePerGasStr),
-    m_maxPriorityFeePerGasStr(other.m_maxPriorityFeePerGasStr),
     m_version(other.m_version),
     m_blockLimit(other.m_blockLimit),
-    m_web3AccessListBuilt(false),
     m_cachedHashForSign(other.m_cachedHashForSign),
     m_hashForSignDirty(other.m_hashForSignDirty),
     m_cachedSignature(other.m_cachedSignature)
@@ -133,41 +122,45 @@ RLPTransaction::RLPTransaction(const RLPTransaction& other)
 void RLPTransaction::refreshStringCaches()
 {
     if (m_chainId.has_value())
+    {
         m_chainIdStr = std::to_string(m_chainId.value());
+    }
     else
+    {
         m_chainIdStr.clear();
+    }
 
     m_nonceStr = toQuantityStr(m_nonce);
 
     if (m_to.has_value())
+    {
         m_toStr = m_to.value().hexPrefixed();
+    }
     else
+    {
         m_toStr.clear();
-
-    m_valueStr = toQuantityStr(m_value);
-
-    if (m_web3TypedTxKind <= static_cast<uint8_t>(Web3TxType::EIP2930))
-        m_gasPriceStr = toQuantityStr(m_maxFeePerGas);
-    else
-        m_gasPriceStr.clear();
-
-    m_maxFeePerGasStr = toQuantityStr(m_maxFeePerGas);
-    m_maxPriorityFeePerGasStr = toQuantityStr(m_maxPriorityFeePerGas);
+    }
 }
 
 void RLPTransaction::refreshSignatureCache() const
 {
-    std::lock_guard<std::mutex> lock(m_cacheMutex);
+    std::lock_guard<std::mutex> lock(*m_cacheMutex);
     if (!m_cachedSignature.empty())
+    {
         return;
+    }
     m_cachedSignature.reserve(65);  // r(32) + s(32) + v(1)
     // Left-pad r to 32 bytes (RLP decode strips leading zeros)
     if (m_signatureR.size() < 32)
+    {
         m_cachedSignature.insert(m_cachedSignature.end(), 32 - m_signatureR.size(), 0);
+    }
     m_cachedSignature.insert(m_cachedSignature.end(), m_signatureR.begin(), m_signatureR.end());
     // Left-pad s to 32 bytes (RLP decode strips leading zeros)
     if (m_signatureS.size() < 32)
+    {
         m_cachedSignature.insert(m_cachedSignature.end(), 32 - m_signatureS.size(), 0);
+    }
     m_cachedSignature.insert(m_cachedSignature.end(), m_signatureS.begin(), m_signatureS.end());
     m_cachedSignature.push_back(static_cast<byte>(m_signatureV & 0xFF));
 }
@@ -194,7 +187,9 @@ size_t RLPTransaction::basePayloadLength() const
         len += rlp::length(m_chainId.value_or(0));
         len += rlp::length(m_nonce);
         if (m_web3TypedTxKind != static_cast<uint8_t>(Web3TxType::EIP2930))
+        {
             len += rlp::length(m_maxPriorityFeePerGas);
+        }
         len += rlp::length(m_maxFeePerGas);
     }
 
@@ -210,7 +205,9 @@ size_t RLPTransaction::basePayloadLength() const
         {
             size_t keysLen = 0;
             for (auto const& key : entry.storageKeys)
+            {
                 keysLen += rlp::length(key.ref());
+            }
             size_t entryPayloadLen = Address::SIZE + 1 + rlp::lengthOfLength(keysLen) + keysLen;
             alLen += rlp::lengthOfLength(entryPayloadLen) + entryPayloadLen;
         }
@@ -222,7 +219,9 @@ size_t RLPTransaction::basePayloadLength() const
         len += rlp::length(m_maxFeePerBlobGas);
         size_t bLen = 0;
         for (auto const& bh : m_blobVersionedHashes)
+        {
             bLen += rlp::length(bh.ref());
+        }
         len += rlp::lengthOfLength(bLen) + bLen;
     }
 
@@ -238,7 +237,7 @@ size_t RLPTransaction::signedPayloadLength() const
     if (m_web3TypedTxKind == static_cast<uint8_t>(Web3TxType::Legacy))
     {
         uint64_t recoveredV =
-            m_chainId.has_value() ? m_chainId.value() * 2 + 35 + m_signatureV : m_signatureV + 27;
+            m_chainId.has_value() ? (m_chainId.value() * 2) + 35 + m_signatureV : m_signatureV + 27;
         payloadLen += rlp::length(recoveredV);
         payloadLen += rlp::length(trimLeadingZeros(ref(m_signatureR)));
         payloadLen += rlp::length(trimLeadingZeros(ref(m_signatureS)));
@@ -266,15 +265,21 @@ void RLPTransaction::encodeBaseFields(bcos::bytes& out) const
         rlp::encode(out, m_chainId.value_or(0));
         rlp::encode(out, m_nonce);
         if (m_web3TypedTxKind != static_cast<uint8_t>(Web3TxType::EIP2930))
+        {
             rlp::encode(out, m_maxPriorityFeePerGas);
+        }
         rlp::encode(out, m_maxFeePerGas);
     }
 
     rlp::encode(out, m_gasLimit);
     if (m_to.has_value())
+    {
         rlp::encode(out, m_to.value().ref());
+    }
     else
+    {
         out.push_back(rlp::BYTES_HEAD_BASE);
+    }
     rlp::encode(out, m_value);
     rlp::encode(out, m_input);
 
@@ -285,7 +290,9 @@ void RLPTransaction::encodeBaseFields(bcos::bytes& out) const
         {
             size_t keysLen = 0;
             for (auto const& key : entry.storageKeys)
+            {
                 keysLen += rlp::length(key.ref());
+            }
             size_t entryPayloadLen = Address::SIZE + 1 + rlp::lengthOfLength(keysLen) + keysLen;
             alLen += rlp::lengthOfLength(entryPayloadLen) + entryPayloadLen;
         }
@@ -294,13 +301,17 @@ void RLPTransaction::encodeBaseFields(bcos::bytes& out) const
         {
             size_t keysLen = 0;
             for (auto const& key : entry.storageKeys)
+            {
                 keysLen += rlp::length(key.ref());
+            }
             size_t entryPayloadLen = Address::SIZE + 1 + rlp::lengthOfLength(keysLen) + keysLen;
             rlp::encodeHeader(out, {.isList = true, .payloadLength = entryPayloadLen});
             rlp::encode(out, entry.account.ref());
             rlp::encodeHeader(out, {.isList = true, .payloadLength = keysLen});
             for (auto const& key : entry.storageKeys)
+            {
                 rlp::encode(out, key.ref());
+            }
         }
     }
 
@@ -309,10 +320,14 @@ void RLPTransaction::encodeBaseFields(bcos::bytes& out) const
         rlp::encode(out, m_maxFeePerBlobGas);
         size_t bLen = 0;
         for (auto const& bh : m_blobVersionedHashes)
+        {
             bLen += rlp::length(bh.ref());
+        }
         rlp::encodeHeader(out, {.isList = true, .payloadLength = bLen});
         for (auto const& bh : m_blobVersionedHashes)
+        {
             rlp::encode(out, bh.ref());
+        }
     }
 }
 
@@ -328,7 +343,9 @@ void RLPTransaction::encodePayload(bcos::bytes& out) const
     size_t payloadLen = basePayloadLength();
     size_t eip155Extra = 0;
     if (m_web3TypedTxKind == static_cast<uint8_t>(Web3TxType::Legacy) && m_chainId.has_value())
+    {
         eip155Extra = rlp::length(m_chainId.value()) + 2;
+    }
     payloadLen += eip155Extra;
 
     // 2. Reserve and write header, then fields
@@ -367,7 +384,7 @@ void RLPTransaction::encode(bcos::bytes& txData) const
     if (m_web3TypedTxKind == static_cast<uint8_t>(Web3TxType::Legacy))
     {
         uint64_t recoveredV =
-            m_chainId.has_value() ? m_chainId.value() * 2 + 35 + m_signatureV : m_signatureV + 27;
+            m_chainId.has_value() ? (m_chainId.value() * 2) + 35 + m_signatureV : m_signatureV + 27;
 
         txData.reserve(txData.size() + rlp::lengthOfLength(payloadLen) + payloadLen);
         rlp::encodeHeader(txData, {.isList = true, .payloadLength = payloadLen});
@@ -383,9 +400,13 @@ void RLPTransaction::encode(bcos::bytes& txData) const
         rlp::encodeHeader(txData, {.isList = true, .payloadLength = payloadLen});
         encodeBaseFields(txData);
         if (m_signatureV == 0)
+        {
             txData.push_back(rlp::BYTES_HEAD_BASE);
+        }
         else
+        {
             rlp::encode(txData, static_cast<uint8_t>(m_signatureV));
+        }
         rlp::encode(txData, trimLeadingZeros(ref(m_signatureR)));
         rlp::encode(txData, trimLeadingZeros(ref(m_signatureS)));
     }
@@ -399,7 +420,9 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
     bcos::bytesRef ref(dataCopy.data(), dataCopy.size());
 
     if (ref.empty())
+    {
         BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: empty decode data"));
+    }
 
     auto const firstByte = ref[0];
     if (firstByte > 0 && firstByte < 0x80)
@@ -407,35 +430,49 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
         // --- EIP-2718 Typed Transaction ---
         auto txType = magic_enum::enum_cast<Web3TxType>(firstByte);
         if (!txType.has_value())
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: unsupported tx type " +
                                       std::to_string(static_cast<int>(firstByte))));
+        }
         m_web3TypedTxKind = static_cast<uint8_t>(txType.value());
         ref = ref.getCroppedData(1);
 
         auto&& [err, header] = rlp::decodeHeader(ref);
         if (err != nullptr || !header.isList)
+        {
             BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: invalid typed tx header"));
+        }
 
         uint64_t chainId = 0;
         if (auto error = rlp::decodeItems(ref, chainId, m_nonce, m_maxPriorityFeePerGas))
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: decode typed fields failed"));
+        }
         m_chainId.emplace(chainId);
 
         if (m_web3TypedTxKind == static_cast<uint8_t>(Web3TxType::EIP2930))
+        {
             m_maxFeePerGas = m_maxPriorityFeePerGas;
+        }
         else if (auto error = rlp::decode(ref, m_maxFeePerGas))
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: decode maxFeePerGas failed"));
+        }
 
         if (auto error = rlp::decode(ref, m_gasLimit))
+        {
             BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: decode gasLimit failed"));
+        }
 
         // Guard against truncated tx (ref[0] OOB)
         if (ref.empty())
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: truncated tx at to field"));
+        }
         if (ref[0] == rlp::BYTES_HEAD_BASE)
         {
             m_to = std::nullopt;
@@ -445,13 +482,17 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
         {
             Address addr;
             if (auto error = rlp::decode(ref, addr))
+            {
                 BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: decode to failed"));
+            }
             m_to.emplace(addr);
         }
 
         if (auto error = rlp::decodeItems(ref, m_value, m_input))
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: decode value/data failed"));
+        }
 
         // Manually decode access list (EthAccessListEntry), bypassing ADL issues
         // with the std::vector decode template.
@@ -459,15 +500,19 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
         {
             auto&& [alErr, alHeader] = rlp::decodeHeader(ref);
             if (alErr || !alHeader.isList)
+            {
                 BOOST_THROW_EXCEPTION(
                     std::invalid_argument("RLPTransaction: bad accessList header"));
+            }
             auto alView = ref.getCroppedData(0, alHeader.payloadLength);
             while (!alView.empty())
             {
                 EthAccessListEntry entry;
                 if (auto e = rlpDecodeEthAccessListEntry(alView, entry))
+                {
                     BOOST_THROW_EXCEPTION(
                         std::invalid_argument("RLPTransaction: decode access entry failed"));
+                }
                 m_accessList.emplace_back(std::move(entry));
             }
             ref = ref.getCroppedData(alHeader.payloadLength);
@@ -476,29 +521,43 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
         if (m_web3TypedTxKind == static_cast<uint8_t>(Web3TxType::EIP4844))
         {
             if (auto error = rlp::decodeItems(ref, m_maxFeePerBlobGas, m_blobVersionedHashes))
+            {
                 BOOST_THROW_EXCEPTION(
                     std::invalid_argument("RLPTransaction: decode EIP-4844 fields failed"));
+            }
             // Enforce EIP-4844 invariants
             if (!m_to.has_value())
+            {
                 BOOST_THROW_EXCEPTION(
                     std::invalid_argument("RLPTransaction: EIP-4844 blob tx must have 'to'"));
+            }
             if (m_blobVersionedHashes.empty())
+            {
                 BOOST_THROW_EXCEPTION(std::invalid_argument(
                     "RLPTransaction: EIP-4844 blobVersionedHashes must be non-empty"));
+            }
             for (auto const& h : m_blobVersionedHashes)
+            {
                 if (h.ref()[0] != 0x01)
+                {
                     BOOST_THROW_EXCEPTION(std::invalid_argument(
                         "RLPTransaction: EIP-4844 versioned hash must start with 0x01"));
+                }
+            }
         }
 
         if (auto error = rlp::decodeItems(ref, m_signatureV, m_signatureR, m_signatureS))
+        {
             BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: decode signature failed"));
+        }
 
         // Validate yParity for typed txs
         if (m_signatureV > 1)
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: typed tx yParity must be 0 or 1, got " +
                                       std::to_string(m_signatureV)));
+        }
     }
     else
     {
@@ -507,21 +566,29 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
 
         auto&& [err, header] = rlp::decodeHeader(ref);
         if (err != nullptr || !header.isList)
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: invalid legacy tx header"));
+        }
 
         if (auto error = rlp::decodeItems(ref, m_nonce, m_maxPriorityFeePerGas))
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: decode legacy fields failed"));
+        }
         m_maxFeePerGas = m_maxPriorityFeePerGas;
 
         if (auto error = rlp::decode(ref, m_gasLimit))
+        {
             BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: decode gasLimit failed"));
+        }
 
         // Guard against truncated tx (ref[0] OOB)
         if (ref.empty())
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: truncated tx at to field"));
+        }
         if (ref[0] == rlp::BYTES_HEAD_BASE)
         {
             m_to = std::nullopt;
@@ -531,16 +598,22 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
         {
             Address addr;
             if (auto error = rlp::decode(ref, addr))
+            {
                 BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: decode to failed"));
+            }
             m_to.emplace(addr);
         }
 
         if (auto error = rlp::decodeItems(ref, m_value, m_input))
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransaction: decode value/data failed"));
+        }
 
         if (auto error = rlp::decodeItems(ref, m_signatureV, m_signatureR, m_signatureS))
+        {
             BOOST_THROW_EXCEPTION(std::invalid_argument("RLPTransaction: decode signature failed"));
+        }
 
         // EIP-155: extract chainId from v
         auto v = m_signatureV;
@@ -569,9 +642,11 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
 
     // Verify full consumption: reject trailing garbage
     if (!ref.empty())
+    {
         BOOST_THROW_EXCEPTION(
             std::invalid_argument("RLPTransaction: trailing bytes after decode, remaining=" +
                                   std::to_string(ref.size())));
+    }
 
     setTainted(true);
     m_hashForSignDirty = true;
@@ -581,7 +656,7 @@ void RLPTransaction::decode(bcos::bytesConstRef _txData)
     // Eagerly compute mutable caches to avoid data races on const getters
     refreshSignatureCache();
     {
-        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        std::lock_guard<std::mutex> lock(*m_cacheMutex);
         m_encodedForSign = encodeForSign();
     }
 }
@@ -625,7 +700,9 @@ bcos::bytes RLPTransaction::encodeForSign() const
 void RLPTransaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl)
 {
     if (!tainted())
+    {
         return;
+    }
 
     auto const txHash = hash();
     auto const signature = signatureData();
@@ -641,9 +718,11 @@ void RLPTransaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& sig
 
 bcos::bytesConstRef RLPTransaction::extraTransactionBytes() const
 {
-    std::lock_guard<std::mutex> lock(m_cacheMutex);
+    std::lock_guard<std::mutex> lock(*m_cacheMutex);
     if (m_encodedForSign.empty())
+    {
         m_encodedForSign = encodeForSign();
+    }
     return {m_encodedForSign.data(), m_encodedForSign.size()};
 }
 
@@ -655,12 +734,16 @@ void RLPTransaction::ensureWeb3AccessListCache() const
 {
     std::lock_guard<std::mutex> lock(*m_accessListMutex);
     if (m_web3AccessListBuilt)
+    {
         return;
+    }
     m_web3AccessListCache.clear();
     m_web3AccessListCache.reserve(m_accessList.size());
     for (auto const& entry : m_accessList)
+    {
         m_web3AccessListCache.push_back(
             bcos::protocol::Web3AccessListEntry{entry.account, entry.storageKeys});
+    }
     m_web3AccessListBuilt = true;
 }
 
@@ -679,9 +762,13 @@ void RLPTransaction::setNonce(std::string nonce)
     try
     {
         if (nonce.starts_with("0x") || nonce.starts_with("0X"))
+        {
             m_nonce = std::stoull(nonce.substr(2), nullptr, 16);
+        }
         else
+        {
             m_nonce = std::stoull(nonce);
+        }
     }
     catch (...)
     {
@@ -690,7 +777,7 @@ void RLPTransaction::setNonce(std::string nonce)
     refreshStringCaches();  // Use formatted hex, not raw input
     m_hashForSignDirty = true;
     {
-        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        std::lock_guard<std::mutex> lock(*m_cacheMutex);
         m_encodedForSign.clear();
     }
 }
@@ -698,11 +785,13 @@ void RLPTransaction::setNonce(std::string nonce)
 void RLPTransaction::forceSender(const bcos::bytes& _sender)
 {
     if (!tainted())
+    {
         BOOST_THROW_EXCEPTION(std::invalid_argument("sender of clean transaction is immutable"));
+    }
     m_sender = _sender;
     // Clear cached signature since sender changed (may need re-verify)
     {
-        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        std::lock_guard<std::mutex> lock(*m_cacheMutex);
         m_cachedSignature.clear();
     }
 }
@@ -720,7 +809,7 @@ void RLPTransaction::setChainId(std::optional<uint64_t> id)
     m_chainId = id;
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setWeb3TxType(Web3TxType t)
@@ -728,7 +817,7 @@ void RLPTransaction::setWeb3TxType(Web3TxType t)
     m_web3TypedTxKind = static_cast<uint8_t>(t);
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setToAddress(std::optional<Address> addr)
@@ -736,22 +825,22 @@ void RLPTransaction::setToAddress(std::optional<Address> addr)
     m_to = addr;
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setInputData(bcos::bytes data)
 {
     m_input = std::move(data);
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setValueU256(u256 v)
 {
-    m_value = v;
+    m_value = std::move(v);
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setNonceU64(uint64_t n)
@@ -759,64 +848,64 @@ void RLPTransaction::setNonceU64(uint64_t n)
     m_nonce = n;
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setGasLimitU64(uint64_t g)
 {
     m_gasLimit = g;
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setMaxFeePerGasU256(u256 v)
 {
-    m_maxFeePerGas = v;
+    m_maxFeePerGas = std::move(v);
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setMaxPriorityFeePerGasU256(u256 v)
 {
-    m_maxPriorityFeePerGas = v;
+    m_maxPriorityFeePerGas = std::move(v);
     refreshStringCaches();
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setMaxFeePerBlobGasU256(u256 v)
 {
-    m_maxFeePerBlobGas = v;
+    m_maxFeePerBlobGas = std::move(v);
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setBlobVersionedHashes(h256s hashes)
 {
     m_blobVersionedHashes = std::move(hashes);
     m_hashForSignDirty = true;
-    { std::lock_guard<std::mutex> lock(m_cacheMutex); m_encodedForSign.clear(); }
+    { std::lock_guard<std::mutex> lock(*m_cacheMutex); m_encodedForSign.clear(); }
 }
 
 void RLPTransaction::setSignatureR(bcos::bytes r)
 {
     m_signatureR = std::move(r);
-    std::lock_guard<std::mutex> lock(m_cacheMutex);
+    std::lock_guard<std::mutex> lock(*m_cacheMutex);
     m_cachedSignature.clear();
 }
 
 void RLPTransaction::setSignatureS(bcos::bytes s)
 {
     m_signatureS = std::move(s);
-    std::lock_guard<std::mutex> lock(m_cacheMutex);
+    std::lock_guard<std::mutex> lock(*m_cacheMutex);
     m_cachedSignature.clear();
 }
 
 void RLPTransaction::setSignatureV(uint64_t v)
 {
     m_signatureV = v;
-    std::lock_guard<std::mutex> lock(m_cacheMutex);
+    std::lock_guard<std::mutex> lock(*m_cacheMutex);
     m_cachedSignature.clear();
 }
 
@@ -827,7 +916,7 @@ void RLPTransaction::setAccessListEth(std::vector<EthAccessListEntry> list)
     m_web3AccessListBuilt = false;
     m_hashForSignDirty = true;
     {
-        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
+        std::lock_guard<std::mutex> cacheLock(*m_cacheMutex);
         m_encodedForSign.clear();
     }
 }
@@ -843,7 +932,9 @@ size_t RLPTransaction::size() const
     size_t payloadLen = signedPayloadLength();
 
     if (m_web3TypedTxKind == static_cast<uint8_t>(Web3TxType::Legacy))
+    {
         return rlp::lengthOfLength(payloadLen) + payloadLen;
+    }
 
     return 1 + rlp::lengthOfLength(payloadLen) + payloadLen;  // type byte + header + payload
 }

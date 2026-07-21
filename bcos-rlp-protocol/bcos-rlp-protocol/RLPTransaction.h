@@ -113,11 +113,16 @@ public:
     std::string_view to() const override { return m_toStr; }
     std::string_view abi() const override { return {}; }
 
-    std::string_view value() const override { return m_valueStr; }
-    std::string_view gasPrice() const override { return m_gasPriceStr; }
+    u256 value() const override { return m_value; }
+    std::optional<u256> gasPrice() const override
+    {
+        if (m_web3TypedTxKind <= static_cast<uint8_t>(Web3TxType::EIP2930))
+            return m_maxFeePerGas;
+        return std::nullopt;
+    }
     int64_t gasLimit() const override { return static_cast<int64_t>(m_gasLimit); }
-    std::string_view maxFeePerGas() const override { return m_maxFeePerGasStr; }
-    std::string_view maxPriorityFeePerGas() const override { return m_maxPriorityFeePerGasStr; }
+    std::optional<u256> maxFeePerGas() const override { return m_maxFeePerGas; }
+    std::optional<u256> maxPriorityFeePerGas() const override { return m_maxPriorityFeePerGas; }
 
     bcos::bytesConstRef extension() const override { return {}; }
     std::string_view extraData() const override { return m_extraData; }
@@ -231,10 +236,6 @@ private:
     std::string m_nonceStr;
     std::string m_chainIdStr;
     std::string m_toStr;
-    std::string m_valueStr;
-    std::string m_gasPriceStr;
-    std::string m_maxFeePerGasStr;
-    std::string m_maxPriorityFeePerGasStr;
     int32_t m_version{0};
     int64_t m_blockLimit{std::numeric_limits<int64_t>::max()};
 
@@ -247,7 +248,7 @@ private:
     mutable bool m_hashForSignDirty{true};
 
     mutable bcos::bytes m_encodedForSign;
-    mutable std::mutex m_cacheMutex;
+    mutable std::unique_ptr<std::mutex> m_cacheMutex{std::make_unique<std::mutex>()};
 
     mutable bcos::bytes m_cachedSignature;
 };

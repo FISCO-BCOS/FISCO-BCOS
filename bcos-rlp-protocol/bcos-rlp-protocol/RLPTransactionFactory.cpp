@@ -17,6 +17,7 @@
  * @file RLPTransactionFactory.cpp
  */
 
+#include "RLPTransaction.h"
 #include "RLPTransactionFactory.h"
 #include <bcos-utilities/BoostLog.h>
 #include <boost/throw_exception.hpp>
@@ -46,7 +47,7 @@ bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(
     bcos::protocol::Transaction& input)
 {
     auto* rlpInput = dynamic_cast<RLPTransaction*>(&input);
-    if (!rlpInput)
+    if (rlpInput == nullptr)
     {
         BOOST_THROW_EXCEPTION(
             std::invalid_argument("RLPTransactionFactory: input is not RLPTransaction"));
@@ -77,8 +78,10 @@ bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(
     {
         // Reject empty signatures when verification is explicitly requested
         if (tx->signatureR().empty() || tx->signatureS().empty())
+        {
             BOOST_THROW_EXCEPTION(
                 std::invalid_argument("RLPTransactionFactory: checkSig=true but signature empty"));
+        }
 
         // Verify secp256k1 signature using injected crypto suite
         auto const hashForSign = tx->hashForSign();
@@ -105,18 +108,24 @@ bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(
 
 // --- BCOSTransaction-style creation (unsupported) ---
 
-bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(int32_t, std::string,
-    bcos::bytes const&, std::string const&, int64_t, std::string, std::string, int64_t, std::string,
-    std::string, std::string, int64_t, std::string, std::string)
+bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(int32_t /*_version*/,
+    std::string /*_to*/, bcos::bytes const& /*_input*/, std::string const& /*_nonce*/,
+    int64_t /*_blockLimit*/, std::string /*_chainId*/, std::string /*_groupId*/,
+    int64_t /*_importTime*/, std::string /*_abi*/, std::string /*_value*/,
+    std::string /*_gasPrice*/, int64_t /*_gasLimit*/, std::string /*_maxFeePerGas*/,
+    std::string /*_maxPriorityFeePerGas*/)
 {
     BOOST_THROW_EXCEPTION(std::logic_error(
         "RLPTransactionFactory: BCOSTransaction-style creation not supported for RLP transactions"));
 }
 
-bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(int32_t, std::string,
-    bcos::bytes const&, std::string const&, int64_t, std::string, std::string, int64_t,
-    const bcos::crypto::KeyPairInterface&, std::string, std::string, std::string, int64_t,
-    std::string, std::string)
+bcos::protocol::Transaction::Ptr RLPTransactionFactory::createTransaction(int32_t /*_version*/,
+    std::string /*_to*/, bcos::bytes const& /*_input*/, std::string const& /*_nonce*/,
+    int64_t /*_blockLimit*/, std::string /*_chainId*/, std::string /*_groupId*/,
+    int64_t /*_importTime*/, const bcos::crypto::KeyPairInterface& /*keyPair*/,
+    std::string /*_abi*/, std::string /*_value*/, std::string /*_gasPrice*/,
+    int64_t /*_gasLimit*/, std::string /*_maxFeePerGas*/,
+    std::string /*_maxPriorityFeePerGas*/)
 {
     BOOST_THROW_EXCEPTION(std::logic_error(
         "RLPTransactionFactory: BCOSTransaction-style creation not supported for RLP transactions"));
