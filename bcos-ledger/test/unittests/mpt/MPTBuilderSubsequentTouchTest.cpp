@@ -436,11 +436,43 @@ BOOST_AUTO_TEST_CASE(Eip7702DelegatedEoaCommitsLikeAnyOtherAccount)
     BOOST_CHECK(output.stateRoot == computeTrieRoot(stateEntries).root);
 }
 
-BOOST_AUTO_TEST_CASE(DeletedCodeHashRowResolvesToEmptyCodeHash)
+BOOST_AUTO_TEST_CASE(ClearingA7702DelegationWritesEmptyCodeHash)
 {
-    // EIP-7702: clearing a delegation returns an EOA to a code-less state. An executor may
-    // express that by deleting the codeHash row, which must resolve to emptyCodeHash() — the
-    // same default readFlatAccountMeta applies to a missing row — not halt the block.
+    // The standard shape for clearing a delegation: "code-less" is a VALUE, so the executor
+    // writes keccak256("") into the codeHash row. Nothing special happens here — it merges like
+    // any other written codeHash — and the account ends up as a plain EOA leaf.
+    NodeStorage storage;
+    auto const eoa = makeAddress(0x7E);
+    Account prior;  // an EOA currently carrying a delegation designator
+    prior.nonce = 3;
+    prior.codeHash =
+        bcos::h256{"0x00000000000000000000000000000000000000000000000000000000000000ff"};
+    auto const parentRoot = buildStateTrie(storage, {{eoa, prior}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    auto const empty = emptyCodeHash();
+    writeFlatRow(view, accountFieldKey(eoa, ROW_CODE_HASH),
+        makeEntry(std::string_view(reinterpret_cast<char const*>(empty.data()), bcos::h256::SIZE)));
+    writeFlatRow(view, accountFieldKey(eoa, ROW_NONCE), makeEntry("4"));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(eoa));
+    BOOST_REQUIRE(updated.has_value());
+    BOOST_CHECK(updated->codeHash == emptyCodeHash());
+    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(4));
+}
+
+BOOST_AUTO_TEST_CASE(DeletedCodeHashRowOnALiveAccountThrows)
+{
+    // A deleted codeHash row outside a tombstone is not a shape Ethereum produces (clearing a
+    // delegation WRITES emptyCodeHash — see above). Resolving it to emptyCodeHash() instead
+    // would silently turn this contract into a code-less account and fork the state root, so the
+    // invariant fires. It also guards the corrupt-tombstone case: if nonce/balance deletions were
+    // lost and only this one survived, the leaf would keep the destroyed contract's storageRoot.
     NodeStorage storage;
     auto const addr = makeAddress(0x0E);
     Account prior;
@@ -454,14 +486,28 @@ BOOST_AUTO_TEST_CASE(DeletedCodeHashRowResolvesToEmptyCodeHash)
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
     writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("4"));
 
-    auto output =
-        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+    BOOST_CHECK_THROW(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
+                          /*l2Mode=*/false)),
+        MPTInvariantViolation);
+}
 
-    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
-    auto updated = bcos::task::syncWait(readView.readAccount(addr));
-    BOOST_REQUIRE(updated.has_value());
-    BOOST_CHECK(updated->codeHash == emptyCodeHash());
-    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(4));
+BOOST_AUTO_TEST_CASE(LoneDeletedCodeHashOnAFirstTouchAccountThrowsInsteadOfInsertingAnEmptyLeaf)
+{
+    // Same invariant, first-touch side. Without it this account would reach the leaf write as
+    // {0, 0, emptyCodeHash, emptyRoot} — an EIP-161 empty account, exactly what sawEthereumRow
+    // keeps out for code/extension-only runs. A deleted codeHash row IS an Ethereum-state row,
+    // so that guard does not cover this; requireNotDeleted does.
+    NodeStorage storage;
+    auto const addr = makeAddress(0x0F);
+    auto const parentRoot = buildStateTrie(storage, {});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
+
+    BOOST_CHECK_THROW(bcos::task::syncWait(buildAndCollect(storage, parentRoot, view,
+                          /*l2Mode=*/false)),
+        MPTInvariantViolation);
 }
 
 BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
@@ -492,6 +538,31 @@ BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
     BOOST_CHECK_THROW(
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
         UnexpectedBCOSFieldInL2);
+}
+
+BOOST_AUTO_TEST_CASE(UnclassifiedRowFieldThrowsInBothModes)
+{
+    // A field name that is neither Ethereum state nor a known BCOS extension. Unlike "abi", it
+    // does NOT get the scenario-A skip: nobody has judged whether it carries state, so skipping
+    // it could drop state from the commitment with no signal. Both modes throw, and the two
+    // failures are distinguishable — UnknownAccountRowField, not UnexpectedBCOSFieldInL2.
+    NodeStorage storage;
+    auto const addr = makeAddress(0x03);
+    Account prior;
+    prior.nonce = 4;
+    auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, "someFutureField"), makeEntry("1"));
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("5"));
+
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
+        UnknownAccountRowField);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/true)),
+        UnknownAccountRowField);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

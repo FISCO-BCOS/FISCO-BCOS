@@ -90,6 +90,11 @@ struct AccountRows
     /// Set once a row carrying Ethereum state (core field or storage slot) is seen. Code and BCOS
     /// extension rows leave it false: an account touched only by those has no Ethereum state
     /// change, and finalizeAccount must not invent a leaf for it (see there).
+    ///
+    /// This closes ONE member of the EIP-161 empty-account class, not the class. A block that
+    /// writes a zero balance to an otherwise-untouched account still produces {0, 0,
+    /// emptyCodeHash, emptyRoot}, because EIP-158/161 empty-account clearing is not implemented
+    /// (see finalizeAccount's tombstone comment).
     bool sawEthereumRow = false;
 };
 
@@ -115,7 +120,10 @@ void accumulateRow(BuildContext<Storage> const& context, AccountRows& rows,
     // RowKind makes -Wswitch flag this spot, and the key-format knowledge stays
     // unit-tested in Classify.h.
     auto const kind = classifyRowKey(keyView.m_key);
-    if (kind != RowKind::Code && kind != RowKind::BcosExtension)
+    // Stated positively — these four ARE the Ethereum state. The complement (code, known BCOS
+    // extensions, unclassified fields) must leave the flag alone.
+    if (kind == RowKind::Nonce || kind == RowKind::Balance || kind == RowKind::CodeHash ||
+        kind == RowKind::StorageSlot)
     {
         rows.sawEthereumRow = true;
     }
@@ -189,6 +197,14 @@ void accumulateRow(BuildContext<Storage> const& context, AccountRows& rows,
                     std::string{keyView.m_table} + ":" + std::string{keyView.m_key}));
         }
         break;  // native BCOS chain: not part of the Ethereum 4-tuple
+    case RowKind::UnknownField:
+        // Not in KNOWN_BCOS_EXTENSION_FIELDS, so nobody has judged whether it carries Ethereum
+        // state. Skipping it would drop that state from the commitment with no signal, so throw
+        // in BOTH modes and make the judgement happen once, when the field is introduced.
+        BOOST_THROW_EXCEPTION(UnknownAccountRowField{} << bcos::errinfo_comment(
+                                  "MPTBuilder: unclassified account row field; add it to "
+                                  "KNOWN_BCOS_EXTENSION_FIELDS if it is not Ethereum state. key=" +
+                                  std::string{keyView.m_table} + ":" + std::string{keyView.m_key}));
     }
 }
 
@@ -239,17 +255,23 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         accountChanges[accountKeyHash(address)] = std::nullopt;
         co_return;
     }
-    // nonce and balance have no protocol operation that removes them on a live account, so a
-    // lone deletion there is a delta shape the executor should not produce — fail loudly.
+    // No protocol operation removes a core field from a LIVE account, so a lone deletion here is
+    // a delta shape the executor should not produce — fail loudly rather than guess a value.
+    //
+    // codeHash included, and EIP-7702 does not change that. Clearing a delegation does return an
+    // EOA to a code-less state, but the standard expresses "code-less" as a VALUE: an account
+    // leaf always carries a codeHash and a code-less account's is keccak256(""), so the executor
+    // WRITES emptyCodeHash() (handled below like any other written value) and never deletes the
+    // row. Resolving a deletion to emptyCodeHash() instead would be unsound both ways: on a
+    // subsequent touch it would overwrite the parent leaf's real contract codeHash — the leaf is
+    // positive evidence that this account HAS code, unlike the first-touch case where
+    // readFlatAccountMeta's missing-row default is an inference from the absence of evidence —
+    // and on a first touch it would let an account whose only delta row is a deleted codeHash
+    // reach the leaf write below as {0, 0, emptyCodeHash, emptyRoot}, the very EIP-161 empty
+    // account the sawEthereumRow guard above exists to keep out.
     rows.nonce.requireNotDeleted();
     rows.balance.requireNotDeleted();
-    // codeHash is different: an Ethereum account leaf ALWAYS carries a codeHash, and for a
-    // code-less account that value is keccak256("") — there is no "absent codeHash" state in the
-    // standard. readFlatAccountMeta already maps a missing row to emptyCodeHash(); a deleted row
-    // is the same statement about the same account, so it resolves the same way rather than
-    // being an error. EIP-7702 makes this reachable: clearing a delegation (authorization
-    // pointing at the zero address) returns an EOA to a code-less state, and an executor
-    // expressing that as a row deletion must not halt the block.
+    rows.codeHash.requireNotDeleted();
 
     // Path selection is the readAccount result itself (Revision 2026-07-09b): a parent leaf
     // means subsequent-touch, none means first-touch — no flag to disagree with.
@@ -298,10 +320,6 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     if (rows.codeHash.value)
     {
         updated.codeHash = *rows.codeHash.value;
-    }
-    else if (rows.codeHash.deleted)
-    {
-        updated.codeHash = emptyCodeHash();  // see the requireNotDeleted block above
     }
     accountChanges[accountKeyHash(address)] = updated.encode();
 }
@@ -375,10 +393,12 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///                        one, which is worse — the scan finds nothing, accountChanges stays
 ///                        empty, commitTrie short-circuits to priorRoot and the MPT silently
 ///                        stops advancing.
-/// @param l2Mode          scenario B (Ethereum-compatible chain): a BCOS extension row in
+/// @param l2Mode          scenario B (Ethereum-compatible chain): a KNOWN BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
 /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone
 ///         (spec §5.4 treats that as an error).
+/// @throws UnknownAccountRowField on an account row whose field name is not classified, in
+///         either mode (spec §5.2).
 template <bcos::storage2::ReadWriteStorage<bcos::h256, bcos::bytes> Storage>
 bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     Storage& nodeStorage, bcos::h256 parentStateRoot, auto& flatView, bool l2Mode)

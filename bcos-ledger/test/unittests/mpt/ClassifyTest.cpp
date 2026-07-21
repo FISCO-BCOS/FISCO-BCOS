@@ -78,15 +78,42 @@ BOOST_AUTO_TEST_CASE(ClassifyRowKeyKinds)
     std::string_view const slotRow{reinterpret_cast<char const*>(slot.data()), slot.size()};
     BOOST_CHECK(classifyRowKey(slotRow) == RowKind::StorageSlot);
 
-    // Every other named row is a BCOS extension (skipped in scenario A, throws in scenario B).
+    // A KNOWN non-Ethereum field: skipped in scenario A, throws in scenario B.
     BOOST_CHECK(classifyRowKey("abi") == RowKind::BcosExtension);
     BOOST_CHECK(classifyRowKey("alive") == RowKind::BcosExtension);
     BOOST_CHECK(classifyRowKey("frozen") == RowKind::BcosExtension);
     BOOST_CHECK(classifyRowKey("shard") == RowKind::BcosExtension);
     BOOST_CHECK(classifyRowKey("status") == RowKind::BcosExtension);
-    // 31 and 33 bytes are NOT slots.
-    BOOST_CHECK(classifyRowKey(std::string(31, 'x')) == RowKind::BcosExtension);
-    BOOST_CHECK(classifyRowKey(std::string(33, 'x')) == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey("last_update") == RowKind::BcosExtension);
+    BOOST_CHECK(classifyRowKey("last_status") == RowKind::BcosExtension);
+
+    // Anything else has never been classified — it throws in BOTH modes rather than falling out
+    // of the state commitment silently. 31 and 33 bytes are NOT slots, so they land here too.
+    BOOST_CHECK(classifyRowKey("someFutureField") == RowKind::UnknownField);
+    BOOST_CHECK(classifyRowKey(std::string(31, 'x')) == RowKind::UnknownField);
+    BOOST_CHECK(classifyRowKey(std::string(33, 'x')) == RowKind::UnknownField);
+    // Near-misses of real field names must not be whitelisted by accident.
+    BOOST_CHECK(classifyRowKey("Abi") == RowKind::UnknownField);
+    BOOST_CHECK(classifyRowKey("abi ") == RowKind::UnknownField);
+    BOOST_CHECK(classifyRowKey("") == RowKind::UnknownField);
+}
+
+BOOST_AUTO_TEST_CASE(KnownExtensionWhitelistMirrorsTheExecutorConstants)
+{
+    // KNOWN_BCOS_EXTENSION_FIELDS mirrors bcos-executor/src/Common.h:81-98. Copied here rather
+    // than included so bcos-ledger keeps no build dependency on bcos-executor; this test is what
+    // catches the two drifting apart.
+    BOOST_CHECK_EQUAL(KNOWN_BCOS_EXTENSION_FIELDS.size(), 7U);
+    for (auto const& field : KNOWN_BCOS_EXTENSION_FIELDS)
+    {
+        BOOST_CHECK(isKnownBcosExtensionField(field));
+        BOOST_CHECK(classifyRowKey(field) == RowKind::BcosExtension);
+    }
+    // Core fields must never appear in the extension whitelist.
+    BOOST_CHECK(!isKnownBcosExtensionField(ROW_NONCE));
+    BOOST_CHECK(!isKnownBcosExtensionField(ROW_BALANCE));
+    BOOST_CHECK(!isKnownBcosExtensionField(ROW_CODE_HASH));
+    BOOST_CHECK(!isKnownBcosExtensionField(ROW_CODE));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

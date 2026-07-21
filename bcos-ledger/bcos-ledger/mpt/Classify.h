@@ -24,6 +24,8 @@
 
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -59,6 +61,23 @@ inline constexpr std::string_view ROW_NONCE = "nonce";
 inline constexpr std::string_view ROW_BALANCE = "balance";
 inline constexpr std::string_view ROW_CODE_HASH = "codeHash";
 inline constexpr std::string_view ROW_CODE = "code";
+
+/// Every account-table field name FISCO writes that is deliberately NOT part of the Ethereum
+/// four-tuple. Mirrors bcos-executor/src/Common.h:81-98 exactly — keep the two in sync.
+///
+/// This is a whitelist rather than a catch-all so the builder can tell "a BCOS field we decided
+/// to exclude" from "a field nobody has classified yet". The second must not be skipped silently:
+/// a row the builder has never heard of is a row whose Ethereum relevance was never judged, and
+/// dropping it would remove state from the commitment with no signal. Adding an account row to
+/// FISCO therefore requires one line here, which is where that judgement gets recorded.
+inline constexpr std::array<std::string_view, 7> KNOWN_BCOS_EXTENSION_FIELDS{
+    "abi", "alive", "frozen", "shard", "status", "last_update", "last_status"};
+
+inline bool isKnownBcosExtensionField(std::string_view rowKey)
+{
+    return std::ranges::find(KNOWN_BCOS_EXTENSION_FIELDS, rowKey) !=
+           KNOWN_BCOS_EXTENSION_FIELDS.end();
+}
 
 /// The flat table name of an account: "/apps/" + 40 lowercase hex chars (no 0x).
 inline std::string accountTableName(bcos::Address const& addr)
@@ -98,18 +117,22 @@ inline std::optional<bcos::Address> parseAccountTable(std::string_view table)
 }
 
 /// Row-level kinds inside one account's table, consumed by MPTBuilder's prefix-range loop
-/// (spec §5.2). A 32-byte binary row key is always a storage slot (no field name is 32 bytes);
-/// any named row that is not a core field and not "code" is a BCOS extension — the builder skips
-/// those on a native chain and throws UnexpectedBCOSFieldInL2 on an Ethereum-compatible one
-/// (loud on purpose: an unrecognized row in scenario B would otherwise silently fall out of the
-/// state commitment).
+/// (spec §5.2). A 32-byte binary row key is always a storage slot (no field name is 32 bytes).
+///
+/// Named rows that are neither a core field nor "code" split two ways, and the split is the
+/// point: KNOWN_BCOS_EXTENSION_FIELDS are fields FISCO deliberately keeps out of the Ethereum
+/// four-tuple, so scenario A skips them and only scenario B (where no FISCO-private field should
+/// exist at all) throws. Anything else has never been classified by anyone and throws in BOTH
+/// modes — loud on purpose, because a row that silently falls out of the state commitment is a
+/// fork nobody can trace back to its cause.
 enum class RowKind : uint8_t
 {
     Nonce,
     Balance,
     CodeHash,
     Code,           ///< skipped in both modes: represented by the paired codeHash row
-    BcosExtension,  ///< abi/alive/frozen/shard/status/... — scenario A skip, scenario B throw
+    BcosExtension,  ///< a KNOWN non-Ethereum field — scenario A skip, scenario B throw
+    UnknownField,   ///< never classified — throws in both modes
     StorageSlot,
 };
 
@@ -135,7 +158,7 @@ inline RowKind classifyRowKey(std::string_view rowKey)
     {
         return RowKind::Code;
     }
-    return RowKind::BcosExtension;
+    return isKnownBcosExtensionField(rowKey) ? RowKind::BcosExtension : RowKind::UnknownField;
 }
 
 }  // namespace bcos::ledger::mpt
