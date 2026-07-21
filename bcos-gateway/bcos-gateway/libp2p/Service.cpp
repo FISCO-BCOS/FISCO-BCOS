@@ -111,9 +111,21 @@ void Service::heartBeat()
         return;
     }
 
+    // FIB-186 (vector D): snapshot the static-node list under x_nodes and release it BEFORE calling
+    // isConnected()/asyncConnect(), both of which take x_sessions. Holding x_nodes across an
+    // x_sessions acquisition here is the reverse of the order onConnect uses (x_sessions ->
+    // x_nodes, via updateStaticNodes), which deadlocks under connection churn: onConnect holds
+    // x_sessions(W) waiting for x_nodes(W) while heartBeat holds x_nodes(R) waiting for
+    // x_sessions(R). Copying the list then dropping x_nodes makes every path acquire x_sessions
+    // before x_nodes.
+    std::vector<std::pair<NodeIPEndpoint, P2pID>> staticNodes;
+    {
+        std::shared_lock nodeLock(x_nodes);
+        staticNodes.assign(m_staticNodes.begin(), m_staticNodes.end());
+    }
+
     // Reconnect all nodes
-    std::shared_lock nodeLock(x_nodes);
-    for (auto& it : m_staticNodes)
+    for (auto& it : staticNodes)
     {
         /// exclude myself
         if (it.second == id())
@@ -134,7 +146,6 @@ void Service::heartBeat()
                 service->onConnect(std::move(error), p2pInfo, std::move(session));
             });
     }
-    nodeLock.unlock();
 
     std::shared_lock sessionLock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")

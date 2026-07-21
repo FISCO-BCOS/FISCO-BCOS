@@ -140,8 +140,9 @@ void ServiceV2::joinRouterTable(
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);
+    // FIB-186 (vector B): advance seq only; the 3s m_routerTimer broadcasts it (see onNewSession).
+    // Re-broadcasting here on every learned route is what made the gossip cascade self-sustaining.
     m_statusSeq++;
-    broadcastRouterSeq();
 }
 
 // receive routerTable request from peer
@@ -230,8 +231,11 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);
+    // FIB-186 (vector B): advance the seq only; do NOT broadcast synchronously on every membership
+    // change. The 3s m_routerTimer already broadcasts the current seq. Broadcasting inline let
+    // connect/disconnect churn cascade a full-mesh seq->request->whole-table gossip on m_asyncGroup
+    // -- the same pool that delivers PBFT messages -- and starved consensus (CertiK vector B).
     m_statusSeq++;
-    broadcastRouterSeq();
     SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("update routerTable")
                        << LOG_KV("dst", _session->printP2pID());
 }
@@ -243,8 +247,9 @@ void ServiceV2::onEraseSession(P2PSession::Ptr _session)
     if (m_routerTable->erase(unreachableNodes, _session->p2pID()))
     {
         onP2PNodesUnreachable(unreachableNodes);
+        // FIB-186 (vector B): advance seq only; the 3s m_routerTimer broadcasts it (see
+        // onNewSession).
         m_statusSeq++;
-        broadcastRouterSeq();
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onEraseSession") << LOG_KV("dst", _session->printP2pID());
 }
