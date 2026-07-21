@@ -1,4 +1,5 @@
 #include "HttpStream.h"
+#include <bcos-utilities/BoostLog.h>
 
 std::string bcos::boostssl::http::HttpStream::localEndpoint()
 {

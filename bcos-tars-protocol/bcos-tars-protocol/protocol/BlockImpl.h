@@ -33,6 +33,7 @@
 #include <bcos-framework/protocol/BlockHeader.h>
 #include <gsl/span>
 #include <memory>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcostars::protocol
 {

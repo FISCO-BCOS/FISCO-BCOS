@@ -19,6 +19,7 @@
     "./ports/boost-context",
     "./ports/tarscpp",
     "./ports/rapidhash",
-    "./ports/openssl"
+    "./ports/openssl",
+    "./ports/benchmark"
   ]
 }
