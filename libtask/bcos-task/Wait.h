@@ -51,13 +51,22 @@ constexpr inline struct SyncWait
         using ReturnVariant = std::conditional_t<std::is_void_v<ReturnType>,
             std::variant<std::monostate, std::exception_ptr>,
             std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
-        ReturnVariant result;
-        boost::atomic_flag finished;
-        boost::atomic_flag waitFlag;
+        // The task may complete on another thread. Everything that thread touches after
+        // completion must be heap-owned (shared_ptr held by the detached coroutine below),
+        // never on this waiter's stack: the waiter may wake, return and have its stack
+        // unmapped while the completing thread is still executing the coroutine tail
+        // (FIB-48 crash on macOS: "memory access violation ... no mapping at fault address").
+        struct State
+        {
+            ReturnVariant m_result;
+            boost::atomic_flag m_finished;
+        };
+        auto state = std::make_shared<State>();
 
-        auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                          boost::atomic_flag& waitFlag,
-                          auto&&... args) -> task::Task<void> {
+        // AsyncTask self-destroys at final_suspend on whichever thread completes it, so the
+        // waiter never destroys a coroutine frame the completer may still be executing in.
+        auto executeTask = [](Task&& task, std::shared_ptr<State> state,
+                               auto&&... args) -> AsyncTask {
             try
             {
                 if constexpr (std::is_void_v<ReturnType>)
@@ -69,39 +78,27 @@ constexpr inline struct SyncWait
                     if constexpr (std::is_reference_v<ReturnType>)
                     {
                         decltype(auto) ref = co_await task;
-                        result = std::addressof(ref);
+                        state->m_result = std::addressof(ref);
                     }
                     else
                     {
-                        result.template emplace<ReturnType>(co_await std::forward<Task>(task));
+                        state->m_result.template emplace<ReturnType>(
+                            co_await std::forward<Task>(task));
                     }
                 }
             }
             catch (...)
             {
-                result.template emplace<std::exception_ptr>(std::current_exception());
+                state->m_result.template emplace<std::exception_ptr>(std::current_exception());
             }
 
-            if (finished.test_and_set())
-            {
-                // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
-                // If true is returned here, the external finish is set first, and the external
-                // execution needs to be notified
-                waitFlag.test_and_set();
-                waitFlag.notify_one();
-            }
-        }(std::forward<Task>(task), result, finished, waitFlag,
-                                              std::forward<decltype(args)>(args)...);
-        handle.start();
+            state->m_finished.test_and_set();
+            state->m_finished.notify_one();
+        };
+        executeTask(std::forward<Task>(task), state, std::forward<decltype(args)>(args)...).start();
 
-        if (!finished.test_and_set())
-        {
-            // 此处返回false说明task还在执行中，需要等待task完成
-            // If false is returned, the task is still being executed and you need to wait for the
-            // task to complete
-            waitFlag.wait(false);
-        }
-        if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(result)))
+        state->m_finished.wait(false);
+        if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(state->m_result)))
         {
             std::rethrow_exception(*exception);
         }
@@ -110,11 +107,11 @@ constexpr inline struct SyncWait
         {
             if constexpr (std::is_reference_v<ReturnType>)
             {
-                return *(std::get<ReturnTypeWrap>(result));
+                return *(std::get<ReturnTypeWrap>(state->m_result));
             }
             else
             {
-                return std::move(std::get<ReturnTypeWrap>(result));
+                return std::move(std::get<ReturnTypeWrap>(state->m_result));
             }
         }
     }
