@@ -31,6 +31,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 #include <future>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -50,23 +51,34 @@ public:
         BOOST_TEST(web3JsonRpc != nullptr);
     }
 
+    /// Commit @p entries into a fresh trie in @p storage and flush the produced nodes, returning
+    /// the root. commitTrie only computes; persistence is the caller's job (HashBuilder.h).
+    static bcos::h256 commitInto(
+        MPTNodeStorage& storage, std::map<bcos::h256, bcos::bytes> const& entries)
+    {
+        std::map<bcos::h256, std::optional<bcos::bytes>> changes;
+        for (auto const& [key, value] : entries)
+        {
+            changes[key] = value;
+        }
+        auto result = task::syncWait(mpt::commitTrie(storage, mpt::emptyRootHash(), changes));
+        task::syncWait(mpt::flushTrieNodes(storage, result.newNodes));
+        return result.root;
+    }
+
     /// Build one account owning a two-slot storage trie into m_mptNodes and stamp the resulting
     /// state root onto the latest fake block header ("latest" resolves to it). Reader wiring is a
     /// separate step so the unset-reader case can reuse the same trie setup.
     void buildTrie()
     {
-        mpt::HashBuilder storageTrie(m_mptNodes, mpt::emptyRootHash());
-        task::syncWait(storageTrie.put(mpt::slotKeyHash(slotA), valueA));
-        task::syncWait(storageTrie.put(mpt::slotKeyHash(slotB), valueB));
-        auto const storageRoot = task::syncWait(storageTrie.commit());
+        auto const storageRoot = commitInto(
+            m_mptNodes, {{mpt::slotKeyHash(slotA), valueA}, {mpt::slotKeyHash(slotB), valueB}});
 
         mpt::Account account;
         account.nonce = 7;
         account.balance = 1000;
         account.storageRoot = storageRoot;
-        mpt::HashBuilder stateTrie(m_mptNodes, mpt::emptyRootHash());
-        task::syncWait(stateTrie.put(mpt::accountKeyHash(address), account.encode()));
-        stateRoot = task::syncWait(stateTrie.commit());
+        stateRoot = commitInto(m_mptNodes, {{mpt::accountKeyHash(address), account.encode()}});
 
         m_ledger->ledgerData().back()->blockHeader()->setStateRoot(stateRoot);
     }
