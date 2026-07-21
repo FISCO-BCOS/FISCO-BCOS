@@ -43,9 +43,19 @@ struct MPTDeltaLayer
     /// this block. The commit flow writes these under /mpt/<hash> keys in the SAME WriteBatch as
     /// the flat state (single db->Write, spec §5.6).
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
-    /// Nodes this block made unreachable, disjoint from newNodes. Contract (spec §4.8): an input
-    /// ledger for the future pathdb pruning spec ONLY — the commit flow does not read it and
-    /// issues no deletes from it.
+    /// Nodes that the tries rebuilt by THIS block no longer reference, disjoint from newNodes.
+    ///
+    /// CANDIDATES, not a delete list. Each hash is judged inside one trie's rebuild (mergeTrie
+    /// phase 4: resolved minus re-emitted), which cannot see the rest of the state. Nodes are
+    /// content-addressed and therefore shared: two accounts whose subtries encode identically —
+    /// same slot, same value — resolve to the same hash and the same stored node. So a hash
+    /// listed here may still be referenced by an account this block never touched, and deleting
+    /// it would make that account's storage permanently unreadable.
+    ///
+    /// Contract (spec §4.8): an input ledger for the future pathdb pruning spec ONLY. The commit
+    /// flow does not read it and issues no deletes from it. Whatever consumes it must establish
+    /// unreachability itself (reference counting or an equivalent), never trust membership here
+    /// as permission to delete.
     std::unordered_set<bcos::h256> obsoletedNodes;
     /// Nodes produced AND obsoleted within this same block (identical RLP encodings hash
     /// identically across the block's per-account trie builds, so one build's new node can

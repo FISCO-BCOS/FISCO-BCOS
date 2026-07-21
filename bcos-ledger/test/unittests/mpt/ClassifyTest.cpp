@@ -15,7 +15,7 @@
  *
  * @file ClassifyTest.cpp
  * @brief Unit tests for the flat-state key parsers: parseAccountTable / classifyRowKey /
- *        extractTouchedAccounts (spec §5.2, Revision 2026-07-09b)
+ *        (spec §5.2, Revision 2026-07-09b)
  */
 
 #include "TestHelpers.h"
@@ -87,39 +87,6 @@ BOOST_AUTO_TEST_CASE(ClassifyRowKeyKinds)
     // 31 and 33 bytes are NOT slots.
     BOOST_CHECK(classifyRowKey(std::string(31, 'x')) == RowKind::BcosExtension);
     BOOST_CHECK(classifyRowKey(std::string(33, 'x')) == RowKind::BcosExtension);
-}
-
-BOOST_AUTO_TEST_CASE(ExtractTouchedAccountsSortsAndDeduplicates)
-{
-    auto const addrA = makeAddress(0x0B);  // written second, must sort first? (0x0B > 0x0A)
-    auto const addrB = makeAddress(0x0A);
-
-    FlatMutableStorage delta;
-    // Several rows for A (dedup), one row for B, plus rows extraction must skip.
-    writeFlatRow(delta, accountFieldKey(addrA, ROW_NONCE), makeEntry("1"));
-    writeFlatRow(delta, accountFieldKey(addrA, ROW_BALANCE), makeEntry("2"));
-    writeFlatRow(delta, accountSlotKey(addrA, makeHash(0x01)), makeEntry("\x2a"));
-    writeFlatRow(delta, accountFieldKey(addrB, ROW_NONCE), makeEntry("3"));
-    writeFlatRow(delta, bcos::executor_v1::StateKey{"/sys/s_tables", "value"}, makeEntry("x"));
-    writeFlatRow(delta, bcos::executor_v1::StateKey{"/apps/short_name", "nonce"}, makeEntry("y"));
-
-    auto touched = bcos::task::syncWait(extractTouchedAccounts(delta));
-    BOOST_REQUIRE_EQUAL(touched.size(), 2U);
-    BOOST_CHECK(touched[0] == addrB);  // 0x0A... sorts before 0x0B...
-    BOOST_CHECK(touched[1] == addrA);
-}
-
-BOOST_AUTO_TEST_CASE(ExtractTouchedAccountsSeesLogicallyDeletedRows)
-{
-    // A tombstone account's rows are deletions — logical deletion keeps the key in the delta
-    // layer, and extraction must still report the account (key-only parsing).
-    auto const addr = makeAddress(0x0C);
-    FlatMutableStorage delta;
-    bcos::task::syncWait(bcos::storage2::removeOne(delta, accountFieldKey(addr, ROW_NONCE)));
-
-    auto touched = bcos::task::syncWait(extractTouchedAccounts(delta));
-    BOOST_REQUIRE_EQUAL(touched.size(), 1U);
-    BOOST_CHECK(touched.front() == addr);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

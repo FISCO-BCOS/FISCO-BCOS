@@ -100,10 +100,6 @@ void writeTombstoneEntries(FlatStateView& view, bcos::Address const& addr)
     deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
 }
 
-std::vector<bcos::Address> touchedOf(FlatStateView& view)
-{
-    return bcos::task::syncWait(extractTouchedAccounts(mutableStorage(view)));
-}
 }  // namespace
 
 BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
@@ -126,12 +122,8 @@ BOOST_AUTO_TEST_CASE(SelfdestructRemovesAccountFromTrie)
     auto view = makeFlatView(flatBackend);
     writeTombstoneEntries(view, addrA);
 
-    // A tombstone account is still a touched account: its deleted rows keep their keys in the
-    // delta layer, so extraction sees it.
-    auto const touched = touchedOf(view);
-    BOOST_REQUIRE_EQUAL(touched.size(), 1U);
-    BOOST_CHECK(touched.front() == addrA);
-
+    // A tombstone account still reaches the scan: logical deletion keeps its keys in the delta
+    // layer, so the run is seen and settled as a tombstone.
     auto output =
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 

@@ -87,6 +87,10 @@ struct AccountRows
     CoreFieldRow<bcos::h256> codeHash;
     /// This account's storage-trie change-set: slotKeyHash → RLP(value) or delete.
     std::map<bcos::h256, std::optional<bcos::bytes>> storageChanges;
+    /// Set once a row carrying Ethereum state (core field or storage slot) is seen. Code and BCOS
+    /// extension rows leave it false: an account touched only by those has no Ethereum state
+    /// change, and finalizeAccount must not invent a leaf for it (see there).
+    bool sawEthereumRow = false;
 };
 
 /// Fold one row of the block's delta into @p rows. Synchronous: classification and value decoding
@@ -110,7 +114,12 @@ void accumulateRow(BuildContext<Storage> const& context, AccountRows& rows,
     // the switch is a jump on the enum. Kept as enum + switch (no default) so adding a
     // RowKind makes -Wswitch flag this spot, and the key-format knowledge stays
     // unit-tested in Classify.h.
-    switch (classifyRowKey(keyView.m_key))
+    auto const kind = classifyRowKey(keyView.m_key);
+    if (kind != RowKind::Code && kind != RowKind::BcosExtension)
+    {
+        rows.sawEthereumRow = true;
+    }
+    switch (kind)
     {
     case RowKind::Nonce:
         rows.nonce.deleted = deleted;
@@ -158,7 +167,18 @@ void accumulateRow(BuildContext<Storage> const& context, AccountRows& rows,
         break;
     }
     case RowKind::Code:
-        break;  // represented by the paired codeHash row
+        // Code never enters the trie in any Ethereum revision — the account leaf commits to
+        // codeHash only, so a code change reaches the MPT through its paired codeHash row. That
+        // holds under EIP-7702 too: a delegation designator (0xef0100 || address) is just code,
+        // and its keccak IS the codeHash, so an EOA gaining or clearing a delegation shows up in
+        // the leaf's codeHash field and nowhere else.
+        //
+        // As of today the v1 executor does not even write this row — EVMAccount::setCode puts
+        // the bytes in the global SYS_CODE_BINARY table keyed by codeHash — so the case fires
+        // only on scenario-A chains whose legacy executor left code rows in the account table.
+        // Whether a future 7702 implementation routes designators through this row does not
+        // change the rule; it only changes how often this case is taken.
+        break;
     case RowKind::BcosExtension:
         if (context.l2Mode)
         {
@@ -179,6 +199,17 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     AccountRows const& rows, auto& flatView,
     std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTDeltaLayer& output)
 {
+    // Nothing in this run carried Ethereum state — the account was touched only by code and/or
+    // BCOS extension rows. It must not reach the trie: with no parent leaf, the path below would
+    // read Yellow Paper defaults from the flat KV (nonce 0, balance 0, emptyCodeHash) and insert
+    // an EIP-161 EMPTY ACCOUNT, which no Ethereum implementation keeps in state — a fork. The old
+    // classify() got this for free by never creating an AccountDelta for such an account; the
+    // single-pass scan has to say it explicitly.
+    if (!rows.sawEthereumRow)
+    {
+        co_return;
+    }
+
     // Tombstone (spec §5.3 path 3): all three core rows deleted = SELFDESTRUCT. Slot rows in the
     // same delta are ignored — this account does not reach the MPT.
     //
@@ -208,9 +239,17 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
         accountChanges[accountKeyHash(address)] = std::nullopt;
         co_return;
     }
+    // nonce and balance have no protocol operation that removes them on a live account, so a
+    // lone deletion there is a delta shape the executor should not produce — fail loudly.
     rows.nonce.requireNotDeleted();
     rows.balance.requireNotDeleted();
-    rows.codeHash.requireNotDeleted();
+    // codeHash is different: an Ethereum account leaf ALWAYS carries a codeHash, and for a
+    // code-less account that value is keccak256("") — there is no "absent codeHash" state in the
+    // standard. readFlatAccountMeta already maps a missing row to emptyCodeHash(); a deleted row
+    // is the same statement about the same account, so it resolves the same way rather than
+    // being an error. EIP-7702 makes this reachable: clearing a delegation (authorization
+    // pointing at the zero address) returns an EOA to a code-less state, and an executor
+    // expressing that as a row deletion must not halt the block.
 
     // Path selection is the readAccount result itself (Revision 2026-07-09b): a parent leaf
     // means subsequent-touch, none means first-touch — no flag to disagree with.
@@ -260,6 +299,10 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     {
         updated.codeHash = *rows.codeHash.value;
     }
+    else if (rows.codeHash.deleted)
+    {
+        updated.codeHash = emptyCodeHash();  // see the requireNotDeleted block above
+    }
     accountChanges[accountKeyHash(address)] = updated.encode();
 }
 
@@ -296,20 +339,42 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///  - subsequent-touch: the parent leaf is the baseline and the storage trie updates
 ///    incrementally.
 ///
+/// The leaf is the standard Ethereum four-tuple and nothing else, so new account-model revisions
+/// need no handling here as long as they express themselves through it. EIP-7702 is the current
+/// example: a delegated EOA's designator is code (out of the trie, committed via its codeHash),
+/// the authorization bumps nonce, and a delegated call writes the AUTHORITY's own storage — all
+/// three arrive as ordinary rows. Resist adding a 7702-specific branch; if some revision cannot
+/// be expressed through the four-tuple, the account encoding is what has to change.
+///
 /// Keccak-pinned like commitTrie itself (its from-empty stateless core is not yet
 /// hasher-parameterized); the local hash context exists only to reuse one hasher across the
 /// block's slot-key transforms.
+///
+/// @todo HasherT — this function, commitTrie, computeTrieRootFromSorted, accountKeyHash and
+/// Account's default storageRoot/codeHash all hard-code keccak256. An SM3 deployment has to
+/// parameterize every one of them together; doing a subset silently mixes hash functions.
 ///
 /// @tparam Storage the trie-node storage (storage2 ReadWriteStorage over h256 → RLP bytes):
 /// commitTrie merge-reads prior-version nodes through it, and the block's aggregated newNodes are
 /// batch-flushed into it once at the end.
 /// @param nodeStorage     node storage shared by reads and the end-of-build flush.
 /// @param parentStateRoot the parent block's MPT state root (emptyRootHash() = empty state).
-/// @param flatView        the block's fork of the flat MultiLayerStorage (the same view
-///                        coCommitBlock forks for prewrite). Its top mutable layer is the block's
-///                        delta — the one thing scanned — while first-touch metadata reads go
-///                        through the whole view, since a field the block never wrote exists only
-///                        in the parent state.
+/// @param flatView        a flat-state view with TWO properties, both required: its top mutable
+///                        layer must be exactly this block's delta (that layer, and only it, is
+///                        scanned), and reading through the view must resolve to the PARENT
+///                        state, because a core field the block never wrote exists nowhere else
+///                        (readFlatAccountMeta). A view carrying newer blocks' deltas underneath
+///                        would let future writes leak into a first-touch baseline.
+///
+///                        Wiring note for the caller (PR-14b/PR-18): do NOT expect to obtain this
+///                        by forking at commit time. coExecuteBlock builds exactly such a view
+///                        (BaselineScheduler.h:355-356) but hands its mutable layer to the
+///                        storage stack via pushView before commit runs, and coCommitBlock forks
+///                        nothing. A bare fork() there has no mutable layer at all
+///                        (NotExistsMutableStorageError); fork() + newMutable() yields an EMPTY
+///                        one, which is worse — the scan finds nothing, accountChanges stays
+///                        empty, commitTrie short-circuits to priorRoot and the MPT silently
+///                        stops advancing.
 /// @param l2Mode          scenario B (Ethereum-compatible chain): a BCOS extension row in
 ///                        the delta throws UnexpectedBCOSFieldInL2; scenario A skips it.
 /// @throws MPTInvariantViolation on a deleted core-field row outside a tombstone

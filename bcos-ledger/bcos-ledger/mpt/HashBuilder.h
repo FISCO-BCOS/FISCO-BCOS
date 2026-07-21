@@ -88,10 +88,17 @@ TrieBuildResult computeTrieRootFromSorted(
 /// obsolete.
 ///
 /// Keccak-pinned: the from-empty stateless core is not yet hasher-parameterized, so a non-keccak
-/// instantiation would silently mix hash functions between the two paths. Parameterize on HasherT
-/// only after computeTrieRootFromSorted (and accountKeyHash / Account's defaults) are.
+/// instantiation would silently mix hash functions between the two paths.
+///
+/// @todo HasherT — parameterize computeTrieRootFromSorted, accountKeyHash and Account's default
+/// storageRoot/codeHash together with this function; doing a subset silently mixes hash
+/// functions, which is exactly the failure this pinning exists to prevent.
+///
+/// [[nodiscard]] on purpose: the result carries newNodes, which only exist in memory until the
+/// caller passes them to flushTrieNodes. Dropping the return value loses the block's nodes with
+/// no diagnostic — the new root would reference nodes that were never written.
 template <bcos::storage2::ReadableStorage<bcos::h256> Storage>
-bcos::task::Task<TrieMergeResult> commitTrie(Storage& storage, bcos::h256 priorRoot,
+[[nodiscard]] bcos::task::Task<TrieMergeResult> commitTrie(Storage& storage, bcos::h256 priorRoot,
     std::map<bcos::h256, std::optional<bcos::bytes>> const& changes)
 {
     if (changes.empty())

@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file Classify.h
- * @brief Flat-state KEY parsing: extractTouchedAccounts() + classifyRowKey() (spec §5.2,
+ * @brief Flat-state KEY parsing: accountTableName / parseAccountTable / classifyRowKey (spec §5.2,
  *        Revision 2026-07-09b). Key-only on purpose — the old classify() copied every changed
  *        value into an AccountDelta/MPTBuildInput layer the builder then consumed; the block's
  *        delta already sits in the fork view's ordered mutable storage, so MPTBuilder now
@@ -22,16 +22,12 @@
  */
 #pragma once
 
-#include <bcos-framework/storage2/Storage.h>
-#include <bcos-task/Task.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
-#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace bcos::ledger::mpt
 {
@@ -140,48 +136,6 @@ inline RowKind classifyRowKey(std::string_view rowKey)
         return RowKind::Code;
     }
     return RowKind::BcosExtension;
-}
-
-/// Range the block's flat delta layer (the fork view's top mutable storage) and return the
-/// sorted, deduplicated touched account addresses. Key parsing only — no value is read or
-/// copied; MPTBuilder re-reads each returned account's rows in place via a per-account prefix
-/// range (spec §5.3).
-///
-/// @param flatDelta the block's mutable layer — in production
-///        MemoryStorage<StateKey, Entry, ORDERED | LOGICAL_DELETION>
-///        (libinitializer/GlobalStateStorageInitializer.h:14-17). Ordered input arrives with
-///        adjacent duplicates only, but the final sort+unique keeps the contract for any range.
-bcos::task::Task<std::vector<bcos::Address>> extractTouchedAccounts(auto& flatDelta)
-{
-    std::vector<bcos::Address> touched;
-    auto iterator = co_await bcos::storage2::range(flatDelta);
-    while (true)
-    {
-        // Bind the awaited result to a local before use (GCC template-coroutine hazard class,
-        // see MPTReadView::hasAccount).
-        auto keyValue = co_await iterator.next();
-        if (!keyValue)
-        {
-            break;
-        }
-        auto const& key = std::get<0>(*keyValue);  // the value side is never touched
-        // string_view{key.data(), key.size()} (not string_view{key}): StateKey exposes
-        // data()/size() but no operator string_view.
-        std::string_view const fullKey{key.data(), key.size()};
-        auto const colon = fullKey.find_first_of(':');
-        if (colon == std::string_view::npos)
-        {
-            continue;  // not a StateKey-shaped row
-        }
-        auto address = parseAccountTable(fullKey.substr(0, colon));
-        if (address && (touched.empty() || touched.back() != *address))
-        {
-            touched.push_back(*address);
-        }
-    }
-    std::sort(touched.begin(), touched.end());
-    touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
-    co_return touched;
 }
 
 }  // namespace bcos::ledger::mpt

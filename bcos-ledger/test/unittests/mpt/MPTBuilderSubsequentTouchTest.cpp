@@ -97,11 +97,6 @@ bcos::h256 slotKey(uint8_t marker)
     return makeHash(marker);
 }
 
-// extractTouchedAccounts over the view's delta layer — the production feeding order.
-std::vector<bcos::Address> touchedOf(FlatStateView& view)
-{
-    return bcos::task::syncWait(extractTouchedAccounts(mutableStorage(view)));
-}
 }  // namespace
 
 BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
@@ -129,10 +124,6 @@ BOOST_AUTO_TEST_CASE(IncrementalUpdateOfExistingAccountStorage)
     writeFlatRow(view, accountSlotKey(addr, slotKey(0x00)), slotEntry(bcos::bytes{0xFF}));
     deleteFlatRowLogically(view, accountSlotKey(addr, slotKey(0x01)));
     writeFlatRow(view, accountSlotKey(addr, slotKey(0x03)), slotEntry(bcos::bytes{0x33}));
-
-    auto const touched = touchedOf(view);
-    BOOST_REQUIRE_EQUAL(touched.size(), 1U);
-    BOOST_CHECK(touched.front() == addr);
 
     auto output =
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
@@ -286,9 +277,6 @@ BOOST_AUTO_TEST_CASE(MultipleAccountsInOneBlock)
     writeFlatRow(view, accountFieldKey(addrA, ROW_NONCE), makeEntry("2"));
     writeFlatRow(view, accountSlotKey(addrB, slotKey(0x05)), slotEntry(bcos::bytes{0x55}));
 
-    auto const touched = touchedOf(view);
-    BOOST_REQUIRE_EQUAL(touched.size(), 2U);
-
     auto output =
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
 
@@ -318,6 +306,162 @@ BOOST_AUTO_TEST_CASE(DeletedFieldOutsideTombstoneThrows)
     BOOST_CHECK_THROW(
         bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false)),
         MPTInvariantViolation);
+}
+
+BOOST_AUTO_TEST_CASE(ExtensionOnlyAccountAbsentFromParentStaysOutOfTheMPT)
+{
+    // An account the block touched ONLY through a BCOS extension row carries no Ethereum state
+    // change. Inventing a leaf for it would read Yellow Paper defaults from flat (nonce 0,
+    // balance 0, emptyCodeHash) and insert an EIP-161 empty account — which no Ethereum
+    // implementation keeps in state, so the root would fork.
+    NodeStorage storage;
+    auto const existing = makeAddress(0x0A);
+    auto const extensionOnly = makeAddress(0x0B);
+    Account prior;
+    prior.nonce = 1;
+    auto const parentRoot = buildStateTrie(storage, {{existing, prior}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(extensionOnly, "status"), makeEntry("1"));
+    writeFlatRow(view, accountFieldKey(extensionOnly, "abi"), makeEntry("[]"));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    BOOST_CHECK(output.stateRoot == parentRoot);  // nothing entered the trie
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    BOOST_CHECK(!bcos::task::syncWait(readView.readAccount(extensionOnly)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(CodeOnlyAccountAbsentFromParentStaysOutOfTheMPT)
+{
+    // Same rule for a bare code row. Code never enters the trie (the leaf commits to codeHash),
+    // so a run holding only a code row means nothing the MPT commits to has changed — including
+    // under EIP-7702, where a delegation designator is code whose keccak IS the codeHash.
+    NodeStorage storage;
+    auto const existing = makeAddress(0x0A);
+    auto const codeOnly = makeAddress(0x0C);
+    Account prior;
+    prior.nonce = 1;
+    auto const parentRoot = buildStateTrie(storage, {{existing, prior}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(codeOnly, ROW_CODE), makeEntry("\x60\x80\x60\x40"));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    BOOST_CHECK(output.stateRoot == parentRoot);
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    BOOST_CHECK(!bcos::task::syncWait(readView.readAccount(codeOnly)).has_value());
+}
+
+BOOST_AUTO_TEST_CASE(ExtensionRowAlongsideACoreFieldStillCommitsTheAccount)
+{
+    // The guard keys off "no Ethereum row at all", not "an extension row was present": an
+    // account whose run mixes an extension row with a real core-field write must still commit.
+    NodeStorage storage;
+    auto const addr = makeAddress(0x0D);
+    Account prior;
+    prior.nonce = 1;
+    auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(addr, "status"), makeEntry("1"));
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("7"));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    BOOST_CHECK(output.stateRoot != parentRoot);
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(updated.has_value());
+    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(7));
+}
+
+BOOST_AUTO_TEST_CASE(Eip7702DelegatedEoaCommitsLikeAnyOtherAccount)
+{
+    // EIP-7702 gives an EOA a delegation designator (0xef0100 || address) as its code, and a
+    // delegated call operates on the AUTHORITY's own storage. For the MPT that is not a special
+    // case at all — the leaf is the same four-tuple: the designator itself stays out of the trie
+    // (code never enters it), its keccak lands in codeHash, the authorization bumps nonce, and
+    // the slots the delegated call writes build the EOA's storage trie. This test pins that the
+    // builder needs no 7702-specific handling to produce the standard Ethereum leaf.
+    NodeStorage storage;
+    auto const eoa = makeAddress(0x77);
+    Account prior;  // a plain EOA: nonce 0, no code, no storage
+    auto const parentRoot = buildStateTrie(storage, {{eoa, prior}});
+
+    // keccak of a 23-byte designator — the value the executor would write into the codeHash row.
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    bcos::bytes const designator{0xef, 0x01, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+        0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05};
+    hasher.update(designator);
+    bcos::h256 designatorHash;
+    hasher.final(designatorHash);
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    writeFlatRow(view, accountFieldKey(eoa, ROW_NONCE), makeEntry("1"));  // authorization bump
+    writeFlatRow(view, accountFieldKey(eoa, ROW_CODE_HASH),
+        makeEntry(std::string_view(
+            reinterpret_cast<char const*>(designatorHash.data()), bcos::h256::SIZE)));
+    // The designator bytes themselves: skipped, they are represented by the codeHash row.
+    writeFlatRow(view, accountFieldKey(eoa, ROW_CODE),
+        makeEntry(
+            std::string_view(reinterpret_cast<char const*>(designator.data()), designator.size())));
+    // A delegated call writing the EOA's OWN storage.
+    writeFlatRow(view, accountSlotKey(eoa, slotKey(0x01)), slotEntry(bcos::bytes{0x2a}));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(eoa));
+    BOOST_REQUIRE(updated.has_value());
+    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(1));
+    BOOST_CHECK(updated->codeHash == designatorHash);
+    BOOST_CHECK(updated->storageRoot == storageRootOracle({{slotKey(0x01), bcos::bytes{0x2a}}}));
+
+    // The whole leaf equals a from-scratch build of the standard four-tuple.
+    Account expected;
+    expected.nonce = 1;
+    expected.codeHash = designatorHash;
+    expected.storageRoot = storageRootOracle({{slotKey(0x01), bcos::bytes{0x2a}}});
+    std::map<bcos::h256, bcos::bytes> stateEntries{{accountKeyHash(eoa), expected.encode()}};
+    BOOST_CHECK(output.stateRoot == computeTrieRoot(stateEntries).root);
+}
+
+BOOST_AUTO_TEST_CASE(DeletedCodeHashRowResolvesToEmptyCodeHash)
+{
+    // EIP-7702: clearing a delegation returns an EOA to a code-less state. An executor may
+    // express that by deleting the codeHash row, which must resolve to emptyCodeHash() — the
+    // same default readFlatAccountMeta applies to a missing row — not halt the block.
+    NodeStorage storage;
+    auto const addr = makeAddress(0x0E);
+    Account prior;
+    prior.nonce = 3;
+    prior.codeHash =
+        bcos::h256{"0x00000000000000000000000000000000000000000000000000000000000000ff"};
+    auto const parentRoot = buildStateTrie(storage, {{addr, prior}});
+
+    FlatBackendStorage flatBackend;
+    auto view = makeFlatView(flatBackend);
+    deleteFlatRowLogically(view, accountFieldKey(addr, ROW_CODE_HASH));
+    writeFlatRow(view, accountFieldKey(addr, ROW_NONCE), makeEntry("4"));
+
+    auto output =
+        bcos::task::syncWait(buildAndCollect(storage, parentRoot, view, /*l2Mode=*/false));
+
+    MPTReadView<NodeStorage> readView(storage, output.stateRoot);
+    auto updated = bcos::task::syncWait(readView.readAccount(addr));
+    BOOST_REQUIRE(updated.has_value());
+    BOOST_CHECK(updated->codeHash == emptyCodeHash());
+    BOOST_CHECK_EQUAL(updated->nonce, bcos::u256(4));
 }
 
 BOOST_AUTO_TEST_CASE(BcosExtensionRowSkippedInScenarioAThrowsInL2)
