@@ -321,7 +321,7 @@ bool precompiled::checkPathValid(std::string_view _path,
         return false;
     }
     // FIB-83: reject paths ending with reserved _accessAuth suffix to prevent auth table squatting
-    if (features != nullptr && features->get(ledger::Features::Flag::bugfix_auth_table_squatting))
+    if (features != nullptr && features->get(ledger::Features::Flag::bugfix_auth_check))
     {
         for (const auto& component : pathList)
         {

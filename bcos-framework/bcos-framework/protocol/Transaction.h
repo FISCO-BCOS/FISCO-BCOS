@@ -18,11 +18,11 @@
  */
 #pragma once
 #include "TransactionSubmitResult.h"
+#include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
-#include "bcos-utilities/AnyHolder.h"
 #include <atomic>
 #include <concepts>
 #include <functional>
@@ -33,7 +33,7 @@ namespace bcostars::protocol
 {
 class TransactionImpl;
 class TransactionFactoryImpl;
-}
+}  // namespace bcostars::protocol
 
 namespace bcos::protocol
 {
@@ -117,7 +117,9 @@ public:
     virtual uint8_t type() const = 0;
 
     virtual void forceSender(const bcos::bytes& _sender) = 0;
-    // Clear both sender and hash fields and mark transaction tainted for re-verification
+    // Clear sender and all cached/derived hashes (dataHash and, for Web3 tx, the wire-supplied
+    // canonical extraTransactionHash) and mark the transaction tainted for re-verification, so
+    // verify() recomputes them from the signed payload rather than trusting stale/wire values.
     virtual void clearSenderAndHash() = 0;
     // Recompute hash from transaction data fields
     virtual void calculateHash(const crypto::Hash& hashImpl) = 0;

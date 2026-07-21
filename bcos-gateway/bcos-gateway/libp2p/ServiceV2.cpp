@@ -21,6 +21,7 @@
 #include "Common.h"
 #include "P2PMessageV2.h"
 #include "bcos-utilities/BoostLog.h"
+#include <cstring>
 #include <utility>
 
 using namespace bcos;
@@ -187,8 +188,18 @@ void ServiceV2::onReceiveRouterSeq(
                               << LOG_KV("message", _error.what());
         return;
     }
-    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_message->payload().data()));
+    // FIB-183: the router-sequence payload must contain at least a 4-byte sequence number.
+    // A short or empty payload (the smallest attacker-supplied frames are 14-78 bytes total)
+    // would read past the end of the decoded payload buffer. Drop it before dereferencing.
+    if (_message->payload().size() < sizeof(uint32_t))
+    {
+        SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq") << LOG_DESC("short payload, drop")
+                              << LOG_KV("size", _message->payload().size());
+        return;
+    }
+    uint32_t seq = 0;
+    std::memcpy(&seq, _message->payload().data(), sizeof(seq));
+    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(seq);
     if (!tryToUpdateSeq(_session->p2pID(), statusSeq))
     {
         return;

@@ -28,6 +28,7 @@
 #include "bcos-tars-protocol/bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-utilities/Common.h"
+#include <bcos-codec/rlp/RLPEncode.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -153,20 +154,28 @@ inline Transaction::Ptr fakeWeb3Tx(CryptoSuite::Ptr _cryptoSuite, std::string no
     transaction.data.input.assign(inputStr.begin(), inputStr.end());
     transaction.data.nonce = std::move(nonce);
     transaction.type = static_cast<tars::Char>(TransactionType::Web3Transaction);
-    std::mt19937 random(std::random_device{}());
-    std::string extraData = "extraData" + std::to_string(random());
-    auto hash = _cryptoSuite->hash(extraData);
-    transaction.extraTransactionBytes.assign(extraData.begin(), extraData.end());
-    transaction.extraTransactionHash.assign(hash.begin(), hash.end());
+    // extraTransactionBytes must be a genuine Web3 signing preimage: since FIB-New1, verify()
+    // recomputes the canonical txHash from it by RLP splicing, so arbitrary bytes are rejected.
+    // Build a minimal legacy (pre-EIP-155) preimage rlp([nonce, gasPrice, gas, to, value, data])
+    // with random nonce/data so each fake tx gets a distinct hash.
+    std::mt19937_64 random(std::random_device{}());
+    auto toAddress = key->address(_cryptoSuite->hashImpl()).asBytes();
+    std::string data = "extraData" + std::to_string(random());
+    bcos::bytes preimage;
+    bcos::codec::rlp::encode(preimage, static_cast<uint64_t>(random()) | 1U,
+        static_cast<uint64_t>(1), static_cast<uint64_t>(21000), toAddress, static_cast<uint64_t>(0),
+        data);
+    transaction.extraTransactionBytes.assign(preimage.begin(), preimage.end());
     auto tx = std::make_shared<bcostars::protocol::TransactionImpl>(
         [m_transaction = std::move(transaction)]() mutable { return &m_transaction; });
-    // set signature
-    tx->calculateHash(*_cryptoSuite->hashImpl());
-
-    auto signData = _cryptoSuite->signatureImpl()->sign(*key, tx->hash(), true);
+    // Web3 signatures sign the EIP signing hash keccak256(preimage) -- the same hash verify()
+    // recovers the sender from.
+    auto sigHash = bcos::crypto::keccak256Hash(bcos::ref(preimage));
+    auto signData = _cryptoSuite->signatureImpl()->sign(*key, sigHash, true);
     tx->setSignatureData(*signData);
-    tx->forceSender(key->address(_cryptoSuite->hashImpl()).asBytes());
+    // Fills extraTransactionHash with the canonical txHash recomputed from preimage + signature.
     tx->calculateHash(*_cryptoSuite->hashImpl());
+    tx->forceSender(key->address(_cryptoSuite->hashImpl()).asBytes());
     return tx;
 }
 

@@ -61,14 +61,16 @@ void PBFTMessage::deserializeToObject()
     m_proposals->clear();
     if (m_pbftRawMessage->has_consensusproposal())
     {
-        auto* consensusProposal = m_pbftRawMessage->mutable_consensusproposal();
-        std::shared_ptr<PBFTRawProposal> rawConsensusProposal(consensusProposal);
-        m_consensusProposal = std::make_shared<PBFTProposal>(rawConsensusProposal);
+        // FIB-121: aliasing shared_ptr shares m_pbftRawMessage's control block, so the
+        // child wrapper keeps the parent protobuf alive and never deletes the submessage
+        // itself -- no dual-ownership, no destructor release dance.
+        m_consensusProposal = std::make_shared<PBFTProposal>(std::shared_ptr<PBFTRawProposal>(
+            m_pbftRawMessage, m_pbftRawMessage->mutable_consensusproposal()));
     }
     for (int i = 0; i < m_pbftRawMessage->proposals_size(); i++)
     {
-        std::shared_ptr<PBFTRawProposal> rawProposal(m_pbftRawMessage->mutable_proposals(i));
-        m_proposals->push_back(std::make_shared<PBFTProposal>(rawProposal));
+        m_proposals->push_back(std::make_shared<PBFTProposal>(std::shared_ptr<PBFTRawProposal>(
+            m_pbftRawMessage, m_pbftRawMessage->mutable_proposals(i))));
     }
 }
 
@@ -80,15 +82,14 @@ void PBFTMessage::decodeAndSetSignature(CryptoSuite::Ptr _cryptoSuite, bytesCons
 
 void PBFTMessage::setConsensusProposal(PBFTProposalInterface::Ptr _consensusProposal)
 {
-    m_consensusProposal = _consensusProposal;
     auto pbftProposal = std::dynamic_pointer_cast<PBFTProposal>(_consensusProposal);
-    // set committed proposal
-    if (m_pbftRawMessage->has_consensusproposal())
-    {
-        m_pbftRawMessage->unsafe_arena_release_consensusproposal();
-    }
-    m_pbftRawMessage->unsafe_arena_set_allocated_consensusproposal(
-        pbftProposal->pbftRawProposal().get());
+    // FIB-121: deep-copy the caller's proposal into our own protobuf, then expose an
+    // aliasing wrapper over that copy. Nothing is shared with the caller, and proofs
+    // later appended via consensusProposal() (e.g. PBFTCache::intoPrecommit ->
+    // setSignatureList) write through to m_pbftRawMessage and survive encode().
+    m_pbftRawMessage->mutable_consensusproposal()->CopyFrom(*pbftProposal->pbftRawProposal());
+    m_consensusProposal = std::make_shared<PBFTProposal>(std::shared_ptr<PBFTRawProposal>(
+        m_pbftRawMessage, m_pbftRawMessage->mutable_consensusproposal()));
 }
 
 HashType PBFTMessage::getHashFieldsDataHash(CryptoSuite::Ptr _cryptoSuite) const
@@ -112,14 +113,17 @@ void PBFTMessage::generateAndSetSignatureData(
 
 void PBFTMessage::setProposals(PBFTProposalList const& _proposals)
 {
+    // FIB-121: keep the caller's wrappers in the member list (identity + in-memory fields
+    // preserved, exactly as before) and deep-copy each into our protobuf for encode. The
+    // protobuf owns its copies normally, so there is no borrowed raw pointer to release in
+    // the destructor (was UnsafeArenaAddAllocated borrow + ~PBFTMessage release).
     *m_proposals = _proposals;
     m_pbftRawMessage->clear_proposals();
     for (const auto& proposal : _proposals)
     {
         auto proposalImpl = std::dynamic_pointer_cast<PBFTProposal>(proposal);
         assert(proposalImpl);
-        m_pbftRawMessage->mutable_proposals()->UnsafeArenaAddAllocated(
-            proposalImpl->pbftRawProposal().get());
+        m_pbftRawMessage->add_proposals()->CopyFrom(*proposalImpl->pbftRawProposal());
     }
 }
 

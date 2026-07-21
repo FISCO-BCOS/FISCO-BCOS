@@ -6,6 +6,7 @@ find_package(FakeIt CONFIG REQUIRED)
 
 target_link_libraries(test-transaction-scheduler
 	transaction-scheduler
+	transaction-executor
 	${EXECUTOR_TARGET}
 	${LEDGER_TARGET}
 	${TARS_PROTOCOL_TARGET}

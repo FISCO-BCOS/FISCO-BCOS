@@ -22,6 +22,7 @@
 #include "CampaignConfig.h"
 #include <bcos-framework/election/LeaderElectionInterface.h>
 #include <bcos-utilities/Timer.h>
+#include <chrono>
 #include <memory>
 namespace bcos
 {
@@ -33,9 +34,24 @@ class LeaderElection : public LeaderElectionInterface,
 public:
     using Ptr = std::shared_ptr<LeaderElection>;
     LeaderElection(CampaignConfig::Ptr _config)
-      : m_config(_config), m_etcdClient(_config->etcdClient())
+      : m_config(_config),
+        m_etcdClient(_config->etcdClient()),
+        // FIB-175: bound every blocking unary etcd op (leasegrant/txn/get) to
+        // roughly one lease period so a stalled or unreachable etcd cannot wedge
+        // the campaign thread forever. Build the duration in chrono's 64-bit
+        // representation (seconds -> milliseconds) so a large leaseTTL cannot
+        // overflow the unsigned multiply before the cast.
+        m_etcdOpTimeout(std::chrono::seconds(m_config->leaseTTL()))
     {
         m_campaignTimer = std::make_shared<Timer>(m_config->leaseTTL() * 1000, "campTimer");
+        // FIB-175: arm the bound as a client-level grpc timeout. etcd-cpp-apiv3
+        // applies this deadline on the completion-queue wait of unary RPCs only;
+        // the watch stream pumps an unbounded cq_.Next() loop and is unaffected,
+        // while a keepalive refresh becomes bounded by one lease period (benign: a
+        // refresh that cannot complete within a full TTL means the lease is gone).
+        // This replaces the previous detached-thread+promise workaround, so a
+        // stalled leasegrant().get() now returns a not-ok response on its own.
+        m_etcdClient->set_grpc_timeout(m_etcdOpTimeout);
     }
     ~LeaderElection() override { stop(); }
     void start() override;
@@ -85,6 +101,10 @@ protected:
     std::function<void(std::exception_ptr)> m_onKeepAliveException;
     std::function<void(bool, bcos::protocol::MemberInterface::Ptr)> m_onCampaignHandler;
     mutable RecursiveMutex m_mutex;
+
+    // FIB-175: upper bound on a single blocking unary etcd op, applied via
+    // etcd::Client::set_grpc_timeout in the constructor.
+    std::chrono::milliseconds m_etcdOpTimeout;
 
     // for trigger campaign after disconnect
     std::shared_ptr<Timer> m_campaignTimer;

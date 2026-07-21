@@ -178,18 +178,13 @@ BOOST_AUTO_TEST_CASE(feature)
         "bugfix_nonce_initialize",
         "bugfix_v1_timestamp",
         "bugfix_revert_logs",
-        "bugfix_auth_check_create2",
-        "bugfix_auth_check_revert_status",
-        "bugfix_auth_table_raw_address",
-        "bugfix_auth_table_squatting",
-        "bugfix_v1_exec_error_gas_used",
-        "bugfix_v1_precompiled_error_gas",
+        "bugfix_auth_check",
+        "bugfix_v1_error_handling",
         "bugfix_gas_payment_balance_precheck",
-        "bugfix_clamp_gas_left_on_error",
         "bugfix_precompiled_feature_gate",
-        "bugfix_v1_executive_wrapper",
         "bugfix_evm_storage_status",
         "bugfix_statestorage_hash_v3_17",
+        "bugfix_nonce_ordering",
         "feature_dmc2serial",
         "feature_sharding",
         "feature_rpbft",
@@ -365,34 +360,31 @@ BOOST_AUTO_TEST_CASE(upgrade)
         bcos::protocol::BlockVersion::V3_16_4_VERSION);
     BOOST_TEST(validFlags(features13).size() == 1);
 
-    // 3.15.2 to 3.16.5: expect 3.16.0, 3.16.4 and 3.16.5 feature flags
+    // 3.16.4 to 3.16.5: ghost version, no flags activate
     Features features14;
-    features14.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_15_2_VERSION,
+    features14.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_4_VERSION,
         bcos::protocol::BlockVersion::V3_16_5_VERSION);
-    auto expect11 = std::to_array<std::string_view>(
-        {"bugfix_delegatecall_transfer", "bugfix_nonce_initialize", "bugfix_v1_timestamp",
-            "bugfix_revert_logs", "bugfix_auth_check_create2", "bugfix_auth_check_revert_status",
-            "bugfix_auth_table_raw_address", "bugfix_auth_table_squatting",
-            "bugfix_v1_exec_error_gas_used", "bugfix_v1_precompiled_error_gas"});
-    BOOST_CHECK_EQUAL(validFlags(features14).size(), expect11.size());
-    for (auto feature : expect11)
-    {
-        BOOST_CHECK(features14.get(feature));
-    }
+    BOOST_CHECK_EQUAL(validFlags(features14).size(), 0);
 
-    // 3.16.5 to 3.17.0: expect the six FIB-75/78/84/85-87/94/99-105 flags only
+    // 3.16.4 to 3.17.0: the six consolidated audit flags plus bugfix_nonce_ordering
     Features features15;
-    features15.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION,
+    features15.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_4_VERSION,
         bcos::protocol::BlockVersion::V3_17_0_VERSION);
     auto expect12 = std::to_array<std::string_view>(
-        {"bugfix_gas_payment_balance_precheck", "bugfix_clamp_gas_left_on_error",
-            "bugfix_precompiled_feature_gate", "bugfix_v1_executive_wrapper",
-            "bugfix_evm_storage_status", "bugfix_statestorage_hash_v3_17"});
+        {"bugfix_auth_check", "bugfix_v1_error_handling", "bugfix_gas_payment_balance_precheck",
+            "bugfix_precompiled_feature_gate", "bugfix_evm_storage_status",
+            "bugfix_statestorage_hash_v3_17", "bugfix_nonce_ordering"});
     BOOST_CHECK_EQUAL(validFlags(features15).size(), expect12.size());
     for (auto feature : expect12)
     {
         BOOST_CHECK(features15.get(feature));
     }
+
+    // 3.16.5 to 3.17.0: same six flags (3.16.5 chains, if any existed, lose nothing)
+    Features features16;
+    features16.setUpgradeFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION,
+        bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    BOOST_CHECK_EQUAL(validFlags(features16).size(), expect12.size());
 }
 
 BOOST_AUTO_TEST_CASE(genesis)
@@ -537,7 +529,7 @@ BOOST_AUTO_TEST_CASE(genesis)
         BOOST_CHECK(features3_152.get(feature));
     }
 
-    // 3.16.5
+    // 3.16.5 (ghost version, behaves as 3.16.4)
     Features features3_16_5;
     features3_16_5.setGenesisFeatures(bcos::protocol::BlockVersion::V3_16_5_VERSION);
     auto expect3_16_5 = std::to_array<std::string_view>({// up to 3.15.1
@@ -558,17 +550,30 @@ BOOST_AUTO_TEST_CASE(genesis)
         // 3.16.0
         "bugfix_delegatecall_transfer", "bugfix_nonce_initialize", "bugfix_v1_timestamp",
         // 3.16.4
-        "bugfix_revert_logs",
-        // 3.16.5
-        "bugfix_auth_check_create2", "bugfix_auth_check_revert_status",
-        "bugfix_auth_table_raw_address", "bugfix_auth_table_squatting",
-        "bugfix_v1_exec_error_gas_used", "bugfix_v1_precompiled_error_gas"});
+        "bugfix_revert_logs"});
     BOOST_CHECK_EQUAL(validFlags(features3_16_5).size(), expect3_16_5.size());
     for (auto feature : expect3_16_5)
     {
         BOOST_CHECK(features3_16_5.get(feature));
     }
     BOOST_CHECK_EQUAL(features3_16_5.get(bcos::ledger::Features::Flag::bugfix_revert_logs), true);
+
+    // 3.17.0: everything in 3.16.5 plus the six consolidated audit flags and bugfix_nonce_ordering
+    Features features3_17_0;
+    features3_17_0.setGenesisFeatures(bcos::protocol::BlockVersion::V3_17_0_VERSION);
+    auto extra3_17_0 = std::to_array<std::string_view>(
+        {"bugfix_auth_check", "bugfix_v1_error_handling", "bugfix_gas_payment_balance_precheck",
+            "bugfix_precompiled_feature_gate", "bugfix_evm_storage_status",
+            "bugfix_statestorage_hash_v3_17", "bugfix_nonce_ordering"});
+    BOOST_CHECK_EQUAL(validFlags(features3_17_0).size(), expect3_16_5.size() + extra3_17_0.size());
+    for (auto feature : expect3_16_5)
+    {
+        BOOST_CHECK(features3_17_0.get(feature));
+    }
+    for (auto feature : extra3_17_0)
+    {
+        BOOST_CHECK(features3_17_0.get(feature));
+    }
 }
 
 

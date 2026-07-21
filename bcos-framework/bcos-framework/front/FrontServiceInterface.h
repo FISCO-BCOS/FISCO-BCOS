@@ -22,9 +22,11 @@
 #include "bcos-crypto/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/gateway/GroupNodeInfo.h"
 #include "bcos-task/Task.h"
+#include "bcos-task/Wait.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 #include <range/v3/view/any_view.hpp>
+#include <range/v3/view/single.hpp>
 
 namespace bcos::front
 {
@@ -131,6 +133,56 @@ public:
 
     virtual task::Task<void> broadcastMessage(
         uint16_t type, int moduleID, ::ranges::any_view<bytesConstRef> payloads) = 0;
+
+    /**
+     * @brief broadcast an already-encoded message, taking ownership of the payload so the send can
+     *        be deferred without copying the message body.
+     *
+     * The default implementation bridges to broadcastMessage on the caller thread (correct for the
+     * tars/MAX client and test fakes, which have no in-process gateway lock to contend). The
+     * production FrontService overrides this to dispatch the gateway send off the caller thread, so
+     * a caller holding a lock (e.g. the PBFT consensus worker under m_mutex) is never coupled to
+     * gateway session-lock contention under TLS-churn. The owned payload is kept alive for the
+     * duration of the send.
+     *
+     * Constraint for new implementations: if your environment has in-process send-path lock
+     * coupling (as AIR's gateway does), you MUST override this to dispatch the send off the caller
+     * thread. The default (synchronous bridge) is safe only when the send cannot block on a lock
+     * the caller may already hold.
+     *
+     * @param type: receiver node type
+     * @param moduleID: moduleID
+     * @param payload: already-encoded message body; ownership is transferred to the callee
+     */
+    virtual void asyncBroadcastMessageByOwnedPayload(
+        uint16_t type, int moduleID, bytesPointer payload)
+    {
+        task::wait([](FrontServiceInterface* self, uint16_t _type, int _moduleID,
+                       bytesPointer _payload) -> task::Task<void> {
+            co_await self->broadcastMessage(
+                _type, _moduleID, ::ranges::views::single(bcos::ref(*_payload)));
+        }(this, type, moduleID, std::move(payload)));
+    }
+
+    /**
+     * @brief send an already-encoded message to one node, taking ownership of the payload so the
+     *        send can be deferred without the caller keeping the buffer alive.
+     *
+     * Same rationale as asyncBroadcastMessageByOwnedPayload: the production FrontService dispatches
+     * the gateway send off the caller thread (PBFT under m_mutex must not contend the gateway
+     * session lock; sendViewChange / sendRecoverResponse run there). Point-to-point sends encode
+     * the wire frame anyway, so this is not zero-copy; owning the payload only keeps it alive
+     * across the deferred encode. The default implementation bridges to asyncSendMessageByNodeID.
+     *
+     * @param moduleID: moduleID
+     * @param nodeID: the receiver nodeID
+     * @param payload: already-encoded message body; ownership is transferred to the callee
+     */
+    virtual void asyncSendMessageByNodeIDByOwnedPayload(
+        int moduleID, bcos::crypto::NodeIDPtr nodeID, bytesPointer payload)
+    {
+        asyncSendMessageByNodeID(moduleID, std::move(nodeID), bcos::ref(*payload), 0, nullptr);
+    }
 
     /**
      * @brief: get local protocol info

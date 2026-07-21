@@ -32,16 +32,16 @@ BOOST_AUTO_TEST_SUITE(FIB83_AccessAuthSuffixTest)
 
 BOOST_AUTO_TEST_CASE(rejectAccessAuthSuffix_WithFlag)
 {
-    // Set up features with bugfix_auth_table_squatting enabled
+    // Set up features with bugfix_auth_check enabled
     ledger::Features features;
-    features.set(ledger::Features::Flag::bugfix_auth_table_squatting);
+    features.set(ledger::Features::Flag::bugfix_auth_check);
 
     // Paths ending with _accessAuth should be rejected when the flag is on
     BOOST_CHECK(
-        !checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_16_5_VERSION, &features));
+        !checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_17_0_VERSION, &features));
     BOOST_CHECK(!checkPathValid(
-        "/apps/aabbccddee1234_accessAuth", BlockVersion::V3_16_5_VERSION, &features));
-    BOOST_CHECK(!checkPathValid("/apps/_accessAuth", BlockVersion::V3_16_5_VERSION, &features));
+        "/apps/aabbccddee1234_accessAuth", BlockVersion::V3_17_0_VERSION, &features));
+    BOOST_CHECK(!checkPathValid("/apps/_accessAuth", BlockVersion::V3_17_0_VERSION, &features));
 }
 
 BOOST_AUTO_TEST_CASE(allowAccessAuthSuffix_WithoutFlag)
@@ -49,10 +49,10 @@ BOOST_AUTO_TEST_CASE(allowAccessAuthSuffix_WithoutFlag)
     // Without the flag, paths ending with _accessAuth should pass (backward compat)
     ledger::Features noFlag;
     BOOST_CHECK(
-        checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_16_5_VERSION, &noFlag));
+        checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_17_0_VERSION, &noFlag));
 
     // Even with nullptr features (e.g. ShardingPrecompiled path), should pass
-    BOOST_CHECK(checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_16_5_VERSION));
+    BOOST_CHECK(checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_17_0_VERSION));
     BOOST_CHECK(checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_2_VERSION));
     BOOST_CHECK(checkPathValid("/apps/contract_accessAuth", BlockVersion::V3_1_VERSION));
 }
@@ -60,23 +60,23 @@ BOOST_AUTO_TEST_CASE(allowAccessAuthSuffix_WithoutFlag)
 BOOST_AUTO_TEST_CASE(allowNonSuffixPaths_WithFlag)
 {
     ledger::Features features;
-    features.set(ledger::Features::Flag::bugfix_auth_table_squatting);
+    features.set(ledger::Features::Flag::bugfix_auth_check);
 
     // Paths that don't end with _accessAuth should still be valid
-    BOOST_CHECK(checkPathValid("/apps/mycontract", BlockVersion::V3_16_5_VERSION, &features));
+    BOOST_CHECK(checkPathValid("/apps/mycontract", BlockVersion::V3_17_0_VERSION, &features));
     BOOST_CHECK(
-        checkPathValid("/apps/accessAuth_contract", BlockVersion::V3_16_5_VERSION, &features));
-    BOOST_CHECK(checkPathValid("/apps/my_accessAuthx", BlockVersion::V3_16_5_VERSION, &features));
+        checkPathValid("/apps/accessAuth_contract", BlockVersion::V3_17_0_VERSION, &features));
+    BOOST_CHECK(checkPathValid("/apps/my_accessAuthx", BlockVersion::V3_17_0_VERSION, &features));
 }
 
 BOOST_AUTO_TEST_CASE(rejectNestedAccessAuthSuffix)
 {
     ledger::Features features;
-    features.set(ledger::Features::Flag::bugfix_auth_table_squatting);
+    features.set(ledger::Features::Flag::bugfix_auth_check);
 
     // Intermediate path components ending with _accessAuth should also be rejected
     BOOST_CHECK(
-        !checkPathValid("/apps/contract_accessAuth/sub", BlockVersion::V3_16_5_VERSION, &features));
+        !checkPathValid("/apps/contract_accessAuth/sub", BlockVersion::V3_17_0_VERSION, &features));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

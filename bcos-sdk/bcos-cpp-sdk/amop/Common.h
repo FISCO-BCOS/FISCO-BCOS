@@ -18,6 +18,7 @@
  * @date 2021-08-25
  */
 #pragma once
+#include <bcos-utilities/BoostLog.h>
 
 #define AMOP_CLIENT(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][CLIENT]"
 #define AMOP_TOPIC_MANAGER(LEVEL) BCOS_LOG(LEVEL) << "[AMOP][TOPICMANAGER]"

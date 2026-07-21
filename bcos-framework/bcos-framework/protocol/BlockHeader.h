@@ -27,6 +27,7 @@
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <gsl/span>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcos::protocol
 {
@@ -76,8 +77,8 @@ public:
         if (signatures.size() < sealers.size())
         {
             throwTrace(InvalidBlockHeader()
-                           << errinfo_comment("Invalid blockHeader for the size of sealerList "
-                                              "is smaller than the size of signatureList"));
+                       << errinfo_comment("Invalid blockHeader for the size of sealerList "
+                                          "is smaller than the size of signatureList"));
         }
         for (const auto& signature : signatures)
         {
@@ -88,8 +89,8 @@ public:
                     hash(), bytesConstRef(signatureData.data(), signatureData.size())))
             {
                 throwTrace(InvalidSignatureList() << errinfo_comment(
-                                   "Invalid signatureList for verify failed, signatureData:" +
-                                   toHex(signatureData)));
+                               "Invalid signatureList for verify failed, signatureData:" +
+                               toHex(signatureData)));
             }
         }
     }

@@ -20,6 +20,7 @@
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-boostssl/websocket/WsTools.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace bcos;
