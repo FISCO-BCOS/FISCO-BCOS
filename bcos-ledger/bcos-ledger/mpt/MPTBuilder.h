@@ -179,8 +179,22 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
     AccountRows const& rows, auto& flatView,
     std::map<bcos::h256, std::optional<bcos::bytes>>& accountChanges, MPTDeltaLayer& output)
 {
-    // Tombstone (spec §5.3 path 3): all three core rows deleted = SELFDESTRUCT. Slot rows
-    // in the same delta are ignored — the whole leaf goes away.
+    // Tombstone (spec §5.3 path 3): all three core rows deleted = SELFDESTRUCT. Slot rows in the
+    // same delta are ignored — this account does not reach the MPT.
+    //
+    // Under current Ethereum rules this branch's job is to recognize an account that was BORN AND
+    // DIED inside this block and keep it out of the trie, NOT to remove a pre-existing leaf.
+    // EIP-6780 leaves exactly one case where SELFDESTRUCT still deletes an account — a contract
+    // created within the same transaction — and such an account was never in the parent MPT, so
+    // the removal below resolves to a no-op. It is still a branch that must exist: CREATE really
+    // wrote the three core rows into the delta and SELFDESTRUCT really deleted them (it is not a
+    // revert), so the run reaches us as "all three core rows deleted"; without this case
+    // requireNotDeleted() would reject a perfectly legal transaction.
+    //
+    // Removing a pre-existing leaf is the same one line, kept as compatibility headroom: there is
+    // no path to it today (6780 spares already-existing contracts; EIP-158/161 empty-account
+    // clearing is not implemented) — but if one appears, silently leaving a stale leaf behind
+    // would be a fork.
     if (rows.nonce.deleted && rows.balance.deleted && rows.codeHash.deleted)
     {
         // Record the prior storage root for future pathdb pruning — the full subtree walk
@@ -272,7 +286,9 @@ bcos::task::Task<void> finalizeAccount(BuildContext<Storage>& context, bcos::Add
 ///
 /// Per-account shapes are decided from the data itself, not from classify-time flags (spec §5.3):
 ///  - tombstone: the delta holds all three core-field rows (nonce/balance/codeHash) deleted —
-///    the SELFDESTRUCT convention — and the account leaf is removed;
+///    the SELFDESTRUCT convention — and the account is kept out of the MPT. Post-EIP-6780 this
+///    means an account born and died within this block (see finalizeAccount); removing a
+///    pre-existing leaf is the same code path but has no trigger under current rules;
 ///  - first-touch: the parent MPT has no leaf (readAccount nullopt). The storage trie starts
 ///    from emptyRootHash() and only holds THIS BLOCK's written slots — cold flat slots are never
 ///    back-filled (slot-level commitment, spec §4.2); unwritten core fields come from the flat
@@ -316,9 +332,16 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
     // ordering the trie build relies on.
     std::map<bcos::h256, std::optional<bcos::bytes>> accountChanges;
 
-    // Single pass over the block's delta. currentTable owns its bytes: the run it delimits
-    // outlives the iterator position that produced it.
-    std::string currentTable;
+    // Single pass over the block's delta, grouped by account. Rows arrive (table, key)-ordered,
+    // so one account's rows form a contiguous run and a table change marks its end. Scanning
+    //     /apps/0a..:balance   /apps/0a..:nonce   /apps/0b..:nonce   /sys/config:x
+    // settles account 0a when the /apps/0b.. row arrives, settles 0b when /sys/config arrives,
+    // and skips the system row — currentAddress stays unset for any table outside /apps/.
+    //
+    // currentTable is a view into the row the iterator last yielded: elements live in the delta
+    // container, which this read-only scan never mutates, so it stays valid across iterations.
+    // Comparison is by content, so a same-named table always matches.
+    std::string_view currentTable;
     std::optional<bcos::Address> currentAddress;
     detail::AccountRows rows;
 
@@ -335,8 +358,9 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
 
         if (keyView.m_table != currentTable)
         {
-            // Run boundary: settle the account just finished, then re-resolve the table. Rows
-            // outside /apps/ (system tables) leave currentAddress unset and are skipped.
+            // Run boundary. Settle the account that just ended (none on the first row, and none
+            // when the run that ended was a non-account table), then reset the accumulator — a
+            // missed reset would leak one account's fields into the next.
             if (currentAddress)
             {
                 co_await detail::finalizeAccount(
@@ -352,6 +376,8 @@ bcos::task::Task<MPTDeltaLayer> buildAndCollect(
         }
         detail::accumulateRow(context, rows, keyView, dataValue);
     }
+    // N runs have only N-1 internal boundaries: a run that reaches the end of the delta never
+    // sees a table change, so the last account is settled here.
     if (currentAddress)
     {
         co_await detail::finalizeAccount(
