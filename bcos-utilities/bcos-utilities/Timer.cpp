@@ -48,6 +48,15 @@ bcos::Timer::Timer(int64_t _timeout, std::string _threadName)
             if (ioContext.stopped())
             {
                 ioContext.restart();
+                // destroy() publishes m_working=false before calling ioService().stop().
+                // If that stop() landed between the stopped() check and restart(), the
+                // restart() above just erased it; without this re-check the loop would
+                // enter run() under a fresh work guard and block forever, deadlocking
+                // destroy() in m_worker->join() (FIB135 test hang on CI).
+                if (!m_working)
+                {
+                    break;
+                }
             }
             try
             {
