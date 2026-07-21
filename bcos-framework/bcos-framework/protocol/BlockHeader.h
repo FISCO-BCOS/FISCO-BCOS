@@ -135,8 +135,7 @@ public:
     virtual void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) = 0;
     virtual void setConsensusWeights(std::vector<uint64_t>&& _weightList) = 0;
 
-    virtual void setExtraData(bytes const& _extraData) = 0;
-    virtual void setExtraData(bytes&& _extraData) = 0;
+    virtual void setExtraData(bytes _extraData) = 0;
 
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;

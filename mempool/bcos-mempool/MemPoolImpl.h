@@ -180,7 +180,7 @@ public:
         }
     }
 
-    void remove(storage2::ReadableStorage<executor_v1::StateKeyView> auto& state)
+    void removeByState(storage2::ReadableStorage<executor_v1::StateKeyView> auto& state)
     {
         std::unique_lock lock(m_mutex);
         auto& senderIndex = m_transactions.get<2>();
@@ -213,7 +213,7 @@ public:
         }
     }
 
-    void remove(InputHashes auto hashes)
+    void removeByHashes(InputHashes auto hashes)
     {
         std::unordered_map<std::string_view, int64_t> senderNonceMap;
         std::unique_lock lock(m_mutex);

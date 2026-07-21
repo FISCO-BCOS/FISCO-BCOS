@@ -229,7 +229,7 @@ public:
         // Mempool operations run without lock — they only depend on the view, not on x_state.
         // Step 1: Remove stale/tainted transactions from mempool (cleans tx with nonce < state
         // nonce)
-        m_memPool.get().remove(view);
+        m_memPool.get().removeByState(view);
 
         // Step 2: Create mutable storage layer on the view for transaction sealing
         view.newMutable();

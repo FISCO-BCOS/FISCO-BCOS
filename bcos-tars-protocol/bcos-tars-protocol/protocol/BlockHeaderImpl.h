@@ -83,8 +83,7 @@ public:
     void setSealerList(std::vector<bcos::bytes>&& _sealerList) override;
     void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) override;
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override;
-    void setExtraData(bcos::bytes const& _extraData) override;
-    void setExtraData(bcos::bytes&& _extraData) override;
+    void setExtraData(bcos::bytes _extraData) override;
     void setSignatureList(
         gsl::span<const bcos::protocol::Signature> const& _signatureList) override;
     void setSignatureList(bcos::protocol::SignatureList&& _signatureList) override;

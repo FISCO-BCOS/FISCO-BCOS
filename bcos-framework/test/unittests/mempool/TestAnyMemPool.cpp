@@ -12,12 +12,10 @@
 #include <proxy/proxy.h>
 #include <boost/test/unit_test.hpp>
 #include <fakeit.hpp>
-#include <iterator>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -71,13 +69,16 @@ struct MockMemPool
     }
 
     template <class StateStorage>
-    void remove(StateStorage& /*state*/)
+    void removeByState(StateStorage& /*state*/)
     {
         m_removeByStateCalled = true;
         m_addedTransactions.clear();
     }
 
-    void remove(std::vector<bcos::crypto::HashType> hashes) { m_removedHashes = std::move(hashes); }
+    void removeByHashes(std::vector<bcos::crypto::HashType> hashes)
+    {
+        m_removedHashes = std::move(hashes);
+    }
 
     std::vector<protocol::Transaction::Ptr> get(std::vector<bcos::crypto::HashType> hashes)
     {
@@ -121,8 +122,6 @@ struct MockStateStorage
 
 /// Compile-time verification that mocks satisfy the MemPool concept.
 static_assert(MemPool<MockMemPool, MockStateStorage>, "MockMemPool must satisfy MemPool concept");
-static_assert(MemPool<AnyMemPool<MockStateStorage>, MockStateStorage>,
-    "AnyMemPool must satisfy MemPool concept");
 
 /// A non-copyable, non-movable mock that mimics the constraints of the real
 /// MemPoolImpl (which contains std::mutex).  Used to verify that AnyMemPool's
@@ -158,12 +157,12 @@ struct NonCopyableMemPool
     }
 
     template <class StateStorage>
-    void remove(StateStorage& /*state*/)
+    void removeByState(StateStorage& /*state*/)
     {
         m_addedTransactions.clear();
     }
 
-    void remove(std::vector<bcos::crypto::HashType> /*hashes*/)
+    void removeByHashes(std::vector<bcos::crypto::HashType> /*hashes*/)
     {
         m_addedTransactions.clear();
     }
@@ -174,27 +173,13 @@ struct NonCopyableMemPool
     }
 };
 
-/// Ensure NonCopyableMemPool satisfies the MemPool concept.
-static_assert(
-    MemPool<NonCopyableMemPool, MockStateStorage>, "NonCopyableMemPool must satisfy MemPool");
-
-/// Compile-time verification: AnyMemPool is move-only (copy deleted).
-static_assert(!std::is_copy_constructible_v<AnyMemPool<MockStateStorage>>,
-    "AnyMemPool must not be copy-constructible");
-static_assert(!std::is_copy_assignable_v<AnyMemPool<MockStateStorage>>,
-    "AnyMemPool must not be copy-assignable");
-static_assert(std::is_move_constructible_v<AnyMemPool<MockStateStorage>>,
-    "AnyMemPool must be move-constructible");
-static_assert(std::is_move_assignable_v<AnyMemPool<MockStateStorage>>,
-    "AnyMemPool must be move-assignable");
-
 }  // namespace bcos::test
 
-/// Helper to construct an AnyMemPool from a MockMemPool.
+/// Helper to construct an AnyMemPool from a MockMemPool via pro::make_proxy.
 template <class StateStorage = bcos::test::MockStateStorage>
 static auto makeAny(bcos::test::MockMemPool& mock)
 {
-    return bcos::mempool::AnyMemPool<StateStorage>(mock);
+    return pro::make_proxy<AnyMemPoolFacade<StateStorage>, bcos::test::MockMemPool>(mock);
 }
 
 BOOST_AUTO_TEST_SUITE(TestAnyMemPool)
@@ -205,7 +190,7 @@ BOOST_AUTO_TEST_CASE(constructWithMock)
     bcos::test::MockMemPool mock;
     auto any = makeAny(mock);
 
-    BOOST_CHECK(static_cast<bool>(any));
+    BOOST_CHECK(any.has_value());
 }
 
 /// Verify add() / get() round-trip through the type-erased wrapper.
@@ -216,17 +201,17 @@ BOOST_AUTO_TEST_CASE(addAndGetRoundtrip)
 
     fakeit::Mock<protocol::Transaction> mockTx;
     auto tx = bcos::test::makeMockTx(mockTx);
-    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+    any->add(std::vector<protocol::Transaction::Ptr>{tx});
 
     bcos::crypto::HashType h{0xaa};
-    auto result = any.get({h});
+    auto result = any->get({h});
     // The mock's get() returns whatever was added, ignoring the hash arg
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
 
     // Second get() call: the mock always returns m_addedTransactions
     // (which still has the single tx), regardless of the hash argument.
-    auto result2 = any.get({bcos::crypto::HashType{0xbb}});
+    auto result2 = any->get({bcos::crypto::HashType{0xbb}});
     BOOST_CHECK_EQUAL(result2.size(), 1);
 }
 
@@ -258,10 +243,10 @@ BOOST_AUTO_TEST_CASE(sealDrainsTransactions)
     auto any = makeAny(mock);
 
     std::vector<protocol::Transaction::Ptr> out;
-    any.seal(100, state, std::back_inserter(out));
+    any->seal(100, state, std::back_inserter(out));
 
     // After seal, get() should return empty (mock's seal drains m_addedTransactions)
-    auto result = any.get({bcos::crypto::HashType{0x01}});
+    auto result = any->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK(result.empty());
 }
 
@@ -275,10 +260,10 @@ BOOST_AUTO_TEST_CASE(removeByStateClears)
     mock.m_addedTransactions.push_back(tx);
     auto any = makeAny(mock);
 
-    any.remove(state);
+    any->removeByState(state);
 
-    // After remove(state), the pool should be empty
-    auto result = any.get({bcos::crypto::HashType{0x01}});
+    // After removeByState, the pool should be empty
+    auto result = any->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK(result.empty());
 }
 
@@ -292,10 +277,10 @@ BOOST_AUTO_TEST_CASE(removeByHashesDelegates)
     auto any = makeAny(mock);
 
     std::vector<bcos::crypto::HashType> hashes{bcos::crypto::HashType{0x01}};
-    any.remove(hashes);
+    any->removeByHashes(hashes);
 
-    // remove(hashes) sets m_removedHashes in the mock; verify via get()
-    auto result = any.get({bcos::crypto::HashType{0x02}});
+    // removeByHashes sets m_removedHashes in the mock; verify via get()
+    auto result = any->get({bcos::crypto::HashType{0x02}});
     BOOST_CHECK_EQUAL(result.size(), 1);
 }
 
@@ -309,13 +294,13 @@ BOOST_AUTO_TEST_CASE(moveConstruction)
     auto any1 = makeAny(mock);
 
     // Move construct
-    auto any2 = AnyMemPool<bcos::test::MockStateStorage>(std::move(any1));
+    auto any2 = std::move(any1);
 
-    BOOST_CHECK(static_cast<bool>(any2));
-    BOOST_CHECK(!static_cast<bool>(any1));
+    BOOST_CHECK(any2.has_value());
+    BOOST_CHECK(!any1.has_value());
 
     // any2 should still have the transaction
-    auto result = any2.get({bcos::crypto::HashType{0x01}});
+    auto result = any2->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
 }
@@ -332,10 +317,10 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
 
     any2 = std::move(any1);
 
-    BOOST_CHECK(static_cast<bool>(any2));
-    BOOST_CHECK(!static_cast<bool>(any1));
+    BOOST_CHECK(any2.has_value());
+    BOOST_CHECK(!any1.has_value());
 
-    auto result = any2.get({bcos::crypto::HashType{0x01}});
+    auto result = any2->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
 }
@@ -345,18 +330,18 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
 /// std::mutex and is therefore neither copyable nor movable).
 BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
 {
-    // Construct AnyMemPool with a non-copyable mempool via in_place_type.
-    auto any = AnyMemPool<bcos::test::MockStateStorage>(
-        std::in_place_type<bcos::test::NonCopyableMemPool>);
+    // Construct AnyMemPool with a non-copyable mempool via pro::make_proxy.
+    auto any = pro::make_proxy<AnyMemPoolFacade<bcos::test::MockStateStorage>,
+        bcos::test::NonCopyableMemPool>();
 
-    BOOST_CHECK(static_cast<bool>(any));
+    BOOST_CHECK(any.has_value());
 
     // Verify add() and get() round-trip
     fakeit::Mock<protocol::Transaction> mockTx;
     auto tx = bcos::test::makeMockTx(mockTx);
-    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+    any->add(std::vector<protocol::Transaction::Ptr>{tx});
 
-    auto result = any.get({bcos::crypto::HashType{0x01}});
+    auto result = any->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
 }
@@ -365,17 +350,17 @@ BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
 BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
 {
     // NonCopyableMemPool takes no extra args, but this validates the variadic
-    // forwarding path through std::in_place_type.
-    auto any = AnyMemPool<bcos::test::MockStateStorage>(
-        std::in_place_type<bcos::test::NonCopyableMemPool>);
+    // forwarding path through pro::make_proxy.
+    auto any = pro::make_proxy<AnyMemPoolFacade<bcos::test::MockStateStorage>,
+        bcos::test::NonCopyableMemPool>();
 
-    BOOST_CHECK(static_cast<bool>(any));
+    BOOST_CHECK(any.has_value());
 
     fakeit::Mock<protocol::Transaction> mockTx;
     auto tx = bcos::test::makeMockTx(mockTx);
-    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+    any->add(std::vector<protocol::Transaction::Ptr>{tx});
 
-    auto result = any.get({bcos::crypto::HashType{0x02}});
+    auto result = any->get({bcos::crypto::HashType{0x02}});
     BOOST_CHECK_EQUAL(result.size(), 1);
     BOOST_CHECK(result[0] == tx);
 }
@@ -383,16 +368,16 @@ BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
 /// Verify seal() through an in_place_type-constructed AnyMemPool works.
 BOOST_AUTO_TEST_CASE(sealNonCopyableInPlace)
 {
-    auto any = AnyMemPool<bcos::test::MockStateStorage>(
-        std::in_place_type<bcos::test::NonCopyableMemPool>);
+    auto any = pro::make_proxy<AnyMemPoolFacade<bcos::test::MockStateStorage>,
+        bcos::test::NonCopyableMemPool>();
     bcos::test::MockStateStorage state;
 
     fakeit::Mock<protocol::Transaction> mockTx;
     auto tx = bcos::test::makeMockTx(mockTx);
-    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+    any->add(std::vector<protocol::Transaction::Ptr>{tx});
 
     std::vector<protocol::Transaction::Ptr> out;
-    any.seal(100, state, std::back_inserter(out));
+    any->seal(100, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 1);
     BOOST_CHECK(out[0] == tx);
@@ -401,17 +386,17 @@ BOOST_AUTO_TEST_CASE(sealNonCopyableInPlace)
 /// Verify remove(StateStorage) through an in_place_type-constructed AnyMemPool.
 BOOST_AUTO_TEST_CASE(removeByStateNonCopyableInPlace)
 {
-    auto any = AnyMemPool<bcos::test::MockStateStorage>(
-        std::in_place_type<bcos::test::NonCopyableMemPool>);
+    auto any = pro::make_proxy<AnyMemPoolFacade<bcos::test::MockStateStorage>,
+        bcos::test::NonCopyableMemPool>();
     bcos::test::MockStateStorage state;
 
     fakeit::Mock<protocol::Transaction> mockTx;
     auto tx = bcos::test::makeMockTx(mockTx);
-    any.add(std::vector<protocol::Transaction::Ptr>{tx});
+    any->add(std::vector<protocol::Transaction::Ptr>{tx});
 
-    any.remove(state);
+    any->removeByState(state);
 
-    auto result = any.get({bcos::crypto::HashType{0x01}});
+    auto result = any->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK(result.empty());
 }
 

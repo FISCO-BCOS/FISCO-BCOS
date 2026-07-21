@@ -319,7 +319,7 @@ BOOST_AUTO_TEST_CASE(remove_by_state_drops_confirmed)
     MapStateStorage state{};
     setNonce(state, senderA, "2");
 
-    pool.remove(state);
+    pool.removeByState(state);
 
     auto fetched = pool.get(std::vector{a0->hash(), a1->hash(), a2->hash(), b0->hash()});
     BOOST_CHECK(!fetched[0]);
@@ -341,7 +341,7 @@ BOOST_AUTO_TEST_CASE(remove_by_hashes_respects_per_sender_max)
     auto b1 = makeTx(senderB, 1);
     pool.add(std::vector{a0, a1, a2, b0, b1});
 
-    pool.remove(std::vector{a1->hash(), b0->hash()});
+    pool.removeByHashes(std::vector{a1->hash(), b0->hash()});
 
     auto fetched =
         pool.get(std::vector{a0->hash(), a1->hash(), a2->hash(), b0->hash(), b1->hash()});

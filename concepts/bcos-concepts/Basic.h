@@ -18,12 +18,6 @@ template <class T>
 concept StringLike = std::same_as<std::remove_cvref_t<T>, std::string> ||
                      std::same_as<std::remove_cvref_t<T>, std::string_view>;
 
-template <class Pointer>
-concept PointerLike = requires(Pointer pointer) {
-    *pointer;
-    pointer.operator->();
-};
-
 template <class Input>
 auto& getRef(Input& input)
 {
