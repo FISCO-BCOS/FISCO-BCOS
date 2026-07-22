@@ -37,8 +37,8 @@ concept MemPool =
         std::back_insert_iterator<std::vector<protocol::Transaction::Ptr>> out, int64_t limit) {
         { transactions.add(std::move(inputTransactions)) } -> std::same_as<void>;
         { transactions.seal(limit, state, out) } -> std::same_as<void>;
-        { transactions.removeByState(state) } -> std::same_as<void>;
-        { transactions.removeByHashes(std::move(hashes)) } -> std::same_as<void>;
+        { transactions.remove(state) } -> std::same_as<void>;
+        { transactions.remove(std::move(hashes)) } -> std::same_as<void>;
         {
             transactions.get(std::move(hashes))
         } -> std::same_as<std::vector<protocol::Transaction::Ptr>>;

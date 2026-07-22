@@ -69,13 +69,13 @@ struct MockMemPool
     }
 
     template <class StateStorage>
-    void removeByState(StateStorage& /*state*/)
+    void remove(StateStorage& /*state*/)
     {
         m_removeByStateCalled = true;
         m_addedTransactions.clear();
     }
 
-    void removeByHashes(std::vector<bcos::crypto::HashType> hashes)
+    void remove(std::vector<bcos::crypto::HashType> hashes)
     {
         m_removedHashes = std::move(hashes);
     }
@@ -157,12 +157,12 @@ struct NonCopyableMemPool
     }
 
     template <class StateStorage>
-    void removeByState(StateStorage& /*state*/)
+    void remove(StateStorage& /*state*/)
     {
         m_addedTransactions.clear();
     }
 
-    void removeByHashes(std::vector<bcos::crypto::HashType> /*hashes*/)
+    void remove(std::vector<bcos::crypto::HashType> /*hashes*/)
     {
         m_addedTransactions.clear();
     }
@@ -260,9 +260,9 @@ BOOST_AUTO_TEST_CASE(removeByStateClears)
     mock.m_addedTransactions.push_back(tx);
     auto any = makeAny(mock);
 
-    any->removeByState(state);
+    any->remove(state);
 
-    // After removeByState, the pool should be empty
+    // After remove, the pool should be empty
     auto result = any->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK(result.empty());
 }
@@ -277,9 +277,9 @@ BOOST_AUTO_TEST_CASE(removeByHashesDelegates)
     auto any = makeAny(mock);
 
     std::vector<bcos::crypto::HashType> hashes{bcos::crypto::HashType{0x01}};
-    any->removeByHashes(hashes);
+    any->remove(hashes);
 
-    // removeByHashes sets m_removedHashes in the mock; verify via get()
+    // remove sets m_removedHashes in the mock; verify via get()
     auto result = any->get({bcos::crypto::HashType{0x02}});
     BOOST_CHECK_EQUAL(result.size(), 1);
 }
@@ -394,7 +394,7 @@ BOOST_AUTO_TEST_CASE(removeByStateNonCopyableInPlace)
     auto tx = bcos::test::makeMockTx(mockTx);
     any->add(std::vector<protocol::Transaction::Ptr>{tx});
 
-    any->removeByState(state);
+    any->remove(state);
 
     auto result = any->get({bcos::crypto::HashType{0x01}});
     BOOST_CHECK(result.empty());

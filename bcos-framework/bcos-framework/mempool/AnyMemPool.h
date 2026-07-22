@@ -28,13 +28,12 @@ namespace bcos::mempool
 {
 
 /// Dispatch structs — each maps to a member function of the underlying
-/// MemPool implementation.  The two remove overloads are given distinct
-/// names (removeByState / removeByHashes) so that pro::proxy's operator->
-/// can dispatch them without ambiguity.
+/// MemPool implementation.  MemRemove targets both overloads of ::remove;
+/// pro::proxy resolves them by normal overload resolution via a single
+/// add_convention<MemRemove, void(StateStorage&), void(vector<HashType>)>.
 PRO_DEF_MEM_DISPATCH(MemAdd, add);
 PRO_DEF_MEM_DISPATCH(MemSeal, seal);
-PRO_DEF_MEM_DISPATCH(MemRemoveState, removeByState);
-PRO_DEF_MEM_DISPATCH(MemRemoveHashes, removeByHashes);
+PRO_DEF_MEM_DISPATCH(MemRemove, remove);
 PRO_DEF_MEM_DISPATCH(MemGet, get);
 
 /// Facade declaring the MemPool<StateStorage> interface for proxy.
@@ -46,8 +45,8 @@ struct AnyMemPoolFacade
         void(std::vector<protocol::Transaction::Ptr>)>::add_convention<MemSeal,
         void(int64_t, StateStorage&,
             std::back_insert_iterator<
-                std::vector<protocol::Transaction::Ptr>>)>::template add_convention<MemRemoveState,
-        void(StateStorage&)>::template add_convention<MemRemoveHashes,
+                std::vector<protocol::Transaction::Ptr>>)>::template add_convention<MemRemove,
+        void(StateStorage&),
         void(std::vector<bcos::crypto::HashType>)>::template add_convention<MemGet,
         std::vector<protocol::Transaction::Ptr>(std::vector<bcos::crypto::HashType>)>::
         template support_relocation<pro::constraint_level::nothrow>::template support_destruction<
@@ -59,7 +58,8 @@ struct AnyMemPoolFacade
 ///
 /// This is a template alias for pro::proxy<AnyMemPoolFacade<StateStorage>>.
 /// Users interact with the pool through operator->.  The two remove overloads
-/// are named removeByState / removeByHashes, so no ambiguity arises.
+/// are resolved by normal overload resolution via MemRemove's multi-signature
+/// convention.
 ///
 /// Usage:
 /// @code
@@ -67,8 +67,8 @@ struct AnyMemPoolFacade
 ///   pool->add(myTransactions);
 ///   pool->seal(limit, state, std::back_inserter(out));
 ///   auto txs = pool->get(myHashes);
-///   pool->removeByState(state);
-///   pool->removeByHashes(myHashes);
+///   pool->remove(state);
+///   pool->remove(myHashes);
 /// @endcode
 template <class StateStorage>
 using AnyMemPool = pro::proxy<AnyMemPoolFacade<StateStorage>>;
