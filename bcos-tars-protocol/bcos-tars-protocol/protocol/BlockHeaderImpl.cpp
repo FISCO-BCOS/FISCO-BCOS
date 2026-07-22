@@ -237,12 +237,7 @@ void bcostars::protocol::BlockHeaderImpl::setConsensusWeights(std::vector<uint64
     setConsensusWeights(gsl::span(_weightList.data(), _weightList.size()));
     clearDataHash();
 }
-void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes const& _extraData)
-{
-    m_inner()->data.extraData.assign(_extraData.begin(), _extraData.end());
-    clearDataHash();
-}
-void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes&& _extraData)
+void bcostars::protocol::BlockHeaderImpl::setExtraData(bcos::bytes _extraData)
 {
     m_inner()->data.extraData.assign(_extraData.begin(), _extraData.end());
     clearDataHash();

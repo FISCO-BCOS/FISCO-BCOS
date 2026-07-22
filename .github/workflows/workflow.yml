@@ -353,7 +353,7 @@ jobs:
           fi
           genhtml coverage.info --output-directory CodeCoverage --ignore-errors "$IGN" || true
           {
-            echo '## Code coverage (release-3.17.0)'
+            echo '## Code coverage (release-3.18.0)'
             echo '```'
             lcov --summary coverage.info --ignore-errors inconsistent,source 2>&1
             echo '```'

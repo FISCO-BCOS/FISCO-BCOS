@@ -50,8 +50,7 @@ public:
     void setSealerList(std::vector<bytes>&& _sealerList) override {}
     void setConsensusWeights(const gsl::span<const uint64_t>& _weightList) override {}
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override {}
-    void setExtraData(const bytes& _extraData) override {}
-    void setExtraData(bytes&& _extraData) override {}
+    void setExtraData(bytes _extraData) override {}
     void setSignatureList(const gsl::span<const protocol::Signature>& _signatureList) override {}
     void setSignatureList(protocol::SignatureList&& _signatureList) override {}
     size_t size() const override { return 0; }
