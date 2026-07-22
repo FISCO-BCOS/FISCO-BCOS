@@ -98,3 +98,62 @@ jobs:
           override_pr: ${{ steps.pr.outputs.number }}
           fail_ci_if_error: false
           verbose: true
+      - name: Post coverage summary comment
+        # Codecov's free-tier processing queue can lag hours behind the upload,
+        # so parse the lcov file ourselves and post/update a sticky summary
+        # comment the moment CI finishes. The Codecov comment later adds the
+        # detailed per-file diff against the base report.
+        # Untrusted-input note: the numbers come from integer-parsing the
+        # artifact's lcov records and module names are regex-whitelisted, so no
+        # raw artifact text reaches the comment body.
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          python3 - "${RUNNER_TEMP}/cov/coverage.info" > summary.md <<'PY'
+          import os, re, sys
+          from collections import defaultdict
+
+          mod = defaultdict(lambda: [0, 0])  # module -> [lines found, lines hit]
+          total_found = total_hit = 0
+          cur = 'other'
+          safe = re.compile(r'^[A-Za-z0-9._-]+$')
+          with open(sys.argv[1]) as f:
+              for line in f:
+                  line = line.strip()
+                  if line.startswith('SF:'):
+                      top = line[3:].split('/', 1)[0]
+                      cur = top if safe.match(top) else 'other'
+                  elif line.startswith('LF:'):
+                      n = int(line[3:]); mod[cur][0] += n; total_found += n
+                  elif line.startswith('LH:'):
+                      n = int(line[3:]); mod[cur][1] += n; total_hit += n
+          pct = 100.0 * total_hit / total_found if total_found else 0.0
+          head = os.environ.get('HEAD_SHA', '')[:7]
+          print('<!-- ci-coverage-summary -->')
+          print(f'## Unit-test line coverage: **{pct:.2f}%** ({total_hit}/{total_found} lines) @ `{head}`')
+          print()
+          print('| Module | Coverage | Lines hit |')
+          print('|---|---|---|')
+          top15 = sorted(mod.items(), key=lambda kv: -kv[1][0])[:15]
+          for name, (found, hit) in top15:
+              p = 100.0 * hit / found if found else 0.0
+              print(f'| {name} | {p:.1f}% | {hit}/{found} |')
+          rest = len(mod) - len(top15)
+          if rest > 0:
+              print(f'| _... {rest} more modules_ | | |')
+          print()
+          print('_Posted by CI right after the coverage build; the Codecov comment '
+                'adds the per-file diff vs base once its processing queue catches up._')
+          PY
+          # Upsert: update the existing summary comment instead of stacking new ones.
+          cid="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | startswith("<!-- ci-coverage-summary -->")) | .id' | head -n1)"
+          if [ -n "$cid" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$(cat summary.md)"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$(cat summary.md)"
+          fi
