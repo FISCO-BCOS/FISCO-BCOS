@@ -36,4 +36,11 @@ DERIVE_BCOS_EXCEPTION(MPTInvariantViolation);
 /// than left as dead code.
 DERIVE_BCOS_EXCEPTION(UnexpectedBCOSFieldInL2);
 
+/// Thrown when an account row carries a field name the builder has never been taught to classify
+/// (spec §5.2). Distinct from UnexpectedBCOSFieldInL2: that one means a KNOWN BCOS field reached
+/// an Ethereum-compatible chain, this one means nobody has yet judged whether the field belongs
+/// in the state commitment at all. Adding a new account row is what triggers it; the fix is one
+/// line in KNOWN_BCOS_EXTENSION_FIELDS once that judgement is made.
+DERIVE_BCOS_EXCEPTION(UnknownAccountRowField);
+
 }  // namespace bcos::ledger::mpt

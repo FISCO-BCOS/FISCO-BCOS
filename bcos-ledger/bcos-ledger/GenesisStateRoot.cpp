@@ -21,10 +21,10 @@
 #include "mpt/StorageValueCodec.h"
 #include <bcos-codec/rlp/RLPEncode.h>
 #include <bcos-crypto/hash/Keccak256.h>
-#include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
+#include <map>
 
 using namespace bcos;
 using namespace bcos::ledger;
@@ -44,9 +44,7 @@ bcos::h256 keccak(bcos::bytesConstRef data)
 // right-aligns into a fixed 32 bytes) to keep genesis hashing byte-identical.
 bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& storage)
 {
-    storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> nodes;
-    mpt::HashBuilder builder(nodes, mpt::emptyRootHash());
-    bool anySlot = false;
+    std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [slotHex, valueHex] : storage)
     {
         auto valueBytes = bcos::fromHex(valueHex);
@@ -55,23 +53,23 @@ bcos::task::Task<bcos::h256> storageRootOf(std::vector<Alloc::State> const& stor
         {
             continue;  // zero value: not part of the storage trie
         }
-        anySlot = true;
         auto slotBytes = bcos::fromHex(slotHex);
         auto slotKeyHash = keccak(bcos::bytesConstRef(slotBytes.data(), slotBytes.size()));
-        co_await builder.put(slotKeyHash, std::move(rlpValue));
+        entries[slotKeyHash] = std::move(rlpValue);
     }
-    if (!anySlot)
+    if (entries.empty())
     {
         co_return mpt::emptyRootHash();
     }
-    co_return co_await builder.commit();
+    // From-empty build through the stateless core; the produced nodes are not persisted — only
+    // the root goes into the genesis header.
+    co_return mpt::computeTrieRoot(entries).root;
 }
 }  // namespace
 
 bcos::task::Task<bcos::h256> bcos::ledger::computeGenesisStateRoot(GenesisConfig const& genesis)
 {
-    storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> stateNodes;
-    mpt::HashBuilder stateBuilder(stateNodes, mpt::emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> stateEntries;
 
     for (auto const& alloc : genesis.m_allocs)
     {
@@ -93,8 +91,8 @@ bcos::task::Task<bcos::h256> bcos::ledger::computeGenesisStateRoot(GenesisConfig
         // Secure state trie: leaf key = keccak256(address20).
         auto addrBytes = bcos::fromHex(alloc.address);
         auto addrKeyHash = keccak(bcos::bytesConstRef(addrBytes.data(), addrBytes.size()));
-        co_await stateBuilder.put(addrKeyHash, std::move(accountRlp));
+        stateEntries[addrKeyHash] = std::move(accountRlp);
     }
 
-    co_return co_await stateBuilder.commit();
+    co_return mpt::computeTrieRoot(stateEntries).root;
 }

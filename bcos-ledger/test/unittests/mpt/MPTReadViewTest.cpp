@@ -49,20 +49,18 @@ BOOST_AUTO_TEST_CASE(HasAccountFalseOnEmptyRoot)
     BOOST_CHECK(!bcos::task::syncWait(view.readAccount(a)).has_value());
 }
 
-// An account committed through HashBuilder into the SAME storage reads back through MPTReadView.
+// An account committed through commitTrie into the SAME storage reads back through MPTReadView.
 // The decoded fields must match what was encoded.
 BOOST_AUTO_TEST_CASE(HasAccountTrueAfterCommit)
 {
     bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
     bcos::Address const a = makeAddress(0xab);
 
-    HashBuilder hb(storage, emptyRootHash());
     Account acc;
     acc.nonce = 1;
     acc.balance = 100;
-    auto const kh = accountKeyHash(a);
-    bcos::task::syncWait(hb.put(kh, acc.encode()));
-    auto const root = bcos::task::syncWait(hb.commit());
+    auto const root =
+        seedTrieFlushed(storage, emptyRootHash(), {{accountKeyHash(a), acc.encode()}}).root;
 
     MPTReadView view(storage, root);
 
@@ -87,15 +85,13 @@ BOOST_AUTO_TEST_CASE(ReadThroughSeparateStorage)
 
     // Build the trie into storageA and capture every node it produced.
     bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storageA;
-    HashBuilder hb(storageA, emptyRootHash());
     Account acc;
     acc.nonce = 7;
     acc.balance = 4242;
-    auto const kh = accountKeyHash(a);
-    bcos::task::syncWait(hb.put(kh, acc.encode()));
-    auto const root = bcos::task::syncWait(hb.commit());
+    auto result = seedTrieFlushed(storageA, emptyRootHash(), {{accountKeyHash(a), acc.encode()}});
+    auto const root = result.root;
 
-    auto const nodes = hb.drainNewNodes();
+    auto const nodes = std::move(result.newNodes);
     BOOST_REQUIRE(!nodes.empty());
 
     // Load the drained nodes into a fresh, independent storage.

@@ -74,8 +74,9 @@ std::map<bcos::h256, bcos::bytes> ctrSortedMap(
 }
 }  // namespace
 
-// The stateless core must agree with the independent reference oracle AND with the stateful
-// HashBuilder — same root and a byte-identical produced node set — across several batch sizes.
+// The stateless core must agree with the independent reference oracle AND with the commitTrie
+// from-empty entry point — same root and a byte-identical produced node set — across several
+// batch sizes.
 BOOST_AUTO_TEST_CASE(MatchesReferenceAndStatefulCommit)
 {
     for (size_t size : {size_t{1}, size_t{2}, size_t{5}, size_t{20}, size_t{100}})
@@ -88,15 +89,10 @@ BOOST_AUTO_TEST_CASE(MatchesReferenceAndStatefulCommit)
         BOOST_CHECK_EQUAL(result.root, expected);
 
         bcos::storage2::memory_storage::MemoryStorage<bcos::h256, bcos::bytes> storage;
-        HashBuilder builder(storage, emptyRootHash());
-        for (auto const& [key, value] : kvs)
-        {
-            bcos::task::syncWait(builder.put(key, value));
-        }
-        bcos::h256 const commitRoot = bcos::task::syncWait(builder.commit());
-        BOOST_CHECK_EQUAL(result.root, commitRoot);
+        auto commitResult = seedTrieFlushed(storage, emptyRootHash(), sorted);
+        BOOST_CHECK_EQUAL(result.root, commitResult.root);
         // unordered_map operator== is content-based: this is a byte-identical node-set check.
-        BOOST_CHECK(result.newNodes == builder.drainNewNodes());
+        BOOST_CHECK(result.newNodes == commitResult.newNodes);
     }
 }
 

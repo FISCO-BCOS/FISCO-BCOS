@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @file HashBuilderIncrementalTest.cpp
- * @brief Incremental (non-empty prior root) HashBuilder rebuild — equivalence, readback and
+ * @brief Incremental (non-empty prior root) commitTrie rebuild — equivalence, readback and
  *        pruning-safety oracles (spec §5.3 path 1, §5.4)
  */
 #include "TestHelpers.h"
@@ -50,12 +50,7 @@ using KeyValueMap = std::map<bcos::h256, bcos::bytes>;
 // Build the base trie from @p base into @p storage and return its root.
 bcos::h256 buildBase(NodeStorage& storage, KeyValueMap const& base)
 {
-    HashBuilder builder(storage, emptyRootHash());
-    for (auto const& [key, value] : base)
-    {
-        bcos::task::syncWait(builder.put(key, value));
-    }
-    return bcos::task::syncWait(builder.commit());
+    return seedTrieFlushed(storage, emptyRootHash(), base).root;
 }
 
 // The expected post-change key set: base with puts applied and deletes removed.
@@ -75,27 +70,15 @@ KeyValueMap applyChanges(KeyValueMap base, ChangeMap const& changes)
     return base;
 }
 
-// Run the incremental commit and return {newRoot, builder-after-commit} drains via out-params.
+// Run the incremental commit (flushed) and hand out the produced node delta via out-params.
 bcos::h256 incrementalCommit(NodeStorage& storage, bcos::h256 priorRoot, ChangeMap const& changes,
     std::unordered_map<bcos::h256, bcos::bytes>& outNewNodes,
     std::unordered_set<bcos::h256>& outObsoleted)
 {
-    HashBuilder builder(storage, priorRoot);
-    for (auto const& [key, valueOpt] : changes)
-    {
-        if (valueOpt.has_value())
-        {
-            bcos::task::syncWait(builder.put(key, *valueOpt));
-        }
-        else
-        {
-            bcos::task::syncWait(builder.remove(key));
-        }
-    }
-    auto root = bcos::task::syncWait(builder.commit());
-    outNewNodes = builder.drainNewNodes();
-    outObsoleted = builder.drainObsoletedNodes();
-    return root;
+    auto result = commitTrieFlushed(storage, priorRoot, changes);
+    outNewNodes = std::move(result.newNodes);
+    outObsoleted = std::move(result.obsoletedNodes);
+    return result.root;
 }
 
 // Every key in @p expected reads back its value through a Trie over @p storage at @p root, and

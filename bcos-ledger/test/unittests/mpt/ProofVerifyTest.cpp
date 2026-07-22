@@ -32,6 +32,7 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
+#include <map>
 #include <span>
 #include <utility>
 #include <variant>
@@ -51,12 +52,12 @@ namespace
 bcos::h256 buildVerifyStateTrie(
     VerifyMemStorage& storage, std::vector<std::pair<bcos::Address, Account>> const& accounts)
 {
-    HashBuilder builder(storage, emptyRootHash());
+    std::map<bcos::h256, bcos::bytes> entries;
     for (auto const& [addr, account] : accounts)
     {
-        bcos::task::syncWait(builder.put(accountKeyHash(addr), account.encode()));
+        entries[accountKeyHash(addr)] = account.encode();
     }
-    return bcos::task::syncWait(builder.commit());
+    return seedTrieFlushed(storage, emptyRootHash(), entries).root;
 }
 
 /// A generated proof plus the state root it was generated against.
@@ -78,12 +79,12 @@ ProofSetup makeAccountWithSlots(std::vector<std::pair<bcos::h256, bcos::bytes>> 
     account.balance = 4242;
     if (!slotValues.empty())
     {
-        HashBuilder storageTrieBuilder(storage, emptyRootHash());
+        std::map<bcos::h256, bcos::bytes> slotEntries;
         for (auto const& [slot, value] : slotValues)
         {
-            bcos::task::syncWait(storageTrieBuilder.put(slotKeyHash(slot), value));
+            slotEntries[slotKeyHash(slot)] = value;
         }
-        account.storageRoot = bcos::task::syncWait(storageTrieBuilder.commit());
+        account.storageRoot = seedTrieFlushed(storage, emptyRootHash(), slotEntries).root;
     }
     auto const stateRoot = buildVerifyStateTrie(storage, {{addr, account}});
 

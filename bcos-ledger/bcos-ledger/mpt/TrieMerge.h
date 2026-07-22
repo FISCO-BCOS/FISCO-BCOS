@@ -72,7 +72,8 @@ namespace detail
 //
 // I/O contract: reads = nodes on changed key paths (each at most once) + one unavoidable probe
 // per branch collapse (mergeNormalize); everything else is spliced back by hash, unread. This
-// header only READS storage — flushing newNodes is the caller's job (HashBuilder::commit).
+// header only READS storage — flushing newNodes is commitTrie's caller's job (MPTBuilder
+// batches one flushTrieNodes per block).
 //
 // Two bookkeeping fields drive correctness of the obsoletion ledger:
 //   - MergeContext::resolvedHashes records every hash-addressed node loaded from the prior
@@ -632,7 +633,7 @@ NodeRef emitNode(EmitContext<HasherT>& ctx, MutableNode& node)  // NOLINT(misc-n
 /// newNodes holds every node emitted for the new version (a no-net-change subtree re-emits its
 /// identical encoding — harmless). obsoletedNodes = nodes of the prior version that the new root
 /// no longer references: exactly the resolved-and-replaced set minus re-emitted identical hashes.
-/// Storage is only read; the caller (HashBuilder::commit) owns flushing newNodes — and owns
+/// Storage is only read; commitTrie's caller owns flushing newNodes (flushTrieNodes) — and owns
 /// @p hasher, reused across every node emission of this merge (and across merges, if the caller
 /// keeps it around). @p hasher is any type satisfying the Hasher concept (keccak256, SM3, ...);
 /// it is single-threaded state, same contract as NodeEncoder's injection overload.
@@ -646,7 +647,9 @@ bcos::task::Task<TrieMergeResult> mergeTrie(Storage& storage, bcos::h256 priorRo
     detail::MutableChild root{NodeRef::fromHash(priorRoot)};
 
     // Phase 1 — apply. std::map iteration = h256 lexicographic = 64-nibble path order, so keys
-    // sharing a prefix arrive consecutively and hit the overlay's memoized nodes.
+    // sharing a prefix arrive consecutively and hit the overlay's memoized nodes. The concrete
+    // std::map parameter is deliberate: the type pins ascending order and key uniqueness in the
+    // signature; a generic kv range would move both invariants into caller documentation.
     for (auto const& [keyHash, valueOpt] : changes)
     {
         auto const path = bytesToNibbles(keyHash.ref());
