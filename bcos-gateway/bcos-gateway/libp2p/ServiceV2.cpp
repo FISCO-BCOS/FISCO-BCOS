@@ -64,7 +64,25 @@ ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTab
     registerOnDeleteSession(
         [this](P2PSession::Ptr _session) { onEraseSession(std::move(_session)); });
 
-    m_routerTimer->registerTimeoutHandler([this]() { broadcastRouterSeq(); });
+    // FIB-186 (vector B): the timer is the trailing-edge flush and the steady-state reconciliation.
+    // It resets the coalescing flag so the next membership change is a fresh leading edge, and it
+    // survives a broadcast failure by re-arming on the error path -- otherwise a single throwing
+    // broadcast would leave the timer un-rearmed and router-seq sync would stop silently until
+    // process restart (there is no other re-arm path once inline broadcasts are coalesced).
+    m_routerTimer->registerTimeoutHandler([this]() {
+        m_routerSeqDirty.store(false, std::memory_order_release);
+        try
+        {
+            broadcastRouterSeq();
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE2_LOG(WARNING) << LOG_BADGE("routerSeqSync")
+                                  << LOG_DESC("broadcastRouterSeq exception")
+                                  << LOG_KV("error", e.what());
+            m_routerTimer->restart();
+        }
+    });
 }
 
 void ServiceV2::start()
@@ -141,7 +159,7 @@ void ServiceV2::joinRouterTable(
     }
     onP2PNodesUnreachable(unreachableNodes);
     m_statusSeq++;
-    broadcastRouterSeq();
+    markRouterSeqChanged();
 }
 
 // receive routerTable request from peer
@@ -176,6 +194,23 @@ void ServiceV2::broadcastRouterSeq()
     message->setPayload({(byte*)&statusSeq, (byte*)&statusSeq + 4});
     // the router table should only exchange between neighbor
     asyncBroadcastMessageWithoutForward(message, Options());
+}
+
+void ServiceV2::markRouterSeqChanged()
+{
+    // FIB-186 (vector B): leading-edge coalesce. Broadcast the seq immediately on the first change
+    // of a burst -- neighbours then re-request the current full router table, which already
+    // reflects the changes made so far -- so a directly reachable peer converges without waiting on
+    // the timer. Further churn within the window only marks the flag (no broadcast); the
+    // m_routerTimer flushes the coalesced state once and resets the flag. The pre-fix code
+    // broadcast on every single membership/route change, so connect/disconnect churn cascaded a
+    // full-mesh seq->request->whole-table gossip on m_asyncGroup -- the pool that delivers PBFT
+    // messages -- and starved consensus (CertiK vector B). broadcastRouterSeq() also restart()s the
+    // timer, which resurrects it if a prior tick failed to re-arm.
+    if (!m_routerSeqDirty.exchange(true, std::memory_order_acq_rel))
+    {
+        broadcastRouterSeq();
+    }
 }
 
 void ServiceV2::onReceiveRouterSeq(
@@ -231,7 +266,7 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
     }
     onP2PNodesUnreachable(unreachableNodes);
     m_statusSeq++;
-    broadcastRouterSeq();
+    markRouterSeqChanged();
     SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("update routerTable")
                        << LOG_KV("dst", _session->printP2pID());
 }
@@ -244,7 +279,7 @@ void ServiceV2::onEraseSession(P2PSession::Ptr _session)
     {
         onP2PNodesUnreachable(unreachableNodes);
         m_statusSeq++;
-        broadcastRouterSeq();
+        markRouterSeqChanged();
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onEraseSession") << LOG_KV("dst", _session->printP2pID());
 }
