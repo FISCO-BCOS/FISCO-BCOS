@@ -340,6 +340,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: build/coverage.info
+          # Upload only the clean lcov file. Without this, codecov-cli also
+          # sweeps the build/ tree and uploads thousands of raw .gcov/.gcda
+          # intermediates whose paths do not map to the repo, which makes
+          # Codecov reject the whole commit as an unusable report.
+          disable_search: true
           flags: unittests
           fail_ci_if_error: false
           verbose: true
