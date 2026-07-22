@@ -1,0 +1,117 @@
+name: Coverage summary test
+
+# Manual experiment harness for the instant coverage-summary PR comment.
+#
+# The production home for this logic is the coverage-comment.yml workflow_run
+# listener, which GitHub only fires from the DEFAULT branch (master) -- so a
+# candidate change to it cannot be exercised from a release branch. This
+# workflow_dispatch variant runs the exact same download -> parse -> upsert
+# steps against an existing run's coverage-data artifact, letting the comment
+# logic be validated from this branch without touching master. Once validated,
+# the same step is ported into coverage-comment.yml on master.
+#
+# Usage:
+#   gh workflow run coverage-summary-test.yml --ref release-3.17.0 \
+#     -f run_id=<actions run id with a coverage-data artifact> \
+#     -f pr_number=<PR to comment on>
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Actions run id that produced the coverage-data artifact"
+        required: true
+      pr_number:
+        description: "PR number to post the summary comment on"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  summary:
+    name: Post coverage summary comment
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate inputs and resolve head sha
+        id: v
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ inputs.run_id }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          # Inputs are typed by a human: accept digits only before using them
+          # in API paths.
+          printf '%s' "$RUN_ID" | grep -Eq '^[0-9]+$'
+          printf '%s' "$PR_NUMBER" | grep -Eq '^[0-9]+$'
+          head_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '.head_sha')"
+          printf '%s' "$head_sha" | grep -Eq '^[0-9a-f]{40}$'
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "pr=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-data
+          run-id: ${{ steps.v.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/cov
+      - name: Post coverage summary comment
+        # Identical logic to the candidate coverage-comment.yml step.
+        # Untrusted-input note: the artifact originates from a fork build, so
+        # nothing from it reaches the comment verbatim -- numbers are
+        # integer-parsed from lcov records and module names are
+        # regex-whitelisted.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.v.outputs.pr }}
+          HEAD_SHA: ${{ steps.v.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          python3 - "${RUNNER_TEMP}/cov/coverage.info" > summary.md <<'PY'
+          import os, re, sys
+          from collections import defaultdict
+
+          mod = defaultdict(lambda: [0, 0])  # module -> [lines found, lines hit]
+          total_found = total_hit = 0
+          cur = 'other'
+          safe = re.compile(r'^[A-Za-z0-9._-]+$')
+          with open(sys.argv[1]) as f:
+              for line in f:
+                  line = line.strip()
+                  if line.startswith('SF:'):
+                      top = line[3:].split('/', 1)[0]
+                      cur = top if safe.match(top) else 'other'
+                  elif line.startswith('LF:'):
+                      n = int(line[3:]); mod[cur][0] += n; total_found += n
+                  elif line.startswith('LH:'):
+                      n = int(line[3:]); mod[cur][1] += n; total_hit += n
+          pct = 100.0 * total_hit / total_found if total_found else 0.0
+          head = os.environ.get('HEAD_SHA', '')[:7]
+          print('<!-- ci-coverage-summary -->')
+          print(f'## Unit-test line coverage: **{pct:.2f}%** ({total_hit}/{total_found} lines) @ `{head}`')
+          print()
+          print('| Module | Coverage | Lines hit |')
+          print('|---|---|---|')
+          top15 = sorted(mod.items(), key=lambda kv: -kv[1][0])[:15]
+          for name, (found, hit) in top15:
+              p = 100.0 * hit / found if found else 0.0
+              print(f'| {name} | {p:.1f}% | {hit}/{found} |')
+          rest = len(mod) - len(top15)
+          if rest > 0:
+              print(f'| _... {rest} more modules_ | | |')
+          print()
+          print('_Posted by CI right after the coverage build; the Codecov comment '
+                'adds the per-file diff vs base once its processing queue catches up._')
+          PY
+          # Upsert: update the existing summary comment instead of stacking new ones.
+          cid="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | startswith("<!-- ci-coverage-summary -->")) | .id' | head -n1)"
+          if [ -n "$cid" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$(cat summary.md)"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$(cat summary.md)"
+          fi
