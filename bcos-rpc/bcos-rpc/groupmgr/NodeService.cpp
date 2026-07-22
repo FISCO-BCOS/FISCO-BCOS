@@ -93,12 +93,12 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(std::string const&, std::s
         return nullptr;
     }
 
-    // Note: m_engineService is nullptr by default. In AIR nodes, it is wired via
-    // AirNodeInitializer. In MAX/Tars nodes, the EngineService needs to be exposed as a
-    // Tars servant before the RPC process can obtain a proxy to it (TODO: MAX wiring).
+    // Note: m_engineService is default-constructed (empty) by default. In AIR nodes, it is
+    // moved from AirNodeInitializer. In MAX/Tars nodes, the EngineService needs to be exposed
+    // as a Tars servant before the RPC process can obtain a proxy to it (TODO: MAX wiring).
     auto nodeService = std::make_shared<NodeService>(ledgerClient.first, schedulerClient.first,
         txpoolClient.first, consensusClient.first, syncClient.first, blockFactory,
-        m_engineService);
+        std::move(m_engineService));
 
     nodeService->setLedgerPrx(ledgerClient.second);
     return nodeService;

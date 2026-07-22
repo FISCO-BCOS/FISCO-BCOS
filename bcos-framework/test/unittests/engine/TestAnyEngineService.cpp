@@ -146,9 +146,8 @@ static_assert(
 static_assert(EngineServiceConcept<NonCopyableEngineService>,
     "NonCopyableEngineService must satisfy EngineServiceConcept");
 
-/// Compile-time verification: AnyEngineService is correctly constrained.
-static_assert(
-    EngineServiceConcept<AnyEngineService>, "AnyEngineService must satisfy EngineServiceConcept");
+/// Compile-time verification: AnyEngineService (= pro::proxy<AnyEngineServiceFacade>)
+/// is correctly constrained.
 static_assert(!std::is_copy_constructible_v<AnyEngineService>,
     "AnyEngineService must not be copy-constructible");
 static_assert(
@@ -166,19 +165,19 @@ BOOST_AUTO_TEST_SUITE(TestAnyEngineService)
 BOOST_AUTO_TEST_CASE(constructWithMock)
 {
     bcos::test::MockEngineService mock;
-    AnyEngineService any(mock);
+    auto any = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
-    BOOST_CHECK(static_cast<bool>(any));
+    BOOST_CHECK(any.has_value());
 }
 
 /// Verify exchangeCapabilities delegates correctly.
 BOOST_AUTO_TEST_CASE(exchangeCapabilitiesDelegates)
 {
     bcos::test::MockEngineService mock;
-    AnyEngineService any(mock);
+    auto any = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
     auto result =
-        task::syncWait(any.exchangeCapabilities(std::vector<std::string>{"cap1", "cap2"}));
+        task::syncWait(any->exchangeCapabilities(std::vector<std::string>{"cap1", "cap2"}));
 
     BOOST_CHECK_EQUAL(result.size(), 2);
     BOOST_CHECK_EQUAL(result[0], "cap1");
@@ -190,9 +189,9 @@ BOOST_AUTO_TEST_CASE(getSafeBlockNumberDelegates)
 {
     bcos::test::MockEngineService mock;
     mock.m_safeBlockNumber = 42;
-    AnyEngineService any(mock);
+    auto any = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
-    auto result = any.getSafeBlockNumber();
+    auto result = any->getSafeBlockNumber();
 
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 42);
@@ -203,9 +202,9 @@ BOOST_AUTO_TEST_CASE(getFinalizedBlockNumberDelegates)
 {
     bcos::test::MockEngineService mock;
     mock.m_finalizedBlockNumber = 21;
-    AnyEngineService any(mock);
+    auto any = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
-    auto result = any.getFinalizedBlockNumber();
+    auto result = any->getFinalizedBlockNumber();
 
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 21);
@@ -218,9 +217,9 @@ BOOST_AUTO_TEST_CASE(getSafeBlockNumberOnConst)
 {
     bcos::test::MockEngineService mock;
     mock.m_safeBlockNumber = 99;
-    const AnyEngineService any(mock);
+    const auto any = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
-    auto result = any.getSafeBlockNumber();
+    auto result = any->getSafeBlockNumber();
 
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 99);
@@ -231,9 +230,9 @@ BOOST_AUTO_TEST_CASE(getFinalizedBlockNumberOnConst)
 {
     bcos::test::MockEngineService mock;
     mock.m_finalizedBlockNumber = 55;
-    const AnyEngineService any(mock);
+    const auto any = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
-    auto result = any.getFinalizedBlockNumber();
+    auto result = any->getFinalizedBlockNumber();
 
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 55);
@@ -243,15 +242,16 @@ BOOST_AUTO_TEST_CASE(getFinalizedBlockNumberOnConst)
 /// This is the critical path for wrapping real EngineServiceImpl.
 BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
 {
-    auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>);
+    auto any =
+        pro::make_proxy<AnyEngineServiceFacade, bcos::test::NonCopyableEngineService>();
 
-    BOOST_CHECK(static_cast<bool>(any));
+    BOOST_CHECK(any.has_value());
 
-    auto result = any.getSafeBlockNumber();
+    auto result = any->getSafeBlockNumber();
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 100);
 
-    auto finalized = any.getFinalizedBlockNumber();
+    auto finalized = any->getFinalizedBlockNumber();
     BOOST_CHECK(finalized.has_value());
     BOOST_CHECK_EQUAL(*finalized, 200);
 }
@@ -259,16 +259,16 @@ BOOST_AUTO_TEST_CASE(constructNonCopyableInPlace)
 /// Verify in_place_type with extra constructor arguments (variadic forwarding).
 BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
 {
-    auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>,
+    auto any = pro::make_proxy<AnyEngineServiceFacade, bcos::test::NonCopyableEngineService>(
         std::optional<BlockNumber>{300}, std::optional<BlockNumber>{400});
 
-    BOOST_CHECK(static_cast<bool>(any));
+    BOOST_CHECK(any.has_value());
 
-    auto result = any.getSafeBlockNumber();
+    auto result = any->getSafeBlockNumber();
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 300);
 
-    auto finalized = any.getFinalizedBlockNumber();
+    auto finalized = any->getFinalizedBlockNumber();
     BOOST_CHECK(finalized.has_value());
     BOOST_CHECK_EQUAL(*finalized, 400);
 }
@@ -276,9 +276,11 @@ BOOST_AUTO_TEST_CASE(constructNonCopyableInPlaceWithArgs)
 /// Verify exchangeCapabilities through an in_place_type-constructed AnyEngineService.
 BOOST_AUTO_TEST_CASE(exchangeCapabilitiesNonCopyableInPlace)
 {
-    auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>);
+    auto any =
+        pro::make_proxy<AnyEngineServiceFacade, bcos::test::NonCopyableEngineService>();
 
-    auto result = task::syncWait(any.exchangeCapabilities(std::vector<std::string>{"a", "b", "c"}));
+    auto result =
+        task::syncWait(any->exchangeCapabilities(std::vector<std::string>{"a", "b", "c"}));
 
     BOOST_CHECK_EQUAL(result.size(), 3);
 }
@@ -286,14 +288,15 @@ BOOST_AUTO_TEST_CASE(exchangeCapabilitiesNonCopyableInPlace)
 /// Verify that const methods work on an in_place_type-constructed AnyEngineService.
 BOOST_AUTO_TEST_CASE(constMethodsOnNonCopyableInPlace)
 {
-    const auto any = AnyEngineService(std::in_place_type<bcos::test::NonCopyableEngineService>,
-        std::optional<BlockNumber>{500}, std::optional<BlockNumber>{600});
+    const auto any =
+        pro::make_proxy<AnyEngineServiceFacade, bcos::test::NonCopyableEngineService>(
+            std::optional<BlockNumber>{500}, std::optional<BlockNumber>{600});
 
-    auto safe = any.getSafeBlockNumber();
+    auto safe = any->getSafeBlockNumber();
     BOOST_CHECK(safe.has_value());
     BOOST_CHECK_EQUAL(*safe, 500);
 
-    auto finalized = any.getFinalizedBlockNumber();
+    auto finalized = any->getFinalizedBlockNumber();
     BOOST_CHECK(finalized.has_value());
     BOOST_CHECK_EQUAL(*finalized, 600);
 }
@@ -303,14 +306,14 @@ BOOST_AUTO_TEST_CASE(moveConstruction)
 {
     bcos::test::MockEngineService mock;
     mock.m_safeBlockNumber = 77;
-    AnyEngineService any1(mock);
+    auto any1 = pro::make_proxy<AnyEngineServiceFacade>(mock);
 
-    AnyEngineService any2(std::move(any1));
+    auto any2 = std::move(any1);
 
-    BOOST_CHECK(static_cast<bool>(any2));
-    BOOST_CHECK(!static_cast<bool>(any1));
+    BOOST_CHECK(any2.has_value());
+    BOOST_CHECK(!any1.has_value());
 
-    auto result = any2.getSafeBlockNumber();
+    auto result = any2->getSafeBlockNumber();
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 77);
 }
@@ -322,15 +325,15 @@ BOOST_AUTO_TEST_CASE(moveAssignment)
     mock1.m_safeBlockNumber = 88;
     bcos::test::MockEngineService mock2;
     mock2.m_safeBlockNumber = 99;
-    AnyEngineService any1(mock1);
-    AnyEngineService any2(mock2);
+    auto any1 = pro::make_proxy<AnyEngineServiceFacade>(mock1);
+    auto any2 = pro::make_proxy<AnyEngineServiceFacade>(mock2);
 
     any2 = std::move(any1);
 
-    BOOST_CHECK(static_cast<bool>(any2));
-    BOOST_CHECK(!static_cast<bool>(any1));
+    BOOST_CHECK(any2.has_value());
+    BOOST_CHECK(!any1.has_value());
 
-    auto result = any2.getSafeBlockNumber();
+    auto result = any2->getSafeBlockNumber();
     BOOST_CHECK(result.has_value());
     BOOST_CHECK_EQUAL(*result, 88);
 }

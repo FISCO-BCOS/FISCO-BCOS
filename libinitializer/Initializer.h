@@ -23,6 +23,7 @@
 #include "PBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
+#include "bcos-framework/engine/AnyEngineService.h"
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "bcos-tool/NodeConfig.h"
 #include "bcos-transaction-executor/precompiled/PrecompiledManager.h"
@@ -55,10 +56,6 @@ class GatewayInterface;
 namespace scheduler
 {
 class SchedulerInterface;
-}
-namespace engine
-{
-class AnyEngineService;
 }
 namespace initializer
 {

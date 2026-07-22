@@ -537,7 +537,8 @@ BOOST_AUTO_TEST_CASE(handleEngineNotAvailableTest)
 BOOST_AUTO_TEST_CASE(handleEngineV2PayloadParsingAndSerializationTest)
 {
     TestEngineService testEngineService;
-    nodeService->engineService() = std::make_shared<bcos::engine::AnyEngineService>(testEngineService);
+    nodeService->engineService() =
+        pro::make_proxy<bcos::engine::AnyEngineServiceFacade>(testEngineService);
 
     auto tx = m_blockFactory->transactionFactory()->createTransaction(0,
         "0xabcdabcdabcdabcdabcdabcdabcdabcdabcdabcd", bytes{0x12, 0x34}, "nonce-1", 100,

@@ -85,7 +85,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
         std::make_shared<NodeService>(m_nodeInitializer->ledger(), m_nodeInitializer->scheduler(),
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory(),
-            m_nodeInitializer->engineService());
+            std::move(*m_nodeInitializer->engineService()));
 
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory,

@@ -125,8 +125,8 @@ public:
 
         nodeService = std::make_shared<rpc::NodeService>(
             m_ledger, scheduler, txPool, nullptr, nullptr, m_blockFactory,
-            // EngineService not needed for existing RPC tests; pass nullptr as stub.
-            nullptr);
+            // EngineService not needed for existing RPC tests; pass empty proxy as stub.
+            bcos::engine::AnyEngineService{});
 
 
         groupInfo = std::make_shared<group::GroupInfo>();

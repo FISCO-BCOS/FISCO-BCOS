@@ -315,7 +315,7 @@ task::Task<void> EngineEndpoint::exchangeCapabilities(
     const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -342,7 +342,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV1(
     const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -362,7 +362,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV2(
     const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -382,7 +382,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
     const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -401,7 +401,7 @@ task::Task<void> EngineEndpoint::forkchoiceUpdatedV3(
 task::Task<void> EngineEndpoint::getPayloadV1(const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -418,7 +418,7 @@ task::Task<void> EngineEndpoint::getPayloadV1(const Json::Value& request, Json::
 task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -436,7 +436,7 @@ task::Task<void> EngineEndpoint::getPayloadV2(const Json::Value& request, Json::
 task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -478,7 +478,7 @@ task::Task<void> EngineEndpoint::getPayloadV3(const Json::Value& request, Json::
 task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -496,7 +496,7 @@ task::Task<void> EngineEndpoint::newPayloadV1(const Json::Value& request, Json::
 task::Task<void> EngineEndpoint::newPayloadV2(const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;
@@ -514,7 +514,7 @@ task::Task<void> EngineEndpoint::newPayloadV2(const Json::Value& request, Json::
 task::Task<void> EngineEndpoint::newPayloadV3(const Json::Value& request, Json::Value& response)
 {
     auto& engineService = m_nodeService->engineService();
-    if (!engineService)
+    if (!engineService.has_value())
     {
         buildEngineNotAvailableError(request, response);
         co_return;

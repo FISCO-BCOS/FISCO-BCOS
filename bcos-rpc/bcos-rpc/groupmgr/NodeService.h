@@ -49,7 +49,7 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool,
         bcos::consensus::ConsensusInterface::Ptr _consensus,
         bcos::sync::BlockSyncInterface::Ptr _sync, bcos::protocol::BlockFactory::Ptr _blockFactory,
-        std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
+        bcos::engine::AnyEngineService _engineService)
       : m_ledger(std::move(_ledger)),
         m_scheduler(std::move(_scheduler)),
         m_txpool(std::move(_txpool)),
@@ -69,11 +69,8 @@ public:
 
     bcos::txpool::TxPoolInterface& txpoolRef() { return *m_txpool; }
 
-    std::shared_ptr<bcos::engine::AnyEngineService>& engineService() { return m_engineService; }
-    std::shared_ptr<bcos::engine::AnyEngineService> const& engineService() const
-    {
-        return m_engineService;
-    }
+    bcos::engine::AnyEngineService& engineService() { return m_engineService; }
+    bcos::engine::AnyEngineService const& engineService() const { return m_engineService; }
 
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
     /// hash, value = the node's raw RLP encoding, physically stored under the /mpt/<hash> key
@@ -107,7 +104,7 @@ private:
     bcos::sync::BlockSyncInterface::Ptr m_sync;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
 
-    std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
+    bcos::engine::AnyEngineService m_engineService;
 
     /// Non-owning MPT node reader; see setMPTNodeReader() for the lifetime contract.
     std::shared_ptr<MPTNodeReader> m_mptNodeReader;
@@ -124,7 +121,7 @@ public:
     NodeService::Ptr buildNodeService(std::string const& _chainID, std::string const& _groupID,
         bcos::group::ChainNodeInfo::Ptr _nodeInfo, bcos::tool::NodeConfig::Ptr _nodeConfig);
 
-    void setEngineService(std::shared_ptr<bcos::engine::AnyEngineService> _engineService)
+    void setEngineService(bcos::engine::AnyEngineService _engineService)
     {
         m_engineService = std::move(_engineService);
     }
@@ -147,6 +144,6 @@ public:
     }
 
 private:
-    std::shared_ptr<bcos::engine::AnyEngineService> m_engineService;
+    bcos::engine::AnyEngineService m_engineService;
 };
 }  // namespace bcos::rpc
