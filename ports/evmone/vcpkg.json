@@ -1,6 +1,7 @@
 {
     "name": "evmone",
     "version-string": "0.21.0",
+    "port-version": 2,
     "homepage": "https://github.com/ipsilon/evmone",
     "description": "Fast Ethereum Virtual Machine implementation (EVMC merged)",
     "dependencies": [
