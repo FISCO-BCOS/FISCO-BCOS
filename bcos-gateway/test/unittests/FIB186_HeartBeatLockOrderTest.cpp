@@ -77,7 +77,14 @@ public:
     {
         bool acquiredExclusive = false;
         std::thread probe([this, &acquiredExclusive]() {
-            acquiredExclusive = m_xNodesPtr->try_lock();
+            // try_lock() is permitted to fail spuriously; retry a bounded number of times so a
+            // spurious failure is not misread as "heartBeat holds x_nodes". If it is genuinely
+            // held (shared, by heartBeat) every exclusive attempt fails; if it is free the first
+            // attempt succeeds.
+            for (int i = 0; i < 64 && !acquiredExclusive; ++i)
+            {
+                acquiredExclusive = m_xNodesPtr->try_lock();
+            }
             if (acquiredExclusive)
             {
                 m_xNodesPtr->unlock();
@@ -92,9 +99,16 @@ public:
     // Test hooks.
     size_t staticNodeCount() const { return m_staticNodes.size(); }
     void probeIsConnected() { isConnected("peerRawP2pID"); }
-    // heartBeat is aborted mid-way (via the throw) so m_host is never set; clear m_run so the
-    // destructor's stop() does not dereference the null host.
+    // heartBeat is aborted mid-way (via the throw) so m_host is never set; clear m_run so
+    // stop() does not dereference the null host.
     void disarm() { m_run = false; }
+
+    // Exception-safety guard. arm() sets m_run=true without a host; Service::stop() runs its whole
+    // body (including m_host->stop()) whenever m_run is true. If any BOOST_REQUIRE below throws
+    // before the explicit disarm(), the fixture unwinds and ~Service()->stop() would dereference
+    // the null m_host and SIGSEGV the whole test binary with no report. Resetting m_run here makes
+    // teardown safe regardless of where a check throws.
+    ~ProbeService() override { m_run = false; }
 
     std::shared_mutex* m_xNodesPtr = nullptr;
     mutable std::atomic<bool> m_xNodesHeldDuringIsConnected{false};

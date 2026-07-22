@@ -73,7 +73,14 @@ public:
     {
         bool acquiredExclusive = false;
         std::thread probe([this, &acquiredExclusive]() {
-            acquiredExclusive = m_xSessionsPtr->try_lock();
+            // try_lock() is permitted to fail spuriously; retry a bounded number of times so a
+            // spurious failure is not misread as "asyncBroadcastMessage holds x_sessions". If it is
+            // genuinely held (shared, by the broadcasting thread) every exclusive attempt fails; if
+            // it is free the first attempt succeeds.
+            for (int i = 0; i < 64 && !acquiredExclusive; ++i)
+            {
+                acquiredExclusive = m_xSessionsPtr->try_lock();
+            }
             if (acquiredExclusive)
             {
                 m_xSessionsPtr->unlock();

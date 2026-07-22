@@ -810,6 +810,10 @@ void bcos::gateway::Service::registerUnreachableHandler(std::function<void(std::
 {}
 std::map<NodeIPEndpoint, P2pID> bcos::gateway::Service::staticNodes()
 {
+    // FIB-186 (vector D): read m_staticNodes under x_nodes -- the same member heartBeat now
+    // snapshots under the lock. Returning it unlocked races with onConnect's updateStaticNodes
+    // writer (the exact data race this fix closes inline in heartBeat).
+    std::shared_lock lock(x_nodes);
     return m_staticNodes;
 }
 void bcos::gateway::Service::setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)
