@@ -365,8 +365,9 @@ private:
             }
             auto ledgerConfig =
                 co_await ledger::getLedgerConfig(view, blockHeader->number(), m_blockFactory.get());
-            auto receipts = co_await m_schedulerImpl.get().executeBlock(
-                view.backendStorageRef(), m_executor.get(),
+            // Execute writes must land in the view's mutable layer: finishExecute
+            // computes the state root from it and commit merges it into the backend.
+            auto receipts = co_await m_schedulerImpl.get().executeBlock(view, m_executor.get(),
                 *blockHeader, ::ranges::views::indirect(transactions), *ledgerConfig);
 
             auto executedBlockHeader =
@@ -539,8 +540,8 @@ private:
                 {
                     auto message = std::string{"Unexpected empty results!"};
                     BASELINE_SCHEDULER_LOG(INFO) << message;
-                    co_return {BCOS_ERROR_UNIQUE_PTR(
-                                   scheduler::SchedulerError::UnknownError, message),
+                    co_return {
+                        BCOS_ERROR_UNIQUE_PTR(scheduler::SchedulerError::UnknownError, message),
                         nullptr};
                 }
 
