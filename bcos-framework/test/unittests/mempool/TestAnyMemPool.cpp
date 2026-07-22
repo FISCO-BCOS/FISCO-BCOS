@@ -226,7 +226,7 @@ BOOST_AUTO_TEST_CASE(sealProducesOutput)
     auto any = makeAny(mock);
 
     std::vector<protocol::Transaction::Ptr> out;
-    any.seal(100, state, std::back_inserter(out));
+    any->seal(100, state, std::back_inserter(out));
 
     BOOST_CHECK_EQUAL(out.size(), 1);
     BOOST_CHECK(out[0] == tx);
