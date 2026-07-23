@@ -16,11 +16,10 @@
 #include "bcos-executor/src/precompiled/extension/GroupSigPrecompiled.h"
 #include "../mock/MockLedger.h"
 #include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-executor/src/executive/BlockContext.h"
 #include "bcos-executor/src/executive/TransactionExecutive.h"
 #include "bcos-executor/src/precompiled/common/Common.h"
-#include "vm/gas_meter/GasInjector.h"
-#include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
@@ -41,9 +40,8 @@ struct GroupSigPrecompiledFixture
         m_groupSigPrecompiled = std::make_shared<GroupSigPrecompiled>(m_hashImpl);
         m_ledgerCache = std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
         m_blockContext = std::make_shared<BlockContext>(
-            nullptr, m_ledgerCache, m_hashImpl, 0, h256(), utcTime(), 0, false, false);
-        m_executive =
-            std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0, m_gasInjector);
+            nullptr, m_ledgerCache, m_hashImpl, 0, h256(), utcTime(), 0, false);
+        m_executive = std::make_shared<TransactionExecutive>(*m_blockContext, "", 100, 0);
     }
 
     ~GroupSigPrecompiledFixture() {}
@@ -52,8 +50,6 @@ struct GroupSigPrecompiledFixture
     bcos::crypto::Hash::Ptr m_hashImpl;
     BlockContext::Ptr m_blockContext;
     TransactionExecutive::Ptr m_executive;
-
-    wasm::GasInjector m_gasInjector;
     GroupSigPrecompiled::Ptr m_groupSigPrecompiled;
 };
 

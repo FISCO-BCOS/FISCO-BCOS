@@ -20,11 +20,11 @@
  */
 
 #pragma once
-#include "bcos-protocol/TransactionStatus.h"
-#include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-boostssl/websocket/WsService.h"
 #include "bcos-framework/gateway/GatewayInterface.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-rpc/filter/FilterSystem.h"
+#include "bcos-rpc/groupmgr/GroupManager.h"
 #include "bcos-rpc/jsonrpc/JsonRpcInterface.h"
 #include <json/json.h>
 #include <boost/core/ignore_unused.hpp>
@@ -208,7 +208,6 @@ void toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const& transacti
 void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
 void toJsonResp(Json::Value& jResp, bcos::protocol::Block& block, bool _onlyTxHash);
 void toJsonResp(Json::Value& jResp, std::string_view _txHash, protocol::TransactionStatus status,
-    bcos::protocol::TransactionReceipt const& transactionReceiptPtr, bool _isWasm,
-    crypto::Hash& hashImpl);
+    bcos::protocol::TransactionReceipt const& transactionReceiptPtr, crypto::Hash& hashImpl);
 
 }  // namespace bcos::rpc

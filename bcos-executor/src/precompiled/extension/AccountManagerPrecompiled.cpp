@@ -67,8 +67,8 @@ std::shared_ptr<PrecompiledExecResult> AccountManagerPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        BOOST_THROW_EXCEPTION(
-            bcos::protocol::PrecompiledError{} << errinfo_comment("AccountManagerPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(bcos::protocol::PrecompiledError{} << errinfo_comment(
+                                  "AccountManagerPrecompiled call undefined function!"));
     }
     return _callParameters;
 }
@@ -121,7 +121,7 @@ void AccountManagerPrecompiled::setAccountStatus(
     Address account;
     uint8_t status = 0;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_callParameters->params(), account, status);
     std::string accountStr = account.hex();
 
@@ -147,7 +147,8 @@ void AccountManagerPrecompiled::setAccountStatus(
                               << LOG_BADGE("AccountManagerPrecompiled")
                               << LOG_DESC("set governor's status") << LOG_KV("account", accountStr)
                               << LOG_KV("status", std::to_string(status));
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("Should not set governor's status."));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("Should not set governor's status."));
     }
 
     // check account exist, if not exist, create first
@@ -191,7 +192,7 @@ void AccountManagerPrecompiled::getAccountStatus(
     // getAccountStatus(address)
     Address account;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_callParameters->params(), account);
     std::string accountStr = account.hex();
 

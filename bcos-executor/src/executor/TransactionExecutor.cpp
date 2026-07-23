@@ -24,7 +24,6 @@
 #include "../dag/Abi.h"
 #include "../dag/ClockCache.h"
 #include "../dag/CriticalFields.h"
-#include "../dag/ScaleUtils.h"
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
 #include "../executive/ExecutiveFactory.h"
@@ -60,10 +59,6 @@
 
 #include <array>
 #include <cstring>
-
-#ifdef WITH_WASM
-#include "../vm/gas_meter/GasInjector.h"
-#endif
 
 #include "ExecuteOutputs.h"
 #include "bcos-executor/src/executive/BlockContext.h"
@@ -113,7 +108,6 @@ using namespace bcos;
 using namespace std;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;
-using namespace bcos::wasm;
 using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
@@ -128,10 +122,9 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
-    bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
+    bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
     std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables = nullptr,
-    std::string name = "default-executor-name",
-    bcos::IOServicePool::Ptr ioServicePool = nullptr)
+    std::string name = "default-executor-name", bcos::IOServicePool::Ptr ioServicePool = nullptr)
   : m_name(std::move(name)),
     m_ledger(ledger),
     m_txpool(std::move(txpool)),
@@ -141,7 +134,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_stateStorageFactory(std::move(stateStorageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
-    m_isWasm(isWasm),
     m_keyPageIgnoreTables(std::move(keyPageIgnoreTables)),
     m_ledgerCache(std::make_shared<LedgerCache>(ledger)),
     m_vmFactory(std::move(vmFactory)),
@@ -152,9 +144,6 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
     m_ledgerCache->updateLedgerConfig();
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
-#ifdef WITH_WASM
-    m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
-#endif
 
     setBlockVersion(m_ledgerCache->ledgerConfig().compatibilityVersion());
     if (m_ledgerCache->ledgerConfig().compatibilityVersion() >= BlockVersion::V3_3_VERSION)
@@ -162,17 +151,10 @@ TransactionExecutor::TransactionExecutor(bcos::ledger::LedgerInterface::Ptr ledg
         if (m_ledgerCache->ledgerConfig().authCheckStatus() != UINT32_MAX)
         {
             // cannot get auth check status, use config value
-            m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
+            m_isAuthCheck = m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
         }
     }
-    if (m_isWasm)
-    {
-        initWasmEnvironment();
-    }
-    else
-    {
-        initEvmEnvironment();
-    }
+    initEvmEnvironment();
 
     if (m_blockVersion == (uint32_t)protocol::BlockVersion::V3_0_VERSION)
     {
@@ -323,12 +305,12 @@ void TransactionExecutor::initEvmEnvironment()
         DISCRETE_ZKP_ADDRESS, std::make_shared<ZkpPrecompiled>(m_hashImpl), disabledInL2());
 
     m_precompiled->insert(AUTH_MANAGER_ADDRESS,
-        std::make_shared<AuthManagerPrecompiled>(m_hashImpl, m_isWasm),
+        std::make_shared<AuthManagerPrecompiled>(m_hashImpl),
         predicateAnd([](uint32_t version, bool isAuthCheck, ledger::Features const& features)
                          -> bool { return isAuthCheck || version >= BlockVersion::V3_3_VERSION; },
             disabledInL2()));
     m_precompiled->insert(AUTH_CONTRACT_MGR_ADDRESS,
-        std::make_shared<ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm),
+        std::make_shared<ContractAuthMgrPrecompiled>(m_hashImpl),
         predicateAnd([](uint32_t version, bool isAuthCheck, ledger::Features const& features)
                          -> bool { return isAuthCheck || version >= BlockVersion::V3_3_VERSION; },
             disabledInL2()));
@@ -390,95 +372,6 @@ void TransactionExecutor::initEvmEnvironment()
             disabledInL2()));
 }
 
-void TransactionExecutor::initWasmEnvironment()
-{
-    m_precompiled = std::make_shared<PrecompiledMap>();
-
-    auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
-    auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
-    auto tableManagerPrecompiled =
-        std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
-    auto kvTablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl);
-    auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
-
-    // in WASM
-    m_precompiled->insert(SYS_CONFIG_NAME, std::move(sysConfig), disabledInL2());
-    m_precompiled->insert(CONSENSUS_TABLE_NAME, std::move(consensusPrecompiled), disabledInL2());
-    m_precompiled->insert(TABLE_MANAGER_NAME, std::move(tableManagerPrecompiled), disabledInL2());
-    m_precompiled->insert(KV_TABLE_NAME, std::move(kvTablePrecompiled), disabledInL2());
-    m_precompiled->insert(TABLE_NAME, std::move(tablePrecompiled), disabledInL2());
-    m_precompiled->insert(DAG_TRANSFER_NAME,
-        std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl), disabledInL2());
-    m_precompiled->insert(CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl));
-    m_precompiled->insert(BFS_NAME, std::make_shared<BFSPrecompiled>(m_hashImpl), disabledInL2());
-    m_precompiled->insert(PAILLIER_SIG_NAME, std::make_shared<PaillierPrecompiled>(m_hashImpl),
-        [](uint32_t, bool, ledger::Features const& features) {
-            return features.get(ledger::Features::Flag::feature_paillier);
-        });
-    m_precompiled->insert(GROUP_SIG_NAME, std::make_shared<GroupSigPrecompiled>(m_hashImpl));
-    m_precompiled->insert(RING_SIG_NAME, std::make_shared<RingSigPrecompiled>(m_hashImpl));
-    m_precompiled->insert(DISCRETE_ZKP_NAME, std::make_shared<ZkpPrecompiled>(m_hashImpl));
-    m_precompiled->insert(AUTH_MANAGER_NAME,
-        std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, m_isWasm),
-        predicateAnd(
-            [](uint32_t version, bool isAuth, ledger::Features const&) {
-                return version >= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) && isAuth;
-            },
-            disabledInL2()));
-    m_precompiled->insert(AUTH_CONTRACT_MGR_ADDRESS,
-        std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, m_isWasm),
-        predicateAnd(
-            [](uint32_t version, bool isAuth, ledger::Features const&) {
-                return version >= static_cast<uint32_t>(BlockVersion::V3_0_VERSION) && isAuth;
-            },
-            disabledInL2()));
-
-    m_precompiled->insert(CAST_NAME, std::make_shared<CastPrecompiled>(GlobalHashImpl::g_hashImpl),
-        BlockVersion::V3_2_VERSION);
-    m_precompiled->insert(ACCOUNT_MANAGER_NAME,
-        std::make_shared<AccountManagerPrecompiled>(m_hashImpl),
-        predicateAnd(
-            [](uint32_t version, bool, ledger::Features const&) {
-                return version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION);
-            },
-            disabledInL2()));
-    m_precompiled->insert(ACCOUNT_ADDRESS, std::make_shared<AccountPrecompiled>(m_hashImpl),
-        predicateAnd(
-            [](uint32_t version, bool, ledger::Features const&) {
-                return version >= static_cast<uint32_t>(BlockVersion::V3_1_VERSION);
-            },
-            disabledInL2()));
-
-    // CRYPTO stays in the static-precompile set; GROUP_SIG / RING_SIG / CAST
-    // were moved out in PR #5286 so they flow through the m_precompiled
-    // predicate path (which carries `disabledInL2()`). HostContext::call
-    // checks isStaticPrecompiled BEFORE the predicate path, so keeping the
-    // three FISCO-private precompiles in the static set would silently bypass
-    // the L2 gate and execute them under feature_l2_ethereum_compat, leaking
-    // FISCO-only output into otherwise-Ethereum-compatible bytecode.
-    set<string> builtIn = {std::string(CRYPTO_ADDRESS)};
-    m_staticPrecompiled = std::make_shared<set<string>>(builtIn);
-
-    if (m_blockVersion <=> BlockVersion::V3_1_VERSION == 0 &&
-        m_ledgerCache->ledgerConfig().blockNumber() > 0)
-    {
-        // Only 3.1 goes here, here is a bug, ignore init test precompiled
-    }
-    else
-    {
-        CpuHeavyPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
-        SmallBankPrecompiled::registerPrecompiled(m_precompiled, m_hashImpl);
-    }
-    // according to feature flag to register precompiled
-    m_precompiled->insert(BALANCE_PRECOMPILED_NAME,
-        std::make_shared<BalancePrecompiled>(m_hashImpl),
-        predicateAnd(
-            [](uint32_t, bool, ledger::Features const& features) {
-                return features.get(ledger::Features::Flag::feature_balance_precompiled);
-            },
-            disabledInL2()));
-}
-
 void TransactionExecutor::initTestPrecompiledTable(storage::StorageInterface::Ptr storage)
 {
     SmallBankPrecompiled::createTable(storage);
@@ -495,7 +388,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
         backend = m_cachedStorage;
     }
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        *currentHeader, m_isWasm, m_isAuthCheck, std::move(backend), m_keyPageIgnoreTables);
+        *currentHeader, m_isAuthCheck, std::move(backend), m_keyPageIgnoreTables);
     context->setVMFactory(m_vmFactory);
     if (f_onNeedSwitchEvent)
     {
@@ -510,7 +403,7 @@ std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
     int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_ledgerCache, m_hashImpl,
-        blockNumber, blockHash, timestamp, blockVersion, m_isWasm, m_isAuthCheck);
+        blockNumber, blockHash, timestamp, blockVersion, m_isAuthCheck);
     ledger::Features features;
     task::syncWait(features.readFromStorage(*storage, blockNumber + 1));
     context->setFeatures(features);
@@ -1192,14 +1085,11 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         _callback)
 {
-    if (!m_isWasm)
+    // padding the address
+    constexpr static auto addressSize = Address::SIZE * 2;
+    if (contractAddress.size() < addressSize) [[unlikely]]
     {
-        // padding the address
-        constexpr static auto addressSize = Address::SIZE * 2;
-        if (contractAddress.size() < addressSize) [[unlikely]]
-        {
-            contractAddress.insert(0, addressSize - contractAddress.size(), '0');
-        }
+        contractAddress.insert(0, addressSize - contractAddress.size(), '0');
     }
 
     executeTransactionsInternal(
@@ -1524,52 +1414,14 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         case Params:
         {
             assert(!conflictField.value.empty());
-            const ParameterAbi* paramAbi = nullptr;
-            const auto* components = &functionAbi.inputs;
-            auto inputData = ref(params.data).getCroppedData(4).toBytes();
-            if (_blockContext->isWasm())
+            auto index = conflictField.value[0];
+            const auto& typeName = functionAbi.flatInputs[index];
+            if (typeName.empty())
             {
-                auto startPos = 0u;
-                for (const auto& segment : conflictField.value)
-                {
-                    if (segment >= components->size())
-                    {
-                        return nullptr;
-                    }
-
-                    for (auto i = 0u; i < segment; ++i)
-                    {
-                        auto length = scaleEncodingLength(components->at(i), inputData, startPos);
-                        if (!length.has_value())
-                        {
-                            return nullptr;
-                        }
-                        startPos += length.value();
-                    }
-                    paramAbi = &components->at(segment);
-                    components = &paramAbi->components;
-                }
-                auto length = scaleEncodingLength(*paramAbi, inputData, startPos);
-                if (!length.has_value())
-                {
-                    return nullptr;
-                }
-                assert(startPos + length.value() <= inputData.size());
-                bytes var(
-                    inputData.begin() + startPos, inputData.begin() + startPos + length.value());
-                criticalKey.insert(criticalKey.end(), var.begin(), var.end());
+                return nullptr;
             }
-            else
-            {  // evm
-                auto index = conflictField.value[0];
-                const auto& typeName = functionAbi.flatInputs[index];
-                if (typeName.empty())
-                {
-                    return nullptr;
-                }
-                auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
-                criticalKey.insert(criticalKey.end(), out.begin(), out.end());
-            }
+            auto out = getComponentBytes(index, typeName, ref(params.data).getCroppedData(4));
+            criticalKey.insert(criticalKey.end(), out.begin(), out.end());
             conflictFields->emplace_back(std::move(criticalKey));
             EXECUTOR_NAME_LOG(TRACE)
                 << LOG_BADGE("extractConflictFields") << LOG_DESC("use `Params`")
@@ -1649,8 +1501,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     auto abiKey = bytes(to.cbegin(), to.cend());
                     abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                     // if precompiled
-                    auto executiveFactory = std::make_shared<ExecutiveFactory>(*m_blockContext,
-                        m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
+                    auto executiveFactory = std::make_shared<ExecutiveFactory>(
+                        *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled);
                     auto executive = executiveFactory->build(
                         params->codeAddress, params->contextID, params->seq, ExecutiveType::common);
                     auto p = executive->getPrecompiled(params->receiveAddress);
@@ -1659,8 +1511,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         // Precompile transaction
                         if (p->isParallelPrecompiled())
                         {
-                            auto criticals =
-                                vector<string>(p->getParallelTag(ref(params->data), m_isWasm));
+                            auto criticals = vector<string>(p->getParallelTag(ref(params->data)));
                             conflictFields = make_shared<vector<bytes>>();
                             for (string& critical : criticals)
                             {
@@ -2005,7 +1856,7 @@ void TransactionExecutor::commit(
             if (m_ledgerCache->ledgerConfig().authCheckStatus() != UINT32_MAX)
             {
                 // cannot get auth check status, not update value
-                m_isAuthCheck = !m_isWasm && m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
+                m_isAuthCheck = m_ledgerCache->ledgerConfig().authCheckStatus() != 0;
             }
         }
         removeCommittedState();
@@ -2380,7 +2231,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
     if (executiveFlow == nullptr)
     {
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
-            *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
+            *blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled);
         if (!useCoroutine)
         {
             EXECUTOR_NAME_LOG(DEBUG) << "getExecutiveFlow" << LOG_KV("codeAddress", codeAddress)
@@ -2833,12 +2684,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     {
         // padding zero
         callParameters->origin = std::string(addressSize - input.origin().size(), '0');
-        // NOTE: if wasm and use dmc static call external call, should not padding zero, because it
-        // is contract address
-        if (!(m_isWasm && input.origin() != input.from())) [[unlikely]]
-        {
-            callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
-        }
+        callParameters->senderAddress = std::string(addressSize - input.from().size(), '0');
     }
     callParameters->origin += input.origin();
     callParameters->senderAddress += input.from();
@@ -2869,7 +2715,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         callParameters->codeAddress = input.delegateCallAddress();
     }
 
-    if (!m_isWasm && !callParameters->create)
+    if (!callParameters->create)
     {
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
         {
@@ -2942,7 +2788,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     //   4. In TransactionExecutive::execute(), call warmUpEip2930AccessList(*callParameters)
     //      right after warmUpEip2929InitialSet(*callParameters) (see ~line 478).
 
-    if (!m_isWasm && !callParameters->create)
+    if (!callParameters->create)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
         if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
@@ -2975,7 +2821,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
 
         auto& input = inputs[id];
         auto executiveFactory = std::make_shared<ExecutiveFactory>(
-            *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, *m_gasInjector);
+            *m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled);
         auto executive = executiveFactory->build(
             input->codeAddress, input->contextID, input->seq, ExecutiveType::common);
 

@@ -315,16 +315,6 @@ void NodeConfig::validateL2Invariants()
                                   "[alloc.*] section requires feature_l2_ethereum_compat enabled "
                                   "in [features]"));
     }
-    // L2 predeploys/genesis are EVM-only (loadExecutorConfig at ~201 already set
-    // m_isWasm before this runs). The WASM executor builds a different precompiled
-    // map and has no L2 ethereum-compat path, so reject the combination up front.
-    // Reuses the l2Enabled bit already computed above.
-    if (l2Enabled && genesis.m_isWasm)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "feature_l2_ethereum_compat requires the EVM executor; "
-                                  "is_wasm=true is not supported"));
-    }
 }
 
 std::string NodeConfig::getServiceName(boost::property_tree::ptree const& _pt,
@@ -604,9 +594,9 @@ void NodeConfig::loadRpcConfig(boost::property_tree::ptree const& _pt)
     // Deprecation warning for removed rpc.thread_count
     if (_pt.get_optional<int>("rpc.thread_count"))
     {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC("loadRpcConfig: rpc.thread_count is deprecated, "
-                        "use thread_pool.io_thread_count instead");
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadRpcConfig: rpc.thread_count is deprecated, "
+            "use thread_pool.io_thread_count instead");
     }
 
     m_rpcListenIP = listenIP;
@@ -666,9 +656,9 @@ void NodeConfig::loadWeb3RpcConfig(boost::property_tree::ptree const& _pt)
     // Deprecation warning for removed web3_rpc.thread_count
     if (_pt.get_optional<int>("web3_rpc.thread_count"))
     {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC("loadWeb3RpcConfig: web3_rpc.thread_count is deprecated, "
-                        "use thread_pool.io_thread_count instead");
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadWeb3RpcConfig: web3_rpc.thread_count is deprecated, "
+            "use thread_pool.io_thread_count instead");
     }
 
     m_web3RpcListenIP = listenIP;
@@ -804,15 +794,15 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
     // Deprecation warnings for removed txpool thread config keys
     if (_pt.get_optional<std::string>("txpool.notify_worker_num"))
     {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC("loadTxPoolConfig: txpool.notify_worker_num is deprecated, "
-                        "use thread_pool.io_thread_count instead");
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadTxPoolConfig: txpool.notify_worker_num is deprecated, "
+            "use thread_pool.io_thread_count instead");
     }
     if (_pt.get_optional<std::string>("txpool.verify_worker_num"))
     {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC("loadTxPoolConfig: txpool.verify_worker_num is deprecated, "
-                        "use thread_pool.io_thread_count instead");
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadTxPoolConfig: txpool.verify_worker_num is deprecated, "
+            "use thread_pool.io_thread_count instead");
     }
 
     m_txpoolLimit = checkAndGetValue(_pt, "txpool.limit", "15000");
@@ -1225,15 +1215,15 @@ void NodeConfig::loadOthersConfig(boost::property_tree::ptree const& _pt)
     // Deprecation warning for removed config keys
     if (_pt.get_optional<std::string>("executor.baseline_scheduler_maxthread"))
     {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC("loadOthersConfig: executor.baseline_scheduler_maxthread is deprecated, "
-                        "use thread_pool.tbb_thread_count instead");
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadOthersConfig: executor.baseline_scheduler_maxthread is deprecated, "
+            "use thread_pool.tbb_thread_count instead");
     }
     if (_pt.get_optional<std::string>("rpc.tars_rpc_thread_count"))
     {
-        NodeConfig_LOG(WARNING)
-            << LOG_DESC("loadOthersConfig: rpc.tars_rpc_thread_count is deprecated, "
-                        "use thread_pool.io_thread_count instead");
+        NodeConfig_LOG(WARNING) << LOG_DESC(
+            "loadOthersConfig: rpc.tars_rpc_thread_count is deprecated, "
+            "use thread_pool.io_thread_count instead");
     }
 
     m_ioThreadCount = checkAndGetValue(_pt, "thread_pool.io_thread_count",
@@ -1447,7 +1437,6 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
 {
     try
     {
-        m_genesisConfig.m_isWasm = _genesisConfig.get<bool>("executor.is_wasm", false);
         m_genesisConfig.m_isAuthCheck = _genesisConfig.get<bool>("executor.is_auth_check", false);
         m_genesisConfig.m_isSerialExecute =
             _genesisConfig.get<bool>("executor.is_serial_execute", false);
@@ -1456,34 +1445,17 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _genesisC
     catch (std::exception const& e)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                  "executor.is_wasm/executor.is_auth_check/"
+                                  "executor.is_auth_check/"
                                   "executor.is_serial_execute is null, please set it!"));
     }
-    if (m_genesisConfig.m_isWasm && !m_genesisConfig.m_isSerialExecute)
+    // WASM support was removed in 3.18; reject executor.is_wasm=true explicitly so operators get a
+    // clear error instead of a silent EVM fallback or an opaque genesis-mismatch on startup.
+    if (_genesisConfig.get<bool>("executor.is_wasm", false))
     {
-        if (m_genesisConfig.m_compatibilityVersion >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "loadExecutorConfig wasm only support serial executing, "
-                                      "please set is_serial_execute to true"));
-        }
-        NodeConfig_LOG(WARNING)
-            << METRIC
-            << LOG_DESC("loadExecutorConfig wasm with serial executing is not recommended");
-    }
-    if (m_genesisConfig.m_isWasm && m_genesisConfig.m_isAuthCheck)
-    {
-        if (m_genesisConfig.m_compatibilityVersion >=
-            (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "loadExecutorConfig auth only support solidity, "
-                                      "please set is_auth_check to false or set is_wasm to false"));
-        }
-        NodeConfig_LOG(WARNING) << METRIC
-                                << LOG_DESC(
-                                       "loadExecutorConfig wasm auth is not supported for now");
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment(
+                "executor.is_wasm=true is not supported: WASM support was removed "
+                "in FISCO-BCOS 3.18; use the EVM executor (set is_wasm=false)"));
     }
     try
     {
@@ -1811,11 +1783,6 @@ std::int64_t NodeConfig::epochSealerNum() const
 std::int64_t NodeConfig::epochBlockNum() const
 {
     return m_genesisConfig.m_epochBlockNum;
-}
-
-bool NodeConfig::isWasm() const
-{
-    return m_genesisConfig.m_isWasm;
 }
 
 bool NodeConfig::isAuthCheck() const

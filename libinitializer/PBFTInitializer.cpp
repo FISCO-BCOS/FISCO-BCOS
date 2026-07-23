@@ -77,7 +77,7 @@ PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchT
     m_ioServicePool(std::move(_ioServicePool))
 {
     m_groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
-    g_BCOSConfig.setIsWasm(m_nodeConfig->isWasm());
+    g_BCOSConfig.setIsWasm(false);
 
     createSealer();
     // TODO: add rpbft create
@@ -124,7 +124,7 @@ std::string PBFTInitializer::generateIniConfig(bcos::tool::NodeConfig::Ptr _node
     iniConfig["chainID"] = _nodeConfig->chainId();
     iniConfig["groupID"] = _nodeConfig->groupId();
     iniConfig["smCryptoType"] = _nodeConfig->smCryptoType();
-    iniConfig["isWasm"] = _nodeConfig->isWasm();
+    iniConfig["isWasm"] = false;
     iniConfig["isAuthCheck"] = _nodeConfig->isAuthCheck();
     iniConfig["isSerialExecute"] = _nodeConfig->isSerialExecute();
     iniConfig["nodeName"] = _nodeConfig->nodeName();
@@ -141,7 +141,7 @@ void PBFTInitializer::initChainNodeInfo(
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
-    m_groupInfo->setWasm(_nodeConfig->isWasm());
+    m_groupInfo->setWasm(false);
     m_groupInfo->setSmCryptoType(_nodeConfig->smCryptoType());
     int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
@@ -447,18 +447,16 @@ void PBFTInitializer::createPBFT()
     if (m_nodeConfig->consensusType() == ledger::PBFT_CONSENSUS_TYPE)
     {
         auto pbftFactory = std::make_shared<PBFTFactory>(*m_ioServicePool->getIOService(),
-            m_protocolInitializer->cryptoSuite(),
-            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
+            kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
             m_protocolInitializer->txResultFactory(), m_ioServicePool);
         m_pbft = pbftFactory->createPBFT();
     }
     else if (m_nodeConfig->consensusType() == ledger::RPBFT_CONSENSUS_TYPE)
     {
         auto rpbftFactory = std::make_shared<RPBFTFactory>(*m_ioServicePool->getIOService(),
-            m_protocolInitializer->cryptoSuite(),
-            m_protocolInitializer->keyPair(), m_frontService, kvStorage, m_ledger, m_scheduler,
-            m_txpool, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->cryptoSuite(), m_protocolInitializer->keyPair(), m_frontService,
+            kvStorage, m_ledger, m_scheduler, m_txpool, m_protocolInitializer->blockFactory(),
             m_protocolInitializer->txResultFactory(), m_ioServicePool);
         m_pbft = rpbftFactory->createRPBFT();
     }
@@ -506,7 +504,8 @@ void PBFTInitializer::createSync()
         m_txpool, m_frontService, m_scheduler, m_pbft, m_nodeTimeMaintenance,
         m_nodeConfig->enableSendBlockStatusByTree(), m_nodeConfig->treeWidth(),
         m_nodeConfig->syncArchivedBlocks());
-    m_blockSync = blockSyncFactory->createBlockSync(*m_ioServicePool->getIOService(), m_ioServicePool);
+    m_blockSync =
+        blockSyncFactory->createBlockSync(*m_ioServicePool->getIOService(), m_ioServicePool);
     m_blockSync->setFaultyNodeBlockDelta(m_nodeConfig->pipelineSize());
     m_blockSync->setAllowFreeNodeSync(m_nodeConfig->allowFreeNodeSync());
 }

@@ -76,10 +76,8 @@
         "zstd",
         "cryptopp",
         "tarscpp",
-        "wabt",
         "blst",
         "ittapi",
-        "fbwasm",
         "group-sig",
         "paillier"
       ]

@@ -74,6 +74,10 @@ public:
     // tx config
     uint64_t m_txGasLimit = 3000000000;
     // executorConfig
+    // WASM support was removed; this field is retained and permanently false because
+    // generateGenesisData() serializes it into the genesis string. Dropping it would
+    // change the genesis data of every existing chain and break node admission.
+    // It is no longer parsed from executor.is_wasm.
     bool m_isWasm{};
     bool m_isAuthCheck = true;
     std::string m_authAdminAccount;

@@ -27,11 +27,11 @@ struct ExecutiveStateFixture
         input->codeAddress = "aabbccddee";
         input->contextID = 1;
         input->seq = 1;
-        blockContext = std::make_shared<BlockContext>(
-            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false, false);
+        blockContext =
+            std::make_shared<BlockContext>(nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false);
 
-        executiveFactory = std::make_shared<MockExecutiveFactory>(
-            *blockContext, nullptr, nullptr, nullptr, nullptr);
+        executiveFactory =
+            std::make_shared<MockExecutiveFactory>(*blockContext, nullptr, nullptr, nullptr);
     }
     LedgerCache::Ptr ledgerCache;
     std::shared_ptr<MockTransactionExecutive> executive;

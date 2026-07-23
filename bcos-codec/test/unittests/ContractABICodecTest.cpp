@@ -254,7 +254,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_s256)
 BOOST_AUTO_TEST_CASE(ContractABIType_integer)
 {
     auto hashImpl = std::make_shared<Keccak256>();
-    auto codec = CodecWrapper(hashImpl, false);
+    auto codec = CodecWrapper(hashImpl);
 
     // int8
     {

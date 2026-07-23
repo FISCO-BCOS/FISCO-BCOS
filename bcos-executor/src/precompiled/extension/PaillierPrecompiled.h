@@ -40,9 +40,10 @@ public:
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive,
         PrecompiledExecResult::Ptr _callParameters) override;
-     bool isParallelPrecompiled() override;
+    bool isParallelPrecompiled() override;
 
-     std::vector<std::string> getParallelTag(bytesConstRef, bool) override;
+    std::vector<std::string> getParallelTag(bytesConstRef) override;
+
 private:
     std::shared_ptr<CallPaillier> m_callPaillier;
 };

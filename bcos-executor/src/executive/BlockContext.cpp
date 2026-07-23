@@ -25,8 +25,8 @@
 #include "bcos-framework/ledger/FeaturesStorage.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-framework/storage/Table.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "bcos-task/Wait.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -41,13 +41,11 @@ using namespace std;
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
-    storage::StorageInterface::Ptr backendStorage)
+    uint32_t blockVersion, bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
     m_timeStamp(timestamp),
     m_blockVersion(blockVersion),
-    m_isWasm(_isWasm),
     m_isAuthCheck(_isAuthCheck),
     m_storage(std::move(storage)),
     m_transientStorageMap(std::make_shared<transientStorageMap>(10)),
@@ -69,10 +67,10 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
     LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl, protocol::BlockHeader const& current,
-    bool _isWasm, bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
+    bool _isAuthCheck, storage::StorageInterface::Ptr backendStorage,
     std::shared_ptr<std::set<std::string, std::less<>>> _keyPageIgnoreTables)
   : BlockContext(std::move(storage), std::move(ledgerCache), std::move(_hashImpl), current.number(),
-        current.hash(), current.timestamp(), current.version(), _isWasm, _isAuthCheck,
+        current.hash(), current.timestamp(), current.version(), _isAuthCheck,
         std::move(backendStorage))
 {
     if (current.number() > 0 && !current.parentInfo().empty())
@@ -92,7 +90,8 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorageInterface> stora
             auto entry = table->getRow(key);
             if (entry)
             {
-                auto [value, enableNumber] = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
+                auto [value, enableNumber] =
+                    bcos::storage::serialize::decode<ledger::SystemConfigEntry>(entry->get());
                 if (current.number() >= enableNumber)
                 {
                     m_features.set(key);

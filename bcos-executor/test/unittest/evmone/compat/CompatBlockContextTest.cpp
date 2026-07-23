@@ -32,7 +32,7 @@ BOOST_AUTO_TEST_CASE(FC_R_block_context_schedule_ladder)
     auto makeContext = [&](ledger::Features const& features, uint32_t blockVersion) {
         task::syncWait(ledger::writeToStorage(features, *stateStorage, 1));
         auto ctx = std::make_shared<BlockContext>(
-            stateStorage, ledgerCache, hashImpl, 1, h256(), 0, blockVersion, false, false, backend);
+            stateStorage, ledgerCache, hashImpl, 1, h256(), 0, blockVersion, false, backend);
         ctx->setFeatures(features);
         ctx->setVMSchedule();
         return ctx;

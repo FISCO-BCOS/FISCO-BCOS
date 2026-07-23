@@ -28,22 +28,6 @@ using namespace bcos::protocol;
 
 namespace bcos
 {
-bool hasWasmPreamble(const std::string_view& _input)
-{
-    return hasWasmPreamble(
-        bytesConstRef(reinterpret_cast<const byte*>(_input.data()), _input.size()));
-}
-bool hasWasmPreamble(const bytesConstRef& _input)
-{
-    return _input.size() >= 8 && _input[0] == 0 && _input[1] == 'a' && _input[2] == 's' &&
-           _input[3] == 'm';
-}
-
-bool hasWasmPreamble(const bytes& _input)
-{
-    return hasWasmPreamble(bytesConstRef(_input.data(), _input.size()));
-}
-
 bool hasPrecompiledPrefix(const std::string_view& _code)
 {
     return _code.size() > precompiled::PRECOMPILED_CODE_FIELD_SIZE &&

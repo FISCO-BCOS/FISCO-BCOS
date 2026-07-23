@@ -53,14 +53,14 @@ private:
 
 
 private:
-    std::string getThisAddress(bool _isWasm) override;
+    std::string getThisAddress() override;
 
     std::string_view getLinkRootDir() override;
 
     bool checkPathPrefixValid(
         const std::string_view& path, uint32_t blockVersion, const std::string_view& type) override;
 
-    bool checkContractAddressValid(bool isWasm, const std::string& address,
+    bool checkContractAddressValid(const std::string& address,
         uint32_t blockVersion = static_cast<uint32_t>(protocol::BlockVersion::V3_3_VERSION));
 };
 }  // namespace bcos::precompiled

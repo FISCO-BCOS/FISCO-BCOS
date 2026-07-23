@@ -52,7 +52,6 @@ BOOST_AUTO_TEST_CASE(prague_schedule_flags)
     BOOST_CHECK(FiscoBcosSchedulePrague.enablePairs);
     BOOST_CHECK(!FiscoBcosSchedulePrague.enableOsaka);
     BOOST_CHECK_EQUAL(FiscoBcosSchedulePrague.maxEvmCodeSize, 0x100000u);
-    BOOST_CHECK_EQUAL(FiscoBcosSchedulePrague.maxWasmCodeSize, 0xF00000u);
 }
 
 // ===== Osaka schedule flags ==================================================
@@ -67,7 +66,6 @@ BOOST_AUTO_TEST_CASE(osaka_schedule_flags)
     BOOST_CHECK(FiscoBcosScheduleOsaka.enableOsaka);
     BOOST_CHECK(FiscoBcosScheduleOsaka.enablePairs);
     BOOST_CHECK_EQUAL(FiscoBcosScheduleOsaka.maxEvmCodeSize, 0x100000u);
-    BOOST_CHECK_EQUAL(FiscoBcosScheduleOsaka.maxWasmCodeSize, 0xF00000u);
 }
 
 // ===== Prague vs Cancun schedule differences =================================
@@ -93,8 +91,6 @@ BOOST_AUTO_TEST_CASE(prague_vs_cancun_gas)
     // Both share the same code-size limits introduced with Cancun / V320
     BOOST_CHECK_EQUAL(
         FiscoBcosScheduleCancun.maxEvmCodeSize, FiscoBcosSchedulePrague.maxEvmCodeSize);
-    BOOST_CHECK_EQUAL(
-        FiscoBcosScheduleCancun.maxWasmCodeSize, FiscoBcosSchedulePrague.maxWasmCodeSize);
 }
 
 // ===== Precompile gas budget =================================================

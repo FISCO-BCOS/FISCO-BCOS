@@ -65,7 +65,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     auto funcSelector = getParamFunc(_callParameters->input());
     auto paramData = _callParameters->params();
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(paramData.size());
     auto version = blockContext.blockVersion();
@@ -119,7 +119,7 @@ void CryptoPrecompiled::curve25519VRFVerify(
     PrecompiledExecResult::Ptr _callResult)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     bool verifySuccess = false;
     u256 randomValue = 0;
     try
@@ -156,7 +156,7 @@ void CryptoPrecompiled::sm2Verify(const std::shared_ptr<executor::TransactionExe
     bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     try
     {
         string32 message;

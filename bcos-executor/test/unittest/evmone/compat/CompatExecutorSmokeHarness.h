@@ -54,7 +54,7 @@ struct CompatExecutorSmokeFixture
         auto lruStorage = std::make_shared<storage::LRUStateStorage>(backend, false);
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage, backend,
-            executionResultFactory, stateStorageFactory, hashImpl, false, false);
+            executionResultFactory, stateStorageFactory, hashImpl, false);
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         const auto secretKeyBytes =
@@ -77,7 +77,7 @@ struct CompatExecutorSmokeFixture
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         auto lruStorage = std::make_shared<storage::LRUStateStorage>(storage, false);
         auto exec = executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage, storage,
-            executionResultFactory, stateStorageFactory, hashImpl, false, false);
+            executionResultFactory, stateStorageFactory, hashImpl, false);
         return {std::move(exec), std::move(storage)};
     }
 

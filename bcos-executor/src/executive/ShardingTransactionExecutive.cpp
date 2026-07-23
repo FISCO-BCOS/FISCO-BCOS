@@ -7,8 +7,8 @@
 #include "bcos-table/src/ContractShardUtils.h"
 #include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/algorithm/find.hpp>
-#include <range/v3/view/drop.hpp>
 #include <range/v3/view/all.hpp>
+#include <range/v3/view/drop.hpp>
 
 using namespace bcos::executor;
 using namespace bcos::storage;
@@ -17,7 +17,7 @@ TransactionExecutive::Ptr ShardingTransactionExecutive::buildChildExecutive(
     const std::string& _contractAddress, int64_t contextID, int64_t seq)
 {
     ShardingExecutiveFactory executiveFactory = ShardingExecutiveFactory(
-        m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled, m_gasInjector);
+        m_blockContext, m_evmPrecompiled, m_precompiled, m_staticPrecompiled);
 
     if (m_blockContext.features().get(
             ledger::Features::Flag::bugfix_sharding_call_in_child_executive))
@@ -34,10 +34,10 @@ bool ShardingTransactionExecutive::isUsePromise() const
 }
 
 ShardingTransactionExecutive::ShardingTransactionExecutive(const BlockContext& blockContext,
-    std::string contractAddress, int64_t contextID, int64_t seq,
-    const wasm::GasInjector& gasInjector, IOServicePool::Ptr pool, bool usePromise)
+    std::string contractAddress, int64_t contextID, int64_t seq, IOServicePool::Ptr pool,
+    bool usePromise)
   : PromiseTransactionExecutive(
-        pool, std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector),
+        pool, std::move(blockContext), std::move(contractAddress), contextID, seq),
     m_usePromise(usePromise)
 {
     if (m_blockContext.features().get(
@@ -146,7 +146,7 @@ CallParameters::UniquePtr ShardingTransactionExecutive::resume()
 
 std::string ShardingTransactionExecutive::getContractShard(const std::string_view& contractAddress)
 {
-    auto tableName = getContractTableName(contractAddress, m_blockContext.isWasm());
+    auto tableName = getContractTableName(contractAddress);
     return ContractShardUtils::getContractShard(storage(), tableName);
 }
 
@@ -154,8 +154,7 @@ CallParameters::UniquePtr ShardingChildTransactionExecutive::start(CallParameter
 {
     if (c_fileLogLevel == LogLevel::TRACE) [[unlikely]]
     {
-        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding")
-                             << "ShardingChildTransactionExecutive start: "
+        EXECUTIVE_LOG(TRACE) << LOG_BADGE("Sharding") << "ShardingChildTransactionExecutive start: "
                              << input->toFullString();
     }
 
@@ -194,10 +193,9 @@ CallParameters::UniquePtr& ShardingChildTransactionExecutive::getExchangeMessage
 
 ShardingChildTransactionExecutive::ShardingChildTransactionExecutive(
     ShardingTransactionExecutive* parent, const BlockContext& blockContext,
-    std::string contractAddress, int64_t contextID, int64_t seq,
-    const wasm::GasInjector& gasInjector, IOServicePool::Ptr pool, bool usePromise)
-  : ShardingTransactionExecutive(
-        blockContext, contractAddress, contextID, seq, gasInjector, pool, usePromise),
+    std::string contractAddress, int64_t contextID, int64_t seq, IOServicePool::Ptr pool,
+    bool usePromise)
+  : ShardingTransactionExecutive(blockContext, contractAddress, contextID, seq, pool, usePromise),
 
     // for coroutine
     m_pullMessageRef(parent->getPullMessage()),

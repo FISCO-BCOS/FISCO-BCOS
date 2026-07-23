@@ -18,11 +18,11 @@
  * @date 2023/1/3
  */
 
-#include "libprecompiled/PreCompiledFixture.h"
 #include "bcos-executor/src/precompiled/common/Utilities.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-tool/VersionConverter.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "libprecompiled/PreCompiledFixture.h"
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -39,9 +39,9 @@ public:
 
     ~UtilitiesFixture() override = default;
 
-    void init(bool _isWasm, protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
+    void init(protocol::BlockVersion version = BlockVersion::V3_1_VERSION)
     {
-        setIsWasm(_isWasm, false, true, version);
+        prepareEnv(false, true, version);
     }
 
     static bool checkPathValid(

@@ -35,7 +35,7 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
-#include "vm/EVMCWasm.h"
+#include "vm/EVMCGasMetrics.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
@@ -181,7 +181,6 @@ struct VMSchedule
     unsigned suicideRefundGas = 24000;
     unsigned createDataGas = 20;
     unsigned maxEvmCodeSize = 0x40000;
-    unsigned maxWasmCodeSize = 0xF00000;  // 15MB
 };
 
 static const VMSchedule FiscoBcosSchedule = [] {
@@ -192,16 +191,14 @@ static const VMSchedule FiscoBcosSchedule = [] {
 static const VMSchedule FiscoBcosScheduleV320 = [] {
     VMSchedule schedule;
     schedule.enablePairs = true;
-    schedule.maxEvmCodeSize = 0x100000;   // 1MB
-    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
     return schedule;
 }();
 
 static const VMSchedule FiscoBcosScheduleCancun = [] {
     VMSchedule schedule;
     schedule.enableCanCun = true;
-    schedule.maxEvmCodeSize = 0x100000;   // 1MB
-    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
     return schedule;
 }();
 
@@ -210,8 +207,7 @@ static const VMSchedule FiscoBcosSchedulePrague = [] {
     schedule.enablePairs = true;
     schedule.enableCanCun = true;
     schedule.enablePrague = true;
-    schedule.maxEvmCodeSize = 0x100000;   // 1MB
-    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
     return schedule;
 }();
 
@@ -221,8 +217,7 @@ static const VMSchedule FiscoBcosScheduleOsaka = [] {
     schedule.enableCanCun = true;
     schedule.enablePrague = true;
     schedule.enableOsaka = true;
-    schedule.maxEvmCodeSize = 0x100000;   // 1MB
-    schedule.maxWasmCodeSize = 0xF00000;  // 15MB
+    schedule.maxEvmCodeSize = 0x100000;  // 1MB
     return schedule;
 }();
 
@@ -275,9 +270,6 @@ enum ExecutiveType : uint8_t
 
 }  // namespace executor
 
-bool hasWasmPreamble(const std::string_view& _input);
-bool hasWasmPreamble(const bytesConstRef& _input);
-bool hasWasmPreamble(const bytes& _input);
 bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address

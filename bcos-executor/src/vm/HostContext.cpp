@@ -70,7 +70,6 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     m_tableName(std::move(tableName))
 {
     interface = getHostInterface();
-    wasm_interface = getWasmHostInterface();
 
     hash_fn = evm_hash_fn;
     version = m_executive->blockContext().blockVersion();
@@ -135,7 +134,7 @@ CallParameters::UniquePtr&& HostContext::takeCallParameters()
 
 std::string HostContext::getContractTableName(const std::string_view& _address)
 {
-    return m_executive->getContractTableName(_address, isWasm(), isCreate());
+    return m_executive->getContractTableName(_address);
 }
 
 
@@ -203,14 +202,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
         }
         break;
     case EVMC_CALL:
-        if (blockContext.isWasm())
-        {
-            request->receiveAddress.assign((char*)_msg->destination_ptr, _msg->destination_len);
-        }
-        else
-        {
-            request->receiveAddress = evmAddress2String(_msg->code_address);
-        }
+        request->receiveAddress = evmAddress2String(_msg->code_address);
 
         request->codeAddress = request->receiveAddress;
         request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
@@ -218,25 +210,22 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     case EVMC_DELEGATECALL:
     case EVMC_CALLCODE:
     {
-        if (!blockContext.isWasm())
+        if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
         {
-            if (blockContext.blockVersion() >= (uint32_t)bcos::protocol::BlockVersion::V3_1_VERSION)
-            {
-                request->delegateCall = true;
-                request->codeAddress = evmAddress2String(_msg->code_address);
-                request->delegateCallSender = evmAddress2String(_msg->sender);
+            request->delegateCall = true;
+            request->codeAddress = evmAddress2String(_msg->code_address);
+            request->delegateCallSender = evmAddress2String(_msg->sender);
 
-                if (features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
-                {
-                    request->receiveAddress = myAddress();
-                }
-                else
-                {
-                    request->receiveAddress = codeAddress();
-                }
-                request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
-                break;
+            if (features().get(ledger::Features::Flag::bugfix_call_noaddr_return))
+            {
+                request->receiveAddress = myAddress();
             }
+            else
+            {
+                request->receiveAddress = codeAddress();
+            }
+            request->data.assign(_msg->input_data, _msg->input_data + _msg->input_size);
+            break;
         }
 
         // old logic
@@ -278,7 +267,7 @@ evmc_result HostContext::externalRequest(const evmc_message* _msg)
     {
         return callBuiltInPrecompiled(request, false);
     }
-    if (!blockContext.isWasm() && m_executive->isEthereumPrecompiled(request->receiveAddress))
+    if (m_executive->isEthereumPrecompiled(request->receiveAddress))
     {
         return callBuiltInPrecompiled(request, true);
     }
@@ -732,22 +721,6 @@ void HostContext::setTransientStorage(const evmc_bytes32* key, const evmc_bytes3
 
 void HostContext::log(h256s&& _topics, bytesConstRef _data)
 {
-    // if (m_isWasm || myAddress().empty())
-    // {
-    //     m_sub.logs->push_back(
-    //         protocol::LogEntry(bytes(myAddress().data(), myAddress().data() +
-    //         myAddress().size()),
-    //             std::move(_topics), _data.toBytes()));
-    // }
-    // else
-    // {
-    //     // convert solidity address to hex string
-    //     auto hexAddress = toHex(myAddress());
-    //     boost::algorithm::to_lower(hexAddress);  // this is in case of toHexString be modified
-    //     toChecksumAddress(hexAddress, hashImpl()->hash(hexAddress).hex());
-    //     m_sub.logs->push_back(
-    //         protocol::LogEntry(asBytes(hexAddress), std::move(_topics), _data.toBytes()));
-    // }
     m_callParameters->logEntries.emplace_back(
         bytes(myAddress().data(), myAddress().data() + myAddress().size()), std::move(_topics),
         _data.toBytes());
@@ -818,19 +791,13 @@ crypto::HashType HostContext::codeHash()
     return m_executive->getCodeHash(m_tableName);
 }
 
-bool HostContext::isWasm()
-{
-    return m_executive->isWasm();
-}
-
 evmc_bytes32 HostContext::getBalance(const evmc_address* _addr)
 {
     // address
     auto addr2GetBalance = address2HexString(*_addr);
 
     // input
-    auto codec = bcos::CodecWrapper(
-        m_executive->blockContext().hashHandler(), m_executive->blockContext().isWasm());
+    auto codec = bcos::CodecWrapper(m_executive->blockContext().hashHandler());
     // get balance from account table
     auto params = codec.encodeWithSig("getAccountBalance()");
     auto tableName = getContractTableName(addr2GetBalance);

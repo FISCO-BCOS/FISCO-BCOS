@@ -73,7 +73,7 @@ protected:
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         PrecompiledExecResult::Ptr const& _callParameters);
 
-    virtual std::string getThisAddress(bool _isWasm);
+    virtual std::string getThisAddress();
     virtual std::string_view getLinkRootDir();
     virtual bool checkPathPrefixValid(
         const std::string_view& path, uint32_t blockVersion, const std::string_view& type);

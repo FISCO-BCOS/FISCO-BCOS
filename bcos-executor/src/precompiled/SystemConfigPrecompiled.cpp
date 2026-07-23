@@ -27,9 +27,9 @@
 #include "bcos-framework/ledger/SystemConfigs.h"
 #include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/protocol/Protocol.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "bcos-task/Wait.h"
 #include "bcos-tool/VersionConverter.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <algorithm>
@@ -199,7 +199,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     const auto& blockContext = _executive->blockContext();
 
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
         // setValueByKey(string,string)
@@ -369,7 +369,8 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
         auto entry = table->getRow(_key);
         if (entry) [[likely]]
         {
-            auto [value, enableNumber] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+            auto [value, enableNumber] =
+                bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
             return {value, enableNumber};
         }
 
@@ -413,10 +414,8 @@ void SystemConfigPrecompiled::upgradeChain(
         // rebuild Bfs
         auto input = codec.encodeWithSig(
             "rebuildBfs(uint256,uint256)", blockContext.blockVersion(), toVersion);
-        std::string sender(
-            blockContext.isWasm() ? precompiled::SYS_CONFIG_NAME : precompiled::SYS_CONFIG_ADDRESS);
-        std::string toAddress(
-            blockContext.isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS);
+        std::string sender(precompiled::SYS_CONFIG_ADDRESS);
+        std::string toAddress(precompiled::BFS_ADDRESS);
         auto response = externalRequest(_executive, ref(input), _callParameters->m_origin, sender,
             toAddress, false, false, _callParameters->m_gasLeft);
 
@@ -486,9 +485,7 @@ void SystemConfigPrecompiled::registerGovernorToCaller(
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled, registerGovernorToCaller")
                               << LOG_DESC("get governor list failed")
                               << LOG_KV("info", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment(
-                                  "get governor list failed, maybe current is wasm model, "
-                                  "feature_balance_precompiled is not supported in wasm model."));
+        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("get governor list failed."));
     }
     if (governorAddress.empty())
     {

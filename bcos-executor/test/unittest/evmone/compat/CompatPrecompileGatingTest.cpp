@@ -448,8 +448,8 @@ BOOST_AUTO_TEST_CASE(FC_P_address_routing_prefix_overlap)
 
     auto blockContext =
         std::make_shared<executor::BlockContext>(stateStorage, ledgerCache, hashImpl, 1, h256(), 0,
-            static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION), false, false, backend);
-    auto exec = std::make_shared<CompatHostTestExecutive>(blockContext, "", 100, 0, gasInjector);
+            static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION), false, backend);
+    auto exec = std::make_shared<CompatHostTestExecutive>(blockContext, "", 100, 0);
 
     // Attach BLS + p256verify to m_evmPrecompiled (single combined map — each
     // compatAttach* helper replaces the whole map, so they can't be chained).

@@ -140,7 +140,6 @@ public:
 
     static crypto::Hash::Ptr& hashImpl() { return GlobalHashImpl::g_hashImpl; }
 
-    bool isWasm();
     const std::shared_ptr<TransactionExecutive>& getTransactionExecutive() const
     {
         return m_executive;

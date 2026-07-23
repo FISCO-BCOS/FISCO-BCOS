@@ -156,17 +156,16 @@ void ExecutorServiceApp::createAndInitExecutor()
     // Create IOServicePool for the MAX/TARS executor service.
     // In AIR mode this pool is shared across all modules; here the executor
     // runs in its own process and needs its own pool.
-    m_ioServicePool = std::make_shared<bcos::IOServicePool>(
-        std::thread::hardware_concurrency(), "executor-io");
+    m_ioServicePool =
+        std::make_shared<bcos::IOServicePool>(std::thread::hardware_concurrency(), "executor-io");
 
     auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(ledger,
         m_txpool, cacheFactory, storage, executionMessageFactory, stateStorageFactory,
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-        m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), "executor",
-        m_ioServicePool);
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->vmCacheSize(),
+        m_nodeConfig->isAuthCheck(), "executor", m_ioServicePool);
 
-    m_executor = std::make_shared<bcos::executor::SwitchExecutorManager>(
-        executorFactory, m_ioServicePool);
+    m_executor =
+        std::make_shared<bcos::executor::SwitchExecutorManager>(executorFactory, m_ioServicePool);
 
     std::weak_ptr<bcos::executor::SwitchExecutorManager> executorWeakPtr = m_executor;
     std::weak_ptr<bcos::storage::TiKVStorage> storageWeakPtr =

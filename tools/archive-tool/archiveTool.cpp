@@ -333,8 +333,7 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                     // read the receipt and store to archive database use json format
                     Json::Value receiptJson;
                     bcos::rpc::toJsonResp(receiptJson, toHex(keys[j], "0x"),
-                        protocol::TransactionStatus::None, *receipt, nodeConfig->isWasm(),
-                        *hashImpl);
+                        protocol::TransactionStatus::None, *receipt, *hashImpl);
                     receiptValues[j] = receiptJson.toStyledString();
                 }
             });
@@ -348,7 +347,8 @@ void archiveBlocks(auto archiveStorage, auto ledger,
                        [](const std::string& str) { return std::string_view{str}; }),
             receiptValues | ::ranges::views::transform(
                                 [](const std::string& str) { return std::string_view{str}; }));
-        std::cout << "\r" << "write block " << i << " size: " << size << std::flush;
+        std::cout << "\r"
+                  << "write block " << i << " size: " << size << std::flush;
     }
     std::cout << std::endl
               << "write to archive database, block range [" << startBlockNumber << ","
@@ -512,7 +512,7 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
                         output = fromHexWithPrefix(outString);
                     }
                     std::string contractAddress;
-                    if (!nodeConfig->isWasm() && jsonValue["contractAddress"].asString().size() > 2)
+                    if (jsonValue["contractAddress"].asString().size() > 2)
                     {
                         auto addressBytes =
                             fromHexWithPrefix(jsonValue["contractAddress"].asString());
@@ -545,8 +545,8 @@ void reimportBlocks(auto archiveStorage, TransactionalStorageInterface::Ptr loca
             });
         // write receipt to local storage
         localBlockStorage->setRows(ledger::SYS_HASH_2_RECEIPT, txHashes, receiptsView);
-        std::cout << "\r" << "reimport block " << blockNumber << " size: " << txHashes.size()
-                  << std::flush;
+        std::cout << "\r"
+                  << "reimport block " << blockNumber << " size: " << txHashes.size() << std::flush;
     }
     // });
     std::cout << std::endl

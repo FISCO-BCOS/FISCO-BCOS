@@ -116,9 +116,9 @@ bcos::executor_v1::PrecompiledManager::PrecompiledManager(crypto::Hash::Ptr hash
     m_address2Precompiled.emplace_back(
         0x5100, std::make_shared<precompiled::ZkpPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x1005, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl, false));
+        0x1005, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
-        0x10002, std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl, false));
+        0x10002, std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl));
     m_address2Precompiled.emplace_back(
         0x1010, Precompiled{std::make_shared<precompiled::ShardingPrecompiled>(m_hashImpl),
                     ledger::Features::Flag::feature_sharding});

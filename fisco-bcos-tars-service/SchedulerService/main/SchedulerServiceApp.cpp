@@ -162,8 +162,7 @@ void SchedulerServiceApp::createScheduler()
         StorageInitializer::build(m_nodeConfig->pdAddrs(), getLogPath(), m_nodeConfig->pdCaPath(),
             m_nodeConfig->pdCertPath(), m_nodeConfig->pdKeyPath()),
         executionMessageFactory, blockFactory, m_protocolInitializer->txResultFactory(),
-        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm());
+        m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck());
     auto scheduler = std::dynamic_pointer_cast<bcos::scheduler::SchedulerImpl>(m_scheduler);
     // handler for notify block number
     scheduler->registerBlockNumberReceiver([this](bcos::protocol::BlockNumber number) {

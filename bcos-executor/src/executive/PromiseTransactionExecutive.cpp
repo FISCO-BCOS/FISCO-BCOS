@@ -5,8 +5,7 @@ using namespace bcos::executor;
 
 MessagePromiseSwapper::MessagePromiseSwapper(IOServicePool::Ptr pool) : m_pool(std::move(pool)) {}
 
-void MessagePromiseSwapper::spawnAndCall(
-    std::function<CallParameters::UniquePtr()> spawnCall,
+void MessagePromiseSwapper::spawnAndCall(std::function<CallParameters::UniquePtr()> spawnCall,
     std::function<void(CallParameters::UniquePtr)> waitAndDo)
 {
     assert(m_pool);
@@ -26,10 +25,8 @@ void MessagePromiseSwapper::spawnAndCall(
 }
 
 PromiseTransactionExecutive::PromiseTransactionExecutive(IOServicePool::Ptr pool,
-    const BlockContext& blockContext, std::string contractAddress, int64_t contextID,
-    int64_t seq, const wasm::GasInjector& gasInjector)
-  : CoroutineTransactionExecutive(
-        blockContext, std::move(contractAddress), contextID, seq, gasInjector),
+    const BlockContext& blockContext, std::string contractAddress, int64_t contextID, int64_t seq)
+  : CoroutineTransactionExecutive(blockContext, std::move(contractAddress), contextID, seq),
     m_messageSwapper(std::make_shared<MessagePromiseSwapper>(std::move(pool)))
 {}
 
@@ -37,9 +34,8 @@ CallParameters::UniquePtr PromiseTransactionExecutive::resume()
 {
     CallParameters::UniquePtr exchangeMessage;
     m_messageSwapper->spawnAndCall([this]() { return std::move(m_exchangeMessage); },
-        [&exchangeMessage](CallParameters::UniquePtr message) {
-            exchangeMessage = std::move(message);
-        });
+        [&exchangeMessage](
+            CallParameters::UniquePtr message) { exchangeMessage = std::move(message); });
 
     return exchangeMessage;
 }

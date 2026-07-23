@@ -19,9 +19,9 @@
  */
 
 #include "bcos-framework/ledger/LedgerTypeDef.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "bcos-framework/protocol/ProtocolTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/endian/conversion.hpp>
 #include <algorithm>
 
@@ -37,10 +37,10 @@ class ConfigPrecompiledFixture : public PrecompiledFixture
 public:
     ConfigPrecompiledFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             IGNORED_ARRAY_310.begin(), IGNORED_ARRAY_310.end());
-        setIsWasm(false, false, true, DEFAULT_VERSION);
+        prepareEnv(false, true, DEFAULT_VERSION);
         std::stringstream nodeFactory;
         nodeFactory << std::setfill('1') << std::setw(128) << 1;
         node1 = nodeFactory.str();

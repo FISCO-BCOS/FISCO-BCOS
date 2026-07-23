@@ -409,7 +409,7 @@ s256 precompiled::externalTouchNewFile(
     std::string_view _fileType, int64_t gasLeft)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto codecResult =
         codec.encodeWithSig("touch(string,string)", std::string(_filePath), std::string(_fileType));
     auto response =

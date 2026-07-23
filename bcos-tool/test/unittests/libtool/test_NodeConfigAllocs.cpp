@@ -54,7 +54,7 @@ constexpr auto kBase =
     "node.0=0102030405060708090a0b0c0d0e0f1011121314:1\n"
     "[version]\ncompatibility_version=3.10.0\n"
     "[tx]\ngas_limit=300000000\n"
-    "[executor]\nis_wasm=0\nis_auth_check=1\nauth_admin_account=0x0\n";
+    "[executor]\nis_auth_check=1\nauth_admin_account=0x0\n";
 
 constexpr auto kFeatureL2 = "[features]\nfeature_l2_ethereum_compat=1\n";
 
@@ -194,30 +194,4 @@ BOOST_AUTO_TEST_CASE(NonceOverflowRejected)
     auto cfg = makeNodeConfig();
     BOOST_CHECK_THROW(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig);
 }
-BOOST_AUTO_TEST_CASE(L2ModeRejectsWasm)
-{
-    // L2 predeploys are EVM-only. is_wasm=1 with a valid l2 + alloc config must be
-    // rejected by validateL2Invariants, not by some unrelated executor check.
-    // L2 mode is signalled by feature_l2_ethereum_compat in [features] (upstream
-    // PR-2 removed the [chain].chain_mode key; allocs and the flag must agree).
-    // (is_auth_check=0 + is_serial_execute=1 so loadExecutorConfig itself passes.)
-    std::string ini =
-        "[chain]\nsm_crypto=0\nchain_id=1\ngroup_id=g\n"
-        "[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=1000\nleader_period=1\n"
-        "node.0=0102030405060708090a0b0c0d0e0f1011121314:1\n"
-        "[version]\ncompatibility_version=3.10.0\n"
-        "[tx]\ngas_limit=300000000\n"
-        "[executor]\nis_wasm=1\nis_auth_check=0\nis_serial_execute=1\nauth_admin_account=0x0\n"
-        "[features]\nfeature_l2_ethereum_compat=1\n";
-    ini +=
-        "[alloc.0]\naddress=0x42000000000000000000000000000000000000C0\n"
-        "balance=0\nnonce=0\ncode=0x6080604052\n";
-    auto cfg = makeNodeConfig();
-    BOOST_CHECK_EXCEPTION(cfg->loadGenesisConfig(parseIni(ini)), bcos::tool::InvalidConfig,
-        [](bcos::tool::InvalidConfig const& e) {
-            auto const* comment = boost::get_error_info<bcos::errinfo_comment>(e);
-            return comment != nullptr && comment->find("is_wasm") != std::string::npos;
-        });
-}
-
 BOOST_AUTO_TEST_SUITE_END()

@@ -15,13 +15,8 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(executor ${SRCS})
 target_include_directories(executor PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-if(WITH_WASM)
-    target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
-            Boost::context evmone::evmone fbwasm wabt GroupSig Paillier blst)
-else()
-    target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
-            Boost::context evmone::evmone GroupSig Paillier blst)
-endif()
+target_link_libraries(executor PUBLIC jsoncpp_static ledger codec tool bcos-crypto table wedprcrypto::fisco-bcos bcos-protocol
+        Boost::context evmone::evmone GroupSig Paillier blst)
 # Web3AccessListResolver decodes extraTransactionBytes via rpc::Web3Transaction RLP.
 # TODO: move typed-tx RLP decode to bcos-codec to drop executor -> rpc dependency.
 target_link_libraries(executor PRIVATE rpc)
@@ -41,10 +36,6 @@ if(SANITIZE_ADDRESS)
         PROPERTIES COMPILE_FLAGS "-fno-sanitize-address-use-after-scope")
 endif()
 set_target_properties(executor PROPERTIES UNITY_BUILD "ON")
-
-if (TOOLS)
-    add_subdirectory(tools)
-endif()
 
 if (TESTS)
     enable_testing()

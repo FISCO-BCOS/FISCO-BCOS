@@ -1,25 +1,16 @@
 #pragma once
 
 #include "MockBlock.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "bcos-framework/ledger/LedgerInterface.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/storage/StorageInterface.h"
 #include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>
 #include <sstream>
-
-#ifndef WITH_WASM
-namespace bcos::wasm
-{
-class GasInjector
-{
-};
-}  // namespace bcos::wasm
-#endif
 
 namespace bcos::test
 {
@@ -164,7 +155,8 @@ public:
                         promise.set_value(entry.value());
                     });
                 auto rawEntry = promise.get_future().get();
-                auto entry = bcos::storage::serialize::decode<ledger::SystemConfigEntry>(rawEntry.get());
+                auto entry =
+                    bcos::storage::serialize::decode<ledger::SystemConfigEntry>(rawEntry.get());
                 _onGetConfig(nullptr, std::get<0>(entry), std::get<1>(entry));
                 return;
             }

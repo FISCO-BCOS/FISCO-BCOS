@@ -53,12 +53,11 @@ class TransactionExecutive : public std::enable_shared_from_this<TransactionExec
 public:
     using Ptr = std::shared_ptr<TransactionExecutive>;
     TransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, const wasm::GasInjector& gasInjector)
+        int64_t contextID, int64_t seq)
       : m_blockContext(blockContext),
         m_contractAddress(std::move(contractAddress)),
         m_contextID(contextID),
         m_seq(seq),
-        m_gasInjector(gasInjector),
         m_recoder(std::make_shared<storage::Recoder>()),
         m_transientRecoder(std::make_shared<storage::Recoder>()),
         m_storageWrapperObj(m_blockContext.storage(), m_recoder),
@@ -124,7 +123,6 @@ public:
 
     VMSchedule const& vmSchedule() const { return m_blockContext.vmSchedule(); }
 
-    bool isWasm() const { return m_blockContext.isWasm(); }
 
     bool hasContractTableChanged() const { return m_hasContractTableChanged; }
     void setContractTableChanged() { m_hasContractTableChanged = true; }
@@ -146,8 +144,7 @@ public:
     CallParameters::UniquePtr transferBalance(CallParameters::UniquePtr callParameters,
         int64_t requireGas, std::string_view currentContextAddress);
 
-    std::string getContractTableName(
-        const std::string_view& _address, bool isWasm = false, bool isCreate = false);
+    std::string getContractTableName(const std::string_view& _address);
 
     std::shared_ptr<storage::StateStorageInterface> getTransientStateStorage(int64_t contextID);
 
@@ -205,8 +202,6 @@ protected:
     int64_t m_contextID;
     int64_t m_seq;
     crypto::Hash::Ptr m_hashImpl;
-
-    const wasm::GasInjector& m_gasInjector;
 
     bcos::storage::Recoder::Ptr m_recoder;
     bcos::storage::Recoder::Ptr m_transientRecoder;

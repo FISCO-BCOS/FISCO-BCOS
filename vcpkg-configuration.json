@@ -19,10 +19,8 @@
     "./ports/openssl",
     "./ports/evmone",
     "./ports/intx",
-    "./ports/wabt",
     "./ports/blst",
     "./ports/ittapi",
-    "./ports/fbwasm",
     "./ports/group-sig",
     "./ports/paillier",
     "./ports/tikv-client-cpp"

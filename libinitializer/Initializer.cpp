@@ -40,7 +40,6 @@
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
 #include "bcos-storage/RocksDBStorage.h"
-#include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
 #include "fisco-bcos-tars-service/Common/TarsUtils.h"
@@ -73,6 +72,7 @@
 #include <bcos-transaction-executor/precompiled/PrecompiledManager.h>
 #include <bcos-transaction-scheduler/SchedulerParallelImpl.h>
 #include <bcos-transaction-scheduler/SchedulerSerialImpl.h>
+#include <legacy/bcos-storage/StorageWrapperImpl.h>
 #include <rocksdb/slice.h>
 #include <rocksdb/sst_file_reader.h>
 #include <txpool/validator/TxValidator.h>
@@ -342,7 +342,7 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_txpoolInitializer->txpool(), m_protocolInitializer->txResultFactory(),
         m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-        m_nodeConfig->isWasm(), m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
+        m_nodeConfig->isSerialExecute(), m_nodeConfig->keyPageSize());
 
     int64_t schedulerSeq = 0;  // In Max node, this seq will be update after consensus module
                                // switch to a leader during startup
@@ -421,9 +421,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         auto executorFactory = std::make_shared<bcos::executor::TransactionExecutorFactory>(
             m_ledger, m_txpoolInitializer->txpool(), cacheFactory, airExecutorStorage,
             executionMessageFactory, storageFactory,
-            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
-            m_nodeConfig->vmCacheSize(), m_nodeConfig->isAuthCheck(), executorName,
-            m_ioServicePool);
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->vmCacheSize(),
+            m_nodeConfig->isAuthCheck(), executorName, m_ioServicePool);
         auto switchExecutorManager = std::make_shared<bcos::executor::SwitchExecutorManager>(
             executorFactory, m_ioServicePool);
         executorManager->addExecutor(executorName, switchExecutorManager);
@@ -589,7 +588,7 @@ void Initializer::initSysContract()
             SYS_CONTRACT_DEPLOY_NUMBER, m_protocolInitializer, m_nodeConfig, block);
     }
 
-    if ((!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck()) ||
+    if (m_nodeConfig->isAuthCheck() ||
         versionCompareTo(m_nodeConfig->compatibilityVersion(), BlockVersion::V3_3_VERSION) >= 0)
     {
         // add auth deploy func here

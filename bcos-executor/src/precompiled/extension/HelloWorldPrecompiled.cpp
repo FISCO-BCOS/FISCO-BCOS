@@ -52,7 +52,8 @@ const char* const HELLO_WORLD_METHOD_SET = "set(string)";
 // register contract methods' interface in constructor
 HelloWorldPrecompiled::HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
-    // name2Selector is a member of the base class Precompiled, and keeps the mapping of interface and its implementation
+    // name2Selector is a member of the base class Precompiled, and keeps the mapping of interface
+    // and its implementation
     name2Selector[HELLO_WORLD_METHOD_GET] = getFuncSelector(HELLO_WORLD_METHOD_GET, _hashImpl);
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET, _hashImpl);
 }
@@ -68,7 +69,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_callParameters->input().size());
 

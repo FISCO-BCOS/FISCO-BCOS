@@ -4,10 +4,9 @@
 using namespace bcos::executor;
 using namespace bcos::precompiled;
 
-BillingTransactionExecutive::BillingTransactionExecutive(const BlockContext& blockContext,
-    std::string contractAddress, int64_t contextID, int64_t seq,
-    const wasm::GasInjector& gasInjector)
-  : TransactionExecutive(blockContext, std::move(contractAddress), contextID, seq, gasInjector)
+BillingTransactionExecutive::BillingTransactionExecutive(
+    const BlockContext& blockContext, std::string contractAddress, int64_t contextID, int64_t seq)
+  : TransactionExecutive(blockContext, std::move(contractAddress), contextID, seq)
 {}
 
 CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::UniquePtr input)
@@ -23,7 +22,7 @@ CallParameters::UniquePtr BillingTransactionExecutive::start(CallParameters::Uni
     {
         CallParameters::UniquePtr callParam4AccountPre =
             std::make_unique<CallParameters>(CallParameters::MESSAGE);
-        auto codec = bcos::CodecWrapper(m_blockContext.hashHandler(), m_blockContext.isWasm());
+        auto codec = bcos::CodecWrapper(m_blockContext.hashHandler());
         callParam4AccountPre->origin = BALANCE_PRECOMPILED_ADDRESS;
         callParam4AccountPre->senderAddress =
             contractAddress();  // because seq = 0, not delegatecall

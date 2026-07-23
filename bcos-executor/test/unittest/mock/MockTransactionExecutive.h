@@ -17,8 +17,8 @@ class MockTransactionExecutive : public bcos::executor::CoroutineTransactionExec
 public:
     using Ptr = std::shared_ptr<MockTransactionExecutive>;
     MockTransactionExecutive(const BlockContext& blockContext, std::string contractAddress,
-        int64_t contextID, int64_t seq, std::shared_ptr<wasm::GasInjector>& gasInjector)
-      : CoroutineTransactionExecutive(blockContext, contractAddress, contextID, seq, *gasInjector)
+        int64_t contextID, int64_t seq)
+      : CoroutineTransactionExecutive(blockContext, contractAddress, contextID, seq)
     {}
 
     virtual ~MockTransactionExecutive() {}

@@ -41,7 +41,8 @@ struct NodeInfo
     std::string agency;
     std::string buildTime;
     std::string gitCommitHash;
-    bool isWasm;
+    // WASM support was removed; retained for response-shape compatibility, always false.
+    bool isWasm = false;
     bool isSM;
 };
 

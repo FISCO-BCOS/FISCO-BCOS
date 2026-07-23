@@ -20,8 +20,8 @@
 
 #include "precompiled/KVTablePrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
-#include "libprecompiled/PreCompiledFixture.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "libprecompiled/PreCompiledFixture.h"
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -34,12 +34,12 @@ namespace bcos::test
 class KVTableFactoryPrecompiledFixture : public PrecompiledFixture
 {
 public:
-    KVTableFactoryPrecompiledFixture() { init(false); }
+    KVTableFactoryPrecompiledFixture() { init(); }
 
-    void init(bool _isWasm)
+    void init()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
-        setIsWasm(_isWasm);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
+        prepareEnv();
     }
 
     virtual ~KVTableFactoryPrecompiledFixture() {}
@@ -62,7 +62,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
+        params2->setTo(std::string(TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -156,7 +156,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
+        params2->setTo(std::string(TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -305,58 +305,6 @@ BOOST_AUTO_TEST_CASE(createTableTest)
     }
 }
 
-BOOST_AUTO_TEST_CASE(createTableWasmTest)
-{
-    init(true);
-    int64_t number = 2;
-    //
-    {
-        creatKVTable(number++, "t_test", "id", "item_name", "/tables/t_test");
-    }
-
-    // createTable exist
-    {
-        creatKVTable(number++, "t_test", "id", "item_name", "/tables/t_test",
-            CODE_TABLE_NAME_ALREADY_EXIST, true);
-    }
-
-    // createTable build
-    {
-        auto response =
-            creatKVTable(number++, "t_test/t_test2", "id", "item_name", "/tables/t_test/t_test2");
-        BOOST_CHECK(response->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    std::string errorStr;
-    for (int i = 0; i <= SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH; i++)
-    {
-        errorStr += std::to_string(0);
-    }
-    // createTable too long tableName, key and field
-    {
-        auto r1 = creatKVTable(number++, errorStr, "id", "item_name", "/tables/t_test3", 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r2 =
-            creatKVTable(number++, "t_test", errorStr, "item_name", "/tables/t_test4", 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r3 = creatKVTable(number++, "t_test", "id", errorStr, "/tables/t_test5", 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // createTable error key and field
-    std::string errorStr2 = "/test&";
-    {
-        auto r1 = creatKVTable(
-            number++, errorStr2, "id", "item_name,item_id", "/tables/t_test6", 0, true);
-        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r2 = creatKVTable(
-            number++, "t_test", errorStr2, "item_name,item_id", "/tables/t_test7", 0, true);
-        BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r3 = creatKVTable(number++, "t_test", "id", errorStr2, "/tables/t_test8", 0, true);
-        BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(descTest)
 {
     int64_t number = 2;
@@ -371,81 +319,10 @@ BOOST_AUTO_TEST_CASE(descTest)
     BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
 }
 
-BOOST_AUTO_TEST_CASE(descWasmTest)
-{
-    init(true);
-    int64_t number = 2;
-    std::string address = "/tables/t_kv_test";
-    // create
-    {
-        auto result = creatKVTable(number++, "t_kv_test", "id", "item_name", address);
-        BOOST_CHECK(result->status() == (int32_t)TransactionStatus::None);
-    }
-
-    auto result2 = desc(number++, "t_kv_test");
-    TableInfoTuple tableInfo = {"id", {"item_name"}};
-    BOOST_CHECK(result2->data().toBytes() == codec->encode(tableInfo));
-}
-
 BOOST_AUTO_TEST_CASE(setTest)
 {
     int64_t number = 2;
     std::string address = "1234853b49838bd3e9466c85a4cc3428c960dde2";
-    // create
-    {
-        creatKVTable(number++, "t_kv_test", "id", "item_name", address);
-    }
-
-    // simple set and get
-    {
-        auto result1 = set(number++, address, "id1", "test1");
-        auto result2 = get(number++, address, "id1");
-        BOOST_CHECK(result2->data().toBytes() == codec->encode(true, std::string("test1")));
-    }
-
-    // cover write and get
-    {
-        auto result3 = set(number++, address, "id1", "test2");
-        auto result4 = get(number++, address, "id1");
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(true, std::string("test2")));
-    }
-
-    // get not exist
-    {
-        auto result4 = get(number++, address, "noExist");
-        BOOST_CHECK(result4->data().toBytes() == codec->encode(false, std::string("")));
-    }
-
-    boost::log::core::get()->set_logging_enabled(false);
-    // set key overflow
-    {
-        std::string errorKey = "0";
-        for (int j = 0; j < USER_TABLE_KEY_VALUE_MAX_LENGTH; ++j)
-        {
-            errorKey += "0";
-        }
-        auto result3 = set(number++, address, errorKey, "test2");
-        BOOST_CHECK(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-
-    // set value overflow
-    {
-        std::string errorValue = "0";
-        for (int j = 0; j < USER_TABLE_FIELD_VALUE_MAX_LENGTH; ++j)
-        {
-            errorValue += "0";
-        }
-        auto result3 = set(number++, address, "1", errorValue);
-        BOOST_CHECK(result3->status() == (int32_t)TransactionStatus::PrecompiledError);
-    }
-    boost::log::core::get()->set_logging_enabled(true);
-}
-
-BOOST_AUTO_TEST_CASE(setWasmTest)
-{
-    init(true);
-    int64_t number = 2;
-    std::string address = "/tables/t_kv_test";
     // create
     {
         creatKVTable(number++, "t_kv_test", "id", "item_name", address);
