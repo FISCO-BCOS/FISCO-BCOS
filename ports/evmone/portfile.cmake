@@ -1,9 +1,10 @@
 # Official evmone (ipsilon) v0.21.0. FISCO-BCOS's SM3 (national crypto) support is
-# applied as a transparent patch instead of consuming a private fork: it adds the
-# host-provided hash_fn hook that lets SM chains use SM3 for the KECCAK256 opcode,
-# plus the macOS static-lib combine and exception-enabled build tweaks evmone needs
-# here. See fisco-sm3.patch. WASM and the dead evmc_gas_metrics field are NOT part
-# of the patch (WASM support was removed from FISCO-BCOS).
+# applied as a transparent patch instead of consuming a private fork: evmone::VM
+# carries an optional host-provided hash_fn used by the KECCAK256 opcode, so SM
+# chains hash with SM3. The evmc/ headers are NOT modified (evmc_host_context stays
+# opaque upstream). The patch also carries the macOS static-lib combine and the
+# fork-parity exception-enabled build (noexcept stripped from the execute entry
+# points; NOT an exception-propagation guarantee). See fisco-sm3.patch.
 # Use the GitHub source archive (single tarball) rather than a full git history
 # fetch: official evmone's history is large and vcpkg_from_git kept disconnecting
 # mid-transfer. The archive contains the vendored evmc/ and lib/evmone_precompiles/
@@ -15,20 +16,6 @@ vcpkg_from_github(
     SHA512 bc2928d42140d2fbb47d1e06773e634d208945e52ac70a418798586897a60164910cc2b23c80479ae172941d8d9142ea6fdd86e13f560195cff44ccdc1f1d0f2
     HEAD_REF master
     PATCHES fisco-sm3.patch
-)
-
-# 1b. Remove find_dependency(evmc) from the auto-generated evmoneConfig.cmake.
-#     evmc is bundled inside evmone and is not a separate vcpkg package.
-vcpkg_replace_string("${SOURCE_PATH}/lib/evmone/CMakeLists.txt"
-    "@PACKAGE_INIT@\\ninclude(CMakeFindDependencyMacro)\\nfind_dependency(evmc CONFIG)\\ncheck_required_components(\"@PROJECT_NAME@\")\\n"
-    "@PACKAGE_INIT@\\ncheck_required_components(\"@PROJECT_NAME@\")\\n"
-)
-
-# 2. Remove EXPORT from install(TARGETS) to avoid export set errors
-#    (evmone depends on evmc and evmone_precompiles which are not in the export set)
-vcpkg_replace_string("${SOURCE_PATH}/CMakeLists.txt"
-    "install(TARGETS \${install_targets} EXPORT evmoneTargets"
-    "install(TARGETS \${install_targets}"
 )
 
 vcpkg_cmake_configure(
@@ -83,18 +70,8 @@ if(NOT DEFINED VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
     file(INSTALL "${_precomp_rel_lib}" DESTINATION "${CURRENT_PACKAGES_DIR}/lib")
 endif()
 
-# 4b. Install evmone internal headers needed by FISCO-BCOS
-#     (baseline.hpp, vm.hpp, and transitive deps are in lib/evmone/, not installed by default)
-file(INSTALL
-    "${SOURCE_PATH}/lib/evmone/baseline.hpp"
-    "${SOURCE_PATH}/lib/evmone/vm.hpp"
-    "${SOURCE_PATH}/lib/evmone/execution_state.hpp"
-    "${SOURCE_PATH}/lib/evmone/tracing.hpp"
-    "${SOURCE_PATH}/lib/evmone/constants.hpp"
-    "${SOURCE_PATH}/lib/evmone/delegation.hpp"
-    DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone")
-
 # 4c. Install phase-1 precompile crypto headers used directly by FISCO-BCOS.
+#     (lib/evmone/*.hpp internal headers are installed by the patch's DIRECTORY install.)
 file(INSTALL
     "${SOURCE_PATH}/lib/evmone_precompiles/sha256.hpp"
     "${SOURCE_PATH}/lib/evmone_precompiles/ripemd160.hpp"
