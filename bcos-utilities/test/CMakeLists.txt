@@ -32,5 +32,6 @@ set_source_files_properties("unittests/libutilities/RateCollectorTest.cpp" PROPE
 set_source_files_properties("unittests/libutilities/RateReporterTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libutilities/BoostLogInitializerTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libutilities/CommonUtilTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/libutilities/TokenBucketRateLimiterTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
