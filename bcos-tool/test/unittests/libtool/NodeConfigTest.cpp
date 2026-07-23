@@ -111,5 +111,55 @@ BOOST_AUTO_TEST_CASE(loadConfigFromStringPartialDocumentDispatchesSubLoaders)
     BOOST_CHECK(true);
 }
 
+// The cert/key material has direct setters (used when certs are injected
+// rather than read from disk); check each round-trips.
+BOOST_AUTO_TEST_CASE(certMaterialSettersRoundTrip)
+{
+    NodeConfig cfg;
+    cfg.setCertPath("/etc/certs");
+    BOOST_CHECK_EQUAL(cfg.certPath(), "/etc/certs");
+    cfg.setCaCert("ca-pem");
+    BOOST_CHECK_EQUAL(cfg.caCert(), "ca-pem");
+    cfg.setNodeCert("node-pem");
+    BOOST_CHECK_EQUAL(cfg.nodeCert(), "node-pem");
+    cfg.setNodeKey("node-key");
+    BOOST_CHECK_EQUAL(cfg.nodeKey(), "node-key");
+    cfg.setSmCaCert("sm-ca");
+    BOOST_CHECK_EQUAL(cfg.smCaCert(), "sm-ca");
+    cfg.setSmNodeCert("sm-node");
+    BOOST_CHECK_EQUAL(cfg.smNodeCert(), "sm-node");
+    cfg.setSmNodeKey("sm-key");
+    BOOST_CHECK_EQUAL(cfg.smNodeKey(), "sm-key");
+    cfg.setEnSmNodeCert("en-sm-node");
+    BOOST_CHECK_EQUAL(cfg.enSmNodeCert(), "en-sm-node");
+    cfg.setEnSmNodeKey("en-sm-key");
+    BOOST_CHECK_EQUAL(cfg.enSmNodeKey(), "en-sm-key");
+    cfg.setWithoutTarsFramework(true);
+    BOOST_CHECK(cfg.withoutTarsFramework());
+}
+
+// All read-only accessors must be queryable on a default-constructed config
+// (they return the documented defaults, never throw).
+BOOST_AUTO_TEST_CASE(readOnlyAccessorsQueryableOnDefault)
+{
+    NodeConfig cfg;
+    BOOST_CHECK_NO_THROW(cfg.p2pListenIP());
+    BOOST_CHECK_NO_THROW(cfg.p2pListenPort());
+    BOOST_CHECK_NO_THROW(cfg.p2pSmSsl());
+    BOOST_CHECK_NO_THROW(cfg.p2pNodeDir());
+    BOOST_CHECK_NO_THROW(cfg.p2pNodeFileName());
+    BOOST_CHECK_NO_THROW(cfg.baselineSchedulerConfig());
+    BOOST_CHECK_NO_THROW(cfg.tarsRPCConfig());
+    BOOST_CHECK_NO_THROW(cfg.enableTxsFromFreeNode());
+    BOOST_CHECK_NO_THROW(cfg.preStoreBackpressureEnabled());
+    BOOST_CHECK_NO_THROW(cfg.preStoreMaxInflight());
+    BOOST_CHECK_NO_THROW(cfg.genesisConfig());
+    BOOST_CHECK_NO_THROW(cfg.checkTransactionSignature());
+    BOOST_CHECK_NO_THROW(cfg.checkParallelConflict());
+    BOOST_CHECK_NO_THROW(cfg.executorVersion());
+    BOOST_CHECK_NO_THROW(cfg.singlePointConsensus());
+    BOOST_CHECK_NO_THROW(cfg.forceSender());
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
