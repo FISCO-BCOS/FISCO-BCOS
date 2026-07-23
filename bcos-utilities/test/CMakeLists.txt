@@ -35,5 +35,6 @@ set_source_files_properties("unittests/libutilities/CommonUtilTest.cpp" PROPERTI
 set_source_files_properties("unittests/libutilities/TokenBucketRateLimiterTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libutilities/IOServicePoolTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libutilities/ErrorHelperTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/libutilities/AnyHolderTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 config_test_cases("" "${SOURCES}" ${TEST_BINARY_NAME} "" "")
