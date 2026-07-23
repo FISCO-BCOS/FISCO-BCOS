@@ -39,10 +39,8 @@ class CompatHostTestExecutive : public executor::TransactionExecutive
 {
 public:
     CompatHostTestExecutive(std::shared_ptr<executor::BlockContext> blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        const wasm::GasInjector& gasInjector)
-      : executor::TransactionExecutive(
-            *blockContext, std::move(contractAddress), contextID, seq, gasInjector),
+        std::string contractAddress, int64_t contextID, int64_t seq)
+      : executor::TransactionExecutive(*blockContext, std::move(contractAddress), contextID, seq),
         m_blockContextHolder(std::move(blockContext))
     {}
 
@@ -70,7 +68,6 @@ struct CompatHostContextFixture
         std::make_shared<storage::StateStorage>(backend, false);
     std::shared_ptr<executor::LedgerCache> ledgerCache =
         std::make_shared<executor::LedgerCache>(std::make_shared<MockLedger>());
-    wasm::GasInjector gasInjector;
 };
 
 inline std::string compatFillZeroAddr(int num)
@@ -186,12 +183,11 @@ inline executor::HostContext makeCompatHostContext(CompatHostContextFixture& fix
     task::syncWait(ledger::writeToStorage(features, *fixture.stateStorage, 1));
     auto blockContext = std::make_shared<executor::BlockContext>(fixture.stateStorage,
         fixture.ledgerCache, fixture.hashImpl, 1, h256(), 0,
-        static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION), false, false, fixture.backend);
+        static_cast<uint32_t>(protocol::BlockVersion::MAX_VERSION), false, fixture.backend);
     // Unit-test storage may not round-trip every feature flag; pin the profile explicitly.
     blockContext->setFeatures(features);
     blockContext->setVMSchedule();
-    auto executive =
-        std::make_shared<CompatHostTestExecutive>(blockContext, "", 100, 0, fixture.gasInjector);
+    auto executive = std::make_shared<CompatHostTestExecutive>(blockContext, "", 100, 0);
     if (attach == CompatEvmAttach::BlsG1Add)
     {
         compatAttachBlsG1AddEvmPrecompile(executive);

@@ -45,13 +45,13 @@ SmallBankPrecompiled::SmallBankPrecompiled(crypto::Hash::Ptr hashImpl, std::stri
 }
 
 
-std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _param, bool _isWasm)
+std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _param)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
     std::vector<std::string> results;
-    auto codec = CodecWrapper(m_hashImpl, _isWasm);
+    auto codec = CodecWrapper(m_hashImpl);
 
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT])
@@ -103,7 +103,7 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
                                << LOG_KV("tableName", m_tableName);
         const auto& blockContext = _executive->blockContext();
         getErrorCodeOut(_callParameters->mutableExecResult(), CODE_TABLE_OPEN_ERROR,
-            CodecWrapper(blockContext.hashHandler(), blockContext.isWasm()));
+            CodecWrapper(blockContext.hashHandler()));
         return _callParameters;
     }
 
@@ -138,7 +138,7 @@ void SmallBankPrecompiled::updateBalanceCall(
     std::string user;
     u256 amount;
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     codec.decode(_data, user, amount);
 
     int ret;
@@ -189,7 +189,7 @@ void SmallBankPrecompiled::sendPaymentCall(
     std::string const&, bytes& _out)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     std::string fromUser, toUser;
     u256 amount;
     codec.decode(_data, fromUser, toUser, amount);

@@ -244,15 +244,8 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
     auto& hostContext = static_cast<HostContext&>(*_context);
     // FIXME: the evmc_tx_context should init use the transaction info
     evmc_tx_context result{};
-    if (hostContext.isWasm())
-    {
-        result.tx_origin = toEvmC(hostContext.origin());
-    }
-    else
-    {
-        auto origin = fromHex(hostContext.origin());
-        result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
-    }
+    auto origin = fromHex(hostContext.origin());
+    result.tx_origin = toEvmC(std::string_view((char*)origin.data(), origin.size()));
     result.block_number = hostContext.blockNumber();
     result.block_timestamp = hostContext.timestamp();
     result.block_gas_limit = hostContext.blockGasLimit();
@@ -329,129 +322,12 @@ evmc_host_interface const fnTable = {
 };
 // clang-format on
 
-// for wasm
-
-bool wasmAccountExists(
-    evmc_host_context* _context, const uint8_t* address, int32_t addressLength) noexcept
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.exists(string_view((char*)address, addressLength));
-}
-
-int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
-    const uint8_t* _key, int32_t _keyLength, uint8_t* _value, int32_t _valueLength)
-{
-    boost::ignore_unused(_addr, _addressLength);
-    auto& hostContext = static_cast<HostContext&>(*_context);
-
-    // programming assert for debug
-    assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
-    auto value = hostContext.get(std::string_view((char*)_key, _keyLength));
-    if (value.size() > (size_t)_valueLength)
-    {
-        return -1;
-    }
-    memcpy(_value, value.data(), value.size());
-    return value.size();
-}
-
-evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
-    const uint8_t* _key, int32_t _keyLength, const uint8_t* _value, int32_t _valueLength)
-{
-    boost::ignore_unused(_addr, _addressLength);
-    auto& hostContext = static_cast<HostContext&>(*_context);
-
-    // IF (!HOSTCONTEXT.ISPERMITTED())
-    // {  // FIXME: RETURN STATUS INSTEAD OF THROW EXCEPTION
-    //     BOOST_THROW_EXCEPTION(PERMISSIONDENIED());
-    // }
-    assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
-    string key((char*)_key, _keyLength);
-    string value((char*)_value, _valueLength);
-
-    auto status = EVMC_STORAGE_MODIFIED;
-    if (value.empty())  // TODO: should use 32 bytes 0?
-    {
-        status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
-    }
-    hostContext.set(key, value);  // Interface uses native endianness
-    return status;
-}
-
-size_t wasmGetCodeSize(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return hostContext.codeSizeAt(string_view((char*)_addr, _addressLength));
-}
-
-evmc_bytes32 wasmGetCodeHash(
-    evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    return toEvmC(hostContext.codeHashAt(string_view((char*)_addr, _addressLength)));
-}
-
-size_t wasmCopyCode(evmc_host_context* _context, const uint8_t*, int32_t, size_t,
-    uint8_t* _bufferData, size_t _bufferSize)
-{
-    auto& hostContext = static_cast<HostContext&>(*_context);
-
-    hostContext.setCode(bytes((bcos::byte*)_bufferData, (bcos::byte*)_bufferData + _bufferSize));
-    return _bufferSize;
-
-    //   hostContext.setCode(bcos::bytes(_bufferData, _bufferSize));
-
-    // auto code = hostContext.codeAt(string_view((char *)_addr, _addressLength));
-
-    // // Handle "big offset" edge case.
-    // if (_codeOffset >= code->size())
-    //   return 0;
-
-    // size_t maxToCopy = code->size() - _codeOffset;
-    // size_t numToCopy = std::min(maxToCopy, _bufferSize);
-    // std::copy_n(code->data() + _codeOffset, numToCopy, _bufferData);
-    // return numToCopy;
-}
-
-void wasmLog(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
-    uint8_t const* _data, size_t _dataSize, const evmc_bytes32 _topics[],
-    size_t _numTopics) noexcept
-{
-    boost::ignore_unused(_addr, _addressLength);
-
-    auto& hostContext = static_cast<HostContext&>(*_context);
-    assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
-    h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
-    hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
-}
-
-wasm_host_interface const wasmFnTable = {
-    wasmAccountExists,
-    get,
-    set,
-    wasmGetCodeSize,
-    wasmGetCodeHash,
-    wasmCopyCode,
-    wasmLog,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-};
 
 }  // namespace
 
 const evmc_host_interface* getHostInterface()
 {
     return &fnTable;
-}
-const wasm_host_interface* getWasmHostInterface()
-{
-    return &wasmFnTable;
 }
 }  // namespace executor
 }  // namespace bcos

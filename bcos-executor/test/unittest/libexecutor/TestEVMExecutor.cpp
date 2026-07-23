@@ -20,7 +20,6 @@
  */
 
 #include "../mock/MockLedger.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
@@ -41,6 +40,7 @@
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "evmc/evmc.h"
 #include "executor/TransactionExecutorFactory.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -83,25 +83,21 @@ struct TransactionExecutorFixture
         auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend, false);
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-            backend, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+            backend, executionResultFactory, stateStorageFactory, hashImpl, false);
 
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto secretKeyBytes =
             fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
-        memcpy(keyPair->secretKey()->mutableData(),
-            secretKeyBytes.data(),
-            32);
+        memcpy(keyPair->secretKey()->mutableData(), secretKeyBytes.data(), 32);
         // address: "11ac3ca85a307ae2aff614e83949ab691ba019c5"
         auto publicKeyBytes = fromHex(
             "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
             "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae");
-        memcpy(keyPair->publicKey()->mutableData(),
-            publicKeyBytes.data(),
-            64);
+        memcpy(keyPair->publicKey()->mutableData(), publicKeyBytes.data(), 64);
         eoa = keyPair->address(hashImpl).hex();
 
-        codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
+        codec = std::make_unique<bcos::CodecWrapper>(hashImpl);
     }
     ~TransactionExecutorFixture() { boost::log::core::get()->set_logging_enabled(true); }
 
@@ -1958,7 +1954,7 @@ BOOST_AUTO_TEST_CASE(transientStorageTest2)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string transientCodeBin =
         "6080604052348015600e575f80fd5b506108748061001c5f395ff3fe608060405234801561000f575f80fd5b50"
@@ -2181,7 +2177,7 @@ BOOST_AUTO_TEST_CASE(mcopy_opcode_test_1)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string mcopyCodeBin =
         "6080604052348015600e575f80fd5b5060b980601a5f395ff3fe6080604052348015600e575f80"
@@ -2289,7 +2285,7 @@ BOOST_AUTO_TEST_CASE(blobBaseFee_test)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string blobBaseFeeCodeBin =
         "6080604052348015600e575f80fd5b5060d980601a5f395ff3fe6080"
@@ -2391,7 +2387,7 @@ BOOST_AUTO_TEST_CASE(blobHash_test)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string blobHashCodeBin =
         "6080604052348015600e575f80fd5b5060d780601a5f395ff3fe6080604052348015600e575f80fd5b50600436"
@@ -2481,7 +2477,7 @@ BOOST_AUTO_TEST_CASE(getTransientStorageTest)
     auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
     auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(newStorage, false);
     auto newExecutor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, lruStorage,
-        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false, false);
+        newStorage, executionResultFactory, stateStorageFactory, hashImpl, false);
 
     std::string transientCodeBin =
         "60806040527fe3598e46f24394be411dcf68a978c22ef80d97a0ef7c630d9b8e35d241c0210060015534801560"

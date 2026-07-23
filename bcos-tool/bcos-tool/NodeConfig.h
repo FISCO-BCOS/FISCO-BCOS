@@ -141,7 +141,6 @@ public:
     std::int64_t epochSealerNum() const;
     std::int64_t epochBlockNum() const;
 
-    bool isWasm() const;
     bool isAuthCheck() const;
     bool isSerialExecute() const;
     size_t vmCacheSize() const;

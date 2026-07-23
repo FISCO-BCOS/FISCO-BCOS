@@ -51,8 +51,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
     const auto& blockContext = _executive->blockContext();
-    auto codec =
-        std::make_shared<CodecWrapper>(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = std::make_shared<CodecWrapper>(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
     if (func == name2Selector[GROUP_SIG_METHOD_SET_STR])

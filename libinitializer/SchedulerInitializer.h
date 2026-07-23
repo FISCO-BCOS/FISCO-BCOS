@@ -43,13 +43,13 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, size_t blockLimit, bool isAuthCheck, bool isWasm,
-        bool isSerialExecute, int64_t schedulerSeq)
+        crypto::Hash::Ptr hashImpl, size_t blockLimit, bool isAuthCheck, bool isSerialExecute,
+        int64_t schedulerSeq)
     {
         bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
             std::move(storage), std::move(executionMessageFactory), std::move(blockFactory),
             std::move(txPool), std::move(transactionSubmitResultFactory), std::move(hashImpl),
-            isAuthCheck, isWasm, isSerialExecute);
+            isAuthCheck, isSerialExecute);
 
         return factory.build(schedulerSeq);
     }
@@ -61,13 +61,12 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-        size_t keyPageSize)
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute, size_t keyPageSize)
     {
         return std::make_shared<bcos::scheduler::SchedulerFactory>(std::move(executorManager),
             std::move(_ledger), std::move(storage), executionMessageFactory,
             std::move(blockFactory), txPool, std::move(transactionSubmitResultFactory),
-            std::move(hashImpl), isAuthCheck, isWasm, isSerialExecute, keyPageSize);
+            std::move(hashImpl), isAuthCheck, isSerialExecute, keyPageSize);
     }
 };
 }  // namespace bcos::initializer

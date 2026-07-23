@@ -64,8 +64,7 @@ BOOST_FIXTURE_TEST_SUITE(PrecompiledMapProductionInvariantTest, TransactionFixtu
 // must disappear; a non-L2 precompile (CRYPTO_ADDRESS) must remain visible.
 BOOST_AUTO_TEST_CASE(EvmProductionMapHidesAllL2DisabledMembers)
 {
-    setIsWasm(
-        false, /*isCheckAuth*/ true, /*isKeyPage*/ false, protocol::BlockVersion::MAX_VERSION);
+    prepareEnv(/*isCheckAuth*/ true, /*isKeyPage*/ false, protocol::BlockVersion::MAX_VERSION);
     auto const* map = executor->precompiledMapForTest();
     BOOST_REQUIRE(map != nullptr);
 
@@ -97,52 +96,6 @@ BOOST_AUTO_TEST_CASE(EvmProductionMapHidesAllL2DisabledMembers)
     // static set in the same PR-review fix and now flow through this predicate
     // path (and are covered by the `for (auto addr : kL2DisabledSet)` loop above).
     BOOST_CHECK(map->at(CRYPTO_ADDRESS, kMaxVersion, isAuth, l2) != nullptr);
-}
-
-// Same invariant for the WASM-initialized map. kL2DisabledSet holds EVM-address
-// strings; the WASM map keys by /sys/* name, so we translate via SYS_NAME_ADDRESS_MAP
-// and probe each /sys name that backs an L2-disabled address.
-//
-// IMPORTANT: do NOT wrap the BOOST_AUTO_TEST_CASE in `#ifdef WITH_WASM`.
-// FISCO's cmake/SearchTestCases.cmake registers test cases by grep-ing source
-// text for BOOST_..._TEST_CASE — it never runs the preprocessor. With the
-// case hidden behind #ifdef, the test binary built without WITH_WASM still
-// gets a ctest entry for this name, and ctest exits ***Failed with
-// "no test cases matching filter or all test cases were disabled". So the
-// case body itself stays unconditionally visible to the source grep, and the
-// WITH_WASM dependency moves inside as an early skip.
-BOOST_AUTO_TEST_CASE(WasmProductionMapHidesAllL2DisabledMembers)
-{
-#ifndef WITH_WASM
-    BOOST_TEST_MESSAGE("skipped: built without WITH_WASM");
-    return;
-#else
-    setIsWasm(
-        true, /*isCheckAuth*/ false, /*isKeyPage*/ false, protocol::BlockVersion::MAX_VERSION);
-    auto const* map = executor->precompiledMapForTest();
-    BOOST_REQUIRE(map != nullptr);
-
-    Features pbft = enablingFeatures();
-    Features l2 = enablingFeatures();
-    l2.set(Features::Flag::feature_l2_ethereum_compat);
-    constexpr bool isAuth = true;
-
-    for (auto const& [name, addr] : SYS_NAME_ADDRESS_MAP)
-    {
-        bool const inSet =
-            std::find(kL2DisabledSet.begin(), kL2DisabledSet.end(), addr) != kL2DisabledSet.end();
-        if (!inSet)
-        {
-            continue;
-        }
-        BOOST_TEST_INFO("name=" << name << " addr=" << addr);
-        BOOST_CHECK_MESSAGE(map->at(name, kMaxVersion, isAuth, l2) == nullptr,
-            "expected wasm " << name << " hidden under feature_l2_ethereum_compat");
-    }
-
-    // CRYPTO_NAME stays visible (no predicate).
-    BOOST_CHECK(map->at(CRYPTO_NAME, kMaxVersion, isAuth, l2) != nullptr);
-#endif
 }
 
 BOOST_AUTO_TEST_SUITE_END()

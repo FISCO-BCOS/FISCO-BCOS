@@ -166,7 +166,7 @@ bool Precompiled::isParallelPrecompiled()
     return false;
 }
 
-std::vector<std::string> Precompiled::getParallelTag(bytesConstRef, bool)
+std::vector<std::string> Precompiled::getParallelTag(bytesConstRef)
 {
     return {};
 }

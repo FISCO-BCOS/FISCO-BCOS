@@ -18,7 +18,6 @@ gateway_sm_ssl=false
 group_id="group0"
 # the genesis configuration path of the group, will generate new genesis configuration if not configured
 # genesis_config_path = ""
-# VM type, now only support evm/wasm
 vm_type="evm"
 # use sm-crypto or not
 sm_crypto=false

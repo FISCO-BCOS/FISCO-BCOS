@@ -40,7 +40,7 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
-        bool isWasm, bool isAuthCheck, std::string name = "executor-" + std::to_string(utcTime()),
+        bool isAuthCheck, std::string name = "executor-" + std::to_string(utcTime()),
         bcos::IOServicePool::Ptr ioServicePool = nullptr)
     {  // only for test
         if (!ioServicePool)
@@ -50,7 +50,7 @@ public:
         auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
             storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
         return std::make_shared<TransactionExecutor>(ledger, txpool, cachedStorage, backendStorage,
-            executionMessageFactory, stateStorageFactory, hashImpl, isWasm, isAuthCheck,
+            executionMessageFactory, stateStorageFactory, hashImpl, isAuthCheck,
             std::make_shared<VMFactory>(), std::move(keyPageIgnoreTables), name, ioServicePool);
     }
 
@@ -59,7 +59,7 @@ public:
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
-        bool isWasm, size_t vmCacheSize, bool isAuthCheck, std::string name,
+        size_t vmCacheSize, bool isAuthCheck, std::string name,
         bcos::IOServicePool::Ptr ioServicePool = nullptr)
       : m_name(std::move(name)),
         m_ledger(std::move(ledger)),
@@ -69,7 +69,6 @@ public:
         m_storage(std::move(storage)),
         m_executionMessageFactory(std::move(executionMessageFactory)),
         m_hashImpl(std::move(hashImpl)),
-        m_isWasm(isWasm),
         m_isAuthCheck(isAuthCheck),
         m_vmFactory(std::make_shared<VMFactory>(vmCacheSize)),
         m_ioServicePool(std::move(ioServicePool))
@@ -82,7 +81,7 @@ public:
             storage::IGNORED_ARRAY.begin(), storage::IGNORED_ARRAY.end());
         auto executor = std::make_shared<ShardingTransactionExecutor>(m_ledger, m_txpool,
             m_cacheFactory ? m_cacheFactory->build() : nullptr, m_storage,
-            m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isWasm, m_isAuthCheck,
+            m_executionMessageFactory, m_stateStorageFactory, m_hashImpl, m_isAuthCheck,
             m_vmFactory, std::move(keyPageIgnoreTables), m_name + "-" + std::to_string(utcTime()),
             m_ioServicePool);
         if (f_onNeedSwitchEvent)
@@ -103,7 +102,6 @@ private:
     storage::TransactionalStorageInterface::Ptr m_storage;
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
-    bool m_isWasm;
     bool m_isAuthCheck;
     std::function<void()> f_onNeedSwitchEvent;
     std::shared_ptr<VMFactory> m_vmFactory;

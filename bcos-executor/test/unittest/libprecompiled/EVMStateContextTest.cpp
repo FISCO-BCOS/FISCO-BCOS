@@ -38,8 +38,8 @@ class EVMStateContextFixture : public PrecompiledFixture
 public:
     EVMStateContextFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        setIsWasm(false, false, true);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
+        prepareEnv(false, true);
         testAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         origin = Address("0x1234567890123456789012345678901234567890").hex();
     }

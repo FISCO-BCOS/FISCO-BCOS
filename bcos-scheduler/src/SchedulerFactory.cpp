@@ -8,8 +8,7 @@ SchedulerFactory::SchedulerFactory(ExecutorManager::Ptr executorManager,
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
-    size_t keyPageSize)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute, size_t keyPageSize)
   : m_executorManager(std::move(executorManager)),
     m_ledger(std::move(ledger)),
     m_storage(std::move(storage)),
@@ -19,17 +18,15 @@ SchedulerFactory::SchedulerFactory(ExecutorManager::Ptr executorManager,
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
-    m_isWasm(isWasm),
     m_isSerialExecute(isSerialExecute),
     m_keyPageSize(keyPageSize)
 {}
 
 SchedulerImpl::Ptr SchedulerFactory::build(int64_t schedulerTermId)
 {
-    auto scheduler = std::make_shared<SchedulerImpl>(m_executorManager, m_ledger,
-        m_storage, m_executionMessageFactory, m_blockFactory, m_txPool,
-        m_transactionSubmitResultFactory, m_hashImpl, m_isAuthCheck, m_isWasm,
-        m_isSerialExecute, schedulerTermId, m_keyPageSize);
+    auto scheduler = std::make_shared<SchedulerImpl>(m_executorManager, m_ledger, m_storage,
+        m_executionMessageFactory, m_blockFactory, m_txPool, m_transactionSubmitResultFactory,
+        m_hashImpl, m_isAuthCheck, m_isSerialExecute, schedulerTermId, m_keyPageSize);
     scheduler->fetchConfig();
 
     scheduler->registerBlockNumberReceiver(m_blockNumberReceiver);
@@ -45,7 +42,8 @@ void SchedulerFactory::setBlockNumberReceiver(
 }
 
 void SchedulerFactory::setTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
-        bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)> txNotifier)
+        bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
+        txNotifier)
 {
     m_txNotifier = std::move(txNotifier);
 }

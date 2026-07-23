@@ -7,13 +7,6 @@
 #include "bcos-executor/src/vm/HostContext.h"
 #include <evmc/evmc.h>
 #include <memory>
-#ifdef WITH_WASM
-#include "bcos-executor/src/vm/gas_meter/GasInjector.h"
-#else
-class bcos::wasm::GasInjector
-{
-};
-#endif
 
 #define EXECUTIVE_WRAPPER(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTIVE_WRAPPER")
 
@@ -44,11 +37,9 @@ private:
 
 public:
     ExecutiveWrapper(std::unique_ptr<executor::BlockContext> blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        const wasm::GasInjector& gasInjector, Caller externalCaller,
+        std::string contractAddress, int64_t contextID, int64_t seq, Caller externalCaller,
         PrecompiledManager const& precompiledManager)
-      : executor::TransactionExecutive(
-            *blockContext, std::move(contractAddress), contextID, seq, gasInjector),
+      : executor::TransactionExecutive(*blockContext, std::move(contractAddress), contextID, seq),
         m_blockContext(std::move(blockContext)),
         m_externalCaller(std::move(externalCaller)),
         m_precompiledManager(precompiledManager)
@@ -119,7 +110,7 @@ public:
         {
             internalCallParams.emplace();
             auto& [precompiledContract, precompiledInput] = *internalCallParams;
-            CodecWrapper codec(m_blockContext->hashHandler(), m_blockContext->isWasm());
+            CodecWrapper codec(m_blockContext->hashHandler());
             codec.decode(ref(input->data), precompiledContract, precompiledInput);
             evmcMessage.code_address = unhexAddress(precompiledContract);
             evmcMessage.input_data = precompiledInput.data();
@@ -170,11 +161,11 @@ inline auto buildLegacyExecutive(auto& storage, protocol::BlockHeader const& blo
         std::make_shared<storage::LegacyStateStorageWrapper<std::decay_t<decltype(storage)>>>(
             storage);
 
-    auto blockContext = std::make_unique<executor::BlockContext>(storageWrapper, nullptr,
-        executor::GlobalHashImpl::g_hashImpl, blockHeader, false, authCheck);
+    auto blockContext = std::make_unique<executor::BlockContext>(
+        storageWrapper, nullptr, executor::GlobalHashImpl::g_hashImpl, blockHeader, authCheck);
     return std::make_shared<
         ExecutiveWrapper<decltype(externalCaller), std::decay_t<decltype(precompiledManager)>>>(
-        std::move(blockContext), std::move(contractAddress), contextID, seq, wasm::GasInjector{},
+        std::move(blockContext), std::move(contractAddress), contextID, seq,
         std::move(externalCaller), precompiledManager);
 }
 }  // namespace bcos::executor_v1

@@ -127,7 +127,7 @@ public:
         PrecompiledExecResult::Ptr _callParameters) = 0;
     virtual bool isParallelPrecompiled();
 
-    virtual std::vector<std::string> getParallelTag(bytesConstRef, bool);
+    virtual std::vector<std::string> getParallelTag(bytesConstRef);
 
 protected:
     std::map<std::string, uint32_t, std::less<>> name2Selector;
@@ -220,7 +220,7 @@ private:
         PrecompiledExecResult::Ptr const& res, Tuple& tup, std::index_sequence<I...>)
     {
         auto const& blockContext = executive->blockContext();
-        CodecWrapper codec(blockContext.hashHandler(), blockContext.isWasm());
+        CodecWrapper codec(blockContext.hashHandler());
         try
         {
             if constexpr (std::is_same_v<R, void>)

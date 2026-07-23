@@ -15,12 +15,11 @@ void CoroutineTransactionExecutive::ResumeHandler::operator()()
     (*m_executive.m_pullMessage)();
 }
 
-CoroutineTransactionExecutive::CoroutineTransactionExecutive(const BlockContext& blockContext,
-    std::string contractAddress, int64_t contextID, int64_t seq,
-    const wasm::GasInjector& gasInjector)
-  : TransactionExecutive(
-        std::move(blockContext), std::move(contractAddress), contextID, seq, gasInjector),
-    m_syncStorageWrapper(std::make_shared<SyncStorageWrapper>(m_blockContext.storage(),
+CoroutineTransactionExecutive::CoroutineTransactionExecutive(
+    const BlockContext& blockContext, std::string contractAddress, int64_t contextID, int64_t seq)
+  : TransactionExecutive(std::move(blockContext), std::move(contractAddress), contextID, seq),
+    m_syncStorageWrapper(std::make_shared<SyncStorageWrapper>(
+        m_blockContext.storage(),
         [this](auto&& PH1) { externalAcquireKeyLocks(std::forward<decltype(PH1)>(PH1)); },
         m_recoder))
 {
@@ -118,8 +117,8 @@ CallParameters::UniquePtr CoroutineTransactionExecutive::dispatcher()
 {
     try
     {
-           for (auto it = ::ranges::begin(*getPullMessage());
-               it != ::ranges::end(*getPullMessage()); ++it)
+        for (auto it = ::ranges::begin(*getPullMessage()); it != ::ranges::end(*getPullMessage());
+             ++it)
         {
             if (*it)
             {

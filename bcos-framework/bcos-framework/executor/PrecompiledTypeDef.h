@@ -49,7 +49,7 @@ constexpr auto toSortedList(auto input)
 
 namespace precompiled
 {
-/// precompiled contract path for wasm
+/// BFS paths of the system precompiled contracts
 constexpr static std::string_view SYS_CONFIG_NAME = "/sys/status";
 constexpr static std::string_view TABLE_NAME = "/sys/table_storage";
 constexpr static std::string_view TABLE_MANAGER_NAME = "/sys/table_manager";

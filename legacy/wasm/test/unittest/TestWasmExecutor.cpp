@@ -34,21 +34,21 @@
 #include "../mock/MockTxPool.h"
 // #include "Common.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
-#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
-#include "bcos-framework/executor/ExecutionMessage.h"
-#include "bcos-framework/protocol/Transaction.h"
-#include "bcos-table/src/StateStorage.h"
-#include "bcos-table/src/StateStorageFactory.h"
-#include "executor/TransactionExecutor.h"
-#include "executor/TransactionExecutorFactory.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-crypto/interfaces/crypto/CryptoSuite.h"
 #include "bcos-crypto/interfaces/crypto/Hash.h"
 #include "bcos-crypto/signature/secp256k1/Secp256k1Crypto.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeBlockHeader.h"
+#include "bcos-framework/bcos-framework/testutils/faker/FakeTransaction.h"
+#include "bcos-framework/executor/ExecutionMessage.h"
 #include "bcos-framework/executor/NativeExecutionMessage.h"
+#include "bcos-framework/protocol/Transaction.h"
+#include "bcos-table/src/StateStorage.h"
+#include "bcos-table/src/StateStorageFactory.h"
+#include "executor/TransactionExecutor.h"
+#include "executor/TransactionExecutorFactory.h"
 #include <unistd.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -96,13 +96,11 @@ struct WasmExecutorFixture
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
-            fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
-                ->data(),
+            fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")->data(),
             32);
         memcpy(keyPair->publicKey()->mutableData(),
-            fromHex(
-                "ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
-                "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
+            fromHex("ccd8de502ac45462767e649b462b5f4ca7eadd69c7e1f1b410bdf754359be29b1b88ffd79744"
+                    "03f56e250af52b25682014554f7b3297d6152401e85d426a06ae")
                 ->data(),
             64);
 

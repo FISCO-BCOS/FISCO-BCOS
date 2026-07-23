@@ -18,10 +18,10 @@
  * @date 2021-11-15
  */
 
-#include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/extension/AccountManagerPrecompiled.h"
 #include "bcos-framework/executor/PrecompiledTypeDef.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "libprecompiled/PreCompiledFixture.h"
+#include "precompiled/extension/AccountManagerPrecompiled.h"
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -38,9 +38,9 @@ class AccountPrecompiledFixture : public PrecompiledFixture
 public:
     AccountPrecompiledFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
         helloAddress = Address("0x1234654b49838bd3e9466c85a4cc3428c9601234").hex();
-        setIsWasm(false, true);
+        prepareEnv(true);
     }
 
     ~AccountPrecompiledFixture() override = default;

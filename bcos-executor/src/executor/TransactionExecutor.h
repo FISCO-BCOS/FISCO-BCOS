@@ -55,10 +55,6 @@ namespace precompiled
 class Precompiled;
 struct PrecompiledExecResult;
 }  // namespace precompiled
-namespace wasm
-{
-class GasInjector;
-}
 namespace executor
 {
 enum ExecutorVersion : int32_t
@@ -92,7 +88,7 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         storage::StateStorageFactory::Ptr stateStorageFactory, bcos::crypto::Hash::Ptr hashImpl,
-        bool isWasm, bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
+        bool isAuthCheck, std::shared_ptr<VMFactory> vmFactory,
         std::shared_ptr<std::set<std::string, std::less<>>> keyPageIgnoreTables, std::string name,
         bcos::IOServicePool::Ptr ioServicePool);
 
@@ -119,7 +115,7 @@ public:
     void preExecuteTransactions(int64_t schedulerTermId,
         const bcos::protocol::BlockHeader::ConstPtr& blockHeader, std::string contractAddress,
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(bcos::Error::UniquePtr)> callback) override {
+        std::function<void(bcos::Error::UniquePtr)> callback) override{
         // do nothing
     };
 
@@ -180,9 +176,9 @@ public:
     // only for test, do not use in formal environment
     void setKeyPageIgnoreTable(auto ignoreTable) { m_keyPageIgnoreTables = std::move(ignoreTable); }
 
-    // only for test: exposes the real precompiled map built by initEvmEnvironment/
-    // initWasmEnvironment so the disabledInL2() invariant can be checked against the
-    // production registration sites (a dropped predicate is otherwise invisible).
+    // only for test: exposes the real precompiled map built by initEvmEnvironment so the
+    // disabledInL2() invariant can be checked against the production registration sites
+    // (a dropped predicate is otherwise invisible).
     const executor::PrecompiledMap* precompiledMapForTest() const { return m_precompiled.get(); }
 
 protected:
@@ -319,10 +315,8 @@ protected:
     std::shared_ptr<const std::set<std::string>> m_staticPrecompiled;
 
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
-    std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isAuthCheck = false;
-    bool m_isWasm = false;
     bool m_isRunning = false;
     uint32_t m_blockVersion = 0;
     int64_t m_schedulerTermId = -1;
@@ -332,7 +326,6 @@ protected:
 
     void setBlockVersion(uint32_t blockVersion);
     void initEvmEnvironment();
-    void initWasmEnvironment();
     void resetEnvironment();
     void initTestPrecompiledTable(storage::StorageInterface::Ptr storage);
     std::function<void()> f_onNeedSwitchEvent;

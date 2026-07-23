@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../bcos-lightnode/rpc/LightNodeRPC.h"
 #include <bcos-cpp-sdk/multigroup/JsonGroupInfoCodec.h>
 #include <bcos-cpp-sdk/ws/HandshakeResponse.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
@@ -9,8 +10,6 @@
 #include <bcos-framework/protocol/Protocol.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <legacy/bcos-ledger/LedgerImpl.h>
-#include "../bcos-lightnode/rpc/LightNodeRPC.h"
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-storage/RocksDBStorage.h>
@@ -18,6 +17,7 @@
 #include <bcos-tool/NodeConfig.h>
 #include <json/forwards.h>
 #include <json/value.h>
+#include <legacy/bcos-ledger/LedgerImpl.h>
 #include <libinitializer/ProtocolInitializer.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/throw_exception.hpp>
@@ -92,19 +92,19 @@ static auto initRPC(bcos::tool::NodeConfig::Ptr nodeConfig, std::string nodeID,
             groupInfo->setChainID(nodeConfig->chainId());
             groupInfo->setGenesisConfig(genesisConfigStr);
             groupInfo->setGroupID(nodeConfig->groupId());
-            groupInfo->setWasm(nodeConfig->isWasm());
+            groupInfo->setWasm(false);
             groupInfo->setIniConfig("");
             groupInfo->setSmCryptoType(nodeConfig->smCryptoType());
 
             auto nodeInfo = std::make_shared<bcos::group::ChainNodeInfo>();
 
             Json::Value iniConfig;
-            iniConfig["isWasm"] = nodeConfig->isWasm();
+            iniConfig["isWasm"] = false;
             iniConfig["smCryptoType"] = nodeConfig->smCryptoType();
             iniConfig["chainID"] = nodeConfig->chainId();
             std::string iniStr = fastWriter.write(iniConfig);
 
-            nodeInfo->setWasm(nodeConfig->isWasm());
+            nodeInfo->setWasm(false);
             nodeInfo->setSmCryptoType(nodeConfig->smCryptoType());
 
             nodeInfo->setIniConfig(iniStr);

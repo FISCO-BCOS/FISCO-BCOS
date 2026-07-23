@@ -187,7 +187,6 @@ multi_ca_path=multiCaPath
 [certificate_whitelist]
 
 [executor]
-is_wasm=false
 is_auth_check=false
 auth_admin_account=0x3443d6866e757893e6862f451f5d1b7976c54594
 is_serial_execute=true

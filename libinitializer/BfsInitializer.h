@@ -36,14 +36,12 @@ public:
         const std::shared_ptr<ProtocolInitializer>& _protocol,
         const std::shared_ptr<tool::NodeConfig>& _nodeConfig, const protocol::Block::Ptr& _block)
     {
-        bcos::CodecWrapper codecWrapper(
-            _protocol->cryptoSuite()->hashImpl(), _nodeConfig->isWasm());
+        bcos::CodecWrapper codecWrapper(_protocol->cryptoSuite()->hashImpl());
         bytes input = codecWrapper.encodeWithSig("initBfs()");
 
         auto transaction = _protocol->blockFactory()->transactionFactory()->createTransaction(0,
-            std::string(_nodeConfig->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS),
-            input, u256(_number).str(), 500, _nodeConfig->chainId(), _nodeConfig->groupId(),
-            utcTime());
+            std::string(precompiled::BFS_ADDRESS), input, u256(_number).str(), 500,
+            _nodeConfig->chainId(), _nodeConfig->groupId(), utcTime());
         _block->appendTransaction(std::move(transaction));
     }
 };

@@ -73,8 +73,6 @@ class NodeConfigGenerator:
             group_config.genesis_config.compatibility_version)
 
         executor_section = "executor"
-        config_content[executor_section]["is_wasm"] = utilities.convert_bool_to_str(
-            group_config.genesis_config.vm_type != "evm")
         config_content[executor_section]["is_auth_check"] = utilities.convert_bool_to_str(
             group_config.genesis_config.auth_check)
         config_content[executor_section]["auth_admin_account"] = group_config.genesis_config.init_auth_address

@@ -21,7 +21,6 @@
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "vm/VMInstance.h"
-#include "vm/gas_meter/GasInjector.h"
 #include <boost/test/unit_test.hpp>
 #include <vector>
 

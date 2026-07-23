@@ -22,10 +22,10 @@
 #include "bcos-framework/ledger/LedgerTypeDef.h"
 #include "bcos-framework/protocol/Protocol.h"
 #include "bcos-framework/sealer/VrfCurveType.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "common/PrecompiledResult.h"
 #include "common/Utilities.h"
 #include "common/WorkingSealerManagerImpl.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/lexical_cast.hpp>
@@ -404,7 +404,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     showConsensusTable(_executive);
 
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
 
     if (blockContext.isAuthCheck() && !checkSenderFromAuth(_callParameters->m_sender) &&
         (!blockContext.features().get(Features::Flag::feature_rpbft) ||

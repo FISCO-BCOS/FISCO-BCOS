@@ -67,7 +67,9 @@ public:
         Status status;
         std::shared_ptr<std::vector<uint8_t>> byteCode;
     };
-    GasInjector(InstructionTable costTable = wasm::GetInstructionTable()) : m_costTable(std::move(costTable)) {}
+    GasInjector(InstructionTable costTable = wasm::GetInstructionTable())
+      : m_costTable(std::move(costTable))
+    {}
 
     Result InjectMeter(const std::vector<uint8_t>& byteCode) const;
 

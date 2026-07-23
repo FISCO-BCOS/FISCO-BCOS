@@ -41,7 +41,7 @@ public:
 public:
     // is this precompiled need parallel processing, default false.
     bool isParallelPrecompiled() override { return true; }
-    std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
+    std::vector<std::string> getParallelTag(bytesConstRef param) override;
 
     static void createDagTable(std::shared_ptr<storage::StorageInterface> storageInterface)
     {

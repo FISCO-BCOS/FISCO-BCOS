@@ -835,8 +835,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                 bcos::protocol::BlockNumber blockNumber = -1;
                 try
                 {
-                    blockNumber =
-                        boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
+                    blockNumber = boost::lexical_cast<bcos::protocol::BlockNumber>(entry->get());
                 }
                 catch (boost::bad_lexical_cast& e)
                 {
@@ -1111,7 +1110,8 @@ void Ledger::asyncGetSystemConfigByKey(const std::string_view& _key,
 
                     LEDGER_LOG(TRACE) << "Entry value: " << toHex(entry->get());
 
-                    auto [value, number] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+                    auto [value, number] =
+                        bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
 
                     // The param was reset at height getLatestBlockNumber(), and takes effect in
                     // next block. So we query the status of getLatestBlockNumber() + 1.
@@ -1912,7 +1912,7 @@ bool Ledger::buildGenesisBlock(
             auto existsGenesisData = genesisBlockHeader->extraData().toStringView();
 
             // generateGenesisData() (hence extraData) covers chainID / groupID /
-            // smCrypto / isWasm / [features] / consensus / version / executor /
+            // smCrypto / [features] / consensus / version / executor /
             // tx / nodes, but NOT the allocs. The allocs are pinned by the
             // genesis block's stateRoot (set to ethStateRoot on first init); a
             // config change to any alloc changes that root, so compare the
@@ -1955,7 +1955,8 @@ bool Ledger::buildGenesisBlock(
                     executor_v1::StateKeyView(SYS_CURRENT_STATE, SYS_KEY_CURRENT_NUMBER));
                 if (versionEntry && blockNumberEntry)
                 {
-                    auto [versionStr, _] = bcos::storage::serialize::decode<SystemConfigEntry>(versionEntry->get());
+                    auto [versionStr, _] =
+                        bcos::storage::serialize::decode<SystemConfigEntry>(versionEntry->get());
                     auto storageVersion = tool::toVersionNumber(versionStr);
 
                     // 设置sharding default，相关的bugfix也要设置上，否则会不一致
@@ -2161,7 +2162,8 @@ bool Ledger::buildGenesisBlock(
         {
             // write auth check status
             Entry authCheckStatusEntry;
-            authCheckStatusEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0}));
+            authCheckStatusEntry.set(bcos::storage::serialize::encode(
+                SystemConfigEntry{genesis.m_isAuthCheck ? "1" : "0", 0}));
             sysTable->setRow(SYSTEM_KEY_AUTH_CHECK_STATUS, std::move(authCheckStatusEntry));
         }
 
@@ -2169,7 +2171,8 @@ bool Ledger::buildGenesisBlock(
         {
             // write web3 chain id
             Entry chainIdEntry;
-            chainIdEntry.set(bcos::storage::serialize::encode(SystemConfigEntry{genesis.m_web3ChainID, 0}));
+            chainIdEntry.set(
+                bcos::storage::serialize::encode(SystemConfigEntry{genesis.m_web3ChainID, 0}));
             sysTable->setRow(SYSTEM_KEY_WEB3_CHAIN_ID, std::move(chainIdEntry));
         }
 
@@ -2456,7 +2459,8 @@ task::Task<bcos::ledger::SystemConfigs> Ledger::fetchAllSystemConfigs(
     {
         if (entry)
         {
-            auto [value, enableNumber] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+            auto [value, enableNumber] =
+                bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
             if (enableNumber <= _blockNumber)
             {
                 configs.set(key, value, enableNumber);
@@ -2487,7 +2491,8 @@ bcos::storage::StorageInterface::Ptr bcos::ledger::Ledger::getStateStorage()
         {
             BOOST_THROW_EXCEPTION(BCOS_ERROR(GetStorageError, "Not found compatibilityVersion."));
         }
-        auto [compatibilityVersionStr, _] = bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
+        auto [compatibilityVersionStr, _] =
+            bcos::storage::serialize::decode<SystemConfigEntry>(entry->get());
         auto const version = bcos::tool::toVersionNumber(compatibilityVersionStr);
         auto stateStorage = stateStorageFactory.createStateStorage(
             m_stateStorage, version, true, false, keyPageIgnoreTables);

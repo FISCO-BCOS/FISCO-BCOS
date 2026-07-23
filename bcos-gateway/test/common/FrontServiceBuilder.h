@@ -37,7 +37,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     auto gatewayFactory = std::make_shared<bcos::gateway::GatewayFactory>("", "");
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
     auto ioServicePool = std::make_shared<bcos::IOServicePool>(1, "frontBuild");
-    auto threadPool = std::make_shared<bcos::IOServicePool>("frontServiceTest", 16);
+    auto threadPool = std::make_shared<bcos::IOServicePool>(16, "frontServiceTest");
 
     // build gateway
     gatewayFactory->setIOServicePool(ioServicePool);

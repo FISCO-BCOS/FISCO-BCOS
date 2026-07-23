@@ -22,9 +22,6 @@
 
 #include "VMFactory.h"
 #include "VMInstance.h"
-#ifdef WITH_WASM
-#include <BCOS_WASM.h>
-#endif
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
@@ -38,10 +35,6 @@ VMInstance VMFactory::create(VMKind kind, evmc_revision revision, const crypto::
 {
     switch (kind)
     {
-#ifdef WITH_WASM
-    case VMKind::BcosWasm:
-        return VMInstance{evmc_create_bcoswasm(), revision, code};
-#endif
     case VMKind::evmone:
     default:
     {

@@ -42,11 +42,11 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId,
-    size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, int64_t schedulerTermId, size_t keyPageSize,
+    bcos::IOServicePool::Ptr ioServicePool)
   : SchedulerImpl(executorManager, ledger, storage, executionMessageFactory, blockFactory, txPool,
-        transactionSubmitResultFactory, hashImpl, isAuthCheck, isWasm, false, schedulerTermId,
-        keyPageSize, std::move(ioServicePool))
+        transactionSubmitResultFactory, hashImpl, isAuthCheck, false, schedulerTermId, keyPageSize,
+        std::move(ioServicePool))
 {}
 
 SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
@@ -55,7 +55,7 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
     bcos::protocol::BlockFactory::Ptr blockFactory, bcos::txpool::TxPoolInterface::Ptr txPool,
     bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, bool isSerialExecute,
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isSerialExecute,
     int64_t schedulerTermId, size_t keyPageSize, bcos::IOServicePool::Ptr ioServicePool)
   : m_executorManager(std::move(executorManager)),
     m_ledger(std::move(ledger)),
@@ -67,7 +67,6 @@ SchedulerImpl::SchedulerImpl(ExecutorManager::Ptr executorManager,
     m_txPool(txPool),
     m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
     m_hashImpl(std::move(hashImpl)),
-    m_isWasm(isWasm),
     m_schedulerTermId(schedulerTermId),
     m_ioServicePool(std::move(ioServicePool))
 {
@@ -814,8 +813,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
                          << LOG_KV("address", tx->to());
 
     // set attribute before call
-    tx->setAttribute(m_isWasm ? bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC :
-                                bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC);
+    tx->setAttribute(bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC);
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->blockHeader()->setNumber(blockNumber);

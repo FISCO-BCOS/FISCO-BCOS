@@ -50,7 +50,6 @@ binary_path=""
 lightnode_binary_path=""
 download_lightnode_binary="false"
 mtail_binary_path=""
-wasm_mode="false"
 serial_mode="true"
 node_key_dir=""
 # if the config.genesis path has been set, don't generate genesis file, use the config instead
@@ -580,7 +579,6 @@ air
     -D <docker mode>                    Default off. If set -D, build with docker
     -E <Enable debug log>               Default off. If set -E, enable debug log
     -a <Auth account>                   [Optional] when Auth mode Specify the admin account address.
-    -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -R <Serial_mode>                    [Optional] Whether to use serial execute,default is true
     -k <key page size>                  [Optional] key page size, default is 10240
     -m <fisco-bcos monitor>             [Optional] node monitor or not, default is false
@@ -649,7 +647,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zwDshHmEn:R:a:N:u:y:r:V:6T:" option; do
+    while getopts "l:C:c:o:e:t:p:d:g:G:L:v:i:I:M:k:zDshHmEn:R:a:N:u:y:r:V:6T:" option; do
         case $option in
         6) use_ipv6="true" && default_listen_ip="::"
         ;;
@@ -719,9 +717,6 @@ parse_params() {
                 LOG_FATAL "Not support docker mode for macOS now"
            fi
         ;;
-        w) wasm_mode="true"
-          auth_mode="false"
-          ;;
         R) serial_mode="${OPTARG}";;
         a)
           auth_admin_account="${OPTARG}"
@@ -962,7 +957,6 @@ generate_node_scripts() {
     generate_script_template "$output/start.sh"
     cat <<EOF >> "${output}/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${binary_name}
-export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
@@ -1118,7 +1112,6 @@ EOF
     cat <<EOF >> "${output}/mtail/start_mtail_monitor.sh"
 mtail=\${SHELL_FOLDER}/../../mtail
 mtailScript=\${SHELL_FOLDER}/node.mtail
-export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
@@ -1790,8 +1783,6 @@ generate_genesis_config() {
     ; transaction gas limit
     gas_limit=3000000000
 [executor]
-    ; use the wasm virtual machine or not
-    is_wasm=${wasm_mode}
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
     is_serial_execute=${serial_mode}
@@ -2498,7 +2489,6 @@ gen_group_template() {
 group_id="${default_group}"
 # the genesis configuration path of the group, will generate new genesis configuration if not configured
 # genesis_config_path = ""
-# VM type, now only support evm/wasm
 vm_type="evm"
 # use sm-crypto or not
 sm_crypto=false

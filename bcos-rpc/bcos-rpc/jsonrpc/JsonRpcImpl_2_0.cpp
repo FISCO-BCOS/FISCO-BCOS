@@ -235,8 +235,11 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
         // match tars hash: nullopt → "", otherwise hex quantity
         jResp["gasPrice"] = transaction.gasPrice() ? toQuantity(*transaction.gasPrice()) : "";
         jResp["gasLimit"] = transaction.gasLimit();
-        jResp["maxFeePerGas"] = transaction.maxFeePerGas() ? toQuantity(*transaction.maxFeePerGas()) : "";
-        jResp["maxPriorityFeePerGas"] = transaction.maxPriorityFeePerGas() ? toQuantity(*transaction.maxPriorityFeePerGas()) : "";
+        jResp["maxFeePerGas"] =
+            transaction.maxFeePerGas() ? toQuantity(*transaction.maxFeePerGas()) : "";
+        jResp["maxPriorityFeePerGas"] = transaction.maxPriorityFeePerGas() ?
+                                            toQuantity(*transaction.maxPriorityFeePerGas()) :
+                                            "";
     }
     if (transaction.version() >= (int32_t)bcos::protocol::TransactionVersion::V2_VERSION)
     {
@@ -270,13 +273,12 @@ void bcos::rpc::toJsonResp(Json::Value& jResp, bcos::protocol::Transaction const
 
 void bcos::rpc::toJsonResp(Json::Value& jResp, std::string_view _txHash,
     protocol::TransactionStatus status,
-    bcos::protocol::TransactionReceipt const& transactionReceipt, bool _isWasm,
-    crypto::Hash& hashImpl)
+    bcos::protocol::TransactionReceipt const& transactionReceipt, crypto::Hash& hashImpl)
 {
     jResp["version"] = transactionReceipt.version();
     std::string contractAddress = string(transactionReceipt.contractAddress());
 
-    if (!contractAddress.empty() && !_isWasm)
+    if (!contractAddress.empty())
     {
         std::string checksumContractAddr = contractAddress;
         toChecksumAddress(checksumContractAddr, hashImpl.hash(contractAddress).hex());
@@ -489,7 +491,6 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
         Json::Value jResp;
         try
         {
-            auto isWasm = groupInfo->wasm();
             auto transactionData = decodeData(data);
             auto transaction = nodeService->blockFactory()->transactionFactory()->decodeTransaction(
                 bcos::ref(transactionData));
@@ -505,7 +506,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             if (c_fileLogLevel <= TRACE)
             {
                 RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", groupID)
-                                    << LOG_KV("node", nodeName) << LOG_KV("isWasm", isWasm);
+                                    << LOG_KV("node", nodeName);
             }
             // check transaction validator
             if (transaction->chainId() != self->m_groupManager->chainID())
@@ -532,7 +533,7 @@ void JsonRpcImpl_2_0::sendTransaction(std::string_view groupID, std::string_view
             }
 
             toJsonResp(jResp, hexPreTxHash, (protocol::TransactionStatus)submitResult->status(),
-                *(submitResult->transactionReceipt()), isWasm,
+                *(submitResult->transactionReceipt()),
                 *(nodeService->blockFactory()->cryptoSuite()->hashImpl()));
             jResp["to"] = submitResult->to();
             jResp["from"] = toHexStringWithPrefix(submitResult->sender());
@@ -680,13 +681,12 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
             "The group " + std::string(_groupID) + " does not exist!"));
     }
 
-    bool isWasm = groupInfo->wasm();
 
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     ledger->asyncGetTransactionReceiptByHash(hash, _requireProof,
         [m_group = std::string(_groupID), m_nodeName = std::string(_nodeName),
             m_txHash = std::string(_txHash), hash, _requireProof, m_respFunc = std::move(_respFunc),
-            self, hashImpl, isWasm](Error::Ptr _error,
+            self, hashImpl](Error::Ptr _error,
             protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr,
             ledger::MerkleProofPtr _merkleProofPtr) {
             auto rpc = self.lock();
@@ -708,7 +708,7 @@ void JsonRpcImpl_2_0::getTransactionReceipt(std::string_view _groupID, std::stri
             }
 
             toJsonResp(jResp, hash.hexPrefixed(), protocol::TransactionStatus::None,
-                *_transactionReceiptPtr, isWasm, *hashImpl);
+                *_transactionReceiptPtr, *hashImpl);
 
             RPC_IMPL_LOG(TRACE) << LOG_DESC("getTransactionReceipt") << LOG_KV("txHash", m_txHash)
                                 << LOG_KV("requireProof", _requireProof)
@@ -888,9 +888,8 @@ void JsonRpcImpl_2_0::getCode(std::string_view _groupID, std::string_view _nodeN
             "The group " + std::string(_groupID) + " does not exist!"));
     }
 
-    auto isWasm = groupInfo->wasm();
     // trim 0x prefix for solidity contract
-    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    if (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X"))
     {
         _contractAddress = _contractAddress.substr(2);
     }
@@ -937,9 +936,8 @@ void JsonRpcImpl_2_0::getABI(std::string_view _groupID, std::string_view _nodeNa
             "The group " + std::string(_groupID) + " does not exist!"));
     }
 
-    auto isWasm = groupInfo->wasm();
     // trim 0x prefix for solidity contract address
-    if (!isWasm && (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X")))
+    if (_contractAddress.starts_with("0x") || _contractAddress.starts_with("0X"))
     {
         _contractAddress = _contractAddress.substr(2);
     }

@@ -15,7 +15,6 @@ mtail=${SHELL_FOLDER}/mtail
 mtailScript=${SHELL_FOLDER}/node.mtail
 port=$1
 #logDir=$2
-export RUST_LOG=bcos_wasm=error
 cd ${SHELL_FOLDER}
 node=$(basename ${SHELL_FOLDER})
 node_pid=$(ps aux|grep ${mtail}|grep -v grep|awk '{print $2}')

@@ -1,9 +1,4 @@
-if(WITH_WASM)
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h.in ${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h @ONLY)
-    set(EXCLUDE_SUITES "")
-else()
-    set(EXCLUDE_SUITES "TestWasmExecutor")
-endif()
+set(EXCLUDE_SUITES "")
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 
 # cmake settings

@@ -46,7 +46,7 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
     PrecompiledExecResult::Ptr _callParameters)
 {
     const auto& blockContext = _executive->blockContext();
-    auto codec = CodecWrapper(blockContext.hashHandler(), blockContext.isWasm());
+    auto codec = CodecWrapper(blockContext.hashHandler());
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     uint32_t func = getParamFunc(_callParameters->input());
     bytesConstRef data = _callParameters->params();
@@ -146,7 +146,8 @@ std::shared_ptr<PrecompiledExecResult> CastPrecompiled::call(
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("CastPrecompiled")
                               << LOG_DESC("call undefined function!");
-        BOOST_THROW_EXCEPTION(PrecompiledError{} << errinfo_comment("CastPrecompiled call undefined function!"));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError{} << errinfo_comment("CastPrecompiled call undefined function!"));
     }
     return _callParameters;
 }

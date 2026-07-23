@@ -20,7 +20,6 @@
 
 #pragma once
 #include "bcos-codec/scale/Scale.h"
-#include <bcos-framework/storage/Serialize.h>
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-crypto/hash/SM3.h"
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
@@ -52,6 +51,7 @@
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
 #include "precompiled/extension/UserPrecompiled.h"
+#include <bcos-framework/storage/Serialize.h>
 #include <libinitializer/AuthInitializer.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -85,12 +85,10 @@ public:
 
     virtual ~PrecompiledFixture() = default;
 
-    /// must set isWasm
-    void setIsWasm(bool _isWasm, bool _isCheckAuth = false, bool _isKeyPage = true,
+    void prepareEnv(bool _isCheckAuth = false, bool _isKeyPage = true,
         protocol::BlockVersion version = DEFAULT_VERSION,
         std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
     {
-        isWasm = _isWasm;
         storage = std::make_shared<MockTransactionalStorage>(hashImpl);
         if (_isKeyPage)
         {
@@ -111,7 +109,8 @@ public:
         ledger->setBlockNumber(header->number() - 1);
         std::promise<bool> p;
         Entry authEntry;
-        authEntry.set(bcos::storage::serialize::encode(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0)));
+        authEntry.set(
+            bcos::storage::serialize::encode(SystemConfigEntry(_isCheckAuth ? "1" : "0", 0)));
         storage->asyncSetRow(ledger::SYS_CONFIG, ledger::SYSTEM_KEY_AUTH_CHECK_STATUS,
             std::move(authEntry), [&p](auto&& e) { p.set_value(true); });
         p.get_future().get();
@@ -119,14 +118,14 @@ public:
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
         auto stateStorageFactory = std::make_shared<storage::StateStorageFactory>(0);
         executor = bcos::executor::TransactionExecutorFactory::build(ledger, txpool, nullptr,
-            storage, executionResultFactory, stateStorageFactory, hashImpl, _isWasm, _isCheckAuth,
+            storage, executionResultFactory, stateStorageFactory, hashImpl, _isCheckAuth,
             std::string("executor"));
         if (_ignoreTables != nullptr)
         {
             executor->setKeyPageIgnoreTable(_ignoreTables);
         }
 
-        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         auto secretKeyBytes =
             fromHex("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
@@ -414,7 +413,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
+        params2->setTo(std::string(BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -453,7 +452,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
+        params2->setTo(std::string(BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -494,7 +493,6 @@ protected:
     KeyPairInterface::Ptr keyPair;
 
     int64_t gas = MockLedger::TX_GAS_LIMIT;
-    bool isWasm = false;
     std::string admin = "1111654b49838bd3e9466c85a4cc3428c9601111";
     protocol::BlockVersion m_blockVersion = protocol::DEFAULT_VERSION;
 };

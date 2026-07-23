@@ -50,12 +50,12 @@ public:
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        uint32_t blockVersion, bool _isWasm, bool _isAuthCheck,
+        uint32_t blockVersion, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr);
 
     BlockContext(std::shared_ptr<storage::StateStorageInterface> storage,
         LedgerCache::Ptr ledgerCache, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader const& current, bool _isWasm, bool _isAuthCheck,
+        protocol::BlockHeader const& current, bool _isAuthCheck,
         storage::StorageInterface::Ptr backendStorage = nullptr,
         std::shared_ptr<std::set<std::string, std::less<>>> = nullptr);
 
@@ -79,7 +79,6 @@ public:
         -> std::shared_ptr<std::vector<std::string>>;
 
     crypto::Hash::Ptr hashHandler() const { return m_hashImpl; }
-    bool isWasm() const { return m_isWasm; }
     bool isAuthCheck() const { return m_isAuthCheck; }
     int64_t number() const { return m_blockNumber; }
     h256 hash() const { return m_blockHash; }
@@ -129,7 +128,6 @@ private:
     uint32_t m_blockVersion;
 
     VMSchedule m_schedule;
-    bool m_isWasm = false;
     bool m_isAuthCheck = false;
     std::shared_ptr<storage::StateStorageInterface> m_storage;
     transientStorageMap::Ptr m_transientStorageMap;

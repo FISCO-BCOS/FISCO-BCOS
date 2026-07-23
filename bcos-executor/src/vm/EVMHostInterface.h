@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "EVMCWasm.h"
 #include "evmc/evmc.h"
 #include <boost/optional.hpp>
 
@@ -30,6 +29,5 @@ namespace bcos
 namespace executor
 {
 const evmc_host_interface* getHostInterface();
-const wasm_host_interface* getWasmHostInterface();
 }  // namespace executor
 }  // namespace bcos

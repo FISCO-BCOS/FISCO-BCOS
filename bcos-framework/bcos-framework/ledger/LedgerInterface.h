@@ -186,7 +186,7 @@ public:
      * table of address like /apps/[address] and get the value of key. NOTE: blockNumber is ignored
      * nowadays, it will always get the latest value of key in address.
      * @param _address the address of contract/EOA. if in EVM, it should be the address of contract,
-     * hex string; if in WASM, it should be the path name of contract.
+     * hex string.
      * @param _key the key of storage
      * @param _blockNumber the block number to get the storage value
      * @return the storage value of key in address

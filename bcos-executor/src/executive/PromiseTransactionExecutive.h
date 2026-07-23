@@ -53,8 +53,7 @@ public:
 
 
     PromiseTransactionExecutive(IOServicePool::Ptr pool, const BlockContext& blockContext,
-        std::string contractAddress, int64_t contextID, int64_t seq,
-        const wasm::GasInjector& gasInjector);
+        std::string contractAddress, int64_t contextID, int64_t seq);
 
     CallParameters::UniquePtr start(CallParameters::UniquePtr input) override;  // start a new
     // coroutine to

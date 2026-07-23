@@ -83,11 +83,11 @@ struct ExecutiveStackFlowFixture
 
         LedgerCache::Ptr ledgerCache =
             std::make_shared<LedgerCache>(std::make_shared<MockLedger>());
-        blockContext = std::make_shared<BlockContext>(
-            nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false, false);
+        blockContext =
+            std::make_shared<BlockContext>(nullptr, ledgerCache, nullptr, 0, h256(), 0, 0, false);
 
-        executiveFactory = std::make_shared<MockExecutiveFactory>(
-            *blockContext, nullptr, nullptr, nullptr, nullptr);
+        executiveFactory =
+            std::make_shared<MockExecutiveFactory>(*blockContext, nullptr, nullptr, nullptr);
 
         ioServicePool = std::make_shared<bcos::IOServicePool>(1, "executive-test");
     }

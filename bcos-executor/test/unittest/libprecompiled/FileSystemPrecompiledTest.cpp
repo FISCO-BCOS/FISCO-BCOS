@@ -40,29 +40,19 @@ public:
 
     ~FileSystemPrecompiledFixture() override = default;
 
-    void init(bool _isWasm, protocol::BlockVersion version = BlockVersion::V3_1_VERSION,
+    void init(protocol::BlockVersion version = BlockVersion::V3_1_VERSION,
         std::shared_ptr<std::set<std::string, std::less<>>> _ignoreTables = nullptr)
     {
-        setIsWasm(_isWasm, false, true, version, _ignoreTables);
-        bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
-        tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
+        prepareEnv(false, true, version, _ignoreTables);
+        bfsAddress = BFS_ADDRESS;
+        tableAddress = KV_TABLE_ADDRESS;
         tableTestAddress1 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         tableTestAddress2 = Address("0x420f853b49838bd3e9466c85a4cc3428c9601234").hex();
 
-        if (_isWasm)
-        {
-            auto result1 = creatKVTable(1, "test1", "id", "item1", "/tables/test1");
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
-            auto result2 = creatKVTable(2, "test2", "id", "item1", "/tables/test2");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
-        }
-        else
-        {
-            auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
-            auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
-        }
+        auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
+        BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
+        auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
+        BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
 
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");
         addressString = addressCreate.hex().substr(0, 40);
@@ -174,7 +164,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS));
+        params2->setTo(std::string(TABLE_MANAGER_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -309,23 +299,16 @@ public:
 
         if (_errorCode != 0)
         {
-            if (isWasm && versionCompareTo(m_blockVersion, BlockVersion::V3_2_VERSION) >= 0)
-            {
-                BOOST_CHECK(result4->data().toBytes() == codec->encode(int32_t(_errorCode)));
-            }
-            else
-            {
-                BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
-            }
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
         return result4;
     };
 
-    ExecutionMessage::UniquePtr link([[maybe_unused]] bool _isWasm, protocol::BlockNumber _number,
-        std::string const& name, std::string const& version, std::string const& address,
-        std::string const& abi, int _errorCode = 0, bool _isCover = false)
+    ExecutionMessage::UniquePtr link(protocol::BlockNumber _number, std::string const& name,
+        std::string const& version, std::string const& address, std::string const& abi,
+        int _errorCode = 0, bool _isCover = false)
     {
         bytes in;
         if (version.empty())
@@ -451,8 +434,7 @@ public:
         bytes in = codec->encodeWithSig("rebuildBfs(uint256,uint256)", from, to);
         auto tx =
             fakeTransaction(cryptoSuite, keyPair, "", in, std::to_string(101), 100001, "1", "1");
-        Address newSender = Address(isWasm ? std::string(precompiled::SYS_CONFIG_NAME) :
-                                             std::string(precompiled::SYS_CONFIG_ADDRESS));
+        Address newSender = Address(std::string(precompiled::SYS_CONFIG_ADDRESS));
         tx->forceSender(newSender.asBytes());
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -505,7 +487,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? SYS_CONFIG_NAME : SYS_CONFIG_ADDRESS));
+        params2->setTo(std::string(SYS_CONFIG_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -572,7 +554,7 @@ public:
         params2->setSeq(1000);
         params2->setDepth(0);
         params2->setFrom(sender);
-        params2->setTo(std::string(isWasm ? BFS_NAME : BFS_ADDRESS));
+        params2->setTo(std::string(BFS_ADDRESS));
         params2->setOrigin(sender);
         params2->setStaticCall(false);
         params2->setGasAvailable(gas);
@@ -608,7 +590,7 @@ BOOST_FIXTURE_TEST_SUITE(precompiledFileSystemTest, FileSystemPrecompiledFixture
 
 BOOST_AUTO_TEST_CASE(lsTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
@@ -724,7 +706,7 @@ BOOST_AUTO_TEST_CASE(lsTest)
 
 BOOST_AUTO_TEST_CASE(lsPageTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
@@ -846,133 +828,9 @@ BOOST_AUTO_TEST_CASE(lsPageTest)
     }
 }
 
-BOOST_AUTO_TEST_CASE(lsPagWasmTest)
-{
-    init(true);
-    bcos::protocol::BlockNumber _number = 3;
-
-    // ls dir
-    {
-        auto result = listPage(_number++, "/tables", 0, 500);
-        s256 code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 2);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
-        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
-
-        result = listPage(_number++, "/tables", 1, 2);
-        ls.clear();
-        ls.shrink_to_fit();
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 1);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-    }
-
-    // ls regular
-    {
-        auto result = listPage(_number++, "/tables/test2", 0, 500);
-        s256 code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 1);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == tool::FS_TYPE_CONTRACT);
-    }
-
-    // ls not exist
-    {
-        auto result = listPage(_number++, "/tables/test3", 0, 500, CODE_FILE_NOT_EXIST);
-        s256 code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
-        BOOST_CHECK(ls.empty());
-    }
-
-    // ls invalid path
-    {
-        listPage(_number++, "", 0, 500, CODE_FILE_INVALID_PATH);
-        std::stringstream errorPath;
-        errorPath << std::setfill('0') << std::setw(56) << 1;
-        listPage(_number++, "/" + errorPath.str(), 0, 500, CODE_FILE_INVALID_PATH);
-        listPage(_number++, "/path/level/too/deep/not/over/six/", 0, 500, CODE_FILE_INVALID_PATH);
-    }
-
-    // ls /
-    {
-        auto result = listPage(_number++, "/", 0, 500);
-        s256 code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 4);
-        std::set<std::string> lsSet;
-        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
-                 return std::get<0>(bfs);
-             }))
-        {
-            lsSet.insert(item);
-        }
-
-        for (auto const& rootSub : tool::FS_ROOT_SUBS | ::ranges::views::drop(1))
-        {
-            BOOST_CHECK(lsSet.contains(std::string(rootSub.substr(1))));
-        }
-    }
-
-    // ls /sys
-    {
-        auto result = listPage(_number++, "/sys", 0, 500);
-        s256 code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        if (m_blockVersion < BlockVersion::V3_2_VERSION)
-        {
-            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 2);
-        }
-        else if (m_blockVersion < BlockVersion::V3_3_VERSION)
-        {
-            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT - 1);
-        }
-        else
-        {
-            BOOST_CHECK(ls.size() == precompiled::BFS_SYS_SUBS_COUNT);
-        }
-        std::set<std::string> lsSet;
-        for (const auto& item : ls | ::ranges::views::transform([](auto&& bfs) -> std::string {
-                 return std::get<0>(bfs);
-             }))
-        {
-            lsSet.insert(item);
-        }
-
-        auto take = precompiled::BFS_SYS_SUBS_COUNT;
-        if (m_blockVersion < BlockVersion::V3_2_VERSION)
-        {
-            // remove cast
-            take--;
-        }
-        if (m_blockVersion < BlockVersion::V3_3_VERSION)
-        {
-            // remove shard
-            take--;
-        }
-        for (auto const& sysSub :
-            precompiled::BFS_SYS_SUBS | ::ranges::views::take(take) | ::ranges::views::drop(1))
-        {
-            BOOST_CHECK(lsSet.contains(std::string(sysSub.substr(tool::FS_SYS_BIN.size() + 1))));
-        }
-    }
-}
-
 BOOST_AUTO_TEST_CASE(lsTest_3_0)
 {
-    init(false, BlockVersion::V3_0_VERSION);
+    init(BlockVersion::V3_0_VERSION);
     m_blockVersion = BlockVersion::V3_0_VERSION;
     bcos::protocol::BlockNumber _number = 3;
 
@@ -1030,125 +888,9 @@ BOOST_AUTO_TEST_CASE(lsTest_3_0)
     }
 }
 
-BOOST_AUTO_TEST_CASE(lsTestWasm)
-{
-    init(true);
-    bcos::protocol::BlockNumber _number = 3;
-    // ls dir
-    {
-        auto result = list(_number++, "/tables");
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 2);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
-        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
-    }
-
-    // ls regular
-    {
-        auto result = list(_number++, "/tables/test2");
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 1);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == executor::FS_TYPE_CONTRACT);
-    }
-
-    // ls not exist
-    {
-        auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
-        BOOST_CHECK(ls.empty());
-    }
-
-    // ls /
-    {
-        auto result = list(_number++, "/");
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 4);  // with '/'
-    }
-
-    // mkdir invalid path
-    {
-        list(_number++, "", CODE_FILE_INVALID_PATH);
-        std::stringstream errorPath;
-        errorPath << std::setfill('0') << std::setw(56) << 1;
-        list(_number++, "/" + errorPath.str(), CODE_FILE_INVALID_PATH);
-        list(_number++, "/path/level/too/deep/not/over/six/", CODE_FILE_INVALID_PATH);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(lsTestWasm_3_0)
-{
-    init(true, BlockVersion::V3_0_VERSION);
-    bcos::protocol::BlockNumber _number = 3;
-    // ls dir
-    {
-        auto result = list(_number++, "/tables");
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 2);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test1");
-        BOOST_CHECK(std::get<0>(ls.at(1)) == "test2");
-    }
-
-    // ls regular
-    {
-        auto result = list(_number++, "/tables/test2");
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 1);
-        BOOST_CHECK(std::get<0>(ls.at(0)) == "test2");
-        BOOST_CHECK(std::get<1>(ls.at(0)) == executor::FS_TYPE_CONTRACT);
-    }
-
-    // ls not exist
-    {
-        auto result = list(_number++, "/tables/test3", CODE_FILE_NOT_EXIST);
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == s256((int)CODE_FILE_NOT_EXIST));
-        BOOST_CHECK(ls.empty());
-    }
-
-    // ls /
-    {
-        auto result = list(_number++, "/");
-        int32_t code;
-        std::vector<BfsTuple> ls;
-        codec->decode(result->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 3);  // with '/'
-    }
-
-    // mkdir invalid path
-    {
-        list(_number++, "", CODE_FILE_INVALID_PATH);
-        std::stringstream errorPath;
-        errorPath << std::setfill('0') << std::setw(56) << 1;
-        list(_number++, "/" + errorPath.str(), CODE_FILE_INVALID_PATH);
-        list(_number++, "/path/level/too/deep/not/over/six/", CODE_FILE_INVALID_PATH);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(mkdirTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
@@ -1206,69 +948,9 @@ BOOST_AUTO_TEST_CASE(mkdirTest)
     }
 }
 
-BOOST_AUTO_TEST_CASE(mkdirWasmTest)
-{
-    init(true);
-    bcos::protocol::BlockNumber _number = 3;
-    // simple mkdir
-    {
-        auto result = mkdir(_number++, "/tables/temp/test");
-        int32_t m;
-        codec->decode(result->data(), m);
-        BOOST_TEST(m == 0u);
-
-        auto lsResult = list(_number++, "/tables");
-        std::vector<BfsTuple> ls;
-        int32_t code;
-        codec->decode(lsResult->data(), code, ls);
-        BOOST_CHECK(code == (int)CODE_SUCCESS);
-        BOOST_CHECK(ls.size() == 3);
-
-        auto lsResult2 = list(_number++, "/tables/temp");
-        std::vector<BfsTuple> ls2;
-        codec->decode(lsResult2->data(), code, ls2);
-        BOOST_CHECK(ls2.size() == 1);
-        BOOST_CHECK(std::get<0>(ls2[0]) == "test");
-        BOOST_CHECK(std::get<1>(ls2[0]) == executor::FS_TYPE_DIR);
-    }
-
-    // mkdir /tables/test1/test
-    {
-        auto result = mkdir(_number++, "/tables/test1/test", CODE_FILE_BUILD_DIR_FAILED);
-    }
-
-    // mkdir /tables/test1
-    {
-        auto result = mkdir(_number++, "/tables/test1", 0, true);
-        BOOST_CHECK(result->data().toBytes() == codec->encode((int32_t)CODE_FILE_ALREADY_EXIST));
-    }
-
-    // mkdir /tables
-    {
-        auto result = mkdir(_number++, "/tables", 0, true);
-        BOOST_CHECK(result->data().toBytes() == codec->encode((int32_t)CODE_FILE_ALREADY_EXIST));
-    }
-
-    // mkdir in wrong path
-    {
-        auto result = mkdir(_number++, "/sys/test1", CODE_FILE_INVALID_PATH);
-        auto result2 = mkdir(_number++, "/user/test1", CODE_FILE_INVALID_PATH);
-        auto result3 = mkdir(_number++, "/test1", CODE_FILE_INVALID_PATH);
-    }
-
-    // mkdir invalid path
-    {
-        mkdir(_number++, "", CODE_FILE_INVALID_PATH);
-        std::stringstream errorPath;
-        errorPath << std::setfill('0') << std::setw(56) << 1;
-        mkdir(_number++, "/" + errorPath.str(), CODE_FILE_INVALID_PATH);
-        mkdir(_number++, "/path/level/too/deep/not/over/six/", CODE_FILE_INVALID_PATH);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 {
-    init(false, protocol::BlockVersion::V3_0_VERSION);
+    init(protocol::BlockVersion::V3_0_VERSION);
     bcos::protocol::BlockNumber _number = 3;
     // simple mkdir
     {
@@ -1328,7 +1010,7 @@ BOOST_AUTO_TEST_CASE(mkdirTest_3_0)
 
 BOOST_AUTO_TEST_CASE(linkTest)
 {
-    init(false);
+    init();
     bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
@@ -1351,7 +1033,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
         "0123456789012345678901234567890123456789012345678901234567890123456789";
     // simple link
     {
-        link(false, number++, contractName, contractVersion, addressString, contractAbi);
+        link(number++, contractName, contractVersion, addressString, contractAbi);
         auto result = list(number++, "/apps/Hello");
         s256 code;
         std::vector<BfsTuple> ls;
@@ -1378,7 +1060,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
     // overwrite link
     {
         auto latestVersion = "latest";
-        link(false, number++, contractName, latestVersion, addressString, contractAbi);
+        link(number++, contractName, latestVersion, addressString, contractAbi);
         auto result = list(number++, "/apps/Hello");
         s256 code;
         std::vector<BfsTuple> ls;
@@ -1402,7 +1084,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
         // cover write
         auto newAddress = "420f853b49838bd3e9466c85a4cc3428c960dde1";
         deployHelloContract(number++, newAddress);
-        link(false, number++, contractName, latestVersion, newAddress, contractAbi, 0, true);
+        link(number++, contractName, latestVersion, newAddress, contractAbi, 0, true);
         auto result3 = list(number++, "/apps/Hello/latest");
         std::vector<BfsTuple> ls3;
         codec->decode(result3->data(), code, ls3);
@@ -1419,7 +1101,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
     // wrong version
     {
         auto errorVersion = "ver/tion";
-        link(false, number++, contractName, errorVersion, addressString, contractAbi,
+        link(number++, contractName, errorVersion, addressString, contractAbi,
             CODE_ADDRESS_OR_VERSION_ERROR, true);
     }
 
@@ -1427,7 +1109,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
     {
         auto wrongAddress = addressString;
         std::reverse(wrongAddress.begin(), wrongAddress.end());
-        link(false, number++, contractName, contractVersion, wrongAddress, contractAbi,
+        link(number++, contractName, contractVersion, wrongAddress, contractAbi,
             CODE_ADDRESS_OR_VERSION_ERROR, true);
     }
 
@@ -1438,14 +1120,14 @@ BOOST_AUTO_TEST_CASE(linkTest)
         {
             errorVersion << "1";
         }
-        link(false, number++, contractName, errorVersion.str(), addressString, contractAbi,
+        link(number++, contractName, errorVersion.str(), addressString, contractAbi,
             CODE_FILE_INVALID_PATH, true);
     }
 
     // simple link without version
     {
         std::string newAbsolutePath = "link_test";
-        link(false, number++, newAbsolutePath, "", addressString, contractAbi);
+        link(number++, newAbsolutePath, "", addressString, contractAbi);
         auto result = list(number++, "/apps/link_test");
         s256 code;
         std::vector<BfsTuple> ls;
@@ -1465,7 +1147,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
 
 BOOST_AUTO_TEST_CASE(linkTest_3_0)
 {
-    init(false, protocol::BlockVersion::V3_0_VERSION);
+    init(protocol::BlockVersion::V3_0_VERSION);
     bcos::protocol::BlockNumber number = 3;
     deployHelloContract(number++, addressString);
 
@@ -1488,7 +1170,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
         "0123456789012345678901234567890123456789012345678901234567890123456789";
     // simple link
     {
-        link(false, number++, contractName, contractVersion, addressString, contractAbi);
+        link(number++, contractName, contractVersion, addressString, contractAbi);
         auto result = list(number++, "/apps/Hello");
         s256 code;
         std::vector<BfsTuple> ls;
@@ -1515,7 +1197,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
     // overwrite link
     {
         auto latestVersion = "latest";
-        link(false, number++, contractName, latestVersion, addressString, contractAbi);
+        link(number++, contractName, latestVersion, addressString, contractAbi);
         auto result = list(number++, "/apps/Hello");
         s256 code;
         std::vector<BfsTuple> ls;
@@ -1539,7 +1221,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
         // cover write
         auto newAddress = "420f853b49838bd3e9466c85a4cc3428c960dde1";
         deployHelloContract(number++, newAddress);
-        link(false, number++, contractName, latestVersion, newAddress, contractAbi, 0, true);
+        link(number++, contractName, latestVersion, newAddress, contractAbi, 0, true);
         auto result3 = list(number++, "/apps/Hello/latest");
         std::vector<BfsTuple> ls3;
         codec->decode(result3->data(), code, ls3);
@@ -1556,7 +1238,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
     // wrong version
     {
         auto errorVersion = "ver/tion";
-        link(false, number++, contractName, errorVersion, addressString, contractAbi,
+        link(number++, contractName, errorVersion, addressString, contractAbi,
             CODE_ADDRESS_OR_VERSION_ERROR, true);
     }
 
@@ -1564,7 +1246,7 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
     {
         auto wrongAddress = addressString;
         std::reverse(wrongAddress.begin(), wrongAddress.end());
-        link(false, number++, contractName, contractVersion, wrongAddress, contractAbi,
+        link(number++, contractName, contractVersion, wrongAddress, contractAbi,
             CODE_ADDRESS_OR_VERSION_ERROR, true);
     }
 
@@ -1575,14 +1257,14 @@ BOOST_AUTO_TEST_CASE(linkTest_3_0)
         {
             errorVersion << "1";
         }
-        link(false, number++, contractName, errorVersion.str(), addressString, contractAbi,
+        link(number++, contractName, errorVersion.str(), addressString, contractAbi,
             CODE_FILE_INVALID_PATH, true);
     }
 }
 
 BOOST_AUTO_TEST_CASE(rebuildBfsTest)
 {
-    init(false, protocol::BlockVersion::V3_0_VERSION);
+    init(protocol::BlockVersion::V3_0_VERSION);
     bcos::protocol::BlockNumber _number = 3;
 
     // ls dir
@@ -1754,8 +1436,8 @@ BOOST_AUTO_TEST_CASE(rebuildBfsBySysTest)
 {
     //    auto keyPageIgnoreTables = std::make_shared<std::set<std::string, std::less<>>>(
     //        IGNORED_ARRAY.begin(), IGNORED_ARRAY.end());
-    //    init(false, protocol::BlockVersion::V3_0_VERSION, keyPageIgnoreTables);
-    init(false, protocol::BlockVersion::V3_0_VERSION);
+    //    init(protocol::BlockVersion::V3_0_VERSION, keyPageIgnoreTables);
+    init(protocol::BlockVersion::V3_0_VERSION);
     bcos::protocol::BlockNumber _number = 3;
 
     // ls dir

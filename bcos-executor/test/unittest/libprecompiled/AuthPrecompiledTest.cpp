@@ -37,8 +37,8 @@ class PermissionPrecompiledFixture : public PrecompiledFixture
 public:
     PermissionPrecompiledFixture()
     {
-        codec = std::make_shared<CodecWrapper>(hashImpl, false);
-        setIsWasm(false, true);
+        codec = std::make_shared<CodecWrapper>(hashImpl);
+        prepareEnv(true);
         helloAddress = Address("0x1234654b49838bd3e9466c85a4cc3428c9601234").hex();
         hello2Address = Address("0x0987654b49838bd3e9466c85a4cc3428c9601234").hex();
         newHello2Address = Address("0x9999999999999999999999999999999999999999").hex();
@@ -1847,7 +1847,7 @@ BOOST_AUTO_TEST_CASE(testContractStatus)
 
 BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
 {
-    setIsWasm(false, true, true);
+    prepareEnv(true, true);
 
     deployHello();
     bcos::protocol::BlockNumber _number = 3;
@@ -1896,7 +1896,7 @@ BOOST_AUTO_TEST_CASE(testContractStatusInKeyPage)
 
 BOOST_AUTO_TEST_CASE(testContractAbolish)
 {
-    setIsWasm(false, true, true, BlockVersion::V3_2_VERSION);
+    prepareEnv(true, true, BlockVersion::V3_2_VERSION);
 
     deployHello();
     bcos::protocol::BlockNumber _number = 3;
@@ -1975,7 +1975,7 @@ BOOST_AUTO_TEST_CASE(testContractAbolish)
 BOOST_AUTO_TEST_CASE(testInitAuth)
 {
     // 3.2 version, not set auth
-    setIsWasm(false, false, true, BlockVersion::V3_2_VERSION);
+    prepareEnv(false, true, BlockVersion::V3_2_VERSION);
     deployHello();
     bcos::protocol::BlockNumber _number = 3;
 
