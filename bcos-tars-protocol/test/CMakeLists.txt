@@ -35,6 +35,7 @@ set_source_files_properties("ExecutionMessageImplTest.cpp" PROPERTIES SKIP_UNITY
 set_source_files_properties("TransactionReceiptImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("TransactionFactoryImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("CommonConvertTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("BlockImplTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/protocol/New1_Web3TxHashCanonicalTest.cpp"
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
