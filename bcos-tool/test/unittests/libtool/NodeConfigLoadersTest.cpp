@@ -65,6 +65,22 @@ boost::property_tree::ptree fromIni(std::string const& ini)
 
 BOOST_AUTO_TEST_SUITE(NodeConfigLoadersTest)
 
+// loadTxPoolConfig rejects a zero limit / worker count (the runtime-wedging
+// values the `<= 0` guards are meant to catch).
+BOOST_AUTO_TEST_CASE(txPoolConfigRejectsZero)
+{
+    LoaderProbe p;
+    BOOST_CHECK_THROW(p.loadTxPoolConfig(fromIni("[txpool]\nlimit=0\n")), std::exception);
+    BOOST_CHECK_THROW(
+        p.loadTxPoolConfig(fromIni("[txpool]\nnotify_worker_num=0\n")), std::exception);
+    BOOST_CHECK_THROW(
+        p.loadTxPoolConfig(fromIni("[txpool]\nverify_worker_num=0\n")), std::exception);
+    // A positive configuration is accepted.
+    LoaderProbe ok;
+    BOOST_CHECK_NO_THROW(ok.loadTxPoolConfig(
+        fromIni("[txpool]\nlimit=100\nnotify_worker_num=1\nverify_worker_num=1\n")));
+}
+
 BOOST_AUTO_TEST_CASE(rpcConfigDefaultsAndPopulated)
 {
     LoaderProbe a;
