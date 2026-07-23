@@ -28,7 +28,7 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::scheduler_v1;
 
-// ---- Mock storage that supports DIRECT reads (used for FIB-100 tracking tests) ----
+// ---- Mock storage that supports untracked reads (used for FIB-100 tracking tests) ----
 // ReadWriteSetStorage forwards readSomeRaw/readOneRaw via direct member access,
 // so the wrapped backend must expose those (matching MemoryStorage's interface).
 struct DirectMockStorage
@@ -68,7 +68,7 @@ task::Task<std::optional<int>> tag_invoke(
 }
 
 task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    DirectMockStorage& /*storage*/, const auto& key, storage2::DIRECT_TYPE /*unused*/)
+    DirectMockStorage& /*storage*/, const auto& key, storage2::untracked_read_t /*unused*/)
 {
     co_return std::make_optional(key * 10);
 }
@@ -87,7 +87,7 @@ task::Task<std::vector<std::optional<int>>> tag_invoke(
 
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
-    ::ranges::forward_range auto keys, storage2::DIRECT_TYPE /*unused*/)
+    ::ranges::forward_range auto keys, storage2::untracked_read_t /*unused*/)
 {
     std::vector<std::optional<int>> result;
     for (auto&& key : keys)
@@ -101,35 +101,35 @@ BOOST_AUTO_TEST_SUITE(FIB100_FIB106_ReadWriteSetTest)
 
 // ---- FIB-100 ----
 
-// DIRECT reads are Rollbackable's internal pre-image snapshots. Tracking them
+// untracked reads are Rollbackable's internal pre-image snapshots. Tracking them
 // as transaction-visible reads would create phantom RAW dependencies. The
 // rollback-correctness concern raised by the audit is addressed instead by
 // WAW detection (see wawIntersectionDetected below): two chunks writing the
 // same key are serialized, so Rollbackable never reads a stale pre-image.
-BOOST_AUTO_TEST_CASE(directReadOneDoesNotPolluteReadSet)
+BOOST_AUTO_TEST_CASE(untrackedReadOneDoesNotPolluteReadSet)
 {
     task::syncWait([]() -> task::Task<void> {
         DirectMockStorage backend;
         ReadWriteSetStorage<decltype(backend)> reader(backend);
 
-        auto value = co_await storage2::readOne(reader, 42, storage2::DIRECT);
+        auto value = co_await storage2::readOne(reader, 42, storage2::untracked_read);
         BOOST_REQUIRE(value);
         BOOST_CHECK_EQUAL(*value, 420);
 
-        // Read set must remain empty — DIRECT is infrastructure, not business.
+        // Read set must remain empty — untracked is infrastructure, not business.
         BOOST_CHECK(::ranges::empty(readWriteSet(reader)));
         co_return;
     }());
 }
 
-BOOST_AUTO_TEST_CASE(directReadSomeDoesNotPolluteReadSet)
+BOOST_AUTO_TEST_CASE(untrackedReadSomeDoesNotPolluteReadSet)
 {
     task::syncWait([]() -> task::Task<void> {
         DirectMockStorage backend;
         ReadWriteSetStorage<decltype(backend)> reader(backend);
 
         std::vector<int> keys = {3, 5, 7};
-        auto values = co_await storage2::readSome(reader, keys, storage2::DIRECT);
+        auto values = co_await storage2::readSome(reader, keys, storage2::untracked_read);
         BOOST_REQUIRE_EQUAL(values.size(), 3);
         BOOST_CHECK_EQUAL(*values[0], 30);
         BOOST_CHECK_EQUAL(*values[1], 50);
@@ -140,8 +140,8 @@ BOOST_AUTO_TEST_CASE(directReadSomeDoesNotPolluteReadSet)
     }());
 }
 
-// Rollbackable<ReadWriteSetStorage<...>>.writeOne internally does a
-// DIRECT readOne to capture the pre-image. That read must not appear in the
+// Rollbackable<ReadWriteSetStorage<...>>.writeOne internally does an
+// untracked readOne to capture the pre-image. That read must not appear in the
 // tracked set — only the subsequent write should.
 BOOST_AUTO_TEST_CASE(rollbackablePreImageReadIsNotTracked)
 {
@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(rollbackablePreImageReadIsNotTracked)
         co_await storage2::writeOne(rollbackable, 42, 7);
 
         // Exactly one entry, and it is a write (not a read inflated by the
-        // DIRECT pre-image snapshot).
+        // untracked pre-image snapshot).
         auto const& tracked = readWriteSet(rwStorage);
         BOOST_REQUIRE_EQUAL(tracked.size(), 1);
         auto const& flag = tracked.at(std::hash<int>{}(42));

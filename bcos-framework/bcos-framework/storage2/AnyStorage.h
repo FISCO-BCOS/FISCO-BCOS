@@ -33,7 +33,7 @@ namespace bcos::storage2
 // 说明
 // - 批量 API 接受通用 range；AnyStorage 在内部使用 any_view 别名进行适配
 // - merge(to, from) 会遍历来源的 range，并以通用方式对目标执行写入/删除
-// - 使用 DIRECT 进行删除时，如果底层存储支持，将绕过“逻辑删除”
+// - 使用 bypass_logical_delete 进行删除时，如果底层存储支持，将绕过“逻辑删除”
 //
 // 通过将 Key/Value 作为模板参数保留，在擦除具体存储实现的同时保持强类型。
 
@@ -57,7 +57,7 @@ namespace bcos::storage2
 // Notes
 // - Bulk APIs accept generic ranges; AnyStorage adapts them internally using any_view aliases
 // - merge(to, from) iterates source's range and applies writes/removes to destination generically
-// - Removing with DIRECT will bypass logical-deletion if the underlying storage supports it
+// - Removing with bypass_logical_delete will bypass logical-deletion if the underlying storage supports it
 //
 // Keep Key/Value as template parameters to preserve strong types while
 // erasing the concrete storage implementation.
@@ -108,11 +108,11 @@ private:
         virtual ~StorageConcept() = default;
         virtual task::Task<std::vector<std::optional<ValueType>>> readSome(AnyKeyView keys) = 0;
         virtual task::Task<void> writeSome(AnyKeyValueView keyValues) = 0;
-        virtual task::Task<void> removeSome(AnyKeyView keys, bool direct) = 0;
+        virtual task::Task<void> removeSome(AnyKeyView keys, bool physical) = 0;
 
         virtual task::Task<std::optional<ValueType>> readOne(Key key) = 0;
         virtual task::Task<void> writeOne(Key key, ValueType value) = 0;
-        virtual task::Task<void> removeOne(Key key, bool direct) = 0;
+        virtual task::Task<void> removeOne(Key key, bool physical) = 0;
 
         virtual task::Task<std::unique_ptr<IteratorConcept>> rangeBegin() = 0;
         virtual task::Task<std::unique_ptr<IteratorConcept>> rangeSeekBegin(const Key& key) = 0;
@@ -177,11 +177,12 @@ private:
             co_await m_storage->writeSome(::ranges::views::all(keyValues));
         }
 
-        task::Task<void> removeSome(AnyKeyView keys, bool direct) override
+        task::Task<void> removeSome(AnyKeyView keys, bool physical) override
         {
-            if (direct)
+            if (physical)
             {
-                co_await m_storage->removeSome(::ranges::views::all(keys), DIRECT);
+                co_await m_storage->removeSome(
+                    ::ranges::views::all(keys), bypass_logical_delete);
             }
             else
             {
@@ -199,11 +200,11 @@ private:
             co_await m_storage->writeOne(std::move(key), std::move(value));
         }
 
-        task::Task<void> removeOne(Key key, bool direct) override
+        task::Task<void> removeOne(Key key, bool physical) override
         {
-            if (direct)
+            if (physical)
             {
-                co_await m_storage->removeOne(std::move(key), DIRECT);
+                co_await m_storage->removeOne(std::move(key), bypass_logical_delete);
             }
             else
             {
@@ -298,9 +299,11 @@ public:
         co_await m_self->removeSome(::ranges::views::all(keys), false);
     }
 
-    auto removeSome(::ranges::input_range auto keys, DIRECT_TYPE /*unused*/) -> task::Task<void>
+    auto removeSome(::ranges::input_range auto keys, auto... tags) -> task::Task<void>
     {
-        co_await m_self->removeSome(::ranges::views::all(keys), true);
+        constexpr bool physical =
+            contains_tag_v<bypass_logical_delete_t, decltype(tags)...>;
+        co_await m_self->removeSome(::ranges::views::all(keys), physical);
     }
 
     auto readOne(auto key) -> task::Task<std::optional<Value>>
@@ -318,9 +321,11 @@ public:
         co_await m_self->removeOne(std::move(key), false);
     }
 
-    auto removeOne(auto key, DIRECT_TYPE /*unused*/) -> task::Task<void>
+    auto removeOne(auto key, auto... tags) -> task::Task<void>
     {
-        co_await m_self->removeOne(std::move(key), true);
+        constexpr bool physical =
+            contains_tag_v<bypass_logical_delete_t, decltype(tags)...>;
+        co_await m_self->removeOne(std::move(key), physical);
     }
 
     auto range() -> task::Task<typename AnyStorage::Iterator>

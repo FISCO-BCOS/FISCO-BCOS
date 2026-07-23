@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(addRollback)
         Rollbackable rollbackableStorage(memoryStorage);
 
         auto view = ::ranges::single_view(StateKey{"table1"sv, "Key1"sv});
-        co_await storage2::readSome(memoryStorage, view, storage2::DIRECT);
+        co_await storage2::readSome(memoryStorage, view, storage2::untracked_read);
 
         std::string_view tableID = "table1";
         auto point = rollbackableStorage.current();
@@ -529,7 +529,7 @@ BOOST_AUTO_TEST_CASE(rollbackToLogicalDeletionState)
         auto valueAfterRollback = co_await storage2::readOne(rollbackableStorage, key);
         BOOST_CHECK(!valueAfterRollback);
 
-        auto rawValue = co_await memoryStorage.readOneRaw(key, storage2::DIRECT);
+        auto rawValue = co_await memoryStorage.readOneRaw(key, storage2::untracked_read);
         BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(rawValue));
     }());
 }
@@ -645,7 +645,7 @@ BOOST_AUTO_TEST_CASE(rollbackRestoresLogicalDeletionForStringValues)
         auto rolledBackValue = co_await storage2::readOne(rollbackableStorage, key);
         BOOST_CHECK(!rolledBackValue);
 
-        auto rawValue = co_await storage.readOneRaw(key, storage2::DIRECT);
+        auto rawValue = co_await storage.readOneRaw(key, storage2::untracked_read);
         BOOST_CHECK(std::holds_alternative<storage2::DELETED_TYPE>(rawValue));
     }());
 }
