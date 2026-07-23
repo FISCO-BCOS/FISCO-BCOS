@@ -16,23 +16,23 @@ namespace bcos::storage2
 {
 
 // Helper: check if a tag type is present in a parameter pack.
-// Usage: if constexpr (contains_tag_v<untracked_read_t, decltype(tags)...>) { ... }
+// Usage: if constexpr (contains_tag_v<UNTRACKED_READ_TYPE, decltype(tags)...>) { ... }
 template <class Tag, class... Tags>
 inline constexpr bool contains_tag_v = (std::same_as<std::decay_t<Tags>, Tag> || ...);
 
 // Bypass logical deletion: physically erase the entry instead of marking a
 // deleteItem sentinel. Used by MemoryStorage (removeOne/removeSome) and
 // RollbackableStorage (rollback).
-inline constexpr struct bypass_logical_delete_t
+inline constexpr struct BYPASS_LOGICAL_DELETE_TYPE
 {
-} bypass_logical_delete;
+} BYPASS_LOGICAL_DELETE;
 
 // Bypass read-set tracking: do not register the read in the parallel
 // scheduler's conflict set. Used by ReadWriteSetStorage (readOne/readSome),
 // EVM metadata reads (SSTORE status), and Rollbackable pre-image capture.
-inline constexpr struct untracked_read_t
+inline constexpr struct UNTRACKED_READ_TYPE
 {
-} untracked_read;
+} UNTRACKED_READ;
 
 inline constexpr struct RANGE_SEEK_TYPE
 {

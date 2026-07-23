@@ -443,7 +443,7 @@ public:
 
     task::AwaitableValue<void> removeOne(auto key, auto... tags)
     {
-        constexpr bool physical = contains_tag_v<bypass_logical_delete_t, decltype(tags)...>;
+        constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         removeSome(::ranges::views::single(std::move(key)), physical);
         return {};
     }
@@ -456,7 +456,7 @@ public:
 
     task::Task<void> removeSome(::ranges::input_range auto keys, auto... tags)
     {
-        constexpr bool physical = contains_tag_v<bypass_logical_delete_t, decltype(tags)...>;
+        constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         removeSome(std::move(keys), physical);
         co_return;
     }

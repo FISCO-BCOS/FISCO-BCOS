@@ -68,7 +68,7 @@ task::Task<std::optional<int>> tag_invoke(
 }
 
 task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    DirectMockStorage& /*storage*/, const auto& key, storage2::untracked_read_t /*unused*/)
+    DirectMockStorage& /*storage*/, const auto& key, storage2::UNTRACKED_READ_TYPE /*unused*/)
 {
     co_return std::make_optional(key * 10);
 }
@@ -87,7 +87,7 @@ task::Task<std::vector<std::optional<int>>> tag_invoke(
 
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
-    ::ranges::forward_range auto keys, storage2::untracked_read_t /*unused*/)
+    ::ranges::forward_range auto keys, storage2::UNTRACKED_READ_TYPE /*unused*/)
 {
     std::vector<std::optional<int>> result;
     for (auto&& key : keys)
@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(untrackedReadOneDoesNotPolluteReadSet)
         DirectMockStorage backend;
         ReadWriteSetStorage<decltype(backend)> reader(backend);
 
-        auto value = co_await storage2::readOne(reader, 42, storage2::untracked_read);
+        auto value = co_await storage2::readOne(reader, 42, storage2::UNTRACKED_READ);
         BOOST_REQUIRE(value);
         BOOST_CHECK_EQUAL(*value, 420);
 
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(untrackedReadSomeDoesNotPolluteReadSet)
         ReadWriteSetStorage<decltype(backend)> reader(backend);
 
         std::vector<int> keys = {3, 5, 7};
-        auto values = co_await storage2::readSome(reader, keys, storage2::untracked_read);
+        auto values = co_await storage2::readSome(reader, keys, storage2::UNTRACKED_READ);
         BOOST_REQUIRE_EQUAL(values.size(), 3);
         BOOST_CHECK_EQUAL(*values[0], 30);
         BOOST_CHECK_EQUAL(*values[1], 50);

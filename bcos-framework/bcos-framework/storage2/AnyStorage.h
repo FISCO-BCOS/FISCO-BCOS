@@ -33,7 +33,7 @@ namespace bcos::storage2
 // 说明
 // - 批量 API 接受通用 range；AnyStorage 在内部使用 any_view 别名进行适配
 // - merge(to, from) 会遍历来源的 range，并以通用方式对目标执行写入/删除
-// - 使用 bypass_logical_delete 进行删除时，如果底层存储支持，将绕过“逻辑删除”
+// - 使用 BYPASS_LOGICAL_DELETE 进行删除时，如果底层存储支持，将绕过“逻辑删除”
 //
 // 通过将 Key/Value 作为模板参数保留，在擦除具体存储实现的同时保持强类型。
 
@@ -57,7 +57,7 @@ namespace bcos::storage2
 // Notes
 // - Bulk APIs accept generic ranges; AnyStorage adapts them internally using any_view aliases
 // - merge(to, from) iterates source's range and applies writes/removes to destination generically
-// - Removing with bypass_logical_delete will bypass logical-deletion if the underlying storage supports it
+// - Removing with BYPASS_LOGICAL_DELETE will bypass logical-deletion if the underlying storage supports it
 //
 // Keep Key/Value as template parameters to preserve strong types while
 // erasing the concrete storage implementation.
@@ -182,7 +182,7 @@ private:
             if (physical)
             {
                 co_await m_storage->removeSome(
-                    ::ranges::views::all(keys), bypass_logical_delete);
+                    ::ranges::views::all(keys), BYPASS_LOGICAL_DELETE);
             }
             else
             {
@@ -204,7 +204,7 @@ private:
         {
             if (physical)
             {
-                co_await m_storage->removeOne(std::move(key), bypass_logical_delete);
+                co_await m_storage->removeOne(std::move(key), BYPASS_LOGICAL_DELETE);
             }
             else
             {
@@ -302,7 +302,7 @@ public:
     auto removeSome(::ranges::input_range auto keys, auto... tags) -> task::Task<void>
     {
         constexpr bool physical =
-            contains_tag_v<bypass_logical_delete_t, decltype(tags)...>;
+            contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         co_await m_self->removeSome(::ranges::views::all(keys), physical);
     }
 
@@ -324,7 +324,7 @@ public:
     auto removeOne(auto key, auto... tags) -> task::Task<void>
     {
         constexpr bool physical =
-            contains_tag_v<bypass_logical_delete_t, decltype(tags)...>;
+            contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
         co_await m_self->removeOne(std::move(key), physical);
     }
 

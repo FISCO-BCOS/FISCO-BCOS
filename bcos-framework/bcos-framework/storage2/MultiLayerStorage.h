@@ -198,7 +198,7 @@ public:
         -> task::Task<std::vector<storage2::StorageValueType<Value>>>
         requires ::ranges::sized_range<Keys>
     {
-        constexpr bool untracked = contains_tag_v<untracked_read_t, decltype(tags)...>;
+        constexpr bool untracked = contains_tag_v<UNTRACKED_READ_TYPE, decltype(tags)...>;
         if constexpr (untracked)
         {
             if (m_mutableStorage)
@@ -258,7 +258,7 @@ public:
 
     auto readOneRaw(const auto& key, auto... tags) -> task::Task<storage2::StorageValueType<Value>>
     {
-        constexpr bool untracked = contains_tag_v<untracked_read_t, decltype(tags)...>;
+        constexpr bool untracked = contains_tag_v<UNTRACKED_READ_TYPE, decltype(tags)...>;
         if constexpr (untracked)
         {
             if (m_mutableStorage)

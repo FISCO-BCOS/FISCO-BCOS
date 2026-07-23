@@ -196,7 +196,7 @@ public:
     // wrapper. Use for metadata-only reads (e.g. computing evmc_storage_status)
     // that must not register as a semantic read for parallel conflict detection.
     task::Task<evmc_bytes32> storage(
-        const evmc_bytes32& key, storage2::untracked_read_t untracked)
+        const evmc_bytes32& key, storage2::UNTRACKED_READ_TYPE untracked)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
             executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)},

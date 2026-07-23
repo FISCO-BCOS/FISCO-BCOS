@@ -93,7 +93,7 @@ struct MockStorage
         co_return std::nullopt;
     }
 
-    auto readOne(auto&& key, storage2::untracked_read_t untracked) -> task::Task<std::optional<int>>
+    auto readOne(auto&& key, storage2::UNTRACKED_READ_TYPE untracked) -> task::Task<std::optional<int>>
     {
         co_return std::make_optional(100);
     }
@@ -105,7 +105,7 @@ BOOST_AUTO_TEST_CASE(untrackedReadFlag)
         MockStorage lhsStorage;
         ReadWriteSetStorage<decltype(lhsStorage)> firstStorage(lhsStorage);
 
-        auto value = co_await firstStorage.readOneRaw(100, storage2::untracked_read);
+        auto value = co_await firstStorage.readOneRaw(100, storage2::UNTRACKED_READ);
         BOOST_CHECK_EQUAL(std::get<int>(value), 100);
     }());
 }

@@ -11,13 +11,13 @@ namespace bcos::executor_v1
 
 template <class Storage>
 concept HasReadOneRaw = requires(Storage& storage) {
-    storage.readOneRaw(std::declval<typename Storage::Key>(), storage2::untracked_read);
+    storage.readOneRaw(std::declval<typename Storage::Key>(), storage2::UNTRACKED_READ);
 };
 
 template <class Storage>
 concept HasReadSomeRaw = requires(Storage& storage) {
     storage.readSomeRaw(
-        std::declval<std::vector<typename Storage::Key>>(), storage2::untracked_read);
+        std::declval<std::vector<typename Storage::Key>>(), storage2::UNTRACKED_READ);
 };
 
 template <class Storage>
@@ -46,7 +46,7 @@ public:
             co_await std::visit(
                 bcos::overloaded{[&](storage2::NOT_EXISTS_TYPE) -> task::Task<void> {
                                      co_await storage2::removeOne(m_storage.get(),
-                                         std::move(record.key), storage2::bypass_logical_delete);
+                                         std::move(record.key), storage2::BYPASS_LOGICAL_DELETE);
                                  },
                     [&](storage2::DELETED_TYPE) -> task::Task<void> {
                         co_await storage2::writeOne(
@@ -87,7 +87,7 @@ private:
                        ::ranges::to<std::vector<Key>>;
             }
         }();
-        auto oldValues = co_await storage.readSomeRaw(keyList, storage2::untracked_read);
+        auto oldValues = co_await storage.readSomeRaw(keyList, storage2::UNTRACKED_READ);
 
         m_records.reserve(m_records.size() + keyList.size());
         for (auto&& [key, oldValue] : ::ranges::views::zip(keyList, oldValues))
@@ -137,7 +137,7 @@ public:
     // rollback-record creation). Used by callers that read a value for internal
     // metadata only (e.g. computing evmc_storage_status) and must not participate
     // in parallel conflict detection.
-    auto readOneRaw(auto key, storage2::untracked_read_t untracked) -> task::Task<
+    auto readOneRaw(auto key, storage2::UNTRACKED_READ_TYPE untracked) -> task::Task<
         task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(std::move(key), untracked))>>
         requires HasReadOneRaw<Storage>
     {
@@ -157,7 +157,7 @@ public:
         auto& record = m_records.emplace_back();
         record.key = key;
         auto& storage = m_storage.get();
-        record.oldValue = co_await storage.readOneRaw(key, storage2::untracked_read);
+        record.oldValue = co_await storage.readOneRaw(key, storage2::UNTRACKED_READ);
         co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
     }
 

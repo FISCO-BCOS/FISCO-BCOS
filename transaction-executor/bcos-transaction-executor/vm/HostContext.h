@@ -282,7 +282,7 @@ public:
     // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
     // SSTORE status determination) that must not influence DAG conflict edges.
     task::Task<evmc_bytes32> get(
-        const evmc_bytes32* key, storage2::untracked_read_t untracked)
+        const evmc_bytes32* key, storage2::UNTRACKED_READ_TYPE untracked)
     {
         co_return co_await m_recipientAccount.storage(*key, untracked);
     }

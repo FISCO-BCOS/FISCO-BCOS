@@ -94,7 +94,7 @@ public:
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys), decltype(tags)...>>>
     {
         constexpr bool untracked =
-            storage2::contains_tag_v<storage2::untracked_read_t, decltype(tags)...>;
+            storage2::contains_tag_v<storage2::UNTRACKED_READ_TYPE, decltype(tags)...>;
         if constexpr (!untracked)
         {
             for (auto&& key : keys)
@@ -109,7 +109,7 @@ public:
         std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key), decltype(tags)...>>>
     {
         constexpr bool untracked =
-            storage2::contains_tag_v<storage2::untracked_read_t, decltype(tags)...>;
+            storage2::contains_tag_v<storage2::UNTRACKED_READ_TYPE, decltype(tags)...>;
         if constexpr (!untracked)
         {
             putSet(false, key);
