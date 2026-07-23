@@ -81,6 +81,31 @@ BOOST_AUTO_TEST_CASE(txPoolConfigRejectsZero)
         fromIni("[txpool]\nlimit=100\nnotify_worker_num=1\nverify_worker_num=1\n")));
 }
 
+// The genesis loader validates consensus.block_tx_count_limit and
+// consensus.leader_period as strictly positive. These are read as signed
+// int64_t, so both zero and negative values are rejected (unlike the size_t
+// txpool fields above, where negatives wrap past the guard).
+BOOST_AUTO_TEST_CASE(ledgerConfigRejectsNonPositiveConsensusCounts)
+{
+    auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
+    std::string node =
+        "1234567890123456789012345678901234567890123456789012345678901234"
+        "1234567890123456789012345678901234567890123456789012345678901234";
+    auto cfg = [&](const std::string& txCount, const std::string& leaderPeriod) {
+        return fromIni("[consensus]\nconsensus_type=pbft\nblock_tx_count_limit=" + txCount +
+                       "\nleader_period=" + leaderPeriod + "\nnode.0=" + node +
+                       ":1:0\n[tx]\ngas_limit=3000000000\n");
+    };
+    LoaderProbe a(keyFactory);
+    BOOST_CHECK_THROW(a.loadLedgerConfig(cfg("0", "1")), bcos::tool::InvalidConfig);
+    LoaderProbe b(keyFactory);
+    BOOST_CHECK_THROW(b.loadLedgerConfig(cfg("-5", "1")), bcos::tool::InvalidConfig);
+    LoaderProbe c(keyFactory);
+    BOOST_CHECK_THROW(c.loadLedgerConfig(cfg("1000", "0")), bcos::tool::InvalidConfig);
+    LoaderProbe d(keyFactory);
+    BOOST_CHECK_THROW(d.loadLedgerConfig(cfg("1000", "-1")), bcos::tool::InvalidConfig);
+}
+
 BOOST_AUTO_TEST_CASE(rpcConfigDefaultsAndPopulated)
 {
     LoaderProbe a;
