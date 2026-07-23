@@ -204,10 +204,7 @@ private:
         std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
         uint8_t web3TypedTxKind = 0,
         std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
-      : evmc_host_context{.interface = hostInterface,
-            .hash_fn = evm_hash_fn,
-            .isSMCrypto = (hashImpl.getHashImplType() == crypto::HashImplType::Sm3Hash),
-            .version = 0},
+      : evmc_host_context{.interface = hostInterface, .hash_fn = evm_hash_fn},
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
         m_blockHeader(blockHeader),

@@ -1,20 +1,18 @@
 --- a/evmc/include/evmc/evmc.h
 +++ b/evmc/include/evmc/evmc.h
-@@ -233,8 +233,17 @@
+@@ -233,8 +233,15 @@
   * @struct evmc_host_context
   * The opaque data type representing the Host execution context.
   * @see evmc_execute_fn().
 + *
-+ * Extended for FISCO-BCOS: includes hash_fn, isSMCrypto and version fields
-+ * that enable SM3 national cryptography support.
++ * Extended for FISCO-BCOS with a host-provided hash_fn so SM chains can use
++ * SM3 for the KECCAK256 opcode.
   */
 -struct evmc_host_context;
 +struct evmc_host_context
 +{
 +    const struct evmc_host_interface* interface;
 +    evmc_bytes32 (*hash_fn)(struct evmc_host_context* context, const uint8_t* data, size_t size);
-+    bool isSMCrypto;
-+    uint32_t version;
 +};
  
  /**

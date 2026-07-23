@@ -72,13 +72,6 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     interface = getHostInterface();
 
     hash_fn = evm_hash_fn;
-    version = m_executive->blockContext().blockVersion();
-    isSMCrypto = false;
-
-    if (hashImpl() && hashImpl()->getHashImplType() == crypto::HashImplType::Sm3Hash)
-    {
-        isSMCrypto = true;
-    }
 
     if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
     {
@@ -375,7 +368,8 @@ evmc_result HostContext::callBuiltInPrecompiled(
         /// NOTE: this assignment is wrong, will cause out of gas, should not use evm precompiled
         /// before 3.1.0
         callResults->gas = gasUsed;
-        if (versionCompareTo(version, BlockVersion::V3_1_VERSION) >= 0)
+        if (versionCompareTo(
+                m_executive->blockContext().blockVersion(), BlockVersion::V3_1_VERSION) >= 0)
         {
             callResults->gas = _request->gas - gasUsed;
         }
