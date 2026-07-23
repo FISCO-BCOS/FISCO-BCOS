@@ -1,8 +1,20 @@
-vcpkg_from_git(
+# Official evmone (ipsilon) v0.21.0. FISCO-BCOS's SM3 (national crypto) support is
+# applied as a transparent patch instead of consuming a private fork: it adds the
+# host-provided hash_fn hook that lets SM chains use SM3 for the KECCAK256 opcode,
+# plus the macOS static-lib combine and exception-enabled build tweaks evmone needs
+# here. See fisco-sm3.patch. WASM and the dead evmc_gas_metrics field are NOT part
+# of the patch (WASM support was removed from FISCO-BCOS).
+# Use the GitHub source archive (single tarball) rather than a full git history
+# fetch: official evmone's history is large and vcpkg_from_git kept disconnecting
+# mid-transfer. The archive contains the vendored evmc/ and lib/evmone_precompiles/
+# (evmone's only submodule is the test-only evm-benchmarks, which we don't build).
+vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    URL "https://github.com/ywy2090/evmone"
-    REF 3585c2cb0c2a4752ef6e31e17803d4bfc2d44a69
-    FETCH_REF refs/heads/v0.21.0
+    REPO ipsilon/evmone
+    REF v0.21.0
+    SHA512 bc2928d42140d2fbb47d1e06773e634d208945e52ac70a418798586897a60164910cc2b23c80479ae172941d8d9142ea6fdd86e13f560195cff44ccdc1f1d0f2
+    HEAD_REF master
+    PATCHES fisco-sm3.patch
 )
 
 # 1b. Remove find_dependency(evmc) from the auto-generated evmoneConfig.cmake.

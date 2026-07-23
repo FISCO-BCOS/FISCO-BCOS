@@ -26,11 +26,7 @@ evmc_message bcos::executor_v1::newEVMCMessage(protocol::BlockNumber blockNumber
         .create2_salt = {},
         .code_address = recipientAddress,
         .code = nullptr,
-        .code_size = 0,
-        .destination_ptr = nullptr,
-        .destination_len = 0,
-        .sender_ptr = nullptr,
-        .sender_len = 0};
+        .code_size = 0};
 
     if (blockNumber == 0 && transaction.to() == precompiled::AUTH_COMMITTEE_ADDRESS)
     {

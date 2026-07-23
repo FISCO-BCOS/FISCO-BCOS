@@ -83,11 +83,7 @@ public:
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -126,11 +122,7 @@ public:
             .create2_salt = {},
             .code_address = address,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -178,11 +170,7 @@ public:
             .create2_salt = {},
             .code_address = callAddress,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -290,11 +278,7 @@ BOOST_AUTO_TEST_CASE(emptyCreate)
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
 
         evmc_address origin{};
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -407,11 +391,7 @@ BOOST_AUTO_TEST_CASE(precompiled)
             .create2_salt = {},
             .code_address = callAddress,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -622,11 +602,7 @@ BOOST_AUTO_TEST_CASE(setStorageStatusWithBugfix)
             .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -687,11 +663,7 @@ BOOST_AUTO_TEST_CASE(setStorageStatusLegacy)
             .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         evmc_bytes32 storageKey{};

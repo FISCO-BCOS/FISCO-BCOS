@@ -85,11 +85,7 @@ public:
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
             rollbackableStorage, rollbackableTransientStorage, blockHeader, message, origin, "", 0,
             seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait,

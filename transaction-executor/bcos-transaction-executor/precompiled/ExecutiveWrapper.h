@@ -94,11 +94,7 @@ public:
             .create2_salt = toEvmC(0x0_cppui256),
             .code_address = unhexAddress(input->codeAddress),
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
 
         struct InternalCallParams
         {

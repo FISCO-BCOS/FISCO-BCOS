@@ -205,11 +205,9 @@ private:
         uint8_t web3TypedTxKind = 0,
         std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
       : evmc_host_context{.interface = hostInterface,
-            .wasm_interface = nullptr,
             .hash_fn = evm_hash_fn,
             .isSMCrypto = (hashImpl.getHashImplType() == crypto::HashImplType::Sm3Hash),
-            .version = 0,
-            .metrics = std::addressof(executor::ethMetrics)},
+            .version = 0},
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
         m_blockHeader(blockHeader),

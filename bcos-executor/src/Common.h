@@ -35,7 +35,6 @@
 #include "bcos-protocol/TransactionStatus.h"
 #include "bcos-task/Task.h"
 #include "bcos-utilities/Exceptions.h"
-#include "vm/EVMCGasMetrics.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <iterator>
@@ -257,7 +256,6 @@ inline int64_t calcEip7623CalldataGas(bcos::bytesConstRef data)
     return std::max(normalDataCost, numTokens * TOTAL_COST_FLOOR_PER_TOKEN);
 }
 
-constexpr evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 
 protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 

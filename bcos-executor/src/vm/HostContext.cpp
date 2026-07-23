@@ -79,7 +79,6 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     {
         isSMCrypto = true;
     }
-    metrics = &ethMetrics;
 
     if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
     {
