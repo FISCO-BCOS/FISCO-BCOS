@@ -23,7 +23,20 @@
 #include "../protocol/ProtocolTypeDef.h"
 #include "Features.h"
 #include "SystemConfigs.h"
+// evmc is only installed as part of the 'fullnode' feature (via evmone).
+// Provide a minimal fallback so this header compiles without the full EVM stack
+// (e.g. Windows CI builds with -DFULLNODE=OFF / -DWITH_CPPSDK=ON).
+#if __has_include(<evmc/evmc.hpp>)
 #include <evmc/evmc.hpp>
+#else
+// Minimal evmc_uint256be definition — mirrors the real evmc C definition exactly.
+// NOLINTNEXTLINE(modernize-use-using)
+struct evmc_bytes32
+{
+    uint8_t bytes[32]; /**< The 32 bytes. */
+};
+typedef struct evmc_bytes32 evmc_uint256be; /* NOLINT */
+#endif
 #include <utility>
 
 namespace bcos::ledger

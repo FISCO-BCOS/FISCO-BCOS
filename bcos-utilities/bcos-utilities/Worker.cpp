@@ -25,6 +25,13 @@
 #include <exception>
 #include <future>
 
+// In Unity builds, Boost.Asio headers (from Worker.h) may include <windows.h>
+// AFTER BoostLog.h was already included (pragma once), redefining ERROR as 0.
+// Re-undef here so that BCOS_LOG(ERROR) resolves to bcos::LogLevel::ERROR.
+#ifdef ERROR
+#undef ERROR
+#endif
+
 using namespace bcos;
 
 Worker::~Worker()

@@ -51,6 +51,26 @@
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
+// Re-undef Windows macros that Boost headers may have pulled in via <windows.h>.
+// This is needed for Unity builds where another .cpp file (e.g. Worker.cpp) later
+// includes Boost.Asio which also re-includes Windows headers — once windows.h is
+// already in, its include-guards prevent re-inclusion so ERROR stays undef'd.
+#ifdef ERROR
+#undef ERROR
+#endif
+#ifdef TRACE
+#undef TRACE
+#endif
+#ifdef INFO
+#undef INFO
+#endif
+#ifdef WARNING
+#undef WARNING
+#endif
+#ifdef FATAL
+#undef FATAL
+#endif
+
 // BCOS log format
 #ifndef LOG_BADGE
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
