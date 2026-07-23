@@ -2,6 +2,11 @@
 #include <evmone/evmone.h>
 #include <evmone/vm.hpp>
 
+namespace bcos::executor_v1::hostcontext
+{
+evmc_bytes32 evm_hash_fn(struct evmc_host_context* context, const uint8_t* data, size_t size);
+}  // namespace bcos::executor_v1::hostcontext
+
 bcos::executor_v1::VMInstance::VMInstance(
     std::shared_ptr<EvmoneCodeAnalysis const> analysis) noexcept
   : m_analysis(std::move(analysis))
@@ -18,8 +23,9 @@ bcos::executor_v1::EVMCResult bcos::executor_v1::VMInstance::execute(
     // Fresh VM per execute: evmone 0.21 pools ExecutionState inside VM; thread_local reuse leaves
     // dirty stack after reset() (EVMC_BAD_JUMP_DESTINATION).
     evmc::VM evm{evmc_create_evmone()};
-    return EVMCResult(evmone::baseline::execute(
-        *static_cast<evmone::VM*>(evm.get_raw_pointer()), *host, context, rev, *msg, *m_analysis));
+    auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
+    evmoneVm->hash_fn = hostcontext::evm_hash_fn;
+    return EVMCResult(evmone::baseline::execute(*evmoneVm, *host, context, rev, *msg, *m_analysis));
 }
 
 void bcos::executor_v1::VMInstance::enableDebugOutput() {}

@@ -45,6 +45,7 @@ VMInstance::VMInstance(evmc_vm* instance, evmc_revision revision, bytes_view cod
   : m_evmcVm(evmc::VM{instance}), m_revision(revision), m_code(code)
 {
     assert(m_evmcVm->is_abi_compatible());
+    static_cast<evmone::VM*>(m_evmcVm->get_raw_pointer())->hash_fn = evm_hash_fn;
     // Set the options.
     if (m_evmcVm->get_raw_pointer()->set_option != nullptr)
     {  // baseline interpreter could not work with precompiled
@@ -63,10 +64,11 @@ VMInstance::VMInstance(
 
 Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
 {
+    auto* hostCtx = reinterpret_cast<evmc_host_context*>(&_hostContext);
     if (m_evmcVm)
     {
         return Result(m_evmcVm
-                          ->execute(*_hostContext.interface, &_hostContext, m_revision, *_msg,
+                          ->execute(*_hostContext.hostInterface, hostCtx, m_revision, *_msg,
                               m_code.data(), m_code.size())
                           .release_raw());
     }
@@ -76,8 +78,10 @@ Result VMInstance::execute(HostContext& _hostContext, evmc_message* _msg)
     // NOTE(perf): this is the correctness-first path for now; benchmark-backed pooling can be
     // considered only after evmone reset/reuse guarantees are validated.
     evmc::VM evm{evmc_create_evmone()};
-    return Result(evmone::baseline::execute(*static_cast<evmone::VM*>(evm.get_raw_pointer()),
-        *_hostContext.interface, &_hostContext, m_revision, *_msg, *m_analysis));
+    auto* evmoneVm = static_cast<evmone::VM*>(evm.get_raw_pointer());
+    evmoneVm->hash_fn = evm_hash_fn;
+    return Result(evmone::baseline::execute(
+        *evmoneVm, *_hostContext.hostInterface, hostCtx, m_revision, *_msg, *m_analysis));
 }
 
 evmc_revision toRevision(VMSchedule const& _schedule)

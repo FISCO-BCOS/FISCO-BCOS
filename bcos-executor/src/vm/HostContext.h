@@ -38,9 +38,18 @@ namespace executor
 {
 class TransactionExecutive;
 
-class HostContext : public evmc_host_context
+/// Host-provided hash for the KECCAK256 opcode; dispatches via GlobalHashImpl::g_hashImpl
+/// (SM3 on SM chains). Installed on evmone::VM by VMInstance.
+evmc_bytes32 evm_hash_fn(evmc_host_context* context, const uint8_t* data, size_t size);
+
+class HostContext
 {
 public:
+    /// EVMC host interface table (formerly the inherited `interface` field of the
+    /// concretized evmc_host_context; the evmc type is upstream-opaque again).
+    /// Renamed: `interface` is a Windows SDK macro (#define interface struct).
+    const evmc_host_interface* hostInterface = nullptr;
+
     using UniquePtr = std::unique_ptr<HostContext>;
     using UniqueConstPtr = std::unique_ptr<const HostContext>;
 

@@ -53,25 +53,18 @@ using namespace bcos::protocol;
 
 namespace bcos::executor
 {
-namespace
-{
-
 evmc_bytes32 evm_hash_fn(evmc_host_context* /*context*/, const uint8_t* data, size_t size)
 {
     return toEvmC(HostContext::hashImpl()->hash(bytesConstRef(data, size)));
 }
-}  // namespace
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
     std::shared_ptr<TransactionExecutive> executive, std::string tableName)
-  : evmc_host_context(),
-    m_callParameters(std::move(callParameters)),
+  : m_callParameters(std::move(callParameters)),
     m_executive(std::move(executive)),
     m_tableName(std::move(tableName))
 {
-    interface = getHostInterface();
-
-    hash_fn = evm_hash_fn;
+    hostInterface = getHostInterface();
 
     if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
     {
