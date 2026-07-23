@@ -27,6 +27,7 @@ set_source_files_properties("unittests/main/main.cpp" PROPERTIES SKIP_UNITY_BUIL
 set_source_files_properties("unittests/libtool/NodeConfigLoadersTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libtool/NodeConfigGenesisDataTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_source_files_properties("unittests/libtool/NodeConfigExecutorConfigTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties("unittests/libtool/BfsFileFactoryTest.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD "ON")
 
 target_link_libraries(${TEST_BINARY_NAME} PUBLIC ${TOOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)
