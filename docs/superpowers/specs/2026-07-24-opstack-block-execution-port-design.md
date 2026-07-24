@@ -25,7 +25,7 @@ patch 只碰 `lib/evmone/*`,不碰 `test/`)。
 |---|---|
 | 验收范围 | **全保真**:源码 + 21 个测试文件(123 用例)+ 31 向量 t8n gate + upstream-diff 重锚 |
 | 测试框架 | **加 gtest + nlohmann-json**(vcpkg,仅测试目标链接),测试代码零改写 |
-| 移植基准 | `efb6fd42e` + worktree 未提交译英批次(搬运前先在 worktree 侧提交固化,SHA 落账于此) |
+| 移植基准 | `1cec91b27639cab7037bcf344d4109fd19334fff`(= efb6fd42e + 译英批次) |
 | 分支策略 | 叠在 `refactor-evmone-vm-hash-fn` 上开 `feat-evm-opstack-port`,独立 PR |
 | EEST 套件 | **不随本次**(EestStateTest/EestBlockchainTest + blockchaintest loader 排除) |
 | 模块形态 | **方案 A 单模块扩展**:opstack 作为 `bcos-evm` 第二子库,ports/ 零改动 |
