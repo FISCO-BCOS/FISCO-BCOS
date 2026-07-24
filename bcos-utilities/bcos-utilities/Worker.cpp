@@ -44,8 +44,13 @@ Worker::~Worker()
         auto drainStatus = drainFuture.wait_for(std::chrono::seconds(5));
         if (drainStatus != std::future_status::ready)
         {
-            BCOS_LOG(ERROR) << LOG_DESC("Worker::~Worker() timed out waiting for handler drain")
-                            << LOG_KV("threadName", m_threadName);
+            constexpr auto errorSeverity = boost::log::trivial::severity_level::error;
+            if (static_cast<bcos::LogLevel>(errorSeverity) >= bcos::c_fileLogLevel)
+            {
+                BOOST_LOG_SEV(bcos::FileLoggerHandler, errorSeverity)
+                    << LOG_DESC("Worker::~Worker() timed out waiting for handler drain")
+                    << LOG_KV("threadName", m_threadName);
+            }
         }
     }
 }

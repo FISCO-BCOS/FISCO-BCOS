@@ -22,6 +22,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 find_package(Microsoft.GSL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(TBB REQUIRED)
+find_package(evmone CONFIG REQUIRED)
 
 set(BCOS_FRAMEWORK_SOURCES
     bcos-framework/ledger/Features.cpp
@@ -42,7 +43,8 @@ target_link_libraries(bcos-framework PUBLIC
     bcos-crypto
     Microsoft.GSL::GSL
     fmt::fmt
-    TBB::tbb)
+    TBB::tbb
+    evmone::evmone)
 set_target_properties(bcos-framework PROPERTIES UNITY_BUILD "ON")
 # Entry.cpp uses namespace bcos::storage which conflicts with unity build
 # namespace stacking from other translation units in the same batch.
