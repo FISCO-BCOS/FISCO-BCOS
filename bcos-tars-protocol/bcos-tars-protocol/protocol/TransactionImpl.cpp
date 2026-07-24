@@ -287,6 +287,71 @@ bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3A
     return m_web3AccessListCache;
 }
 
+void bcostars::protocol::TransactionImpl::ensureAuthorizationListCache() const
+{
+    std::lock_guard<std::mutex> const lock(*m_authorizationListCacheMutex);
+    if (m_authorizationListCacheBuilt)
+    {
+        return;
+    }
+    m_authorizationListCache.clear();
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        m_authorizationListCacheBuilt = true;
+        return;
+    }
+    auto const& entries = m_inner()->data.authorizationList;
+    m_authorizationListCache.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::protocol::Authorization auth;
+        auth.chainId = entry.chainID;
+        auth.nonce = entry.nonce;
+        auth.v = entry.v;
+        try
+        {
+            auth.address = bcos::toAddress(entry.address);
+        }
+        catch (std::exception const&)
+        {
+            continue;
+        }
+        try
+        {
+            auth.signer = bcos::toAddress(entry.signer);
+        }
+        catch (std::exception const&)
+        {
+            continue;
+        }
+        try
+        {
+            auth.r = bcos::hex2u(entry.r);
+        }
+        catch (std::exception const&)
+        {
+            continue;
+        }
+        try
+        {
+            auth.s = bcos::hex2u(entry.s);
+        }
+        catch (std::exception const&)
+        {
+            continue;
+        }
+        m_authorizationListCache.emplace_back(std::move(auth));
+    }
+    m_authorizationListCacheBuilt = true;
+}
+
+bcos::protocol::AuthorizationList const&
+bcostars::protocol::TransactionImpl::authorizationList() const
+{
+    ensureAuthorizationListCache();
+    return m_authorizationListCache;
+}
+
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const
 {
     return *m_inner();

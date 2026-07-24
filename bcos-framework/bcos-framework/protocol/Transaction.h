@@ -19,6 +19,7 @@
 #pragma once
 #include "TransactionSubmitResult.h"
 #include "Web3AccessList.h"
+#include "Authorization.h"
 #include "bcos-utilities/AnyHolder.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
@@ -92,6 +93,10 @@ public:
     virtual uint8_t web3TypedTxKind() const { return 0; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
     virtual Web3AccessList const& web3AccessList() const;
+
+    /// EIP-7702 authorization list (Prague+ set_code transactions).
+    /// Returns empty vector for non-set_code transactions.
+    virtual AuthorizationList const& authorizationList() const;
 
     virtual void verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signatureImpl);
 
@@ -196,6 +201,7 @@ private:
     mutable bool m_storeToBackend = {false};
 
     static Web3AccessList const& emptyWeb3AccessList();
+    static AuthorizationList const& emptyAuthorizationList();
 };
 
 // FIB-75: Return the effective gas price for a transaction.

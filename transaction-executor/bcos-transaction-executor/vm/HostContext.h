@@ -161,6 +161,9 @@ private:
     std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
     uint8_t m_web3TypedTxKindForAccessList = 0;
 
+    // EIP-6780: track addresses created in this transaction (shared across nested contexts)
+    std::shared_ptr<std::set<evmc_address>> m_createdInTx;
+
     constexpr auto buildLegacyExternalCaller()
     {
         return
@@ -209,7 +212,8 @@ private:
         const evmc_host_interface* hostInterface,
         std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
         uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr,
+        std::shared_ptr<std::set<evmc_address>> createdInTx = nullptr)
       : m_hostInterface(hostInterface),
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
@@ -234,7 +238,8 @@ private:
         m_web3Tx(web3Tx),
         m_eip2929Access(std::move(eip2929Access)),
         m_eip2930AccessList(std::move(accessList)),
-        m_web3TypedTxKindForAccessList(web3TypedTxKind)
+        m_web3TypedTxKindForAccessList(web3TypedTxKind),
+        m_createdInTx(std::move(createdInTx))
     {
         // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
         // prepare() handles prepareCall/Create only; see TransactionExecutorImpl executeStep<0>.
@@ -250,11 +255,13 @@ public:
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
         std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
         uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr,
+        std::shared_ptr<std::set<evmc_address>> createdInTx = nullptr)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
-            std::move(accessList), web3TypedTxKind, std::move(eip2929Access))
+            std::move(accessList), web3TypedTxKind, std::move(eip2929Access),
+            std::move(createdInTx))
     {}
 
     ~HostContext() noexcept = default;
@@ -417,6 +424,48 @@ public:
     void suicide()
     {
         // suicide(m_myContractTable); // TODO: add suicide
+
+        auto const isEthereum =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
+        if (!isEthereum)
+            return;
+
+        // --- Ethereum-native SELFDESTRUCT (EIP-6780) ---
+        // Reference: bcos-evm/bcos-evm/eth/state/host.cpp Host::selfdestruct()
+        auto& ref = message();
+        auto const& selfAddr = ref.code_address;
+        auto const& beneficiary = ref.recipient;
+
+        auto selfAccount = getAccount(*this, selfAddr);
+        auto beneficiaryAccount = getAccount(*this, beneficiary);
+
+        auto selfBalance = task::syncWait(selfAccount.balance());
+        auto benBalance = task::syncWait(beneficiaryAccount.balance());
+
+        // EIP-6780 (Cancun+): contracts NOT created in the current transaction
+        // only transfer balance, do NOT register destruction → no SELFDESTRUCT gas refund.
+        bool const justCreated = m_createdInTx && m_createdInTx->count(selfAddr) > 0;
+        if (m_revision >= EVMC_CANCUN && !justCreated)
+        {
+            auto newBenBalance = benBalance + selfBalance;
+            task::syncWait(selfAccount.setBalance(u256{0}));
+            task::syncWait(beneficiaryAccount.setBalance(newBenBalance));
+            HOST_CONTEXT_LOG(TRACE)
+                << "Ethereum SELFDESTRUCT (EIP-6780, not same-tx create)"
+                << LOG_KV("addr", selfAddr) << LOG_KV("beneficiary", beneficiary)
+                << LOG_KV("balance", selfBalance);
+            return;
+        }
+
+        // Pre-Cancun or same-tx create: full selfdestruct with SELFDESTRUCT refund
+        auto newBenBalance = benBalance + selfBalance;
+        task::syncWait(selfAccount.setBalance(u256{0}));
+        task::syncWait(beneficiaryAccount.setBalance(newBenBalance));
+
+        HOST_CONTEXT_LOG(TRACE)
+            << "Ethereum SELFDESTRUCT (registered, refund eligible)"
+            << LOG_KV("addr", selfAddr) << LOG_KV("beneficiary", beneficiary)
+            << LOG_KV("balance", selfBalance);
     }
 
     task::Task<void> prepare()
@@ -460,7 +509,11 @@ public:
         {
             // FIB-91: checkAuth() moved inside try block so exceptions
             // trigger rollback/cleanup instead of bypassing it
-            if (m_ledgerConfig.get().authCheckStatus() != 0U)
+            // Ethereum native mode skips BCOS-specific auth checks.
+            auto const isEthereumExec =
+                m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_ethereum_executor);
+            if (!isEthereumExec && m_ledgerConfig.get().authCheckStatus() != 0U)
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
@@ -625,7 +678,8 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
+            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access,
+            m_createdInTx);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -689,6 +743,9 @@ private:
             input.createCodeAddress = ref.code_address;
         }
         // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
+        // Ethereum native mode: warm COINBASE address per EIP-3651 (Shanghai+).
+        // BCOS currently has no block-level coinbase address; when available,
+        // pass it via input.coinbase.
         input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
         input.accessList = m_eip2930AccessList.get();
         executor::warmEip2929AtTransactionEntry(
@@ -705,54 +762,151 @@ private:
     task::Task<EVMCResult> executeCreate()
     {
         auto& ref = message();
-        if (m_blockHeader.get().number() != 0)
+        auto const isEthereum =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
+
+        if (!isEthereum)
         {
-            std::string authTablePath;
-            // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a binary
-            // path, but ContractAuthMgrPrecompiled always looks up auth tables using hex paths.
-            // Force hex to match the lookup path.
-            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_auth_check) &&
-                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address))
+            // BCOS mode: create auth table for permission checking
+            if (m_blockHeader.get().number() != 0)
             {
-                authTablePath =
-                    std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
+                std::string authTablePath;
+                // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a
+                // binary path, but ContractAuthMgrPrecompiled always looks up auth tables using
+                // hex paths. Force hex to match the lookup path.
+                if (m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_auth_check) &&
+                    m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::feature_raw_address))
+                {
+                    authTablePath = std::string(executor::USER_APPS_PREFIX) +
+                                    address2HexString(ref.code_address);
+                }
+                else
+                {
+                    authTablePath = std::string(co_await m_recipientAccount.path());
+                }
+                co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                    authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(),
+                    m_contextID, m_seq, m_ledgerConfig);
             }
-            else
-            {
-                authTablePath = std::string(co_await m_recipientAccount.path());
-            }
-            co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID,
-                m_seq, m_ledgerConfig);
         }
 
-        if (m_web3Tx && m_level != 0)
+        if (m_web3Tx && m_level != 0 && !isEthereum)
         {
             auto senderAccount = getAccount(*this, ref.sender);
             co_await senderAccount.increaseNonce();
         }
 
+        // --- EIP-7610: create collision check (Ethereum mode) ---
+        if (isEthereum)
+        {
+            if (co_await m_recipientAccount.exists())
+            {
+                auto codeHash = co_await m_recipientAccount.codeHash();
+                static const bcos::h256 EMPTY_CODE_HASH{};
+                auto existingNonce = co_await m_recipientAccount.nonce();
+                auto existingBalance = co_await m_recipientAccount.balance();
+                if (codeHash != EMPTY_CODE_HASH || existingNonce != 0 ||
+                    existingBalance != 0)
+                {
+                    // Account already exists with non-empty state → collision
+                    co_return EVMCResult{
+                        evmc_result{.status_code = EVMC_FAILURE,
+                            .gas_left = 0,
+                            .gas_refund = 0,
+                            .output_data = nullptr,
+                            .output_size = 0,
+                            .release = nullptr,
+                            .create_address = ref.code_address,
+                            .padding = {}},
+                        protocol::TransactionStatus::ContractAddressAlreadyUsed};
+                }
+            }
+        }
+
         co_await m_recipientAccount.create();
-        auto bugfixNest =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_nonce_initialize);
-        if (bugfixNest)
+
+        // Ethereum mode: always set nonce=1 before VM (EIP-161 / Spurious Dragon)
+        if (isEthereum)
         {
             co_await m_recipientAccount.setNonce("1");
         }
+        else
+        {
+            auto bugfixNest = m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::bugfix_nonce_initialize);
+            if (bugfixNest)
+            {
+                co_await m_recipientAccount.setNonce("1");
+            }
+        }
+
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             ref.input_data, ref.input_size);
         if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
+
+            // --- EIP-3541: reject code starting with 0xEF (Ethereum mode, London+) ---
+            if (isEthereum && m_revision >= EVMC_LONDON && !code.empty() && code[0] == 0xEF)
+            {
+                co_return EVMCResult{
+                    evmc_result{.status_code = EVMC_CONTRACT_VALIDATION_FAILURE,
+                        .gas_left = 0,
+                        .gas_refund = 0,
+                        .output_data = nullptr,
+                        .output_size = 0,
+                        .release = nullptr,
+                        .create_address = ref.code_address,
+                        .padding = {}},
+                    protocol::TransactionStatus::BadInstruction};
+            }
+
+            // --- MAX_CODE_SIZE check (Ethereum mode, Spurious Dragon+) ---
+            if (isEthereum && m_revision >= EVMC_SPURIOUS_DRAGON)
+            {
+                static constexpr size_t MAX_CODE_SIZE = 24576;
+                if (code.size() > MAX_CODE_SIZE)
+                {
+                    co_return EVMCResult{
+                        evmc_result{.status_code = EVMC_FAILURE,
+                            .gas_left = 0,
+                            .gas_refund = 0,
+                            .output_data = nullptr,
+                            .output_size = 0,
+                            .release = nullptr,
+                            .create_address = ref.code_address,
+                            .padding = {}},
+                        protocol::TransactionStatus::OutOfGas};
+                }
+            }
+
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
-            if (!bugfixNest)
+
+            if (!isEthereum)
             {
-                co_await m_recipientAccount.setNonce("1");
+                auto bugfixNest = m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::bugfix_nonce_initialize);
+                if (!bugfixNest)
+                {
+                    co_await m_recipientAccount.setNonce("1");
+                }
             }
-            result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
+
+            // Code deposit cost: Ethereum = 200/byte, BCOS = VMSchedule().createDataGas
+            result.gas_left -= isEthereum ?
+                static_cast<int64_t>(result.output_size) * 200 :
+                result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
+
+            // Track created address for EIP-6780 (selfdestruct only for same-tx creates)
+            if (isEthereum && m_createdInTx)
+            {
+                m_createdInTx->insert(ref.code_address);
+            }
 
             // Clear the output
             if (result.release)
@@ -881,7 +1035,12 @@ private:
                                      .padding = {}},
                 protocol::TransactionStatus::None};
         }
-        processDynamicPrecompiled();
+        // BCOS dynamic precompile redirect — skip in Ethereum native mode
+        if (!m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::feature_ethereum_executor))
+        {
+            processDynamicPrecompiled();
+        }
 
         if (m_preparedPrecompiled != nullptr)
         {

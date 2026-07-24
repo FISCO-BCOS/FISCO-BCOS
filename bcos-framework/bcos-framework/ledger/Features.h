@@ -118,6 +118,8 @@ public:
         feature_mpt_state_root = 58,      // MPT lazy-build: block stateRoot switches to the
                                           // Ethereum MPT root from this flag's activation
                                           // block on (spec 2026-04-24 design3 4.3)
+        feature_ethereum_executor = 59,  // Native Ethereum execution mode: EIP-1559 gas,
+                                         // standard precompiles only, no BCOS auth/balance checks
     };
 
     // feature_flags bit = enum value; magic_enum's default reflection range is

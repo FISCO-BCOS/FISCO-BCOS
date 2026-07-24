@@ -29,6 +29,7 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
+#include "bcos-framework/protocol/Authorization.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 #include <memory>
@@ -94,6 +95,7 @@ public:
     bcos::bytesConstRef extraTransactionBytes() const override;
     uint8_t web3TypedTxKind() const override;
     bcos::protocol::Web3AccessList const& web3AccessList() const override;
+    bcos::protocol::AuthorizationList const& authorizationList() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();
@@ -103,11 +105,16 @@ public:
 
 private:
     void ensureWeb3AccessListCache() const;
+    void ensureAuthorizationListCache() const;
 
     std::function<bcostars::Transaction*()> m_inner;
     mutable bcos::protocol::Web3AccessList m_web3AccessListCache;
     mutable std::unique_ptr<std::mutex> m_web3AccessListCacheMutex{std::make_unique<std::mutex>()};
     mutable bool m_web3AccessListCacheBuilt = false;
+    mutable bcos::protocol::AuthorizationList m_authorizationListCache;
+    mutable std::unique_ptr<std::mutex> m_authorizationListCacheMutex{
+        std::make_unique<std::mutex>()};
+    mutable bool m_authorizationListCacheBuilt = false;
 };
 
 // Guard: TransactionImpl must fit inside the AnyTransaction fixed-size buffer.
