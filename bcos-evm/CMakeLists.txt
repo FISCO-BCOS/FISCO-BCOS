@@ -49,6 +49,26 @@ set_source_files_properties(
     bcos-evm/eth/utils/utils.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
+add_library(bcos-evm-opstack STATIC
+    bcos-evm/opstack/OpForkSchedule.cpp
+    bcos-evm/opstack/OpHost.cpp
+    bcos-evm/opstack/OpPrecompiles.cpp
+    bcos-evm/opstack/OpFeeParams.cpp
+    bcos-evm/opstack/OpPredeploys.cpp
+    bcos-evm/opstack/RollupCost.cpp
+    bcos-evm/opstack/OpValidate.cpp
+    bcos-evm/opstack/OpTransition.cpp
+    bcos-evm/opstack/OpExecCommon.cpp
+    bcos-evm/opstack/OpDepositTx.cpp
+    bcos-evm/opstack/OpReceiptMeta.cpp
+    bcos-evm/opstack/OpBlockFinalize.cpp
+    bcos-evm/opstack/OpBlockExecute.cpp
+    bcos-evm/opstack/OpReceiptEncode.cpp
+    bcos-evm/opstack/OpBlockSeal.cpp)
+add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
+target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)
+
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
 # 否则整树 TESTS=ON 构建/CI 也不会编译 bcos-evm-eth-tests，回归无从暴露。
 if(BCOS_EVM_STANDALONE OR TESTS)
