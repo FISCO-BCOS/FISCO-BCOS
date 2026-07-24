@@ -22,6 +22,7 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/eth/utils/blob_schedule.cpp
     bcos-evm/eth/utils/mpt.cpp
     bcos-evm/eth/utils/mpt_hash.cpp
     bcos-evm/eth/utils/rlp_encode.cpp
@@ -42,6 +43,7 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/eth/utils/blob_schedule.cpp
     bcos-evm/eth/utils/mpt.cpp
     bcos-evm/eth/utils/mpt_hash.cpp
     bcos-evm/eth/utils/rlp_encode.cpp
