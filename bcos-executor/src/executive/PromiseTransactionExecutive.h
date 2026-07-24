@@ -24,17 +24,13 @@
 #include "CoroutineTransactionExecutive.h"
 #include "SyncStorageWrapper.h"
 #include "TransactionExecutive.h"
+#include "bcos-utilities/IOServicePool.h"
 #include <boost/coroutine2/coroutine.hpp>
 #include <memory>
 #include <thread>
 
 namespace bcos
 {
-// Forward declaration — the actual header (bcos-utilities/IOServicePool.h) is
-// only needed in the .cpp file.  The constructor parameter is kept for
-// backward compatibility but is no longer used (the swapper now owns its
-// dedicated background thread pool).
-class IOServicePool;
 
 namespace executor
 {
@@ -44,12 +40,13 @@ public:
     using Ptr = std::shared_ptr<MessagePromiseSwapper>;
 
     /// Construct a MessagePromiseSwapper.
-    /// @param _pool  DEPRECATED — no longer used.  The swapper now uses its own
-    ///               dedicated background thread pool, independent of the main
-    ///               IOServicePool, to avoid thread-pool exhaustion deadlocks
-    ///               on low-core-count systems (≤ 3 cores) where the DAG
-    ///               wait_for_all and DMC resume paths could otherwise starve
-    ///               the shared pool.
+    /// @param _pool  DEPRECATED — no longer used.  The swapper now spawns
+    ///               dedicated fire-and-forget threads on demand (via
+    ///               std::thread::detach) instead of posting work to the
+    ///               shared IOServicePool, to avoid thread-pool exhaustion
+    ///               deadlocks on low-core-count systems (≤ 3 cores) where
+    ///               the DAG wait_for_all and DMC resume paths could
+    ///               otherwise starve the shared pool.
     MessagePromiseSwapper(IOServicePool::Ptr _pool = nullptr);
 
     void spawnAndCall(std::function<CallParameters::UniquePtr()> spawnCall,
