@@ -53,7 +53,7 @@ bcos-evm/
 
 - `bcosevm::eth`(`bcos-evm-eth`,已有)← 并入 `eth/utils/` 源与 `StateRootCompute.cpp`
 - `bcosevm::opstack`(`bcos-evm-opstack`)→ 链 `bcosevm::eth`
-- `bcos-evm-opstack-tests`(GTest)→ 链 `bcosevm::opstack` + `GTest::gtest_main` + `nlohmann_json` + `statetest_loader.cpp`(测试侧源)
+- `bcos-evm-opstack-tests`(GTest)→ 链 `bcosevm::opstack` + `GTest::gtest` + `nlohmann_json`;源含 ref 的 `test/main.cpp` 与 `statetest_loader.cpp`(测试侧源)
 
 不变式:
 
@@ -99,7 +99,7 @@ vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 
 | `test/opstack/` 24 个 `.cpp` + helper | `bcos-evm/test/opstack/` | 仅 include 三规则改写 |
 | `t8n/vectors/`(432K,31 向量 + manifest + DIVERGENCES.md) | 同构搬运 | **逐字节不动** |
 | `t8n/generator/` + `regen.sh` | 同构搬运 | 只搬不跑;README 路径引用改写 |
-| `test/main.cpp` | `test/opstack/` | 或改用 `GTest::gtest_main` |
+| `test/main.cpp` | `test/opstack/` | 原样沿用(零改写原则),不换 `gtest_main` |
 
 ### 4.4 依赖变更
 
