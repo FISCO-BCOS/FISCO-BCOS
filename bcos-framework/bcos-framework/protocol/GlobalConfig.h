@@ -74,6 +74,10 @@ public:
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
+    // Deprecated: WASM/Liquid execution support was removed. These accessors are
+    // retained only for API compatibility. setIsWasm() is still invoked once during
+    // init (always with false) and isWasm() is no longer read anywhere. Do not use
+    // in new code; the node no longer supports WASM execution.
     virtual void setIsWasm(bool _isWasm) noexcept { m_isWasm = _isWasm; }
     virtual bool isWasm() const noexcept { return m_isWasm; }
 
@@ -100,7 +104,7 @@ private:
     std::string m_storageType;
     bool m_enableDAG = true;
     bool m_needRetInput = false;  // need add 'input' param in sendTransaction() return value
-    bool m_isWasm = false;
+    bool m_isWasm = false;        // deprecated: WASM removed; write-only, retained for API compat
     mutable std::mutex x_signalMutex;
 };
 

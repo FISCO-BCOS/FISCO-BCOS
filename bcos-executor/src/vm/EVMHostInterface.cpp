@@ -23,6 +23,10 @@
  * @date: 2021-09-13
  */
 
+// NOTE: evmc_host_context is upstream-opaque; every context pointer entering these
+// shims is the executor's own HostContext (see VMInstance), so the reinterpret_casts
+// below are the inverse of the cast made at the execute() call sites.
+
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
@@ -46,7 +50,7 @@ static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mism
 
 bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     auto addr = fromEvmC(*_addr);
     return hostContext.exists(addr);
 }
@@ -54,7 +58,7 @@ bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexc
 evmc_bytes32 getStorage(
     evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
-    auto& hostContext = static_cast<HostContext&>(*context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
 
     // programming assert for debug
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
@@ -65,7 +69,7 @@ evmc_bytes32 getStorage(
 evmc_bytes32 getTransientStorage(
     evmc_host_context* context, [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key)
 {
-    auto& hostContext = static_cast<HostContext&>(*context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
 
     // programming assert for debug
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
@@ -77,7 +81,7 @@ evmc_bytes32 getTransientStorage(
 evmc_storage_status setStorage(evmc_host_context* context,
     [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    auto& hostContext = static_cast<HostContext&>(*context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
 
     assert(fromEvmC(*addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
@@ -118,14 +122,14 @@ evmc_storage_status setStorage(evmc_host_context* context,
 void setTransientStorage(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
     const evmc_bytes32* key, const evmc_bytes32* value)
 {
-    auto& hostContext = static_cast<HostContext&>(*context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(context);
     hostContext.setTransientStorage(key, value);  // Interface uses native endianness
 }
 
 
 evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     const auto& blockContext = hostContext.getTransactionExecutive()->blockContext();
     EXECUTIVE_LOG(DEBUG) << "start getBalance in evm";
     if (blockContext.features().get(ledger::Features::Flag::feature_balance))
@@ -143,13 +147,13 @@ evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) 
 
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return hostContext.codeSizeAt(fromEvmC(*_addr));
 }
 
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
 }
 
@@ -169,7 +173,7 @@ evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _codeOffset,
     uint8_t* _bufferData, size_t _bufferSize)
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     if (hostContext.features().get(
             ledger::Features::Flag::bugfix_evm_create2_delegatecall_staticcall_codecopy))
     {
@@ -196,7 +200,7 @@ bool selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
 {
     (void)_addr;
     (void)_beneficiary;
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     const auto& blockContext = hostContext.getTransactionExecutive()->blockContext();
     EXECUTIVE_LOG(DEBUG) << "EVM suicide start ";
     if (blockContext.features().get(ledger::Features::Flag::feature_balance))
@@ -219,7 +223,7 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
     size_t _dataSize, const evmc_bytes32 _topics[], size_t _numTopics) noexcept
 {
     (void)_addr;
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
@@ -227,7 +231,7 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
 
 evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return hostContext.accessAccount(*_addr, hostContext.revision());
 }
 
@@ -235,13 +239,13 @@ evmc_access_status access_account(evmc_host_context* _context, const evmc_addres
 evmc_access_status access_storage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     return hostContext.accessStorage(*_addr, *_key, hostContext.revision());
 }
 
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
     // FIXME: the evmc_tx_context should init use the transaction info
     evmc_tx_context result{};
     auto origin = fromHex(hostContext.origin());
@@ -264,7 +268,7 @@ evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 
 evmc_bytes32 getBlockHash(evmc_host_context* _txContextPtr, int64_t _number)
 {
-    auto& hostContext = static_cast<HostContext&>(*_txContextPtr);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_txContextPtr);
     return toEvmC(hostContext.blockHash(_number));
 }
 
@@ -295,7 +299,7 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 
-    auto& hostContext = static_cast<HostContext&>(*_context);
+    auto& hostContext = *reinterpret_cast<HostContext*>(_context);
 
     return hostContext.externalRequest(_msg);
 }

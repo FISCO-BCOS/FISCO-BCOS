@@ -98,11 +98,7 @@ public:
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         return HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>(
             rollbackableStorage, rollbackableTransientStorage, blockHeader, message, originIn, "",
             0, seq, *precompiledManager, ledgerConfig, *hashImpl, false, 0, bcos::task::syncWait,
@@ -444,11 +440,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
         .create2_salt = {},
         .code_address = emptyCallee,
         .code = nullptr,
-        .code_size = 0,
-        .destination_ptr = nullptr,
-        .destination_len = 0,
-        .sender_ptr = nullptr,
-        .sender_len = 0};
+        .code_size = 0};
 
     auto evmOut = syncWait([&parent, nested]() -> Task<EVMCResult> {
         co_return co_await parent.externalCall(nested);
@@ -813,11 +805,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_access_list_multi_slot)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_REVERT);
 
@@ -913,11 +901,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_REVERT);
 
@@ -968,11 +952,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_success_commits_child_warm)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_SUCCESS);
 
@@ -1038,11 +1018,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
             .create2_salt = {},
             .code_address = outer,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_REVERT);
 
@@ -1160,11 +1136,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
 
         auto msg1 = callTemplate;
         msg1.recipient = child1;
@@ -1434,11 +1406,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_oog_rolls_back_child_warm)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_OUT_OF_GAS);
 
@@ -1502,11 +1470,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_REVERT);
 
@@ -1567,11 +1531,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_REVERT);
 
@@ -1685,11 +1645,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         int64_t const childSeq = seq + 1;
         auto const resolved =
             getMessage(false, nested, blockHeader.number(), 0, childSeq, nonce, *hashImpl);
@@ -1740,11 +1696,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         int64_t const childSeq = seq + 1;
         auto const resolved =
             getMessage(false, nested, blockHeader.number(), 0, childSeq, nonce, *hashImpl);
@@ -1929,11 +1881,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_checkpoint_off_nested_call)
             .create2_salt = {},
             .code_address = childContract,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         auto out = co_await host.externalCall(nested);
         BOOST_REQUIRE_EQUAL(out.status_code, EVMC_SUCCESS);
 

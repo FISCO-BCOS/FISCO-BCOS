@@ -90,11 +90,7 @@ public:
             .create2_salt = {},
             .code_address = {},
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin = {};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -145,11 +141,7 @@ BOOST_AUTO_TEST_CASE(FIB88_InsufficientBalanceConsumesAllGas)
             .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -192,11 +184,7 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeRevertPreservesGas)
             .create2_salt = {},
             .code_address = nonExistentAddr,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -236,11 +224,7 @@ BOOST_AUTO_TEST_CASE(FIB88_NotFoundCodeStaticCallReturnsSuccess)
             .create2_salt = {},
             .code_address = nonExistentAddr,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -305,11 +289,7 @@ BOOST_AUTO_TEST_CASE(FIB91_AuthCheckInsideTryBlock)
             .create2_salt = {},
             .code_address = helloworldAddress,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>
@@ -401,11 +381,7 @@ BOOST_AUTO_TEST_CASE(FIB88_FlagOff_InsufficientBalancePreservesGas)
             .create2_salt = {},
             .code_address = recipient,
             .code = nullptr,
-            .code_size = 0,
-            .destination_ptr = nullptr,
-            .destination_len = 0,
-            .sender_ptr = nullptr,
-            .sender_len = 0};
+            .code_size = 0};
         evmc_address origin{};
 
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>

@@ -19,6 +19,11 @@
  * @date: 2021-05-24
  */
 
+// NOTE: evmc_host_context is upstream-opaque; every context pointer entering these
+// shims is the executor's own HostContextType (see VMInstance/HostContext::execute),
+// so the reinterpret_casts below are the inverse of the cast made at the execute()
+// call sites.
+
 #pragma once
 
 #include "bcos-concepts/ByteBuffer.h"
@@ -38,21 +43,21 @@ struct EVMHostInterface
 {
     static bool accountExists(evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return syncWait(hostContext.exists(*addr));
     }
 
     static evmc_bytes32 getStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return syncWait(hostContext.get(key));
     }
 
     static evmc_bytes32 getTransientStorage(evmc_host_context* context,
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return syncWait(hostContext.getTransientStorage(key));
     }
 
@@ -61,7 +66,7 @@ struct EVMHostInterface
         const evmc_bytes32* value) noexcept
     {
         assert(!concepts::bytebuffer::equalTo(addr->bytes, executor::EMPTY_EVM_ADDRESS.bytes));
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
 
         bool newIsZero =
             concepts::bytebuffer::equalTo(value->bytes, executor::EMPTY_EVM_BYTES32.bytes);
@@ -104,33 +109,33 @@ struct EVMHostInterface
         [[maybe_unused]] const evmc_address* addr, const evmc_bytes32* key,
         const evmc_bytes32* value) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         syncWait(hostContext.setTransientStorage(key, value));
     }
 
     static evmc_bytes32 getBalance(evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         auto balance = syncWait(hostContext.balance(*addr));
         return toEvmC(balance);
     }
 
     static size_t getCodeSize(evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return syncWait(hostContext.codeSizeAt(*addr));
     }
 
     static evmc_bytes32 getCodeHash(evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return toEvmC(syncWait(hostContext.codeHashAt(*addr)));
     }
 
     static size_t copyCode(evmc_host_context* context, const evmc_address* address,
         size_t codeOffset, uint8_t* bufferData, size_t bufferSize) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         auto codeEntry = syncWait(hostContext.code(*address));
 
         // Handle "big offset" edge case.
@@ -149,7 +154,7 @@ struct EVMHostInterface
     static bool selfdestruct(evmc_host_context* context, [[maybe_unused]] const evmc_address* addr,
         [[maybe_unused]] const evmc_address* beneficiary) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         hostContext.suicide();  // FISCO BCOS has no _beneficiary
         // EIP-3529 (London): SELFDESTRUCT gas refund is removed entirely.
         // EIP-6780 (Cancun+): account deletion only when created in same tx;
@@ -162,7 +167,7 @@ struct EVMHostInterface
     static void log(evmc_host_context* context, const evmc_address* addr, uint8_t const* data,
         size_t dataSize, const evmc_bytes32 topics[], size_t numTopics) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         h256s hashTopics;
         hashTopics.reserve(numTopics);
         for (auto i : ::ranges::views::iota(0LU, numTopics))
@@ -175,20 +180,20 @@ struct EVMHostInterface
     static evmc_access_status accessAccount(
         evmc_host_context* context, const evmc_address* addr) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return hostContext.accessAccount(*addr);
     }
 
     static evmc_access_status accessStorage(
         evmc_host_context* context, const evmc_address* addr, const evmc_bytes32* key) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return hostContext.accessStorage(*addr, *key);
     }
 
     static evmc_tx_context getTxContext(evmc_host_context* context) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         evmc_tx_context result = {
             .tx_gas_price = toEvmC(hostContext.gasPrice()),
             .tx_origin = hostContext.origin(),
@@ -212,7 +217,7 @@ struct EVMHostInterface
 
     static evmc_bytes32 getBlockHash(evmc_host_context* context, int64_t number) noexcept
     {
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         return toEvmC(syncWait(hostContext.blockHash(number)));
     }
 
@@ -225,7 +230,7 @@ struct EVMHostInterface
             BOOST_THROW_EXCEPTION(protocol::GasOverflow());
         }
 
-        auto& hostContext = static_cast<HostContextType&>(*context);
+        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
         auto result = syncWait(hostContext.externalCall(*message));
         evmc_result evmcResult = result;
         result.release = nullptr;

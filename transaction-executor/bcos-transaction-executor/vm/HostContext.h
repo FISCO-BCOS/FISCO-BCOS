@@ -125,9 +125,15 @@ task::Task<std::shared_ptr<Executable>> getExecutable(
 }
 
 template <class Storage, class TransientStorage>
-class HostContext : public evmc_host_context
+class HostContext
 {
 private:
+    /// EVMC host interface table (formerly the inherited `interface` field of the
+    /// concretized evmc_host_context; the evmc type is upstream-opaque again).
+    /// Renamed: `interface` is a Windows SDK macro. Declared first so the
+    /// mem-init list order below matches declaration order.
+    const evmc_host_interface* m_hostInterface = nullptr;
+
     std::reference_wrapper<Storage> m_rollbackableStorage;
     std::reference_wrapper<TransientStorage> m_rollbackableTransientStorage;
     std::reference_wrapper<const protocol::BlockHeader> m_blockHeader;
@@ -204,12 +210,7 @@ private:
         std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
         uint8_t web3TypedTxKind = 0,
         std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
-      : evmc_host_context{.interface = hostInterface,
-            .wasm_interface = nullptr,
-            .hash_fn = evm_hash_fn,
-            .isSMCrypto = (hashImpl.getHashImplType() == crypto::HashImplType::Sm3Hash),
-            .version = 0,
-            .metrics = std::addressof(executor::ethMetrics)},
+      : m_hostInterface(hostInterface),
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
         m_blockHeader(blockHeader),
@@ -430,6 +431,11 @@ public:
         co_await prepareCall();
     }
 
+    /// The EVMC host interface table paired with this context, plus the opaque
+    /// context pointer to pass back into it (tests drive the C shims directly).
+    const evmc_host_interface* hostInterface() const noexcept { return m_hostInterface; }
+    evmc_host_context* hostCtx() noexcept { return reinterpret_cast<evmc_host_context*>(this); }
+
     task::Task<EVMCResult> execute()
     {
         const auto* ref = std::addressof(message());
@@ -619,7 +625,7 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            interface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
+            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
 
         co_await hostcontext.prepare();
         auto result = co_await hostcontext.execute();
@@ -733,8 +739,9 @@ private:
         {
             co_await m_recipientAccount.setNonce("1");
         }
-        auto result = m_executable->m_vmInstance.execute(
-            interface, this, m_revision, std::addressof(ref), ref.input_data, ref.input_size);
+        auto result = m_executable->m_vmInstance.execute(m_hostInterface,
+            reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
+            ref.input_data, ref.input_size);
         if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
@@ -884,9 +891,9 @@ private:
                 m_ledgerConfig.get().authCheckStatus(), m_ledgerConfig.get().features());
         }
 
-        co_return m_executable->m_vmInstance.execute(interface, this, m_revision,
-            std::addressof(ref), (const uint8_t*)m_executable->m_code->data(),
-            m_executable->m_code->size());
+        co_return m_executable->m_vmInstance.execute(m_hostInterface,
+            reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
+            (const uint8_t*)m_executable->m_code->data(), m_executable->m_code->size());
     }
 };
 

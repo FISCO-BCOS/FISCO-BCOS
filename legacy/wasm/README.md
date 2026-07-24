@@ -41,19 +41,19 @@ Their content is unchanged, but they are not byte-identical to `decb19395`.
 | `ports/fbwasm/` | `ports/fbwasm/` | vcpkg port building the Rust engine. Pinned `rustup override set nightly-2024-02-25`. |
 | `ports/wabt/` | `ports/wabt/` | vcpkg port for the WebAssembly Binary Toolkit, used only by `gas_meter/` |
 
-## Important: `EVMCWasm.h` is not purely WASM
+## `EVMCWasm.h` is fully archived
 
-The archived copy defines **two** structs, and only one of them was WASM-specific:
+The archived copy defines **two** structs; both are now dead:
 
 - `wasm_host_interface` — the WASM host callback table. Dead, archived here.
-- `evmc_gas_metrics` — **still live.** `evmc.h` only forward-declares this struct
-  and holds a pointer to it in `evmc_host_context`; the definition lived here.
-  The EVM path uses it via `ethMetrics` in `bcos-executor/src/Common.h`.
+- `evmc_gas_metrics` — dead as well since the switch to official evmone
+  (ports/evmone + fisco-sm3.patch): the `metrics` pointer field was dropped from
+  `evmc_host_context`, and the `ethMetrics` constant plus its extracted header
+  `bcos-executor/src/vm/EVMCGasMetrics.h` were deleted. The struct was set into
+  the host context but never read by evmone or any FISCO-BCOS code.
 
-`evmc_gas_metrics` was therefore extracted into
-`bcos-executor/src/vm/EVMCGasMetrics.h` and remains part of the active build. Do
-not restore `EVMCWasm.h` into the source tree — you would get a duplicate
-definition.
+Nothing in the active build references either struct; this file survives only as
+archive.
 
 ## Why WASM was removed
 

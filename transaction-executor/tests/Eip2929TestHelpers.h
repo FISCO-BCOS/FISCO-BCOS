@@ -281,10 +281,6 @@ inline evmc_message makeCreate2Message(
     message.code_address = {};
     message.code = nullptr;
     message.code_size = 0;
-    message.destination_ptr = nullptr;
-    message.destination_len = 0;
-    message.sender_ptr = nullptr;
-    message.sender_len = 0;
     return message;
 }
 
