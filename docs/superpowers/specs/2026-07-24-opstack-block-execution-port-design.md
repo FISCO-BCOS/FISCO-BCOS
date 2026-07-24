@@ -23,7 +23,7 @@ patch 只碰 `lib/evmone/*`,不碰 `test/`)。
 
 | 决策点 | 结论 |
 |---|---|
-| 验收范围 | **全保真**:源码 + 24 单测 + 31 向量 t8n gate + upstream-diff 重锚 |
+| 验收范围 | **全保真**:源码 + 21 个测试文件(123 用例)+ 31 向量 t8n gate + upstream-diff 重锚 |
 | 测试框架 | **加 gtest + nlohmann-json**(vcpkg,仅测试目标链接),测试代码零改写 |
 | 移植基准 | `efb6fd42e` + worktree 未提交译英批次(搬运前先在 worktree 侧提交固化,SHA 落账于此) |
 | 分支策略 | 叠在 `refactor-evmone-vm-hash-fn` 上开 `feat-evm-opstack-port`,独立 PR |
@@ -53,7 +53,7 @@ bcos-evm/
 
 - `bcosevm::eth`(`bcos-evm-eth`,已有)← 并入 `eth/utils/` 源与 `StateRootCompute.cpp`
 - `bcosevm::opstack`(`bcos-evm-opstack`)→ 链 `bcosevm::eth`
-- `bcos-evm-opstack-tests`(GTest)→ 链 `bcosevm::opstack` + `GTest::gtest` + `nlohmann_json`;源含 ref 的 `test/main.cpp` 与 `statetest_loader.cpp`(测试侧源)
+- `bcos-evm-opstack-tests`(GTest)→ 链 `bcosevm::opstack` + `GTest::gtest_main` + `nlohmann_json`;源另含 `statetest_loader.cpp`(测试侧 vendored loader)。ref 的 `test/main.cpp` 未被任何目标引用,不搬。编译期宏 `EVM_REF_OPSTACK_FIXTURES_DIR`/`OP_T8N_VECTORS_DIR` 沿用 ref 机制,指向移植后的源内路径
 
 不变式:
 
@@ -96,14 +96,15 @@ vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 
 
 | ref 侧 | 目标 | 处理 |
 |---|---|---|
-| `test/opstack/` 24 个 `.cpp` + helper | `bcos-evm/test/opstack/` | 仅 include 三规则改写 |
-| `t8n/vectors/`(432K,31 向量 + manifest + DIVERGENCES.md) | 同构搬运 | **逐字节不动** |
-| `t8n/generator/` + `regen.sh` | 同构搬运 | 只搬不跑;README 路径引用改写 |
-| `test/main.cpp` | `test/opstack/` | 原样沿用(零改写原则),不换 `gtest_main` |
+| `test/opstack/` 21 个 `.cpp` + `OpL1AttributesTestHelpers.h` | `bcos-evm/test/opstack/` | 仅 include 三规则改写 |
+| `test/fixtures/opstack/`(bin 语料) | `bcos-evm/test/fixtures/opstack/` | 逐字节搬运 |
+| `t8n/vectors/`(432K,31 向量 JSON + manifest.txt + DIVERGENCES.md) | 同构搬运 | **逐字节不动**(含 DIVERGENCES.md;其中 `bcos-evm-ref` 路径引用视为出处记录,不改写) |
+| `t8n/generator/`(含 `regen.sh`) | 同构搬运 | 只搬不跑;generator README 路径引用改写 |
 
 ### 4.4 依赖变更
 
-`vcpkg.json` 新增 `gtest`、`nlohmann-json`。均为叶子依赖;与 baseline 解析冲突则 pin version。
+- 根 `vcpkg.json` 新增 `gtest`、`nlohmann-json`(in-tree `TESTS=ON` 构建需要)。均为叶子依赖;与 baseline 解析冲突则 pin version。
+- `bcos-evm` 当前**无** standalone vcpkg 清单;本次照 ref 模块补建 `bcos-evm/vcpkg.json`(deps: `evmone`/`gtest`/`nlohmann-json`,builtin-baseline 沿用 ref 值)与 `bcos-evm/vcpkg-configuration.json`(overlay `../ports/{evmone,intx,blst}`),使 standalone 迭代构建可用。
 
 ### 4.5 明确不搬
 
@@ -185,7 +186,7 @@ upstream-diff.sh 需外部 evmone 检出,只做本地/手动检查,不进 CI(同
 5. **测试复活**:vcpkg 加 gtest/nlohmann-json → 24 测试文件 + t8n 资产搬运 →
    `bcos-evm-opstack-tests` 全绿(123/123 + 31/31,`known_diverges=0`)。
 6. **upstream-diff 重锚**:按 §6.2;manifest/golden 落账。
-7. **文档回填**:README 移植说明(E-b park 限定原文保留)、DIVERGENCES 头注路径更新。
+7. **文档回填**:新建 `bcos-evm/README.md` 移植说明(E-b park 限定原文保留);DIVERGENCES.md 逐字节保留不改写;spec §2 基准 SHA 与 §4.2 最终 vendor 清单回填。
 
 ## 8. 验收清单
 
