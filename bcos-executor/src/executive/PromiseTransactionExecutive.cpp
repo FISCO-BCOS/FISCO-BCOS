@@ -1,6 +1,7 @@
 #include "PromiseTransactionExecutive.h"
 #include "bcos-framework/executor/ExecuteError.h"
 #include <future>
+#include <thread>
 
 using namespace bcos::executor;
 
@@ -12,11 +13,18 @@ using namespace bcos::executor;
 // (e.g. inside tbb::flow::graph::wait_for_all or during DMC-resume
 // processing), the posted work could never be picked up → deadlock.
 //
-// We use std::async(std::launch::async, ...) to launch a dedicated thread
-// on demand.  Threads are created only when PromiseTransactionExecutive is
-// actually invoked (infrequent — TiKV storage + sharding path only), and
-// they exit immediately after the task completes, avoiding persistent
-// resource consumption.
+// We use std::thread(...).detach() to launch a dedicated on-demand thread
+// in fire-and-forget fashion.  std::async is deliberately NOT used here
+// because its returned std::future joins on destruction, which would
+// deadlock when spawnCall internally blocks on a nested spawnAndCall
+// (cross-shard DMC externalCall) — the inner promise is only fulfilled by
+// a later resume(), which cannot happen until the outer spawnAndCall
+// returns, but the outer future's destructor would be waiting to join the
+// still-blocked worker thread.
+//
+// Threads are created only when PromiseTransactionExecutive is actually
+// invoked (TiKV storage + sharding path only) and exit after the task
+// completes, avoiding persistent resource consumption.
 // ---------------------------------------------------------------------------
 
 MessagePromiseSwapper::MessagePromiseSwapper(IOServicePool::Ptr /*_pool*/) {}
@@ -26,23 +34,45 @@ void MessagePromiseSwapper::spawnAndCall(std::function<CallParameters::UniquePtr
 {
     auto lastPromise = m_currentPromise;
     m_currentPromise = std::make_shared<std::promise<CallParameters::UniquePtr>>();
+    auto currentPromise = m_currentPromise;
 
     // Launch work on a DEDICATED on-demand thread, never on the main
     // IOServicePool.  This breaks the cross-dependency that would otherwise
     // deadlock on low-core-count systems.
-    // The returned future is stored so that its destructor (which joins the
-    // thread) runs after the promise below has been fulfilled, ensuring the
-    // async thread is always joined before spawnAndCall returns.
-    auto asyncFuture = std::async(std::launch::async, [this, lastPromise,
-                                     spawnCall = std::move(spawnCall)]() mutable {
-        auto message = spawnCall();
-        auto promise = lastPromise ? lastPromise : m_currentPromise;
-        promise->set_value(std::move(message));
-    });
+    //
+    // IMPORTANT: std::thread(...).detach() is used instead of std::async
+    // because the spawned task may internally call spawnAndCall again
+    // (cross-shard DMC externalCall) and block on the nested promise.
+    // A std::async future would join on destruction and deadlock waiting
+    // for the still-blocked thread — the nested promise is only fulfilled
+    // by a future resume() that requires this spawnAndCall to return first.
+    // The lambda MUST read m_currentPromise (the member) at completion
+    // time, NOT a frozen snapshot.  Under the serialized ping-pong
+    // protocol the member has been advanced by nested spawnAndCall /
+    // resume() calls while execute() was in-flight, and the last
+    // completer must deliver to the latest promise.
+    //
+    // Data-race safety: every m_currentPromise write in a subsequent
+    // spawnAndCall happens-before this thread's wake-up via the
+    // thread-creation + promise set_value/get chain; the scheduler is
+    // always blocked in get() when this thread's completion runs.
+    std::thread([this, lastPromise,
+                    spawnCall = std::move(spawnCall)]() mutable {
+        try
+        {
+            auto message = spawnCall();
+            auto promise = lastPromise ? lastPromise : m_currentPromise;
+            promise->set_value(std::move(message));
+        }
+        catch (...)
+        {
+            auto promise = lastPromise ? lastPromise : m_currentPromise;
+            promise->set_exception(std::current_exception());
+        }
+    }).detach();
 
-    auto message = m_currentPromise->get_future().get();
+    auto message = currentPromise->get_future().get();
     waitAndDo(std::move(message));
-    // asyncFuture destructor joins the async thread here (already finished)
 }
 
 PromiseTransactionExecutive::PromiseTransactionExecutive(IOServicePool::Ptr pool,
