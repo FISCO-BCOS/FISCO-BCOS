@@ -42,7 +42,7 @@ bcos-evm/
 │   ├── adapter/
 │   │   ├── StateViewAdapter.h        # 已有,与 ref 侧(含译英)对齐一次
 │   │   └── StateDiffSanitize.h / StateDiffWriteback.h / StateRootCompute.{h,cpp}
-│   └── opstack/                      # 17 文件整层移植
+│   └── opstack/                      # 30 文件整层移植(15 头 + 15 源)
 ├── test/
 │   ├── eth/                          # 已有 Boost.Test 目标,不动
 │   └── opstack/                      # GTest 目标 + t8n/{vectors,generator} + regen.sh
@@ -74,7 +74,7 @@ include 改写规则(全模块仅三条,机械可脚本化;vendored utils 内部
 
 | ref 侧 | 目标 | 处理 |
 |---|---|---|
-| `opstack/` 17 文件(~1920 行) | `bcos-evm/bcos-evm/opstack/` | 原样 + include 三规则改写 |
+| `opstack/` 30 文件(15 头 + 15 源,~1920 行) | `bcos-evm/bcos-evm/opstack/` | 原样 + include 三规则改写 |
 | `adapter/StateDiffSanitize.h`、`StateDiffWriteback.h` | `bcos-evm/bcos-evm/adapter/` | 原样 + 改写 |
 | `adapter/StateRootCompute.{h,cpp}` | 同上 | 原样 + 改写;`.cpp` 并入 `bcos-evm-eth` |
 | `adapter/StateViewAdapter.h` | 已存在 | 取 ref 版本对齐一次 |
@@ -96,7 +96,7 @@ vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 
 
 | ref 侧 | 目标 | 处理 |
 |---|---|---|
-| `test/opstack/` 21 个 `.cpp` + `OpL1AttributesTestHelpers.h` | `bcos-evm/test/opstack/` | 仅 include 三规则改写 |
+| `test/opstack/` 整目录:21 个 `.cpp` + `OpL1AttributesTestHelpers.h` + `scripts/gen_7702_vectors.py`(7702 金值出处)+ `t8n/{cases,generator,vectors}` | `bcos-evm/test/opstack/` | 整目录搬运;仅顶层 `.cpp/.h` 做 include 三规则改写 |
 | `test/fixtures/opstack/`(bin 语料) | `bcos-evm/test/fixtures/opstack/` | 逐字节搬运 |
 | `t8n/vectors/`(432K,31 向量 JSON + manifest.txt + DIVERGENCES.md) | 同构搬运 | **逐字节不动**(含 DIVERGENCES.md;其中 `bcos-evm-ref` 路径引用视为出处记录,不改写) |
 | `t8n/generator/`(含 `regen.sh`) | 同构搬运 | 只搬不跑;generator README 路径引用改写 |
@@ -104,7 +104,7 @@ vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 
 ### 4.4 依赖变更
 
 - 根 `vcpkg.json` 新增 `gtest`、`nlohmann-json`(in-tree `TESTS=ON` 构建需要)。均为叶子依赖;与 baseline 解析冲突则 pin version。
-- `bcos-evm` 当前**无** standalone vcpkg 清单;本次照 ref 模块补建 `bcos-evm/vcpkg.json`(deps: `evmone`/`gtest`/`nlohmann-json`,builtin-baseline 沿用 ref 值)与 `bcos-evm/vcpkg-configuration.json`(overlay `../ports/{evmone,intx,blst}`),使 standalone 迭代构建可用。
+- `bcos-evm` 当前**无** standalone vcpkg 清单;本次照 ref 模块补建 `bcos-evm/vcpkg.json`(deps: `boost-test`/`evmone`/`gtest`/`nlohmann-json`——`boost-test` 为既有 Boost.Test eth 测试目标 standalone 构建所需;builtin-baseline 沿用 ref 值)与 `bcos-evm/vcpkg-configuration.json`(overlay `../ports/{evmone,intx,blst}`),使 standalone 迭代构建可用。
 
 ### 4.5 明确不搬
 

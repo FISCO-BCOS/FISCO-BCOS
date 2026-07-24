@@ -141,6 +141,7 @@ rg -l "nlohmann" $FB/bcos-evm/bcos-evm/ | rg -v statetest.hpp ; echo "exit=$?"
     "version-string": "0.1.0",
     "builtin-baseline": "f6729a3ac3bfdefc999aa8e3664f8014370886b8",
     "dependencies": [
+        "boost-test",
         "evmone",
         "gtest",
         "nlohmann-json"
@@ -243,7 +244,7 @@ cd $FB && rtk git add bcos-evm && rtk git commit -m "feat(bcos-evm): StateDiff �
 ### Task 4: opstack 整层移植
 
 **Files:**
-- Create: `bcos-evm/bcos-evm/opstack/`(ref `opstack/` 全部 17 个文件)
+- Create: `bcos-evm/bcos-evm/opstack/`(ref `opstack/` 全部 30 个文件,15 头 + 15 源)
 - Modify: `bcos-evm/CMakeLists.txt`(新目标 `bcos-evm-opstack`)
 
 **Interfaces:**
@@ -257,7 +258,7 @@ mkdir -p $FB/bcos-evm/bcos-evm/opstack
 cp $REF/bcos-evm-ref/bcos-evm-ref/opstack/*.h $REF/bcos-evm-ref/bcos-evm-ref/opstack/*.cpp $FB/bcos-evm/bcos-evm/opstack/
 cd $FB/bcos-evm/bcos-evm/opstack
 LC_ALL=C sed -i '' -e 's|<test/state/|<bcos-evm/eth/state/|g' -e 's|<test/utils/|<bcos-evm/eth/utils/|g' -e 's|<bcos-evm-ref/|<bcos-evm/|g' *.h *.cpp
-ls | wc -l   # 预期:34(17 头 + 17 源... 实际 .h/.cpp 合计以 ref 为准,head 17+17=34;OpReceiptMeta 等头源齐备)
+ls | wc -l   # 预期:30(15 头 + 15 源)
 ```
 
 - [ ] **Step 2: CMake 新目标**
@@ -307,7 +308,7 @@ cd $FB && rtk git add bcos-evm && rtk git commit -m "feat(bcos-evm): opstack 块
 
 **Files:**
 - Modify: `vcpkg.json`(根清单,dependencies 数组加 `"gtest"`、`"nlohmann-json"`)
-- Create: `bcos-evm/test/opstack/`(21 个 `.cpp` + `OpL1AttributesTestHelpers.h` + `t8n/{vectors,generator}`)
+- Create: `bcos-evm/test/opstack/`(整目录:21 个 `.cpp` + `OpL1AttributesTestHelpers.h` + `scripts/gen_7702_vectors.py` + `t8n/{cases,generator,vectors}`)
 - Create: `bcos-evm/test/fixtures/opstack/`(bin 语料)
 - Create: `bcos-evm/test/support/statetest_loader.cpp`
 - Modify: `bcos-evm/test/CMakeLists.txt`
@@ -328,9 +329,8 @@ cd $FB && rtk git add bcos-evm && rtk git commit -m "feat(bcos-evm): opstack 块
 - [ ] **Step 2: 拷贝测试资产**
 
 ```bash
-mkdir -p $FB/bcos-evm/test/opstack $FB/bcos-evm/test/fixtures $FB/bcos-evm/test/support
-cp $REF/bcos-evm-ref/test/opstack/*.cpp $REF/bcos-evm-ref/test/opstack/*.h $FB/bcos-evm/test/opstack/
-cp -R $REF/bcos-evm-ref/test/opstack/t8n $FB/bcos-evm/test/opstack/
+mkdir -p $FB/bcos-evm/test/fixtures $FB/bcos-evm/test/support
+cp -R $REF/bcos-evm-ref/test/opstack $FB/bcos-evm/test/   # 整目录:21 .cpp + helper .h + scripts/gen_7702_vectors.py + t8n/{cases,generator,vectors}
 cp -R $REF/bcos-evm-ref/test/fixtures/opstack $FB/bcos-evm/test/fixtures/
 cd $FB/bcos-evm/test/opstack
 LC_ALL=C sed -i '' -e 's|<test/state/|<bcos-evm/eth/state/|g' -e 's|<test/utils/|<bcos-evm/eth/utils/|g' -e 's|<bcos-evm-ref/|<bcos-evm/|g' *.cpp *.h
