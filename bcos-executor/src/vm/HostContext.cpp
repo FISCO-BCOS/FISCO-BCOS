@@ -66,7 +66,7 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
 {
     hostInterface = getHostInterface();
 
-    if (m_executive->blockContext().features().get(ledger::Features::Flag::feature_evm_eip2929))
+    if (toRevision(m_executive->blockContext().vmSchedule()) >= EVMC_BERLIN)
     {
         m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
     }

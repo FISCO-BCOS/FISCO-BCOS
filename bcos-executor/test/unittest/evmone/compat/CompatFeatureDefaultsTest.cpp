@@ -17,8 +17,7 @@ BOOST_AUTO_TEST_SUITE(CompatFeatureDefaults)
 BOOST_AUTO_TEST_CASE(FC_F_eip2929_default_off)
 {
     ledger::Features f;
-    BOOST_CHECK(!f.get(ledger::Features::Flag::feature_evm_eip2929));
-    BOOST_CHECK(!f.get("feature_evm_eip2929"));
+
 }
 
 BOOST_AUTO_TEST_CASE(FC_F_prague_default_off)
@@ -44,7 +43,6 @@ BOOST_AUTO_TEST_CASE(FC_F_flags_contain_string)
     BOOST_CHECK(ledger::Features::contains("feature_evm_cancun"));
     BOOST_CHECK(ledger::Features::contains("feature_evm_prague"));
     BOOST_CHECK(ledger::Features::contains("feature_evm_osaka"));
-    BOOST_CHECK(ledger::Features::contains("feature_evm_eip2929"));
 }
 
 BOOST_AUTO_TEST_CASE(FC_F_prague_does_not_auto_enable_cancun)

@@ -50,6 +50,17 @@ public:
     // When bugfix_gas_payment_balance_precheck is enabled and the tx declares gasLimit > 0,
     // the EVM budget is capped at tx.gasLimit() (geth-compatible); otherwise falls back to
     // blockGasLimit for backward compat.
+
+    /// Ethereum mode: use LedgerConfig's explicit EVMC revision if set,
+    /// otherwise fall back to toRevision feature mapping.
+    static evmc_revision effectiveRevision(
+        ledger::LedgerConfig const& cfg, protocol::BlockHeader const& header)
+    {
+        if (auto rev = cfg.evmcRevision(); rev.has_value())
+            return *rev;
+        return bcos::executor::toRevision(cfg.features(), header.version());
+    }
+
     static int64_t computeEffectiveGasLimit(
         protocol::Transaction const& tx, ledger::LedgerConfig const& cfg)
     {
@@ -177,10 +188,10 @@ public:
             if (codeHash != EMPTY_CODE_HASH)
             {
                 auto codeEntry = co_await authorityAccount.code();
-                if (codeEntry && codeEntry->size() >= DELEGATION_MAGIC.size() &&
-                    static_cast<uint8_t>((*codeEntry)[0]) == DELEGATION_MAGIC[0] &&
-                    static_cast<uint8_t>((*codeEntry)[1]) == DELEGATION_MAGIC[1] &&
-                    static_cast<uint8_t>((*codeEntry)[2]) == DELEGATION_MAGIC[2])
+                if (codeEntry && static_cast<size_t>(codeEntry->size()) >= DELEGATION_MAGIC.size() &&
+                    static_cast<uint8_t>(codeEntry->get()[0]) == DELEGATION_MAGIC[0] &&
+                    static_cast<uint8_t>(codeEntry->get()[1]) == DELEGATION_MAGIC[1] &&
+                    static_cast<uint8_t>(codeEntry->get()[2]) == DELEGATION_MAGIC[2])
                 {
                     isDelegated = true;
                 }
@@ -325,8 +336,8 @@ public:
                 if (isEthereumMode)
                 {
                     auto& hostContext = m_data->m_hostContext;
-                    auto const rev = bcos::executor::toRevision(
-                        features, m_data->m_blockHeader.get().version());
+                    auto const rev = effectiveRevision(
+                        m_data->m_ledgerConfig.get(), m_data->m_blockHeader.get());
                     auto const& tx = m_data->m_transaction.get();
 
                     auto senderAccount = getAccount(hostContext, m_data->m_origin);
@@ -424,19 +435,33 @@ public:
                 {
                     auto const& blockHeader = m_data->m_blockHeader.get();
                     auto const& tx = m_data->m_transaction.get();
-                    auto const rev = bcos::executor::toRevision(
-                        features, blockHeader.version());
+                    auto const rev = effectiveRevision(
+                        m_data->m_ledgerConfig.get(), blockHeader);
 
-                    // Compute effective gas price (EIP-1559)
+                    // Compute effective gas price
+                    // EIP-1559: effectiveGasPrice = baseFee + priorityFee
+                    // Legacy:   effectiveGasPrice = gasPrice
                     auto blockGasPrice =
                         u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     auto baseFee = (rev >= EVMC_LONDON) ? blockGasPrice : u256{0};
-                    auto maxGasPrice =
-                        tx.maxFeePerGas().value_or(tx.gasPrice().value_or(u256{0}));
-                    auto priorityGasPrice = std::min(
-                        tx.maxPriorityFeePerGas().value_or(u256{0}),
-                        maxGasPrice > baseFee ? maxGasPrice - baseFee : u256{0});
-                    auto effectiveGasPrice = baseFee + priorityGasPrice;
+                    u256 effectiveGasPrice;
+                    u256 priorityGasPrice;
+                    if (tx.maxFeePerGas().has_value())
+                    {
+                        // EIP-1559 typed transaction (type 2)
+                        auto maxGasPrice = tx.maxFeePerGas().value();
+                        priorityGasPrice = std::min(
+                            tx.maxPriorityFeePerGas().value_or(u256{0}),
+                            maxGasPrice > baseFee ? maxGasPrice - baseFee : u256{0});
+                        effectiveGasPrice = baseFee + priorityGasPrice;
+                    }
+                    else
+                    {
+                        // Legacy transaction: effectiveGasPrice = gasPrice
+                        effectiveGasPrice = tx.gasPrice().value_or(u256{0});
+                        priorityGasPrice = effectiveGasPrice > baseFee ?
+                            effectiveGasPrice - baseFee : u256{0};
+                    }
 
                     if (!m_data->m_call && effectiveGasPrice > 0)
                     {
@@ -486,9 +511,12 @@ public:
                                 gasUsed / maxRefundQuotient);
                         gasUsed -= refund;
 
-                        // EIP-7623 floor: gasUsed >= intrinsic after refund
+                        // Ethereum intrinsic gas: the EVM internally deducts intrinsic gas
+                        // before execution, so actual gasUsed = intrinsic + executionGas.
+                        // Since BCOS's EVM starts with full gasLimit (intrinsic not
+                        // pre-deducted), we add it here to match Ethereum's gas accounting.
                         auto const intrinsicGas = computeTxIntrinsicCost(rev, tx, 0);
-                        gasUsed = std::max(gasUsed, intrinsicGas);
+                        gasUsed += intrinsicGas;
 
                         m_data->m_gasUsed = gasUsed;
 
@@ -504,13 +532,19 @@ public:
                                 balance + u256(unusedGas) * effectiveGasPrice);
                         }
 
-                        // NOTE: Coinbase priority-fee payment — uses 0x0 as placeholder
-                        // address until BCOS has a block-level coinbase concept.
+                        // Coinbase priority-fee payment
+                        // Use block header's coinbase if set (Ethereum mode), else 0x0
                         if (priorityGasPrice > 0)
                         {
-                            static constexpr evmc_address COINBASE_ADDRESS{};
+                            evmc_address coinbaseAddr{};
+                            auto const coinbaseBytes = m_data->m_blockHeader.get().coinbase();
+                            if (coinbaseBytes.size() == sizeof(evmc_address))
+                            {
+                                std::copy(coinbaseBytes.begin(), coinbaseBytes.end(),
+                                    coinbaseAddr.bytes);
+                            }
                             auto coinbaseAccount =
-                                getAccount(m_data->m_hostContext, COINBASE_ADDRESS);
+                                getAccount(m_data->m_hostContext, coinbaseAddr);
                             auto coinbaseBalance = co_await coinbaseAccount.balance();
                             co_await coinbaseAccount.setBalance(
                                 coinbaseBalance + u256(gasUsed) * priorityGasPrice);

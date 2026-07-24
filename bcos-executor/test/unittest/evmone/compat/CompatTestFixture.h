@@ -34,14 +34,12 @@ struct CompatFeatureProfile
     {
         ledger::Features f;
         f.set(ledger::Features::Flag::feature_evm_cancun);
-        f.set(ledger::Features::Flag::feature_evm_eip2929);
         return f;
     }
 
     static ledger::Features shanghaiEip2929()
     {
         ledger::Features f;
-        f.set(ledger::Features::Flag::feature_evm_eip2929);
         return f;
     }
 
@@ -50,7 +48,6 @@ struct CompatFeatureProfile
         ledger::Features f;
         f.set(ledger::Features::Flag::feature_evm_cancun);
         f.set(ledger::Features::Flag::feature_evm_prague);
-        f.set(ledger::Features::Flag::feature_evm_eip2929);
         return f;
     }
 

@@ -51,6 +51,7 @@ public:
     PrecompiledManager precompiledManager{cryptoSuite->hashImpl()};
     TransactionExecutorImpl executor{
         receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
+    evmc_revision m_currentRevision = EVMC_CANCUN;
 
     EESTFixtureRunner()
     {
@@ -61,24 +62,25 @@ public:
     void configureFork(std::string const& forkName)
     {
         auto const rev = test::forkNameToRevision(forkName);
+        m_currentRevision = rev;
         ledger::Features features;
 
         // Enable Ethereum executor mode
         features.set(ledger::Features::Flag::feature_ethereum_executor);
 
-        // Enable fork-specific features
-        if (rev >= EVMC_CANCUN)
-            features.set(ledger::Features::Flag::feature_evm_cancun);
-        if (rev >= EVMC_PRAGUE)
-            features.set(ledger::Features::Flag::feature_evm_prague);
+        // Enable all 3.18.0 bugfix flags to match production feature set
+        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
+
+        // Enable fork-specific features (toRevision maps these → evmc_revision)
         if (rev >= EVMC_OSAKA)
             features.set(ledger::Features::Flag::feature_evm_osaka);
-
-        // EIP-2929 (Berlin+) — needed for cold/warm access gas
-        if (rev >= EVMC_BERLIN)
-            features.set(ledger::Features::Flag::feature_evm_eip2929);
+        else if (rev >= EVMC_PRAGUE)
+            features.set(ledger::Features::Flag::feature_evm_prague);
+        else if (rev >= EVMC_CANCUN)
+            features.set(ledger::Features::Flag::feature_evm_cancun);
 
         ledgerConfig.setFeatures(features);
+        ledgerConfig.setEVMCRevision(rev);
     }
 
     /// Set up pre-state accounts in BCOS storage.
@@ -93,7 +95,7 @@ public:
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
 
-            account::EVMAccount<MutableStorage> evmAccount(
+            ledger::account::EVMAccount<MutableStorage> evmAccount(
                 storage, addr, false /* binary address */);
 
             // Ensure account exists
@@ -102,11 +104,12 @@ public:
                     co_await evmAccount.create();
             }());
 
-            // Set nonce
+            // Set nonce (BCOS stores nonce as decimal strings; EEST hex 0→"0", 1→"1" etc.)
             if (!acc.nonce.empty() && acc.nonce != "0x" && acc.nonce != "0x0")
             {
+                auto nonceStr = test::hexToU256(acc.nonce).str(0, std::ios_base::dec);
                 task::syncWait([&]() -> task::Task<void> {
-                    co_await evmAccount.setNonce(acc.nonce);
+                    co_await evmAccount.setNonce(nonceStr);
                 }());
             }
 
@@ -160,8 +163,17 @@ public:
     bcostars::protocol::BlockHeaderImpl buildBlockHeader(test::EESTEnvironment const& env)
     {
         bcostars::protocol::BlockHeaderImpl header;
-        header.setVersion(
-            static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_7_0_VERSION));
+        // Map EVM revision to BCOS block version for toRevision() compatibility:
+        // - Pre-Cancun with no evm_xxx flag: V3_1→EVMC_LONDON, V3_2→EVMC_PARIS
+        // - Cancun+: feature flag overrides, but use V3_1 for uniformity
+        uint32_t blockVer;
+        if (m_currentRevision >= EVMC_CANCUN)
+            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        else if (m_currentRevision >= EVMC_PARIS)
+            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_2_VERSION);
+        else
+            blockVer = static_cast<uint32_t>(bcos::protocol::BlockVersion::V3_1_VERSION);
+        header.setVersion(blockVer);
         header.setNumber(test::hexToInt64(env.number));
 
         // Timestamp: EEST gives seconds since epoch in hex; BCOS uses milliseconds
@@ -170,6 +182,13 @@ public:
 
         // Sealer (BCOS-specific, 0 for tests)
         header.setSealer(0);
+
+        // Coinbase: from EEST environment
+        if (!env.coinbase.empty())
+        {
+            auto cbBytes = test::hexToBytes(env.coinbase);
+            header.setCoinbase(std::move(cbBytes));
+        }
 
         header.calculateHash(*cryptoSuite->hashImpl());
         return header;
@@ -200,6 +219,8 @@ public:
 
         data.version = 0;
         data.blockLimit = 0;
+        // BCOS's TransactionImpl uses hex2u() to parse these fields, so store
+        // EEST hex values as-is (with 0x stripped) — do NOT convert to decimal.
         data.nonce = test::strip0x(tx.nonce);
         data.gasLimit = test::hexToInt64(gasLimit);
         data.value = test::strip0x(value);
@@ -212,7 +233,7 @@ public:
         auto inputBytes = test::hexToBytes(txData);
         data.input.assign(inputBytes.begin(), inputBytes.end());
 
-        // Gas price fields
+        // Gas price fields: BCOS TransactionImpl uses hex2u(), store as hex without 0x
         if (!tx.gasPrice.empty())
             data.gasPrice = test::strip0x(tx.gasPrice);
         if (!tx.maxFeePerGas.empty())
@@ -235,6 +256,9 @@ public:
         data.chainID = "0";  // Will be overridden by LedgerConfig if needed
 
         tarsTx->type = 1;  // web3 transaction
+
+        // Set a dummy transaction hash (required by TransactionImpl::hash())
+        tarsTx->extraTransactionHash.assign(32, 0);
 
         // Determine typed tx kind
         if (!tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty())
@@ -286,7 +310,7 @@ public:
             evmc_address addr;
             std::copy(addrBytes.begin(), addrBytes.end(), addr.bytes);
 
-            account::EVMAccount<MutableStorage> evmAccount(
+            ledger::account::EVMAccount<MutableStorage> evmAccount(
                 storage, addr, false /* binary address */);
 
             bool accPassed = true;
@@ -326,8 +350,12 @@ public:
                 {
                     auto codeEntry = co_await evmAccount.code();
                     auto expCode = test::hexToBytes(expectedAcc.code);
-                    bool codeMatch = codeEntry.has_value() &&
-                        bcos::bytes(codeEntry->begin(), codeEntry->end()) == expCode;
+                    bool codeMatch = codeEntry.has_value();
+                    if (codeMatch)
+                    {
+                        auto codeView = codeEntry->get();
+                        codeMatch = bcos::bytes(codeView.begin(), codeView.end()) == expCode;
+                    }
                     if (!codeMatch)
                     {
                         std::cerr << "  CODE MISMATCH for " << addrHex
@@ -472,8 +500,8 @@ BOOST_AUTO_TEST_CASE(runEESTFixtures)
     int totalPassed = 0;
     int totalFailed = 0;
 
-    // Iterate over JSON fixture files
-    for (auto const& entry : fs::directory_iterator(dirPath))
+    // Iterate over JSON fixture files recursively
+    for (auto const& entry : fs::recursive_directory_iterator(dirPath))
     {
         if (!entry.is_regular_file())
             continue;

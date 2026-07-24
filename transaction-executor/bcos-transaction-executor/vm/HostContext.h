@@ -228,12 +228,15 @@ private:
         m_message(getMessage(
             web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        // Never downgrade below EVMC_CANCUN (pre-PR baseline).
-        // Future EVM feature flags (Amsterdam, etc.) automatically upgrade through
-        // toRevision without requiring code changes here.
-        m_revision(
-            std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
-                EVMC_CANCUN)),
+        // Ethereum mode: use explicit revision if set, else toRevision.
+        // BCOS mode: never downgrade below EVMC_CANCUN (pre-PR baseline).
+        m_revision(ledgerConfig.features().get(
+                       ledger::Features::Flag::feature_ethereum_executor) ?
+                       ledgerConfig.evmcRevision().value_or(bcos::executor::toRevision(
+                           ledgerConfig.features(), blockHeader.version())) :
+                       std::max(bcos::executor::toRevision(
+                                    ledgerConfig.features(), blockHeader.version()),
+                           EVMC_CANCUN)),
         m_level(seq),
         m_web3Tx(web3Tx),
         m_eip2929Access(std::move(eip2929Access)),
@@ -803,7 +806,8 @@ private:
                 static const bcos::h256 EMPTY_CODE_HASH{};
                 auto existingNonce = co_await m_recipientAccount.nonce();
                 auto existingBalance = co_await m_recipientAccount.balance();
-                if (codeHash != EMPTY_CODE_HASH || existingNonce != 0 ||
+                auto existingNonceVal = u256(existingNonce.value_or("0"));
+                if (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0 ||
                     existingBalance != 0)
                 {
                     // Account already exists with non-empty state → collision
@@ -999,9 +1003,15 @@ private:
     task::Task<EVMCResult> executeCall()
     {
         auto& ref = mutableMessage();
-        // 先扣除BALANCE_TRANSFER_GAS
-        // First deduct the BALANCE_TRANSFER_GAS.
-        consumeTransferGas(ref);
+        // BCOS mode: deduct BALANCE_TRANSFER_GAS up front.
+        // Ethereum mode: intrinsic gas (including 21000 base) is already computed
+        // by TransactionExecutorImpl::computeTxIntrinsicCost, and the EVM handles
+        // the base cost internally — skip the extra deduction.
+        if (!m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::feature_ethereum_executor))
+        {
+            consumeTransferGas(ref);
+        }
 
         if (m_preparedPrecompiled != nullptr)
         {

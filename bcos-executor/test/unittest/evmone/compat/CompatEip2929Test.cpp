@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(FC_A_revision_gate_eip2929_on_prefork_evmc_rev_always_cold)
 {
     using compat::CompatFeatureProfile;
 
-    // feature_evm_eip2929 on, but EIP-2929 cold/warm is suppressed when evmc rev < Berlin
+    // EIP-2929 cold/warm is suppressed when evmc rev < Berlin
     // (London in evmc is still >= Berlin; use Istanbul/Petersburg for pre-Berlin).
     auto host = makeCompatHostContext(*this, CompatFeatureProfile::pragueEnabled());
     evmc_address addr{};
@@ -94,19 +94,19 @@ BOOST_AUTO_TEST_CASE(FC_A_revision_gate_eip2929_on_prefork_evmc_rev_always_cold)
     BOOST_CHECK_EQUAL(host.accessAccount(addr, EVMC_CANCUN), EVMC_ACCESS_WARM);
 }
 
-BOOST_AUTO_TEST_CASE(FC_A_revision_london_forces_cold)
+BOOST_AUTO_TEST_CASE(FC_A_revision_pre_berlin_forces_cold)
 {
     using compat::CompatFeatureProfile;
 
-    // Without feature_evm_eip2929, access stays cold regardless of evmc revision argument.
+    // EIP-2929 is suppressed when evmc rev < Berlin.
     auto host = makeCompatHostContext(*this, CompatFeatureProfile::cancunOnly());
     evmc_address addr{};
     std::memset(addr.bytes, 0x55, sizeof(addr.bytes));
     evmc_bytes32 key{};
     std::memset(key.bytes, 0x66, sizeof(key.bytes));
 
-    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_LONDON), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_CANCUN), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_BERLIN - 1), EVMC_ACCESS_COLD);
 }
 
 BOOST_AUTO_TEST_CASE(FC_A_eip2929_warm_shared_across_call_depth)

@@ -55,7 +55,6 @@ bool containsOsakaPrecompile(std::vector<evmc_address> const& addrs)
 bcos::ledger::Features featuresWithEip2929On()
 {
     bcos::ledger::Features features;
-    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
     return features;
 }
 }  // namespace
