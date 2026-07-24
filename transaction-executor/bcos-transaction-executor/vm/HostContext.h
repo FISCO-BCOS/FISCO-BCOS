@@ -273,13 +273,8 @@ public:
                 ledger::Features::Flag::feature_raw_address));
     }
 
-    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
-    {
-        co_return co_await m_recipientAccount.storage(*key);
-    }
-
     // Tag-forwarding variant: passes all tags through to the underlying
-    // storage call chain. Callers compose the exact set of tags they need
+    // EVMAccount::storage call. Callers compose the exact set of tags they need
     // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
     // must skip both conflict tracking and layer resolution).
     task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto... tags)
