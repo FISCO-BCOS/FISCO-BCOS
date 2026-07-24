@@ -13,6 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(evmone CONFIG REQUIRED)
 
 add_library(bcos-evm-eth STATIC
+    bcos-evm/adapter/StateRootCompute.cpp
     bcos-evm/eth/EthTransition.cpp
     bcos-evm/eth/state/block.cpp
     bcos-evm/eth/state/bloom_filter.cpp
