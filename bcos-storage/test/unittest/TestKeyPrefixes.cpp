@@ -46,17 +46,21 @@ BOOST_AUTO_TEST_CASE(MakeMPTNodeKeyFormat)
 
     std::string key = makeMPTNodeKey(hash);
 
-    // Must be exactly 37 bytes: 5 (prefix) + 32 (hash)
-    BOOST_CHECK_EQUAL(key.size(), 37U);
+    // Must be exactly 38 bytes: 5 (table) + 1 (':') + 32 (hash)
+    BOOST_CHECK_EQUAL(key.size(), 38U);
 
-    // Must start with "/mpt/"
-    BOOST_CHECK_EQUAL(key.substr(0, 5), "/mpt/");
+    // Must start with the "/mpt/:" StateKey serialization prefix
+    BOOST_CHECK_EQUAL(key.substr(0, 6), "/mpt/:");
 
     // Last 32 bytes must match the raw hash bytes
     for (unsigned i = 0; i < 32; ++i)
     {
-        BOOST_CHECK_EQUAL(static_cast<uint8_t>(key[5 + i]), hash[i]);
+        BOOST_CHECK_EQUAL(static_cast<uint8_t>(key[6 + i]), hash[i]);
     }
+
+    // The physical bytes ARE the StateKey serialization of mptNodeStateKey(hash).
+    auto stateKey = mptNodeStateKey(hash);
+    BOOST_CHECK_EQUAL(std::string_view(stateKey.data(), stateKey.size()), key);
 }
 
 BOOST_AUTO_TEST_CASE(ParseMPTNodeKeyRoundTrip)
@@ -78,7 +82,7 @@ BOOST_AUTO_TEST_CASE(ParseMPTNodeKeyRejectsBadInputs)
     BOOST_CHECK(!parseMPTNodeKey("/mpt/").has_value());
 
     // Prefix + truncated hash (less than 32 bytes)
-    BOOST_CHECK(!parseMPTNodeKey("/mpt/short").has_value());
+    BOOST_CHECK(!parseMPTNodeKey("/mpt/:short").has_value());
 
     // Wrong prefix: existing /apps/ namespace key
     BOOST_CHECK(!parseMPTNodeKey("/apps/abc:def").has_value());
@@ -86,10 +90,20 @@ BOOST_AUTO_TEST_CASE(ParseMPTNodeKeyRejectsBadInputs)
     // Wrong prefix: existing s_ namespace key
     BOOST_CHECK(!parseMPTNodeKey("s_number_2_hash:123").has_value());
 
-    // Exactly 37 bytes but wrong prefix: "/abc/" + 32 nul bytes (spec example)
-    std::string almost(37, '\0');
-    almost.replace(0, 5, "/abc/");
+    // The RETIRED 37-byte layout ("/mpt/" + raw digest, no ':'): must not parse.
+    std::string legacy(37, '\0');
+    legacy.replace(0, 5, "/mpt/");
+    BOOST_CHECK(!parseMPTNodeKey(legacy).has_value());
+
+    // Exactly 38 bytes but wrong table: "/abc/:" + 32 nul bytes
+    std::string almost(38, '\0');
+    almost.replace(0, 6, "/abc/:");
     BOOST_CHECK(!parseMPTNodeKey(almost).has_value());
+
+    // Exactly 38 bytes, right table, but the separator byte is not ':'
+    std::string badSeparator = makeMPTNodeKey(h256{});
+    badSeparator[5] = '_';
+    BOOST_CHECK(!parseMPTNodeKey(badSeparator).has_value());
 }
 
 BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
@@ -118,7 +132,7 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
         // rocksDB() must reference the same underlying DB instance
         BOOST_CHECK_EQUAL(&storage.rocksDB(), rawPtr);
 
-        // Demonstrate writing and reading a /mpt/<hash> key via rocksDB()
+        // Demonstrate writing and reading a "/mpt/:<hash>" key via rocksDB()
         h256 hash = h256::generateRandomFixedBytes();
         std::string mptKey = makeMPTNodeKey(hash);
         std::string mptValue = "mpt_node_data";

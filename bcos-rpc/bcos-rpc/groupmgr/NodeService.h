@@ -76,8 +76,9 @@ public:
     }
 
     /// Type-erased read handle over the MPT node storage for eth_getProof (M8.3): key = node
-    /// hash, value = the node's raw RLP encoding, physically stored under the /mpt/<hash> key
-    /// prefix of the default column family (bcos-storage KeyPrefixes.h::makeMPTNodeKey).
+    /// hash, value = the node's raw RLP encoding, physically stored as ordinary state rows
+    /// under the "/mpt/:<hash>" key prefix of the default column family (bcos-storage
+    /// KeyPrefixes.h::mptNodeStateKey / makeMPTNodeKey).
     using MPTNodeReader = bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>;
 
     /// Non-owning: the AnyStorage view holds a raw pointer to the underlying storage, whose

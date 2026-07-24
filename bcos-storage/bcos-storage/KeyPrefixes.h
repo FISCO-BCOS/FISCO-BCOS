@@ -13,12 +13,13 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief MPT key namespace constants and encode/decode helpers (spec §5.1)
+ * @brief MPT node-row key layout: the "/mpt/" state table and its encode/decode helpers
  * @file KeyPrefixes.h
  * @author: kyonRay
  * @date: 2026-05-12
  */
 #pragma once
+#include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-utilities/FixedBytes.h>
 #include <cstring>
 #include <optional>
@@ -28,26 +29,45 @@
 namespace bcos::storage2
 {
 
-/// The sole "/mpt/" ASCII prefix for MPT node keys in the default ColumnFamily.
-/// All MPT keys are exactly 37 bytes: kMPTPrefix (5) + raw keccak hash (32).
-/// Do NOT write "/mpt/" literals anywhere else — use makeMPTNodeKey / parseMPTNodeKey.
-inline constexpr std::string_view kMPTPrefix = "/mpt/";
-inline constexpr std::size_t kMPTKeyLength = kMPTPrefix.size() + 32;  // 37
+/// The state TABLE of MPT trie-node rows. A node row is an ordinary state row —
+/// StateKey{"/mpt/", <32 raw digest bytes>} — so its physical key in the default
+/// ColumnFamily is the StateKey serialization "<table>" ':' "<key>":
+///
+///   "/mpt/:" + 32 raw digest bytes = 38 bytes
+///
+/// "/mpt/" itself contains no ':', so the first ':' of every node row's physical key sits
+/// at index 5 and StateKeyResolver::decode's split-at-first-colon reconstruction is exact
+/// for every digest — including digests that happen to contain 0x3A (':') bytes.
+/// Do NOT write "/mpt/" literals anywhere else — use mptNodeStateKey / makeMPTNodeKey /
+/// parseMPTNodeKey.
+inline constexpr std::string_view kMPTTable = "/mpt/";
+inline constexpr std::size_t kMPTKeyLength = kMPTTable.size() + 1 + 32;  // 38
 
-/// Encode a 32-byte keccak hash into a 37-byte RocksDB key with the /mpt/ namespace prefix.
-/// This is the ONLY place that embeds kMPTPrefix into a key.
+/// The StateKey of a trie node's row: table "/mpt/", row key = the 32 raw digest bytes.
+/// This is the form every in-process reader and writer uses — the ordinary state
+/// resolvers and storages handle it with no MPT-specific code.
+inline executor_v1::StateKey mptNodeStateKey(const h256& hash)
+{
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    return {kMPTTable, std::string_view(reinterpret_cast<const char*>(hash.data()), h256::SIZE)};
+}
+
+/// The literal 38-byte physical RocksDB key of a trie node's row — exactly what
+/// StateKeyResolver::encode(mptNodeStateKey(hash)) emits. For raw-DB consumers only
+/// (layout-proof tests, offline tooling); in-process code goes through mptNodeStateKey.
 inline std::string makeMPTNodeKey(const h256& hash)
 {
     std::string key;
-    key.reserve(kMPTPrefix.size() + h256::SIZE);
-    key.append(kMPTPrefix);
+    key.reserve(kMPTKeyLength);
+    key.append(kMPTTable);
+    key.push_back(':');
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     key.append(reinterpret_cast<const char*>(hash.data()), h256::SIZE);
     return key;
 }
 
-/// Decode a raw RocksDB key back to its h256 hash.
-/// Returns std::nullopt if the key is not a valid 37-byte /mpt/-prefixed key.
+/// Decode a physical RocksDB key back to its node digest.
+/// Returns std::nullopt unless the key is exactly the 38-byte "/mpt/:<32 bytes>" form.
 /// Never throws — this is runtime data validation.
 inline std::optional<h256> parseMPTNodeKey(std::string_view key) noexcept
 {
@@ -55,13 +75,12 @@ inline std::optional<h256> parseMPTNodeKey(std::string_view key) noexcept
     {
         return std::nullopt;
     }
-    if (key.substr(0, kMPTPrefix.size()) != kMPTPrefix)
+    if (!key.starts_with(kMPTTable) || key[kMPTTable.size()] != ':')
     {
         return std::nullopt;
     }
     h256 hash;
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    std::memcpy(hash.data(), key.data() + kMPTPrefix.size(), h256::SIZE);
+    std::memcpy(hash.data(), key.data() + kMPTTable.size() + 1, h256::SIZE);
     return hash;
 }
 
