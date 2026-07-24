@@ -149,7 +149,9 @@ public:
                 {
                     evmc_bytes32 storageKey{}, storageValue{};
                     std::copy(keyBytes.begin(), keyBytes.end(), storageKey.bytes);
-                    std::copy(valBytes.begin(), valBytes.end(), storageValue.bytes);
+                    // EEST hex values are big-endian: copy to RIGHT side of 32-byte slot
+                    std::copy(valBytes.begin(), valBytes.end(),
+                        storageValue.bytes + 32 - valBytes.size());
 
                     task::syncWait([&]() -> task::Task<void> {
                         co_await evmAccount.setStorage(storageKey, storageValue);
@@ -374,12 +376,19 @@ public:
                     auto storedVal = co_await evmAccount.storage(storageKey);
                     auto expValBytes = test::hexToBytes(val);
                     evmc_bytes32 expVal{};
-                    std::copy(expValBytes.begin(), expValBytes.end(), expVal.bytes);
+                    // EEST hex values are big-endian: copy to the RIGHT side of the 32-byte slot
+                    if (expValBytes.size() <= 32)
+                        std::copy(expValBytes.begin(), expValBytes.end(),
+                            expVal.bytes + 32 - expValBytes.size());
 
                     if (!::ranges::equal(storedVal.bytes, expVal.bytes))
                     {
+                        std::string actualHex;
+                        boost::algorithm::hex_lower(
+                            storedVal.bytes, storedVal.bytes + 32, std::back_inserter(actualHex));
                         std::cerr << "  STORAGE MISMATCH for " << addrHex
-                                  << " key " << key << ": expected " << val << std::endl;
+                                  << " key " << key << ": expected " << val
+                                  << ", got 0x" << actualHex << std::endl;
                         accPassed = false;
                     }
                 }
