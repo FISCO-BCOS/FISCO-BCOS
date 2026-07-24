@@ -16,8 +16,9 @@
  * @brief Physical-layout proof for MPT node rows as ORDINARY state rows: an Entry keyed
  *        mptNodeStateKey(hash) written through a real RocksDBStorage2<StateKey, ...,
  *        StateKeyResolver, ...> lands under the literal 38-byte "/mpt/:<digest>" key
- *        (makeMPTNodeKey), and those physical bytes decode back to the same StateKey via
- *        the resolver's split-at-first-colon reconstruction — the two facts the scheduler's
+ *        (constructed INDEPENDENTLY in this TU — KeyPrefixes.h exports no physical-key
+ *        helper), and those physical bytes decode back to the same StateKey via the
+ *        resolver's split-at-first-colon reconstruction — the two facts the scheduler's
  *        view-riding node plane (ViewNodeStorage) and every raw-DB node reader depend on.
  * @file TestMPTNodeKey.cpp
  */
@@ -59,6 +60,16 @@ bytes sampleNodeRlp()
     // Arbitrary non-empty payload standing in for a node's RLP encoding.
     return bytes{0xC5, 0x84, 0xDE, 0xAD, 0xBE, 0xEF};
 }
+
+// The literal 38-byte physical key, built here by hand ON PURPOSE: the proof compares what
+// the resolver-backed storage stack actually writes against bytes constructed with zero
+// shared code (the production encode authority is StateKeyResolver alone).
+std::string physicalNodeKey(h256 const& hash)
+{
+    std::string key = "/mpt/:";
+    key.append(reinterpret_cast<char const*>(hash.data()), h256::SIZE);
+    return key;
+}
 }  // namespace
 
 struct TestMPTNodeKeyFixture
@@ -88,23 +99,19 @@ BOOST_FIXTURE_TEST_SUITE(TestMPTNodeKey, TestMPTNodeKeyFixture)
 BOOST_AUTO_TEST_CASE(physicalFormIsStateKeyNative)
 {
     auto const hash = colonRiddledHash();
-    auto const physicalKey = storage2::makeMPTNodeKey(hash);
+    auto const physicalKey = physicalNodeKey(hash);
 
     BOOST_CHECK_EQUAL(physicalKey.size(), storage2::kMPTKeyLength);  // 38
     BOOST_CHECK_EQUAL(physicalKey.find(':'), 5U);                    // table separator
 
-    // Split-at-first-colon reconstruction (what StateKeyResolver::decode does).
-    StateKey const decoded{std::string(physicalKey)};
+    // The resolver's decode (single-string StateKey constructor, split at the first colon)
+    // reconstructs table "/mpt/" + the raw digest exactly — colons in the digest and all.
+    auto const decoded = StateKeyResolver::decode(std::string_view(physicalKey));
     StateKeyView const view{decoded};
     BOOST_CHECK_EQUAL(view.m_table, storage2::kMPTTable);
     BOOST_CHECK_EQUAL(
         view.m_key, std::string_view(reinterpret_cast<char const*>(hash.data()), h256::SIZE));
     BOOST_CHECK(decoded == storage2::mptNodeStateKey(hash));
-
-    // parseMPTNodeKey inverts the physical key.
-    auto parsed = storage2::parseMPTNodeKey(physicalKey);
-    BOOST_REQUIRE(parsed.has_value());
-    BOOST_CHECK_EQUAL(*parsed, hash);
 }
 
 // End-to-end physical-key proof over a real RocksDB, through the same code path commit
@@ -139,8 +146,8 @@ BOOST_AUTO_TEST_CASE(mergeLandsUnderPhysicalKey)
         // Raw Get with the literal 38-byte key: proves the on-disk layout, not just the
         // resolver round-trip.
         std::string rawValue;
-        auto status = rocksDB->Get(
-            ::rocksdb::ReadOptions(), storage2::makeMPTNodeKey(hash), std::addressof(rawValue));
+        auto status =
+            rocksDB->Get(::rocksdb::ReadOptions(), physicalNodeKey(hash), std::addressof(rawValue));
         BOOST_REQUIRE(status.ok());
 
         // The value is Entry-encoded like every other value in the CF.

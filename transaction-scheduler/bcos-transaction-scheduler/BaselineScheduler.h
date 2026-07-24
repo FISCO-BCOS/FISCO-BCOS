@@ -230,6 +230,20 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
         executor_v1::StateKey{
             ledger::SYS_HASH_2_NUMBER, bcos::concepts::bytebuffer::toView(blockHash)},
         hash2NumberEntry);
+
+    // The executed header itself, under the same key commit's prewrite uses — written at
+    // execute time for the same reason as the two hash mappings above: the NEXT block's
+    // execution reads its parent's header (stateRoot for the MPT parent root) through the
+    // view while the parent is still pending. Commit overwrites this row with the
+    // consensus-SIGNED encoding in the same WriteBatch — mergeBackStorage merges the
+    // block's layer before prewriteStorage, so the signed version wins in the backend.
+    bytes headerBuffer;
+    newBlockHeader.encode(headerBuffer);
+    storage::Entry headerEntry;
+    headerEntry.set(std::move(headerBuffer));
+    co_await storage2::writeOne(storage,
+        executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
+        std::move(headerEntry));
 }
 
 template <class MultiLayerStorage,
@@ -294,44 +308,29 @@ private:
      * mutable layer is exactly this block's delta and whose immutable layers are the pending
      * blocks' not-yet-committed deltas, node rows included — and return the trie-node delta.
      *
-     * Parent state root resolution, in order:
-     *  1. the newest pending ExecuteResult (block N-1 executed, not yet committed) carries an
-     *     MPT delta — pipeline case, its stateRoot is the parent root; the parent's NODES need
-     *     no bookkeeping, they sit in N-1's layer inside this view's immutable chain;
-     *  2. shouldBuildMPT(features, N-1): block N-1 committed with an MPT root — read it from
-     *     the signed header in the ledger (restart / sequential case);
-     *  3. otherwise (scenario-A activation boundary where N-1 was XOR-rooted, or genesis):
-     *     the empty trie root.
+     * The parent state root comes from the parent block's HEADER, read through the view.
+     * finishExecute writes every executed header into its block's mutable layer, so ONE
+     * getBlockData arm covers every case: a pending parent resolves from the view's
+     * immutable chain (pipeline), a committed parent — the genesis block included — from
+     * the backend's signed header (restart / sequential). A missing header under an MPT
+     * parent throws NotFoundBlockHeader (getBlockData, LedgerMethods.h) — never a silent
+     * empty-trie rebuild. An XOR parent (scenario-A activation boundary) starts from the
+     * empty trie. Scenario-B limitation unchanged: a non-empty-alloc L2 genesis persists
+     * its header but no trie NODES, so only empty-alloc genesis chains block 1 today.
      */
     task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRoot(
         typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
         ledger::LedgerConfig const& ledgerConfig)
     {
-        h256 parentStateRoot = ledger::mpt::emptyRootHash();
         auto const blockNumber = blockHeader.number();
-        bool parentPending = false;
-        {
-            std::unique_lock resultsLock(m_resultsMutex);
-            if (!m_results.empty() &&
-                m_results.front()->m_executedBlockHeader->number() == blockNumber - 1 &&
-                m_results.front()->m_mptDelta)
-            {
-                parentStateRoot = m_results.front()->m_mptDelta->stateRoot;
-                parentPending = true;
-            }
-        }
-        if (!parentPending && blockNumber > 0 &&
-            shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
+        h256 parentStateRoot = ledger::mpt::emptyRootHash();
+        if (blockNumber > 0 && shouldBuildMPT(ledgerConfig.features(), blockNumber - 1))
         {
             auto parentBlock = co_await ledger::getBlockData(
                 view, blockNumber - 1, ledger::HEADER, m_blockFactory.get());
             parentStateRoot = parentBlock->blockHeader()->stateRoot();
         }
-        // else: scenario-A activation boundary (parent committed an XOR root) or a scenario-B
-        // genesis execute — the build starts from the empty trie. Scenario-B limitation: a
-        // non-empty-alloc L2 genesis persists its state root (Ledger.cpp genesis build) but
-        // not its trie NODES, so only empty-alloc genesis (root == emptyRootHash()) can chain
-        // block 1 today.
+        // else: scenario-A activation boundary (parent committed an XOR root) — empty trie.
 
         // Node reads resolve through the full view (parent nodes live in the pending layers /
         // backend); node writes land in this block's own mutable layer (MPTNodeStorage.h).

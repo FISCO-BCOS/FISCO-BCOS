@@ -13,7 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief Unit tests for KeyPrefixes.h (MPT key namespace utilities)
+ * @brief Unit tests for KeyPrefixes.h: the "/mpt/" node-row key layout, with
+ *        StateKeyResolver as the ONLY physical encode/decode authority (KeyPrefixes.h
+ *        deliberately exports no physical-key helpers of its own).
  * @file TestKeyPrefixes.cpp
  * @author: kyonRay
  * @date: 2026-05-12
@@ -33,9 +35,23 @@ using namespace bcos;
 using namespace bcos::storage2;
 using namespace bcos::storage2::rocksdb;
 
+namespace
+{
+/// The physical bytes StateKeyResolver::encode emits for a StateKey — the single authority
+/// every on-disk key goes through (RocksDBStorage2's write path).
+std::string resolverPhysicalKey(executor_v1::StateKey const& stateKey)
+{
+    std::string out;
+    StateKeyResolver::encode(stateKey, [&](bcos::bytesConstRef view) {
+        out.append(reinterpret_cast<char const*>(view.data()), view.size());
+    });
+    return out;
+}
+}  // namespace
+
 BOOST_AUTO_TEST_SUITE(KeyPrefixesSuite)
 
-BOOST_AUTO_TEST_CASE(MakeMPTNodeKeyFormat)
+BOOST_AUTO_TEST_CASE(NodeRowPhysicalForm)
 {
     h256 hash;
     // Fill with a recognisable pattern
@@ -44,9 +60,10 @@ BOOST_AUTO_TEST_CASE(MakeMPTNodeKeyFormat)
         hash[i] = static_cast<byte>(i + 1);
     }
 
-    std::string key = makeMPTNodeKey(hash);
+    std::string key = resolverPhysicalKey(mptNodeStateKey(hash));
 
     // Must be exactly 38 bytes: 5 (table) + 1 (':') + 32 (hash)
+    BOOST_CHECK_EQUAL(key.size(), kMPTKeyLength);
     BOOST_CHECK_EQUAL(key.size(), 38U);
 
     // Must start with the "/mpt/:" StateKey serialization prefix
@@ -58,52 +75,34 @@ BOOST_AUTO_TEST_CASE(MakeMPTNodeKeyFormat)
         BOOST_CHECK_EQUAL(static_cast<uint8_t>(key[6 + i]), hash[i]);
     }
 
-    // The physical bytes ARE the StateKey serialization of mptNodeStateKey(hash).
+    // The physical bytes ARE the StateKey's own flat buffer — encode adds nothing.
     auto stateKey = mptNodeStateKey(hash);
     BOOST_CHECK_EQUAL(std::string_view(stateKey.data(), stateKey.size()), key);
 }
 
-BOOST_AUTO_TEST_CASE(ParseMPTNodeKeyRoundTrip)
+BOOST_AUTO_TEST_CASE(NodeRowResolverRoundTrip)
 {
     h256 original = h256::generateRandomFixedBytes();
-    std::string encoded = makeMPTNodeKey(original);
-    auto decoded = parseMPTNodeKey(encoded);
+    std::string physical = resolverPhysicalKey(mptNodeStateKey(original));
 
-    BOOST_REQUIRE(decoded.has_value());
-    BOOST_CHECK_EQUAL(decoded.value(), original);
+    // decode is the inverse of encode: same StateKey, table "/mpt/", key = the raw digest.
+    auto decoded = StateKeyResolver::decode(std::string_view(physical));
+    BOOST_CHECK(decoded == mptNodeStateKey(original));
+    executor_v1::StateKeyView const view{decoded};
+    BOOST_CHECK_EQUAL(view.m_table, kMPTTable);
+    BOOST_CHECK_EQUAL(
+        view.m_key, std::string_view(reinterpret_cast<char const*>(original.data()), h256::SIZE));
 }
 
-BOOST_AUTO_TEST_CASE(ParseMPTNodeKeyRejectsBadInputs)
+BOOST_AUTO_TEST_CASE(RetiredColonFreeLayoutIsNotAStateKey)
 {
-    // Empty string
-    BOOST_CHECK(!parseMPTNodeKey("").has_value());
-
-    // Prefix only, no hash bytes
-    BOOST_CHECK(!parseMPTNodeKey("/mpt/").has_value());
-
-    // Prefix + truncated hash (less than 32 bytes)
-    BOOST_CHECK(!parseMPTNodeKey("/mpt/:short").has_value());
-
-    // Wrong prefix: existing /apps/ namespace key
-    BOOST_CHECK(!parseMPTNodeKey("/apps/abc:def").has_value());
-
-    // Wrong prefix: existing s_ namespace key
-    BOOST_CHECK(!parseMPTNodeKey("s_number_2_hash:123").has_value());
-
-    // The RETIRED 37-byte layout ("/mpt/" + raw digest, no ':'): must not parse.
+    // The RETIRED 37-byte layout ("/mpt/" + raw digest, no ':') cannot even be decoded as a
+    // StateKey when the digest contains no 0x3A byte — the reason the layout moved to
+    // "/mpt/:". (A digest WITH a 0x3A would decode, but to a corrupted table/key split.)
     std::string legacy(37, '\0');
     legacy.replace(0, 5, "/mpt/");
-    BOOST_CHECK(!parseMPTNodeKey(legacy).has_value());
-
-    // Exactly 38 bytes but wrong table: "/abc/:" + 32 nul bytes
-    std::string almost(38, '\0');
-    almost.replace(0, 6, "/abc/:");
-    BOOST_CHECK(!parseMPTNodeKey(almost).has_value());
-
-    // Exactly 38 bytes, right table, but the separator byte is not ':'
-    std::string badSeparator = makeMPTNodeKey(h256{});
-    badSeparator[5] = '_';
-    BOOST_CHECK(!parseMPTNodeKey(badSeparator).has_value());
+    BOOST_CHECK_THROW(
+        StateKeyResolver::decode(std::string_view(legacy)), executor_v1::NoTableSpliterError);
 }
 
 BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
@@ -134,7 +133,7 @@ BOOST_AUTO_TEST_CASE(RocksDBAccessorExposed)
 
         // Demonstrate writing and reading a "/mpt/:<hash>" key via rocksDB()
         h256 hash = h256::generateRandomFixedBytes();
-        std::string mptKey = makeMPTNodeKey(hash);
+        std::string mptKey = resolverPhysicalKey(mptNodeStateKey(hash));
         std::string mptValue = "mpt_node_data";
 
         ::rocksdb::WriteOptions wo;

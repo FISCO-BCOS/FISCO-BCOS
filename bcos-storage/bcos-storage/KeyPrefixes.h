@@ -21,9 +21,6 @@
 #pragma once
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include <bcos-utilities/FixedBytes.h>
-#include <cstring>
-#include <optional>
-#include <string>
 #include <string_view>
 
 namespace bcos::storage2
@@ -38,8 +35,8 @@ namespace bcos::storage2
 /// "/mpt/" itself contains no ':', so the first ':' of every node row's physical key sits
 /// at index 5 and StateKeyResolver::decode's split-at-first-colon reconstruction is exact
 /// for every digest — including digests that happen to contain 0x3A (':') bytes.
-/// Do NOT write "/mpt/" literals anywhere else — use mptNodeStateKey / makeMPTNodeKey /
-/// parseMPTNodeKey.
+/// Do NOT write "/mpt/" literals anywhere else — build keys with mptNodeStateKey;
+/// the physical form is produced and parsed solely by StateKeyResolver.
 inline constexpr std::string_view kMPTTable = "/mpt/";
 inline constexpr std::size_t kMPTKeyLength = kMPTTable.size() + 1 + 32;  // 38
 
@@ -50,38 +47,6 @@ inline executor_v1::StateKey mptNodeStateKey(const h256& hash)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     return {kMPTTable, std::string_view(reinterpret_cast<const char*>(hash.data()), h256::SIZE)};
-}
-
-/// The literal 38-byte physical RocksDB key of a trie node's row — exactly what
-/// StateKeyResolver::encode(mptNodeStateKey(hash)) emits. For raw-DB consumers only
-/// (layout-proof tests, offline tooling); in-process code goes through mptNodeStateKey.
-inline std::string makeMPTNodeKey(const h256& hash)
-{
-    std::string key;
-    key.reserve(kMPTKeyLength);
-    key.append(kMPTTable);
-    key.push_back(':');
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    key.append(reinterpret_cast<const char*>(hash.data()), h256::SIZE);
-    return key;
-}
-
-/// Decode a physical RocksDB key back to its node digest.
-/// Returns std::nullopt unless the key is exactly the 38-byte "/mpt/:<32 bytes>" form.
-/// Never throws — this is runtime data validation.
-inline std::optional<h256> parseMPTNodeKey(std::string_view key) noexcept
-{
-    if (key.size() != kMPTKeyLength)
-    {
-        return std::nullopt;
-    }
-    if (!key.starts_with(kMPTTable) || key[kMPTTable.size()] != ':')
-    {
-        return std::nullopt;
-    }
-    h256 hash;
-    std::memcpy(hash.data(), key.data() + kMPTTable.size() + 1, h256::SIZE);
-    return hash;
 }
 
 }  // namespace bcos::storage2

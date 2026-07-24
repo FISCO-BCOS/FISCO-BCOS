@@ -18,7 +18,10 @@
  *        trie nodes as ordinary "/mpt/" state rows on the execute view: scenario-A activation
  *        transition, pipeline node visibility through the view's immutable layer chain (with
  *        a negative control), commit atomicity, CommitObserver timing, parent-root resolution
- *        via the ledger header, the stray-"/mpt/"-row guard, and the no-XOR-fallback policy.
+ *        via the parent block's header (finishExecute writes every executed header into the
+ *        block's layer, so pipeline and restart share one getBlockData arm; with a fail-loud
+ *        missing-header negative), the stray-"/mpt/"-row guard, and the no-XOR-fallback
+ *        policy.
  */
 
 #include "TrivialCheckpointStorage.h"
@@ -371,9 +374,9 @@ public:
             [&](Error::Ptr error, ledger::LedgerConfig::Ptr) { commitError = std::move(error); });
         BOOST_REQUIRE_MESSAGE(!commitError,
             "commitBlock failed: " + (commitError ? commitError->errorMessage() : ""));
-        // Production persists the consensus-signed header (with its final stateRoot) via
-        // prewriteBlockToBuffer; the ledger mock here only invokes the callback, so mirror
-        // that persistence for the parent-root-from-header resolution path.
+        // Production persists the consensus-SIGNED header via prewriteBlockToBuffer,
+        // overwriting the execute-time header row the block's layer already merged; the
+        // ledger mock here only invokes the callback, so mirror that overwrite.
         writeHeaderToBackend(header);
     }
 
@@ -387,6 +390,7 @@ public:
             StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(header->number())},
             std::move(entry)));
     }
+
 
     protocol::BlockHeader::Ptr makeExecutedShapeHeader(protocol::BlockNumber number, h256 stateRoot)
     {
@@ -485,8 +489,8 @@ BOOST_FIXTURE_TEST_SUITE(TestMPTSchedulerWiring, MPTWiringFixture)
 // (a) Scenario-A transition: with feature_mpt_state_root activated at block 500, block 500
 // itself still commits the legacy XOR root (strictly-greater boundary), block 501 commits an
 // MPT root pinned against the commitTrie oracle, and block 502 — whose parent root resolves
-// via the committed header in the ledger (the restart path) — extends the trie incrementally,
-// including a storage-slot write that exercises the two-level trie build.
+// via block 501's committed header in the backend (the restart path) — extends the trie
+// incrementally, including a storage-slot write that exercises the two-level trie build.
 BOOST_AUTO_TEST_CASE(scenarioATransition)
 {
     namespace mpt = bcos::ledger::mpt;
@@ -528,8 +532,8 @@ BOOST_AUTO_TEST_CASE(scenarioATransition)
     commitOneBlock(header501);
     BOOST_CHECK_GT(backendNodeCount(backendStorage), 0);
 
-    // --- block 502: parent root read from block 501's committed header (m_results is empty
-    // after the commit, so the pipeline path cannot serve it), trie extended to {A, B}.
+    // --- block 502: parent root read from block 501's committed header in the backend
+    // (no pending layer can serve it after the commit), trie extended to {A, B}.
     auto header502 = executeOneBlock(502);
     mpt::Account accountA;
     accountA.balance = 42;
@@ -542,9 +546,10 @@ BOOST_AUTO_TEST_CASE(scenarioATransition)
 }
 
 // (c) Pipeline visibility: two MPT blocks execute back-to-back with NO commit in between.
-// Block 502's incremental rebuild must resolve block 501's not-yet-committed trie nodes
-// through its forked view's immutable layer chain (fork() carries 501's mutable layer, node
-// rows included) — the backend holds zero node rows throughout.
+// Block 502's incremental rebuild must resolve block 501's not-yet-committed trie nodes AND
+// its parent root (501's executed header, written by finishExecute) through its forked
+// view's immutable layer chain (fork() carries 501's mutable layer, node and header rows
+// included) — the backend holds zero node rows throughout.
 BOOST_AUTO_TEST_CASE(pipelineVisibility)
 {
     namespace mpt = bcos::ledger::mpt;
@@ -687,11 +692,11 @@ BOOST_AUTO_TEST_CASE(commitAtomicityAndObserverTiming)
     }
 }
 
-// Scenario B (L2): every block is MPT-rooted; the first executed block resolves its parent
-// root from the previous block's SIGNED HEADER in the ledger. Part 1: a parent header carrying
-// emptyRootHash() chains cleanly. Part 2 (separate case below): a parent header carrying a
-// root whose nodes do not exist must fail the execute loudly — proving the header value is
-// actually consumed, not silently defaulted.
+// Scenario B (L2, restart case): every block is MPT-rooted; the first executed block after a
+// restart resolves its parent root from the parent's SIGNED HEADER in the backend — what
+// commit left behind. Part 1: a parent header carrying emptyRootHash() chains cleanly. Part 2
+// (separate case below): a parent header carrying a root whose nodes do not exist must fail
+// the execute loudly — proving the header value is actually consumed, not silently defaulted.
 BOOST_AUTO_TEST_CASE(scenarioBParentFromLedgerHeader)
 {
     namespace mpt = bcos::ledger::mpt;
@@ -724,6 +729,50 @@ BOOST_AUTO_TEST_CASE(scenarioBBogusParentRootFailsLoud)
     auto [error, header] = executeBlockRaw(500);
     BOOST_REQUIRE(error);
     BOOST_CHECK(!header);
+}
+
+// Fail-loud negative: an MPT parent whose header is nowhere (no pending layer, no backend
+// row) must surface getBlockData's NotFoundBlockHeader as an execute error — never a silent
+// rebuild from the empty trie.
+BOOST_AUTO_TEST_CASE(mptParentHeaderMissingFailsLoud)
+{
+    namespace mpt = bcos::ledger::mpt;
+    useScenarioB();
+
+    auto const addressA = makeAddress(0xE8);
+    plan[500] = {{mpt::accountTableName(addressA), "balance", "2"}};
+
+    auto [error, header] = executeBlockRaw(500);
+    BOOST_REQUIRE(error);
+    BOOST_CHECK(!header);
+    BOOST_CHECK(error->errorMessage().find("NotFoundBlockHeader") != std::string::npos);
+}
+
+// The execute-time header row (unsigned encoding, written by finishExecute into the block's
+// layer) and commit's prewrite row (signed encoding) share the same key. The backend must end
+// with the prewrite version: mergeBackStorage merges the block's layer BEFORE the extra
+// storages, so within the one WriteBatch the prewrite write wins. This ordering is what lets
+// finishExecute publish headers early without ever leaking an unsigned header to disk.
+BOOST_AUTO_TEST_CASE(commitPrewriteOverwritesExecuteTimeHeaderRow)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    StateKey const key{ledger::SYS_NUMBER_2_BLOCK_HEADER, "7"};
+    storage::Entry executedVersion;
+    executedVersion.set("executed-unsigned");
+    task::syncWait(storage2::writeOne(mutableStorage(view), key, std::move(executedVersion)));
+    multiLayerStorage.pushView(std::move(view));
+
+    MWMutableStorage prewrite;
+    storage::Entry signedVersion;
+    signedVersion.set("committed-signed");
+    task::syncWait(storage2::writeOne(prewrite, key, std::move(signedVersion)));
+
+    task::syncWait(multiLayerStorage.mergeBackStorage(prewrite));
+
+    auto entry = task::syncWait(storage2::readOne(backendStorage, key));
+    BOOST_REQUIRE(entry);
+    BOOST_CHECK_EQUAL(std::string(entry->get()), "committed-signed");
 }
 
 // Guard: a stray row under the reserved "/mpt/" table in the block's TOP delta layer must be
