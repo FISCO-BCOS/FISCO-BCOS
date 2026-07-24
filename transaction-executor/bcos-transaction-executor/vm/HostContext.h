@@ -278,11 +278,11 @@ public:
         co_return co_await m_recipientAccount.storage(*key);
     }
 
-    // untracked-read-tagged variant: reads the underlying slot without populating the
+    // bypass-read-set-tagged variant: reads the underlying slot without populating the
     // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
     // SSTORE status determination) that must not influence DAG conflict edges.
     task::Task<evmc_bytes32> get(
-        const evmc_bytes32* key, storage2::UNTRACKED_READ_TYPE untracked)
+        const evmc_bytes32* key, storage2::BYPASS_READ_SET_TYPE untracked)
     {
         co_return co_await m_recipientAccount.storage(*key, untracked);
     }

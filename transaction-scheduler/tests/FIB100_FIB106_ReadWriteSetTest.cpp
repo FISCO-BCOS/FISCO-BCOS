@@ -68,7 +68,7 @@ task::Task<std::optional<int>> tag_invoke(
 }
 
 task::Task<std::optional<int>> tag_invoke(storage2::tag_t<storage2::readOne> /*unused*/,
-    DirectMockStorage& /*storage*/, const auto& key, storage2::UNTRACKED_READ_TYPE /*unused*/)
+    DirectMockStorage& /*storage*/, const auto& key, storage2::BYPASS_READ_SET_TYPE /*unused*/)
 {
     co_return std::make_optional(key * 10);
 }
@@ -87,7 +87,7 @@ task::Task<std::vector<std::optional<int>>> tag_invoke(
 
 task::Task<std::vector<std::optional<int>>> tag_invoke(
     storage2::tag_t<storage2::readSome> /*unused*/, DirectMockStorage& /*storage*/,
-    ::ranges::forward_range auto keys, storage2::UNTRACKED_READ_TYPE /*unused*/)
+    ::ranges::forward_range auto keys, storage2::BYPASS_READ_SET_TYPE /*unused*/)
 {
     std::vector<std::optional<int>> result;
     for (auto&& key : keys)
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_SUITE(FIB100_FIB106_ReadWriteSetTest)
 
 // ---- FIB-100 ----
 
-// untracked reads are Rollbackable's internal pre-image snapshots. Tracking them
+// bypass-read-set reads are Rollbackable's internal pre-image snapshots. Tracking them
 // as transaction-visible reads would create phantom RAW dependencies. The
 // rollback-correctness concern raised by the audit is addressed instead by
 // WAW detection (see wawIntersectionDetected below): two chunks writing the
@@ -112,11 +112,11 @@ BOOST_AUTO_TEST_CASE(untrackedReadOneDoesNotPolluteReadSet)
         DirectMockStorage backend;
         ReadWriteSetStorage<decltype(backend)> reader(backend);
 
-        auto value = co_await storage2::readOne(reader, 42, storage2::UNTRACKED_READ);
+        auto value = co_await storage2::readOne(reader, 42, storage2::BYPASS_READ_SET);
         BOOST_REQUIRE(value);
         BOOST_CHECK_EQUAL(*value, 420);
 
-        // Read set must remain empty — untracked is infrastructure, not business.
+        // Read set must remain empty — bypass-read-set is infrastructure, not business.
         BOOST_CHECK(::ranges::empty(readWriteSet(reader)));
         co_return;
     }());
@@ -129,7 +129,7 @@ BOOST_AUTO_TEST_CASE(untrackedReadSomeDoesNotPolluteReadSet)
         ReadWriteSetStorage<decltype(backend)> reader(backend);
 
         std::vector<int> keys = {3, 5, 7};
-        auto values = co_await storage2::readSome(reader, keys, storage2::UNTRACKED_READ);
+        auto values = co_await storage2::readSome(reader, keys, storage2::BYPASS_READ_SET);
         BOOST_REQUIRE_EQUAL(values.size(), 3);
         BOOST_CHECK_EQUAL(*values[0], 30);
         BOOST_CHECK_EQUAL(*values[1], 50);

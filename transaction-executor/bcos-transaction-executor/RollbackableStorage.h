@@ -11,13 +11,13 @@ namespace bcos::executor_v1
 
 template <class Storage>
 concept HasReadOneRaw = requires(Storage& storage) {
-    storage.readOneRaw(std::declval<typename Storage::Key>(), storage2::UNTRACKED_READ);
+    storage.readOneRaw(std::declval<typename Storage::Key>(), storage2::BYPASS_READ_SET);
 };
 
 template <class Storage>
 concept HasReadSomeRaw = requires(Storage& storage) {
     storage.readSomeRaw(
-        std::declval<std::vector<typename Storage::Key>>(), storage2::UNTRACKED_READ);
+        std::declval<std::vector<typename Storage::Key>>(), storage2::BYPASS_READ_SET);
 };
 
 template <class Storage>
@@ -87,7 +87,7 @@ private:
                        ::ranges::to<std::vector<Key>>;
             }
         }();
-        auto oldValues = co_await storage.readSomeRaw(keyList, storage2::UNTRACKED_READ);
+        auto oldValues = co_await storage.readSomeRaw(keyList, storage2::BYPASS_READ_SET);
 
         m_records.reserve(m_records.size() + keyList.size());
         for (auto&& [key, oldValue] : ::ranges::views::zip(keyList, oldValues))
@@ -133,11 +133,12 @@ public:
         co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
-    // untracked-read-tagged raw read that bypasses any tracking wrapper (e.g. RW-set or
-    // rollback-record creation). Used by callers that read a value for internal
-    // metadata only (e.g. computing evmc_storage_status) and must not participate
-    // in parallel conflict detection.
-    auto readOneRaw(auto key, storage2::UNTRACKED_READ_TYPE untracked) -> task::Task<
+    // Bypass read-set tracking for pre-image capture: read the raw value
+    // without registering in any tracking wrapper (e.g. RW-set or rollback
+    // record). Used by callers that read a value for internal metadata only
+    // (e.g. computing evmc_storage_status) and must not participate in
+    // parallel conflict detection.
+    auto readOneRaw(auto key, storage2::BYPASS_READ_SET_TYPE untracked) -> task::Task<
         task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(std::move(key), untracked))>>
         requires HasReadOneRaw<Storage>
     {
@@ -157,7 +158,7 @@ public:
         auto& record = m_records.emplace_back();
         record.key = key;
         auto& storage = m_storage.get();
-        record.oldValue = co_await storage.readOneRaw(key, storage2::UNTRACKED_READ);
+        record.oldValue = co_await storage.readOneRaw(key, storage2::BYPASS_READ_SET);
         co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
     }
 

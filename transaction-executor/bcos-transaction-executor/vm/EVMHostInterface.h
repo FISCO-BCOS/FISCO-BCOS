@@ -75,11 +75,11 @@ struct EVMHostInterface
             // MODIFIED_RESTORED). Requires tracking the transaction-original value
             // per slot to distinguish clean (o == c) from dirty (o != c) writes.
             //
-            // untracked read: this lookup is for status metadata only and must not be
+            // bypass-read-set read: this lookup is for status metadata only and must not be
             // registered in the parallel scheduler's read set, otherwise pure SSTORE
             // writes would create false RAW edges against any earlier writer of the
             // same slot.
-            auto existingValue = syncWait(hostContext.get(key, storage2::UNTRACKED_READ));
+            auto existingValue = syncWait(hostContext.get(key, storage2::BYPASS_READ_SET));
             const bool existingIsZero = concepts::bytebuffer::equalTo(
                 existingValue.bytes, executor::EMPTY_EVM_BYTES32.bytes);
             if (newIsZero)

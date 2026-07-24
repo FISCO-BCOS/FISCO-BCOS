@@ -93,9 +93,9 @@ public:
         -> task::Task<task::AwaitableReturnType<
             std::invoke_result_t<storage2::ReadSome, Storage&, decltype(keys), decltype(tags)...>>>
     {
-        constexpr bool untracked =
-            storage2::contains_tag_v<storage2::UNTRACKED_READ_TYPE, decltype(tags)...>;
-        if constexpr (!untracked)
+        constexpr bool bypassSet =
+            storage2::contains_tag_v<storage2::BYPASS_READ_SET_TYPE, decltype(tags)...>;
+        if constexpr (!bypassSet)
         {
             for (auto&& key : keys)
             {
@@ -108,9 +108,9 @@ public:
     auto readOne(auto key, auto... tags) -> task::Task<task::AwaitableReturnType<
         std::invoke_result_t<storage2::ReadOne, Storage&, decltype(key), decltype(tags)...>>>
     {
-        constexpr bool untracked =
-            storage2::contains_tag_v<storage2::UNTRACKED_READ_TYPE, decltype(tags)...>;
-        if constexpr (!untracked)
+        constexpr bool bypassSet =
+            storage2::contains_tag_v<storage2::BYPASS_READ_SET_TYPE, decltype(tags)...>;
+        if constexpr (!bypassSet)
         {
             putSet(false, key);
         }
