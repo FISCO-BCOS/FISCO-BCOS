@@ -352,7 +352,7 @@ BOOST_AUTO_TEST_CASE(directDelete)
         }
         BOOST_CHECK_EQUAL(count1, 10);
 
-        co_await storage2::removeOne(storage, 6, bcos::storage2::DIRECT);
+        co_await storage2::removeOne(storage, 6, bcos::storage2::BYPASS_LOGICAL_DELETE);
         auto range2 = co_await storage2::range(storage);
         int count2 = 0;
         while (co_await range2.next())

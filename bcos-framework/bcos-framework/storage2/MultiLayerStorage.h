@@ -194,26 +194,34 @@ public:
     }
 
     template <::ranges::input_range Keys>
-    auto readSomeRaw(Keys keys, storage2::DIRECT_TYPE /*unused*/)
+    auto readSomeRaw(Keys keys, auto... tags)
         -> task::Task<std::vector<storage2::StorageValueType<Value>>>
         requires ::ranges::sized_range<Keys>
     {
-        if (m_mutableStorage)
+        constexpr bool bypassMultiLayer = contains_tag_v<BYPASS_MULTILAYER_TYPE, decltype(tags)...>;
+        if constexpr (bypassMultiLayer)
         {
-            co_return co_await m_mutableStorage->readSomeRaw(std::move(keys));
-        }
+            if (m_mutableStorage)
+            {
+                co_return co_await m_mutableStorage->readSomeRaw(std::move(keys));
+            }
 
-        for (auto& immutableStorage : m_immutableStorages)
+            for (auto& immutableStorage : m_immutableStorages)
+            {
+                co_return co_await immutableStorage->readSomeRaw(std::move(keys));
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                co_return co_await m_cacheStorage.get().readSomeRaw(std::move(keys));
+            }
+
+            co_return co_await backendStorageRef().readSomeRaw(std::move(keys));
+        }
+        else
         {
-            co_return co_await immutableStorage->readSomeRaw(std::move(keys));
+            co_return co_await readSomeRaw(std::move(keys));
         }
-
-        if constexpr (withCacheStorage)
-        {
-            co_return co_await m_cacheStorage.get().readSomeRaw(std::move(keys));
-        }
-
-        co_return co_await backendStorageRef().readSomeRaw(std::move(keys));
     }
 
     auto readOneRaw(const auto& key) -> task::Task<storage2::StorageValueType<Value>>
@@ -248,25 +256,32 @@ public:
         co_return co_await backendStorageRef().readOneRaw(key);
     }
 
-    auto readOneRaw(const auto& key, storage2::DIRECT_TYPE /*unused*/)
-        -> task::Task<storage2::StorageValueType<Value>>
+    auto readOneRaw(const auto& key, auto... tags) -> task::Task<storage2::StorageValueType<Value>>
     {
-        if (m_mutableStorage)
+        constexpr bool bypassMultiLayer = contains_tag_v<BYPASS_MULTILAYER_TYPE, decltype(tags)...>;
+        if constexpr (bypassMultiLayer)
         {
-            co_return co_await m_mutableStorage->readOneRaw(key);
-        }
+            if (m_mutableStorage)
+            {
+                co_return co_await m_mutableStorage->readOneRaw(key);
+            }
 
-        for (auto& immutableStorage : m_immutableStorages)
+            for (auto& immutableStorage : m_immutableStorages)
+            {
+                co_return co_await immutableStorage->readOneRaw(key);
+            }
+
+            if constexpr (withCacheStorage)
+            {
+                co_return co_await m_cacheStorage.get().readOneRaw(key);
+            }
+
+            co_return co_await backendStorageRef().readOneRaw(key);
+        }
+        else
         {
-            co_return co_await immutableStorage->readOneRaw(key);
+            co_return co_await readOneRaw(key);
         }
-
-        if constexpr (withCacheStorage)
-        {
-            co_return co_await m_cacheStorage.get().readOneRaw(key);
-        }
-
-        co_return co_await backendStorageRef().readOneRaw(key);
     }
 
     template <::ranges::input_range Keys>
@@ -465,10 +480,9 @@ public:
     constexpr static bool withCacheStorage = !std::is_void_v<CachedStorage>;
     using KeyType = std::remove_cvref_t<typename MutableStorageType::Key>;
     using ValueType = std::remove_cvref_t<typename MutableStorageType::Value>;
-    using OpenedStorage =
-        decltype(std::declval<std::remove_reference_t<BackendStorage>&>().open());
-    using ViewType = View<MutableStorageType, CachedStorage,
-        std::remove_reference_t<OpenedStorage>>;
+    using OpenedStorage = decltype(std::declval<std::remove_reference_t<BackendStorage>&>().open());
+    using ViewType =
+        View<MutableStorageType, CachedStorage, std::remove_reference_t<OpenedStorage>>;
     using CheckpointName = typename std::remove_reference_t<BackendStorage>::CheckpointName;
 
     std::deque<std::shared_ptr<MutableStorageType>> m_storages;

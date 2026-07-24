@@ -192,13 +192,15 @@ public:
         }
     }
 
-    // DIRECT-tagged storage read: bypasses any read-set tracking on the storage
-    // wrapper. Use for metadata-only reads (e.g. computing evmc_storage_status)
-    // that must not register as a semantic read for parallel conflict detection.
-    task::Task<evmc_bytes32> storage(const evmc_bytes32& key, storage2::DIRECT_TYPE direct)
+    // Tag-forwarding storage read: passes all tags through to the underlying
+    // readOneRaw call. Callers compose the exact set of tags they need
+    // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
+    // must skip both conflict tracking and layer resolution).
+    task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... tags)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
-            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, direct);
+            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)},
+            tags...);
         evmc_bytes32 value{};
         if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
         {

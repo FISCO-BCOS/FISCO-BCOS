@@ -274,17 +274,13 @@ public:
                 ledger::Features::Flag::feature_raw_address));
     }
 
-    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto&&... /*unused*/)
+    // Tag-forwarding variant: passes all tags through to the underlying
+    // EVMAccount::storage call. Callers compose the exact set of tags they need
+    // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
+    // must skip both conflict tracking and layer resolution).
+    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto... tags)
     {
-        co_return co_await m_recipientAccount.storage(*key);
-    }
-
-    // DIRECT-tagged variant: reads the underlying slot without populating the
-    // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
-    // SSTORE status determination) that must not influence DAG conflict edges.
-    task::Task<evmc_bytes32> get(const evmc_bytes32* key, storage2::DIRECT_TYPE direct)
-    {
-        co_return co_await m_recipientAccount.storage(*key, direct);
+        co_return co_await m_recipientAccount.storage(*key, tags...);
     }
 
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
