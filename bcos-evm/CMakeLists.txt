@@ -20,7 +20,12 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/precompiles.cpp
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
-    bcos-evm/eth/state/system_contracts.cpp)
+    bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/eth/utils/mpt.cpp
+    bcos-evm/eth/utils/mpt_hash.cpp
+    bcos-evm/eth/utils/rlp_encode.cpp
+    bcos-evm/eth/utils/test_state.cpp
+    bcos-evm/eth/utils/utils.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
@@ -36,6 +41,11 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/eth/utils/mpt.cpp
+    bcos-evm/eth/utils/mpt_hash.cpp
+    bcos-evm/eth/utils/rlp_encode.cpp
+    bcos-evm/eth/utils/test_state.cpp
+    bcos-evm/eth/utils/utils.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
 # 集成构建（主工程 add_subdirectory）下跟随主工程的 TESTS 开关，独立构建恒默认 ON；
