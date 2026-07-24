@@ -83,6 +83,23 @@ public:
         ledgerConfig.setEVMCRevision(rev);
     }
 
+    /// Configure environment-specific settings (base fee, etc.)
+    void configureEnvironment(test::EESTEnvironment const& env)
+    {
+        // Set block base fee from EEST environment (EIP-1559, London+)
+        // LedgerConfig::gasPrice() is used as the block baseFee in Ethereum mode
+        if (!env.baseFee.empty())
+        {
+            auto baseFeeVal = test::hexToU256(env.baseFee);
+            auto hexStr = "0x" + baseFeeVal.str(0, std::ios_base::hex);
+            ledgerConfig.setGasPrice({hexStr, 0});
+        }
+        else
+        {
+            ledgerConfig.setGasPrice({"0x0", 0});
+        }
+    }
+
     /// Set up pre-state accounts in BCOS storage.
     void setupPreState(std::map<std::string, test::EESTAccount> const& pre)
     {
@@ -410,6 +427,9 @@ public:
     {
         // Configure fork
         configureFork(forkName);
+
+        // Configure environment (base fee etc.)
+        configureEnvironment(fixture.env);
 
         // Set up pre-state
         setupPreState(fixture.pre);
