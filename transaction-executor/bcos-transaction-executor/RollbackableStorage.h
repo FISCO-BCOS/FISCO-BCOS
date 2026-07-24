@@ -87,7 +87,8 @@ private:
                        ::ranges::to<std::vector<Key>>;
             }
         }();
-        auto oldValues = co_await storage.readSomeRaw(keyList, storage2::BYPASS_READ_SET);
+        auto oldValues = co_await storage.readSomeRaw(
+            keyList, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
 
         m_records.reserve(m_records.size() + keyList.size());
         for (auto&& [key, oldValue] : ::ranges::views::zip(keyList, oldValues))
@@ -133,16 +134,15 @@ public:
         co_return co_await storage2::readOne(m_storage.get(), std::move(key));
     }
 
-    // Bypass read-set tracking for pre-image capture: read the raw value
-    // without registering in any tracking wrapper (e.g. RW-set or rollback
-    // record). Used by callers that read a value for internal metadata only
-    // (e.g. computing evmc_storage_status) and must not participate in
-    // parallel conflict detection.
-    auto readOneRaw(auto key, storage2::BYPASS_READ_SET_TYPE untracked) -> task::Task<
-        task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(std::move(key), untracked))>>
+    // Raw read that forwards tags to the underlying storage without imposing
+    // any interpretation. Callers compose the exact set of tags they need
+    // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for pre-image capture) and
+    // this passthrough forwards them unchanged.
+    auto readOneRaw(auto key, auto... tags) -> task::Task<
+        task::AwaitableReturnType<decltype(m_storage.get().readOneRaw(std::move(key), tags...))>>
         requires HasReadOneRaw<Storage>
     {
-        co_return co_await m_storage.get().readOneRaw(std::move(key), untracked);
+        co_return co_await m_storage.get().readOneRaw(std::move(key), tags...);
     }
 
     auto existsOne(auto key) -> task::Task<task::AwaitableReturnType<
@@ -158,7 +158,8 @@ public:
         auto& record = m_records.emplace_back();
         record.key = key;
         auto& storage = m_storage.get();
-        record.oldValue = co_await storage.readOneRaw(key, storage2::BYPASS_READ_SET);
+        record.oldValue = co_await storage.readOneRaw(
+            key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER);
         co_await storage2::writeOne(m_storage.get(), std::move(key), std::move(value));
     }
 

@@ -278,13 +278,13 @@ public:
         co_return co_await m_recipientAccount.storage(*key);
     }
 
-    // bypass-read-set-tagged variant: reads the underlying slot without populating the
-    // ReadWriteSetStorage read set. Use only for internal metadata reads (e.g.
-    // SSTORE status determination) that must not influence DAG conflict edges.
-    task::Task<evmc_bytes32> get(
-        const evmc_bytes32* key, storage2::BYPASS_READ_SET_TYPE untracked)
+    // Tag-forwarding variant: passes all tags through to the underlying
+    // storage call chain. Callers compose the exact set of tags they need
+    // (e.g. BYPASS_READ_SET | BYPASS_MULTILAYER for metadata reads that
+    // must skip both conflict tracking and layer resolution).
+    task::Task<evmc_bytes32> get(const evmc_bytes32* key, auto... tags)
     {
-        co_return co_await m_recipientAccount.storage(*key, untracked);
+        co_return co_await m_recipientAccount.storage(*key, tags...);
     }
 
     task::Task<void> set(const evmc_bytes32* key, const evmc_bytes32* value, auto&&... /*unused*/)
