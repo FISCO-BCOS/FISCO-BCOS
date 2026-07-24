@@ -16,14 +16,13 @@
 # limitations under the License.
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
-# cmake settings
 set(TEST_BINARY_NAME test-bcos-protocol)
 
-# No need to test pb protocol
-# add_executable(${TEST_BINARY_NAME} ${SOURCES})
-# target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
+add_executable(${TEST_BINARY_NAME} ${SOURCES})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-# find_package(Boost QUIET REQUIRED unit_test_framework)
+find_package(Boost REQUIRED unit_test_framework)
+find_package(jsoncpp CONFIG REQUIRED)
 
-# target_link_libraries(${TEST_BINARY_NAME} ${PROTOCOL_TARGET} ${PBPROTOCOL_TARGET} ${UTILITIES_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)
-# add_test(NAME test-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+target_link_libraries(${TEST_BINARY_NAME} bcos-protocol bcos-framework bcos-utilities JsonCpp::JsonCpp Boost::unit_test_framework)
+add_test(NAME test-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

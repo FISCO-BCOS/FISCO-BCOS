@@ -285,8 +285,8 @@ std::string DownloadingQueue::printBlockHeader(BlockHeader::Ptr const& _header) 
         signatureListStr << ", sign list: ";
         for (auto const& signatureData : signatureList)
         {
-            signatureListStr << (toHex(signatureData.signature)) << ":"
-                             << signatureData.index << ", ";
+            signatureListStr << (toHex(signatureData.signature)) << ":" << signatureData.index
+                             << ", ";
         }
     }
     auto weightList = _header->consensusWeights();
@@ -360,10 +360,9 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                         << LOG_KV("message", _error->errorMessage());
                     if (_error->errorCode() == bcos::scheduler::SchedulerError::InvalidBlocks)
                     {
-                        BLKSYNC_LOG(INFO)
-                            << LOG_DESC("applyBlock: InvalidBlocks, drop the block")
-                            << LOG_KV("number", orgBlockHeader->number())
-                            << LOG_KV("hash", orgBlockHeader->hash().abridged());
+                        BLKSYNC_LOG(INFO) << LOG_DESC("applyBlock: InvalidBlocks, drop the block")
+                                          << LOG_KV("number", orgBlockHeader->number())
+                                          << LOG_KV("hash", orgBlockHeader->hash().abridged());
                         return;
                     }
                     if (!config->masterNode())
@@ -377,21 +376,19 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     if (isRetryableError(errorCode) &&
                         _block->blockHeader()->number() > config->blockNumber())
                     {
-                        BLKSYNC_LOG(INFO)
-                            << LOG_DESC(
-                                   "applyBlock: transient error, re-push the block "
-                                   "into executing queue")
-                            << LOG_KV("number", orgBlockHeader->number())
-                            << LOG_KV("hash", orgBlockHeader->hash().abridged())
-                            << LOG_KV("code", errorCode);
+                        BLKSYNC_LOG(INFO) << LOG_DESC(
+                                                 "applyBlock: transient error, re-push the block "
+                                                 "into executing queue")
+                                          << LOG_KV("number", orgBlockHeader->number())
+                                          << LOG_KV("hash", orgBlockHeader->hash().abridged())
+                                          << LOG_KV("code", errorCode);
                         WriteGuard l(downloadQueue->x_blocks);
                         downloadQueue->m_blocks.push(_block);
                     }
                     else
                     {
                         BLKSYNC_LOG(WARNING)
-                            << LOG_DESC(
-                                   "applyBlock: non-retryable error, dropping block")
+                            << LOG_DESC("applyBlock: non-retryable error, dropping block")
                             << LOG_KV("number", orgBlockHeader->number())
                             << LOG_KV("hash", orgBlockHeader->hash().abridged())
                             << LOG_KV("code", errorCode);
@@ -791,8 +788,7 @@ void DownloadingQueue::onCommitFailed(
     BLKSYNC_LOG(INFO) << LOG_DESC("onCommitFailed: update commitQueue and executingQueue")
                       << LOG_KV("commitQueueSize", commitQueueSize)
                       << LOG_KV("blocksQueueSize", blocksQueueSize)
-                      << LOG_KV("topNumber", topNumber)
-                      << LOG_KV("topBlock", blocksTopNumber)
+                      << LOG_KV("topNumber", topNumber) << LOG_KV("topBlock", blocksTopNumber)
                       << LOG_KV("rePushedBlockCount", rePushedBlockCount)
                       << LOG_KV("executedBlock", m_config->executedBlock());
 }
