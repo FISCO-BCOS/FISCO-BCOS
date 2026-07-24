@@ -31,6 +31,9 @@ BOOST_AUTO_TEST_CASE(referenceConstructorInnerAndSetInner)
     header.inner().data.version = 5;
     BOOST_CHECK_EQUAL(header.version(), 5U);
     BOOST_CHECK_EQUAL(std::as_const(header).inner().data.version, 5);
+    // const inner() must return a reference to the same external struct, not a
+    // copy — a copy would still satisfy the value check above. Compare addresses.
+    BOOST_CHECK(&std::as_const(header).inner() == &tars);
 
     // setInner replaces the referenced struct's contents
     bcostars::BlockHeader other;

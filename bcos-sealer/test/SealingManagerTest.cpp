@@ -94,14 +94,13 @@ BOOST_AUTO_TEST_CASE(latestSettersRoundTrip)
     BOOST_CHECK_EQUAL(sm->latestHash(), h);
 }
 
-BOOST_AUTO_TEST_CASE(resetSealingClearsSealingNumber)
+BOOST_AUTO_TEST_CASE(resetSealingDisablesProposalGeneration)
 {
     auto sm = makeSealingManager();
     sm->resetSealingInfo(/*start=*/10, /*end=*/20, /*maxTxsPerBlock=*/100);
-    // After resetSealingInfo, shouldGenerateProposal depends on internal state.
-    // resetSealing must clear the sealing number back to invalid (-1).
+    // resetSealing advances the sealing number to endSealingNumber + 1 (i.e. past
+    // the sealing window), which leaves nothing to propose.
     sm->resetSealing();
-    // shouldGenerateProposal must be false after reset (sealingNumber == -1).
     BOOST_CHECK(!sm->shouldGenerateProposal());
 }
 

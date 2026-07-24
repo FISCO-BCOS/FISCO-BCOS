@@ -52,9 +52,8 @@ struct AsyncResult
 template <typename Invoke>
 AsyncResult awaitHandler(Invoke&& invoke)
 {
-    std::promise<AsyncResult> promise;
-    auto future = promise.get_future();
-    auto shared = std::make_shared<std::promise<AsyncResult>>(std::move(promise));
+    auto shared = std::make_shared<std::promise<AsyncResult>>();
+    auto future = shared->get_future();
     std::forward<Invoke>(invoke)([shared](bcos::Error::Ptr error, Json::Value& value) {
         AsyncResult result;
         result.hasError = (error != nullptr);

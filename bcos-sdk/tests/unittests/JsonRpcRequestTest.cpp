@@ -123,11 +123,24 @@ BOOST_AUTO_TEST_CASE(fromJsonParamsNotArrayThrowsInvalidRequest)
         [](const JsonRpcException& e) { return e.code() == JsonRpcError::InvalidRequest; });
 }
 
-BOOST_AUTO_TEST_CASE(fromJsonMalformedJsonThrowsInvalidRequest)
+// Unparseable input: Json::Reader::parse() returns false, reported as
+// InvalidRequest (the do/while break path).
+BOOST_AUTO_TEST_CASE(fromJsonUnparseableReportsInvalidRequest)
 {
     JsonRpcRequest req;
     BOOST_CHECK_EXCEPTION(req.fromJson("not json"), JsonRpcException,
         [](const JsonRpcException& e) { return e.code() == JsonRpcError::InvalidRequest; });
+}
+
+// Parses cleanly but a field has the wrong type: id is a string, so asInt64()
+// throws during extraction and is caught and reported as ParseError -- a
+// different branch from the parse-false InvalidRequest path above.
+BOOST_AUTO_TEST_CASE(fromJsonFieldTypeErrorReportsParseError)
+{
+    JsonRpcRequest req;
+    std::string raw = R"({"jsonrpc":"2.0","method":"foo","id":"not-an-int"})";
+    BOOST_CHECK_EXCEPTION(req.fromJson(raw), JsonRpcException,
+        [](const JsonRpcException& e) { return e.code() == JsonRpcError::ParseError; });
 }
 
 BOOST_AUTO_TEST_CASE(factoryAssignsMonotonicallyIncreasingIds)

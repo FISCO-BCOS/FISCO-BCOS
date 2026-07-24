@@ -80,6 +80,12 @@ BOOST_AUTO_TEST_CASE(transactionAndReceiptByIndex)
 
     block->appendReceipt(receipt);
     BOOST_CHECK_EQUAL(block->receiptsSize(), 3U);
+
+    // Out-of-range indices (setReceipt/setTransaction/transactionHash past the
+    // vector size) are currently *unchecked* and hit undefined behavior rather
+    // than throwing — see bug #5355. A regression test asserting std::out_of_range
+    // must land together with the bounds-check fix; triggering the OOB here would
+    // corrupt or crash the test process, so it is intentionally not exercised.
 }
 
 // nonceList round-trips through the any_view setter/getter.

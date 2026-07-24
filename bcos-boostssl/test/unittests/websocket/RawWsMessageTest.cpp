@@ -36,23 +36,24 @@ BOOST_AUTO_TEST_CASE(accessorsRoundTrip)
     BOOST_REQUIRE(msg.payload());
     BOOST_CHECK_EQUAL(msg.payload()->size(), 3U);
     BOOST_CHECK_EQUAL(msg.seq(), "seq-1");
-    // packetType is fixed to WS_RAW_MESSAGE_TYPE for raw messages; just exercise
-    // the getter/setter without asserting a changed value.
-    BOOST_CHECK_NO_THROW(msg.packetType());
+    // setPacketType is a no-op for raw messages: packetType() stays fixed at
+    // WS_RAW_MESSAGE_TYPE regardless of the value passed above.
+    BOOST_CHECK_EQUAL(msg.packetType(), WS_RAW_MESSAGE_TYPE);
 
-    // setVersion/setExt are documented no-ops; calling them must not crash and
-    // the getters stay well-defined.
+    // setVersion/setExt are no-ops; the getters are hardcoded to 0.
     msg.setVersion(2);
     msg.setExt(1);
-    BOOST_CHECK_NO_THROW(msg.version());
-    BOOST_CHECK_NO_THROW(msg.ext());
+    BOOST_CHECK_EQUAL(msg.version(), 0);
+    BOOST_CHECK_EQUAL(msg.ext(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(respPacketFlag)
 {
     RawWsMessage msg;
+    // setRespPacket() is a no-op and isRespPacket() is hardcoded false: raw
+    // messages carry no response flag, so the call must never report true.
     msg.setRespPacket();
-    BOOST_CHECK_NO_THROW(msg.isRespPacket());
+    BOOST_CHECK(!msg.isRespPacket());
 }
 
 BOOST_AUTO_TEST_CASE(encodeAppendsPayloadDecodeRestoresIt)

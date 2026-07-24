@@ -136,20 +136,37 @@ BOOST_AUTO_TEST_CASE(getDataKeyCacheHitSkipsCallMethod)
 BOOST_AUTO_TEST_CASE(getDataKeyServerErrorClearsCacheAndThrows)
 {
     auto mock = std::make_shared<MockKmsClient>();
-    Json::Value rsp;
-    rsp["error"] = 1;  // server-side error
-    rsp["dataKey"] = "00";
-    rsp["info"] = "kms unavailable";
-    mock->response = rsp;
+    bytes realKey{0x11, 0x22};
+    Json::Value ok;
+    ok["error"] = 0;
+    ok["dataKey"] = toHex(realKey);
+    ok["info"] = "";
+    mock->response = ok;
 
     BcosKms kms;
     kms.setKcClient(mock);
-    BOOST_CHECK_THROW(kms.getDataKey("c1", false), KeyCenterConnectionError);
 
-    // After failure, asking again must not use stale cache — it should retry.
-    mock->throwOnCall = true;
-    BOOST_CHECK_THROW(kms.getDataKey("c1", false), KeyCenterConnectionError);
-    BOOST_CHECK_GE(mock->connectCalls, 2);
+    // Seed the single-entry cache with a successful fetch for c1, and confirm a
+    // repeat is a cache hit (no new connect).
+    kms.getDataKey("c1", false);
+    kms.getDataKey("c1", false);
+    BOOST_CHECK_EQUAL(mock->connectCalls, 1);
+
+    // A server-error response for a different cipher goes through the catch,
+    // which calls clearCache() before rethrowing.
+    Json::Value err;
+    err["error"] = 1;
+    err["dataKey"] = "00";
+    err["info"] = "kms unavailable";
+    mock->response = err;
+    BOOST_CHECK_THROW(kms.getDataKey("c2", false), KeyCenterConnectionError);  // connect #2
+
+    // The previously cached c1 must now be cleared: the next c1 fetch re-connects
+    // (connect #3) instead of returning the stale cached value. Without a working
+    // clearCache() this would be a cache hit and connectCalls would stay at 2.
+    mock->response = ok;
+    kms.getDataKey("c1", false);
+    BOOST_CHECK_EQUAL(mock->connectCalls, 3);
 }
 
 BOOST_AUTO_TEST_CASE(getDataKeyTransportThrowWrapsAsKeyCenterError)

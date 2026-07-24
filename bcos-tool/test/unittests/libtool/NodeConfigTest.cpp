@@ -106,9 +106,12 @@ BOOST_AUTO_TEST_CASE(loadConfigFromStringPartialDocumentDispatchesSubLoaders)
     }
     catch (...)
     {
-        // Tolerate failure of required sub-loaders; we still exercised dispatch.
+        // A later required sub-loader (e.g. consensus) may throw on this partial
+        // config; loadTxPoolConfig runs before it, so its effect is still visible.
     }
-    BOOST_CHECK(true);
+    // Concrete post-condition: the [txpool] block was dispatched and applied.
+    BOOST_CHECK_EQUAL(cfg.txpoolLimit(), 15000U);
+    BOOST_CHECK_EQUAL(cfg.notifyWorkerNum(), 2U);
 }
 
 // The cert/key material has direct setters (used when certs are injected
