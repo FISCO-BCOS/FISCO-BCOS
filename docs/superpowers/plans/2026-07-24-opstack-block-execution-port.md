@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 `feat-evm-mb1-block-execution` 分支 `bcos-evm-ref` 的 OP Stack 块级执行(源码 + 21 测试文件 + 31 向量 t8n gate + upstream-diff 护栏)全保真移植到当前 vendored 底座的 `bcos-evm` 模块。
+**Goal:** 把 `feat-evm-mb1-block-execution` 分支 `bcos-evm-ref` 的 OP Stack 块级执行(源码 + 21 测试文件 + 33 向量 t8n gate + upstream-diff 护栏)全保真移植到当前 vendored 底座的 `bcos-evm` 模块。
 
 **Architecture:** 方案 A 单模块扩展——opstack 作为 `bcos-evm` 第二子库(`bcosevm::opstack` 链 `bcosevm::eth`),evmone `test/utils` 最小集 vendor 进 `eth/utils/`,`ports/` 零改动。验证资产(GTest 套件 + t8n 向量 gate)原样复活,验收与 ref 侧同口径。
 
@@ -315,7 +315,7 @@ cd $FB && rtk git add bcos-evm && rtk git commit -m "feat(bcos-evm): opstack 块
 
 **Interfaces:**
 - Consumes: `bcosevm::opstack`(Task 4)、`statetest.hpp`(Task 2)。
-- Produces: ctest 目标 `BcosEvmOpstackTests`(123 用例含 `OpT8nReplay.Vectors`)。
+- Produces: ctest 目标 `BcosEvmOpstackTests`(124 用例含 `OpT8nReplay.Vectors`)。
 
 - [ ] **Step 1: 根 vcpkg.json 加测试依赖**
 
@@ -406,7 +406,7 @@ cmake --build $FB/bcos-evm/build --target bcos-evm-opstack-tests -j8
 ctest --test-dir $FB/bcos-evm/build -R BcosEvmOpstackTests --output-on-failure
 ```
 
-预期:`[  PASSED  ] 123 tests`(21 suites)。链接若报 undefined symbol 且符号属 `$EVMONE/test/utils` 某未拷源文件:补拷该 `.cpp` 入 `eth/utils/`(sed 改写 + CMake 库源追加,Task 2 惯例),重来本步;最终实拷清单留待 Task 7 回填 spec。
+预期:`[  PASSED  ] 124 tests`(21 suites)。链接若报 undefined symbol 且符号属 `$EVMONE/test/utils` 某未拷源文件:补拷该 `.cpp` 入 `eth/utils/`(sed 改写 + CMake 库源追加,Task 2 惯例),重来本步;最终实拷清单留待 Task 7 回填 spec。
 
 - [ ] **Step 7: gate 单独复核**
 
@@ -414,7 +414,7 @@ ctest --test-dir $FB/bcos-evm/build -R BcosEvmOpstackTests --output-on-failure
 $FB/bcos-evm/build/test/bcos-evm-opstack-tests --gtest_filter='OpT8nReplay.Vectors' 2>&1 | tail -20
 ```
 
-预期:31/31 向量回放通过、`known_diverges=0`、比对计数 ~3401 量级。**任何向量翻红:按 DIVERGENCES 三选一纪律归因,禁止改向量变绿**;若归因指向底座差异(hash_fn/官方 v0.21.0 vs fork),STOP 上报(spec §6.2 前提证伪)。
+预期:31/33 向量回放通过、`known_diverges=0`、比对计数 3558 量级。**任何向量翻红:按 DIVERGENCES 三选一纪律归因,禁止改向量变绿**;若归因指向底座差异(hash_fn/官方 v0.21.0 vs fork),STOP 上报(spec §6.2 前提证伪)。
 
 - [ ] **Step 8: 库目标纯净复查**
 
@@ -429,7 +429,7 @@ rg -l "nlohmann|gtest" $FB/bcos-evm/bcos-evm/ | rg -v statetest.hpp ; echo "exit
 ```bash
 cd $FB
 rtk git add vcpkg.json && rtk git commit -m "build: 根清单加 gtest + nlohmann-json(测试期依赖)"
-rtk git add bcos-evm && rtk git commit -m "test(bcos-evm): opstack GTest 套件 + t8n 向量 gate 全保真复活(123 用例,31/31 向量)"
+rtk git add bcos-evm && rtk git commit -m "test(bcos-evm): opstack GTest 套件 + t8n 向量 gate 全保真复活(124 用例,31/33 向量)"
 ```
 
 (若 Step 6 曾补拷 utils 源,`bcos-evm` 一并入第二笔。)
@@ -508,8 +508,8 @@ hash_fn 挂 VM)的 ETH + OP Stack 执行参考模块。自 `bcos-evm-ref`
 - `eth/`:ETH 状态转换内核(EthTransition + vendored state/utils)
 - `adapter/`:StateDiff 消毒/严格写回/stateRootOf/StateView 适配
 - `opstack/`:OP 薄层(processOpBlock/sealOpBlock/deposit/fee/receipt)
-- `test/opstack/`:21 测试文件 123 用例,含 `OpT8nReplay.Vectors`
-  块级 op-geth(pinned v1.101702.2)差分 gate(31 向量,ctest 常驻)
+- `test/opstack/`:21 测试文件 124 用例,含 `OpT8nReplay.Vectors`
+  块级 op-geth(pinned v1.101702.2)差分 gate(33 向量,ctest 常驻)
 - `scripts/upstream-diff.sh`:照抄面静态护栏(EVMONE_GIT 指官方 v0.21.0 检出)
 
 ## Build(standalone)
@@ -566,8 +566,8 @@ rtk git commit -m "docs(bcos-evm): 移植 README(E-b park 限定保留)+ spec ve
 
 ## 验收清单(全部满足才算完,来自 spec §8)
 
-- [ ] `bcos-evm-opstack-tests` 123/123(21 suites),ctest 默认套件
-- [ ] `OpT8nReplay.Vectors` 31/31,`known_diverges=0`,比对计数 ~3401
+- [ ] `bcos-evm-opstack-tests` 124/124(21 suites),ctest 默认套件
+- [ ] `OpT8nReplay.Vectors` 33/33,`known_diverges=0`,比对计数 3558
 - [ ] 既有 `BcosEvmEthTests`(Boost.Test)与全仓 FULLNODE 构建零回归(本地或 CI)
 - [ ] vectors 目录与 ref 基准 `diff -r` 为空
 - [ ] `upstream-diff.sh` 对官方 v0.21.0 检出 exit=0

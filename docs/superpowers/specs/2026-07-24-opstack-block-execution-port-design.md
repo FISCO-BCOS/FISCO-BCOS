@@ -9,7 +9,7 @@
 
 `feat-evm-mb1-block-execution` 分支上的 `bcos-evm-ref` 模块已完成 OP Stack 块级执行全套:
 `processOpBlock`/`sealOpBlock`、receipt/tx/state 三根建根、op-geth `v1.101702.2` 块级 t8n
-差分 gate(31 向量、123 测试全绿、FINDING-1 已归零)。其底座是 vcpkg fork port
+差分 gate(33 向量、124 测试全绿、FINDING-1 已归零)。其底座是 vcpkg fork port
 (`ywy2090/evmone@3585c2cb`,导出 `evmone::state`/`evmone::testutils` 导入目标)。
 
 当前分支 `refactor-evmone-vm-hash-fn` 已将同一模块的 ETH 侧移植为 `bcos-evm`,换用
@@ -23,7 +23,7 @@ patch 只碰 `lib/evmone/*`,不碰 `test/`)。
 
 | 决策点 | 结论 |
 |---|---|
-| 验收范围 | **全保真**:源码 + 21 个测试文件(123 用例)+ 31 向量 t8n gate + upstream-diff 重锚 |
+| 验收范围 | **全保真**:源码 + 21 个测试文件(124 用例)+ 33 向量 t8n gate + upstream-diff 重锚 |
 | 测试框架 | **加 gtest + nlohmann-json**(vcpkg,仅测试目标链接),测试代码零改写 |
 | 移植基准 | `1cec91b27639cab7037bcf344d4109fd19334fff`(= efb6fd42e + 译英批次) |
 | 分支策略 | 叠在 `refactor-evmone-vm-hash-fn` 上开 `feat-evm-opstack-port`,独立 PR |
@@ -98,7 +98,7 @@ vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 
 |---|---|---|
 | `test/opstack/` 整目录:21 个 `.cpp` + `OpL1AttributesTestHelpers.h` + `scripts/gen_7702_vectors.py`(7702 金值出处)+ `t8n/{cases,generator,vectors}` | `bcos-evm/test/opstack/` | 整目录搬运;仅顶层 `.cpp/.h` 做 include 三规则改写 |
 | `test/fixtures/opstack/`(bin 语料) | `bcos-evm/test/fixtures/opstack/` | 逐字节搬运 |
-| `t8n/vectors/`(432K,31 向量 JSON + manifest.txt + DIVERGENCES.md) | 同构搬运 | **逐字节不动**(含 DIVERGENCES.md;其中 `bcos-evm-ref` 路径引用视为出处记录,不改写) |
+| `t8n/vectors/`(432K,33 向量 JSON + manifest.txt + DIVERGENCES.md) | 同构搬运 | **逐字节不动**(含 DIVERGENCES.md;其中 `bcos-evm-ref` 路径引用视为出处记录,不改写) |
 | `t8n/generator/`(含 `regen.sh`) | 同构搬运 | 只搬不跑;generator README 路径引用改写 |
 
 ### 4.4 依赖变更
@@ -142,7 +142,7 @@ FINDING-1 修复前。按 ref 版本对齐两出口:`runTransaction` 的 `transi
 
 **hash_fn/VM 交互**:ref 侧 gate 绿灯在 fork evmone(旧 SM3 形态)取得;本次底座为
 官方 v0.21.0 + hash_fn-on-VM patch。OP 回放纯 keccak 语义,patch 不碰 `test/`,预期
-零行为差;31 向量 gate 复跑即此等价性的实证,不另设专门测试。
+零行为差;33 向量 gate 复跑即此等价性的实证,不另设专门测试。
 
 **错误处理不变式**(随源码移植,不改):`opValidate` 失败→致命(G-1);
 `applyStateDiffStrict` tripwire →测试失败而非静默;回放分歧→仅 `DIVERGENCES.md`
@@ -154,8 +154,8 @@ FINDING-1 修复前。按 ref 版本对齐两出口:`runTransaction` 的 `transi
 
 - `OpT8nReplay.Vectors` 进 ctest 默认套件(同 ref 侧)。回放器向量目录定位机制保持
   ref 侧不变,只改路径常量。
-- 验收判据同口径:opstack 123/123(21 suites)、31/31 向量、`known_diverges=0`、
-  比对计数 ~3401 次量级吻合。向量翻红按 DIVERGENCES 三选一纪律归因,不许改向量变绿。
+- 验收判据同口径:opstack 124/124(21 suites)、31/33 向量、`known_diverges=0`、
+  比对计数 3558 次(实测)。向量翻红按 DIVERGENCES 三选一纪律归因,不许改向量变绿。
 - generator/`regen.sh` 只搬不跑:本次不改向量,不触发再生成仪式。pin 校验、干净树契约
   原样保留。
 
@@ -184,14 +184,14 @@ upstream-diff.sh 需外部 evmone 检出,只做本地/手动检查,不进 CI(同
    两出口接线;现有 Boost.Test 目标回归绿。
 4. **opstack 整层**:17 文件 + include 改写 + `bcos-evm-opstack` 目标;编译绿。
 5. **测试复活**:vcpkg 加 gtest/nlohmann-json → 24 测试文件 + t8n 资产搬运 →
-   `bcos-evm-opstack-tests` 全绿(123/123 + 31/31,`known_diverges=0`)。
+   `bcos-evm-opstack-tests` 全绿(124/124 + 33/33,`known_diverges=0`)。
 6. **upstream-diff 重锚**:按 §6.2;manifest/golden 落账。
 7. **文档回填**:新建 `bcos-evm/README.md` 移植说明(E-b park 限定原文保留);DIVERGENCES.md 逐字节保留不改写;spec §2 基准 SHA 与 §4.2 最终 vendor 清单回填。
 
 ## 8. 验收清单
 
-- [ ] `bcos-evm-opstack-tests` 123/123(21 suites),ctest 默认套件
-- [ ] `OpT8nReplay.Vectors` 31/31,`known_diverges=0`,比对计数 ~3401
+- [ ] `bcos-evm-opstack-tests` 124/124(21 suites),ctest 默认套件
+- [ ] `OpT8nReplay.Vectors` 33/33,`known_diverges=0`,比对计数 3558
 - [ ] 现有 `BcosEvmEthTests`(Boost.Test)与全仓 FULLNODE 构建零回归
 - [ ] `git diff --exit-code -- test/opstack/t8n/vectors/` 为空(向量未被手改)
 - [ ] `upstream-diff.sh` 对官方 v0.21.0 检出通过
@@ -204,7 +204,7 @@ upstream-diff.sh 需外部 evmone 检出,只做本地/手动检查,不进 CI(同
 | fork@3585c2cb 曾改 `test/state`/`test/utils` 语义,vendor 与 gate 绿灯基准不同源 | 低 | §6.2 STOP 条款;gate 复跑 + upstream-diff 双证 |
 | statetest loader 依赖闭包比预期大 | 中 | 闭包判据=链接成功;多 vendor 无害,守住库目标不进 nlohmann |
 | gtest/nlohmann 与 vcpkg baseline 版本解析冲突 | 低 | 叶子依赖;冲突则 pin version |
-| hash_fn-on-VM 底座引入未预期行为差 | 低 | 31 向量 gate 即判别器,翻红即定位 |
+| hash_fn-on-VM 底座引入未预期行为差 | 低 | 33 向量 gate 即判别器,翻红即定位 |
 
 ## 10. 边界重申
 
