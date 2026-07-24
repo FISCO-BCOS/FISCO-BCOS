@@ -46,17 +46,27 @@ void MessagePromiseSwapper::spawnAndCall(std::function<CallParameters::UniquePtr
     // A std::async future would join on destruction and deadlock waiting
     // for the still-blocked thread — the nested promise is only fulfilled
     // by a future resume() that requires this spawnAndCall to return first.
-    std::thread([this, lastPromise, currentPromise,
+    // The lambda MUST read m_currentPromise (the member) at completion
+    // time, NOT a frozen snapshot.  Under the serialized ping-pong
+    // protocol the member has been advanced by nested spawnAndCall /
+    // resume() calls while execute() was in-flight, and the last
+    // completer must deliver to the latest promise.
+    //
+    // Data-race safety: every m_currentPromise write in a subsequent
+    // spawnAndCall happens-before this thread's wake-up via the
+    // thread-creation + promise set_value/get chain; the scheduler is
+    // always blocked in get() when this thread's completion runs.
+    std::thread([this, lastPromise,
                     spawnCall = std::move(spawnCall)]() mutable {
         try
         {
             auto message = spawnCall();
-            auto promise = lastPromise ? lastPromise : currentPromise;
+            auto promise = lastPromise ? lastPromise : m_currentPromise;
             promise->set_value(std::move(message));
         }
         catch (...)
         {
-            auto promise = lastPromise ? lastPromise : currentPromise;
+            auto promise = lastPromise ? lastPromise : m_currentPromise;
             promise->set_exception(std::current_exception());
         }
     }).detach();

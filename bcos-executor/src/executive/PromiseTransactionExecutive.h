@@ -53,7 +53,6 @@ public:
         std::function<void(CallParameters::UniquePtr)> waitAndDo);
 
 private:
-    std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_lastPromise;
     std::shared_ptr<std::promise<CallParameters::UniquePtr>> m_currentPromise;
 };
 
