@@ -441,9 +441,10 @@ public:
         return {true};
     }
 
-    task::AwaitableValue<void> removeOne(auto key, DIRECT_TYPE /*unused*/)
+    task::AwaitableValue<void> removeOne(auto key, auto... tags)
     {
-        removeSome(::ranges::views::single(std::move(key)), true);
+        constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
+        removeSome(::ranges::views::single(std::move(key)), physical);
         return {};
     }
 
@@ -453,9 +454,10 @@ public:
         co_return;
     }
 
-    task::Task<void> removeSome(::ranges::input_range auto keys, DIRECT_TYPE /*unused*/)
+    task::Task<void> removeSome(::ranges::input_range auto keys, auto... tags)
     {
-        removeSome(std::move(keys), true);
+        constexpr bool physical = contains_tag_v<BYPASS_LOGICAL_DELETE_TYPE, decltype(tags)...>;
+        removeSome(std::move(keys), physical);
         co_return;
     }
 
