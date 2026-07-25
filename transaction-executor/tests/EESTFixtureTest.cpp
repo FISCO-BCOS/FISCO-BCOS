@@ -158,11 +158,12 @@ public:
             {
                 auto keyBytes = test::hexToBytes(key);
                 auto valBytes = test::hexToBytes(val);
-                if (keyBytes.size() == 32 && valBytes.size() <= 32)
+                if (keyBytes.size() <= 32 && valBytes.size() <= 32)
                 {
                     evmc_bytes32 storageKey{}, storageValue{};
-                    std::copy(keyBytes.begin(), keyBytes.end(), storageKey.bytes);
-                    // EEST hex values are big-endian: copy to RIGHT side of 32-byte slot
+                    // EEST hex values are big-endian: right-align in 32-byte slot
+                    std::copy(
+                        keyBytes.begin(), keyBytes.end(), storageKey.bytes + 32 - keyBytes.size());
                     std::copy(valBytes.begin(), valBytes.end(),
                         storageValue.bytes + 32 - valBytes.size());
 
@@ -381,7 +382,12 @@ public:
                 {
                     auto keyBytes = test::hexToBytes(key);
                     evmc_bytes32 storageKey{};
-                    std::copy(keyBytes.begin(), keyBytes.end(), storageKey.bytes);
+                    // Key is big-endian: right-align in 32-byte slot (same as value)
+                    if (keyBytes.size() <= 32)
+                        std::copy(keyBytes.begin(), keyBytes.end(),
+                            storageKey.bytes + 32 - keyBytes.size());
+                    else
+                        std::copy(keyBytes.begin(), keyBytes.end(), storageKey.bytes);
 
                     auto storedVal = co_await evmAccount.storage(storageKey);
                     auto expValBytes = test::hexToBytes(val);

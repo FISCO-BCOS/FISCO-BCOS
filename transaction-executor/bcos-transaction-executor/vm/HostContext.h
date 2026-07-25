@@ -109,17 +109,14 @@ CacheExecutables& getCacheExecutables();
 task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
-    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
-    {
-        co_return std::move(*executable);
-    }
-
+    // Bypass global cache: the shared static CacheExecutables (LRU, max 100)
+    // can evict entries across deeply-nested contract calls (259+ contracts),
+    // and may serve stale Executables whose underlying storage has changed.
+    // Always re-read from storage and construct a fresh Executable per lookup.
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await account.code())
     {
-        auto executable = std::make_shared<Executable>(std::move(*codeEntry));
-        co_await storage2::writeOne(getCacheExecutables(), address, executable);
-        co_return executable;
+        co_return std::make_shared<Executable>(std::move(*codeEntry));
     }
     co_return {};
 }
