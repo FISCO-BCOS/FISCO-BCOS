@@ -1,9 +1,7 @@
 #pragma once
 
-#include "bcos-framework/protocol/Transaction.h"
-#include "bcos-framework/protocol/BlockHeader.h"
-#include "bcos-framework/ledger/LedgerConfig.h"
-#include "bcos-framework/storage/Entry.h"
+#include "bcos-utilities/Common.h"
+#include <evmc/evmc.h>
 #include <json/json.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
@@ -22,9 +20,9 @@ namespace bcos::test
 /// A single pre-state account.
 struct EESTAccount
 {
-    std::string nonce;                        // hex string
-    std::string balance;                      // hex string
-    std::string code;                         // hex string (with 0x prefix)
+    std::string nonce;                           // hex string
+    std::string balance;                         // hex string
+    std::string code;                            // hex string (with 0x prefix)
     std::map<std::string, std::string> storage;  // key → value, hex strings
 };
 
@@ -50,14 +48,15 @@ struct EESTTransaction
     std::string gasPrice;
     std::string maxPriorityFeePerGas;
     std::string maxFeePerGas;
-    std::vector<std::string> gasLimit;   // array of hex values
-    std::string to;                       // hex address, empty = create
-    std::vector<std::string> value;       // array of hex values
-    std::vector<std::string> data;        // array of hex strings
+    std::vector<std::string> gasLimit;  // array of hex values
+    std::string to;                     // hex address, empty = create
+    std::vector<std::string> value;     // array of hex values
+    std::vector<std::string> data;      // array of hex strings
     std::string sender;
     std::string secretKey;
     // accessLists: per-index access list (null = none)
-    std::vector<std::optional<std::vector<std::pair<std::string, std::vector<std::string>>>>> accessLists;
+    std::vector<std::optional<std::vector<std::pair<std::string, std::vector<std::string>>>>>
+        accessLists;
     // authorizationList (EIP-7702): null if not present
     std::optional<std::vector<Json::Value>> authorizationList;
     std::string maxFeePerBlobGas;
@@ -69,10 +68,10 @@ struct EESTForkPost
     int dataIndex = 0;
     int gasIndex = 0;
     int valueIndex = 0;
-    std::string stateRoot;            // "hash" — expected state root
-    std::string logsHash;             // "logs"
-    std::string txBytes;              // "txbytes" — RLP-encoded transaction
-    std::string expectException;      // exception name (empty = success expected)
+    std::string stateRoot;                     // "hash" — expected state root
+    std::string logsHash;                      // "logs"
+    std::string txBytes;                       // "txbytes" — RLP-encoded transaction
+    std::string expectException;               // exception name (empty = success expected)
     std::map<std::string, EESTAccount> state;  // expected post-state accounts
 };
 
@@ -336,7 +335,8 @@ inline EESTFixture parseFixture(std::string const& name, Json::Value const& fixt
 
 /// Load all state test fixtures from a JSON file.
 /// The file is expected to be in EEST state test format:
-///   { "fixture_name": { "env":..., "pre":..., "transaction":..., "post":{...}, "config":... }, ... }
+///   { "fixture_name": { "env":..., "pre":..., "transaction":..., "post":{...}, "config":... }, ...
+///   }
 inline std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
 {
     std::vector<EESTFixture> fixtures;
@@ -350,13 +350,14 @@ inline std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
     Json::Value root;
     std::string errors;
     if (!Json::parseFromStream(builder, file, &root, &errors))
-        BOOST_THROW_EXCEPTION(std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("JSON parse error in " + filePath + ": " + errors));
 
     // The root is a map of test_name → fixture_data
     for (auto it = root.begin(); it != root.end(); ++it)
     {
         if (it.key().asString().rfind("//", 0) == 0 ||  // comment entry
-            it.key().asString().rfind("_", 0) == 0)      // meta entry like _info
+            it.key().asString().rfind("_", 0) == 0)     // meta entry like _info
             continue;
 
         try
@@ -381,22 +382,38 @@ inline evmc_revision forkNameToRevision(std::string const& forkName)
     auto lower = forkName;
     boost::algorithm::to_lower(lower);
 
-    if (lower == "frontier") return EVMC_FRONTIER;
-    if (lower == "homestead") return EVMC_HOMESTEAD;
-    if (lower == "tangerine whistle" || lower == "tangerinewhistle" || lower == "eip150") return EVMC_TANGERINE_WHISTLE;
-    if (lower == "spurious dragon" || lower == "spuriousdragon" || lower == "eip158") return EVMC_SPURIOUS_DRAGON;
-    if (lower == "byzantium") return EVMC_BYZANTIUM;
-    if (lower == "constantinople") return EVMC_CONSTANTINOPLE;
-    if (lower == "petersburg") return EVMC_PETERSBURG;
-    if (lower == "istanbul") return EVMC_ISTANBUL;
-    if (lower == "muir glacier" || lower == "muirglacier") return EVMC_BERLIN;
-    if (lower == "berlin") return EVMC_BERLIN;
-    if (lower == "london") return EVMC_LONDON;
-    if (lower == "paris" || lower == "merge") return EVMC_PARIS;
-    if (lower == "shanghai") return EVMC_SHANGHAI;
-    if (lower == "cancun") return EVMC_CANCUN;
-    if (lower == "prague") return EVMC_PRAGUE;
-    if (lower == "osaka") return EVMC_OSAKA;
+    if (lower == "frontier")
+        return EVMC_FRONTIER;
+    if (lower == "homestead")
+        return EVMC_HOMESTEAD;
+    if (lower == "tangerine whistle" || lower == "tangerinewhistle" || lower == "eip150")
+        return EVMC_TANGERINE_WHISTLE;
+    if (lower == "spurious dragon" || lower == "spuriousdragon" || lower == "eip158")
+        return EVMC_SPURIOUS_DRAGON;
+    if (lower == "byzantium")
+        return EVMC_BYZANTIUM;
+    if (lower == "constantinople")
+        return EVMC_CONSTANTINOPLE;
+    if (lower == "petersburg")
+        return EVMC_PETERSBURG;
+    if (lower == "istanbul")
+        return EVMC_ISTANBUL;
+    if (lower == "muir glacier" || lower == "muirglacier")
+        return EVMC_BERLIN;
+    if (lower == "berlin")
+        return EVMC_BERLIN;
+    if (lower == "london")
+        return EVMC_LONDON;
+    if (lower == "paris" || lower == "merge")
+        return EVMC_PARIS;
+    if (lower == "shanghai")
+        return EVMC_SHANGHAI;
+    if (lower == "cancun")
+        return EVMC_CANCUN;
+    if (lower == "prague")
+        return EVMC_PRAGUE;
+    if (lower == "osaka")
+        return EVMC_OSAKA;
 
     // Unknown fork → default to latest
     return EVMC_CANCUN;

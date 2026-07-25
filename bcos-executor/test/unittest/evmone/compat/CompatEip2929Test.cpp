@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(FC_A_revision_pre_berlin_forces_cold)
     std::memset(key.bytes, 0x66, sizeof(key.bytes));
 
     BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_ISTANBUL), EVMC_ACCESS_COLD);
-    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, EVMC_BERLIN - 1), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.accessStorage(addr, key, static_cast<evmc_revision>(EVMC_BERLIN - 1)), EVMC_ACCESS_COLD);
 }
 
 BOOST_AUTO_TEST_CASE(FC_A_eip2929_warm_shared_across_call_depth)

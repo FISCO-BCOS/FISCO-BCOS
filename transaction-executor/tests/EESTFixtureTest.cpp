@@ -17,7 +17,6 @@
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-executor/src/Common.h"
-#include "bcos-executor/src/vm/VMInstance.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
