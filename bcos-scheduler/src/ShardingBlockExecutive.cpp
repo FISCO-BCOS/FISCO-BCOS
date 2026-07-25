@@ -5,6 +5,7 @@
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <tbb/parallel_for_each.h>
+#include <tbb/task_arena.h>
 
 using namespace bcos::scheduler;
 using namespace bcos::storage;
@@ -68,26 +69,25 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-    // Call preExecute sequentially (not via tbb::parallel_for_each) to
-    // prevent the calling thread (which may be an IOServicePool thread
-    // dispatched via the Strand in SchedulerImpl::executeBlock) from
-    // being used as a TBB worker and blocked inside preExecute()->
-    // wait_for().  On low-core machines (e.g. 2-3 core CI runners), the
-    // IOServicePool only has hardware_concurrency()+1 threads.  If one of
-    // them is consumed by a blocking wait_for inside a TBB task, the
-    // remaining threads may be insufficient to process the asynchronous
-    // preExecuteTransactions callbacks posted to the *same* IOServicePool,
-    // causing a permanent deadlock (timeout 30 s).
+    // Run preExecute in a dedicated tbb::task_arena with isolate() to
+    // achieve two levels of protection against the deadlock where
+    // preExecute()'s blocking wait_for() exhausts all TBB workers:
     //
-    // Sequential execution is safe here: each preExecute() blocks the
-    // calling thread in wait_for(), but the preExecuteTransactions work
-    // and its callbacks are processed by *other* threads in the
-    // IOServicePool, so the calling thread being blocked does not prevent
-    // forward progress.
-    for (auto& executorIt : m_dmcExecutors)
-    {
-        executorIt.second->preExecute();
-    }
+    // 1. A separate task_arena prevents preExecute from consuming the
+    //    default arena's workers, so the tbb::parallel_for inside the
+    //    asyncFillBlock callback (DAG preparation) is never starved.
+    //
+    // 2. tbb::this_task_arena::isolate() prevents the calling thread
+    //    (which may be an IOServicePool thread dispatched via the Strand)
+    //    from being stolen as a worker inside this arena, keeping it
+    //    free to service IOServicePool callbacks.
+    tbb::task_arena preExeArena;
+    preExeArena.execute([this] {
+        tbb::this_task_arena::isolate([this] {
+            tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
+                [](auto const& executorIt) { executorIt.second->preExecute(); });
+        });
+    });
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("ShardingBlockExecutive preExecute finish")
                          << LOG_KV("schedulerPrepareCost", schedulerPrepareCost)
