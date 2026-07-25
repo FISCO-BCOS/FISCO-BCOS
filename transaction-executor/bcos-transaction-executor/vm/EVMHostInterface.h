@@ -84,8 +84,8 @@ struct EVMHostInterface
             // registered in the parallel scheduler's read set, otherwise pure SSTORE
             // writes would create false RAW edges against any earlier writer of the
             // same slot.
-            auto existingValue = syncWait(hostContext.get(
-                key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER));
+            auto existingValue = syncWait(
+                hostContext.get(key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER));
             const bool existingIsZero = concepts::bytebuffer::equalTo(
                 existingValue.bytes, executor::EMPTY_EVM_BYTES32.bytes);
             if (newIsZero)

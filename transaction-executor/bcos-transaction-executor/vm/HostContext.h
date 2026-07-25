@@ -230,13 +230,12 @@ private:
         m_recipientAccount(getAccount(*this, this->message().recipient)),
         // Ethereum mode: use explicit revision if set, else toRevision.
         // BCOS mode: never downgrade below EVMC_CANCUN (pre-PR baseline).
-        m_revision(ledgerConfig.features().get(
-                       ledger::Features::Flag::feature_ethereum_executor) ?
-                       ledgerConfig.evmcRevision().value_or(bcos::executor::toRevision(
-                           ledgerConfig.features(), blockHeader.version())) :
-                       std::max(bcos::executor::toRevision(
-                                    ledgerConfig.features(), blockHeader.version()),
-                           EVMC_CANCUN)),
+        m_revision(
+            ledgerConfig.features().get(ledger::Features::Flag::feature_ethereum_executor) ?
+                ledgerConfig.evmcRevision().value_or(
+                    bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())) :
+                std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
+                    EVMC_CANCUN)),
         m_level(seq),
         m_web3Tx(web3Tx),
         m_eip2929Access(std::move(eip2929Access)),
@@ -461,10 +460,9 @@ public:
         task::syncWait(selfAccount.setBalance(u256{0}));
         task::syncWait(beneficiaryAccount.setBalance(newBenBalance));
 
-        HOST_CONTEXT_LOG(TRACE)
-            << "Ethereum SELFDESTRUCT (registered, refund eligible)"
-            << LOG_KV("addr", selfAddr) << LOG_KV("beneficiary", beneficiary)
-            << LOG_KV("balance", selfBalance);
+        HOST_CONTEXT_LOG(TRACE) << "Ethereum SELFDESTRUCT (registered, refund eligible)"
+                                << LOG_KV("addr", selfAddr) << LOG_KV("beneficiary", beneficiary)
+                                << LOG_KV("balance", selfBalance);
     }
 
     task::Task<void> prepare()
@@ -509,9 +507,8 @@ public:
             // FIB-91: checkAuth() moved inside try block so exceptions
             // trigger rollback/cleanup instead of bypassing it
             // Ethereum native mode skips BCOS-specific auth checks.
-            auto const isEthereumExec =
-                m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_ethereum_executor);
+            auto const isEthereumExec = m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::feature_ethereum_executor);
             if (!isEthereumExec && m_ledgerConfig.get().authCheckStatus() != 0U)
             {
                 HOST_CONTEXT_LOG(DEBUG)
@@ -529,26 +526,8 @@ public:
 
             if (!evmResult)
             {
-                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
-                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
-                // The 21000 base cost sits outside this formula and is handled separately.
-                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
-                {
-                    auto& msg = mutableMessage();
-                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
-                        bcos::bytesConstRef(msg.input_data, msg.input_size));
-                    if (msg.gas < calldataGas)
-                    {
-                        evmResult.emplace(
-                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
-                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
-                                "EIP-7623 calldata floor OOG", fixErrorHandling));
-                    }
-                    else
-                    {
-                        msg.gas -= calldataGas;
-                    }
-                }
+                // EIP-7623 calldata floor cost is handled centrally in
+                // TransactionExecutorImpl::computeTxIntrinsicCost() for Prague+.
 
                 // Transfer first, then proceed execute
                 if (m_ledgerConfig.get().features().get(
@@ -639,8 +618,7 @@ public:
         // Ethereum mode: stack overflow/underflow consume all gas but
         // don't revert state (Yellow Paper: exceptional halt, not revert).
         bool const isEthereumExec =
-            m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_ethereum_executor);
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
         bool const isStackError = (evmResult->status_code == EVMC_STACK_OVERFLOW ||
                                    evmResult->status_code == EVMC_STACK_UNDERFLOW);
         if (isEthereumExec && isStackError)
@@ -821,19 +799,17 @@ private:
                 auto existingNonce = co_await m_recipientAccount.nonce();
                 auto existingBalance = co_await m_recipientAccount.balance();
                 auto existingNonceVal = u256(existingNonce.value_or("0"));
-                if (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0 ||
-                    existingBalance != 0)
+                if (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0 || existingBalance != 0)
                 {
                     // Account already exists with non-empty state → collision
-                    co_return EVMCResult{
-                        evmc_result{.status_code = EVMC_FAILURE,
-                            .gas_left = 0,
-                            .gas_refund = 0,
-                            .output_data = nullptr,
-                            .output_size = 0,
-                            .release = nullptr,
-                            .create_address = ref.code_address,
-                            .padding = {}},
+                    co_return EVMCResult{evmc_result{.status_code = EVMC_FAILURE,
+                                             .gas_left = 0,
+                                             .gas_refund = 0,
+                                             .output_data = nullptr,
+                                             .output_size = 0,
+                                             .release = nullptr,
+                                             .create_address = ref.code_address,
+                                             .padding = {}},
                         protocol::TransactionStatus::ContractAddressAlreadyUsed};
                 }
             }
@@ -866,15 +842,14 @@ private:
             // --- EIP-3541: reject code starting with 0xEF (Ethereum mode, London+) ---
             if (isEthereum && m_revision >= EVMC_LONDON && !code.empty() && code[0] == 0xEF)
             {
-                co_return EVMCResult{
-                    evmc_result{.status_code = EVMC_CONTRACT_VALIDATION_FAILURE,
-                        .gas_left = 0,
-                        .gas_refund = 0,
-                        .output_data = nullptr,
-                        .output_size = 0,
-                        .release = nullptr,
-                        .create_address = ref.code_address,
-                        .padding = {}},
+                co_return EVMCResult{evmc_result{.status_code = EVMC_CONTRACT_VALIDATION_FAILURE,
+                                         .gas_left = 0,
+                                         .gas_refund = 0,
+                                         .output_data = nullptr,
+                                         .output_size = 0,
+                                         .release = nullptr,
+                                         .create_address = ref.code_address,
+                                         .padding = {}},
                     protocol::TransactionStatus::BadInstruction};
             }
 
@@ -884,15 +859,14 @@ private:
                 static constexpr size_t MAX_CODE_SIZE = 24576;
                 if (code.size() > MAX_CODE_SIZE)
                 {
-                    co_return EVMCResult{
-                        evmc_result{.status_code = EVMC_FAILURE,
-                            .gas_left = 0,
-                            .gas_refund = 0,
-                            .output_data = nullptr,
-                            .output_size = 0,
-                            .release = nullptr,
-                            .create_address = ref.code_address,
-                            .padding = {}},
+                    co_return EVMCResult{evmc_result{.status_code = EVMC_FAILURE,
+                                             .gas_left = 0,
+                                             .gas_refund = 0,
+                                             .output_data = nullptr,
+                                             .output_size = 0,
+                                             .release = nullptr,
+                                             .create_address = ref.code_address,
+                                             .padding = {}},
                         protocol::TransactionStatus::OutOfGas};
                 }
             }
@@ -912,8 +886,8 @@ private:
 
             // Code deposit cost: Ethereum = 200/byte, BCOS = VMSchedule().createDataGas
             result.gas_left -= isEthereum ?
-                static_cast<int64_t>(result.output_size) * 200 :
-                result.output_size * bcos::executor::VMSchedule().createDataGas;
+                                   static_cast<int64_t>(result.output_size) * 200 :
+                                   result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 
             // Track created address for EIP-6780 (selfdestruct only for same-tx creates)
@@ -1021,8 +995,7 @@ private:
         // Ethereum mode: intrinsic gas (including 21000 base) is already computed
         // by TransactionExecutorImpl::computeTxIntrinsicCost, and the EVM handles
         // the base cost internally — skip the extra deduction.
-        if (!m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_ethereum_executor))
+        if (!m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor))
         {
             consumeTransferGas(ref);
         }
@@ -1056,8 +1029,7 @@ private:
                 protocol::TransactionStatus::None};
         }
         // BCOS dynamic precompile redirect — skip in Ethereum native mode
-        if (!m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_ethereum_executor))
+        if (!m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor))
         {
             processDynamicPrecompiled();
         }

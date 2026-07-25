@@ -223,8 +223,7 @@ public:
     task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... tags)
     {
         auto rawValue = co_await m_storage.get().readOneRaw(
-            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)},
-            tags...);
+            executor_v1::StateKey{m_tableName, concepts::bytebuffer::toView(key.bytes)}, tags...);
         evmc_bytes32 value{};
         if (auto* entry = std::get_if<storage::Entry>(std::addressof(rawValue)))
         {

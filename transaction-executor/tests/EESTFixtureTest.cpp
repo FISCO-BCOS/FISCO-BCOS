@@ -25,8 +25,8 @@
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
-#include <boost/test/unit_test.hpp>
 #include <evmc/evmc.h>
+#include <boost/test/unit_test.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -49,8 +49,7 @@ public:
     bcostars::protocol::TransactionFactoryImpl transactionFactory{cryptoSuite};
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory{cryptoSuite};
     PrecompiledManager precompiledManager{cryptoSuite->hashImpl()};
-    TransactionExecutorImpl executor{
-        receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
+    TransactionExecutorImpl executor{receiptFactory, cryptoSuite->hashImpl(), precompiledManager};
     evmc_revision m_currentRevision = EVMC_CANCUN;
 
     EESTFixtureRunner()
@@ -125,9 +124,8 @@ public:
             if (!acc.nonce.empty() && acc.nonce != "0x" && acc.nonce != "0x0")
             {
                 auto nonceStr = test::hexToU256(acc.nonce).str(0, std::ios_base::dec);
-                task::syncWait([&]() -> task::Task<void> {
-                    co_await evmAccount.setNonce(nonceStr);
-                }());
+                task::syncWait(
+                    [&]() -> task::Task<void> { co_await evmAccount.setNonce(nonceStr); }());
             }
 
             // Set balance
@@ -136,9 +134,8 @@ public:
                 auto bal = test::hexToU256(acc.balance);
                 if (bal > 0)
                 {
-                    task::syncWait([&]() -> task::Task<void> {
-                        co_await evmAccount.setBalance(bal);
-                    }());
+                    task::syncWait(
+                        [&]() -> task::Task<void> { co_await evmAccount.setBalance(bal); }());
                 }
             }
 
@@ -151,8 +148,7 @@ public:
                     auto codeHash = cryptoSuite->hashImpl()->hash(
                         bytesConstRef(codeBytes.data(), codeBytes.size()));
                     task::syncWait([&]() -> task::Task<void> {
-                        co_await evmAccount.setCode(
-                            std::move(codeBytes), std::string{}, codeHash);
+                        co_await evmAccount.setCode(std::move(codeBytes), std::string{}, codeHash);
                     }());
                 }
             }
@@ -314,8 +310,7 @@ public:
 
     /// Verify post-state matches expected values.
     /// Returns pair of {passed, failures}.
-    std::pair<int, int> verifyPostState(
-        std::map<std::string, test::EESTAccount> const& expected)
+    std::pair<int, int> verifyPostState(std::map<std::string, test::EESTAccount> const& expected)
     {
         int passed = 0;
         int failed = 0;
@@ -343,9 +338,8 @@ public:
                     auto actualNonce = bcos::u256(storedNonce.value_or("0"));
                     if (expNonce != actualNonce)
                     {
-                        std::cerr << "  NONCE MISMATCH for " << addrHex
-                                  << ": expected " << expectedAcc.nonce
-                                  << ", got " << actualNonce << std::endl;
+                        std::cerr << "  NONCE MISMATCH for " << addrHex << ": expected "
+                                  << expectedAcc.nonce << ", got " << actualNonce << std::endl;
                         accPassed = false;
                     }
                 }
@@ -357,9 +351,8 @@ public:
                     auto expBal = test::hexToU256(expectedAcc.balance);
                     if (expBal != storedBal)
                     {
-                        std::cerr << "  BALANCE MISMATCH for " << addrHex
-                                  << ": expected " << expectedAcc.balance
-                                  << ", got " << storedBal << std::endl;
+                        std::cerr << "  BALANCE MISMATCH for " << addrHex << ": expected "
+                                  << expectedAcc.balance << ", got " << storedBal << std::endl;
                         accPassed = false;
                     }
                 }
@@ -377,8 +370,8 @@ public:
                     }
                     if (!codeMatch)
                     {
-                        std::cerr << "  CODE MISMATCH for " << addrHex
-                                  << ": expected " << expectedAcc.code << std::endl;
+                        std::cerr << "  CODE MISMATCH for " << addrHex << ": expected "
+                                  << expectedAcc.code << std::endl;
                         accPassed = false;
                     }
                 }
@@ -403,9 +396,8 @@ public:
                         std::string actualHex;
                         boost::algorithm::hex_lower(
                             storedVal.bytes, storedVal.bytes + 32, std::back_inserter(actualHex));
-                        std::cerr << "  STORAGE MISMATCH for " << addrHex
-                                  << " key " << key << ": expected " << val
-                                  << ", got 0x" << actualHex << std::endl;
+                        std::cerr << "  STORAGE MISMATCH for " << addrHex << " key " << key
+                                  << ": expected " << val << ", got 0x" << actualHex << std::endl;
                         accPassed = false;
                     }
                 }
@@ -438,8 +430,8 @@ public:
         auto blockHeader = buildBlockHeader(fixture.env);
 
         // Build transaction
-        auto tx = buildTransaction(
-            fixture.transaction, post.dataIndex, post.gasIndex, post.valueIndex);
+        auto tx =
+            buildTransaction(fixture.transaction, post.dataIndex, post.gasIndex, post.valueIndex);
 
         // Execute
         protocol::TransactionReceipt::Ptr receipt;
@@ -448,8 +440,8 @@ public:
 
         try
         {
-            receipt = task::syncWait(executor.executeTransaction(
-                storage, blockHeader, *tx, 0, ledgerConfig, false));
+            receipt = task::syncWait(
+                executor.executeTransaction(storage, blockHeader, *tx, 0, ledgerConfig, false));
         }
         catch (std::exception const& e)
         {
@@ -459,9 +451,10 @@ public:
 
         // Check expectation
         bool expectsSuccess = post.expectException.empty();
-        bool gotSuccess = !executionThrew && receipt &&
-            (receipt->status() == 0 || receipt->status() == static_cast<int32_t>(
-                protocol::TransactionStatus::None));
+        bool gotSuccess =
+            !executionThrew && receipt &&
+            (receipt->status() == 0 ||
+                receipt->status() == static_cast<int32_t>(protocol::TransactionStatus::None));
 
         if (expectsSuccess && !gotSuccess)
         {
@@ -475,9 +468,8 @@ public:
 
         if (!expectsSuccess && gotSuccess)
         {
-            std::cerr << "FAIL: " << fixture.name << " [" << forkName
-                      << "] expected exception '" << post.expectException
-                      << "', got success" << std::endl;
+            std::cerr << "FAIL: " << fixture.name << " [" << forkName << "] expected exception '"
+                      << post.expectException << "', got success" << std::endl;
             return false;
         }
 
@@ -491,9 +483,8 @@ public:
 
         if (!stateOk)
         {
-            std::cerr << "FAIL: " << fixture.name << " [" << forkName
-                      << "] " << passed << " accounts ok, " << failed
-                      << " mismatched" << std::endl;
+            std::cerr << "FAIL: " << fixture.name << " [" << forkName << "] " << passed
+                      << " accounts ok, " << failed << " mismatched" << std::endl;
             return false;
         }
 
@@ -513,16 +504,14 @@ BOOST_AUTO_TEST_CASE(runEESTFixtures)
     if (!fixtureDir)
     {
         BOOST_TEST_MESSAGE("EEST_FIXTURE_DIR not set, skipping EEST fixture tests");
-        BOOST_TEST_MESSAGE(
-            "To run: EEST_FIXTURE_DIR=/path/to/fixtures ./test-eest-fixtures");
+        BOOST_TEST_MESSAGE("To run: EEST_FIXTURE_DIR=/path/to/fixtures ./test-eest-fixtures");
         return;
     }
 
     std::string dirPath(fixtureDir);
     if (!fs::exists(dirPath) || !fs::is_directory(dirPath))
     {
-        BOOST_TEST_MESSAGE("EEST_FIXTURE_DIR '" << dirPath
-                                                << "' does not exist, skipping");
+        BOOST_TEST_MESSAGE("EEST_FIXTURE_DIR '" << dirPath << "' does not exist, skipping");
         return;
     }
 
@@ -573,9 +562,8 @@ BOOST_AUTO_TEST_CASE(runEESTFixtures)
         }
     }
 
-    BOOST_TEST_MESSAGE("EEST fixture results: " << totalPassed << "/" << totalTests
-                                                << " passed, " << totalFailed
-                                                << " failed");
+    BOOST_TEST_MESSAGE("EEST fixture results: " << totalPassed << "/" << totalTests << " passed, "
+                                                << totalFailed << " failed");
 
     BOOST_CHECK_EQUAL(totalFailed, 0);
 }

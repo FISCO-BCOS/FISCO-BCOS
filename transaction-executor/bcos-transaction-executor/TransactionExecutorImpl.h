@@ -13,10 +13,10 @@
 #include "precompiled/PrecompiledManager.h"
 #include "vm/HostContext.h"
 #include <evmc/evmc.h>
-#include <algorithm>
-#include <array>
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
+#include <algorithm>
+#include <array>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -88,8 +88,8 @@ public:
         const bool isCreate = tx.to().empty();
 
         // EIP-2028: data tokens (4 gas/nonzero-byte post-Istanbul, 17 pre)
-        const size_t numZero = static_cast<size_t>(
-            std::count(input.begin(), input.end(), static_cast<uint8_t>(0)));
+        const size_t numZero =
+            static_cast<size_t>(std::count(input.begin(), input.end(), static_cast<uint8_t>(0)));
         const size_t numNonzero = input.size() - numZero;
         const size_t nonzeroMult = rev >= EVMC_ISTANBUL ? 4 : 17;
         const auto numTokens = static_cast<int64_t>(nonzeroMult * numNonzero + numZero);
@@ -99,12 +99,11 @@ public:
 
         // EIP-3860: initcode word cost (Shanghai+)
         const auto initcodeCost =
-            (isCreate && rev >= EVMC_SHANGHAI)
-                ? INITCODE_WORD_COST * static_cast<int64_t>((input.size() + 31) / 32)
-                : int64_t{0};
+            (isCreate && rev >= EVMC_SHANGHAI) ?
+                INITCODE_WORD_COST * static_cast<int64_t>((input.size() + 31) / 32) :
+                int64_t{0};
 
-        const auto intrinsic =
-            TX_BASE_COST + createCost + dataCost + accessListCost + initcodeCost;
+        const auto intrinsic = TX_BASE_COST + createCost + dataCost + accessListCost + initcodeCost;
 
         // EIP-7623 floor (Prague+): max(intrinsic, base + 10 * tokens)
         const auto minCost =
@@ -121,8 +120,8 @@ public:
     inline static const std::array<uint8_t, 3> DELEGATION_MAGIC = {0xef, 0x01, 0x00};
     // secp256k1n / 2 (EIP-2 s-value upper bound, from bcos-evm constant)
     // NOLINTNEXTLINE
-    inline static const u256 SECP256K1N_OVER_2 = u256{
-        "0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0"};
+    inline static const u256 SECP256K1N_OVER_2 =
+        u256{"0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0"};
 
     /// Process EIP-7702 authorization list and return total delegation_refund.
     /// Each authorization delegates an authority account's code to 0xef0100 || auth.address.
@@ -135,8 +134,7 @@ public:
         protocol::Transaction const& tx, uint64_t chainId, evmc_revision rev,
         const ledger::Features& features, crypto::Hash const& hashImpl)
     {
-        if (rev < EVMC_PRAGUE ||
-            !features.get(ledger::Features::Flag::feature_ethereum_executor))
+        if (rev < EVMC_PRAGUE || !features.get(ledger::Features::Flag::feature_ethereum_executor))
         {
             co_return 0;
         }
@@ -172,8 +170,7 @@ public:
             if (auth.s > SECP256K1N_OVER_2)
                 continue;
 
-            auto const authorityEvmAddr =
-                toEvmC(auth.signer);
+            auto const authorityEvmAddr = toEvmC(auth.signer);
             ledger::account::EVMAccount authorityAccount(storage, authorityEvmAddr,
                 features.get(ledger::Features::Flag::feature_raw_address));
 
@@ -188,7 +185,8 @@ public:
             if (codeHash != EMPTY_CODE_HASH)
             {
                 auto codeEntry = co_await authorityAccount.code();
-                if (codeEntry && static_cast<size_t>(codeEntry->size()) >= DELEGATION_MAGIC.size() &&
+                if (codeEntry &&
+                    static_cast<size_t>(codeEntry->size()) >= DELEGATION_MAGIC.size() &&
                     static_cast<uint8_t>(codeEntry->get()[0]) == DELEGATION_MAGIC[0] &&
                     static_cast<uint8_t>(codeEntry->get()[1]) == DELEGATION_MAGIC[1] &&
                     static_cast<uint8_t>(codeEntry->get()[2]) == DELEGATION_MAGIC[2])
@@ -221,26 +219,23 @@ public:
                 bcos::bytes delegationCode(DELEGATION_MAGIC.begin(), DELEGATION_MAGIC.end());
                 delegationCode.insert(
                     delegationCode.end(), auth.address.begin(), auth.address.end());
-                auto newCodeHash = hashImpl.hash(bcos::bytesConstRef(
-                    delegationCode.data(), delegationCode.size()));
+                auto newCodeHash = hashImpl.hash(
+                    bcos::bytesConstRef(delegationCode.data(), delegationCode.size()));
                 co_await authorityAccount.setCode(
                     std::move(delegationCode), std::string{}, newCodeHash);
             }
             else
             {
-                co_await authorityAccount.setCode(
-                    bcos::bytes{}, std::string{}, EMPTY_CODE_HASH);
+                co_await authorityAccount.setCode(bcos::bytes{}, std::string{}, EMPTY_CODE_HASH);
             }
 
             // 9. Bump authority nonce
             auto newNonce = existingNonce + 1;
-            co_await authorityAccount.setNonce(
-                newNonce.template convert_to<std::string>());
+            co_await authorityAccount.setNonce(newNonce.template convert_to<std::string>());
         }
 
         TRANSACTION_EXECUTOR_LOG(DEBUG)
-            << "EIP-7702: authorization list processed"
-            << LOG_KV("count", authList.size())
+            << "EIP-7702: authorization list processed" << LOG_KV("count", authList.size())
             << LOG_KV("delegationRefund", delegationRefund);
 
         co_return delegationRefund;
@@ -293,10 +288,10 @@ public:
                 m_startSavepoint(m_rollbackableStorage.current()),
                 m_rollbackableTransientStorage(m_transientStorage),
                 m_call(call),
-                m_gasLimit(ledgerConfig.features().get(
-                               ledger::Features::Flag::feature_ethereum_executor) ?
-                               transaction.gasLimit() :
-                               computeEffectiveGasLimit(transaction, ledgerConfig)),
+                m_gasLimit(
+                    ledgerConfig.features().get(ledger::Features::Flag::feature_ethereum_executor) ?
+                        transaction.gasLimit() :
+                        computeEffectiveGasLimit(transaction, ledgerConfig)),
                 m_origin((!m_transaction.get().sender().empty() &&
                              m_transaction.get().sender().size() == sizeof(evmc_address)) ?
                              *(evmc_address*)m_transaction.get().sender().data() :
@@ -326,7 +321,8 @@ public:
         task::Task<protocol::TransactionReceipt::Ptr> executeStep()
         {
             auto const& features = m_data->m_ledgerConfig.get().features();
-            auto const isEthereumMode = features.get(ledger::Features::Flag::feature_ethereum_executor);
+            auto const isEthereumMode =
+                features.get(ledger::Features::Flag::feature_ethereum_executor);
 
             if constexpr (step == 0)
             {
@@ -347,12 +343,11 @@ public:
                     auto storageNonce = u256(nonceInStorage.value_or("0"));
                     if (storageNonce != m_data->m_nonce)
                     {
-                        TRANSACTION_EXECUTOR_LOG(ERROR)
-                            << "Ethereum mode: nonce mismatch"
-                            << LOG_KV("storageNonce", storageNonce)
-                            << LOG_KV("txNonce", m_data->m_nonce);
-                        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                            -1, "Nonce mismatch: tx.nonce != storage.nonce"));
+                        TRANSACTION_EXECUTOR_LOG(ERROR) << "Ethereum mode: nonce mismatch"
+                                                        << LOG_KV("storageNonce", storageNonce)
+                                                        << LOG_KV("txNonce", m_data->m_nonce);
+                        BOOST_THROW_EXCEPTION(
+                            BCOS_ERROR(-1, "Nonce mismatch: tx.nonce != storage.nonce"));
                     }
 
                     // 2. EIP-3607: sender must be an EOA
@@ -361,8 +356,7 @@ public:
                         static const bcos::h256 EMPTY_CODE_HASH{};
                         if (codeHash != EMPTY_CODE_HASH)
                         {
-                            BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                                -2, "EIP-3607: sender is not an EOA"));
+                            BOOST_THROW_EXCEPTION(BCOS_ERROR(-2, "EIP-3607: sender is not an EOA"));
                         }
                     }
 
@@ -372,8 +366,8 @@ public:
                         static constexpr size_t MAX_INITCODE_SIZE = 49152;  // 2 * 24576
                         if (tx.input().size() > MAX_INITCODE_SIZE)
                         {
-                            BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                                -3, "EIP-3860: initcode size exceeds 49152 bytes"));
+                            BOOST_THROW_EXCEPTION(
+                                BCOS_ERROR(-3, "EIP-3860: initcode size exceeds 49152 bytes"));
                         }
                     }
 
@@ -383,21 +377,18 @@ public:
                     int64_t accessListCost = 0;
                     if (m_data->m_web3AccessListResolved.accessList)
                     {
-                        for (auto const& [_, keys] :
-                            *m_data->m_web3AccessListResolved.accessList)
-                            accessListCost += ACCESS_LIST_ADDRESS_COST +
+                        for (auto const& [_, keys] : *m_data->m_web3AccessListResolved.accessList)
+                            accessListCost +=
+                                ACCESS_LIST_ADDRESS_COST +
                                 static_cast<int64_t>(keys.size()) * ACCESS_LIST_STORAGE_KEY_COST;
                     }
-                    auto const intrinsicGas =
-                        computeTxIntrinsicCost(rev, tx, accessListCost);
+                    auto const intrinsicGas = computeTxIntrinsicCost(rev, tx, accessListCost);
                     if (tx.gasLimit() < intrinsicGas)
                     {
-                        TRANSACTION_EXECUTOR_LOG(ERROR)
-                            << "Ethereum mode: intrinsic gas too low"
-                            << LOG_KV("txGasLimit", tx.gasLimit())
-                            << LOG_KV("intrinsicGas", intrinsicGas);
-                        BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                            -4, "Intrinsic gas too low"));
+                        TRANSACTION_EXECUTOR_LOG(ERROR) << "Ethereum mode: intrinsic gas too low"
+                                                        << LOG_KV("txGasLimit", tx.gasLimit())
+                                                        << LOG_KV("intrinsicGas", intrinsicGas);
+                        BOOST_THROW_EXCEPTION(BCOS_ERROR(-4, "Intrinsic gas too low"));
                     }
 
                     // 5. Bump nonce (Ethereum: before gas deduction; rolled back on failure)
@@ -412,7 +403,8 @@ public:
                             cid.has_value())
                         {
                             // Extract lowest 8 bytes of chain ID (256-bit → 64-bit)
-                            chainId = cid->bytes[24] | (static_cast<uint64_t>(cid->bytes[25]) << 8) |
+                            chainId = cid->bytes[24] |
+                                      (static_cast<uint64_t>(cid->bytes[25]) << 8) |
                                       (static_cast<uint64_t>(cid->bytes[26]) << 16) |
                                       (static_cast<uint64_t>(cid->bytes[27]) << 24) |
                                       (static_cast<uint64_t>(cid->bytes[28]) << 32) |
@@ -420,9 +412,9 @@ public:
                                       (static_cast<uint64_t>(cid->bytes[30]) << 48) |
                                       (static_cast<uint64_t>(cid->bytes[31]) << 56);
                         }
-                        m_data->m_delegationRefund = co_await processAuthorizationList(
-                            m_data->m_rollbackableStorage, tx, chainId, rev, features,
-                            *m_data->m_executor.get().m_hashImpl);
+                        m_data->m_delegationRefund =
+                            co_await processAuthorizationList(m_data->m_rollbackableStorage, tx,
+                                chainId, rev, features, *m_data->m_executor.get().m_hashImpl);
                     }
                     // Update savepoint after authorization-list state changes
                     m_data->m_startSavepoint = m_data->m_rollbackableStorage.current();
@@ -435,14 +427,12 @@ public:
                 {
                     auto const& blockHeader = m_data->m_blockHeader.get();
                     auto const& tx = m_data->m_transaction.get();
-                    auto const rev = effectiveRevision(
-                        m_data->m_ledgerConfig.get(), blockHeader);
+                    auto const rev = effectiveRevision(m_data->m_ledgerConfig.get(), blockHeader);
 
                     // Compute effective gas price
                     // EIP-1559: effectiveGasPrice = baseFee + priorityFee
                     // Legacy:   effectiveGasPrice = gasPrice
-                    auto blockGasPrice =
-                        u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
+                    auto blockGasPrice = u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
                     auto baseFee = (rev >= EVMC_LONDON) ? blockGasPrice : u256{0};
                     u256 effectiveGasPrice;
                     u256 priorityGasPrice;
@@ -450,8 +440,7 @@ public:
                     {
                         // EIP-1559 typed transaction (type 2)
                         auto maxGasPrice = tx.maxFeePerGas().value();
-                        priorityGasPrice = std::min(
-                            tx.maxPriorityFeePerGas().value_or(u256{0}),
+                        priorityGasPrice = std::min(tx.maxPriorityFeePerGas().value_or(u256{0}),
                             maxGasPrice > baseFee ? maxGasPrice - baseFee : u256{0});
                         effectiveGasPrice = baseFee + priorityGasPrice;
                     }
@@ -459,8 +448,8 @@ public:
                     {
                         // Legacy transaction: effectiveGasPrice = gasPrice
                         effectiveGasPrice = tx.gasPrice().value_or(u256{0});
-                        priorityGasPrice = effectiveGasPrice > baseFee ?
-                            effectiveGasPrice - baseFee : u256{0};
+                        priorityGasPrice =
+                            effectiveGasPrice > baseFee ? effectiveGasPrice - baseFee : u256{0};
                     }
 
                     if (!m_data->m_call && effectiveGasPrice > 0)
@@ -468,19 +457,17 @@ public:
                         auto const txMaxCost =
                             u256(m_data->m_gasLimit) * effectiveGasPrice + u256(tx.value());
                         auto& evmcMessage = m_data->m_hostContext.message();
-                        auto senderAccount =
-                            getAccount(m_data->m_hostContext, evmcMessage.sender);
+                        auto senderAccount = getAccount(m_data->m_hostContext, evmcMessage.sender);
                         auto senderBalance = co_await senderAccount.balance();
 
                         if (senderBalance < txMaxCost)
                         {
-                            TRANSACTION_EXECUTOR_LOG(ERROR)
-                                << "Ethereum mode: insufficient balance"
-                                << LOG_KV("balance", senderBalance)
-                                << LOG_KV("txMaxCost", txMaxCost);
-                            BOOST_THROW_EXCEPTION(protocol::NotEnoughCashError{}
-                                << errinfo_comment(
-                                       "Insufficient funds for gas * price + value"));
+                            TRANSACTION_EXECUTOR_LOG(ERROR) << "Ethereum mode: insufficient balance"
+                                                            << LOG_KV("balance", senderBalance)
+                                                            << LOG_KV("txMaxCost", txMaxCost);
+                            BOOST_THROW_EXCEPTION(
+                                protocol::NotEnoughCashError{}
+                                << errinfo_comment("Insufficient funds for gas * price + value"));
                         }
 
                         // Pre-deduct max gas cost
@@ -506,22 +493,24 @@ public:
                     }
 
                     // Execute EVM
-                    m_data->m_evmcResult.emplace(
-                        co_await m_data->m_hostContext.execute());
+                    m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
 
                     // Post-execution settlement: gasLeft already accounts for intrinsic
                     auto& evmcResult = *m_data->m_evmcResult;
-                    // EVM stack overflow/underflow: consume all gas, receipt=success
-                    if (isEthereumMode &&
-                        (evmcResult.status_code == EVMC_STACK_OVERFLOW ||
-                         evmcResult.status_code == EVMC_STACK_UNDERFLOW ||
-                         evmcResult.status_code == EVMC_OUT_OF_GAS))
+                    // Ethereum mode: stack overflow/underflow/OOG/revert at top-level
+                    // produce a successful receipt (Yellow Paper, Ethereum consensus).
+                    // The revert output is preserved in the receipt for callers.
+                    if (isEthereumMode && (evmcResult.status_code == EVMC_STACK_OVERFLOW ||
+                                              evmcResult.status_code == EVMC_STACK_UNDERFLOW ||
+                                              evmcResult.status_code == EVMC_OUT_OF_GAS ||
+                                              evmcResult.status_code == EVMC_REVERT))
                     {
                         m_data->m_evmcResult->status = protocol::TransactionStatus::None;
                     }
                     // gasUsed = (gasLimit - intrinsic) - gasLeft + intrinsic = gasLimit - gasLeft
                     auto gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
-                    if (evmcResult.status_code == EVMC_SUCCESS || evmcResult.status_code == EVMC_REVERT)
+                    if (evmcResult.status_code == EVMC_SUCCESS ||
+                        evmcResult.status_code == EVMC_REVERT)
                     {
                         // Cap at gasLimit (handle edge case where EVM over-uses)
                         gasUsed = std::min(gasUsed, m_data->m_gasLimit);
@@ -532,12 +521,11 @@ public:
                         // EIP-3529: gas refund with max_refund_quotient
                         static constexpr auto MAX_REFUND_QUOTIENT_LONDON = 5;
                         static constexpr auto MAX_REFUND_QUOTIENT_PRE_LONDON = 2;
-                        auto const maxRefundQuotient =
-                            rev >= EVMC_LONDON ? MAX_REFUND_QUOTIENT_LONDON
-                                               : MAX_REFUND_QUOTIENT_PRE_LONDON;
-                        auto refund =
-                            std::min(m_data->m_delegationRefund + evmcResult.gas_refund,
-                                gasUsed / maxRefundQuotient);
+                        auto const maxRefundQuotient = rev >= EVMC_LONDON ?
+                                                           MAX_REFUND_QUOTIENT_LONDON :
+                                                           MAX_REFUND_QUOTIENT_PRE_LONDON;
+                        auto refund = std::min(m_data->m_delegationRefund + evmcResult.gas_refund,
+                            gasUsed / maxRefundQuotient);
                         gasUsed -= refund;
 
                         m_data->m_gasUsed = gasUsed;
@@ -562,11 +550,10 @@ public:
                             auto const coinbaseBytes = m_data->m_blockHeader.get().coinbase();
                             if (coinbaseBytes.size() == sizeof(evmc_address))
                             {
-                                std::copy(coinbaseBytes.begin(), coinbaseBytes.end(),
-                                    coinbaseAddr.bytes);
+                                std::copy(
+                                    coinbaseBytes.begin(), coinbaseBytes.end(), coinbaseAddr.bytes);
                             }
-                            auto coinbaseAccount =
-                                getAccount(m_data->m_hostContext, coinbaseAddr);
+                            auto coinbaseAccount = getAccount(m_data->m_hostContext, coinbaseAddr);
                             auto coinbaseBalance = co_await coinbaseAccount.balance();
                             co_await coinbaseAccount.setBalance(
                                 coinbaseBalance + u256(gasUsed) * priorityGasPrice);
@@ -585,8 +572,7 @@ public:
                         evmcResult.status_code != EVMC_STACK_OVERFLOW &&
                         evmcResult.status_code != EVMC_STACK_UNDERFLOW)
                     {
-                        co_await m_data->m_rollbackableStorage.rollback(
-                            m_data->m_startSavepoint);
+                        co_await m_data->m_rollbackableStorage.rollback(m_data->m_startSavepoint);
                     }
                 }
                 else
@@ -594,8 +580,7 @@ public:
                     auto updated = co_await updateNonce();
                     if (updated)
                     {
-                        m_data->m_startSavepoint =
-                            m_data->m_rollbackableStorage.current();
+                        m_data->m_startSavepoint = m_data->m_rollbackableStorage.current();
                     }
 
                     if (const auto gasPrice =
@@ -610,15 +595,13 @@ public:
                         {
                             co_return {};
                         }
-                        m_data->m_evmcResult.emplace(
-                            co_await m_data->m_hostContext.execute());
+                        m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
                         co_await refundGas();
                     }
                     else
                     {
                         // Legacy path
-                        m_data->m_evmcResult.emplace(
-                            co_await m_data->m_hostContext.execute());
+                        m_data->m_evmcResult.emplace(co_await m_data->m_hostContext.execute());
                         co_await consumeBalance();
                     }
                 }
