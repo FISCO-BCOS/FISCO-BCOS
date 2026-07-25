@@ -68,9 +68,26 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-    auto self = shared_from_this();
-    tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
-        [self](auto const& executorIt) { executorIt.second->preExecute(); });
+    // Call preExecute sequentially (not via tbb::parallel_for_each) to
+    // prevent the calling thread (which may be an IOServicePool thread
+    // dispatched via the Strand in SchedulerImpl::executeBlock) from
+    // being used as a TBB worker and blocked inside preExecute()->
+    // wait_for().  On low-core machines (e.g. 2-3 core CI runners), the
+    // IOServicePool only has hardware_concurrency()+1 threads.  If one of
+    // them is consumed by a blocking wait_for inside a TBB task, the
+    // remaining threads may be insufficient to process the asynchronous
+    // preExecuteTransactions callbacks posted to the *same* IOServicePool,
+    // causing a permanent deadlock (timeout 30 s).
+    //
+    // Sequential execution is safe here: each preExecute() blocks the
+    // calling thread in wait_for(), but the preExecuteTransactions work
+    // and its callbacks are processed by *other* threads in the
+    // IOServicePool, so the calling thread being blocked does not prevent
+    // forward progress.
+    for (auto& executorIt : m_dmcExecutors)
+    {
+        executorIt.second->preExecute();
+    }
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("ShardingBlockExecutive preExecute finish")
                          << LOG_KV("schedulerPrepareCost", schedulerPrepareCost)
