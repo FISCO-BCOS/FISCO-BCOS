@@ -81,7 +81,7 @@ void ShardingBlockExecutive::prepare()
     //    (which may be an IOServicePool thread dispatched via the Strand)
     //    from being stolen as a worker inside this arena, keeping it
     //    free to service IOServicePool callbacks.
-    tbb::task_arena preExeArena;
+    static tbb::task_arena preExeArena;
     preExeArena.execute([this] {
         tbb::this_task_arena::isolate([this] {
             tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
