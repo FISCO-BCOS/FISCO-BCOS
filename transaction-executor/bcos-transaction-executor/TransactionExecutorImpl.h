@@ -490,13 +490,42 @@ public:
                             "0x" + effectiveGasPrice.str(256, std::ios_base::hex);
                     }
 
+                    // bcos-evm pattern: pre-deduct intrinsic from EVM gas budget
+                    // so evmone sees correct remaining gas (GAS opcode, OOG detection).
+                    {
+                        auto const intrinsicGas = computeTxIntrinsicCost(rev, tx, 0);
+                        auto& msg = m_data->m_hostContext.mutableMessage();
+                        if (msg.gas <= intrinsicGas)
+                        {
+                            msg.gas = 0;
+                        }
+                        else
+                        {
+                            msg.gas -= intrinsicGas;
+                        }
+                    }
+
                     // Execute EVM
                     m_data->m_evmcResult.emplace(
                         co_await m_data->m_hostContext.execute());
 
-                    // Post-execution settlement
+                    // Post-execution settlement: gasLeft already accounts for intrinsic
                     auto& evmcResult = *m_data->m_evmcResult;
+                    // EVM stack overflow/underflow: consume all gas, receipt=success
+                    if (isEthereumMode &&
+                        (evmcResult.status_code == EVMC_STACK_OVERFLOW ||
+                         evmcResult.status_code == EVMC_STACK_UNDERFLOW ||
+                         evmcResult.status_code == EVMC_OUT_OF_GAS))
+                    {
+                        m_data->m_evmcResult->status = protocol::TransactionStatus::None;
+                    }
+                    // gasUsed = (gasLimit - intrinsic) - gasLeft + intrinsic = gasLimit - gasLeft
                     auto gasUsed = m_data->m_gasLimit - evmcResult.gas_left;
+                    if (evmcResult.status_code == EVMC_SUCCESS || evmcResult.status_code == EVMC_REVERT)
+                    {
+                        // Cap at gasLimit (handle edge case where EVM over-uses)
+                        gasUsed = std::min(gasUsed, m_data->m_gasLimit);
+                    }
 
                     if (!m_data->m_call && effectiveGasPrice > 0)
                     {
@@ -510,13 +539,6 @@ public:
                             std::min(m_data->m_delegationRefund + evmcResult.gas_refund,
                                 gasUsed / maxRefundQuotient);
                         gasUsed -= refund;
-
-                        // Ethereum intrinsic gas: the EVM internally deducts intrinsic gas
-                        // before execution, so actual gasUsed = intrinsic + executionGas.
-                        // Since BCOS's EVM starts with full gasLimit (intrinsic not
-                        // pre-deducted), we add it here to match Ethereum's gas accounting.
-                        auto const intrinsicGas = computeTxIntrinsicCost(rev, tx, 0);
-                        gasUsed += intrinsicGas;
 
                         m_data->m_gasUsed = gasUsed;
 
@@ -557,8 +579,11 @@ public:
 
                     // On EVM failure (non-success, non-revert), rollback ALL
                     // state including the nonce bump done in step 0.
+                    // Ethereum mode: stack overflow/underflow don't revert.
                     if (evmcResult.status_code != EVMC_SUCCESS &&
-                        evmcResult.status_code != EVMC_REVERT)
+                        evmcResult.status_code != EVMC_REVERT &&
+                        evmcResult.status_code != EVMC_STACK_OVERFLOW &&
+                        evmcResult.status_code != EVMC_STACK_UNDERFLOW)
                     {
                         co_await m_data->m_rollbackableStorage.rollback(
                             m_data->m_startSavepoint);

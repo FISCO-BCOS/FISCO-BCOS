@@ -468,6 +468,7 @@ public:
             std::cerr << "FAIL: " << fixture.name << " [" << forkName
                       << "] expected success, got failure"
                       << (executionThrew ? " (exception: " + evmError + ")" : "")
+                      << (receipt ? " status=" + std::to_string(receipt->status()) : "")
                       << std::endl;
             return false;
         }

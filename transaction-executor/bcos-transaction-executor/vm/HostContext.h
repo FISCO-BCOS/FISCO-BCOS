@@ -636,7 +636,19 @@ public:
                 EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
-        if (evmResult->status_code != EVMC_SUCCESS)
+        // Ethereum mode: stack overflow/underflow consume all gas but
+        // don't revert state (Yellow Paper: exceptional halt, not revert).
+        bool const isEthereumExec =
+            m_ledgerConfig.get().features().get(
+                ledger::Features::Flag::feature_ethereum_executor);
+        bool const isStackError = (evmResult->status_code == EVMC_STACK_OVERFLOW ||
+                                   evmResult->status_code == EVMC_STACK_UNDERFLOW);
+        if (isEthereumExec && isStackError)
+        {
+            // Don't rollback — consume all gas but keep state
+            evmResult->gas_left = 0;
+        }
+        else if (evmResult->status_code != EVMC_SUCCESS)
         {
             co_await m_rollbackableStorage.get().rollback(savepoint);
             co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
@@ -800,7 +812,9 @@ private:
         // --- EIP-7610: create collision check (Ethereum mode) ---
         if (isEthereum)
         {
-            if (co_await m_recipientAccount.exists())
+            // EIP-161 (Spurious Dragon): empty accounts don't exist.
+            // Use existsEthereum() to skip accounts with nonce=0, balance=0, no code.
+            if (co_await m_recipientAccount.existsEthereum())
             {
                 auto codeHash = co_await m_recipientAccount.codeHash();
                 static const bcos::h256 EMPTY_CODE_HASH{};
