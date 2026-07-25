@@ -5,7 +5,8 @@
 #include <bcos-framework/executor/ExecuteError.h>
 #include <bcos-table/src/KeyPageStorage.h>
 #include <tbb/parallel_for_each.h>
-#include <tbb/task_arena.h>
+#include <future>
+#include <thread>
 
 using namespace bcos::scheduler;
 using namespace bcos::storage;
@@ -69,25 +70,49 @@ void ShardingBlockExecutive::prepare()
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("dmcExecutor try to preExecute");
 
-    // Run preExecute in a dedicated tbb::task_arena with isolate() to
-    // achieve two levels of protection against the deadlock where
-    // preExecute()'s blocking wait_for() exhausts all TBB workers:
+    // Use std::async (OS threads) instead of TBB to parallelize preExecute
+    // calls.  Each preExecute() does a blocking wait_for() which would
+    // starve TBB's global worker pool on low-core machines.  When all TBB
+    // workers are blocked, the tbb::parallel_for inside prepareDagFlow
+    // (called from the executor's preExecuteTransactions callback) can never
+    // execute, causing a cross-arena deadlock:
     //
-    // 1. A separate task_arena prevents preExecute from consuming the
-    //    default arena's workers, so the tbb::parallel_for inside the
-    //    asyncFillBlock callback (DAG preparation) is never starved.
+    //   TBB workers  ──wait_for──▶  promise ──set_value──▶ IO callback
+    //       ▲                                               │
+    //       └──── tbb::parallel_for (needs TBB worker) ─────┘
     //
-    // 2. tbb::this_task_arena::isolate() prevents the calling thread
-    //    (which may be an IOServicePool thread dispatched via the Strand)
-    //    from being stolen as a worker inside this arena, keeping it
-    //    free to service IOServicePool callbacks.
-    static tbb::task_arena preExeArena;
-    preExeArena.execute([this] {
-        tbb::this_task_arena::isolate([this] {
-            tbb::parallel_for_each(m_dmcExecutors.begin(), m_dmcExecutors.end(),
-                [](auto const& executorIt) { executorIt.second->preExecute(); });
-        });
-    });
+    // By using OS threads for the blocking waits, TBB workers remain
+    // available for the DAG preparation path.
+    {
+        size_t const executorCount = m_dmcExecutors.size();
+        size_t const maxParallel = std::max<size_t>(
+            1, std::min<size_t>(executorCount, std::thread::hardware_concurrency()));
+        std::vector<std::future<void>> preExeFutures;
+        preExeFutures.reserve(executorCount);
+
+        // Process executors in batches of maxParallel to limit thread
+        // creation while keeping reasonable parallelism.
+        auto it = m_dmcExecutors.begin();
+        auto const end = m_dmcExecutors.end();
+        while (it != end)
+        {
+            auto batchEnd = it;
+            size_t batchSize = 0;
+            while (batchEnd != end && batchSize < maxParallel)
+            {
+                preExeFutures.emplace_back(std::async(
+                    std::launch::async, [executor = batchEnd->second] { executor->preExecute(); }));
+                ++batchEnd;
+                ++batchSize;
+            }
+            // Wait for this batch to finish before launching the next one
+            for (size_t i = preExeFutures.size() - batchSize; i < preExeFutures.size(); ++i)
+            {
+                preExeFutures[i].wait();
+            }
+            it = batchEnd;
+        }
+    }
     SCHEDULER_LOG(TRACE) << BLOCK_NUMBER(number()) << LOG_BADGE("Sharding")
                          << LOG_DESC("ShardingBlockExecutive preExecute finish")
                          << LOG_KV("schedulerPrepareCost", schedulerPrepareCost)
