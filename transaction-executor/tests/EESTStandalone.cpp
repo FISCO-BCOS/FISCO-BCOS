@@ -870,8 +870,7 @@ public:
                 std::copy(HISTORY_STORAGE_ADDR_BYTES.begin(),
                     HISTORY_STORAGE_ADDR_BYTES.end(), historyAddr.bytes);
 
-                // The genesis block hash is the parent of the first block.
-                // Store it at slot 0 (block number 1 means parent block 0 → slot 0).
+                // Store genesis block hash at slot 0 for BLOCKHASH access.
                 auto genesisHashHex = fixture.genesisBlockHeader.hash;
                 if (!genesisHashHex.empty())
                 {
