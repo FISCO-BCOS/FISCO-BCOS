@@ -87,6 +87,42 @@ struct EESTFixture
     int64_t chainId = 1;
 };
 
+// --- Blockchain test structures (EEST v5.4.0) ---
+
+/// Simplified block header for blockchain tests.
+struct EESTBlockHeader
+{
+    std::string coinbase;
+    std::string gasLimit;
+    std::string number;
+    std::string timestamp;
+    std::string difficulty;
+    std::string baseFee;
+    std::string random;
+    std::string excessBlobGas;
+    std::string blobGasUsed;
+    std::string parentBeaconRoot;
+    std::string hash;  // block hash (for EIP-2935 history storage)
+};
+
+/// A single block in a blockchain test.
+struct EESTBlock
+{
+    EESTBlockHeader blockHeader;
+    std::vector<EESTTransaction> transactions;
+};
+
+/// A complete blockchain test fixture.
+struct EESTBlockchainFixture
+{
+    std::string name;
+    EESTBlockHeader genesisBlockHeader;
+    std::map<std::string, EESTAccount> pre;
+    std::vector<EESTBlock> blocks;
+    std::map<std::string, EESTAccount> postState;  // expected state after all blocks
+    int64_t chainId = 1;
+};
+
 // === Parsing helpers ===
 
 /// Read an optional hex string from a JSON object field.
@@ -156,12 +192,28 @@ inline std::string strip0x(std::string const& hex)
 
 // === Fixture loader ===
 
+/// Detect fixture format from JSON object keys.
+/// Returns: "state_test", "blockchain_test", or "unknown".
+inline std::string detectFixtureFormat(Json::Value const& fixtureJson)
+{
+    if (fixtureJson.isMember("env") && fixtureJson["env"].isObject() &&
+        fixtureJson.isMember("post") && fixtureJson["post"].isObject())
+        return "state_test";
+    if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
+        return "blockchain_test";
+    return "unknown";
+}
+
 /// Parse the "env" section.
 inline EESTEnvironment parseEnvironment(Json::Value const& envJson)
 {
     EESTEnvironment env;
     env.coinbase = readHexField(envJson, "currentCoinbase");
-    env.gasLimit = readRequiredHex(envJson, "currentGasLimit");
+    // currentGasLimit: use readHexField with default so that corner-case
+    // fixtures (e.g. blockchain_test_from_state_test) don't cause parse failures.
+    env.gasLimit = readHexField(envJson, "currentGasLimit");
+    if (env.gasLimit.empty())
+        env.gasLimit = "0x7fffffffffffffff";  // effectively unlimited
     env.number = readRequiredHex(envJson, "currentNumber");
     env.timestamp = readRequiredHex(envJson, "currentTimestamp");
     env.difficulty = readHexField(envJson, "currentDifficulty");
@@ -171,6 +223,24 @@ inline EESTEnvironment parseEnvironment(Json::Value const& envJson)
     env.blobGasUsed = readHexField(envJson, "currentBlobGasUsed");
     env.parentBeaconRoot = readHexField(envJson, "parentBeaconBlockRoot");
     return env;
+}
+
+/// Parse a block header from blockchain test format.
+inline EESTBlockHeader parseBlockHeader(Json::Value const& headerJson)
+{
+    EESTBlockHeader h;
+    h.coinbase = readHexField(headerJson, "coinbase");
+    h.gasLimit = readHexField(headerJson, "gasLimit");
+    h.number = readHexField(headerJson, "number");
+    h.timestamp = readHexField(headerJson, "timestamp");
+    h.difficulty = readHexField(headerJson, "difficulty");
+    h.baseFee = readHexField(headerJson, "baseFeePerGas");
+    h.random = readHexField(headerJson, "mixHash");
+    h.excessBlobGas = readHexField(headerJson, "excessBlobGas");
+    h.blobGasUsed = readHexField(headerJson, "blobGasUsed");
+    h.parentBeaconRoot = readHexField(headerJson, "parentBeaconBlockRoot");
+    h.hash = readHexField(headerJson, "hash");
+    return h;
 }
 
 /// Parse a single account from the "pre" or post-state.
@@ -361,11 +431,25 @@ inline std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
             std::runtime_error("JSON parse error in " + filePath + ": " + errors));
 
     // The root is a map of test_name → fixture_data
+    int skippedBlockchain = 0;
     for (auto it = root.begin(); it != root.end(); ++it)
     {
         if (it.key().asString().rfind("//", 0) == 0 ||  // comment entry
             it.key().asString().rfind("_", 0) == 0)     // meta entry like _info
             continue;
+
+        // Skip non-object values (e.g. metadata files with string/bool/int entries)
+        if (!it->isObject())
+            continue;
+
+        // Per-fixture format check: some state_tests directories contain
+        // blockchain_test_from_state_test fixtures that lack currentGasLimit.
+        auto fmt = detectFixtureFormat(*it);
+        if (fmt == "blockchain_test")
+        {
+            ++skippedBlockchain;
+            continue;
+        }
 
         try
         {
@@ -375,6 +459,179 @@ inline std::vector<EESTFixture> loadEESTFixtures(std::string const& filePath)
         {
             std::cerr << "Warning: Failed to parse fixture '" << it.key().asString()
                       << "': " << e.what() << std::endl;
+        }
+    }
+
+    if (skippedBlockchain > 0 && fixtures.empty())
+    {
+        std::cerr << "Info: " << filePath << " contains " << skippedBlockchain
+                  << " blockchain_test fixture(s); use --fixture-dir with the"
+                  << " blockchain_tests directory or the individual file.\n";
+    }
+
+    return fixtures;
+}
+
+// =============================================================================
+//  Blockchain test loading (EEST v5.4.0)
+//  Format: { "name": { "genesisBlockHeader":..., "pre":..., "blocks":[...],
+//                      "postState":..., "config":... }, ... }
+// =============================================================================
+
+/// Parse a blockchain test transaction (flat format, no index arrays).
+inline EESTTransaction parseBlockchainTransaction(Json::Value const& txJson)
+{
+    EESTTransaction tx;
+    tx.nonce = readHexField(txJson, "nonce");
+    tx.gasPrice = readHexField(txJson, "gasPrice");
+    tx.maxPriorityFeePerGas = readHexField(txJson, "maxPriorityFeePerGas");
+    tx.maxFeePerGas = readHexField(txJson, "maxFeePerGas");
+    // blockchain tests have scalar values, wrap in single-element arrays
+    auto gasLimit = readHexField(txJson, "gasLimit");
+    if (!gasLimit.empty())
+        tx.gasLimit.push_back(gasLimit);
+    else
+        tx.gasLimit.push_back("0x0");
+    tx.to = readHexField(txJson, "to");
+    auto value = readHexField(txJson, "value");
+    if (!value.empty())
+        tx.value.push_back(value);
+    else
+        tx.value.push_back("0x0");
+    auto data = readHexField(txJson, "data");
+    if (!data.empty())
+        tx.data.push_back(data);
+    else
+        tx.data.push_back("0x");
+    tx.sender = readHexField(txJson, "sender");
+    tx.secretKey = readHexField(txJson, "secretKey");
+    tx.maxFeePerBlobGas = readHexField(txJson, "maxFeePerBlobGas");
+
+    // accessList (optional, array format)
+    if (txJson.isMember("accessList") && txJson["accessList"].isArray())
+    {
+        std::vector<std::pair<std::string, std::vector<std::string>>> entries;
+        for (auto const& entry : txJson["accessList"])
+        {
+            std::string addr = readHexField(entry, "address");
+            std::vector<std::string> keys;
+            if (entry.isMember("storageKeys") && entry["storageKeys"].isArray())
+                for (auto const& k : entry["storageKeys"])
+                    keys.push_back(k.asString());
+            entries.emplace_back(std::move(addr), std::move(keys));
+        }
+        tx.accessLists.push_back(std::move(entries));
+    }
+
+    // authorizationList (EIP-7702)
+    if (txJson.isMember("authorizationList") && !txJson["authorizationList"].isNull())
+    {
+        tx.authorizationList.emplace();
+        for (auto const& auth : txJson["authorizationList"])
+            tx.authorizationList->push_back(auth);
+    }
+
+    // blobVersionedHashes
+    if (txJson.isMember("blobVersionedHashes") && txJson["blobVersionedHashes"].isArray())
+        for (auto const& h : txJson["blobVersionedHashes"])
+            tx.blobVersionedHashes.push_back(h.asString());
+
+    // Determine typed tx kind
+    auto type = readHexField(txJson, "type");
+    // type is stored separately from the web3TypedTxKind; we'll set it later
+
+    return tx;
+}
+
+/// Parse a single blockchain test fixture.
+inline EESTBlockchainFixture parseBlockchainFixture(
+    std::string const& name, Json::Value const& fixtureJson)
+{
+    EESTBlockchainFixture fixture;
+    fixture.name = name;
+
+    // genesisBlockHeader (optional: engine_x format lacks it)
+    if (fixtureJson.isMember("genesisBlockHeader") &&
+        fixtureJson["genesisBlockHeader"].isObject())
+        fixture.genesisBlockHeader =
+            parseBlockHeader(fixtureJson["genesisBlockHeader"]);
+
+    // pre state
+    if (fixtureJson.isMember("pre") && !fixtureJson["pre"].isNull())
+        for (auto it = fixtureJson["pre"].begin(); it != fixtureJson["pre"].end(); ++it)
+            fixture.pre[it.key().asString()] = parseAccount(*it);
+
+    // blocks
+    if (fixtureJson.isMember("blocks") && fixtureJson["blocks"].isArray())
+    {
+        for (auto const& blockJson : fixtureJson["blocks"])
+        {
+            EESTBlock block;
+            block.blockHeader = parseBlockHeader(blockJson["blockHeader"]);
+
+            if (blockJson.isMember("transactions") && blockJson["transactions"].isArray())
+                for (auto const& txJson : blockJson["transactions"])
+                    block.transactions.push_back(parseBlockchainTransaction(txJson));
+
+            fixture.blocks.push_back(std::move(block));
+        }
+    }
+
+    // postState
+    if (fixtureJson.isMember("postState") && !fixtureJson["postState"].isNull())
+        for (auto it = fixtureJson["postState"].begin();
+             it != fixtureJson["postState"].end(); ++it)
+            fixture.postState[it.key().asString()] = parseAccount(*it);
+
+    // config
+    if (fixtureJson.isMember("config"))
+    {
+        auto chainIdHex = readHexField(fixtureJson["config"], "chainid");
+        fixture.chainId = hexToInt64(chainIdHex);
+        if (fixture.chainId == 0)
+            fixture.chainId = 1;
+    }
+
+    return fixture;
+}
+
+/// Load all blockchain test fixtures from a JSON file.
+inline std::vector<EESTBlockchainFixture> loadEESTBlockchainFixtures(
+    std::string const& filePath)
+{
+    std::vector<EESTBlockchainFixture> fixtures;
+
+    std::ifstream file(filePath);
+    if (!file.is_open())
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("Cannot open fixture file: " + filePath));
+
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    if (!Json::parseFromStream(builder, file, &root, &errors))
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("JSON parse error in " + filePath + ": " + errors));
+
+    for (auto it = root.begin(); it != root.end(); ++it)
+    {
+        if (it.key().asString().rfind("//", 0) == 0 ||
+            it.key().asString().rfind("_", 0) == 0)
+            continue;
+
+        // Skip non-object values
+        if (!it->isObject())
+            continue;
+
+        try
+        {
+            fixtures.push_back(
+                parseBlockchainFixture(it.key().asString(), *it));
+        }
+        catch (std::exception const& e)
+        {
+            std::cerr << "Warning: Failed to parse blockchain fixture '"
+                      << it.key().asString() << "': " << e.what() << std::endl;
         }
     }
 

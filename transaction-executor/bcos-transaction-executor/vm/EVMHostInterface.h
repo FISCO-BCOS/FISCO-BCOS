@@ -204,7 +204,7 @@ struct EVMHostInterface
             .block_gas_limit = hostContext.blockGasLimit(),
             .block_prev_randao = {},
             .chain_id = hostContext.chainId(),
-            .block_base_fee = {},
+            .block_base_fee = toEvmC(hostContext.blockBaseFee()),
             .blob_base_fee = {},
             .blob_hashes = {},
             .blob_hashes_count = 0,

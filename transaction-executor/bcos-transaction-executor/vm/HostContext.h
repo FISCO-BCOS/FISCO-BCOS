@@ -368,10 +368,11 @@ public:
         co_return co_await account.codeHash();
     }
 
-    task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
+    task::Task<bool> exists(const evmc_address& address, auto&&... /*unused*/)
     {
-        // TODO: impl the full support for solidity
-        co_return true;
+        Account<Storage> account(m_rollbackableStorage.get(), address,
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
+        co_return co_await account.exists();
     }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
@@ -403,6 +404,14 @@ public:
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
     u256 gasPrice() const { return u256(std::get<0>(m_ledgerConfig.get().gasPrice())); }
+    u256 blockBaseFee() const
+    {
+        // EIP-1559: BASEFEE opcode returns the block's base fee.
+        // Pre-London forks return 0.
+        if (m_revision < EVMC_LONDON)
+            return u256{0};
+        return u256(std::get<0>(m_ledgerConfig.get().gasPrice()));
+    }
     evmc_address coinbaseEvmc() const
     {
         auto const cb = m_blockHeader.get().coinbase();
@@ -746,6 +755,18 @@ public:
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
 
+        // --- Bump caller nonce for CREATE/CREATE2 BEFORE the savepoint ---
+        // Ethereum consensus: nonce is consumed even for failed creates
+        // (EIP-3541 rejection, collision, OOG, etc.).  Must happen here so
+        // the rollback on sub-call failure does NOT undo the nonce bump.
+        auto const isEthereumExec =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
+        if ((m_web3Tx || isEthereumExec) &&
+            (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2))
+        {
+            co_await senderAccount.increaseNonce();
+        }
+
         std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
         if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
         {
@@ -778,8 +799,6 @@ public:
 
         // Ethereum mode: sub-call REVERT / exceptional halt → rollback sub-call
         // state changes. evmone has already pushed 0 on the EVM stack.
-        auto const isEthereumExec =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
         if (isEthereumExec && result.status_code != EVMC_SUCCESS)
         {
             co_await m_rollbackableStorage.get().rollback(subCallSavepoint);
@@ -808,6 +827,11 @@ public:
             !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
         {
             return EVMC_ACCESS_COLD;
+        }
+        // EIP-2929: precompile addresses are always warm
+        if (m_precompiledManager.get().getPrecompiled(addr, m_ledgerConfig.get().features()))
+        {
+            return EVMC_ACCESS_WARM;
         }
         return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
@@ -900,15 +924,6 @@ private:
             }
         }
 
-        // Bump caller nonce for CREATE/CREATE2 (Ethereum: evmone bumps internally
-        // but our EVMAccount doesn't auto-bump; BCOS mode: legacy behavior).
-        // Top-level (m_level == 0) nonce bump is handled in TransactionExecutorImpl.
-        if (m_web3Tx && m_level != 0)
-        {
-            auto senderAccount = getAccount(*this, ref.sender);
-            co_await senderAccount.increaseNonce();
-        }
-
         // --- EIP-7610: create collision check (Ethereum mode) ---
         if (isEthereum)
         {
@@ -959,10 +974,15 @@ private:
 
         co_await m_recipientAccount.create();
 
-        // Ethereum mode: always set nonce=1 before VM (EIP-161 / Spurious Dragon)
+        // Set nonce=1 before VM execution (EIP-161 / Spurious Dragon+).
+        // Pre-Spurious Dragon (Frontier, Homestead, Tangerine Whistle):
+        // new accounts start with nonce=0 per the Yellow Paper.
         if (isEthereum)
         {
-            co_await m_recipientAccount.setNonce("1");
+            if (m_revision >= EVMC_SPURIOUS_DRAGON)
+            {
+                co_await m_recipientAccount.setNonce("1");
+            }
         }
         else
         {
@@ -1013,6 +1033,49 @@ private:
                 }
             }
 
+            // Code deposit cost (Ethereum: 200/byte, BCOS: VMSchedule().createDataGas).
+            // Must be checked BEFORE storing code — Frontier returns EVMC_SUCCESS
+            // when code deposit runs OOG, but does NOT store the code.
+            // Reference: bcos-evm/bcos-evm/eth/state/host.cpp Host::create().
+            const auto codeDepositGas = isEthereum ?
+                                            static_cast<int64_t>(code.size()) * 200 :
+                                            static_cast<int64_t>(code.size()) *
+                                                bcos::executor::VMSchedule().createDataGas;
+            if (codeDepositGas > result.gas_left)
+            {
+                // Frontier: transaction succeeds but code is NOT stored.
+                // Homestead+: transaction fails (EVMC_FAILURE), state rolled back.
+                if (m_revision == EVMC_FRONTIER)
+                {
+                    HOST_CONTEXT_LOG(DEBUG)
+                        << "Frontier code deposit OOG — success, code not stored"
+                        << LOG_KV("gas_left", result.gas_left)
+                        << LOG_KV("codeDepositGas", codeDepositGas)
+                        << LOG_KV("codeSize", code.size());
+                    // Return EVMC_SUCCESS with unchanged gas_left; code is NOT stored.
+                    result.create_address = ref.code_address;
+                    if (result.release)
+                    {
+                        result.release(std::addressof(result));
+                        result.release = nullptr;
+                    }
+                    result.output_data = nullptr;
+                    result.output_size = 0;
+                    co_return result;
+                }
+                // Homestead+: code deposit OOG → EVMC_FAILURE (state rolled back).
+                co_return EVMCResult{evmc_result{.status_code = EVMC_FAILURE,
+                                         .gas_left = 0,
+                                         .gas_refund = 0,
+                                         .output_data = nullptr,
+                                         .output_size = 0,
+                                         .release = nullptr,
+                                         .create_address = ref.code_address,
+                                         .padding = {}},
+                    protocol::TransactionStatus::OutOfGas};
+            }
+            result.gas_left -= codeDepositGas;
+
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
 
@@ -1026,10 +1089,6 @@ private:
                 }
             }
 
-            // Code deposit cost: Ethereum = 200/byte, BCOS = VMSchedule().createDataGas
-            result.gas_left -= isEthereum ?
-                                   static_cast<int64_t>(result.output_size) * 200 :
-                                   result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
 
             // Track created address for EIP-6780 (selfdestruct only for same-tx creates)
@@ -1137,9 +1196,34 @@ private:
         // Ethereum mode: intrinsic gas (including 21000 base) is already computed
         // by TransactionExecutorImpl::computeTxIntrinsicCost, and the EVM handles
         // the base cost internally — skip the extra deduction.
-        if (!m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor))
+        auto const isEthereum =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
+        if (!isEthereum)
         {
             consumeTransferGas(ref);
+        }
+
+        // --- Ethereum mode: transfer value for sub-CALL messages ---
+        // evmone's Host::execute_message() transfers value for CALL before
+        // processing.  Top-level value transfer is handled by execute().
+        // Sub-calls must transfer here (inside the savepoint so it rolls
+        // back on REVERT/exception, matching evmone behaviour).
+        // Only EVMC_CALL transfers value; CALLCODE/DELEGATECALL/STATICCALL do not.
+        if (isEthereum && m_level > 0 && ref.kind == EVMC_CALL &&
+            (ref.flags & EVMC_STATIC) == 0 &&
+            !::ranges::equal(ref.value.bytes, executor::EMPTY_EVM_BYTES32.bytes))
+        {
+            auto value = fromEvmC(ref.value);
+            auto senderAcc = getAccount(*this, ref.sender);
+            auto fromBalance = co_await senderAcc.balance();
+            if (fromBalance >= value)
+            {
+                if (!co_await m_recipientAccount.exists())
+                    co_await m_recipientAccount.create();
+                auto toBalance = co_await m_recipientAccount.balance();
+                co_await senderAcc.setBalance(fromBalance - value);
+                co_await m_recipientAccount.setBalance(toBalance + value);
+            }
         }
 
         if (m_preparedPrecompiled != nullptr)
@@ -1155,7 +1239,10 @@ private:
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             !m_executable)
         {
-            if (ref.input_size > 0)
+            // Ethereum mode: call to an address with no code succeeds silently
+            // (returns success, empty output, no state change).
+            // BCOS mode: preserve NotFoundCodeError behavior for non-empty input.
+            if (!isEthereum && ref.input_size > 0)
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }

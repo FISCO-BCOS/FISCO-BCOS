@@ -72,18 +72,17 @@ inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& pr
         const auto gas = precompiledContract.cost({origMsg.input_data, origMsg.input_size});
         if (gas > std::numeric_limits<int64_t>::max() || gas < 0)
         {
-            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
-                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
-                "Precompiled contract gas cost overflow",
-                features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+            // Precompile gas overflow: return empty output
+            return buildBuiltinPrecompiledResult(
+                false, bcos::bytes{}, 0);
         }
         const auto gasCost = gas.template convert_to<int64_t>();
         if (gasCost > origMsg.gas)
         {
-            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
-                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
-                "Precompiled contract out of gas",
-                features.get(ledger::Features::Flag::bugfix_v1_error_handling));
+            // Precompile OOG: return empty output so returndata is not polluted
+            // with ABI-encoded error strings (matching evmone behavior).
+            return buildBuiltinPrecompiledResult(
+                false, bcos::bytes{}, 0 /* gasLeft=0 for OOG */);
         }
         auto [success, output] =
             precompiledContract.execute({origMsg.input_data, origMsg.input_size});
