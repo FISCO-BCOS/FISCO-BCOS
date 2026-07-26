@@ -345,11 +345,47 @@ void bcostars::protocol::TransactionImpl::ensureAuthorizationListCache() const
     m_authorizationListCacheBuilt = true;
 }
 
+void bcostars::protocol::TransactionImpl::ensureBlobVersionedHashesCache() const
+{
+    std::lock_guard<std::mutex> const lock(*m_blobVersionedHashesCacheMutex);
+    if (m_blobVersionedHashesCacheBuilt)
+        return;
+    m_blobVersionedHashesCache.clear();
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+    {
+        m_blobVersionedHashesCacheBuilt = true;
+        return;
+    }
+    auto const& entries = m_inner()->data.blobVersionedHashes;
+    m_blobVersionedHashesCache.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        bcos::h256 h{};
+        std::copy_n(entry.begin(), std::min(entry.size(), size_t{32}), h.begin());
+        m_blobVersionedHashesCache.emplace_back(std::move(h));
+    }
+    m_blobVersionedHashesCacheBuilt = true;
+}
+
 bcos::protocol::AuthorizationList const&
 bcostars::protocol::TransactionImpl::authorizationList() const
 {
     ensureAuthorizationListCache();
     return m_authorizationListCache;
+}
+
+bcos::protocol::VersionedHashes const&
+bcostars::protocol::TransactionImpl::blobVersionedHashes() const
+{
+    ensureBlobVersionedHashesCache();
+    return m_blobVersionedHashesCache;
+}
+
+std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerBlobGas() const
+{
+    if (m_inner()->data.maxFeePerBlobGas.empty())
+        return std::nullopt;
+    return bcos::hex2u(m_inner()->data.maxFeePerBlobGas);
 }
 
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const

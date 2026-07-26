@@ -35,6 +35,8 @@ module bcostars {
         14 optional vector<byte> extension;
         15 optional vector<Web3AccessListEntry> accessList;
         16 optional vector<AuthorizationEntry> authorizationList;  // EIP-7702
+        17 optional string                    maxFeePerBlobGas;    // EIP-4844 blob gas price cap
+        18 optional vector<vector<byte>>      blobVersionedHashes; // EIP-4844 blob commitments
     };
 
     struct Transaction

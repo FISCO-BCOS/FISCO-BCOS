@@ -60,6 +60,7 @@ struct EESTTransaction
     // authorizationList (EIP-7702): null if not present
     std::optional<std::vector<Json::Value>> authorizationList;
     std::string maxFeePerBlobGas;
+    std::vector<std::string> blobVersionedHashes;  // EIP-4844 blob versioned hashes
 };
 
 /// A single post-state entry for a fork.
@@ -256,6 +257,12 @@ inline EESTTransaction parseTransaction(Json::Value const& txJson)
         for (auto const& auth : txJson["authorizationList"])
             tx.authorizationList->push_back(auth);
     }
+    // blobVersionedHashes (EIP-4844)
+    if (txJson.isMember("blobVersionedHashes") && txJson["blobVersionedHashes"].isArray())
+    {
+        for (auto const& h : txJson["blobVersionedHashes"])
+            tx.blobVersionedHashes.push_back(h.asString());
+    }
     return tx;
 }
 
@@ -394,7 +401,7 @@ inline evmc_revision forkNameToRevision(std::string const& forkName)
         return EVMC_BYZANTIUM;
     if (lower == "constantinople")
         return EVMC_CONSTANTINOPLE;
-    if (lower == "petersburg")
+    if (lower == "constantinoplefix" || lower == "petersburg")
         return EVMC_PETERSBURG;
     if (lower == "istanbul")
         return EVMC_ISTANBUL;

@@ -403,6 +403,17 @@ public:
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
     u256 gasPrice() const { return u256(std::get<0>(m_ledgerConfig.get().gasPrice())); }
+    evmc_address coinbaseEvmc() const
+    {
+        auto const cb = m_blockHeader.get().coinbase();
+        if (cb.size() == sizeof(evmc_address))
+        {
+            evmc_address addr{};
+            std::copy(cb.begin(), cb.end(), addr.bytes);
+            return addr;
+        }
+        return {};
+    }
     evmc_uint256be chainId() const
     {
         return m_ledgerConfig.get().chainId().value_or(evmc_uint256be{});
@@ -526,24 +537,88 @@ public:
                 // EIP-7623 calldata floor cost is handled centrally in
                 // TransactionExecutorImpl::computeTxIntrinsicCost() for Prague+.
 
-                // Transfer first, then proceed execute
-                if (m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_delegatecall_transfer))
+                // Ethereum mode: transfer value unconditionally for the initial
+                // message (CALL/CREATE/CREATE2).  This matches evmone's
+                // Host::execute_message() which transfers value from sender to
+                // recipient before running the VM.  The savepoint captured above
+                // allows rolling this back on EVMC failure.
+                const bool isEthereumForTransfer = m_ledgerConfig.get().features().get(
+                    ledger::Features::Flag::feature_ethereum_executor);
+                // Only transfer value at the top-level (m_level == 0).
+                // Sub-calls (m_level > 0) have their value handled by evmone's
+                // CALL/CREATE instruction processing which calls the host's call()
+                // function → externalCall() → sub-HostContext::execute().
+                if (isEthereumForTransfer && m_level == 0)
                 {
-                    if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
-                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
-                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                        m_ledgerConfig.get().balanceTransfer())
+                    if ((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
+                        ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
                     {
-                        co_await transferBalance(*ref);
+                        if (!::ranges::equal(
+                                ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes))
+                        {
+                            // EIP-7610: skip value transfer for CREATE/CREATE2
+                            // collision.  The collision will be detected in
+                            // executeCreate() and the value must not be
+                            // transferred (matching evmone's Host::create()).
+                            bool skipTransfer = false;
+                            if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
+                            {
+                                if (co_await m_recipientAccount.existsEthereum())
+                                {
+                                    auto codeHash = co_await m_recipientAccount.codeHash();
+                                    static const bcos::h256 EMPTY_CODE_HASH{};
+                                    auto existingNonce =
+                                        co_await m_recipientAccount.nonce();
+                                    auto existingNonceVal =
+                                        u256(existingNonce.value_or("0"));
+                                    bool isCollision;
+                                    if (m_revision >= EVMC_PARIS)
+                                    {
+                                        isCollision = (codeHash != EMPTY_CODE_HASH ||
+                                                       existingNonceVal != 0);
+                                    }
+                                    else
+                                    {
+                                        auto existingBalance =
+                                            co_await m_recipientAccount.balance();
+                                        isCollision =
+                                            (codeHash != EMPTY_CODE_HASH ||
+                                                existingNonceVal != 0 ||
+                                                existingBalance != 0);
+                                    }
+                                    skipTransfer = isCollision;
+                                }
+                            }
+                            if (!skipTransfer)
+                            {
+                                co_await transferBalance(*ref);
+                            }
+                        }
                     }
                 }
                 else
                 {
-                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                        m_ledgerConfig.get().balanceTransfer())
+                    // Transfer first, then proceed execute
+                    if (m_ledgerConfig.get().features().get(
+                            ledger::Features::Flag::bugfix_delegatecall_transfer))
                     {
-                        co_await transferBalance(*ref);
+                        if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
+                                (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
+                            !::ranges::equal(
+                                ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                            m_ledgerConfig.get().balanceTransfer())
+                        {
+                            co_await transferBalance(*ref);
+                        }
+                    }
+                    else
+                    {
+                        if (!::ranges::equal(
+                                ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                            m_ledgerConfig.get().balanceTransfer())
+                        {
+                            co_await transferBalance(*ref);
+                        }
                     }
                 }
 
@@ -612,22 +687,45 @@ public:
                 EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
-        // Ethereum mode: stack overflow/underflow consume all gas but
-        // don't revert state (Yellow Paper: exceptional halt, not revert).
+        // Ethereum mode: exceptional halts (stack error, invalid instruction,
+        // bad jump, OOG, etc.) consume all gas but don't revert state at this
+        // call-frame level. evmone treats these as sub-call failures (pushes 0
+        // on stack) but the outer execution continues.
+        // REVERT is special: gas_left is preserved — the caller pays gas up to
+        // the revert point and gets the remainder refunded.
         bool const isEthereumExec =
             m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
-        bool const isStackError = (evmResult->status_code == EVMC_STACK_OVERFLOW ||
-                                   evmResult->status_code == EVMC_STACK_UNDERFLOW);
-        if (isEthereumExec && isStackError)
+        if (evmResult->status_code != EVMC_SUCCESS)
         {
-            // Don't rollback — consume all gas but keep state
-            evmResult->gas_left = 0;
-        }
-        else if (evmResult->status_code != EVMC_SUCCESS)
-        {
-            co_await m_rollbackableStorage.get().rollback(savepoint);
-            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
-            m_logs.clear();
+            if (isEthereumExec)
+            {
+                // Exceptional halts (INVALID, UNDEFINED, STACK_OVERFLOW,
+                // OOG, etc.) consume all remaining gas.
+                // REVERT preserves gas_left for correct gas accounting.
+                if (evmResult->status_code != EVMC_REVERT)
+                {
+                    evmResult->gas_left = 0;
+                }
+                // Rollback value transfer + EVM state changes for non-SUCCESS
+                // at the top-level only. This matches evmone's Host::call()
+                // which saves a checkpoint before Host::execute_message() and
+                // rolls back on failure. Sub-calls (m_level > 0) are rolled
+                // back by externalCall() independently.
+                // Gas pre-deduction (in TransactionExecutorImpl) is unaffected
+                // because it happens outside this execute() scope.
+                if (m_level == 0)
+                {
+                    co_await m_rollbackableStorage.get().rollback(savepoint);
+                    co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+                    m_logs.clear();
+                }
+            }
+            else
+            {
+                co_await m_rollbackableStorage.get().rollback(savepoint);
+                co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+                m_logs.clear();
+            }
         }
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
@@ -668,9 +766,26 @@ public:
             m_createdInTx);
 
         co_await hostcontext.prepare();
+
+        // Save a storage checkpoint before the sub-call so we can rollback
+        // state changes on REVERT or other sub-call failures (evmone pushes
+        // 0 on the stack but expects the host to restore state).
+        auto const subCallSavepoint = m_rollbackableStorage.get().current();
+        auto const transientSavepoint = m_rollbackableTransientStorage.get().current();
+
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();
-        if (result.status_code == EVMC_SUCCESS && !logs.empty())
+
+        // Ethereum mode: sub-call REVERT / exceptional halt → rollback sub-call
+        // state changes. evmone has already pushed 0 on the EVM stack.
+        auto const isEthereumExec =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
+        if (isEthereumExec && result.status_code != EVMC_SUCCESS)
+        {
+            co_await m_rollbackableStorage.get().rollback(subCallSavepoint);
+            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+        }
+        else if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
             m_logs.reserve(m_logs.size() + ::ranges::size(logs));
             ::ranges::move(logs, std::back_inserter(m_logs));
@@ -728,10 +843,17 @@ private:
         {
             input.createCodeAddress = ref.code_address;
         }
-        // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
-        // Ethereum native mode: warm COINBASE address per EIP-3651 (Shanghai+).
-        // BCOS currently has no block-level coinbase address; when available,
-        // pass it via input.coinbase.
+        // EIP-3651: warm COINBASE address at transaction entry (Shanghai+).
+        if (m_revision >= EVMC_SHANGHAI)
+        {
+            auto const cb = m_blockHeader.get().coinbase();
+            if (cb.size() == sizeof(evmc_address))
+            {
+                evmc_address coinbaseAddr{};
+                std::copy(cb.begin(), cb.end(), coinbaseAddr.bytes);
+                input.coinbase = coinbaseAddr;
+            }
+        }
         input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
         input.accessList = m_eip2930AccessList.get();
         executor::warmEip2929AtTransactionEntry(
@@ -778,7 +900,10 @@ private:
             }
         }
 
-        if (m_web3Tx && m_level != 0 && !isEthereum)
+        // Bump caller nonce for CREATE/CREATE2 (Ethereum: evmone bumps internally
+        // but our EVMAccount doesn't auto-bump; BCOS mode: legacy behavior).
+        // Top-level (m_level == 0) nonce bump is handled in TransactionExecutorImpl.
+        if (m_web3Tx && m_level != 0)
         {
             auto senderAccount = getAccount(*this, ref.sender);
             co_await senderAccount.increaseNonce();
@@ -794,20 +919,40 @@ private:
                 auto codeHash = co_await m_recipientAccount.codeHash();
                 static const bcos::h256 EMPTY_CODE_HASH{};
                 auto existingNonce = co_await m_recipientAccount.nonce();
-                auto existingBalance = co_await m_recipientAccount.balance();
                 auto existingNonceVal = u256(existingNonce.value_or("0"));
-                if (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0 || existingBalance != 0)
+                // EIP-7610 (Paris+): an account with only a non-zero balance (but nonce=0
+                // and empty code) is NOT a collision — it can be pre-funded before deployment.
+                bool isCollision;
+                if (m_revision >= EVMC_PARIS)
                 {
-                    // Account already exists with non-empty state → collision
-                    co_return EVMCResult{evmc_result{.status_code = EVMC_FAILURE,
+                    isCollision = (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0);
+                }
+                else
+                {
+                    auto existingBalance = co_await m_recipientAccount.balance();
+                    isCollision = (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0 ||
+                                   existingBalance != 0);
+                }
+                if (isCollision)
+                {
+                    // EIP-7610 (Paris+): CREATE collision — the creation fails silently
+                    // (returns 0 on the EVM stack) but the transaction succeeds.
+                    // Pre-Paris: same semantics — NOT a revert, the CREATE just returns 0.
+                    // We return EVMC_SUCCESS with zero create_address to signal that
+                    // no code was deployed but the EVM execution continues normally.
+                    // Value transfer is skipped in execute() for this case.
+                    HOST_CONTEXT_LOG(DEBUG)
+                        << "CREATE collision detected" << LOG_KV("addr", ref.code_address)
+                        << LOG_KV("revision", m_revision);
+                    co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
                                              .gas_left = 0,
                                              .gas_refund = 0,
                                              .output_data = nullptr,
                                              .output_size = 0,
                                              .release = nullptr,
-                                             .create_address = ref.code_address,
+                                             .create_address = {},
                                              .padding = {}},
-                        protocol::TransactionStatus::ContractAddressAlreadyUsed};
+                        protocol::TransactionStatus::None};
                 }
             }
         }

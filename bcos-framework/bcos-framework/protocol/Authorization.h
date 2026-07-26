@@ -25,4 +25,8 @@ struct Authorization
 
 using AuthorizationList = std::vector<Authorization>;
 
+/// EIP-4844 blob versioned hash (32-byte commitment hash).
+using VersionedHash = bcos::h256;
+using VersionedHashes = std::vector<VersionedHash>;
+
 }  // namespace bcos::protocol

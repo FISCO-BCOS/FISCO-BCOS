@@ -113,6 +113,10 @@ bcos::protocol::TransactionStatus bcos::executor_v1::evmcStatusToTransactionStat
     case EVMC_INVALID_INSTRUCTION:
     case EVMC_UNDEFINED_INSTRUCTION:
         return protocol::TransactionStatus::BadInstruction;
+    case EVMC_CONTRACT_VALIDATION_FAILURE:
+        return protocol::TransactionStatus::BadInstruction;
+    case EVMC_ARGUMENT_OUT_OF_RANGE:
+        return protocol::TransactionStatus::BadInstruction;
     default:
         BOOST_THROW_EXCEPTION(UnknownEVMCStatus{});
     }
@@ -148,6 +152,12 @@ bcos::executor_v1::evmcStatusToErrorMessage(
         return {bcos::protocol::TransactionStatus::BadInstruction,
             bcos::executor_v1::writeErrInfoToOutput(
                 hashImpl, "Execution invalid/undefined opcode."s)};
+    case EVMC_CONTRACT_VALIDATION_FAILURE:
+        return {bcos::protocol::TransactionStatus::BadInstruction,
+            bcos::executor_v1::writeErrInfoToOutput(hashImpl, "Contract validation failure."s)};
+    case EVMC_ARGUMENT_OUT_OF_RANGE:
+        return {bcos::protocol::TransactionStatus::BadInstruction,
+            bcos::executor_v1::writeErrInfoToOutput(hashImpl, "Argument out of range."s)};
     case EVMC_BAD_JUMP_DESTINATION:
         return {bcos::protocol::TransactionStatus::BadJumpDestination,
             bcos::executor_v1::writeErrInfoToOutput(

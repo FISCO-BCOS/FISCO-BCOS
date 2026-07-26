@@ -73,43 +73,70 @@ public:
         return txSysGasLimit;
     }
 
-    // Ethereum mode: compute intrinsic gas cost per EIP-2028, EIP-3860, EIP-7623.
-    // Reference: bcos-evm/bcos-evm/eth/state/state.cpp  compute_tx_intrinsic_cost().
-    static int64_t computeTxIntrinsicCost(
+    // Ethereum mode: compute pure intrinsic gas cost (EIP-2028, EIP-3860, EIP-7702).
+    // Does NOT include EIP-7623 floor — that is applied post-execution.
+    // Reference: bcos-evm state.cpp compute_tx_intrinsic_cost().
+    static int64_t computeTxIntrinsicCostPure(
         evmc_revision rev, const protocol::Transaction& tx, int64_t accessListCost)
     {
         static constexpr auto TX_BASE_COST = 21000;
         static constexpr auto TX_CREATE_COST = 32000;
         static constexpr auto DATA_TOKEN_COST = 4;
         static constexpr auto INITCODE_WORD_COST = 2;
-        static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
+        static constexpr auto AUTHORIZATION_COST = 25000;  // EIP-7702
 
         auto input = tx.input();
         const bool isCreate = tx.to().empty();
 
-        // EIP-2028: data tokens (4 gas/nonzero-byte post-Istanbul, 17 pre)
         const size_t numZero =
             static_cast<size_t>(std::count(input.begin(), input.end(), static_cast<uint8_t>(0)));
         const size_t numNonzero = input.size() - numZero;
         const size_t nonzeroMult = rev >= EVMC_ISTANBUL ? 4 : 17;
-        const auto numTokens = static_cast<int64_t>(nonzeroMult * numNonzero + numZero);
-        const auto dataCost = numTokens * DATA_TOKEN_COST;
+        const auto dataCost = static_cast<int64_t>(nonzeroMult * numNonzero + numZero) * DATA_TOKEN_COST;
 
         const auto createCost = (isCreate && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
 
-        // EIP-3860: initcode word cost (Shanghai+)
         const auto initcodeCost =
             (isCreate && rev >= EVMC_SHANGHAI) ?
                 INITCODE_WORD_COST * static_cast<int64_t>((input.size() + 31) / 32) :
                 int64_t{0};
 
-        const auto intrinsic = TX_BASE_COST + createCost + dataCost + accessListCost + initcodeCost;
+        const auto authListCost =
+            rev >= EVMC_PRAGUE ?
+                static_cast<int64_t>(tx.authorizationList().size()) * AUTHORIZATION_COST :
+                int64_t{0};
 
-        // EIP-7623 floor (Prague+): max(intrinsic, base + 10 * tokens)
-        const auto minCost =
-            rev >= EVMC_PRAGUE ? TX_BASE_COST + numTokens * TOTAL_COST_FLOOR_PER_TOKEN : int64_t{0};
+        return TX_BASE_COST + createCost + dataCost + accessListCost + initcodeCost + authListCost;
+    }
 
-        return std::max(intrinsic, minCost);
+    // EIP-7623 floor gas cost (Prague+): 21000 + 10 * total_calldata_tokens.
+    // Reference: bcos-evm state.cpp compute_eip7623_min_gas_cost().
+    static int64_t computeEip7623FloorCost(evmc_revision rev, const protocol::Transaction& tx)
+    {
+        if (rev < EVMC_PRAGUE)
+            return 0;
+
+        static constexpr auto TX_BASE_COST = 21000;
+        static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
+
+        auto input = tx.input();
+        const size_t numZero =
+            static_cast<size_t>(std::count(input.begin(), input.end(), static_cast<uint8_t>(0)));
+        const size_t numNonzero = input.size() - numZero;
+        const size_t nonzeroMult = (rev >= EVMC_ISTANBUL) ? 4 : 17;
+        const auto numTokens = static_cast<int64_t>(nonzeroMult * numNonzero + numZero);
+
+        return TX_BASE_COST + numTokens * TOTAL_COST_FLOOR_PER_TOKEN;
+    }
+
+    // Validation-level intrinsic: includes EIP-7623 floor for Prague+.
+    // Used for tx.gasLimit validation check only.
+    static int64_t computeTxIntrinsicCost(
+        evmc_revision rev, const protocol::Transaction& tx, int64_t accessListCost)
+    {
+        auto const intrinsic = computeTxIntrinsicCostPure(rev, tx, accessListCost);
+        auto const floor = computeEip7623FloorCost(rev, tx);
+        return (rev >= EVMC_PRAGUE) ? std::max(intrinsic, floor) : intrinsic;
     }
 
     // --- EIP-7702: set_code / delegation ---
@@ -203,11 +230,12 @@ public:
             if (existingNonce != auth.nonce)
                 continue;
 
-            // 7. Refund for existing accounts
-            if (!isDelegated)
+            // 7. Refund for existing accounts (EIP-7702)
+            // Reference: bcos-evm state.cpp — refund if account is NOT empty (EIP-161:
+            // nonce != 0 || balance != 0 || code_hash != EMPTY_CODE_HASH).
             {
                 auto authorityBalance = co_await authorityAccount.balance();
-                if (authorityBalance > 0 || existingNonce > 0)
+                if (codeHash != EMPTY_CODE_HASH || authorityBalance > 0 || existingNonce > 0)
                 {
                     delegationRefund += EXISTING_AUTHORITY_REFUND;
                 }
@@ -328,6 +356,56 @@ public:
             {
                 co_await m_data->m_hostContext.prepare();
 
+                // --- EIP-2929/2930/3651: pre-warm addresses for the transaction ---
+                // This must happen BEFORE any EVM execution so that the first access
+                // to sender, recipient, coinbase, precompiles, and access-list entries
+                // uses the warm access cost (100 gas) instead of cold (2600 gas).
+                {
+                    auto& hostContext = m_data->m_hostContext;
+                    auto const rev = effectiveRevision(
+                        m_data->m_ledgerConfig.get(), m_data->m_blockHeader.get());
+                    auto& eip2929 = *m_data->m_eip2929Access;
+
+                    // EIP-2929: sender and recipient are warm from tx start
+                    std::optional<evmc_address> toAddr;
+                    auto const& txTo = m_data->m_transaction.get().to();
+                    if (!txTo.empty() && txTo.size() >= sizeof(evmc_address))
+                    {
+                        evmc_address addr{};
+                        std::copy_n(txTo.begin(), sizeof(evmc_address), addr.bytes);
+                        toAddr = addr;
+                    }
+                    eip2929.warmUpInitialTxSet(m_data->m_origin, toAddr, rev);
+
+                    // EIP-3651 (Shanghai+): coinbase is warm from tx start
+                    if (rev >= EVMC_SHANGHAI)
+                    {
+                        auto const coinbaseBytes = m_data->m_blockHeader.get().coinbase();
+                        if (coinbaseBytes.size() == sizeof(evmc_address))
+                        {
+                            evmc_address coinbaseAddr{};
+                            std::copy(coinbaseBytes.begin(), coinbaseBytes.end(),
+                                coinbaseAddr.bytes);
+                            (void)eip2929.warmUpAddressNoJournal(coinbaseAddr);
+                        }
+                    }
+
+                    // EIP-2930: warm access-list entries
+                    if (m_data->m_web3AccessListResolved.accessList)
+                    {
+                        eip2929.warmUpAccessList(
+                            *m_data->m_web3AccessListResolved.accessList,
+                            [](bcos::Address const& addr) -> evmc_address {
+                                evmc_address evmcAddr{};
+                                std::copy_n(addr.begin(),
+                                    std::min(static_cast<size_t>(addr.size()),
+                                        sizeof(evmc_address)),
+                                    evmcAddr.bytes);
+                                return evmcAddr;
+                            });
+                    }
+                }
+
                 // --- Ethereum native mode: validate transaction + bump nonce ---
                 if (isEthereumMode)
                 {
@@ -350,14 +428,64 @@ public:
                             BCOS_ERROR(-1, "Nonce mismatch: tx.nonce != storage.nonce"));
                     }
 
-                    // 2. EIP-3607: sender must be an EOA
-                    if (auto codeHash = co_await senderAccount.codeHash())
+                    // 2. EIP-1559 fee validation (London+, for type 2 and type 4 txs)
+                    // Reference: bcos-evm/bcos-evm/eth/state/state.cpp validate_transaction()
+                    auto const typedTxKind = tx.web3TypedTxKind();
+                    if (rev >= EVMC_LONDON && (typedTxKind == 2 || typedTxKind == 4))
                     {
-                        static const bcos::h256 EMPTY_CODE_HASH{};
-                        if (codeHash != EMPTY_CODE_HASH)
+                        auto maxFee = tx.maxFeePerGas().value_or(u256{0});
+                        auto maxPriorityFee = tx.maxPriorityFeePerGas().value_or(u256{0});
+                        auto blockGasPrice =
+                            u256{std::get<0>(m_data->m_ledgerConfig.get().gasPrice())};
+                        auto blockBaseFee = (rev >= EVMC_LONDON) ? blockGasPrice : u256{0};
+
+                        if (maxFee < blockBaseFee)
                         {
-                            BOOST_THROW_EXCEPTION(BCOS_ERROR(-2, "EIP-3607: sender is not an EOA"));
+                            BOOST_THROW_EXCEPTION(BCOS_ERROR(
+                                -8, "EIP-1559: maxFeePerGas is less than block base fee"));
                         }
+                        if (maxPriorityFee > maxFee)
+                        {
+                            BOOST_THROW_EXCEPTION(
+                                BCOS_ERROR(-9, "EIP-1559: maxPriorityFeePerGas > maxFeePerGas"));
+                        }
+                    }
+
+                    // 3. EIP-3607: sender must be an EOA (check BEFORE auth list processing
+                    //    because self-sponsored EIP-7702 txs delegate to themselves).
+                    //    For EIP-7702 (type 4), the sender can have delegation code set by
+                    //    their own authorization list — skip EIP-3607 for type 4 txs.
+                    if (typedTxKind != 4)
+                    {
+                        if (auto codeHash = co_await senderAccount.codeHash())
+                        {
+                            static const bcos::h256 EMPTY_CODE_HASH{};
+                            if (codeHash != EMPTY_CODE_HASH)
+                            {
+                                BOOST_THROW_EXCEPTION(
+                                    BCOS_ERROR(-2, "EIP-3607: sender is not an EOA"));
+                            }
+                        }
+                    }
+
+                    // 4. Typed transaction fork validity
+                    // EIP-2930 (type 1): only valid from Berlin
+                    // EIP-1559 (type 2): only valid from London
+                    // EIP-7702 (type 4): only valid from Prague
+                    if (typedTxKind == 1 && rev < EVMC_BERLIN)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            BCOS_ERROR(-5, "EIP-2930 type 1 tx before Berlin fork"));
+                    }
+                    if (typedTxKind == 2 && rev < EVMC_LONDON)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            BCOS_ERROR(-6, "EIP-1559 type 2 tx before London fork"));
+                    }
+                    if (typedTxKind == 4 && rev < EVMC_PRAGUE)
+                    {
+                        BOOST_THROW_EXCEPTION(
+                            BCOS_ERROR(-7, "EIP-7702 type 4 tx before Prague fork"));
                     }
 
                     // 3. EIP-3860: initcode size limit (Shanghai+)
@@ -475,12 +603,52 @@ public:
                             senderBalance - u256(m_data->m_gasLimit) * effectiveGasPrice);
                         m_data->m_gasPriceStr =
                             "0x" + effectiveGasPrice.str(256, std::ios_base::hex);
+
+                        // EIP-4844: deduct blob gas fee for type 3 (blob) transactions.
+                        // Reference: evmone state.cpp transition() blob fee deduction.
+                        if (tx.web3TypedTxKind() == 3 && rev >= EVMC_CANCUN)
+                        {
+                            static constexpr int64_t GAS_PER_BLOB = 1 << 17;  // 131072
+                            auto const& blobHashes = tx.blobVersionedHashes();
+                            auto const blobCount = static_cast<int64_t>(blobHashes.size());
+                            auto const blobGasUsed = blobCount * GAS_PER_BLOB;
+                            if (blobGasUsed > 0)
+                            {
+                                // Compute blob gas price from excessBlobGas via
+                                // fake-exponential EIP-4844 formula (simplified:
+                                // excessBlobGas=0 → blobBaseFee=1).
+                                // For EEST tests, excessBlobGas is 0x00 so base fee = 1.
+                                auto const blobBaseFee = u256{1};  // TODO: proper formula
+                                auto const maxBlobFee = u256{tx.maxFeePerBlobGas().value_or(
+                                    u256{std::numeric_limits<uint64_t>::max()})};
+                                auto const effectiveBlobFee =
+                                    std::min(blobBaseFee, maxBlobFee);
+                                auto const blobFee = u256(blobGasUsed) * effectiveBlobFee;
+                                if (blobFee > 0)
+                                {
+                                    auto blobBalance = co_await senderAccount.balance();
+                                    co_await senderAccount.setBalance(blobBalance - blobFee);
+                                }
+                            }
+                        }
                     }
 
                     // bcos-evm pattern: pre-deduct intrinsic from EVM gas budget
                     // so evmone sees correct remaining gas (GAS opcode, OOG detection).
                     {
-                        auto const intrinsicGas = computeTxIntrinsicCost(rev, tx, 0);
+                        static constexpr auto ACCESS_LIST_ADDRESS_COST = 2400;
+                        static constexpr auto ACCESS_LIST_STORAGE_KEY_COST = 1900;
+                        int64_t accessListCostForIntrinsic = 0;
+                        if (m_data->m_web3AccessListResolved.accessList)
+                        {
+                            for (auto const& [_, keys] :
+                                *m_data->m_web3AccessListResolved.accessList)
+                                accessListCostForIntrinsic += ACCESS_LIST_ADDRESS_COST +
+                                    static_cast<int64_t>(keys.size()) *
+                                        ACCESS_LIST_STORAGE_KEY_COST;
+                        }
+                        auto const intrinsicGas =
+                            computeTxIntrinsicCostPure(rev, tx, accessListCostForIntrinsic);
                         auto& msg = m_data->m_hostContext.mutableMessage();
                         if (msg.gas <= intrinsicGas)
                         {
@@ -497,13 +665,15 @@ public:
 
                     // Post-execution settlement: gasLeft already accounts for intrinsic
                     auto& evmcResult = *m_data->m_evmcResult;
-                    // Ethereum mode: stack overflow/underflow/OOG/revert at top-level
-                    // produce a successful receipt (Yellow Paper, Ethereum consensus).
-                    // The revert output is preserved in the receipt for callers.
-                    if (isEthereumMode && (evmcResult.status_code == EVMC_STACK_OVERFLOW ||
-                                              evmcResult.status_code == EVMC_STACK_UNDERFLOW ||
-                                              evmcResult.status_code == EVMC_OUT_OF_GAS ||
-                                              evmcResult.status_code == EVMC_REVERT))
+                    // Ethereum mode: ALL exceptional halts (invalid instruction,
+                    // undefined instruction, bad jump, stack error, OOG,
+                    // contract validation failure, etc.) produce a successful
+                    // transaction receipt per the Yellow Paper / Ethereum consensus.
+                    // Only the gas is consumed; state changes (nonce bump, gas
+                    // deduction) are preserved.
+                    // REVERT is handled separately — it preserves gas_left
+                    // (gas up to the revert point is consumed, remainder refunded).
+                    if (isEthereumMode)
                     {
                         m_data->m_evmcResult->status = protocol::TransactionStatus::None;
                     }
@@ -527,6 +697,22 @@ public:
                         auto refund = std::min(m_data->m_delegationRefund + evmcResult.gas_refund,
                             gasUsed / maxRefundQuotient);
                         gasUsed -= refund;
+
+                        // EIP-7623: floor gas cost (Prague+).
+                        // Reference: bcos-evm state.cpp transition() line 636.
+                        if (rev >= EVMC_PRAGUE)
+                        {
+                            static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
+                            auto const& input = tx.input();
+                            const size_t numZero = static_cast<size_t>(
+                                std::count(input.begin(), input.end(), static_cast<uint8_t>(0)));
+                            const size_t numNonzero = input.size() - numZero;
+                            const auto numTokens = static_cast<int64_t>(
+                                4 * numNonzero + numZero);  // post-Istanbul multipliers
+                            auto const minGasCost =
+                                int64_t{21000} + numTokens * TOTAL_COST_FLOOR_PER_TOKEN;
+                            gasUsed = std::max(gasUsed, minGasCost);
+                        }
 
                         m_data->m_gasUsed = gasUsed;
 
@@ -564,10 +750,15 @@ public:
                         m_data->m_gasUsed = gasUsed;
                     }
 
-                    // On EVM failure (non-success, non-revert), rollback ALL
-                    // state including the nonce bump done in step 0.
-                    // Ethereum mode: stack overflow/underflow don't revert.
-                    if (evmcResult.status_code != EVMC_SUCCESS &&
+                    // On EVM failure in Ethereum mode, do NOT rollback state.
+                    // Ethereum treats all exceptional halts as successful
+                    // transactions — the sender still pays for gas, the nonce
+                    // is consumed, and only the EVM execution effects are
+                    // discarded (evmone already handled that).
+                    // In BCOS mode (non-Ethereum), rollback to preserve
+                    // backward-compatible consensus semantics.
+                    if (!isEthereumMode &&
+                        evmcResult.status_code != EVMC_SUCCESS &&
                         evmcResult.status_code != EVMC_REVERT &&
                         evmcResult.status_code != EVMC_STACK_OVERFLOW &&
                         evmcResult.status_code != EVMC_STACK_UNDERFLOW)

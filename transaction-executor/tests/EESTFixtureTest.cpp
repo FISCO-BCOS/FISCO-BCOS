@@ -27,7 +27,6 @@
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 
 using namespace bcos;
@@ -72,9 +71,9 @@ public:
         // Enable fork-specific features (toRevision maps these → evmc_revision)
         if (rev >= EVMC_OSAKA)
             features.set(ledger::Features::Flag::feature_evm_osaka);
-        else if (rev >= EVMC_PRAGUE)
+        if (rev >= EVMC_PRAGUE)
             features.set(ledger::Features::Flag::feature_evm_prague);
-        else if (rev >= EVMC_CANCUN)
+        if (rev >= EVMC_CANCUN)
             features.set(ledger::Features::Flag::feature_evm_cancun);
 
         ledgerConfig.setFeatures(features);
@@ -275,20 +274,14 @@ public:
         // Set a dummy transaction hash (required by TransactionImpl::hash())
         tarsTx->extraTransactionHash.assign(32, 0);
 
-        // Determine typed tx kind
-        if (!tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty())
-            tarsTx->web3TypedTxKind = 2;  // EIP-1559
-        else if (!tx.gasPrice.empty())
-            tarsTx->web3TypedTxKind = 0;  // Legacy
-        else
-            tarsTx->web3TypedTxKind = 0;
-
-        // Access list
+        // Access list (must be built BEFORE determining typed tx kind)
+        bool hasAccessList = false;
         if (dataIndex >= 0 && static_cast<size_t>(dataIndex) < tx.accessLists.size())
         {
             auto const& al = tx.accessLists[dataIndex];
             if (al.has_value())
             {
+                hasAccessList = true;
                 for (auto const& [addr, keys] : *al)
                 {
                     bcostars::Web3AccessListEntry entry;
@@ -300,6 +293,48 @@ public:
                     }
                     data.accessList.push_back(std::move(entry));
                 }
+            }
+        }
+
+        // Determine typed tx kind (must match access list for Web3AccessListResolver)
+        // type 2 = EIP-1559 (dynamic fee), type 1 = EIP-2930 (access list),
+        // type 4 = EIP-7702 (set_code / authorization list), type 0 = legacy
+        bool hasAuthList = tx.authorizationList.has_value() && !tx.authorizationList->empty();
+        if (hasAuthList)
+            tarsTx->web3TypedTxKind = 4;  // EIP-7702 set_code
+        else if (!tx.maxFeePerGas.empty() || !tx.maxPriorityFeePerGas.empty())
+            tarsTx->web3TypedTxKind = 2;  // EIP-1559
+        else if (hasAccessList)
+            tarsTx->web3TypedTxKind = 1;  // EIP-2930 (access list)
+        else
+            tarsTx->web3TypedTxKind = 0;  // Legacy
+
+        // EIP-7702 authorization list
+        if (hasAuthList)
+        {
+            for (auto const& auth : *tx.authorizationList)
+            {
+                bcostars::AuthorizationEntry entry;
+                entry.chainID = test::hexToInt64(test::readHexField(auth, "chainId"));
+                entry.nonce = test::hexToInt64(test::readHexField(auth, "nonce"));
+                entry.v = static_cast<uint8_t>(test::hexToInt64(test::readHexField(auth, "v")));
+                entry.address = test::strip0x(test::readHexField(auth, "address"));
+                entry.signer = test::strip0x(test::readHexField(auth, "signer"));
+                entry.r = test::strip0x(test::readHexField(auth, "r"));
+                entry.s = test::strip0x(test::readHexField(auth, "s"));
+                data.authorizationList.push_back(std::move(entry));
+            }
+        }
+
+        // EIP-4844 blob versioned hashes
+        if (!tx.blobVersionedHashes.empty())
+        {
+            tarsTx->web3TypedTxKind = 3;  // blob tx
+            data.maxFeePerBlobGas = test::strip0x(tx.maxFeePerBlobGas);
+            for (auto const& h : tx.blobVersionedHashes)
+            {
+                auto hashBytes = test::hexToBytes(h);
+                data.blobVersionedHashes.emplace_back(hashBytes.begin(), hashBytes.end());
             }
         }
 
