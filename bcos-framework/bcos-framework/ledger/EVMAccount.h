@@ -155,8 +155,19 @@ public:
                 executor_v1::StateKeyView{m_tableName, ACCOUNT_TABLE_FIELDS::BALANCE}))
         {
             auto view = balanceEntry->get();
-            auto balance = boost::lexical_cast<u256>(view);
-            co_return balance;
+            // bcos::u256(string) natively supports both decimal ("1000")
+            // and hex ("0x3e8") formats, unlike boost::lexical_cast<u256>()
+            // which only handles decimal.
+            if (view.empty())
+                co_return {};
+            try
+            {
+                co_return bcos::u256(std::string(view));
+            }
+            catch (...)
+            {
+                co_return {};
+            }
         }
         co_return {};
     }
