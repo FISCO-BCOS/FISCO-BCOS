@@ -28,9 +28,10 @@ namespace bcos::executor
 
 struct Eip2929AccessState;
 
-/// True when Berlin+ revision semantics apply (EIP-2929 follows EVM revision directly).
-inline bool eip2929Enabled(evmc_revision revision, ledger::Features const& /*features*/) noexcept
+/// True when Berlin+ revision semantics apply.
+inline bool eip2929Enabled(evmc_revision revision, ledger::Features const& features) noexcept
 {
+    (void)features;
     return revision >= EVMC_BERLIN;
 }
 

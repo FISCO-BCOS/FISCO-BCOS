@@ -3,7 +3,7 @@
  * @brief Standalone Ethereum Execution Spec Tests (EEST) runner.
  *
  * A dedicated command-line tool for running EEST v5.4.0 JSON state test fixtures
- * against bcos-transaction-executor.  Provides detailed per-file and per-test
+ * against ethereum-executor (based on bcos-evm).  Provides detailed per-file and per-test
  * diagnostic output, configurable verbosity, single-fixture regression mode,
  * and TBB-based parallel execution.
  *
@@ -14,24 +14,23 @@
  *   ./eest-runner --fixture-dir /path --jobs 8              # parallel
  */
 
-#include "../bcos-transaction-executor/TransactionExecutorImpl.h"
 #include "EESTFixtureLoader.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-executor/src/Common.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
+#include "ethereum-executor/EthereumExecutor.h"
 #include <evmc/evmc.h>
 #include <tbb/concurrent_vector.h>
+#include <boost/algorithm/hex.hpp>
 #include <boost/log/core.hpp>
-
-// Use TBB-aware syncWait so coroutines cooperate with the TBB scheduler
-// instead of blocking worker threads.
+#include <range/v3/algorithm/equal.hpp>
 #include "bcos-task/TBBWait.h"
 #include <atomic>
 #include <chrono>
@@ -181,8 +180,7 @@ public:
     std::shared_ptr<bcos::crypto::CryptoSuite> cryptoSuite;
     bcostars::protocol::TransactionFactoryImpl transactionFactory;
     bcostars::protocol::TransactionReceiptFactoryImpl receiptFactory;
-    PrecompiledManager precompiledManager;
-    TransactionExecutorImpl executor;
+    eth::EthereumExecutor executor;
     evmc_revision m_currentRevision = EVMC_CANCUN;
     ledger::LedgerConfig m_ledgerConfig;
 
@@ -191,28 +189,13 @@ public:
             std::make_shared<bcos::crypto::Keccak256>(), nullptr, nullptr)),
         transactionFactory(cryptoSuite),
         receiptFactory(cryptoSuite),
-        precompiledManager(cryptoSuite->hashImpl()),
-        executor(receiptFactory, cryptoSuite->hashImpl(), precompiledManager)
-    {
-        // g_hashImpl initialized once in main() — do NOT set here (data race in parallel mode)
-    }
+        executor(receiptFactory, cryptoSuite->hashImpl())
+    {}
 
     void configureFork(std::string const& forkName)
     {
         auto const rev = test::forkNameToRevision(forkName);
         m_currentRevision = rev;
-        ledger::Features features;
-        features.set(ledger::Features::Flag::feature_ethereum_executor);
-        features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
-
-        if (rev >= EVMC_OSAKA)
-            features.set(ledger::Features::Flag::feature_evm_osaka);
-        if (rev >= EVMC_PRAGUE)
-            features.set(ledger::Features::Flag::feature_evm_prague);
-        if (rev >= EVMC_CANCUN)
-            features.set(ledger::Features::Flag::feature_evm_cancun);
-
-        m_ledgerConfig.setFeatures(features);
         m_ledgerConfig.setEVMCRevision(rev);
     }
 
@@ -350,7 +333,10 @@ public:
         data.value = test::strip0x(value);
 
         if (!tx.to.empty() && tx.to != "0x")
-            data.to = test::strip0x(tx.to);
+        {
+            auto toBytes = test::hexToBytes(tx.to);
+            data.to.assign(toBytes.begin(), toBytes.end());
+        }
 
         auto inputBytes = test::hexToBytes(txData);
         data.input.assign(inputBytes.begin(), inputBytes.end());
@@ -472,7 +458,7 @@ public:
                 }
 
                 // balance
-                if (!expectedAcc.balance.empty() && expectedAcc.balance != "0x")
+                if (!expectedAcc.balance.empty())
                 {
                     auto storedBal = co_await evmAccount.balance();
                     auto expBal = test::hexToU256(expectedAcc.balance);
@@ -552,6 +538,30 @@ public:
 
         MutableStorage storage;
         setupPreState(storage, fixture.pre);
+
+        // Ensure sender exists with correct initial nonce.
+        // EEST fixtures may not include sender in "pre" — evmone creates it
+        // with default nonce=0, then bumps to 1. But expected nonce may be 2
+        // (tx nonce 1 → bumped to 2), so we must set the correct initial nonce.
+        if (!fixture.transaction.sender.empty())
+        {
+            auto senderBytes = test::hexToBytes(fixture.transaction.sender);
+            if (senderBytes.size() == sizeof(evmc_address))
+            {
+                evmc_address senderAddr{};
+                std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
+                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
+                auto txNonce = test::hexToU256(fixture.transaction.nonce);
+                auto nonceStr = txNonce.str(0, std::ios_base::dec);
+                task::tbb::syncWait([&]() -> task::Task<void> {
+                    if (!co_await senderAcct.exists())
+                    {
+                        co_await senderAcct.create();
+                        co_await senderAcct.setNonce(nonceStr);
+                    }
+                }());
+            }
+        }
 
         auto blockHeader = buildBlockHeader(fixture.env);
         auto tx =
@@ -682,7 +692,8 @@ public:
     }
 
     /// Run a blockchain test fixture: execute blocks sequentially,
-    /// apply block rewards, then verify postState. Returns true if passed.
+    /// apply block rewards via finalize(), then verify postState.
+    /// Returns true if passed.
     bool runBlockchainFixture(test::EESTBlockchainFixture const& fixture)
     {
         auto forkName = extractForkFromName(fixture.name);
@@ -694,26 +705,42 @@ public:
         MutableStorage storage;
         setupPreState(storage, fixture.pre);
 
+        // Ensure sender accounts exist with correct initial nonce.
+        // EEST fixtures may not include sender in "pre".
+        for (auto const& block : fixture.blocks)
+            for (auto const& tx : block.transactions)
+            {
+                if (tx.sender.empty()) continue;
+                auto senderBytes = test::hexToBytes(tx.sender);
+                if (senderBytes.size() != sizeof(evmc_address)) continue;
+                evmc_address senderAddr{};
+                std::copy(senderBytes.begin(), senderBytes.end(), senderAddr.bytes);
+                ledger::account::EVMAccount<MutableStorage> senderAcct(storage, senderAddr, false);
+                auto txNonce = test::hexToU256(tx.nonce);
+                auto nonceStr = txNonce.str(0, std::ios_base::dec);
+                task::tbb::syncWait([&]() -> task::Task<void> {
+                    if (!co_await senderAcct.exists())
+                    {
+                        co_await senderAcct.create();
+                        co_await senderAcct.setNonce(nonceStr);
+                    }
+                }());
+            }
+
         // Configure initial environment from genesis header
         configureEnvironment(fixture.genesisBlockHeader);
 
-        // Compute block reward based on fork
+        // Compute block reward based on fork (matching evmone's mining_reward()).
+        // Reference: evmone test/blockchaintest/blockchaintest_runner.cpp
         auto const rev = m_currentRevision;
-        u256 blockReward = 0;
-        if (rev < EVMC_PARIS)
-        {
-            // Pre-merge forks have block rewards
-            if (rev <= EVMC_FRONTIER)
-                blockReward = u256(5000000000000000000ULL);  // 5 ETH (Frontier)
-            else if (rev <= EVMC_HOMESTEAD)
-                blockReward = u256(5000000000000000000ULL);  // 5 ETH (Homestead)
-            else if (rev <= EVMC_SPURIOUS_DRAGON)
-                blockReward = u256(5000000000000000000ULL);  // 5 ETH
-            else if (rev < EVMC_CONSTANTINOPLE)
-                blockReward = u256(3000000000000000000ULL);  // 3 ETH (Byzantium)
-            else
-                blockReward = u256(2000000000000000000ULL);  // 2 ETH (Constantinople+)
-        }
+        std::optional<uint64_t> blockReward;
+        if (rev < EVMC_BYZANTIUM)
+            blockReward = 5000000000000000000ULL;  // 5 ETH (Frontier..SpuriousDragon)
+        else if (rev < EVMC_PETERSBURG)
+            blockReward = 3000000000000000000ULL;  // 3 ETH (Byzantium..Constantinople)
+        else if (rev < EVMC_PARIS)
+            blockReward = 2000000000000000000ULL;  // 2 ETH (Petersburg..London)
+        // else: Paris+ → 0 (no block reward after merge)
 
         // Execute each block's transactions sequentially
         int txIndex = 0;
@@ -724,8 +751,6 @@ public:
 
             for (auto const& tx : block.transactions)
             {
-                // blockchain test tx has scalar fields wrapped in arrays;
-                // use index 0 for data, gas, value
                 auto bcosTx =
                     buildTransaction(tx, 0 /*dataIndex*/, 0 /*gasIndex*/, 0 /*valueIndex*/);
 
@@ -744,13 +769,10 @@ public:
                     executionThrew = true;
                 }
 
-                bool expectsSuccess = true;  // blockchain tests always expect success per-tx
-                bool gotSuccess = !executionThrew && receipt &&
-                                  (receipt->status() == 0 ||
-                                      receipt->status() ==
-                                          static_cast<int32_t>(protocol::TransactionStatus::None));
-
-                if (!gotSuccess)
+                if (executionThrew || !receipt ||
+                    (receipt->status() != 0 &&
+                        receipt->status() !=
+                            static_cast<int32_t>(protocol::TransactionStatus::None)))
                 {
                     std::ostringstream oss;
                     oss << "FAIL: " << fixture.name << " [" << forkName << "] tx#" << txIndex
@@ -766,24 +788,9 @@ public:
                 ++txIndex;
             }
 
-            // Apply block reward to coinbase (pre-merge forks only)
-            if (blockReward > 0)
-            {
-                auto coinbaseBytes = test::hexToBytes(block.blockHeader.coinbase);
-                if (coinbaseBytes.size() == sizeof(evmc_address))
-                {
-                    evmc_address coinbaseAddr{};
-                    std::copy(coinbaseBytes.begin(), coinbaseBytes.end(), coinbaseAddr.bytes);
-                    ledger::account::EVMAccount<MutableStorage> coinbaseAccount(
-                        storage, coinbaseAddr, false);
-                    task::tbb::syncWait([&]() -> task::Task<void> {
-                        if (!co_await coinbaseAccount.exists())
-                            co_await coinbaseAccount.create();
-                        auto bal = co_await coinbaseAccount.balance();
-                        co_await coinbaseAccount.setBalance(bal + blockReward);
-                    }());
-                }
-            }
+            // Apply block reward via finalize() (uses bcos-evm's built-in logic)
+            task::tbb::syncWait(
+                executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, rev, blockReward));
 
             // EIP-4788: BEACON_ROOTS system call (Cancun+)
             // After each block, the system calls the BEACON_ROOTS contract to
@@ -1040,12 +1047,6 @@ int main(int argc, char* argv[])
     {
         boost::log::core::get()->set_logging_enabled(false);
     }
-
-    // One-time init: set global hash impl BEFORE any EESTRunner is created.
-    // Must NOT be done in EESTRunner constructor because parallel pipeline
-    // creates runners concurrently → data race on shared_ptr.
-    if (!bcos::executor::GlobalHashImpl::g_hashImpl)
-        bcos::executor::GlobalHashImpl::g_hashImpl = std::make_shared<bcos::crypto::Keccak256>();
 
     // Resolve fixture directory
     std::string fixtureDir = g_opts.fixtureDir;

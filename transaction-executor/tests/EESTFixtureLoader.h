@@ -7,6 +7,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/throw_exception.hpp>
 #include <cstdint>
+#include <fstream>
 #include <map>
 #include <optional>
 #include <string>

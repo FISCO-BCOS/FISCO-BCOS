@@ -14,10 +14,12 @@ namespace bcos::test
 BOOST_AUTO_TEST_SUITE(Compat)
 BOOST_AUTO_TEST_SUITE(CompatFeatureDefaults)
 
+// FC_F_eip2929_default_off: removed — feature_evm_eip2929 flag was removed,
+// EIP-2929 now follows EVM revision directly.
 BOOST_AUTO_TEST_CASE(FC_F_eip2929_default_off)
 {
-    ledger::Features f;
-
+    // Placeholder test — flag no longer exists.
+    BOOST_CHECK(true);
 }
 
 BOOST_AUTO_TEST_CASE(FC_F_prague_default_off)
@@ -43,6 +45,7 @@ BOOST_AUTO_TEST_CASE(FC_F_flags_contain_string)
     BOOST_CHECK(ledger::Features::contains("feature_evm_cancun"));
     BOOST_CHECK(ledger::Features::contains("feature_evm_prague"));
     BOOST_CHECK(ledger::Features::contains("feature_evm_osaka"));
+    // feature_evm_eip2929: flag removed, EIP-2929 follows EVM revision
 }
 
 BOOST_AUTO_TEST_CASE(FC_F_prague_does_not_auto_enable_cancun)

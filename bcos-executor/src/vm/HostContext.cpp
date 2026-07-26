@@ -66,10 +66,9 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
 {
     hostInterface = getHostInterface();
 
-    if (toRevision(m_executive->blockContext().vmSchedule()) >= EVMC_BERLIN)
-    {
-        m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
-    }
+    // EIP-2929 cold/warm access tracking is always created; the caller
+    // gates usage via evm_revision (only used at Berlin+).
+    m_eip2929Access = m_executive->getEip2929AccessState(m_executive->contextID());
 }
 
 std::string HostContext::get(const std::string_view& _key)

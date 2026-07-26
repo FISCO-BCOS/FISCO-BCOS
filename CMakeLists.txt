@@ -63,6 +63,7 @@ if(FULLNODE)
     find_package(blst CONFIG REQUIRED)
 
     add_subdirectory(bcos-evm)
+    add_subdirectory(ethereum-executor)
     add_subdirectory(bcos-sealer)
     add_subdirectory(bcos-security)
     add_subdirectory(bcos-scheduler)

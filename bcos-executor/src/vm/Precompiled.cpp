@@ -537,10 +537,9 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_g1msm)(bytesConstRef _in)
         539, 538, 537, 536, 536, 535, 534, 533, 532, 532, 531, 530, 529, 528, 528, 527, 526, 525,
         525, 524, 523, 522, 522, 521, 520, 520, 519};
     // evmone caps MSM at 128 pairs; larger k means the gas pricer let through an invalid input.
-    // Clamp k to the discount table size to safely handle oversized inputs.
-    auto const clampedK = std::min(k, std::size(DISCOUNTS));
-    auto const discount = DISCOUNTS[clampedK - 1];
-    return u256(12000 * static_cast<int64_t>(discount) * static_cast<int64_t>(clampedK) / 1000);
+    assert(k <= std::size(DISCOUNTS) && "BLS G1MSM: too many pairs for discount table");
+    auto const discount = DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
+    return u256(12000 * static_cast<int64_t>(discount) * static_cast<int64_t>(k) / 1000);
 }
 
 ETH_REGISTER_PRECOMPILED(bls12_g2add)(bytesConstRef _in)
@@ -593,10 +592,9 @@ ETH_REGISTER_PRECOMPILED_PRICER(bls12_g2msm)(bytesConstRef _in)
         543, 542, 541, 541, 540, 539, 538, 537, 537, 536, 535, 535, 534, 533, 532, 532, 531, 530,
         530, 529, 528, 528, 527, 526, 526, 525, 524, 524};
     // evmone caps MSM at 128 pairs; larger k means the gas pricer let through an invalid input.
-    // Clamp k to the discount table size to safely handle oversized inputs.
-    auto const clampedK = std::min(k, std::size(DISCOUNTS));
-    auto const discount = DISCOUNTS[clampedK - 1];
-    return u256(22500 * static_cast<int64_t>(discount) * static_cast<int64_t>(clampedK) / 1000);
+    assert(k <= std::size(DISCOUNTS) && "BLS G2MSM: too many pairs for discount table");
+    auto const discount = DISCOUNTS[std::min(k, std::size(DISCOUNTS)) - 1];
+    return u256(22500 * static_cast<int64_t>(discount) * static_cast<int64_t>(k) / 1000);
 }
 
 ETH_REGISTER_PRECOMPILED(bls12_pairing_check)(bytesConstRef _in)
