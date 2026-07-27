@@ -130,6 +130,28 @@ jobs:
         run: |
           cd build
           CTEST_OUTPUT_ON_FAILURE=TRUE ctest -j3
+      - name: Download EEST fixtures
+        if: matrix.os != 'windows-2025'
+        run: |
+          cd ${{ github.workspace }}
+          curl -L -o fixtures_stable.tar.gz https://github.com/ethereum/execution-spec-tests/releases/download/v5.4.0/fixtures_stable.tar.gz
+          tar -xzf fixtures_stable.tar.gz
+          # The tarball may extract to fixtures_stable/; ensure we have fixtures/
+          if [ -d fixtures_stable ] && [ ! -d fixtures ]; then
+            mv fixtures_stable fixtures
+          fi
+      - name: Run EEST fixture tests
+        if: matrix.os != 'windows-2025'
+        run: |
+          cd build/transaction-executor/tests
+          ./eest-runner --fixture-dir ../../../fixtures/ --no-log 2>&1 | tee eest_output.txt
+          PASS_RATE=$(grep -oP 'Pass rate:\s+\K[0-9]+' eest_output.txt)
+          echo "EEST pass rate: ${PASS_RATE}%"
+          if [ -z "${PASS_RATE}" ] || [ "${PASS_RATE}" -lt 90 ]; then
+            echo "::error::EEST pass rate ${PASS_RATE:-unknown}% is below 90% threshold"
+            exit 1
+          fi
+          echo "::notice::EEST pass rate ${PASS_RATE}% meets the 90% threshold"
       - name: Upload fisco-bcos binary artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4
