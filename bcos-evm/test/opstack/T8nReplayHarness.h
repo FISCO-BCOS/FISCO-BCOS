@@ -338,7 +338,21 @@ struct TestStateBackend
 
     static evmone::hash256 stateRoot(const Ledger& ledger)
     {
+        // TestState 腿(既有,不动,spec §7"三腿回放"):stateRootOf(TestState) 是这条腿的引擎
+        // 本身,标 [[deprecated]] 只是引导*新*调用点改走泛型 stateRootOf<Ledger>(design §6
+        // /真账本桥 Task 5)——本调用点不迁移(迁移意味着为 TestState 另造一层 visitAccounts
+        // 视图,对"exercising this exact engine unmodified"这条腿的存在意义没有增益),
+        // 局部抑制该单点告警即可(-Wdeprecated-declarations;in-tree 构建的 -Werror 已全局
+        // -Wno-error=deprecated-declarations,这里加 pragma 纯为消除告警噪音,不依赖那条全局
+        // 降级)。
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
         return bcos::evm::stateRootOf(ledger);
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     }
 
     static void forEachPostAccount(const Ledger& ledger, const PostVisitor& visitor)
@@ -353,8 +367,9 @@ struct TestStateBackend
 // MemoryLedger::applyDiff 落账，与 Storage2Ledger 腿共用同一份播种实现）；apply 直接走
 // MemoryLedger::applyDiff（strict 语义内置，无需外部 tripwire 包装）；
 // stateRoot/forEachPostAccount 经 visitAccounts（Task 1 已交付、const 遍历
-// 契约）驱动，其中 stateRoot 暂经"导出为 TestState 再调既有 stateRootOf"的
-// 过渡实现——Task 5 换正式的自研遍历建根后删除该导出步骤。
+// 契约）驱动——stateRoot 经真账本桥 Task 5 的泛型 stateRootOf<Ledger>
+// （adapter/StateRootCompute.h）直接对 MemoryLedger 建根，不再经"导出为
+// TestState 再调既有 stateRootOf"的过渡步骤（该导出实现已随 Task 5 删除）。
 struct MemoryLedgerBackend
 {
     using Ledger = bcos::evm::ledger::MemoryLedger;
@@ -375,20 +390,7 @@ struct MemoryLedgerBackend
 
     static evmone::hash256 stateRoot(const Ledger& ledger)
     {
-        // Task 5 移除：过渡实现——MemoryLedger 尚无自研遍历建根，先经
-        // visitAccounts 导出为 evmone::test::TestState，复用既有 stateRootOf
-        // 引擎（同一 mpt_hash 实现）。Task 5 交付正式遍历建根后，本函数体改为
-        // 直接调用新实现，此导出步骤整体删除。
-        evmone::test::TestState exported;
-        ledger.visitAccounts([&](const bcos::evm::ledger::MemoryLedger::AccountView& av) {
-            auto& ea = exported[av.addr];
-            ea.nonce = av.nonce;
-            ea.balance = av.balance;
-            ea.code = av.code();
-            ea.storage = av.storage;
-            return true;
-        });
-        return bcos::evm::stateRootOf(exported);
+        return bcos::evm::stateRootOf(ledger);
     }
 
     static void forEachPostAccount(const Ledger& ledger, const PostVisitor& visitor)

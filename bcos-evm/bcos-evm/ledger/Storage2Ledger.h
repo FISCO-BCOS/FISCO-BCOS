@@ -46,6 +46,7 @@
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
 #include <bcos-task/Wait.h>
+#include <bcos-utilities/Overloaded.h>
 #include <boost/algorithm/hex.hpp>
 #include <array>
 #include <bcos-evm/eth/state/hash_utils.hpp>
@@ -54,6 +55,7 @@
 #include <cstring>
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <optional>
@@ -61,6 +63,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace bcos::evm::ledger
@@ -199,6 +202,52 @@ public:
             task::syncWait(applyDeletedEntry(addr));
     }
 
+    /// AccountVisitor payload (design §6): nonce/balance/codeHash + a lazily-evaluated code
+    /// getter (state-root computation never calls it — avoids an unconditional SYS_CODE_BINARY
+    /// read per account) + the account's already-materialized, tombstone-filtered,
+    /// poison-checked live storage slot map (see fetchAllStorage). Field names mirror
+    /// MemoryLedger::AccountView exactly so bcos::evm::stateRootOf<Ledger> works unmodified
+    /// against either backend.
+    struct AccountView
+    {
+        const evmc::address& addr;
+        uint64_t nonce;
+        const intx::uint256& balance;
+        evmc::bytes32 codeHash;
+        const std::map<evmc::bytes32, evmc::bytes32>& storage;
+
+        [[nodiscard]] evmc::bytes code() const noexcept { return m_bridge->get_account_code(addr); }
+
+        const Storage2Ledger* m_bridge;
+    };
+
+    /// Traverses every live account under the /apps/ namespace (design §6). noexcept +
+    /// poison-flag contract — the same shape as get_account/get_account_code/get_storage:
+    /// storage2 errors (including layout-invariant violations — an unknown key in an account
+    /// table, or a stored zero-valued slot, see fetchAllStorage) are caught here, poison() is
+    /// called, and the traversal stops early returning false. The visitor is invoked
+    /// synchronously per live account and must itself return bool: false aborts the traversal
+    /// early without poisoning (a plain "visitor is done" signal, distinct from a
+    /// poisoned/failed traversal). Consumer contract (design §6 "遍历产物全部作废"): after this
+    /// returns, check poisoned() before trusting anything the visitor produced.
+    template <class Visitor>
+    bool visitAccounts(Visitor&& visitor) const noexcept
+    {
+        try
+        {
+            return task::syncWait(visitAccountsImpl(visitor));
+        }
+        catch (const std::exception& e)
+        {
+            poison(e.what());
+        }
+        catch (...)
+        {
+            poison("Storage2Ledger::visitAccounts: unknown exception");
+        }
+        return false;
+    }
+
 private:
     task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry)
     {
@@ -317,6 +366,169 @@ private:
         m_codeCache.insert_or_assign(addr, evmc::bytes{});
         std::erase_if(
             m_storageCache, [&addr](const auto& item) { return item.first.first == addr; });
+    }
+
+    /// Value-variant discrimination (design §6, Critical): storage2 logical deletion means
+    /// range() merges do NOT filter tombstones — a raw range item's value is the full
+    /// `storage2::StorageValueType<Value>` variant (NOT_EXISTS_TYPE/DELETED_TYPE/Value), and the
+    /// traversal must skip the two tombstone alternatives itself, or a block-internal delete
+    /// would resurrect into the state root. Returns the live content view, or nullopt for a
+    /// tombstone (either alternative) — the caller never needs to distinguish "never existed"
+    /// from "logically deleted", both mean "not part of this traversal".
+    template <class RawValue>
+    static std::optional<std::string_view> liveContent(const RawValue& rawValue)
+    {
+        return std::visit(
+            bcos::overloaded{[](const storage2::NOT_EXISTS_TYPE&)
+                                 -> std::optional<std::string_view> { return std::nullopt; },
+                [](const storage2::DELETED_TYPE&) -> std::optional<std::string_view> {
+                    return std::nullopt;
+                },
+                [](const auto& entry) -> std::optional<std::string_view> { return entry.get(); }},
+            rawValue);
+    }
+
+    /// Whether fieldKey is one of the ACCOUNT_TABLE_FIELDS full set (design §6:
+    /// CODE_HASH/CODE/BALANCE/ABI/NONCE/ALIVE/FROZEN/SHARD) — these rows are already read by
+    /// fetchAccount (or, for CODE, intentionally never read — see the file header comment on why
+    /// this bridge doesn't revive the legacy CODE field) and must not be misclassified as a
+    /// 32-byte storage slot key during the account-table range scan.
+    static bool isKnownAccountField(std::string_view fieldKey)
+    {
+        using Fields = bcos::ledger::ACCOUNT_TABLE_FIELDS;
+        return fieldKey == Fields::CODE_HASH || fieldKey == Fields::CODE ||
+               fieldKey == Fields::BALANCE || fieldKey == Fields::ABI ||
+               fieldKey == Fields::NONCE || fieldKey == Fields::ALIVE ||
+               fieldKey == Fields::FROZEN || fieldKey == Fields::SHARD;
+    }
+
+    /// Decodes the address embedded in a "/apps/<hex(addr)>" SYS_TABLES key (the inverse of
+    /// accountTableName's hex_lower encoding).
+    static evmc::address addressFromTableName(std::string_view tableKey)
+    {
+        auto hexView = tableKey.substr(bcos::ledger::SYS_DIRECTORY::USER_APPS.size());
+        std::string decoded;
+        decoded.reserve(hexView.size() / 2);
+        boost::algorithm::unhex(hexView.begin(), hexView.end(), std::back_inserter(decoded));
+        evmc::address addr{};
+        if (decoded.size() != sizeof(addr.bytes))
+            throw std::length_error(
+                "Storage2Ledger::visitAccounts: /apps/ table name is not a 20-byte hex-encoded "
+                "address: " +
+                std::string(tableKey));
+        std::memcpy(addr.bytes, decoded.data(), decoded.size());
+        return addr;
+    }
+
+    /// Full account-table scan for visitAccounts (design §6): classifies every live row under
+    /// tableName as one of ACCOUNT_TABLE_FIELDS (skipped — read separately by fetchAccount) / a
+    /// 32-byte raw storage slot key (collected into the returned map) / anything else (a
+    /// storage2 layout invariant violation the bridge cannot interpret — throws, caught and
+    /// poisoned by the public visitAccounts entry point). Tombstoned rows (design §6 Critical)
+    /// are skipped before classification, so a logically-deleted slot neither counts as a
+    /// zero-valued-slot violation nor resurrects into the returned map.
+    task::Task<std::map<evmc::bytes32, evmc::bytes32>> fetchAllStorage(std::string tableName) const
+    {
+        std::map<evmc::bytes32, evmc::bytes32> storage;
+        auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
+            executor_v1::StateKeyView{tableName, std::string_view{}});
+        while (auto item = co_await iterator.next())
+        {
+            const auto& key = std::get<0>(*item);
+            const auto& rawValue = std::get<1>(*item);
+            executor_v1::StateKeyView keyView(key);
+            auto [table, fieldKey] = keyView.get();
+            if (table != tableName)
+                break;
+
+            if (isKnownAccountField(fieldKey))
+                continue;
+
+            auto content = liveContent(rawValue);
+            if (!content.has_value())
+                continue;  // 墓碑跳过(design §6 Critical)
+
+            if (fieldKey.size() != kStorageSlotKeySize)
+                throw std::runtime_error(
+                    "Storage2Ledger::visitAccounts: unknown key in account table '" + tableName +
+                    "' (neither a known ACCOUNT_TABLE_FIELDS name nor a 32-byte storage slot "
+                    "key)");
+
+            evmc::bytes32 slotKey{};
+            std::memcpy(slotKey.bytes, fieldKey.data(), fieldKey.size());
+
+            if (content->size() != sizeof(evmc_bytes32::bytes))
+                throw std::length_error(
+                    "Storage2Ledger::visitAccounts: storage slot value size mismatch in account "
+                    "table '" +
+                    tableName + "'");
+
+            evmc::bytes32 slotValue{};
+            std::memcpy(slotValue.bytes, content->data(), content->size());
+
+            if (evmc::is_zero(slotValue))
+                // 零值槽毒旗(design §6):此规则仅在桥自写的 E-b 世界成立——applyDiff 的契约②
+                // 从不写零值槽(零值=删槽),真实值为零而仍落一行,只能是写回路径有漏;该规则
+                // 不得被继承到编排接入层(生产 HostContext::set 对零值照写不删,真实链账户表
+                // 必然含零值槽行)。
+                throw std::runtime_error(
+                    "Storage2Ledger::visitAccounts: zero-valued storage slot in account table '" +
+                    tableName +
+                    "' (bridge write-back never writes zero-valued slots — indicates "
+                    "a write-back leak)");
+
+            storage.emplace(slotKey, slotValue);
+        }
+        co_return storage;
+    }
+
+    /// visitAccounts implementation (design §6): range-scans SYS_TABLES for the /apps/ prefix
+    /// (system addresses route to /sys/ and never appear here — an E-b precondition, not a
+    /// runtime check, see accountTableName), skips tombstoned marker rows (Critical, same
+    /// discrimination as fetchAllStorage), and for each surviving candidate delegates to
+    /// fetchAccount/fetchAllStorage (which independently re-verify liveness through
+    /// existsOne/readOne) before invoking the visitor.
+    template <class Visitor>
+    task::Task<bool> visitAccountsImpl(Visitor& visitor) const
+    {
+        auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
+            executor_v1::StateKeyView{
+                bcos::ledger::SYS_TABLES, bcos::ledger::SYS_DIRECTORY::USER_APPS});
+        while (auto item = co_await iterator.next())
+        {
+            const auto& key = std::get<0>(*item);
+            const auto& rawValue = std::get<1>(*item);
+            executor_v1::StateKeyView keyView(key);
+            auto [table, tableKey] = keyView.get();
+            // 离开 /apps/ 前缀区间即停止(design §6:/sys/ 不扫)。
+            if (table != bcos::ledger::SYS_TABLES ||
+                !tableKey.starts_with(bcos::ledger::SYS_DIRECTORY::USER_APPS))
+                break;
+
+            // 值变体判别(design §6 Critical):跳过 NOT_EXISTS_TYPE/DELETED_TYPE 墓碑行,否则
+            // 块内刚删除的账户还魂进 stateRoot。
+            if (!liveContent(rawValue).has_value())
+                continue;
+
+            const std::string tableName{tableKey};
+            const auto addr = addressFromTableName(tableKey);
+
+            auto account = co_await fetchAccount(tableName);
+            if (!account.has_value())
+                continue;  // 双重防御:与上面的墓碑判别同一判据(existsOne),理应不可达
+
+            const auto storage = co_await fetchAllStorage(tableName);
+
+            const AccountView accountView{.addr = addr,
+                .nonce = account->nonce,
+                .balance = account->balance,
+                .codeHash = account->code_hash,
+                .storage = storage,
+                .m_bridge = this};
+            if (!visitor(accountView))
+                co_return false;
+        }
+        co_return true;
     }
 
     void poison(std::string_view reason) const noexcept

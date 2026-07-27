@@ -7,7 +7,9 @@
 // transaction-executor/tests/TestMemoryStorage.h:8-9),经 EVMAccount 写入种子数据,
 // EVMAccount(storage, addr, /*binaryAddress=*/false)——E-b 前置 feature_raw_address=off。
 
+#include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/ledger/LedgerSeed.h>
+#include <bcos-evm/ledger/MemoryLedger.h>
 #include <bcos-evm/ledger/Storage2Ledger.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -16,13 +18,17 @@
 #include <bcos-task/Wait.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <gtest/gtest.h>
+#include <boost/algorithm/hex.hpp>
+#include <array>
 #include <bcos-evm/eth/state/hash_utils.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <cstring>
 #include <evmc/evmc.hpp>
+#include <map>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "support/CountingStorage.h"
 #include "support/ThrowingStorage.h"
@@ -34,13 +40,33 @@ namespace
 {
 using MutableStorage = bcos::storage2::memory_storage::MemoryStorage<bcos::executor_v1::StateKey,
     bcos::executor_v1::StateValue, bcos::storage2::memory_storage::ORDERED>;
+// (p2)/(p3) 值变体判别测试专用:与生产 MultiLayerStorage 同语义的逻辑删除存储——
+// removeOne（不带 BYPASS_LOGICAL_DELETE_TYPE 标签）在这类存储上保留 DELETED_TYPE 墓碑行,
+// 而非物理擦除,借此直接构造 range() 会看到的原始变体(而不仅是行为层面的"删了就不见"）。
+using LogicalDeleteStorage = bcos::storage2::memory_storage::MemoryStorage<
+    bcos::executor_v1::StateKey, bcos::executor_v1::StateValue,
+    bcos::storage2::memory_storage::Attribute(bcos::storage2::memory_storage::ORDERED |
+                                              bcos::storage2::memory_storage::LOGICAL_DELETION)>;
 using Account = bcos::ledger::account::EVMAccount<MutableStorage>;
+using LogicalDeleteAccount = bcos::ledger::account::EVMAccount<LogicalDeleteStorage>;
 
 evmc_bytes32 slotKey(uint8_t last)
 {
     evmc_bytes32 key{};
     key.bytes[31] = last;
     return key;
+}
+
+// accountTableName 的独立复现(该方法在 Storage2Ledger 内是 private static)——"/apps/" +
+// hex_lower(addr),与 EVMAccount(storage, addr, /*binaryAddress=*/false) 落地的键空间一致。
+std::string tableNameOf(const evmc::address& addr)
+{
+    std::array<char, sizeof(addr.bytes) * 2> hex{};
+    boost::algorithm::hex_lower(
+        std::string_view(reinterpret_cast<const char*>(addr.bytes), sizeof(addr.bytes)),
+        hex.data());
+    return std::string(bcos::ledger::SYS_DIRECTORY::USER_APPS) +
+           std::string(hex.data(), hex.size());
 }
 }  // namespace
 
@@ -429,4 +455,155 @@ TEST(Storage2Ledger, ApplyDiffModifiedSystemAddressThrows)
         {.addr = sysAddr, .nonce = 0, .balance = {}, .code = std::nullopt, .modified_storage = {}});
 
     EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
+}
+
+// ── 真账本桥 Task 5:visitAccounts 遍历(design §6)──────────────────────────────
+// brief 编号 (o)-(s) 中的 (o) 已被上面的 ApplyDiffModifiedSystemAddressThrows(Task 4
+// 审查修复)占用,以下测试沿用 brief 的语义分组顺延为 (p)-(t)(映射见任务报告)。
+
+// (p) 墓碑跳过(design §6):三个变体——行为级(块内 applyDiff 删其一,建根与单账户
+//     MemoryLedger 相等)+ 两个 Critical 字面变体判别(直接在 LOGICAL_DELETION 存储上
+//     构造 DELETED_TYPE 墓碑行,而非仅靠"删了就物理不见"的行为等价性)。
+TEST(Storage2Ledger, VisitAccountsSkipsDeletedAccountAfterApplyDiff)
+{
+    MutableStorage storage;
+    Storage2Ledger<MutableStorage> bridge(storage);
+
+    evmone::state::StateDiff seedDiff;
+    seedDiff.modified_accounts.push_back(
+        {0x01_address, 3, 10, evmc::bytes{0x60, 0x00}, {{slotKey(1), slotKey(7)}}});
+    seedDiff.modified_accounts.push_back({0x02_address, 5, 20, std::nullopt, {}});
+    bridge.applyDiff(seedDiff);
+
+    evmone::state::StateDiff deleteDiff;
+    deleteDiff.deleted_accounts.push_back(0x02_address);
+    bridge.applyDiff(deleteDiff);
+
+    std::vector<evmc::address> visited;
+    const bool ok = bridge.visitAccounts([&](const auto& av) {
+        visited.push_back(av.addr);
+        return true;
+    });
+    EXPECT_TRUE(ok);
+    EXPECT_FALSE(bridge.poisoned());
+    ASSERT_EQ(visited.size(), 1U);
+    EXPECT_EQ(visited[0], 0x01_address);
+
+    // 建根 == 单账户 MemoryLedger 建根(同一状态,泛型 stateRootOf<Ledger>)。
+    bcos::evm::ledger::MemoryLedger reference;
+    evmone::state::StateDiff refDiff;
+    refDiff.modified_accounts.push_back(
+        {0x01_address, 3, 10, evmc::bytes{0x60, 0x00}, {{slotKey(1), slotKey(7)}}});
+    reference.applyDiff(refDiff);
+
+    EXPECT_EQ(bcos::evm::stateRootOf(bridge), bcos::evm::stateRootOf(reference));
+}
+
+TEST(Storage2Ledger, VisitAccountsSkipsLogicallyDeletedStorageSlot)
+{
+    LogicalDeleteStorage storage;
+    LogicalDeleteAccount acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    const auto slot = slotKey(1);
+    bcos::task::syncWait(acc.setStorage(slot, slotKey(9)));
+
+    // 底层直接逻辑删除该槽行:removeOne 不带 BYPASS_LOGICAL_DELETE_TYPE 标签 → 在
+    // LOGICAL_DELETION 存储上保留 DELETED_TYPE 墓碑,而非物理擦除(与生产
+    // MultiLayerStorage 的逻辑删除路径同语义)。
+    const auto tableName = tableNameOf(0x01_address);
+    std::string_view slotKeyView(reinterpret_cast<const char*>(slot.bytes), sizeof(slot.bytes));
+    bcos::task::syncWait(bcos::storage2::removeOne(
+        storage, bcos::executor_v1::StateKeyView{tableName, slotKeyView}));
+
+    Storage2Ledger<LogicalDeleteStorage> bridge(storage);
+    bool sawAccount = false;
+    std::map<evmc::bytes32, evmc::bytes32> seenStorage;
+    const bool ok = bridge.visitAccounts([&](const auto& av) {
+        sawAccount = true;
+        seenStorage = av.storage;
+        return true;
+    });
+    EXPECT_TRUE(ok);
+    EXPECT_FALSE(bridge.poisoned());
+    EXPECT_TRUE(sawAccount);
+    EXPECT_TRUE(seenStorage.empty());  // 墓碑跳过:不当零值毒旗,也不当槽出现
+}
+
+TEST(Storage2Ledger, VisitAccountsSkipsLogicallyDeletedAccountMarker)
+{
+    LogicalDeleteStorage storage;
+    LogicalDeleteAccount acc1(storage, 0x01_address, false);
+    LogicalDeleteAccount acc2(storage, 0x02_address, false);
+    bcos::task::syncWait(acc1.create());
+    bcos::task::syncWait(acc2.create());
+
+    // SYS_TABLES 标记行本身也逻辑删除(同上,不带 BYPASS 标签)——验证账户枚举扫描
+    // (visitAccountsImpl 的 SYS_TABLES /apps/ 前缀扫描)同样正确跳过墓碑,而不仅是
+    // fetchAllStorage 的账户内槽扫描。
+    const auto tableName1 = tableNameOf(0x01_address);
+    bcos::task::syncWait(bcos::storage2::removeOne(
+        storage, bcos::executor_v1::StateKeyView{bcos::ledger::SYS_TABLES, tableName1}));
+
+    Storage2Ledger<LogicalDeleteStorage> bridge(storage);
+    std::vector<evmc::address> visited;
+    const bool ok = bridge.visitAccounts([&](const auto& av) {
+        visited.push_back(av.addr);
+        return true;
+    });
+    EXPECT_TRUE(ok);
+    EXPECT_FALSE(bridge.poisoned());
+    ASSERT_EQ(visited.size(), 1U);
+    EXPECT_EQ(visited[0], 0x02_address);
+}
+
+// (q) 键分类(design §6):ALIVE/FROZEN/SHARD/ABI 手工注入不误判为槽、不误报毒旗;
+//     17 字节未知键 → poisoned()。
+TEST(Storage2Ledger, VisitAccountsIgnoresKnownNonSlotFields)
+{
+    MutableStorage storage;
+    Account acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    bcos::task::syncWait(acc.setStorage(slotKey(1), slotKey(2)));
+
+    const auto tableName = tableNameOf(0x01_address);
+    using Fields = bcos::ledger::ACCOUNT_TABLE_FIELDS;
+    for (const auto field : {Fields::ALIVE, Fields::FROZEN, Fields::SHARD, Fields::ABI})
+    {
+        bcos::task::syncWait(
+            bcos::storage2::writeOne(storage, bcos::executor_v1::StateKeyView{tableName, field},
+                bcos::storage::Entry(std::string("1"))));
+    }
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    std::map<evmc::bytes32, evmc::bytes32> seenStorage;
+    bool sawAccount = false;
+    const bool ok = bridge.visitAccounts([&](const auto& av) {
+        sawAccount = true;
+        seenStorage = av.storage;
+        return true;
+    });
+    EXPECT_TRUE(ok);
+    EXPECT_FALSE(bridge.poisoned());
+    ASSERT_TRUE(sawAccount);
+    // 唯一的真槽是 slotKey(1)→slotKey(2);ALIVE/FROZEN/SHARD/ABI 四行必须不出现在槽集里。
+    ASSERT_EQ(seenStorage.size(), 1U);
+    EXPECT_EQ(seenStorage.at(slotKey(1)), slotKey(2));
+}
+
+TEST(Storage2Ledger, VisitAccountsUnknownKeyPoisons)
+{
+    MutableStorage storage;
+    Account acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+
+    const auto tableName = tableNameOf(0x01_address);
+    const std::string unknownKey(17, 'x');  // 既非已知字段名,也非 32 字节槽键
+    bcos::task::syncWait(
+        bcos::storage2::writeOne(storage, bcos::executor_v1::StateKeyView{tableName, unknownKey},
+            bcos::storage::Entry(std::string("v"))));
+
+    Storage2Ledger<MutableStorage> bridge(storage);
+    const bool ok = bridge.visitAccounts([](const auto&) { return true; });
+    EXPECT_FALSE(ok);
+    EXPECT_TRUE(bridge.poisoned());
 }

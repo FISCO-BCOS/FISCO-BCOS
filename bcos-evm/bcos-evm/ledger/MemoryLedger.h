@@ -65,12 +65,16 @@ public:
     /// this is always false; Storage2Ledger provides the real poison-flag semantics.
     [[nodiscard]] bool poisoned() const noexcept { return false; }
 
-    /// Visits every account in the ledger. The visitor is invoked with an AccountView and must
-    /// return bool; returning false aborts the traversal early (short-circuit). noexcept because
-    /// the in-memory backend cannot fail; consumers should still check poisoned() for backend
-    /// symmetry with Storage2Ledger.
+    /// Visits every account in the ledger (design §6 AccountVisitor contract, same shape as
+    /// Storage2Ledger::visitAccounts — noexcept + returns bool). The visitor is invoked with an
+    /// AccountView and must itself return bool; returning false aborts the traversal early
+    /// (short-circuit). Actually (not just nominally) noexcept: the in-memory backend has no
+    /// failure path to catch-and-poison — poisoned() is a hardcoded false for this backend
+    /// (design §6 "抽象层统一提供该查询,后端不对称由此收敛"), unlike Storage2Ledger's
+    /// catch-then-poison noexcept. Consumers should still check poisoned() for backend symmetry
+    /// with Storage2Ledger (a generic caller shouldn't need to know which backend it has).
     template <class Visitor>
-    bool visitAccounts(Visitor&& visitor) const
+    bool visitAccounts(Visitor&& visitor) const noexcept
     {
         for (const auto& [addr, account] : m_accounts)
         {
