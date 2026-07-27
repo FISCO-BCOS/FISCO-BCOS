@@ -374,6 +374,16 @@ void Gateway::onReceiveP2PMessage(
 
     auto srcNodeID = options.srcNodeID();
     const auto& dstNodeIDs = options.dstNodeIDs();
+    // FIB-183: a decoded P2PMessage may legitimately carry zero dstNodeIDs (the wire
+    // format allows a src-nodeID count of 0). Indexing dstNodeIDs[0] in that case is an
+    // out-of-bounds read on an empty vector. Drop the message before indexing.
+    if (dstNodeIDs.empty())
+    {
+        GATEWAY_LOG(WARNING) << LOG_BADGE("onReceiveP2PMessage")
+                             << LOG_DESC("empty dstNodeIDs, drop") << LOG_KV("groupID", groupID)
+                             << LOG_KV("moduleID", moduleID) << LOG_KV("seq", _msg->seq());
+        return;
+    }
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(srcNodeID);
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(dstNodeIDs[0]);
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());

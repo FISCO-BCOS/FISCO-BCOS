@@ -52,11 +52,9 @@ void PBFTCache::onCheckPointTimeout()
         m_checkpointProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to consensus node
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 }
 
 bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)
@@ -247,11 +245,9 @@ bool PBFTCache::checkAndPreCommit()
                    << LOG_KV("index", commitReq->index());
     auto encodedData = m_config->codec()->encode(commitReq, m_config->pbftMsgDefaultVersion());
     // only broadcast message to consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     m_precommitted = true;
     // collect the commitReq and try to commit
     return checkAndCommit();
@@ -383,6 +379,9 @@ void PBFTCache::resetExceptionCache(ViewType _curView)
                 m_prePrepare = nullptr;
                 break;
             }
+            // FIB-181: erase() already advanced; continue so the post-branch ++
+            // does not skip the next entry.
+            continue;
         }
         exceptionPrePrepare++;
     }

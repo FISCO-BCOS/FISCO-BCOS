@@ -49,7 +49,8 @@ PBFTEngine::PBFTEngine(PBFTConfig::Ptr _config, boost::asio::io_context& _ioCont
 {
     auto cacheFactory = std::make_shared<PBFTCacheFactory>();
     m_cacheProcessor = std::make_shared<PBFTCacheProcessor>(cacheFactory, _config);
-    m_logSync = std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor, std::move(_ioServicePool));
+    m_logSync =
+        std::make_shared<PBFTLogSync>(m_config, m_cacheProcessor, std::move(_ioServicePool));
     // register the timeout function
     m_config->timer()->registerTimeoutHandler([this]() { onTimeout(); });
     m_config->storage()->registerFinalizeHandler(
@@ -165,7 +166,41 @@ void PBFTEngine::tryToResendCheckPoint()
         RecursiveGuard l(m_mutex);
         m_cacheProcessor->tryToResendCheckPoint();
     }
+    // FIB-185: run the consensus-timer watchdog on this periodic path.
+    checkConsensusTimerWatchdog();
     m_timer->restart();
+}
+
+void PBFTEngine::checkConsensusTimerWatchdog()
+{
+    // FIB-185: under adversarial consensus input concurrent with session-teardown churn, a node
+    // can commit its last block, emit a single view-change, and then never re-arm its consensus
+    // timer (an inferred race between session-teardown callbacks and the consensus worker/timer).
+    // The wedge signature is: consensus node, in timeout state (a view-change is pending), but the
+    // view-change timer is not running. Detect that and re-arm the timer. restart() only re-arms
+    // the timer; onTimeout (which actually drives the view-change) fires later, so this watchdog
+    // cannot itself emit a view-change or perturb the view-change cache.
+    if (m_stopped.load())
+    {
+        return;
+    }
+    if (!m_config->isConsensusNode())
+    {
+        return;
+    }
+    auto consensusTimer = m_config->timer();
+    if (!consensusTimer)
+    {
+        return;
+    }
+    if (m_config->timeout() && !consensusTimer->running())
+    {
+        PBFT_LOG(WARNING) << LOG_DESC(
+                                 "checkConsensusTimerWatchdog: consensus timer stalled while in "
+                                 "timeout state, re-arm the timer")
+                          << m_config->printCurrentState();
+        consensusTimer->restart();
+    }
 }
 
 void PBFTEngine::restart()
@@ -294,11 +329,9 @@ void PBFTEngine::onProposalApplySuccess(
 
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     auto startT = utcTime();
     auto recordT = utcTime();
     // Note: must lock here to ensure thread safe
@@ -448,10 +481,9 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, const protocol::Block& prop
                    << LOG_KV("index", pbftMessage->index())
                    << LOG_KV("encode(ms)", encodeEnd - encodeStart)
                    << LOG_KV("asyncSend(ms)", utcTime() - encodeEnd);
-    task::wait([](auto front, decltype(encodedData) encoded) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(std::as_const(*encoded))));
-    }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // handle the pre-prepare packet
     RecursiveGuard lock(m_mutex);
@@ -1304,11 +1336,9 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr const& _prePrepar
                    << LOG_KV("packetSize", encodedData->size())
                    << LOG_KV("index", _prePrepareMsg->index());
     // only broadcast to the consensus nodes
-    task::wait(
-        [](front::FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-            co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE,
-                ModuleID::PBFT, ::ranges::views::single(ref(*encodedData)));
-        }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: hand the owned payload to the front's serial send queue (off this thread); no copy.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
 }
@@ -1452,9 +1482,11 @@ void PBFTEngine::sendViewChange(bcos::crypto::NodeIDPtr _dstNode)
     auto viewChangeReq = generateViewChange();
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(viewChangeReq);
-    // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, std::move(_dstNode), ref(*encodedData), 0, nullptr);
+    // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
+    // (the gateway session-lock acquire runs on the front's send queue, not on the consensus
+    // worker)
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::PBFT, std::move(_dstNode), std::move(encodedData));
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1473,8 +1505,10 @@ void PBFTEngine::sendRecoverResponse(bcos::crypto::NodeIDPtr _dstNode)
     response->setTimestamp(utcTime());
     response->setIndex(m_config->committedProposal()->index());
     auto encodedData = m_config->codec()->encode(response);
-    m_config->frontService()->asyncSendMessageByNodeID(
-        ModuleID::PBFT, _dstNode, ref(*encodedData), 0, nullptr);
+    // FIB-185: send off the m_mutex critical section via the owned-payload point-to-point entry
+    // (copy _dstNode; it is logged below). The gateway send runs on the front's send queue.
+    m_config->frontService()->asyncSendMessageByNodeIDByOwnedPayload(
+        ModuleID::PBFT, _dstNode, std::move(encodedData));
     PBFT_LOG(DEBUG) << LOG_DESC("sendRecoverResponse") << LOG_KV("peer", _dstNode->shortHex())
                     << m_config->printCurrentState();
 }
@@ -1487,10 +1521,15 @@ void PBFTEngine::broadcastViewChangeReq()
     // only broadcast to the consensus nodes
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq)
                    << LOG_KV("packetSize", encodedData->size());
-    task::wait([](FrontServiceInterface::Ptr front, bytesPointer encodedData) -> task::Task<void> {
-        co_await front->broadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT,
-            ::ranges::views::single(ref(*encodedData)));
-    }(m_config->frontService(), std::move(encodedData)));
+    // FIB-185: this runs under m_mutex (onTimeout -> triggerTimeout holds it). Hand the owned
+    // payload to FrontService::asyncBroadcastMessageByOwnedPayload, which enqueues the gateway send
+    // onto its serial send queue and returns immediately -- the gateway-session-lock-acquiring send
+    // no longer runs on the consensus worker while m_mutex is held (the coupling that wedged
+    // consensus under session-teardown churn is decoupled at the FrontService layer), and the owned
+    // payload is forwarded without copying. The view-change cache mutations below stay under the
+    // lock, unchanged.
+    m_config->frontService()->asyncBroadcastMessageByOwnedPayload(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, std::move(encodedData));
 
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);

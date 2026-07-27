@@ -105,11 +105,15 @@ void PeersRouterTable::batchInsertNodeList(
         int64_t i = 0;
         for (auto const& nodeID : nodeIDList)
         {
-            if (!m_groupNodeList.count(groupID) || !m_groupNodeList.at(groupID).count(nodeID))
-            {
-                m_groupNodeList[groupID][nodeID] = std::set<P2pID>();
-            }
-            m_groupNodeList[groupID][nodeID].insert(_p2pNodeID);
+            // Capture the map iterators so the reverse index can alias the stable key strings owned
+            // by these nodes (try_emplace leaves an existing entry untouched, inserts otherwise).
+            auto groupIt = m_groupNodeList.try_emplace(groupID).first;
+            auto nodeIt = groupIt->second.try_emplace(nodeID).first;
+            nodeIt->second.insert(_p2pNodeID);
+            // FIB-186 (vector D): mirror the insert into the reverse index so the matching removal
+            // is O(K) instead of a full-map scan. Store pointers to the key strings (not copies);
+            // see the lifetime invariant on m_p2pID2GroupNodes. std::set dedups repeated pairs.
+            m_p2pID2GroupNodes[_p2pNodeID].emplace(&groupIt->first, &nodeIt->first);
             if (it->protocol(i))
             {
                 m_nodeProtocolInfo[nodeID] = it->protocol(i);
@@ -137,42 +141,40 @@ void PeersRouterTable::removeP2PID(const P2pID& _p2pID)
 void PeersRouterTable::removeP2PIDFromGroupNodeList(const P2pID& _p2pID)
 {
     WriteGuard l(x_groupNodeList);
-    // remove all nodeIDs info belong to p2pID
-    for (auto it = m_groupNodeList.begin(); it != m_groupNodeList.end();)
+    // FIB-186 (vector D): remove only the entries this p2pID actually holds, looked up via the
+    // reverse index, instead of scanning the whole forward map. This bounds the WriteLock hold time
+    // to O(K) (K = entries the peer holds), so a persistent bulk-disconnect on the teardown thread
+    // cannot stall queryP2pIDs (the ReadLock on the unicast routing hot path). Pruning of emptied
+    // node/group entries stays identical to the old full scan: only a set that contained _p2pID can
+    // shrink, so a set the peer never joined is never visited and never pruned.
+    auto revIt = m_p2pID2GroupNodes.find(_p2pID);
+    if (revIt == m_p2pID2GroupNodes.end())
     {
-        for (auto innerIt = it->second.begin(); innerIt != it->second.end();)
+        return;
+    }
+    for (auto const& [groupIDPtr, nodeIDPtr] : revIt->second)
+    {
+        auto groupIt = m_groupNodeList.find(*groupIDPtr);
+        if (groupIt == m_groupNodeList.end())
         {
-            for (auto innerIt2 = innerIt->second.begin(); innerIt2 != innerIt->second.end();)
-            {
-                if (*innerIt2 == _p2pID)
-                {
-                    innerIt2 = innerIt->second.erase(innerIt2);
-                }
-                else
-                {
-                    ++innerIt2;
-                }
-            }
-
-            if (innerIt->second.empty())
-            {
-                innerIt = it->second.erase(innerIt);
-            }
-            else
-            {
-                ++innerIt;
-            }
+            continue;
         }
-
-        if (it->second.empty())
+        auto nodeIt = groupIt->second.find(*nodeIDPtr);
+        if (nodeIt == groupIt->second.end())
         {
-            it = m_groupNodeList.erase(it);
+            continue;
         }
-        else
+        nodeIt->second.erase(_p2pID);
+        if (nodeIt->second.empty())
         {
-            ++it;
+            groupIt->second.erase(nodeIt);
+            if (groupIt->second.empty())
+            {
+                m_groupNodeList.erase(groupIt);
+            }
         }
     }
+    m_p2pID2GroupNodes.erase(revIt);
 }
 
 void PeersRouterTable::updatePeerNodeList(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status)

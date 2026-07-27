@@ -104,6 +104,11 @@ public:
 private:
     void ensureWeb3AccessListCache() const;
 
+    // FIB-New1: recompute the canonical Web3 txHash = keccak256(rlp(signed tx)) directly from the
+    // signing preimage (extraTransactionBytes) + signature, without rebuilding a Web3Transaction.
+    static bcos::crypto::HashType recomputeWeb3CanonicalHash(
+        bcos::bytesConstRef payload, bcos::bytesConstRef signature);
+
     std::function<bcostars::Transaction*()> m_inner;
     mutable bcos::protocol::Web3AccessList m_web3AccessListCache;
     mutable std::unique_ptr<std::mutex> m_web3AccessListCacheMutex{std::make_unique<std::mutex>()};

@@ -22,6 +22,7 @@
 #include "bcos-framework/bcos-framework/ledger/Ledger.h"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/LedgerTypeDef.h"
+#include "bcos-framework/protocol/GlobalConfig.h"
 #include "bcos-framework/storage/LegacyStorageMethods.h"
 #include "bcos-framework/txpool/Constant.h"
 #include "bcos-ledger/LedgerMethods.h"
@@ -29,10 +30,27 @@
 #include "bcos-utilities/DataConvertUtility.h"
 
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <cctype>
 
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::txpool;
+
+bool bcos::txpool::isValidToField(std::string_view toField)
+{
+    if (toField.empty() || g_BCOSConfig.isWasm())
+    {
+        return true;
+    }
+    if (toField.starts_with("0x") || toField.starts_with("0X"))
+    {
+        toField.remove_prefix(2);
+    }
+    constexpr size_t addressHexLength = 40;
+    return toField.size() == addressHexLength &&
+           std::ranges::all_of(
+               toField, [](unsigned char character) { return std::isxdigit(character) != 0; });
+}
 
 TransactionStatus TxValidator::verify(bcos::protocol::Transaction& _tx)
 {
@@ -142,7 +160,14 @@ bcos::protocol::TransactionStatus TxValidator::checkWeb3Nonce(
 
 TransactionStatus TxValidator::validateTransaction(const bcos::protocol::Transaction& _tx)
 {
-
+    // Issue #5318: reject a malformed `to` at admission time so it can never reach a block.
+    if (!isValidToField(_tx.to()))
+    {
+        TX_VALIDATOR_CHECKER_LOG(WARNING)
+            << LOG_BADGE("ValidateTransaction") << LOG_DESC("RejectTransactionWithInvalidTo")
+            << LOG_KV("to", _tx.to()) << LOG_KV("hash", _tx.hash().abridged());
+        return TransactionStatus::Malformed;
+    }
     // EIP-3860: Limit and meter initcode
     if (_tx.type() == TransactionType::Web3Transaction)
     {

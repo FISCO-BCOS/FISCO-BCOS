@@ -20,6 +20,7 @@
 
 #include <bcos-cpp-sdk/ws/Common.h>
 #include <bcos-cpp-sdk/ws/HandshakeResponse.h>
+#include <bcos-utilities/BoostLog.h>
 #include <json/json.h>
 #include <json/value.h>
 

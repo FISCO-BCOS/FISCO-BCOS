@@ -23,6 +23,7 @@
 #include "bcos-pbft/core/Proposal.h"
 #include "bcos-pbft/pbft/protocol/PB/PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/PB/PBFTProposal.h"
+#include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -48,27 +49,26 @@ BOOST_FIXTURE_TEST_SUITE(FIB149_HashLengthStrict, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(oversize_proposal_hash_rejected)
 {
-    // 64-byte (oversize) raw hash inside a RawProposal. Pre-fix Proposal.h used
-    // `<` so oversize was silently truncated to the first 32 bytes; the test
-    // asserts the strict reject path leaves m_hash default-constructed.
+    // 64-byte (oversize) raw hash inside a RawProposal. FIB-149 made the length
+    // predicate strict (`!= HashType::SIZE`); FIB-174 then upgraded the silent
+    // return into a thrown invalid-message so a malformed proposal hash is
+    // rejected at decode rather than accepted with a stale/default identity.
     auto raw = std::make_shared<RawProposal>();
     std::string oversize(64, '\xab');
     raw->set_hash(oversize.data(), oversize.size());
 
-    Proposal proposal(raw);
-    BOOST_CHECK_EQUAL(proposal.hash(), HashType{});
+    BOOST_CHECK_THROW(Proposal{raw}, bcos::Exception);
 }
 
 BOOST_AUTO_TEST_CASE(undersize_proposal_hash_rejected)
 {
-    // Already rejected pre-fix (the `<` predicate caught undersize), but we
-    // keep this case to lock in behavior post-fix.
+    // Undersize was caught pre-fix (the `<` predicate) but only via a silent
+    // return; FIB-174 makes it throw so the malformed input surfaces.
     auto raw = std::make_shared<RawProposal>();
     std::string undersize(16, '\xab');
     raw->set_hash(undersize.data(), undersize.size());
 
-    Proposal proposal(raw);
-    BOOST_CHECK_EQUAL(proposal.hash(), HashType{});
+    BOOST_CHECK_THROW(Proposal{raw}, bcos::Exception);
 }
 
 BOOST_AUTO_TEST_CASE(exact_proposal_hash_accepted)
