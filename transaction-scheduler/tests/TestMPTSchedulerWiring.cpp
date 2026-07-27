@@ -18,10 +18,10 @@
  *        trie nodes as ordinary "/mpt/" state rows on the execute view: scenario-A activation
  *        transition, pipeline node visibility through the view's immutable layer chain (with
  *        a negative control), commit atomicity, CommitObserver timing, parent-root resolution
- *        via the parent block's header (finishExecute writes every executed header into the
- *        block's layer, so pipeline and restart share one getBlockData arm; with a fail-loud
- *        missing-header negative), the stray-"/mpt/"-row guard, and the no-XOR-fallback
- *        policy.
+ *        via the parent block's header (finishExecute publishes every non-genesis MPT block's
+ *        executed header into its layer, so pipeline and restart share one getBlockData arm;
+ *        with a fail-loud missing-header negative and the XOR-block / genesis exclusions),
+ *        the stray-"/mpt/"-row guard, and the no-XOR-fallback policy.
  */
 
 #include "TrivialCheckpointStorage.h"
@@ -378,6 +378,16 @@ public:
         // overwriting the execute-time header row the block's layer already merged; the
         // ledger mock here only invokes the callback, so mirror that overwrite.
         writeHeaderToBackend(header);
+    }
+
+    /// The SYS_NUMBER_2_BLOCK_HEADER row for @p number as seen through a view forked NOW —
+    /// i.e. including the pending (executed, not yet committed) layers.
+    std::optional<storage::Entry> headerRowInView(protocol::BlockNumber number)
+    {
+        auto view = multiLayerStorage.fork();
+        view.newMutable();
+        return task::syncWait(storage2::readOne(
+            view, StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, std::to_string(number)}));
     }
 
     void writeHeaderToBackend(protocol::BlockHeader::Ptr const& header)
@@ -773,6 +783,61 @@ BOOST_AUTO_TEST_CASE(commitPrewriteOverwritesExecuteTimeHeaderRow)
     auto entry = task::syncWait(storage2::readOne(backendStorage, key));
     BOOST_REQUIRE(entry);
     BOOST_CHECK_EQUAL(std::string(entry->get()), "committed-signed");
+}
+
+// The execute-time header row exists for ONE reason — letting the next MPT block resolve its
+// parent's stateRoot through the view — so finishExecute publishes it for MPT blocks only. An
+// XOR block's header is never read that way (buildMPTStateRoot takes the empty-trie arm when
+// the parent did not build an MPT), and publishing it would put an extra row in every legacy
+// chain's execute path.
+BOOST_AUTO_TEST_CASE(executeTimeHeaderRowOnlyForMPTBlocks)
+{
+    namespace mpt = bcos::ledger::mpt;
+    useScenarioA(500);
+
+    auto const address = makeAddress(0xD4);
+    plan[500] = {{mpt::accountTableName(address), "balance", "3"}};
+    plan[501] = {{mpt::accountTableName(address), "balance", "4"}};
+
+    // Block 500 is the activation block itself: XOR root, so no header row.
+    auto header500 = executeOneBlock(500);
+    BOOST_CHECK(!headerRowInView(500));
+    commitOneBlock(header500);
+
+    // Block 501 builds an MPT: its header must be readable from the pending layer, and it must
+    // be the EXECUTED header (the stateRoot block 502's build will start from).
+    auto header501 = executeOneBlock(501);
+    auto row = headerRowInView(501);
+    BOOST_REQUIRE(row);
+    auto field = row->get();
+    auto decoded = blockHeaderFactory->createBlockHeader(
+        bcos::bytesConstRef(reinterpret_cast<bcos::byte const*>(field.data()), field.size()));
+    BOOST_CHECK_EQUAL(decoded->number(), 501);
+    BOOST_CHECK_EQUAL(decoded->stateRoot(), header501->stateRoot());
+}
+
+// Genesis is the one block whose header row already has an owner: Ledger::buildGenesisBlock
+// writes it at chain init, and coCommitBlock skips prewriteBlockToBuffer for block 0
+// (isSysContractDeploy), so nothing would overwrite an execute-time row — the sys-contract
+// deploy header (its own gasUsed, hash, empty sealer/parentInfo) would REPLACE the chain's
+// genesis header on disk. Scenario B is the case that matters: block 0 does take the MPT arm
+// there, so only the explicit number()!=0 guard keeps the row out.
+BOOST_AUTO_TEST_CASE(genesisBlockPublishesNoExecuteTimeHeader)
+{
+    namespace mpt = bcos::ledger::mpt;
+    useScenarioB();
+
+    auto const address = makeAddress(0xE2);
+    plan[0] = {{mpt::accountTableName(address), "balance", "1"}};
+
+    auto header0 = executeOneBlock(0);
+    // The block really went down the MPT arm (an XOR root here would make the test vacuous).
+    BOOST_CHECK_EQUAL(header0->stateRoot(), mptOracle({{address, [] {
+                                                            mpt::Account account;
+                                                            account.balance = 1;
+                                                            return account;
+                                                        }()}}));
+    BOOST_CHECK(!headerRowInView(0));
 }
 
 // Guard: a stray row under the reserved "/mpt/" table in the block's TOP delta layer must be

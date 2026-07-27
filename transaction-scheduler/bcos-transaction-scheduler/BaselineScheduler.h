@@ -237,13 +237,26 @@ task::Task<void> finishExecute(auto& storage, ::ranges::range auto receipts,
     // view while the parent is still pending. Commit overwrites this row with the
     // consensus-SIGNED encoding in the same WriteBatch — mergeBackStorage merges the
     // block's layer before prewriteStorage, so the signed version wins in the backend.
-    bytes headerBuffer;
-    newBlockHeader.encode(headerBuffer);
-    storage::Entry headerEntry;
-    headerEntry.set(std::move(headerBuffer));
-    co_await storage2::writeOne(storage,
-        executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
-        std::move(headerEntry));
+    //
+    // Both conditions are load-bearing:
+    //  - MPT blocks only. buildMPTStateRoot reads a parent header exactly when the parent
+    //    itself built an MPT root, so publishing headers for XOR blocks would buy nothing
+    //    and leave every legacy chain's execute path carrying an extra row;
+    //  - never block 0. Unlike the two hash mappings above, the genesis header row has an
+    //    owner: Ledger::buildGenesisBlock writes it at chain init, and coCommitBlock skips
+    //    prewriteBlockToBuffer for block 0 (isSysContractDeploy), so nothing would overwrite
+    //    an execute-time row — the sys-contract-deploy header (its own gasUsed, hash, empty
+    //    sealer/parentInfo) would replace the chain's genesis header on disk.
+    if (mptStateRoot && newBlockHeader.number() != 0)
+    {
+        bytes headerBuffer;
+        newBlockHeader.encode(headerBuffer);
+        storage::Entry headerEntry;
+        headerEntry.set(std::move(headerBuffer));
+        co_await storage2::writeOne(storage,
+            executor_v1::StateKey{ledger::SYS_NUMBER_2_BLOCK_HEADER, blockNumberStr},
+            std::move(headerEntry));
+    }
 }
 
 template <class MultiLayerStorage,
@@ -309,14 +322,16 @@ private:
      * blocks' not-yet-committed deltas, node rows included — and return the trie-node delta.
      *
      * The parent state root comes from the parent block's HEADER, read through the view.
-     * finishExecute writes every executed header into its block's mutable layer, so ONE
-     * getBlockData arm covers every case: a pending parent resolves from the view's
-     * immutable chain (pipeline), a committed parent — the genesis block included — from
-     * the backend's signed header (restart / sequential). A missing header under an MPT
-     * parent throws NotFoundBlockHeader (getBlockData, LedgerMethods.h) — never a silent
-     * empty-trie rebuild. An XOR parent (scenario-A activation boundary) starts from the
-     * empty trie. Scenario-B limitation unchanged: a non-empty-alloc L2 genesis persists
-     * its header but no trie NODES, so only empty-alloc genesis chains block 1 today.
+     * finishExecute publishes every non-genesis MPT block's executed header into its own
+     * mutable layer, so ONE getBlockData arm covers every case: a pending parent resolves
+     * from the view's immutable chain (pipeline), a committed parent — the genesis block
+     * included — from the backend's signed header (restart / sequential; genesis is the
+     * ledger's own genesis header, which is why finishExecute must not publish one). A
+     * missing header under an MPT parent throws NotFoundBlockHeader (getBlockData,
+     * LedgerMethods.h) — never a silent empty-trie rebuild. An XOR parent (scenario-A
+     * activation boundary) starts from the empty trie, and never has its header read here.
+     * Scenario-B limitation unchanged: a non-empty-alloc L2 genesis persists its header but
+     * no trie NODES, so only empty-alloc genesis chains block 1 today.
      */
     task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRoot(
         typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
