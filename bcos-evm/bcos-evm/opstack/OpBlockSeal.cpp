@@ -2,8 +2,8 @@
 #include <bcos-evm/opstack/OpReceiptEncode.h>
 #include <algorithm>
 // TODO(eth-utils-removal): mpt/rlp(eth/utils)→自研 MPT + bcos-codec/rlp/RLPEncode.h。
-// 注意:opStorageRoot 与 receipts_root 循环属 upstream-diff 追踪段(op_storage_root/
-// receipts_root_loop),替换后须 --regenerate-goldens 并重验 33/33 向量。
+// 注意:opStorageRoot 与 receipts_root 循环照抄自 evmone test/utils/mpt_hash.cpp
+// (官方 v0.21.0),替换后须重验 33/33 向量。
 #include <bcos-evm/eth/utils/mpt.hpp>
 #include <bcos-evm/eth/utils/rlp.hpp>
 #include <functional>

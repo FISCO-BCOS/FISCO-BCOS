@@ -9,9 +9,8 @@
 #include <algorithm>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>
-// TODO(eth-utils-removal): rlp(eth/utils)→bcos-codec RLP。本文件多段属 upstream-diff
-// 照抄面追踪段(区间见 scripts/upstream-diff/manifest.tsv),替换即照抄面重写,
-// 须整体 --regenerate-goldens 并重验等价性宣称。
+// TODO(eth-utils-removal): rlp(eth/utils)→bcos-codec RLP。本文件多段照抄自
+// evmone test/state/state.cpp(官方 v0.21.0),替换即照抄面重写,须重验等价性宣称。
 #include <bcos-evm/eth/utils/rlp.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>

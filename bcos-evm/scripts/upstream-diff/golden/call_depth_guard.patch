@@ -1,7 +1,0 @@
---- upstream
-+++ ref
-@@ -1,2 +1,2 @@
--        if (sender_acc.nonce == Account::NonceMax)
--            return {};
-+        return Host::call(msg);
-+    if (msg.depth == 0)

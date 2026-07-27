@@ -40,8 +40,7 @@ struct OpBlockSeal
 
 /// Single-account storage root (secure-trie: key = keccak256(slot), value = rlp(trim(value)),
 /// zero-value slots skipped — aligned with the private helper in evmone mpt_hash.cpp:13-24; the
-/// upstream does not export it, so it is reproduced here as an exported piece and registered in the
-/// upstream-diff manifest to watch for drift).
+/// upstream does not export it, so it is reproduced here as an exported piece).
 [[nodiscard]] evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage);
 
 /// Compute the block-header commitment fields from the block execution result.

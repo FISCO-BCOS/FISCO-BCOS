@@ -11,7 +11,6 @@ hash_fn 挂 VM)的 ETH + OP Stack 执行参考模块。自 `bcos-evm-ref`
 - `opstack/`:OP 薄层(processOpBlock/sealOpBlock/deposit/fee/receipt)
 - `test/opstack/`:21 测试文件 124 用例,含 `OpT8nReplay.Vectors`
   块级 op-geth(pinned v1.101702.2)差分 gate(33 向量,ctest 常驻)
-- `scripts/upstream-diff.sh`:照抄面静态护栏(EVMONE_GIT 指官方 v0.21.0 检出)
 
 ## Build(standalone)
 

@@ -547,7 +547,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     // ── header.stateRoot（spec §4.4 rev.2：单腿，验执行+引擎 vs op-geth 共识根）─
     // 时点：seal 段 ts 已是 finalize 后完整世界终态（与 messagePasserStorage 快照
     // 同锚），后续 postState 比对只读不写 ts——此处建根安全。
-    // 引擎（evmone mpt_hash）正确性由上游套件 + upstream-diff 外锚，此处不重复自证；
+    // 引擎（evmone mpt_hash）正确性由上游套件外锚，此处不重复自证；
     // 翻红优先归因执行/落账或 pre-alloc 完整性（见 plan 风险 4），非引擎。
     ctx.checkField("stateRoot", hexHash(test::from_json<hash256>(h.at("stateRoot"))),
         hexHash(bcos::evm::stateRootOf(ts)));
