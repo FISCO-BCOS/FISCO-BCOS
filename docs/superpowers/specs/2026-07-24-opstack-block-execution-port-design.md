@@ -80,15 +80,24 @@ include 改写规则(全模块仅三条,机械可脚本化;vendored utils 内部
 | `adapter/StateViewAdapter.h` | 已存在 | 取 ref 版本对齐一次 |
 | `eth/EthTransition.{h,cpp}` | 已存在 | 取 ref 版本(含 sanitize 接线)再改 include |
 
-### 4.2 vendor 层(官方 `ipsilon/evmone v0.21.0` `test/utils/` → `eth/utils/`)
+### 4.2 vendor 层(官方 `ipsilon/evmone v0.21.0` `test/utils/` → `eth/utils/`,最终清单)
 
-起始清单:`mpt.{hpp,cpp}`、`mpt_hash.{hpp,cpp}`、`rlp.hpp`、`rlp_encode.{hpp,cpp}`、
-`test_state.{hpp,cpp}`、`statetest.hpp`、`utils.{hpp,cpp}`、`stdx/`。
-`statetest_loader.cpp` 拆入测试目标(nlohmann 不渗入库目标)。
-**排除**:`blockchaintest*`、`statetest_export`/runner 类纯 EEST 工具;`bytecode.hpp`
-等仅在链接器要求时补入。闭包判据:`bcos-evm-opstack-tests` 链接成功,多退少补,
-最终清单回填本节。vendored 源沿用既有惯例:上游原样不改逻辑、
-`-Wno-missing-field-initializers` 抑制。
+最终落地清单(`bcos-evm/bcos-evm/eth/utils/` 实况核对,库目标):
+`mpt.{hpp,cpp}`、`mpt_hash.{hpp,cpp}`、`rlp.hpp`、`rlp_encode.{hpp,cpp}`、
+`test_state.{hpp,cpp}`、`statetest.hpp`、`utils.{hpp,cpp}`、`blob_schedule.{hpp,cpp}`、
+`stdx/utility.hpp`。其中 `blob_schedule.{hpp,cpp}` 起始清单未列出,系 Task 5 Step 6
+（测试复活阶段补齐依赖闭包时)补拷入库,已并入 `bcos-evm-eth` 库目标源
+(`CMakeLists.txt` add_library 列表)。
+
+测试侧(不进库目标,`nlohmann` 不渗入库):`bcos-evm/test/support/statetest_loader.cpp`,
+按闭包判据"链接成功"拆出,单独编入 `bcos-evm-opstack-tests` 目标源列表。
+
+**排除**(与起始清单一致,实况确认未引入):`blockchaintest*`、
+`statetest_export`/runner 类纯 EEST 工具;`bytecode.hpp` 等未触发链接器要求,未补入。
+
+vendored 源沿用既有惯例:上游原样不改逻辑,`eth/state/` 与 `eth/utils/` 全部
+vendored `.cpp` 统一 `-Wno-missing-field-initializers` 抑制
+(`bcos-evm/CMakeLists.txt` `set_source_files_properties`)。
 
 vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 ywy2090 fork 取。
 
