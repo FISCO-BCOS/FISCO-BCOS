@@ -1,4 +1,5 @@
 #include "HttpSession.h"
+#include <bcos-utilities/BoostLog.h>
 #include <boost/system/error_code.hpp>
 
 bcos::boostssl::http::HttpSession::HttpSession(uint32_t _httpBodySizeLimit, CorsConfig _corsConfig)

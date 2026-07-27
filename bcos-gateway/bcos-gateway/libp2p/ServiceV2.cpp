@@ -21,6 +21,7 @@
 #include "Common.h"
 #include "P2PMessageV2.h"
 #include "bcos-utilities/BoostLog.h"
+#include <cstring>
 #include <utility>
 
 using namespace bcos;
@@ -31,8 +32,7 @@ static bool isRawP2pID(std::string const& p2pID)
     return p2pID.size() > HASH_NODEID_MAX_SIZE;
 }
 
-ServiceV2::ServiceV2(
-    P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory,
+ServiceV2::ServiceV2(P2PInfo const& _p2pInfo, RouterTableFactory::Ptr _routerTableFactory,
     boost::asio::io_context& _ioContext)
   : Service(_p2pInfo),
     m_routerTimer(std::make_shared<Timer>(_ioContext, 3000, "routerSeqSync")),
@@ -65,7 +65,25 @@ ServiceV2::ServiceV2(
     registerOnDeleteSession(
         [this](P2PSession::Ptr _session) { onEraseSession(std::move(_session)); });
 
-    m_routerTimer->registerTimeoutHandler([this]() { broadcastRouterSeq(); });
+    // FIB-186 (vector B): the timer is the trailing-edge flush and the steady-state reconciliation.
+    // It resets the coalescing flag so the next membership change is a fresh leading edge, and it
+    // survives a broadcast failure by re-arming on the error path -- otherwise a single throwing
+    // broadcast would leave the timer un-rearmed and router-seq sync would stop silently until
+    // process restart (there is no other re-arm path once inline broadcasts are coalesced).
+    m_routerTimer->registerTimeoutHandler([this]() {
+        m_routerSeqDirty.store(false, std::memory_order_release);
+        try
+        {
+            broadcastRouterSeq();
+        }
+        catch (std::exception const& e)
+        {
+            SERVICE2_LOG(WARNING) << LOG_BADGE("routerSeqSync")
+                                  << LOG_DESC("broadcastRouterSeq exception")
+                                  << LOG_KV("error", e.what());
+            m_routerTimer->restart();
+        }
+    });
 }
 
 void ServiceV2::start()
@@ -142,7 +160,7 @@ void ServiceV2::joinRouterTable(
     }
     onP2PNodesUnreachable(unreachableNodes);
     m_statusSeq++;
-    broadcastRouterSeq();
+    markRouterSeqChanged();
 }
 
 // receive routerTable request from peer
@@ -179,6 +197,23 @@ void ServiceV2::broadcastRouterSeq()
     asyncBroadcastMessageWithoutForward(message, Options());
 }
 
+void ServiceV2::markRouterSeqChanged()
+{
+    // FIB-186 (vector B): leading-edge coalesce. Broadcast the seq immediately on the first change
+    // of a burst -- neighbours then re-request the current full router table, which already
+    // reflects the changes made so far -- so a directly reachable peer converges without waiting on
+    // the timer. Further churn within the window only marks the flag (no broadcast); the
+    // m_routerTimer flushes the coalesced state once and resets the flag. The pre-fix code
+    // broadcast on every single membership/route change, so connect/disconnect churn cascaded a
+    // full-mesh seq->request->whole-table gossip on m_asyncGroup -- the pool that delivers PBFT
+    // messages -- and starved consensus (CertiK vector B). broadcastRouterSeq() also restart()s the
+    // timer, which resurrects it if a prior tick failed to re-arm.
+    if (!m_routerSeqDirty.exchange(true, std::memory_order_acq_rel))
+    {
+        broadcastRouterSeq();
+    }
+}
+
 void ServiceV2::onReceiveRouterSeq(
     NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
 {
@@ -189,8 +224,18 @@ void ServiceV2::onReceiveRouterSeq(
                               << LOG_KV("message", _error.what());
         return;
     }
-    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-        *((uint32_t*)_message->payload().data()));
+    // FIB-183: the router-sequence payload must contain at least a 4-byte sequence number.
+    // A short or empty payload (the smallest attacker-supplied frames are 14-78 bytes total)
+    // would read past the end of the decoded payload buffer. Drop it before dereferencing.
+    if (_message->payload().size() < sizeof(uint32_t))
+    {
+        SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq") << LOG_DESC("short payload, drop")
+                              << LOG_KV("size", _message->payload().size());
+        return;
+    }
+    uint32_t seq = 0;
+    std::memcpy(&seq, _message->payload().data(), sizeof(seq));
+    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(seq);
     if (!tryToUpdateSeq(_session->p2pID(), statusSeq))
     {
         return;
@@ -222,7 +267,7 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
     }
     onP2PNodesUnreachable(unreachableNodes);
     m_statusSeq++;
-    broadcastRouterSeq();
+    markRouterSeqChanged();
     SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("update routerTable")
                        << LOG_KV("dst", _session->printP2pID());
 }
@@ -235,7 +280,7 @@ void ServiceV2::onEraseSession(P2PSession::Ptr _session)
     {
         onP2PNodesUnreachable(unreachableNodes);
         m_statusSeq++;
-        broadcastRouterSeq();
+        markRouterSeqChanged();
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onEraseSession") << LOG_KV("dst", _session->printP2pID());
 }

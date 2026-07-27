@@ -17,6 +17,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Overloaded.h"
 #include <boost/asio/buffer.hpp>
+#include <boost/asio/post.hpp>
 #include <boost/container/container_fwd.hpp>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -37,7 +38,16 @@ using namespace bcos::gateway;
 Session::Session(
     std::shared_ptr<SocketFace> socket, Host& server, size_t _recvBufferSize, bool _forceSize)
   : m_maxRecvBufferSize(std::max<size_t>(_recvBufferSize, MIN_SESSION_RECV_BUFFER_SIZE)),
-    m_recvBuffer(_forceSize ? _recvBufferSize : MIN_SESSION_RECV_BUFFER_SIZE),
+    // FIB-184: treat _recvBufferSize as the grow CEILING, not the initial allocation. Production
+    // createSession passes the config-validated session_recv_buffer_size, which is forced to
+    // 2 * allow_max_msg_size = 64MB; allocating that per session up front let authenticated TLS
+    // connect/close churn exhaust the heap (SIGSEGV inside malloc during Session construction).
+    // Allocate only INITIAL_SESSION_RECV_BUFFER_SIZE (16KB) initially and let doRead grow the
+    // buffer up to m_maxRecvBufferSize on demand, so only sessions that actually carry large
+    // messages pay for a large buffer. _forceSize keeps the exact size for tests that assert a
+    // specific small buffer.
+    m_recvBuffer(_forceSize ? _recvBufferSize :
+                              std::min<size_t>(_recvBufferSize, INITIAL_SESSION_RECV_BUFFER_SIZE)),
     m_server(server),
     m_socket(std::move(socket)),
     m_idleCheckTimer(
@@ -301,10 +311,13 @@ void Session::write()
             payload.toConstBuffer(outputIt);
         }
         m_server.get().asioInterface()->asyncWrite(m_socket, m_writings->buffers,
-            [self = std::weak_ptr<Session>(shared_from_this()), writings = m_writings,
-                m_lock = std::move(lock)](
+            // FIB-184: hold a strong reference to the session for the duration of the async write.
+            // async_write operates on this->m_socket and reads from buffers owned via m_writings;
+            // a strong ref keeps the socket/SSL stream (and m_writings, which backs the buffers
+            // asyncWrite captures by reference) alive until the write completes, so a concurrent
+            // teardown on another thread cannot free them mid-write.
+            [session = shared_from_this(), m_lock = std::move(lock)](
                 const boost::system::error_code _error, std::size_t _size) mutable {
-                if (auto session = self.lock())
                 {
                     session->m_writings->buffers.clear();
                     for (auto& payload : session->m_writings->payloads)
@@ -369,92 +382,164 @@ void Session::drop(DisconnectReason _reason)
 
     if (m_messageHandler)
     {
-        boost::asio::post(socket->ioService(),
-            [self = weak_from_this(), errorCode, errorMsg = std::move(errorMsg)]() {
-                auto session = self.lock();
-                if (!session)
-                {
-                    return;
-                }
-                session->m_messageHandler(
-                    NetworkException(errorCode, errorMsg), session, Message::Ptr());
-            });
+        // FIB-186 (vector D): run the teardown notification on the dedicated teardown executor, NOT
+        // the shared IOServicePool. This handler drives Service::onMessage's error path ->
+        // onDisconnect -> onRemoveNodeIDs -> syncLatestNodeIDList; running it on the same reactor
+        // that carries inbound message delivery let a persistent bulk-disconnect flood starve
+        // inter-validator message delivery and permanently halt consensus. postTeardown keeps it
+        // off the delivery reactor. Ordering vs message delivery is unchanged: onDisconnect already
+        // ran asynchronously and unordered relative to delivery.
+        auto notifyDisconnect = [self = weak_from_this(), errorCode,
+                                    errorMsg = std::move(errorMsg)]() {
+            auto session = self.lock();
+            if (!session)
+            {
+                return;
+            }
+            session->m_messageHandler(
+                NetworkException(errorCode, errorMsg), session, Message::Ptr());
+        };
+        // Once haveNetwork() is false the Host is on its way out, so run the notification inline
+        // rather than handing it to an executor whose remaining lifetime we do not control here.
+        //
+        // NOTE, because the surrounding machinery changed under this fix: the teardown executor is
+        // deliberately NOT stopped by Host::stop() (see Host.cpp) -- it lives until ~Host -- and
+        // Host::stop() no longer stops the ASIO interface either, so the shared pool's threads are
+        // still running at this point. In practice this branch is currently unreachable during
+        // shutdown: Service::stop() calls Host::stop() first, which makes Session::active() false,
+        // and P2PSession::stop() only calls disconnect() on an active session. The reachable
+        // shutdown-time callers are socket error paths, which already run on the socket's own
+        // io_context.
+        //
+        // KNOWN HAZARD of this inline branch (recorded, not a reason to keep it): any caller that
+        // reaches drop() while holding x_sessions would self-deadlock here, because the inline
+        // notifyDisconnect re-enters Service::onDisconnect -> getP2PSessionByNodeId, which takes
+        // that same non-reentrant shared_mutex -- and Service::stop() does iterate sessions under
+        // it exclusively. No such caller exists today (see the reachability note above). Making
+        // this branch unconditionally async would remove the hazard outright, since the teardown
+        // thread never holds x_sessions; that is worth doing on its own, with the shutdown-path
+        // verification it deserves, rather than inside a merge.
+        if (m_server.get().haveNetwork())
+        {
+            m_server.get().postTeardown(std::move(notifyDisconnect));
+        }
+        else
+        {
+            notifyDisconnect();
+        }
     }
 
-    if (socket->isConnected())
+    // FIB-184: serialize the SSL/socket teardown onto the socket's own (single-threaded)
+    // io_context. drop() can be invoked from another thread (Service-layer teardown, duplicate-peer
+    // handling) while an async_read_some/async_write is still in flight on the socket's io_context
+    // thread. Running close()/async_shutdown inline on the caller thread would then touch the same
+    // ssl::stream concurrently with those handlers. Posting the teardown to the socket's io_context
+    // makes it run on the same single thread that services every read/write for this session —
+    // i.e. a per-session strand — so socket operations never overlap. The strong self capture keeps
+    // the session (and its socket) alive until the teardown runs.
+    //
+    // Shutdown path exception: Service::stop() calls Host::stop() BEFORE dropping sessions, and the
+    // shared IOServicePool is torn down shortly after by whoever owns it, so once the network is
+    // down a posted handler may never run — the socket would never be closed and the posted task
+    // would pin this session in a dead io_context queue. Close inline instead, matching the old
+    // synchronous teardown behaviour on shutdown.
+    //
+    // Do not read this as "the io_context threads are already joined": Host::stop() only clears
+    // m_run now (it no longer stops the ASIO interface), so the shared pool is still live here.
+    // What makes the inline close safe is the caller, not a quiesced pool — see the note on the
+    // teardown-notification branch above.
+    if (m_server.get().haveNetwork())
     {
-        try
-        {
-            if (_reason == DisconnectRequested || _reason == DuplicatePeer ||
-                _reason == ClientQuit || _reason == UserReason)
-            {
-                SESSION_LOG(DEBUG) << "[drop] closing remote " << socket->remoteEndpoint()
-                                   << LOG_KV("reason", reasonOf(_reason))
-                                   << LOG_KV("endpoint", socket->nodeIPEndpoint());
-            }
-            else
-            {
-                SESSION_LOG(INFO) << "[drop] closing remote " << socket->remoteEndpoint()
-                                  << LOG_KV("reason", reasonOf(_reason))
-                                  << LOG_KV("endpoint", socket->nodeIPEndpoint());
-            }
+        boost::asio::post(socket->ioService(),
+            [self = shared_from_this(), _reason]() { self->closeSocket(_reason); });
+    }
+    else
+    {
+        closeSocket(_reason);
+    }
+}
 
-            /// if get Host object failed, close the socket directly
-            if (socket->isConnected())
+void Session::closeSocket(DisconnectReason _reason)
+{
+    // Take a local strong reference before touching the socket, for the same reason drop() does:
+    // a concurrent setSocket(nullptr) must not turn this into a null dereference mid-teardown.
+    auto socket = m_socket;
+    if (!socket || !socket->isConnected())
+    {
+        return;
+    }
+    try
+    {
+        if (_reason == DisconnectRequested || _reason == DuplicatePeer || _reason == ClientQuit ||
+            _reason == UserReason)
+        {
+            SESSION_LOG(DEBUG) << "[drop] closing remote " << socket->remoteEndpoint()
+                               << LOG_KV("reason", reasonOf(_reason))
+                               << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        }
+        else
+        {
+            SESSION_LOG(INFO) << "[drop] closing remote " << socket->remoteEndpoint()
+                              << LOG_KV("reason", reasonOf(_reason))
+                              << LOG_KV("endpoint", socket->nodeIPEndpoint());
+        }
+
+        /// if get Host object failed, close the socket directly
+        if (socket->isConnected())
+        {
+            socket->close();
+        }
+        auto shutdown_timer = std::make_shared<boost::asio::steady_timer>(
+            socket->ioService(), std::chrono::milliseconds(m_shutDownTimeThres));
+        /// async wait for shutdown
+        shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
+            /// drop operation has been aborted
+            if (error == boost::asio::error::operation_aborted)
             {
+                SESSION_LOG(DEBUG)
+                    << "[drop] operation aborted  by async_shutdown"
+                    << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
+                return;
+            }
+            /// shutdown timer error
+            if (error && error != boost::asio::error::operation_aborted)
+            {
+                SESSION_LOG(WARNING)
+                    << "[drop] shutdown timer failed" << LOG_KV("failedValue", error.value())
+                    << LOG_KV("message", error.message());
+            }
+            /// force to shutdown when timeout
+            if (socket->ref().is_open())
+            {
+                SESSION_LOG(WARNING) << "[drop] timeout, force close the socket"
+                                     << LOG_KV("remote endpoint", socket->nodeIPEndpoint());
                 socket->close();
             }
-            auto shutdown_timer = std::make_shared<boost::asio::steady_timer>(
-                socket->ioService(), std::chrono::milliseconds(m_shutDownTimeThres));
-            /// async wait for shutdown
-            shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
-                /// drop operation has been aborted
-                if (error == boost::asio::error::operation_aborted)
+        });
+
+        /// async shutdown normally
+        socket->sslref().async_shutdown(
+            [socket, shutdown_timer](const boost::system::error_code& error) {
+                shutdown_timer->cancel();
+                if (error)
                 {
-                    SESSION_LOG(DEBUG)
-                        << "[drop] operation aborted  by async_shutdown"
-                        << LOG_KV("value", error.value()) << LOG_KV("message", error.message());
-                    return;
-                }
-                /// shutdown timer error
-                if (error && error != boost::asio::error::operation_aborted)
-                {
-                    SESSION_LOG(WARNING)
-                        << "[drop] shutdown timer failed" << LOG_KV("failedValue", error.value())
+                    SESSION_LOG(INFO)
+                        << "[drop] shutdown failed " << LOG_KV("failedValue", error.value())
                         << LOG_KV("message", error.message());
                 }
-                /// force to shutdown when timeout
+                /// force to close the socket
                 if (socket->ref().is_open())
                 {
-                    SESSION_LOG(WARNING) << "[drop] timeout, force close the socket"
-                                         << LOG_KV("remote endpoint", socket->nodeIPEndpoint());
+                    SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
+                                         << LOG_KV("endpoint", socket->nodeIPEndpoint());
                     socket->close();
                 }
             });
-
-            /// async shutdown normally
-            socket->sslref().async_shutdown(
-                [socket, shutdown_timer](const boost::system::error_code& error) {
-                    shutdown_timer->cancel();
-                    if (error)
-                    {
-                        SESSION_LOG(INFO)
-                            << "[drop] shutdown failed " << LOG_KV("failedValue", error.value())
-                            << LOG_KV("message", error.message());
-                    }
-                    /// force to close the socket
-                    if (socket->ref().is_open())
-                    {
-                        SESSION_LOG(WARNING) << LOG_DESC("force to shutdown session")
-                                             << LOG_KV("endpoint", socket->nodeIPEndpoint());
-                        socket->close();
-                    }
-                });
-        }
-        catch (...)
-        {
-            SESSION_LOG(ERROR) << LOG_DESC("drop error") << LOG_KV("endpoint", socket->nodeIPEndpoint());
-        }
+    }
+    catch (...)
+    {
+        SESSION_LOG(ERROR) << LOG_DESC("drop error")
+                           << LOG_KV("endpoint", socket->nodeIPEndpoint());
     }
 }
 
@@ -491,15 +576,15 @@ void Session::doRead()
 {
     if (m_active && m_server.get().haveNetwork())
     {
-        // NOTE: Capture m_socket as a shared_ptr to keep the SSL context alive for the duration
-        // of this async read. The handler never references `socket` directly — it touches
-        // the socket only via the Session recovered from `self.lock()` — but removing this
-        // capture re-introduces the FIB-97 use-after-free: a concurrent drop() can free
-        // the SSL stream while this read is still in flight.
-        auto asyncRead = [self = std::weak_ptr<Session>(shared_from_this()), socket = m_socket](
+        // FIB-184: capture a strong reference (shared_from_this) instead of a weak_ptr. The
+        // buffer handed to asyncReadSome below points into this->m_recvBuffer and the stream is
+        // this->m_socket — both owned by the session. Holding a strong ref keeps the session, and
+        // therefore the recv buffer and the socket, alive until this handler completes, so a
+        // concurrent teardown on another thread can free them only after the read finishes. This
+        // supersedes the FIB-97 socket-only capture, which kept the SSL stream alive but not the
+        // recv buffer that async_read_some writes into — the actual use-after-free.
+        auto asyncRead = [session = shared_from_this()](
                              const boost::system::error_code& ec, std::size_t bytesTransferred) {
-            std::ignore = socket;
-            if (const auto session = self.lock())
             {
                 if (ec)
                 {
@@ -513,7 +598,20 @@ void Session::doRead()
                 session->m_lastReadTime.store(utcSteadyTime());
 
                 auto& recvBuffer = session->recvBuffer();
-                recvBuffer.onWrite(bytesTransferred);
+                // FIB-184 (review): onWrite advances the write position and returns false if the
+                // just-read bytes would overrun the recv buffer. With the lazy-initial / grow-on-
+                // demand buffer the read size is bounded by the write-buffer span, so this should
+                // not happen; but if it ever did the bytes would be silently dropped and the stream
+                // desynchronized. Treat it as a transport error and drop the session instead.
+                if (!recvBuffer.onWrite(bytesTransferred))
+                {
+                    SESSION_LOG(ERROR)
+                        << LOG_BADGE("doRead") << LOG_DESC("recv buffer overflow on write, drop")
+                        << LOG_KV("bytesTransferred", bytesTransferred)
+                        << LOG_KV("recvBufferSize", recvBuffer.recvBufferSize());
+                    session->drop(TCPError);
+                    return;
+                }
 
                 while (true)
                 {
@@ -633,7 +731,7 @@ void Session::doRead()
     else
     {
         SESSION_LOG(ERROR) << LOG_DESC("callback doRead failed for session inactive")
-                           << LOG_KV("active", m_active)
+                           << LOG_KV("active", m_active.load())
                            << LOG_KV("haveNetwork", m_server.get().haveNetwork());
     }
 }

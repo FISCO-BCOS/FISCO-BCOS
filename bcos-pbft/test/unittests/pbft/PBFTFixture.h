@@ -221,13 +221,15 @@ public:
     // Test-only: inject a committed-block timestamp so FIB-126 monotonicity tests
     // can exercise the timestamp check without a real ledger.
     void setCommittedBlockTimestampForTest(int64_t _ts) { m_ledgerConfig->setTimestamp(_ts); }
+
+    // FIB-185: expose the consensus-timer watchdog for unit testing.
+    void checkConsensusTimerWatchdogForTest() { PBFTEngine::checkConsensusTimerWatchdog(); }
 };
 
 class FakePBFTImpl : public PBFTImpl
 {
 public:
-    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine,
-        bcos::IOServicePool::Ptr _ioServicePool)
+    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine, bcos::IOServicePool::Ptr _ioServicePool)
       : PBFTImpl(_pbftEngine, std::move(_ioServicePool))
     {
         m_running = true;
@@ -263,17 +265,19 @@ public:
     {
         auto pbft = PBFTFactory::createPBFT();
         auto orgPBFTConfig = pbft->pbftEngine()->pbftConfig();
-        auto stateMachine = std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
+        auto stateMachine =
+            std::make_shared<StateMachine>(m_scheduler, m_blockFactory, m_ioServicePool);
 
         PBFT_LOG(DEBUG) << LOG_DESC("create pbftStorage");
-        auto pbftStorage = std::make_shared<LedgerStorage>(
-            m_scheduler, m_storage, m_blockFactory, orgPBFTConfig->pbftMessageFactory(), m_ioServicePool);
+        auto pbftStorage = std::make_shared<LedgerStorage>(m_scheduler, m_storage, m_blockFactory,
+            orgPBFTConfig->pbftMessageFactory(), m_ioServicePool);
 
         auto pbftConfig = std::make_shared<FakePBFTConfig>(m_ioService, m_cryptoSuite, m_keyPair,
             orgPBFTConfig->pbftMessageFactory(), orgPBFTConfig->codec(), orgPBFTConfig->validator(),
             orgPBFTConfig->frontService(), stateMachine, pbftStorage, m_blockFactory);
         PBFT_LOG(DEBUG) << LOG_DESC("create PBFTEngine");
-        auto pbftEngine = std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService, m_ioServicePool);
+        auto pbftEngine =
+            std::make_shared<FakePBFTEngine>(pbftConfig, m_ioService, m_ioServicePool);
 
         PBFT_LOG(INFO) << LOG_DESC("create PBFT");
         auto fakedPBFT = std::make_shared<FakePBFTImpl>(pbftEngine, m_ioServicePool);
