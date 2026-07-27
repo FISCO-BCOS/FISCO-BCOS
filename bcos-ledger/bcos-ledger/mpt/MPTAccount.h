@@ -14,7 +14,8 @@
  *  limitations under the License.
  *
  * @file MPTAccount.h
- * @brief Account-concept reader over MPT state at a fixed root, for historical calls (spec §5.13)
+ * @brief EVMAccount subclass whose reads walk the MPT at a fixed root, for historical calls
+ * (spec §5.13)
  */
 #pragma once
 
@@ -26,8 +27,6 @@
 #include "Trie.h"
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-concepts/ByteBuffer.h>
-// EVMAccount.h supplies bcos::ledger::account::NonceNotInitialized; increaseNonce() throws the
-// SAME exception type as EVMAccount so callers need not distinguish the two implementations.
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage/Entry.h>
@@ -42,61 +41,85 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <unordered_map>
-#include <utility>
 
 namespace bcos::ledger::mpt
 {
 
-/// Account-concept implementation that reads state through the MPT at a FIXED stateRoot — the
-/// historical-call counterpart of ledger::account::EVMAccount (spec §5.13). HostContext is coded
-/// against the Account concept (bcos-framework/ledger/Account.h), so an eth_call against block N
-/// swaps this in for EVMAccount and executes on block N's trie instead of the latest flat KV.
+/// A Storage that carries the MPT read context, so MPTAccount stays constructible with
+/// HostContext's fixed (storage, address, binaryAddress) shape (HostContext.h getAccount /
+/// executeCreate): the historical storage stack PR-43 builds exposes these three getters and
+/// MPTAccount pulls its trie context out of them at construction.
+template <class Storage>
+concept HistoricalStorageContext = requires(Storage& storage) {
+    { storage.mptNodeStorage() };
+    { storage.mptBackendStorage() };
+    { storage.mptStateRoot() } -> std::convertible_to<bcos::h256>;
+};
+
+/// EVMAccount subclass for historical calls (spec §5.13): an eth_call against block N swaps this
+/// class in for EVMAccount (HostContext is coded against the Account concept, statically
+/// dispatched, so the shadowed methods below win) and executes on block N's trie.
 ///
-/// Reads walk the trie: balance()/nonce()/codeHash() come from the account leaf 4-tuple
-/// (MPTReadView::readAccount); storage(key) descends the account's storage trie along
-/// slotKeyHash(key); code() resolves the leaf's codeHash through the flat s_code_binary table —
-/// hash-addressed and append-only, so its rows are valid for ANY historical block (spec §4.5).
+/// READS are pure MPT walks at the fixed @p stateRoot, never layered over anything:
+/// balance()/nonce()/codeHash() come from the account leaf 4-tuple (MPTReadView::readAccount);
+/// storage(key) takes the leaf's storageRoot and descends the storage trie along
+/// slotKeyHash(key); code()/abi() resolve the leaf's codeHash through the flat
+/// s_code_binary / s_contract_abi tables — hash-addressed and append-only, so their rows are
+/// valid for ANY historical block (spec §4.5).
+///
+/// WRITES are inherited from EVMAccount verbatim (create/setCode/setBalance/setNonce/setStorage)
+/// and land as flat rows in @p Storage. They exist so a simulated call can execute, but block N
+/// is immutable and reads never consult @p Storage: a write in a historical call is NOT visible
+/// to a subsequent read of the same field/slot (SSTORE then SLOAD returns the historical value).
+/// Historical calls target view-style execution; this boundary is deliberate (spec §5.13).
+/// Nothing ever writes the node storage — MPTAccount only reads it.
 ///
 /// Absence semantics are Ethereum semantics, NOT errors: an account missing from the trie reads
 /// as exists()==false / balance 0 / nonce nullopt / zero codeHash; a slot missing from the
 /// storage trie reads as the zero value. This class targets scenario B (genesis-enabled MPT,
 /// spec §4.4), where the trie is the COMPLETE state and exclusion genuinely means zero/empty.
-/// Scenario-A cold data (dormant accounts, cold slots of touched accounts) makes exclusion
-/// ambiguous — gating historical calls to scenario B is the eth_call plumbing layer's job
-/// (PR-43, per OQ6 resolution (c)+(a)), not this class's.
+/// Scenario-A cold data makes exclusion ambiguous — gating historical calls to scenario B is the
+/// eth_call plumbing layer's job (PR-43, per OQ6 resolution (c)+(a)), not this class's.
 ///
-/// Writes are simulation-only: a historical call may SSTORE / set balances, but block N is
-/// immutable, so create/setCode/setBalance/setNonce/setStorage land in an internal in-memory
-/// overlay that reads consult before the trie. Nothing ever touches the node storage — MPTAccount
-/// only reads it. The overlay dies with the account object (== with the call).
+/// Like MPTReadView, each read walks from the root with a fresh Trie: the object holds no
+/// mutable state (node-level caching is the Storage layer's concern), so HostContext's
+/// construct-per-use pattern is loss-free. The account+storage tries are keccak paths end-to-end
+/// (accountKeyHash / slotKeyHash defaults), matching what MPTBuilder committed.
 ///
-/// Like MPTReadView, each read walks from the root with a fresh Trie: no trie state is cached
-/// (node-level caching is the Storage layer's concern). The account+storage tries are keccak
-/// paths end-to-end (accountKeyHash / slotKeyHash defaults), matching what MPTBuilder committed.
-///
-/// The interface is the de-facto superset of the Account concept that HostContext and
-/// BaselineScheduler actually call (spec §5.13): concept methods plus storage(key, DIRECT_TYPE),
-/// storageEntry(), increaseNonce().
-///
-/// @tparam NodeStorage resolves trie node hashes (same concept MPTReadView eats).
-/// @tparam CodeStorage resolves s_code_binary rows by executor_v1::StateKeyView — the flat KV
-/// store (or any layer over it).
-template <bcos::storage2::ReadableStorage<bcos::h256> NodeStorage, class CodeStorage>
-class MPTAccount
+/// @tparam Storage        where the inherited EVMAccount writes land (and the table name comes
+///                        from); never consulted by reads.
+/// @tparam NodeStorage    resolves trie node hashes (same concept MPTReadView eats).
+/// @tparam BackendStorage flat store holding s_code_binary / s_contract_abi (hash-addressed,
+///                        history-invariant), read by executor_v1::StateKeyView.
+template <class Storage, bcos::storage2::ReadableStorage<bcos::h256> NodeStorage,
+    class BackendStorage>
+class MPTAccount : public bcos::ledger::account::EVMAccount<Storage>
 {
+private:
+    using Base = bcos::ledger::account::EVMAccount<Storage>;
+
 public:
-    /// @param nodeStorage trie node store the walks read against.
-    /// @param codeStorage flat store holding s_code_binary (code bytes by code hash).
-    /// @param stateRoot   block N's state root; emptyRootHash() means "no accounts".
-    /// @param address     the 20-byte account address.
-    MPTAccount(NodeStorage& nodeStorage, CodeStorage& codeStorage, bcos::h256 stateRoot,
-        bcos::Address address)
-      : m_nodeStorage(nodeStorage),
-        m_codeStorage(codeStorage),
+    /// Direct construction (tests, callers that already hold the trie context).
+    /// @param storage   write target for the inherited EVMAccount write methods.
+    /// @param stateRoot block N's state root; emptyRootHash() means "no accounts".
+    MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
+        bcos::h256 stateRoot, bcos::Address address)
+      : Base(storage, address, /*binaryAddress*/ false),
+        m_nodeStorage(nodeStorage),
+        m_backendStorage(backendStorage),
         m_stateRoot(stateRoot),
-        m_address(address),
-        m_addressHex(address.hex())
+        m_address(address)
+    {}
+
+    /// HostContext-shaped construction: same (storage, address, binaryAddress) signature as
+    /// EVMAccount, with the trie context riding on the storage type (PR-43's historical stack).
+    MPTAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
+        requires HistoricalStorageContext<Storage>
+      : Base(storage, address, binaryAddress),
+        m_nodeStorage(storage.mptNodeStorage()),
+        m_backendStorage(storage.mptBackendStorage()),
+        m_stateRoot(storage.mptStateRoot()),
+        m_address(bcos::bytesConstRef{address.bytes, sizeof(address.bytes)})
     {}
 
     MPTAccount(const MPTAccount&) = delete;
@@ -105,59 +128,32 @@ public:
     MPTAccount& operator=(MPTAccount&&) noexcept = default;
     ~MPTAccount() noexcept = default;
 
-    /// True when the account has a leaf in the trie, or create() was called on this object.
-    /// Mirrors EVMAccount: value writes (setBalance etc.) alone do not create the account.
+    /// True when the account has a leaf in block N's trie. A create() in this call writes the
+    /// s_tables row into Storage (inherited) but does not change what block N contains.
     bcos::task::Task<bool> exists()
     {
-        if (m_created)
-        {
-            co_return true;
-        }
         auto const account = co_await readLeaf();
         co_return account.has_value();
     }
 
-    /// Simulation-only: marks the account created in the overlay. The trie is never written.
-    bcos::task::Task<void> create()
-    {
-        m_created = true;
-        co_return;
-    }
-
-    /// The code bytes: overlay first (a simulated setCode), then the trie leaf's codeHash
-    /// resolved through s_code_binary. An absent account or an EOA (emptyCodeHash) has no code.
+    /// The code bytes at block N: the leaf's codeHash resolved through s_code_binary. An absent
+    /// account or an EOA (emptyCodeHash) has no code.
     bcos::task::Task<std::optional<bcos::storage::Entry>> code()
     {
-        if (m_codeOverlay)
-        {
-            co_return bcos::storage::Entry{m_codeOverlay->code};
-        }
         auto const account = co_await readLeaf();
         if (!account || account->codeHash == emptyCodeHash())
         {
             co_return std::nullopt;
         }
         co_return co_await bcos::storage2::readOne(
-            m_codeStorage.get(), bcos::executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY,
-                                     bcos::concepts::bytebuffer::toView(account->codeHash)});
+            m_backendStorage.get(), bcos::executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY,
+                                        bcos::concepts::bytebuffer::toView(account->codeHash)});
     }
 
-    /// Simulation-only: the code/abi/hash land in the overlay; s_code_binary is never written.
-    bcos::task::Task<void> setCode(
-        bcos::bytes code, std::string abi, const bcos::crypto::HashType& codeHash)
-    {
-        m_codeOverlay = CodeOverlay{std::move(code), std::move(abi), codeHash};
-        co_return;
-    }
-
-    /// Overlay codeHash (after a simulated setCode), else the leaf's codeHash. Zero for an
-    /// absent account (mirrors EVMAccount's missing-field default).
+    /// The leaf's codeHash; zero for an absent account (mirrors EVMAccount's missing-field
+    /// default).
     bcos::task::Task<bcos::h256> codeHash()
     {
-        if (m_codeOverlay)
-        {
-            co_return m_codeOverlay->codeHash;
-        }
         auto const account = co_await readLeaf();
         if (!account)
         {
@@ -166,24 +162,23 @@ public:
         co_return account->codeHash;
     }
 
-    /// The Ethereum account 4-tuple has no abi field — abi is a BCOS extension excluded from the
-    /// MPT (spec §5.13). Only a simulated setCode's abi is visible; historical reads are empty.
+    /// The contract abi at block N: the leaf's codeHash resolved through s_contract_abi — like
+    /// s_code_binary it is hash-addressed and append-only, so the flat row is history-valid.
     bcos::task::Task<std::optional<bcos::storage::Entry>> abi()
     {
-        if (m_codeOverlay && !m_codeOverlay->abi.empty())
+        auto const account = co_await readLeaf();
+        if (!account || account->codeHash == emptyCodeHash())
         {
-            co_return bcos::storage::Entry{m_codeOverlay->abi};
+            co_return std::nullopt;
         }
-        co_return std::nullopt;
+        co_return co_await bcos::storage2::readOne(
+            m_backendStorage.get(), bcos::executor_v1::StateKeyView{bcos::ledger::SYS_CONTRACT_ABI,
+                                        bcos::concepts::bytebuffer::toView(account->codeHash)});
     }
 
-    /// Overlay balance, else the leaf's balance, else 0 for an absent account.
+    /// The leaf's balance; 0 for an absent account.
     bcos::task::Task<bcos::u256> balance()
     {
-        if (m_balanceOverlay)
-        {
-            co_return *m_balanceOverlay;
-        }
         auto const account = co_await readLeaf();
         if (!account)
         {
@@ -192,21 +187,10 @@ public:
         co_return account->balance;
     }
 
-    /// Simulation-only: lands in the overlay.
-    bcos::task::Task<void> setBalance(const bcos::u256& balance)
-    {
-        m_balanceOverlay = balance;
-        co_return;
-    }
-
-    /// Overlay nonce, else the leaf's nonce as a decimal string (EVMAccount's representation),
-    /// else nullopt for an absent account.
+    /// The leaf's nonce as a decimal string (EVMAccount's representation); nullopt for an absent
+    /// account.
     bcos::task::Task<std::optional<std::string>> nonce()
     {
-        if (m_nonceOverlay)
-        {
-            co_return *m_nonceOverlay;
-        }
         auto const account = co_await readLeaf();
         if (!account)
         {
@@ -215,38 +199,26 @@ public:
         co_return account->nonce.template convert_to<std::string>();
     }
 
-    /// Simulation-only: lands in the overlay.
-    bcos::task::Task<void> setNonce(std::string nonce)
-    {
-        m_nonceOverlay = std::move(nonce);
-        co_return;
-    }
-
-    /// nonce()+1 into the overlay; throws account::NonceNotInitialized when the account has no
-    /// nonce (absent from the trie and never setNonce'd) — same contract as EVMAccount.
+    /// Trie nonce + 1 written through the inherited setNonce (simulation only, like every
+    /// write); throws account::NonceNotInitialized for an absent account — same contract as
+    /// EVMAccount. Shadowed because the base version reads the flat nonce row, which historical
+    /// reads must not consult.
     bcos::task::Task<void> increaseNonce()
     {
-        if (auto currentNonce = co_await nonce())
-        {
-            const auto newNonce = bcos::u256(currentNonce.value()) + 1;
-            co_await setNonce(newNonce.convert_to<std::string>());
-        }
-        else
+        auto const account = co_await readLeaf();
+        if (!account)
         {
             BOOST_THROW_EXCEPTION(bcos::ledger::account::NonceNotInitialized{});
         }
+        auto const newNonce = account->nonce + 1;
+        co_await Base::setNonce(newNonce.template convert_to<std::string>());
     }
 
-    /// SLOAD at block N: overlay first, then the account's storage trie along slotKeyHash(key).
+    /// SLOAD at block N: the leaf's storageRoot, then the storage trie along slotKeyHash(key).
     /// Absent account, empty storage trie, or absent slot all read as the zero value.
     bcos::task::Task<evmc_bytes32> storage(const evmc_bytes32& key)
     {
-        auto const slot = toSlot(key);
-        if (auto const it = m_storageOverlay.find(slot); it != m_storageOverlay.end())
-        {
-            co_return it->second;
-        }
-        auto const value = co_await readTrieSlot(slot);
+        auto const value = co_await readTrieSlot(toSlot(key));
         if (!value)
         {
             co_return evmc_bytes32{};
@@ -254,19 +226,14 @@ public:
         co_return toEvmcBytes(bcos::h256{*value});
     }
 
-    /// DIRECT-tagged variant (see EVMAccount): metadata-only reads that must bypass read-set
-    /// tracking. MPTAccount tracks no read set, so it is exactly storage(key).
-    bcos::task::Task<evmc_bytes32> storage(
-        const evmc_bytes32& key, storage2::DIRECT_TYPE /*direct*/)
+    /// Tag-taking variant (see EVMAccount's tag-forwarding overload): HostContext passes
+    /// composable tags like BYPASS_READ_SET / BYPASS_MULTILAYER for metadata reads. MPTAccount
+    /// tracks no read set and has no layers, so every tag is a no-op and this is exactly
+    /// storage(key). (Both overloads are shadowed together — shadowing one would hide the
+    /// base's other overload.)
+    bcos::task::Task<evmc_bytes32> storage(const evmc_bytes32& key, auto... /*tags*/)
     {
         co_return co_await storage(key);
-    }
-
-    /// Simulation-only: lands in the overlay; the storage trie is never written.
-    bcos::task::Task<void> setStorage(const evmc_bytes32& key, const evmc_bytes32& value)
-    {
-        m_storageOverlay[toSlot(key)] = value;
-        co_return;
     }
 
     /// The raw 32-byte slot value as a storage Entry (the shape BaselineScheduler's
@@ -281,11 +248,6 @@ public:
         }
         bcos::h256 const slot{
             bcos::bytesConstRef{reinterpret_cast<const bcos::byte*>(key.data()), key.size()}};
-        if (auto const it = m_storageOverlay.find(slot); it != m_storageOverlay.end())
-        {
-            co_return bcos::storage::Entry{std::string_view{
-                reinterpret_cast<const char*>(it->second.bytes), sizeof(it->second.bytes)}};
-        }
         auto const value = co_await readTrieSlot(slot);
         if (!value)
         {
@@ -295,23 +257,14 @@ public:
         co_return bcos::storage::Entry{bcos::concepts::bytebuffer::toView(padded)};
     }
 
-    /// The lowercase-hex address (no 0x). MPTAccount has no flat table, so unlike EVMAccount
-    /// there is no /apps/ table-name prefix to return.
-    bcos::task::Task<std::string_view> path() { co_return std::string_view{m_addressHex}; }
-
-    std::string_view address() const { return m_addressHex; }
+    // path() / address() are inherited: both return the EVMAccount table name ("/apps/<hex>",
+    // or the binary/system variants), so historical and latest accounts key transient storage
+    // and logs identically.
 
     /// The state root this account reads against.
     bcos::h256 root() const noexcept { return m_stateRoot; }
 
 private:
-    struct CodeOverlay
-    {
-        bcos::bytes code;
-        std::string abi;
-        bcos::h256 codeHash;
-    };
-
     /// The account leaf 4-tuple at m_stateRoot, or nullopt when absent. Fresh walk per call.
     bcos::task::Task<std::optional<Account>> readLeaf() const
     {
@@ -370,17 +323,9 @@ private:
     }
 
     std::reference_wrapper<NodeStorage> m_nodeStorage;
-    std::reference_wrapper<CodeStorage> m_codeStorage;
+    std::reference_wrapper<BackendStorage> m_backendStorage;
     bcos::h256 m_stateRoot;
     bcos::Address m_address;
-    std::string m_addressHex;
-
-    // Simulation overlay: writes land here, reads consult it before the trie. Never persisted.
-    bool m_created{false};
-    std::optional<bcos::u256> m_balanceOverlay;
-    std::optional<std::string> m_nonceOverlay;
-    std::optional<CodeOverlay> m_codeOverlay;
-    std::unordered_map<bcos::h256, evmc_bytes32> m_storageOverlay;
 };
 
 }  // namespace bcos::ledger::mpt
