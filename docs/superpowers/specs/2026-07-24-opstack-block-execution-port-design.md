@@ -120,6 +120,67 @@ vendor 基准必须与 `eth/state/` 既有 vendor 同源(官方 v0.21.0),不从 
 `bcos-evm-ref/` 模块壳与 CMakeLists、fork portfile(16.5KB,`EVMONE_STATE` 导出机制)、
 EEST 双套件与 blockchaintest loader、`spike/`(M3.5 读放大)、iwyu 工装(可后补)。
 
+### 4.6 移植偏离台账
+
+移植过程中(Task 1-7)出现的、与"sed 三规则改写、逐字节不动"字面约束有偏离但已
+逐笔核实为语义等价/零风险的改动,统一在此登记,供后续核对与(如适用)回传
+`bcos-evm-ref`:
+
+**(a) clang-format pre-commit hook 触发的 include 重排(纯格式化,零语义)**
+
+sed 把 `<bcos-evm-ref/...>`/`<test/state/...>`/`<test/utils/...>` 改写为
+`<bcos-evm/...>` 后,字符串按字母序落到不同的 include 分组位置,触发本仓
+clang-format 的 include 排序规则在提交时(pre-commit hook)自动重排。涉及
+15 个文件,均只调整 `#include` 顺序,不增删行、不改变符号可见性或逻辑:
+
+- `eth/EthTransition.h`(Task 3):1 处,`<bcos-evm/eth/state/state.hpp>` 从
+  `<system_error>`/`<variant>` 之间移到 include 组最前。
+- `opstack/` 11 个文件(Task 4,28 行):`OpBlockExecute.cpp`、`OpBlockSeal.cpp`、
+  `OpBlockSeal.h`、`OpExecCommon.h`、`OpFeeParams.cpp`、`OpHost.cpp`、`OpHost.h`、
+  `OpReceiptMeta.h`、`OpTransition.cpp`、`OpTransition.h`、`OpValidate.h`。
+- 测试侧 3 个文件(Task 5):`test/opstack/Op7702Test.cpp`、
+  `test/opstack/OpT8nReplayTest.cpp`、`test/support/statetest_loader.cpp`。
+
+控制器已就 Task 3 的首次出现裁定等价口径:"sed 改写 + clang-format 归一化"——
+约束本意是不改逻辑,非逐字节不可变;后续同类重排均按此口径记录,不手工改回。
+
+**(b) `-Werror` 两处两行零行为修复(Task 7 Step 4 发现,建议回传 ref)**
+
+standalone 构建(`BCOS_EVM_STANDALONE`)不继承根 `cmake/CompilerSettings.cmake`
+的 `-Werror -Wall -Wextra -pedantic`,故 Task 2-6 从未在这组严格告警集下编译过
+opstack 层;Task 7 Step 4 首次执行 in-tree(`add_subdirectory(bcos-evm)`,
+FULLNODE)构建时触发并定位:
+
+- `opstack/OpPredeploys.h:7` 前向声明 `struct TestState;` 与
+  `eth/utils/test_state.hpp`(官方 v0.21.0 vendor)的 `class TestState` 定义
+  不一致(`-Wmismatched-tags`)→ 改为 `class TestState;`。
+- `opstack/OpTransition.cpp:193` 聚合初始化 `evmone::state::TransactionReceipt`
+  缺第 8 个字段 `post_state`(`-Wmissing-field-initializers`)→ 补尾随 `{}`。
+
+两处均非 `manifest.tsv` 追踪的"上游照抄段"(`OpPredeploys.h` 完全不在 manifest
+范围;`OpTransition.cpp:193` 不落在该文件已追踪的三段 24-29/82-135/155-165 内),
+属 FISCO 自有的 OP Stack 胶水代码,按 `bcos-evm/CMakeLists.txt` 政策("FISCO
+自有代码保持全 `-Werror`")直接对齐声明/补全字段修复,不做文件级告警抑制。
+`bcos-evm-ref` 若曾/将在同一严格告警集下构建,预期会遇到同一对告警,建议
+回传对齐。详见 `.superpowers/sdd/task-7-report.md`"审查整改"节。
+
+**(c) upstream-diff 5 段 golden 重生成(ref 侧欠账,已签核,ref 侧待补 regen)**
+
+Task 6(upstream-diff 基准重锚官方 v0.21.0)首次对官方检出跑护栏时,
+`apply_call_value`/`call_depth_guard`/`call_03_quirk`/`op_storage_root`/
+`receipts_root_loop` 5 段 FAIL。经排查:该 5 段失败在 `$REF`
+(`bcos-evm-ref`,HEAD `1cec91b27639`)用其自身原始 fork pin 独立复现,逐字节
+相同——与本次基准重锚(fork→官方)无因果关系,根因是 `$REF` 侧
+`885be8d76`(D-12:OpHost precompile override 分派重写)与
+`5b91bfde6`/`9ef2fe6b1`(M-B2:OpBlockSeal receipts-root/withdrawals-root
+落地)改动了照抄面之后,golden(`35283af1b` 固化)未同步重新生成的旧账。
+用户复核归因证据后签核:视为"记录 ref 源码现实状态",授权
+`--regenerate-goldens`,已在 Task 6 提交 `abd35de7e`。`$REF` 仓库自身的
+`scripts/upstream-diff/golden/*.patch` 尚未同步这 5 段的重生成,仍是
+`35283af1b` 时代的旧版本;若后续仍以 `$REF` 作为其他任务的搬运源,建议在
+`$REF` 侧同步执行一次 `--regenerate-goldens` 并提交。详见
+`.superpowers/sdd/task-6-report.md`"裁定与重生成"节。
+
 ## 5. 数据流与 ETH 侧欠账接线
 
 块级执行数据流(移植后与 ref 侧完全同构):
