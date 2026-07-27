@@ -1,9 +1,0 @@
---- upstream
-+++ ref
-@@ -1,4 +1,5 @@
--evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) noexcept
-+evmc_message build_message(
-+    const Transaction& tx, int64_t execution_gas_limit) noexcept
- {
-     const auto recipient = tx.to.has_value() ? *tx.to : address{};
-     return {

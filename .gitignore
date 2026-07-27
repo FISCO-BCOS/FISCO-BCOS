@@ -77,5 +77,3 @@ CLAUDE.local.md
 .claude/worktrees
 .claude/agents
 
-# build** 误伤 upstream-diff golden(build_message.patch 曾因此逃逸提交)
-!**/upstream-diff/golden/*.patch
