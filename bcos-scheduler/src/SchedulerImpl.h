@@ -106,6 +106,7 @@ public:
 
     void start();
     void stop() override;
+    ~SchedulerImpl() override;
 
     void setBlockExecutiveFactory(
         bcos::scheduler::BlockExecutiveFactory::Ptr blockExecutiveFactory);

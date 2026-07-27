@@ -18,6 +18,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string_view>
@@ -111,6 +112,18 @@ void SchedulerImpl::stop()
     for (auto& blockExecutive : *m_blocks)
     {
         blockExecutive->stop();
+    }
+}
+
+SchedulerImpl::~SchedulerImpl()
+{
+    stop();
+    if (m_exeStrand && m_ioServicePool)
+    {
+        auto drainPromise = std::make_shared<std::promise<void>>();
+        auto drainFuture = drainPromise->get_future();
+        m_exeStrand->post([drainPromise]() { drainPromise->set_value(); });
+        drainFuture.wait_for(std::chrono::seconds(5));
     }
 }
 
