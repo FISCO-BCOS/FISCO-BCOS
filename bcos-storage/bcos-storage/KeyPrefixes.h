@@ -40,6 +40,11 @@ namespace bcos::storage2
 inline constexpr std::string_view kMPTTable = "/mpt/";
 inline constexpr std::size_t kMPTKeyLength = kMPTTable.size() + 1 + 32;  // 38
 
+static_assert(kMPTTable.find(':') == std::string_view::npos,
+    "the MPT table name must not contain ':' — StateKeyResolver splits a physical key at its "
+    "FIRST colon, so a colon in the table name would decode node rows to a corrupted "
+    "table/key split");
+
 /// The StateKey of a trie node's row: table "/mpt/", row key = the 32 raw digest bytes.
 /// This is the form every in-process reader and writer uses — the ordinary state
 /// resolvers and storages handle it with no MPT-specific code.

@@ -471,6 +471,12 @@ private:
             std::optional<h256> mptStateRoot;
             if (shouldBuildMPT(ledgerConfig->features(), blockHeader->number()))
             {
+                // Reaching here means an MPT IS being built, so the flag-matrix rule the
+                // build depends on has to hold. Re-checked per block rather than at startup
+                // only: a mid-chain activation of either flag is invisible to the boot-time
+                // guard (LedgerInitializer). Inside the branch, so shouldBuildMPT stays a
+                // pure predicate AND is evaluated once.
+                rejectRawAddressWithMPT(ledgerConfig->features(), blockHeader->number());
                 try
                 {
                     mptDelta.emplace(co_await buildMPTStateRoot(view, *blockHeader, *ledgerConfig));
