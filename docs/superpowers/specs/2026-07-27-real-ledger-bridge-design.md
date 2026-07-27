@@ -55,8 +55,8 @@ bcos-evm/bcos-evm/ledger/
 - 构建:`MemoryLedger.cpp` 进 `bcosevm::eth`;`Storage2Ledger.h` 纯模板头,引入对
   `bcos-framework`(storage2/EVMAccount/task)的 PUBLIC 头依赖——本模块首次依赖
   FISCO 框架层,**单向**(框架不回依赖 bcos-evm),编译期隔离原则不破。
-- `adapter/StateViewAdapter.h` 的 v1 占位由本期落地取代(该头随之收编或删除,
-  实施时定,不留双份)。
+- `adapter/StateViewAdapter.h` 的 v1 占位由本期落地取代:**删除该头**,其占位注释
+  中仍有效的契约说明迁入 `Storage2Ledger.h` 头注,不留双份。
 
 **与 TestState 的过渡策略**:`MemoryLedger` 本期接管 E-b 新 gate 与新增测试;既有
 33 向量 TestState gate **原样保留**(等价性证据链不动,双 gate 并行互为对照)。
@@ -71,7 +71,7 @@ bcos-evm/bcos-evm/ledger/
    将来 RocksDB 后端为线程内阻塞,对块级串行执行可接受。**契约:禁止在协程
    上下文内调桥**(桥内单层 syncWait,嵌套即栈陷阱),E-b 为全同步环境。
 2. **块级读缓存(含负缓存)**:三张表,生命周期一个块——
-   账户 `address → optional<AccountRecord>`(**nullopt 也缓存**,消掉 M3.5 P1 spike
+   账户 `address → optional<LedgerAccount>`(**nullopt 也缓存**,消掉 M3.5 P1 spike
    定位的负查询浪费,占账本读 27.9%);槽 `(address, slot) → bytes32`(零值也缓存);
    code `address → bytes`。写回**写穿**缓存(改值更新、删除写负缓存),块内已写回
    中间态与底层永远一致,无脏读窗口。
@@ -128,7 +128,8 @@ bcos-evm/bcos-evm/ledger/
 - **E-b gate**:新文件 `test/opstack/EbT8nReplayTest.cpp`,复用回放器骨架、同一
   33 向量与 DIVERGENCES 纪律,底座换 `LedgerSeed`→`Storage2Ledger`(内存版
   storage2 fixture)。既有 TestState gate 不动,双 gate 互为对照。
-- **单元测试**:`MemoryLedger`(StateView 语义/三契约/KEEP);`Storage2Ledger`
+- **单元测试**(并入现有 `bcos-evm-opstack-tests` GTest 目标,不新建测试目标):
+  `MemoryLedger`(StateView 语义/三契约/KEEP);`Storage2Ledger`
   (存在性判据、空账户归一化、负缓存命中计数断言、毒旗注入、删除 range 扫删
   完整性);**往返判据**(vs `EVMAccount` 双向逐字段);**三后端同根**
   (TestState == MemoryLedger == Storage2Ledger)。
