@@ -1,6 +1,6 @@
 #include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/opstack/OpDepositTx.h>
-#include <bcos-evm/opstack/OpExecCommon.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpHost.h>
 #include <cassert>
@@ -119,7 +119,7 @@ OpDepositReceipt runDeposit(const evmone::state::StateView& view,
             assert(fromAcc.nonce < evmone::state::Account::NonceMax);
             ++fromAcc.nonce;
             OpHost host{cfg.rev, vm, state, block, hashes, tx, chainId, cfg.precompiles};
-            auto outcome = executeMessage(state, host, tx, cfg.rev, block.coinbase,
+            auto outcome = runTxMessage(state, host, tx, cfg.rev, block.coinbase,
                 p.execution_gas_limit, p.min_gas_cost, /*delegation_refund=*/0);
             receipt.status = outcome.result.status_code;
             receipt.gas_used = outcome.gas_used;

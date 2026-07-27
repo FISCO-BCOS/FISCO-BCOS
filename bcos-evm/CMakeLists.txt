@@ -64,7 +64,6 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/RollupCost.cpp
     bcos-evm/opstack/OpValidate.cpp
     bcos-evm/opstack/OpTransition.cpp
-    bcos-evm/opstack/OpExecCommon.cpp
     bcos-evm/opstack/OpDepositTx.cpp
     bcos-evm/opstack/OpReceiptMeta.cpp
     bcos-evm/opstack/OpBlockFinalize.cpp
