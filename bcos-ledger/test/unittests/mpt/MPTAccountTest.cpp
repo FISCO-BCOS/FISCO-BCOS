@@ -38,6 +38,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <evmc/evmc.h>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -398,6 +399,29 @@ BOOST_AUTO_TEST_CASE(EOALeafHasNoCodeAndEmptyStorage)
     BOOST_CHECK(
         !bcos::task::syncWait(eoa.storageEntry(bcos::concepts::bytebuffer::toView(state.slot1)))
             .has_value());
+}
+
+// A leaf that commits a non-empty codeHash with no matching s_code_binary row is a corrupted
+// backend, not an EOA: code() throws instead of silently downgrading the account. abi() stays
+// nullopt — the abi table is BCOS metadata outside the committed 4-tuple.
+BOOST_AUTO_TEST_CASE(MissingCodeRowIsInvariantViolation)
+{
+    SeededState state;
+    Account broken;
+    broken.nonce = 1;
+    broken.balance = 1;
+    broken.storageRoot = emptyRootHash();
+    broken.codeHash = makeHash(0x77);  // no s_code_binary row exists for this hash
+    auto const brokenAddr = makeAddress(0xba);
+    auto const root = seedTrieFlushed(
+        state.nodeStorage, state.stateRoot, {{accountKeyHash(brokenAddr), broken.encode()}})
+                          .root;
+
+    TestMPTAccount account{
+        state.execStorage, state.nodeStorage, state.backendStorage, root, brokenAddr};
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash()), makeHash(0x77));
+    BOOST_CHECK_THROW(bcos::task::syncWait(account.code()), MPTInvariantViolation);
+    BOOST_CHECK(!bcos::task::syncWait(account.abi()).has_value());
 }
 
 namespace

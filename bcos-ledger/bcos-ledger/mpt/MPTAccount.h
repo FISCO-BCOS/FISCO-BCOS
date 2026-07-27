@@ -137,7 +137,12 @@ public:
     }
 
     /// The code bytes at block N: the leaf's codeHash resolved through s_code_binary. An absent
-    /// account or an EOA (emptyCodeHash) has no code.
+    /// account or an EOA (emptyCodeHash) has no code. A leaf that commits a non-empty codeHash
+    /// with NO matching s_code_binary row is a corrupted backend or a mis-wired code write path,
+    /// not an EOA — silently returning nullopt would downgrade the account and execute the call
+    /// wrong, so it throws instead (the append-only, hash-addressed code table makes the row's
+    /// existence an invariant; EIP-7702 delegation designators are ordinary hash-addressed code
+    /// and are covered by the same invariant).
     bcos::task::Task<std::optional<bcos::storage::Entry>> code()
     {
         auto const account = co_await readLeaf();
@@ -145,9 +150,17 @@ public:
         {
             co_return std::nullopt;
         }
-        co_return co_await bcos::storage2::readOne(
+        auto codeEntry = co_await bcos::storage2::readOne(
             m_backendStorage.get(), bcos::executor_v1::StateKeyView{bcos::ledger::SYS_CODE_BINARY,
                                         bcos::concepts::bytebuffer::toView(account->codeHash)});
+        if (!codeEntry)
+        {
+            BOOST_THROW_EXCEPTION(
+                MPTInvariantViolation{} << bcos::errinfo_comment(
+                    "historical code(): account leaf commits codeHash " + account->codeHash.hex() +
+                    " but s_code_binary has no such row"));
+        }
+        co_return codeEntry;
     }
 
     /// The leaf's codeHash; zero for an absent account (mirrors EVMAccount's missing-field
@@ -164,6 +177,8 @@ public:
 
     /// The contract abi at block N: the leaf's codeHash resolved through s_contract_abi — like
     /// s_code_binary it is hash-addressed and append-only, so the flat row is history-valid.
+    /// Unlike code(), a missing row is NOT an invariant violation: abi is BCOS metadata outside
+    /// the committed 4-tuple, so absence simply reads as nullopt.
     bcos::task::Task<std::optional<bcos::storage::Entry>> abi()
     {
         auto const account = co_await readLeaf();
