@@ -23,6 +23,7 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/transaction-executor/TransactionExecutor.h"
 #include "bcos-task/TBBWait.h"
+#include <bcos-utilities/Exceptions.h>
 #include <evmc/evmc.h>
 #include <evmone/evmone.h>
 #include <memory>
@@ -31,6 +32,15 @@
 
 namespace bcos::executor_v1::eth
 {
+
+DERIVE_BCOS_EXCEPTION(NonceAtMaxValue);
+DERIVE_BCOS_EXCEPTION(GasPriceBelowBaseFee);
+DERIVE_BCOS_EXCEPTION(PriorityGasPriceExceedsMax);
+DERIVE_BCOS_EXCEPTION(IntrinsicGasTooLow);
+DERIVE_BCOS_EXCEPTION(BlobTxMissingTo);
+DERIVE_BCOS_EXCEPTION(EmptyBlobVersionedHashes);
+DERIVE_BCOS_EXCEPTION(BlobFeeCapBelowBaseFee);
+DERIVE_BCOS_EXCEPTION(InsufficientBalance);
 
 class EthereumExecutor
 {
@@ -122,21 +132,25 @@ public:
                 // 0. Nonce must not be max (EIP-2681, transition asserts)
                 static constexpr auto NONCE_MAX = std::numeric_limits<uint64_t>::max();
                 if (senderAcc.nonce == NONCE_MAX)
-                    BOOST_THROW_EXCEPTION(std::runtime_error("nonce has max value"));
+                    BOOST_THROW_EXCEPTION(
+                        NonceAtMaxValue{} << bcos::errinfo_comment("nonce has max value"));
 
                 // 1. max_gas_price >= base_fee (transition asserts)
                 if (evmTx.max_gas_price < baseFee)
-                    BOOST_THROW_EXCEPTION(std::runtime_error("gas price too low"));
+                    BOOST_THROW_EXCEPTION(
+                        GasPriceBelowBaseFee{} << bcos::errinfo_comment("gas price too low"));
 
                 // 2. max_gas_price >= max_priority_gas_price (transition asserts)
                 if (evmTx.max_gas_price < evmTx.max_priority_gas_price)
-                    BOOST_THROW_EXCEPTION(std::runtime_error(
-                        "priority gas price exceeds max gas price"));
+                    BOOST_THROW_EXCEPTION(PriorityGasPriceExceedsMax{}
+                                         << bcos::errinfo_comment(
+                                             "priority gas price exceeds max gas price"));
 
                 // 3. Intrinsic gas must be affordable
                 auto const minGas = std::max(intrinsicCost, minCost);
                 if (evmTx.gas_limit < minGas)
-                    BOOST_THROW_EXCEPTION(std::runtime_error("intrinsic gas too low"));
+                    BOOST_THROW_EXCEPTION(
+                        IntrinsicGasTooLow{} << bcos::errinfo_comment("intrinsic gas too low"));
 
                 // 3. Balance must cover max possible cost
                 auto maxTotalFee =
@@ -147,22 +161,27 @@ public:
                 if (evmTx.type == evmone::state::Transaction::Type::blob)
                 {
                     if (!evmTx.to.has_value())
-                        BOOST_THROW_EXCEPTION(std::runtime_error("create blob tx"));
+                        BOOST_THROW_EXCEPTION(
+                            BlobTxMissingTo{} << bcos::errinfo_comment("create blob tx"));
                     if (evmTx.blob_hashes.empty())
-                        BOOST_THROW_EXCEPTION(std::runtime_error("empty blob hashes"));
+                        BOOST_THROW_EXCEPTION(
+                            EmptyBlobVersionedHashes{}
+                            << bcos::errinfo_comment("empty blob hashes"));
 
                     auto bbf = blockInfo.blob_base_fee.value_or(intx::uint256{});
                     // transition asserts max_blob_gas_price >= blob_base_fee
                     if (evmTx.max_blob_gas_price < bbf)
-                        BOOST_THROW_EXCEPTION(std::runtime_error(
-                            "blob fee cap less than block blob base fee"));
+                        BOOST_THROW_EXCEPTION(BlobFeeCapBelowBaseFee{}
+                                             << bcos::errinfo_comment(
+                                                 "blob fee cap less than block blob base fee"));
 
                     auto blobCost =
                         intx::umul(intx::uint256(evmTx.blob_gas_used()), evmTx.max_blob_gas_price);
                     maxTotalFee += blobCost;
                 }
                 if (senderAcc.balance < maxTotalFee)
-                    BOOST_THROW_EXCEPTION(std::runtime_error("insufficient funds"));
+                    BOOST_THROW_EXCEPTION(
+                        InsufficientBalance{} << bcos::errinfo_comment("insufficient funds"));
             }
 
             // Execute
