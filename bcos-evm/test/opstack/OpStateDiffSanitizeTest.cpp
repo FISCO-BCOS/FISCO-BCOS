@@ -8,6 +8,7 @@
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
+#include "OpPredeploysSeed.h"
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>

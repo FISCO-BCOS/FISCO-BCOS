@@ -60,7 +60,6 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpHost.cpp
     bcos-evm/opstack/OpPrecompiles.cpp
     bcos-evm/opstack/OpFeeParams.cpp
-    bcos-evm/opstack/OpPredeploys.cpp
     bcos-evm/opstack/RollupCost.cpp
     bcos-evm/opstack/OpTransition.cpp
     bcos-evm/opstack/OpReceipt.cpp

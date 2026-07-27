@@ -1,4 +1,5 @@
 #include "OpL1AttributesTestHelpers.h"
+#include "OpPredeploysSeed.h"
 #include <bcos-evm/adapter/StateDiffWriteback.h>
 #include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpFeeParams.h>

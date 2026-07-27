@@ -1,3 +1,4 @@
+#include "OpPredeploysSeed.h"
 #include <bcos-evm/adapter/StateDiffWriteback.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>

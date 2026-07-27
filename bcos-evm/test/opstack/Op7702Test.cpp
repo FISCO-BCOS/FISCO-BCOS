@@ -5,6 +5,7 @@
 // 对应地址 (authority): 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 // 签名哈希公式: keccak256(0x05 || rlp([chain_id, address, nonce]))
 
+#include "OpPredeploysSeed.h"
 #include <bcos-evm/adapter/StateDiffWriteback.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>

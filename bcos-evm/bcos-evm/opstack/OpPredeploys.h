@@ -2,11 +2,6 @@
 
 #include <evmc/evmc.hpp>
 
-namespace evmone::test
-{
-class TestState;
-}
-
 namespace bcos::evm::opstack
 {
 using evmc::literals::operator""_address;
@@ -30,11 +25,4 @@ inline constexpr evmc::address OP_DEPOSITOR = 0xdeaddeaddeaddeaddeaddeaddeaddead
 /// (op-geth params/protocol_params.go:31; validation side block_validator.go:190-198)
 inline constexpr evmc::address OP_L2_TO_L1_MESSAGE_PASSER =
     0x4200000000000000000000000000000000000016_address;
-
-/// Pre-seed the 6 predeploy/vault accounts as empty accounts with balance 0 (M5 block-level harness
-/// genesis preparation).
-/// The four fee vaults carry a 1-byte stub code (0x00) to avoid being deleted as empty accounts by
-/// EIP-161 under zero fees.
-/// The code for OP_L1_BLOCK / OP_GAS_PRICE_ORACLE is still managed by the harness setter itself.
-void seedOpPredeploys(evmone::test::TestState& state);
 }  // namespace bcos::evm::opstack
