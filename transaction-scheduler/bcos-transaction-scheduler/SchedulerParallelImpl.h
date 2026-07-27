@@ -105,7 +105,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await executeContext.template executeStep<0>();
+            co_await executeContext.prepare();
         }
     }
 
@@ -122,7 +122,7 @@ public:
                     << " transactions";
                 break;
             }
-            co_await executeContext.template executeStep<1>();
+            co_await executeContext.execute();
         }
     }
 
@@ -132,7 +132,7 @@ public:
             ittapi::ITT_DOMAINS::instance().EXECUTE_CHUNK3);
         for (auto&& [context, executeContext] : ::ranges::views::zip(m_contexts, m_executeContexts))
         {
-            *context.receipt = co_await executeContext.template executeStep<2>();
+            *context.receipt = co_await executeContext.finish();
         }
     }
 };
