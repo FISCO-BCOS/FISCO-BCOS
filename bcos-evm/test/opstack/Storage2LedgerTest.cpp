@@ -412,3 +412,21 @@ TEST(Storage2Ledger, ApplyDiffDeletedGhostThrows)
 
     EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
 }
+
+// (o) 审查修复:modified entry 含系统地址(c_systemTxsAddress 成员,如
+//     SYS_CONFIG_ADDRESS = 0x...001000)→ EVMAccount 会静默路由进 /sys/,与读桥
+//     accountTableName 判定不一致;写路径同样不得猜测路由 → applyDiff 必须 throw(与
+//     applyDeletedEntry 的 ghost-delete tripwire 同一 strict 纪律,design §4.4)。
+TEST(Storage2Ledger, ApplyDiffModifiedSystemAddressThrows)
+{
+    MutableStorage storage;
+    Storage2Ledger<MutableStorage> bridge(storage);
+
+    constexpr auto sysAddr =
+        0x0000000000000000000000000000000000001000_address;  // SYS_CONFIG_ADDRESS
+    evmone::state::StateDiff diff;
+    diff.modified_accounts.push_back(
+        {.addr = sysAddr, .nonce = 0, .balance = {}, .code = std::nullopt, .modified_storage = {}});
+
+    EXPECT_THROW(bridge.applyDiff(diff), std::runtime_error);
+}

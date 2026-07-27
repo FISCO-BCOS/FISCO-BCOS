@@ -202,6 +202,18 @@ public:
 private:
     task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry)
     {
+        // 路由守卫(design §4.4,与 applyDeletedEntry 的 ghost-delete tripwire 同一 strict 写路径
+        // 纪律):系统地址(c_systemTxsAddress 集合)EVMAccount 会静默路由进 /sys/,与读桥
+        // accountTableName 的判定不一致——写路径同样不得猜测路由,直接 throw。审查发现:此前
+        // 仅 applyDeletedEntry 有该守卫,applyModifiedEntry 会把系统地址悄悄写进 /sys/,构成读写
+        // 两路径行为不对称的缺口,现补齐。
+        std::string tableName;
+        if (!accountTableName(entry.addr, tableName))
+            throw std::runtime_error(
+                "Storage2Ledger::applyDiff: modified address routes to /sys/ "
+                "(c_systemTxsAddress member); bridge refuses to guess the routing, see design "
+                "§4.4");
+
         bcos::ledger::account::EVMAccount<Storage> account(
             m_storage.get(), entry.addr, /*binaryAddress=*/false);
 
@@ -210,8 +222,6 @@ private:
         // evmone build_diff 把只读 touched 账户也放进 modified,对其重写同值 nonce/balance 无害。
         if (!co_await account.exists())
             co_await account.create();
-
-        const std::string tableName(account.address());
 
         co_await account.setBalance(bcos::u256(intx::to_string(entry.balance)));
         co_await account.setNonce(std::to_string(entry.nonce));
