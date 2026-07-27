@@ -67,6 +67,11 @@ TEST(Storage2Ledger, EmptyAccountNormalization)
     EXPECT_EQ(result->code_hash, evmone::keccak256(evmc::bytes_view{}));
     EXPECT_FALSE(result->has_storage);
     EXPECT_FALSE(bridge.poisoned());
+
+    // 已 create() 但从未 setCode() → get_account_code 应返回空字节,且不毒旗
+    // (审查补钉:此前无直接断言覆盖该路径,见 fetchCode 对缺失/空 CODE_HASH 的处理)。
+    EXPECT_TRUE(bridge.get_account_code(0x01_address).empty());
+    EXPECT_FALSE(bridge.poisoned());
 }
 
 // (c) 往返读:EVMAccount 写 balance=7/nonce="5"/setCode → 桥读逐字段相等。
