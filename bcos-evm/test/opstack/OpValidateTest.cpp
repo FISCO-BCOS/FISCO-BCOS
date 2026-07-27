@@ -1,6 +1,6 @@
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpValidate.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <vector>

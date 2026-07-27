@@ -16,12 +16,10 @@
 //   - UserTx：opTransition 后 receipt.gas_used == props.props.min_gas_cost（== 51000）
 //   - Deposit：runDeposit 后 gas_used 亦走 7623 floor（无 Isthmus deposit 豁免）
 
-#include <bcos-evm/opstack/OpDepositTx.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
-#include <bcos-evm/opstack/OpValidate.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/state.hpp>

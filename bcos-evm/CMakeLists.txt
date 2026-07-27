@@ -62,14 +62,9 @@ add_library(bcos-evm-opstack STATIC
     bcos-evm/opstack/OpFeeParams.cpp
     bcos-evm/opstack/OpPredeploys.cpp
     bcos-evm/opstack/RollupCost.cpp
-    bcos-evm/opstack/OpValidate.cpp
     bcos-evm/opstack/OpTransition.cpp
-    bcos-evm/opstack/OpDepositTx.cpp
-    bcos-evm/opstack/OpReceiptMeta.cpp
-    bcos-evm/opstack/OpBlockFinalize.cpp
-    bcos-evm/opstack/OpBlockExecute.cpp
-    bcos-evm/opstack/OpReceiptEncode.cpp
-    bcos-evm/opstack/OpBlockSeal.cpp)
+    bcos-evm/opstack/OpReceipt.cpp
+    bcos-evm/opstack/OpBlock.cpp)
 add_library(bcosevm::opstack ALIAS bcos-evm-opstack)
 target_include_directories(bcos-evm-opstack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bcos-evm-opstack PUBLIC bcosevm::eth)

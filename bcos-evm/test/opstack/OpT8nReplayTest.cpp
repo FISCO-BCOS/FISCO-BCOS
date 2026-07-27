@@ -19,11 +19,10 @@
 
 #include <bcos-evm/adapter/StateDiffWriteback.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
-#include <bcos-evm/opstack/OpBlockExecute.h>
-#include <bcos-evm/opstack/OpBlockSeal.h>
-#include <bcos-evm/opstack/OpDepositTx.h>
+#include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <cxxabi.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>

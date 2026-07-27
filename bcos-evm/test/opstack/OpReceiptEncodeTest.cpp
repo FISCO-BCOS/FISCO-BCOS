@@ -1,4 +1,5 @@
-#include <bcos-evm/opstack/OpReceiptEncode.h>
+#include <bcos-evm/opstack/OpReceipt.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/utils/rlp.hpp>

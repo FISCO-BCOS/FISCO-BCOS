@@ -1,4 +1,4 @@
-#include <bcos-evm/opstack/OpBlockFinalize.h>
+#include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/utils/test_state.hpp>

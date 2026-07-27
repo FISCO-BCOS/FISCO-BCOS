@@ -1,5 +1,5 @@
 #include <bcos-evm/adapter/StateDiffWriteback.h>
-#include <bcos-evm/opstack/OpDepositTx.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <evmone/evmone.h>

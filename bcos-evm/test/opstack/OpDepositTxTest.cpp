@@ -1,4 +1,4 @@
-#include <bcos-evm/opstack/OpDepositTx.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <gtest/gtest.h>
 
 using namespace bcos::evm::opstack;

@@ -1,15 +1,73 @@
 #pragma once
 
-#include <bcos-evm/opstack/OpBlockExecute.h>
+#include <bcos-evm/opstack/OpForkSchedule.h>
+#include <bcos-evm/opstack/OpReceipt.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 // TODO(eth-utils-removal): 三根建根(state/tx/receiptsRoot)从 evmone mpt_hash 迁自研 MPT。
 #include <bcos-evm/eth/utils/mpt_hash.hpp>
+#include <functional>
 #include <map>
 #include <optional>
+#include <span>
+#include <variant>
+#include <vector>
 
 namespace bcos::evm::opstack
 {
 using evmc::literals::operator""_bytes32;
+
+// ---- block execution (formerly OpBlockExecute.h) ----
+
+/// One transaction within a block: deposit or normal tx (a normal tx must carry a signed envelope
+/// for L1 fee calculation).
+struct OpBlockTx
+{
+    std::variant<DepositTx, evmone::state::Transaction> tx;
+    evmc::bytes signedEnvelope;  // empty for deposit
+};
+
+/// Block execution result. receipts keep their original in-block order (M-B2's receipts-root /
+/// block-level bloom depend on this order; cumulative_gas_used is already filled in interleaved
+/// order).
+struct OpBlockResult
+{
+    std::vector<std::variant<OpDepositReceipt, OpTxReceipt>> receipts;
+    int64_t gasUsed = 0;                    // = last tx's cumulative
+    evmone::state::StateDiff finalizeDiff;  // end-of-block finalize output (already delivered via
+                                            // applyDiff)
+};
+
+/// Execute a whole block (spec §4.1 ordering): system_call_block_start → first L1 attributes
+/// deposit → loadOpFeeParams → per-transaction (gas pool / cumulative / per-transaction write-back)
+/// → finalizeOpBlock. Write-back callback: invoked immediately after each diff segment is produced;
+/// the view read by the next step must already reflect it.
+/// **discard-writes contract**: after any throw from this function, the caller must discard the
+/// entire write set already applied via applyDiff within this block (same semantics as op-geth
+/// Process discarding the whole statedb on error, state_processor.go:109-113). Throws
+/// std::runtime_error (block-level error): txs empty or first tx is not the L1 attributes deposit
+/// (to==OP_L1_BLOCK && from==OP_DEPOSITOR, stricter-than-spec); a deposit appears after a
+/// non-deposit (stricter-than-spec); any tx gasLimit exceeds the remaining block gas; is_system_tx;
+/// any validate error on a normal tx (op-geth has no failed-receipt mechanism for normal txs,
+/// state_processor.go:109-113).
+OpBlockResult processOpBlock(const evmone::state::StateView& view,
+    const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
+    std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
+    const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
+
+// ---- block finalize (formerly OpBlockFinalize.h) ----
+
+/// OP block finalize: withdrawals are always empty, no ommers / block reward; EIP-6110/7002/7251
+/// requests are suppressed per cfg.disable_prague_requests — op-geth explicitly disables them for
+/// OP Isthmus (state_processor.go:140-156), and this switch is always true for every OP fork; false
+/// throws std::invalid_argument (configuration guardrail). Scope note: on OP Isthmus op-geth still
+/// runs the EIP-4788/2935 **pre-execution** system call (state_processor.go:90-95) — that is a
+/// precondition step wired in during block-level orchestration (§4.4), not part of this finalize
+/// function.
+evmone::state::StateDiff finalizeOpBlock(
+    const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
+
+// ---- block seal (formerly OpBlockSeal.h) ----
 
 /// OP Isthmus+ block-header requestsHash is a fixed value = sha256("") (op-geth EmptyRequestsHash,
 /// hashes.go:43-44; on the build side worker.go:283-290 calls CalcRequestsHash on an empty list, on

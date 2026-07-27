@@ -4,12 +4,11 @@
 // ④（defer Task 1 审查修复，控制器授权范围更正）：② 的块级对应——真删除穿过
 // processOpBlock 出口，堵回放 postState 空≡不存在规约造成的 KEEP 盲区。
 #include <bcos-evm/adapter/StateDiffWriteback.h>
-#include <bcos-evm/opstack/OpBlockExecute.h>
+#include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
-#include <bcos-evm/opstack/OpValidate.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
 #include <algorithm>

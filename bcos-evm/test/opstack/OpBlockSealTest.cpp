@@ -1,10 +1,9 @@
 #include "OpL1AttributesTestHelpers.h"
 #include <bcos-evm/adapter/StateDiffWriteback.h>
-#include <bcos-evm/opstack/OpBlockExecute.h>
-#include <bcos-evm/opstack/OpBlockSeal.h>
+#include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/opstack/OpReceiptEncode.h>
+#include <bcos-evm/opstack/OpReceipt.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/bloom_filter.hpp>

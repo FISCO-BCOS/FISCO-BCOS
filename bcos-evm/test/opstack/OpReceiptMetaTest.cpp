@@ -1,6 +1,6 @@
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpReceiptMeta.h>
+#include <bcos-evm/opstack/OpReceipt.h>
 #include <bcos-evm/opstack/RollupCost.h>
 #include <gtest/gtest.h>
 #include <vector>

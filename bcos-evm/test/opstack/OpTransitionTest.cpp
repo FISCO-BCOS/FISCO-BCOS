@@ -3,7 +3,6 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
-#include <bcos-evm/opstack/OpValidate.h>
 #include <bcos-evm/opstack/RollupCost.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>

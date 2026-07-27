@@ -10,7 +10,6 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
-#include <bcos-evm/opstack/OpValidate.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/utils/test_state.hpp>

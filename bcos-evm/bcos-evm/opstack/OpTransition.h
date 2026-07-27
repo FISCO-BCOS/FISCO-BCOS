@@ -2,14 +2,51 @@
 
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
-#include <bcos-evm/opstack/OpReceiptMeta.h>
-#include <bcos-evm/opstack/OpValidate.h>
+#include <bcos-evm/opstack/OpReceipt.h>
 #include <bcos-evm/eth/state/state.hpp>
+#include <cstdint>
 #include <evmc/evmc.hpp>
+#include <intx/intx.hpp>
+#include <optional>
+#include <system_error>
+#include <variant>
 
 namespace bcos::evm::opstack
 {
 class OpHost;
+
+// ---- tx validation (formerly OpValidate.h) ----
+
+struct OpTxProperties
+{
+    evmone::state::TransactionProperties props;
+    intx::uint256 l1_cost;
+    intx::uint256 operator_cost_at_gas_limit;
+    // OpFeeParams snapshot used by opValidate when computing l1_cost/operator_cost_at_gas_limit;
+    // opTransition reuses it directly rather than receiving a separate fee parameter, avoiding the
+    // validate/transition calls being fed different OpFeeParams across the two invocations, which
+    // would underflow operator_cost_at_gas_limit - opAtUsed (both must come from the same fee
+    // read).
+    OpFeeParams fee;
+    uint32_t flz_len = 0;  // Fjord+ single FastLZ result; 0 for Ecotone
+};
+
+/// Reuses evmone validate_transaction then applies OP checks: reject blob tx; balance cap
+/// = gasLimit*maxGasPrice + value + l1Cost + operatorCost(gasLimit) (gasFeeCap pricing).
+[[nodiscard]] std::variant<OpTxProperties, std::error_code> opValidate(
+    const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
+    const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
+    const OpForkConfig& cfg, const OpFeeParams& fee, int64_t blockGasLeft);
+
+/// Pairing constraint: the *FromState functions must be used as a pair; they must not be
+/// interleaved with the injection-style ones (opValidate/opTransition).
+/// Reads the OP_L1_BLOCK fee parameters from the view, then delegates to opValidate.
+[[nodiscard]] std::variant<OpTxProperties, std::error_code> opValidateFromState(
+    const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
+    const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
+    const OpForkConfig& cfg, int64_t blockGasLeft);
+
+// ---- shared execution core ----
 
 struct ExecOutcome
 {
@@ -27,6 +64,8 @@ struct ExecOutcome
 ExecOutcome runTxMessage(evmone::state::State& state, OpHost& host,
     const evmone::state::Transaction& tx, evmc_revision rev, const evmc::address& coinbase,
     int64_t execution_gas_limit, int64_t min_gas_cost, int64_t delegation_refund);
+
+// ---- normal-tx transition ----
 
 /// Fork evmone::state::transition (evmone state.cpp:561-649): buyGas adds l1Cost +
 /// operatorCost(gasLimit); Host replaced with OpHost; tail routes base/l1/operator fees to vaults.
@@ -48,4 +87,34 @@ OpTxReceipt opTransitionFromState(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const evmone::state::Transaction& tx, const OpForkConfig& cfg, evmc::VM& vm,
     const OpTxProperties& props, uint64_t chainId, evmc::bytes_view signedTxEnvelope);
+
+// ---- 0x7E deposit tx (formerly OpDepositTx.h) ----
+
+/// 0x7E deposit tx (not an evmone Transaction). When mint has a value it is added unconditionally
+/// to the from balance (nullopt = do not add); value is transferred normally within the call —
+/// two independent fields. is_system_tx must be false after Regolith.
+struct DepositTx
+{
+    evmc::bytes32 source_hash;
+    evmc::address from;
+    std::optional<evmc::address> to;    // nullopt = contract creation (address derived from
+                                        // from + pre-execution nonce)
+    std::optional<intx::uint256> mint;  // nullopt = no mint (matches op-geth *big.Int nil)
+    intx::uint256 value;
+    int64_t gas_limit;
+    bool is_system_tx;
+    evmc::bytes data;
+};
+
+/// OP 0x7E deposit transaction/receipt type (EIP-2718 typed envelope prefix).
+constexpr auto kDepositTxType = static_cast<evmone::state::Transaction::Type>(0x7e);
+
+/// Execute one 0x7E deposit: skip buyGas; add balance when mint has a value; still deduct
+/// intrinsic + the EIP-7623 floor; both failure paths retain the mint and force-increment the
+/// nonce; is_system_tx==true throws std::runtime_error (block-level error). gas_limit exceeding
+/// blockGasLeft throws std::runtime_error (op-geth ErrGasLimitReached, block-level error).
+OpDepositReceipt runDeposit(const evmone::state::StateView& view,
+    const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
+    const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
+    int64_t blockGasLeft);
 }  // namespace bcos::evm::opstack
