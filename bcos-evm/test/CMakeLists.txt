@@ -35,6 +35,7 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpReceiptEncodeTest.cpp
     opstack/OpBlockSealTest.cpp
     opstack/OpT8nReplayTest.cpp
+    opstack/MemoryLedgerT8nReplayTest.cpp
     opstack/MemoryLedgerTest.cpp
 )
 target_compile_definitions(bcos-evm-opstack-tests PRIVATE
