@@ -17,7 +17,7 @@
 //   E) 豁免唯一来源 = DIVERGENCES.md ALLOWLIST 四元组（仅 a:PENDING-FIX /
 //      c:SIGNED-OFF）；entry= 悬空 = FAILURE；本轮未命中的豁免条目 = FAILURE。
 
-#include <bcos-evm/adapter/StateDiffWriteback.h>
+#include "StateDiffWriteback.h"
 #include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>

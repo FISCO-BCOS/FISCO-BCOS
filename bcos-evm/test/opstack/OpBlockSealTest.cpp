@@ -1,6 +1,6 @@
 #include "OpL1AttributesTestHelpers.h"
 #include "OpPredeploysSeed.h"
-#include <bcos-evm/adapter/StateDiffWriteback.h>
+#include "StateDiffWriteback.h"
 #include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>

@@ -3,7 +3,7 @@
 // 错误接线/谓词反转）；③ 红 → 绿。构造照 OpTransitionTest/OpValidateTest 既有形制。
 // ④（defer Task 1 审查修复，控制器授权范围更正）：② 的块级对应——真删除穿过
 // processOpBlock 出口，堵回放 postState 空≡不存在规约造成的 KEEP 盲区。
-#include <bcos-evm/adapter/StateDiffWriteback.h>
+#include "StateDiffWriteback.h"
 #include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>

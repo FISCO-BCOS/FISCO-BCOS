@@ -1,4 +1,4 @@
-#include <bcos-evm/adapter/StateDiffWriteback.h>
+#include "StateDiffWriteback.h"
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>

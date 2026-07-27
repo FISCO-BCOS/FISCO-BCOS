@@ -1,4 +1,4 @@
-// bcos-evm-ref/include/bcos-evm-ref/adapter/StateDiffWriteback.h
+// Test-only strict StateDiff write-back helper (moved from bcos-evm/adapter/: all
 #pragma once
 
 #include <evmc/hex.hpp>
