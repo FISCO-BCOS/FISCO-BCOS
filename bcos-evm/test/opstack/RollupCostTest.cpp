@@ -2,7 +2,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/RollupCost.h>
 #include <gtest/gtest.h>
-#include <fstream>
+#include <evmc/hex.hpp>
 #include <vector>
 
 using namespace bcos::evm::opstack;
@@ -10,13 +10,24 @@ using intx::operator""_u256;
 
 namespace
 {
-std::vector<uint8_t> readFixture(const char* name)
-{
-    const std::string path = std::string(EVM_REF_OPSTACK_FIXTURES_DIR) + "/" + name;
-    std::ifstream in(path, std::ios::binary);
-    EXPECT_TRUE(in.is_open()) << "missing fixture: " << path;
-    return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), {});
-}
+// Real signed-transaction RLP bytes (formerly fixtures/opstack/*.bin). The FastLZ golden
+// values below (31 / 202, from op-geth FlzCompressLen) depend on these exact bytes — do
+// not edit them.
+// Minimal legacy tx, empty calldata (was empty_tx.bin, 30 bytes).
+const evmc::bytes kEmptyTx =
+    evmc::from_hex("dd80808094095e7baea6a6c7c4c2dfeb977efac326af552d878080808080").value();
+// EIP-1559 (type-2) contract call with ABI-encoded calldata + signature (was
+// contract_call_tx.bin, 345 bytes).
+const evmc::bytes kContractCallTx = evmc::from_hex(
+    "02f901550a758302df1483be21b88304743f94f80e51afb613d764fa61751affd3313c190a86bb870151bd62fd"
+    "12adb8e41ef24f3f000000000000000000000000000000000000000000000000000000000000006e0000000000"
+    "00000000000000af88d065e77c8cc2239327c5edb3a432268e58310000000000000000000000000000000000000"
+    "00000000000000000000003c1e50000000000000000000000000000000000000000000000000000000000000000"
+    "00000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000"
+    "00000000000000000000000000000000000148c89ed219d02f1a5be012c689b4f5b731827bebe00000000000000"
+    "0000000000c001a033fd89cb37c31b2cba46b6466e040c61fc9b2a3675a7f5f493ebd5ad77c497f8a07cdf65680"
+    "e238392693019b4092f610222e71b7cec06449cb922b93b6a12744e")
+                                        .value();
 
 OpFeeParams feeParams(uint64_t l1Base, uint64_t blobBase, uint32_t baseScalar, uint32_t blobScalar,
     uint32_t opScalar = 0, uint64_t opConst = 0)
@@ -42,8 +53,8 @@ TEST(RollupCost, FlzCompressLenMatchesOpGethVectors)
     EXPECT_EQ(flzCompressLen(view(ones)), 21u);
     std::vector<uint8_t> zeros(1000, 0x00);
     EXPECT_EQ(flzCompressLen(view(zeros)), 21u);
-    EXPECT_EQ(flzCompressLen(view(readFixture("empty_tx.bin"))), 31u);
-    EXPECT_EQ(flzCompressLen(view(readFixture("contract_call_tx.bin"))), 202u);
+    EXPECT_EQ(flzCompressLen(kEmptyTx), 31u);
+    EXPECT_EQ(flzCompressLen(kContractCallTx), 202u);
 }
 
 TEST(RollupCost, EstimatedDaSizeFloorsToMinimum)
@@ -61,9 +72,9 @@ TEST(RollupCost, EmptyEnvelopeIsZeroL1Cost)
 
 TEST(RollupCost, FjordL1CostEmptyTxMatches3203000)
 {
-    const auto env = readFixture("empty_tx.bin");
-    EXPECT_EQ(computeL1Cost(feeParams(1000000000, 10000000, 2, 3), view(env), fjordConfig()),
-        3203000_u256);
+    const evmc::bytes_view env = kEmptyTx;
+    EXPECT_EQ(
+        computeL1Cost(feeParams(1000000000, 10000000, 2, 3), env, fjordConfig()), 3203000_u256);
 }
 
 TEST(RollupCost, BedrockCalldataGasUsedNoPlus68)
@@ -120,9 +131,9 @@ TEST(RollupCost, EstimatedDaSizeDividesScaledBy1e6)
     EXPECT_EQ(estimatedDaSizeScaled(0) / 1000000_u256, intx::uint256{100});
     std::vector<uint8_t> empty;
     EXPECT_EQ(estimatedDaSize(view(empty)), 0u);
-    const auto env = readFixture("empty_tx.bin");
-    const auto scaled = estimatedDaSizeScaled(flzCompressLen(view(env)));
-    EXPECT_EQ(estimatedDaSize(view(env)), static_cast<uint64_t>(scaled / 1000000_u256));
+    const evmc::bytes_view env = kEmptyTx;
+    const auto scaled = estimatedDaSizeScaled(flzCompressLen(env));
+    EXPECT_EQ(estimatedDaSize(env), static_cast<uint64_t>(scaled / 1000000_u256));
 }
 
 // D-14b：FastLZ 只压一次——分解 API 与原 API 等价

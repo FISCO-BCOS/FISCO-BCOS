@@ -38,7 +38,6 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpT8nReplayTest.cpp
 )
 target_compile_definitions(bcos-evm-opstack-tests PRIVATE
-    EVM_REF_OPSTACK_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/opstack"
     OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"
 )
 # statetest_loader.cpp is compiled straight from the evmone package's installed
