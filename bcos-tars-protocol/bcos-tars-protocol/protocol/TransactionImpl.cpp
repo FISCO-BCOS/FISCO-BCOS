@@ -195,6 +195,16 @@ void bcostars::protocol::TransactionImpl::clearSenderAndHash()
 {
     m_inner()->sender.clear();
     m_inner()->dataHash.clear();
+    // data.accessList / web3TypedTxKind are a Tars-side cache of values already
+    // committed inside extraTransactionBytes. Clear them so verify/import cannot
+    // retain a peer-forged cache that shares the canonical Web3 txHash.
+    m_inner()->data.accessList.clear();
+    m_inner()->web3TypedTxKind = 0;
+    {
+        std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
+        m_web3AccessListCache.clear();
+        m_web3AccessListCacheBuilt = false;
+    }
     setTainted(true);
 }
 void bcostars::protocol::TransactionImpl::setSignatureData(bcos::bytes& signature)

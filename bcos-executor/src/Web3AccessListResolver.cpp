@@ -73,21 +73,31 @@ bool accessListsEqual(
     return true;
 }
 
-void warnIfProtocolAccessListMismatch(protocol::Transaction const& tx,
-    bcos::protocol::Web3AccessList const& protocol, Web3AccessListResolved const& fromExtra)
+void warnIfProtocolAccessListMismatch(bcos::protocol::Web3AccessList const& protocol,
+    Web3AccessListResolved const& fromExtra, uint8_t tarsKind)
 {
-    if (protocol.empty() || !fromExtra.accessList || fromExtra.accessList->empty())
+    bool const kindMismatch =
+        tarsKind != 0 && fromExtra.web3TypedTxKind != 0 && tarsKind != fromExtra.web3TypedTxKind;
+    bool listMismatch = false;
+    if (!protocol.empty())
     {
-        return;
+        if (!fromExtra.accessList || fromExtra.accessList->empty() ||
+            !accessListsEqual(protocol, *fromExtra.accessList))
+        {
+            listMismatch = true;
+        }
     }
-    if (accessListsEqual(protocol, *fromExtra.accessList))
+    if (!kindMismatch && !listMismatch)
     {
         return;
     }
     WEB3_ACCESS_LIST_RESOLVER_LOG(WARNING)
-        << LOG_DESC("Tars data.accessList disagrees with extraTransactionBytes RLP; using Tars")
+        << LOG_DESC(
+               "Tars data.accessList/web3TypedTxKind disagrees with extraTransactionBytes RLP; "
+               "using RLP")
+        << LOG_KV("tarsKind", tarsKind) << LOG_KV("rlpKind", fromExtra.web3TypedTxKind)
         << LOG_KV("tarsEntries", protocol.size())
-        << LOG_KV("extraEntries", fromExtra.accessList->size());
+        << LOG_KV("extraEntries", fromExtra.accessList ? fromExtra.accessList->size() : 0);
 }
 
 Web3AccessListResolved resolveWeb3AccessListFromExtraBytes(protocol::Transaction const& tx)
@@ -137,38 +147,33 @@ Web3AccessListResolved resolveWeb3AccessList(protocol::Transaction const& tx)
         return out;
     }
 
-    auto const kind = tx.web3TypedTxKind();
-    if (kind != 0)
+    // Signed RLP (extraTransactionBytes) is authoritative. Tars data.accessList /
+    // web3TypedTxKind are a cache that may diverge across peers for the same txHash.
+    auto const fromExtra = resolveWeb3AccessListFromExtraBytes(tx);
+    auto const tarsKind = tx.web3TypedTxKind();
+    auto const& tarsList = tx.web3AccessList();
+
+    if (fromExtra.web3TypedTxKind != 0 ||
+        (fromExtra.accessList && !fromExtra.accessList->empty()))
     {
-        out.web3TypedTxKind = kind;
-        auto const& list = tx.web3AccessList();
-        if (!list.empty())
+        if (tarsKind != 0 || !tarsList.empty())
         {
-            // Path A: Tars has both kind and access list — fast path, no extra-bytes fallback
-            // needed.
-            buildAccessListFromProtocol(list, out);
-            auto const fromExtra = resolveWeb3AccessListFromExtraBytes(tx);
-            warnIfProtocolAccessListMismatch(tx, list, fromExtra);
-            return out;
+            warnIfProtocolAccessListMismatch(tarsList, fromExtra, tarsKind);
         }
-        // Path B: kind is known from Tars but access list is empty in Tars.
-        // Two possible reasons:
-        //   1. The access list is genuinely empty (EIP-1559, or EIP-2930 with no pre-warmed
-        //   entries).
-        //   2. An older peer stripped the Tars accessList field — recover it from
-        //   extraTransactionBytes.
-        // Either way, keep the kind we already know and supplement with extra bytes if available.
-        auto fromExtra = resolveWeb3AccessListFromExtraBytes(tx);
-        if (fromExtra.accessList && !fromExtra.accessList->empty())
+        return fromExtra;
+    }
+
+    // Fallback when extra bytes are missing or undecodable: use the Tars cache.
+    if (tarsKind != 0)
+    {
+        out.web3TypedTxKind = tarsKind;
+        if (!tarsList.empty())
         {
-            out.accessList = std::move(fromExtra.accessList);
+            buildAccessListFromProtocol(tarsList, out);
         }
         return out;
     }
-
-    // Path C: kind == 0 means Tars fields were not populated (older node / missing field).
-    // Fall back entirely to extraTransactionBytes RLP decoding.
-    return resolveWeb3AccessListFromExtraBytes(tx);
+    return out;
 }
 
 }  // namespace bcos::executor
