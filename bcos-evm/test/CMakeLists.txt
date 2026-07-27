@@ -58,3 +58,14 @@ target_link_libraries(bcos-evm-opstack-tests PRIVATE
     nlohmann_json::nlohmann_json
 )
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)
+
+# Storage2Ledger 桥测试仅在 in-tree(bcos-framework 目标存在,即根 CMakeLists.txt
+# add_subdirectory(bcos-framework) 早于 add_subdirectory(bcos-evm))时编译;standalone
+# 构建(bcos-evm/build,独立 vcpkg.json 不含 tbb/magic-enum/proxy/wedprcrypto 等
+# bcos-framework 传递依赖)只交付 MemoryLedger 部分(plan Global Constraints,
+# spec §7/§8 回填见 Task 7)。
+if(TARGET bcos-framework)
+    target_sources(bcos-evm-opstack-tests PRIVATE
+        opstack/Storage2LedgerTest.cpp)
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE bcos-framework)
+endif()
