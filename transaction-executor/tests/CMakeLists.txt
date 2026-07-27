@@ -20,19 +20,4 @@ set_target_properties(test-transaction-executor PROPERTIES UNITY_BUILD "ON")
 # add_test(NAME test-transaction-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-transaction-executor)
 config_test_cases("" "${SOURCES}" "test-transaction-executor" "" "")
 
-# ==============================================================================
-# Standalone EEST runner (no Boost.Test dependency, uses TBB for parallelism)
-# ==============================================================================
-add_executable(eest-runner EESTStandalone.cpp)
-target_link_libraries(eest-runner
-    ethereum-executor bcos-evm-eth executor ledger protocol-tars bcos-framework rpc
-    evmone::evmone jsoncpp_static TBB::tbb)
-add_dependencies(eest-runner executor)
-set_source_files_properties("EESTStandalone.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-set_target_properties(eest-runner PROPERTIES UNITY_BUILD OFF)
-# Install alongside test binary
-get_target_property(EEST_RUNNER_OUTPUT test-transaction-executor RUNTIME_OUTPUT_DIRECTORY)
-if(NOT EEST_RUNNER_OUTPUT)
-    set(EEST_RUNNER_OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-endif()
-set_target_properties(eest-runner PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${EEST_RUNNER_OUTPUT}")
+

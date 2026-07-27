@@ -15,3 +15,8 @@ target_link_libraries(ethereum-executor PUBLIC
     bcos-evm-eth bcos-framework
     evmone::evmone intx::intx TBB::tbb)
 set_target_properties(ethereum-executor PROPERTIES UNITY_BUILD OFF)
+
+if (TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
