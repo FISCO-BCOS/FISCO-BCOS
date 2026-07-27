@@ -34,6 +34,7 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpStateDiffSanitizeTest.cpp
     opstack/OpReceiptEncodeTest.cpp
     opstack/OpBlockSealTest.cpp
+    opstack/StateRootCompute.cpp
     opstack/OpT8nReplayTest.cpp
 )
 target_compile_definitions(bcos-evm-opstack-tests PRIVATE

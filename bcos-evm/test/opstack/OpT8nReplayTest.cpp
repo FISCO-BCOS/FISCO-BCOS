@@ -18,7 +18,7 @@
 //      c:SIGNED-OFF）；entry= 悬空 = FAILURE；本轮未命中的豁免条目 = FAILURE。
 
 #include "StateDiffWriteback.h"
-#include <bcos-evm/adapter/StateRootCompute.h>
+#include "StateRootCompute.h"
 #include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>

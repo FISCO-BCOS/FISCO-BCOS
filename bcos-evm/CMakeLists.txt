@@ -28,7 +28,6 @@ if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/mpt.cpp")
 endif()
 
 add_library(bcos-evm-eth STATIC
-    bcos-evm/adapter/StateRootCompute.cpp
     bcos-evm/eth/EthTransition.cpp
     bcos-evm/eth/state/block.cpp
     bcos-evm/eth/state/bloom_filter.cpp

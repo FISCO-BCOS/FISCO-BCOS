@@ -1,4 +1,4 @@
-// bcos-evm-ref/bcos-evm-ref/adapter/StateRootCompute.h
+// Test-side stateRootOf (moved from bcos-evm/adapter/: today its only consumer is
 #pragma once
 
 // TODO(eth-utils-removal): C 路线——建根引擎从 evmone mpt_hash(eth/utils)替换为自研 MPT;
