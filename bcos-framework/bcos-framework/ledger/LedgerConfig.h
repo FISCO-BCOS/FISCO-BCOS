@@ -171,6 +171,11 @@ public:
     int executorVersion() const { return m_executorVersion; }
     void setExecutorVersion(int _executorVersion) { m_executorVersion = _executorVersion; }
 
+    /// Ethereum mode: explicit EVMC revision override (bypasses toRevision feature mapping).
+    /// When set, HostContext and TransactionExecutor use this revision directly.
+    std::optional<evmc_revision> evmcRevision() const { return m_explicitRevision; }
+    void setEVMCRevision(evmc_revision rev) { m_explicitRevision = rev; }
+
 private:
     bcos::consensus::ConsensusNodeList m_consensusNodeList;
     bcos::consensus::ConsensusNodeList m_observerNodeList;
@@ -197,5 +202,6 @@ private:
     std::optional<evmc_uint256be> m_chainId;
     bool m_balanceTransfer = false;
     int m_executorVersion = 0;
+    std::optional<evmc_revision> m_explicitRevision;
 };
 }  // namespace bcos::ledger

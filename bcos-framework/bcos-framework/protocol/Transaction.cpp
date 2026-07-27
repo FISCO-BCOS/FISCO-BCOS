@@ -22,6 +22,33 @@ Web3AccessList const& Transaction::web3AccessList() const
     return emptyWeb3AccessList();
 }
 
+AuthorizationList const& Transaction::emptyAuthorizationList()
+{
+    static AuthorizationList const empty;
+    return empty;
+}
+
+AuthorizationList const& Transaction::authorizationList() const
+{
+    return emptyAuthorizationList();
+}
+
+VersionedHashes const& Transaction::emptyBlobVersionedHashes()
+{
+    static VersionedHashes const empty;
+    return empty;
+}
+
+VersionedHashes const& Transaction::blobVersionedHashes() const
+{
+    return emptyBlobVersionedHashes();
+}
+
+std::optional<u256> Transaction::maxFeePerBlobGas() const
+{
+    return std::nullopt;
+}
+
 Transaction::Transaction(const Transaction& other)
   : m_submitCallback(other.m_submitCallback),
     m_batchHash(other.m_batchHash),

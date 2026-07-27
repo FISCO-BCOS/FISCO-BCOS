@@ -29,6 +29,7 @@
 #include "bcos-crypto/interfaces/crypto/CommonType.h"
 #include "bcos-framework/protocol/Transaction.h"
 #include "bcos-framework/protocol/Web3AccessList.h"
+#include "bcos-framework/protocol/Authorization.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include "bcos-utilities/Common.h"
 #include <memory>
@@ -94,6 +95,9 @@ public:
     bcos::bytesConstRef extraTransactionBytes() const override;
     uint8_t web3TypedTxKind() const override;
     bcos::protocol::Web3AccessList const& web3AccessList() const override;
+    bcos::protocol::AuthorizationList const& authorizationList() const override;
+    bcos::protocol::VersionedHashes const& blobVersionedHashes() const override;
+    std::optional<bcos::u256> maxFeePerBlobGas() const override;
 
     const bcostars::Transaction& inner() const;
     bcostars::Transaction& mutableInner();
@@ -103,17 +107,28 @@ public:
 
 private:
     void ensureWeb3AccessListCache() const;
+    void ensureAuthorizationListCache() const;
+    void ensureBlobVersionedHashesCache() const;
 
     std::function<bcostars::Transaction*()> m_inner;
     mutable bcos::protocol::Web3AccessList m_web3AccessListCache;
     mutable std::unique_ptr<std::mutex> m_web3AccessListCacheMutex{std::make_unique<std::mutex>()};
     mutable bool m_web3AccessListCacheBuilt = false;
+    mutable bcos::protocol::AuthorizationList m_authorizationListCache;
+    mutable std::unique_ptr<std::mutex> m_authorizationListCacheMutex{
+        std::make_unique<std::mutex>()};
+    mutable bool m_authorizationListCacheBuilt = false;
+
+    mutable bcos::protocol::VersionedHashes m_blobVersionedHashesCache;
+    mutable std::unique_ptr<std::mutex> m_blobVersionedHashesCacheMutex{
+        std::make_unique<std::mutex>()};
+    mutable bool m_blobVersionedHashesCacheBuilt = false;
 };
 
 // Guard: TransactionImpl must fit inside the AnyTransaction fixed-size buffer.
 // If this assertion fires, update the size constant in
 // bcos-framework/bcos-framework/protocol/Transaction.h  (using AnyTransaction = AnyHolder<..., N>).
-static_assert(sizeof(TransactionImpl) <= 224,
+static_assert(sizeof(TransactionImpl) <= 256,
     "TransactionImpl exceeds AnyTransaction buffer (224 bytes); "
     "update the size constant in bcos-framework/protocol/Transaction.h");
 

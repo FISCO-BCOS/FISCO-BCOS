@@ -26,6 +26,7 @@ module bcostars {
         11 optional vector<vector<byte>> sealerList;
         12 optional vector<byte> extraData; 
         13 optional vector<long> consensusWeights;
+        14 optional vector<byte> coinbase;
     };
 
     struct BlockHeader {
