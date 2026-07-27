@@ -224,7 +224,7 @@ FINDING-1 修复前。按 ref 版本对齐两出口:`runTransaction` 的 `transi
 
 - `OpT8nReplay.Vectors` 进 ctest 默认套件(同 ref 侧)。回放器向量目录定位机制保持
   ref 侧不变,只改路径常量。
-- 验收判据同口径:opstack 124/124(21 suites)、31/33 向量、`known_diverges=0`、
+- 验收判据同口径:opstack 124/124(21 suites)、33/33 向量、`known_diverges=0`、
   比对计数 3558 次(实测)。向量翻红按 DIVERGENCES 三选一纪律归因,不许改向量变绿。
 - generator/`regen.sh` 只搬不跑:本次不改向量,不触发再生成仪式。pin 校验、干净树契约
   原样保留。

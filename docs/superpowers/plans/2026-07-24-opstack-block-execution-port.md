@@ -414,7 +414,7 @@ ctest --test-dir $FB/bcos-evm/build -R BcosEvmOpstackTests --output-on-failure
 $FB/bcos-evm/build/test/bcos-evm-opstack-tests --gtest_filter='OpT8nReplay.Vectors' 2>&1 | tail -20
 ```
 
-预期:31/33 向量回放通过、`known_diverges=0`、比对计数 3558 量级。**任何向量翻红:按 DIVERGENCES 三选一纪律归因,禁止改向量变绿**;若归因指向底座差异(hash_fn/官方 v0.21.0 vs fork),STOP 上报(spec §6.2 前提证伪)。
+预期:33/33 向量回放通过、`known_diverges=0`、比对计数 3558 量级。**任何向量翻红:按 DIVERGENCES 三选一纪律归因,禁止改向量变绿**;若归因指向底座差异(hash_fn/官方 v0.21.0 vs fork),STOP 上报(spec §6.2 前提证伪)。
 
 - [ ] **Step 8: 库目标纯净复查**
 
@@ -429,7 +429,7 @@ rg -l "nlohmann|gtest" $FB/bcos-evm/bcos-evm/ | rg -v statetest.hpp ; echo "exit
 ```bash
 cd $FB
 rtk git add vcpkg.json && rtk git commit -m "build: 根清单加 gtest + nlohmann-json(测试期依赖)"
-rtk git add bcos-evm && rtk git commit -m "test(bcos-evm): opstack GTest 套件 + t8n 向量 gate 全保真复活(124 用例,31/33 向量)"
+rtk git add bcos-evm && rtk git commit -m "test(bcos-evm): opstack GTest 套件 + t8n 向量 gate 全保真复活(124 用例,33/33 向量)"
 ```
 
 (若 Step 6 曾补拷 utils 源,`bcos-evm` 一并入第二笔。)
