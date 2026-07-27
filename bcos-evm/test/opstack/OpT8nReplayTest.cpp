@@ -46,7 +46,7 @@
 
 namespace fs = std::filesystem;
 using Json = nlohmann::json;
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmone;
 
 namespace
@@ -490,7 +490,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
         }
         for (const auto& a : d.deleted_accounts)
             touchedAddrs.insert(a);
-        bcos::evmref::applyStateDiffStrict(ts, d);
+        bcos::evm::applyStateDiffStrict(ts, d);
     };
 
     OpBlockResult result;
@@ -550,7 +550,7 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     // 引擎（evmone mpt_hash）正确性由上游套件 + upstream-diff 外锚，此处不重复自证；
     // 翻红优先归因执行/落账或 pre-alloc 完整性（见 plan 风险 4），非引擎。
     ctx.checkField("stateRoot", hexHash(test::from_json<hash256>(h.at("stateRoot"))),
-        hexHash(bcos::evmref::stateRootOf(ts)));
+        hexHash(bcos::evm::stateRootOf(ts)));
     // requestsHash：两 fork 恒必填的值比对（seal 侧 optional 经 checkOptional，无门控）。
     ctx.checkOptional("requestsHash",
         std::optional{hexHash(test::from_json<hash256>(h.at("requestsHash")))},

@@ -13,8 +13,8 @@
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <vector>
 
-using namespace bcos::evmref::opstack;
-using namespace bcos::evmref::opstack::testhelpers;
+using namespace bcos::evm::opstack;
+using namespace bcos::evm::opstack::testhelpers;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -95,9 +95,7 @@ TEST(OpBlockHarness, IsthmusBlockWithAttributesDeposit)
     std::vector<uint8_t> env(50, 0x11);
 
     std::vector<OpBlockTx> txs{wrap(attr), wrap(dep), wrap(tx, {env.data(), env.size()})};
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     const auto r = processOpBlock(ts, block, hashes, txs, isthmusConfig(), vm, 1234, apply);
 
     ASSERT_EQ(r.receipts.size(), 3u);
@@ -176,7 +174,7 @@ TEST(OpBlockHarness, FromStateApiCrossCheck)
         .data = toBytes(attrData)};
     const auto attrR = runDeposit(ts, block, hashes, attr, isthmusConfig(), vm, 1234, blockGasLeft);
     ASSERT_EQ(attrR.receipt.status, EVMC_SUCCESS);
-    bcos::evmref::applyStateDiffStrict(ts, attrR.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, attrR.receipt.state_diff);
     blockGasLeft -= attrR.receipt.gas_used;
 
     const auto fee = loadOpFeeParams(ts);

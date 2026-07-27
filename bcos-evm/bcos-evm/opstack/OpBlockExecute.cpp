@@ -8,7 +8,7 @@
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <stdexcept>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -28,7 +28,7 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
 {
     // §4.1 step 1: pre-block system call (4788/2935; revision-gating and silent skip on missing
     // code are both handled inside evmone).
-    applyDiff(bcos::evmref::sanitizeStateDiff(
+    applyDiff(bcos::evm::sanitizeStateDiff(
         view, evmone::state::system_call_block_start(view, block, hashes, cfg.rev, vm)));
 
     // §4.1 step 2 precondition: the first tx must be the L1 attributes deposit (stricter-than-spec,
@@ -97,4 +97,4 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     result.gasUsed = cumulative;
     return result;
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

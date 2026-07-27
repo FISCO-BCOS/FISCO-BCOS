@@ -8,7 +8,7 @@
 #include <bcos-evm/eth/utils/rlp.hpp>
 #include <functional>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 evmone::hash256 opStorageRoot(const std::map<evmc::bytes32, evmc::bytes32>& storage)
 {
@@ -81,4 +81,4 @@ OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     }
     return seal;
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

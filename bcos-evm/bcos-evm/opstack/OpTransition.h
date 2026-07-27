@@ -7,7 +7,7 @@
 #include <bcos-evm/eth/state/state.hpp>
 #include <evmc/evmc.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 /// Fork evmone::state::transition (evmone state.cpp:561-649): buyGas adds l1Cost +
 /// operatorCost(gasLimit); Host replaced with OpHost; tail routes base/l1/operator fees to vaults.
@@ -29,4 +29,4 @@ OpTxReceipt opTransitionFromState(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const evmone::state::Transaction& tx, const OpForkConfig& cfg, evmc::VM& vm,
     const OpTxProperties& props, uint64_t chainId, evmc::bytes_view signedTxEnvelope);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

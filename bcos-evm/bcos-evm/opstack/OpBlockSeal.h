@@ -7,7 +7,7 @@
 #include <map>
 #include <optional>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 using evmc::literals::operator""_bytes32;
 
@@ -55,4 +55,4 @@ struct OpBlockSeal
 /// EMPTY_MPT_HASH rather than an error).
 [[nodiscard]] OpBlockSeal sealOpBlock(const OpBlockResult& result, const OpForkConfig& cfg,
     const std::map<evmc::bytes32, evmc::bytes32>& messagePasserStorage);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

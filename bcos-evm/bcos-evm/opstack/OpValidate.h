@@ -8,7 +8,7 @@
 #include <system_error>
 #include <variant>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 struct OpTxProperties
 {
@@ -38,4 +38,4 @@ struct OpTxProperties
     const evmone::state::StateView& view, const evmone::state::BlockInfo& block,
     const evmone::state::Transaction& tx, evmc::bytes_view signedTxEnvelope,
     const OpForkConfig& cfg, int64_t blockGasLeft);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

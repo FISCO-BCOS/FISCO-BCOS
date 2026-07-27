@@ -8,7 +8,7 @@
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <stdexcept>
 
-namespace bcos::evmref
+namespace bcos::evm
 {
 /// v1 write-back seam: apply an evmone StateDiff to the in-memory TestState.
 /// Contract (a real-ledger write-back implementation must satisfy this, see the
@@ -41,4 +41,4 @@ inline void applyStateDiffStrict(
                 "ghost delete reached writeback: " + evmc::hex(evmc::bytes_view(addr)));
     applyStateDiff(state, diff);
 }
-}  // namespace bcos::evmref
+}  // namespace bcos::evm

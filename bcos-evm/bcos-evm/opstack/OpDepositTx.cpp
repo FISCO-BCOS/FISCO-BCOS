@@ -11,7 +11,7 @@
 #include <bcos-evm/eth/state/errors.hpp>
 #include <bcos-evm/eth/state/state.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -127,7 +127,7 @@ OpDepositReceipt runDeposit(const evmone::state::StateView& view,
         }
     }
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
-    receipt.state_diff = bcos::evmref::sanitizeStateDiff(view, state.build_diff(cfg.rev));
+    receipt.state_diff = bcos::evm::sanitizeStateDiff(view, state.build_diff(cfg.rev));
     return OpDepositReceipt{std::move(receipt), preNonce, 1};
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

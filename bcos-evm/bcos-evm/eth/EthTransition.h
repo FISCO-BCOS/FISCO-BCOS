@@ -7,7 +7,7 @@
 #include <system_error>
 #include <variant>
 
-namespace bcos::evmref::eth
+namespace bcos::evm::eth
 {
 using Result = std::variant<evmone::state::TransactionReceipt, std::error_code>;
 
@@ -25,4 +25,4 @@ using Result = std::variant<evmone::state::TransactionReceipt, std::error_code>;
     evmc_revision rev, const evmc::address& coinbase, std::optional<uint64_t> blockReward,
     std::span<const evmone::state::Ommer> ommers,
     std::span<const evmone::state::Withdrawal> withdrawals);
-}  // namespace bcos::evmref::eth
+}  // namespace bcos::evm::eth

@@ -6,7 +6,7 @@
 #include <intx/intx.hpp>
 #include <optional>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 struct OpFeeParams;
 struct OpForkConfig;
@@ -38,4 +38,4 @@ struct OpTxReceipt
 
 OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fee, uint32_t flzLen,
     intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars) noexcept;
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

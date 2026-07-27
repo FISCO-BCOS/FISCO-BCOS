@@ -2,7 +2,7 @@
 #include <bcos-evm/opstack/OpPrecompiles.h>
 #include <gtest/gtest.h>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 
 TEST(OpPrecompiles, P256VerifyGasOverrideAndAddressExtension)
 {

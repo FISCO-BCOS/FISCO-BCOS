@@ -4,7 +4,7 @@
 #include <bcos-evm/opstack/OpReceiptMeta.h>
 #include <variant>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 /// receipts-root leaf encoding (op-geth Receipts.EncodeIndex semantics, receipt.go:568-592 --
 /// note this is NOT MarshalBinary :279-288; the two deliberately differ for a receipt that
@@ -22,4 +22,4 @@ namespace bcos::evmref::opstack
 [[nodiscard]] evmc::bytes encodeReceiptForRoot(const OpTxReceipt& r);
 [[nodiscard]] evmc::bytes encodeReceiptForRoot(
     const std::variant<OpDepositReceipt, OpTxReceipt>& r);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

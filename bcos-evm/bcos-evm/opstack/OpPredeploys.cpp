@@ -3,7 +3,7 @@
 // 需连同 OpPredeploys.h 声明与全部调用方(OpTransition/测试)同步改。
 #include <bcos-evm/eth/utils/test_state.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 void seedOpPredeploys(evmone::test::TestState& state)
 {
@@ -20,4 +20,4 @@ void seedOpPredeploys(evmone::test::TestState& state)
         state[v].code = evmc::bytes{0x00};
     }
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

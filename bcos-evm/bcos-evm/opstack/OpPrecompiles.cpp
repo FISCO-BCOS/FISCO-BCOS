@@ -1,6 +1,6 @@
 #include <bcos-evm/opstack/OpPrecompiles.h>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -55,4 +55,4 @@ const PrecompileOverrides& granitePrecompileOverrides() noexcept
     static const PrecompileOverrides overrides{.entries = kGraniteEntries};
     return overrides;
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

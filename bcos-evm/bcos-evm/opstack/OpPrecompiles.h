@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <span>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 /// The only gas-override (non-length-limit-only) precompile currently implemented: 0x100
 /// P256Verify.
@@ -45,4 +45,4 @@ const PrecompileOverrides& isthmusPrecompileOverrides() noexcept;
 const PrecompileOverrides& jovianPrecompileOverrides() noexcept;
 const PrecompileOverrides& fjordPrecompileOverrides() noexcept;
 const PrecompileOverrides& granitePrecompileOverrides() noexcept;
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

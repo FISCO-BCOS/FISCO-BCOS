@@ -18,7 +18,7 @@
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <vector>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -168,7 +168,7 @@ TEST(OpStateDiffSanitize, BlockLevelRealDeleteSurvivesSanitize)
 
     test::TestBlockHashes hashes;
     const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
+        bcos::evm::applyStateDiffStrict(ts, d);
     };
 
     // attributes deposit 照 OpBlockExecuteTest::attributesTx；普通 tx 照本文件 baseTx。

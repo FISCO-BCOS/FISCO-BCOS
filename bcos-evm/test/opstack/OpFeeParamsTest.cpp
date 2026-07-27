@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using intx::operator""_u256;
 
 namespace

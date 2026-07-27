@@ -11,7 +11,7 @@ namespace evmone::test
 class TestState;
 }
 
-namespace bcos::evmref
+namespace bcos::evm
 {
 /// Full-state MPT root (correctness version: rebuilds the entire root every time; scalable
 /// incremental building is TA-1d, a non-goal here).
@@ -29,4 +29,4 @@ namespace bcos::evmref
 /// stateRoot does not yet exist and is structurally impossible to expose to the EVM — a
 /// documented invariant, no runtime defense.
 [[nodiscard]] evmone::hash256 stateRootOf(const evmone::test::TestState& state);
-}  // namespace bcos::evmref
+}  // namespace bcos::evm

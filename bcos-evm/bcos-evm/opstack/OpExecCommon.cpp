@@ -4,7 +4,7 @@
 #include <cassert>
 #include <evmone/delegation.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -72,4 +72,4 @@ ExecOutcome executeMessage(evmone::state::State& state, OpHost& host,
 
     return {std::move(result), gas_used};
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

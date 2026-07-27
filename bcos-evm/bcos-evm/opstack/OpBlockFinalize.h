@@ -3,7 +3,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/eth/state/state.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 /// OP block finalize: withdrawals are always empty, no ommers / block reward; EIP-6110/7002/7251
 /// requests are suppressed per cfg.disable_prague_requests — op-geth explicitly disables them for
@@ -14,4 +14,4 @@ namespace bcos::evmref::opstack
 /// function.
 evmone::state::StateDiff finalizeOpBlock(
     const evmone::state::StateView& view, const OpForkConfig& cfg, const evmc::address& coinbase);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

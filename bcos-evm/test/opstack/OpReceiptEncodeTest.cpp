@@ -4,7 +4,7 @@
 #include <bcos-evm/eth/utils/rlp.hpp>
 #include <bcos-evm/eth/utils/rlp_encode.hpp>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmc::literals;
 
 namespace

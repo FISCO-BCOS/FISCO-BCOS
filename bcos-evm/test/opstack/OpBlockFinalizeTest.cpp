@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmc::literals;
 
 // D-10：OP 块收尾不执行 EIP-6110/7002/7251 requests（op-geth core/state_processor.go:140-156

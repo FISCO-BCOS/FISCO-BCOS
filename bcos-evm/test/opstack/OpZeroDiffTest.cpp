@@ -13,7 +13,7 @@
 #include <optional>
 #include <vector>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -125,7 +125,7 @@ TEST(OpZeroDiff, SimpleTransferMatchesEthExceptBaseFeeVault)
     ASSERT_EQ(opTxR.receipt.status, EVMC_SUCCESS);
     const auto& opReceipt = opTxR.receipt;
 
-    const auto ethRes = bcos::evmref::eth::runTransaction(
+    const auto ethRes = bcos::evm::eth::runTransaction(
         ts, block, hashes, tx, cfg.rev, vm, block.gas_limit, /*blobGasLeft=*/0);
     ASSERT_TRUE(std::holds_alternative<state::TransactionReceipt>(ethRes));
     const auto& ethReceipt = std::get<state::TransactionReceipt>(ethRes);

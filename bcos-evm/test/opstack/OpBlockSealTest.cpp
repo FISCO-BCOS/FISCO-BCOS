@@ -14,8 +14,8 @@
 #include <bcos-evm/eth/utils/rlp.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
-using namespace bcos::evmref::opstack;
-using namespace bcos::evmref::opstack::testhelpers;
+using namespace bcos::evm::opstack;
+using namespace bcos::evm::opstack::testhelpers;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -261,9 +261,7 @@ TEST(OpBlockSeal, EndToEndSealsProcessOpBlockResult)
 
     const auto preStorage = ts.at(OP_L2_TO_L1_MESSAGE_PASSER).storage;  // 块前快照留证
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     const auto r = processOpBlock(ts, blk, hashes, txs, isthmusConfig(), vm, 1234, apply);
 
     const auto& postStorage = ts.at(OP_L2_TO_L1_MESSAGE_PASSER).storage;

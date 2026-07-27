@@ -17,7 +17,7 @@
 #include <evmone/delegation.hpp>
 #include <vector>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -120,7 +120,7 @@ TEST(Op7702, RecoversAuthorityAndWritesDelegation)
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth);
     ASSERT_EQ(r.receipt.status, EVMC_SUCCESS);
-    bcos::evmref::applyStateDiffStrict(ts, r.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
     // authority 被写 0xef0100||kDelegate，nonce 从 0 → 1
     ASSERT_NE(ts.find(kAuthority), ts.end()) << "authority account must exist after delegation";
@@ -159,7 +159,7 @@ TEST(Op7702, BadSignatureRecoverFailsNoDelegation)
     // 坏签名只 skip 该条 authorization，tx 本身必须成功——否则"无委托"断言会把
     // "交易整体失败"误判为"正确跳过坏签名"。
     ASSERT_EQ(r.receipt.status, EVMC_SUCCESS);
-    bcos::evmref::applyStateDiffStrict(ts, r.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
     // 真实 kAuthority 必须没有被委托
     auto it = ts.find(kAuthority);
@@ -189,7 +189,7 @@ TEST(Op7702, NonceMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_nonce5),
         .v = intx::uint256{kV_nonce5}};
     const auto r = runWithAuth(ts, vm, auth);
-    bcos::evmref::applyStateDiffStrict(ts, r.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
     // kAuthority 不应有委托代码，nonce 不应被 bump
     auto it = ts.find(kAuthority);
@@ -219,7 +219,7 @@ TEST(Op7702, ChainIdMismatchSkips)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/1);
-    bcos::evmref::applyStateDiffStrict(ts, r.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
     auto it = ts.find(kAuthority);
     if (it != ts.end())
@@ -277,7 +277,7 @@ TEST(Op7702, DelegatedCallAfterAuthorization)
 
     // 委托调用应成功执行 kDelegate 代码；SSTORE 在 authority 上下文中落槽
     EXPECT_EQ(txR.receipt.status, EVMC_SUCCESS);
-    bcos::evmref::applyStateDiffStrict(ts, txR.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
 
     constexpr auto kSlot0 = evmc::bytes32{};
     const auto expectedSlot0 = intx::be::store<evmc::bytes32>(intx::uint256{42});

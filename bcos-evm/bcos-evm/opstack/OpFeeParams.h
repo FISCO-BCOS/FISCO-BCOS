@@ -9,7 +9,7 @@ namespace evmone::state
 class StateView;
 }
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 /// Read from the L1Block storage slots after this block's L1 attributes deposit
 /// has executed (consensus-critical).
@@ -31,4 +31,4 @@ OpFeeParams unpackOpFeeParams(const evmc::bytes32& slot1, const evmc::bytes32& s
 
 /// Read slots 1/3/7/8 from OP_L1_BLOCK and unpack (a missing slot is treated as a zero word).
 OpFeeParams loadOpFeeParams(const evmone::state::StateView& view) noexcept;
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

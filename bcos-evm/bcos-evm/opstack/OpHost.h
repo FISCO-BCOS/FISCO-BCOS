@@ -3,7 +3,7 @@
 #include <bcos-evm/eth/state/host.hpp>
 #include <evmc/evmc.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 struct PrecompileOverrides;
 
@@ -50,4 +50,4 @@ private:
     const evmone::state::BlockInfo& m_block;
     const evmone::state::Transaction& m_tx;
 };
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

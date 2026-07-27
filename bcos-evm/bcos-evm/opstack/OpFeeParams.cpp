@@ -3,7 +3,7 @@
 #include <bcos-evm/eth/state/state_view.hpp>
 #include <cassert>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -44,4 +44,4 @@ OpFeeParams loadOpFeeParams(const evmone::state::StateView& view) noexcept
         view.get_storage(OP_L1_BLOCK, slot(3)), view.get_storage(OP_L1_BLOCK, slot(7)),
         view.get_storage(OP_L1_BLOCK, slot(8)));
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

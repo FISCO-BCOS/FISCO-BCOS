@@ -7,7 +7,7 @@ namespace evmone::test
 class TestState;
 }
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 using evmc::literals::operator""_address;
 
@@ -37,4 +37,4 @@ inline constexpr evmc::address OP_L2_TO_L1_MESSAGE_PASSER =
 /// EIP-161 under zero fees.
 /// The code for OP_L1_BLOCK / OP_GAS_PRICE_ORACLE is still managed by the harness setter itself.
 void seedOpPredeploys(evmone::test::TestState& state);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

@@ -1,7 +1,7 @@
 #include <bcos-evm/opstack/OpDepositTx.h>
 #include <gtest/gtest.h>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmc::literals;
 
 TEST(OpDepositTx, ContractCreationHasNullTo)

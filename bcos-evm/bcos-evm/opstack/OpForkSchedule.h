@@ -2,7 +2,7 @@
 
 #include <evmc/evmc.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 enum class OpFork
 {
@@ -36,4 +36,4 @@ const OpForkConfig& holoceneConfig() noexcept;
 const OpForkConfig& isthmusConfig() noexcept;
 const OpForkConfig& jovianConfig() noexcept;
 const OpForkConfig& karstConfig() noexcept;
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

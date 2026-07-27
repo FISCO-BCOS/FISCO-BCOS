@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 /// One transaction within a block: deposit or normal tx (a normal tx must carry a signed envelope
 /// for L1 fee calculation).
@@ -45,4 +45,4 @@ OpBlockResult processOpBlock(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     std::span<const OpBlockTx> txs, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
     const std::function<void(const evmone::state::StateDiff&)>& applyDiff);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

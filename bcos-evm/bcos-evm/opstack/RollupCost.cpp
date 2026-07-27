@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -206,4 +206,4 @@ intx::uint256 computeOperatorCost(
                intx::uint256{kOperatorFeeScalarDivisor} +
            intx::uint256{params.operator_fee_constant};
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

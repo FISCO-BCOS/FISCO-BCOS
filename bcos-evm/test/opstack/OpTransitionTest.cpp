@@ -10,7 +10,7 @@
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <vector>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -57,7 +57,7 @@ TEST(OpTransition, RoutesFeesToFourVaults)
     const auto txR = opTransition(
         ts, block, hashes, tx, isthmusConfig(), vm, props, 1234, {env.data(), env.size()});
     ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
-    bcos::evmref::applyStateDiffStrict(ts, txR.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
 
     // 纯转账无 calldata：gas_used = intrinsic = 21000（7623 floor 空 calldata 亦为 21000）。
     ASSERT_EQ(txR.receipt.gas_used, 21000);
@@ -181,7 +181,7 @@ TEST(OpTransition, JovianReceiptMetaAndOperatorFormula)
     ASSERT_TRUE(txR.meta.da_footprint.has_value());
     EXPECT_EQ(*txR.meta.da_footprint, estimatedDaSize({env.data(), env.size()}) * 2u);
 
-    bcos::evmref::applyStateDiffStrict(ts, txR.receipt.state_diff);
+    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
     EXPECT_EQ(ts.at(OP_OPERATOR_FEE_VAULT).balance, expectedOp);
     EXPECT_EQ(ts.at(OP_L1_FEE_VAULT).balance, props.l1_cost);
 }

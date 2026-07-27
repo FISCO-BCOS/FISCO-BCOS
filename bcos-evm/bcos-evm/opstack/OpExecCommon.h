@@ -3,7 +3,7 @@
 #include <bcos-evm/eth/state/state.hpp>
 #include <evmc/evmc.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 class OpHost;
 
@@ -22,4 +22,4 @@ struct ExecOutcome
 ExecOutcome executeMessage(evmone::state::State& state, OpHost& host,
     const evmone::state::Transaction& tx, evmc_revision rev, const evmc::address& coinbase,
     int64_t execution_gas_limit, int64_t min_gas_cost, int64_t delegation_refund);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

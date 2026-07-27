@@ -20,7 +20,7 @@
 
 using namespace intx;
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -193,7 +193,7 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     }
 
     evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used, {},
-        host.take_logs(), {}, bcos::evmref::sanitizeStateDiff(view, state.build_diff(rev)), {}};
+        host.take_logs(), {}, bcos::evm::sanitizeStateDiff(view, state.build_diff(rev)), {}};
 
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
 
@@ -209,4 +209,4 @@ OpTxReceipt opTransitionFromState(const evmone::state::StateView& view,
 {
     return opTransition(view, block, hashes, tx, cfg, vm, props, chainId, signedTxEnvelope);
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

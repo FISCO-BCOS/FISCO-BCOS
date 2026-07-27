@@ -14,7 +14,7 @@ struct BlockInfo;
 class BlockHashes;
 }  // namespace evmone::state
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 struct OpForkConfig;
 
@@ -51,4 +51,4 @@ OpDepositReceipt runDeposit(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const DepositTx& dep, const OpForkConfig& cfg, evmc::VM& vm, uint64_t chainId,
     int64_t blockGasLeft);
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

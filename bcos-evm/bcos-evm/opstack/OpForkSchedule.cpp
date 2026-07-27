@@ -1,7 +1,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPrecompiles.h>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 const OpForkConfig& ecotoneConfig() noexcept
 {
@@ -98,4 +98,4 @@ const OpForkConfig& karstConfig() noexcept
     }();
     return cfg;
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

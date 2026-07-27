@@ -4,7 +4,7 @@
 #include <evmc/bytes.hpp>
 #include <intx/intx.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 struct OpFeeParams;
 struct OpForkConfig;
@@ -39,4 +39,4 @@ intx::uint256 computeL1Cost(
 /// Operator fee: Isthmus gas*scalar/1e6+constant; Jovian gas*scalar*100+constant.
 intx::uint256 computeOperatorCost(
     const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept;
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

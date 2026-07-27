@@ -58,7 +58,7 @@ bcos-evm/
 不变式:
 
 - `ports/` 目录 diff 为空,port-version 停在 7
-- 命名空间沿用 `bcos::evmref`
+- 命名空间 `bcos::evm`(2026-07-27 用户裁定自 `bcos::evmref` 改名,见 §4.6(d);DIVERGENCES.md 中的 1 处历史提法按出处记录纪律保留)
 - 根 CMake 沿用 FULLNODE 下 `add_subdirectory(bcos-evm)`;standalone 构建模式保留
 - 库目标(`bcosevm::eth`/`bcosevm::opstack`)不得链接 gtest/nlohmann
 
@@ -180,6 +180,17 @@ Task 6(upstream-diff 基准重锚官方 v0.21.0)首次对官方检出跑护栏�
 `35283af1b` 时代的旧版本;若后续仍以 `$REF` 作为其他任务的搬运源,建议在
 `$REF` 侧同步执行一次 `--regenerate-goldens` 并提交。详见
 `.superpowers/sdd/task-6-report.md`"裁定与重生成"节。
+
+**(d) 命名空间改名 `bcos::evmref` → `bcos::evm`(2026-07-27 用户裁定,合并后偏离)**
+
+移植验收后用户裁定弃用 ref 沿袭的 `bcos::evmref`,全模块(库 37 文件 + 测试 24
+文件)机械替换为 `bcos::evm`。零命中面核实:vendored `eth/state`/`eth/utils` 无
+该命名空间;模块外无引用;`t8n/vectors/DIVERGENCES.md` 中 1 处历史提法按
+出处记录纪律保留不改。CMake alias(`bcosevm::`)与目录名不变。此后与
+`bcos-evm-ref` 的文件级 diff 恒有命名空间噪音,同步比对须先做
+`s/bcos::evmref/bcos::evm/` 归一。同批次:eth/utils 移除(C 路线)TODO 插桩
+使 `OpTransition.cpp`/`OpBlockSeal.cpp` 追踪段行号 +3,`manifest.tsv` 已按
+既定仪式平移(见 `2026-07-27-eth-utils-removal-c-route-todo.md`)。
 
 ## 5. 数据流与 ETH 侧欠账接线
 

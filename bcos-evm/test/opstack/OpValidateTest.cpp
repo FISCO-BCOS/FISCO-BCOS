@@ -5,7 +5,7 @@
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <vector>
 
-using namespace bcos::evmref::opstack;
+using namespace bcos::evm::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;

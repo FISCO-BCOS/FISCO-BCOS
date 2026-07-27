@@ -4,7 +4,7 @@
 #include <bcos-evm/eth/utils/rlp.hpp>
 #include <bcos-evm/eth/utils/rlp_encode.hpp>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 evmc::bytes encodeReceiptForRoot(const OpDepositReceipt& r)
 {
@@ -26,4 +26,4 @@ evmc::bytes encodeReceiptForRoot(const std::variant<OpDepositReceipt, OpTxReceip
 {
     return std::visit([](const auto& x) { return encodeReceiptForRoot(x); }, r);
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

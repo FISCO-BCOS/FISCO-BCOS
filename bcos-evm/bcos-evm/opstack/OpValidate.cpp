@@ -2,7 +2,7 @@
 #include <bcos-evm/opstack/OpValidate.h>
 #include <bcos-evm/opstack/RollupCost.h>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::Transaction& tx,
@@ -51,4 +51,4 @@ std::variant<OpTxProperties, std::error_code> opValidateFromState(
 {
     return opValidate(view, block, tx, signedTxEnvelope, cfg, loadOpFeeParams(view), blockGasLeft);
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

@@ -9,7 +9,7 @@
 #include <evmc/evmc.hpp>
 #include <vector>
 
-namespace bcos::evmref::opstack::testhelpers
+namespace bcos::evm::opstack::testhelpers
 {
 /// 造一个 32 字节大端 word：在 [byteOff, byteOff+len) 放入 value 的低 len 字节。
 inline evmc::bytes32 wordWith(size_t byteOff, uint64_t value, size_t len)
@@ -81,4 +81,4 @@ inline evmc::bytes toBytes(const std::vector<uint8_t>& v)
 {
     return evmc::bytes{v.begin(), v.end()};
 }
-}  // namespace bcos::evmref::opstack::testhelpers
+}  // namespace bcos::evm::opstack::testhelpers

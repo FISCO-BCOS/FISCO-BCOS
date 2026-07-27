@@ -3,7 +3,7 @@
 #include <bcos-evm/opstack/OpReceiptMeta.h>
 #include <bcos-evm/opstack/RollupCost.h>
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fee, uint32_t flzLen,
     intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars) noexcept
@@ -32,4 +32,4 @@ OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fe
     }
     return m;
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

@@ -8,7 +8,7 @@
 
 using namespace evmc::literals;
 
-namespace bcos::evmref::opstack
+namespace bcos::evm::opstack
 {
 namespace
 {
@@ -168,4 +168,4 @@ evmc_access_status OpHost::access_account(const evmc::address& addr) noexcept
         return EVMC_ACCESS_WARM;
     return evmone::state::Host::access_account(addr);
 }
-}  // namespace bcos::evmref::opstack
+}  // namespace bcos::evm::opstack

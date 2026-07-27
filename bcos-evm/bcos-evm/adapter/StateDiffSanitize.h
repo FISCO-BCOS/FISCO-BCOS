@@ -4,7 +4,7 @@
 #include <bcos-evm/eth/state/state_view.hpp>
 #include <vector>
 
-namespace bcos::evmref
+namespace bcos::evm
 {
 /// Strip deletion entries for accounts absent from the view out of the StateDiff (FINDING-1
 /// ghost-delete fix, spec rev.2).
@@ -35,4 +35,4 @@ namespace bcos::evmref
         [&view](const auto& addr) { return !view.get_account(addr).has_value(); });
     return diff;
 }
-}  // namespace bcos::evmref
+}  // namespace bcos::evm

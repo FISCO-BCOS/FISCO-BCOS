@@ -11,8 +11,8 @@
 #include <bcos-evm/eth/state/system_contracts.hpp>
 #include <bcos-evm/eth/utils/test_state.hpp>
 
-using namespace bcos::evmref::opstack;
-using namespace bcos::evmref::opstack::testhelpers;
+using namespace bcos::evm::opstack;
+using namespace bcos::evm::opstack::testhelpers;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
@@ -122,9 +122,7 @@ TEST(OpBlockExecute, RejectsEmptyOrBadFirstTx)
     test::TestState ts;
     seedL1BlockStub(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
 
     EXPECT_THROW(processOpBlock(ts, blk(), hashes, {}, isthmusConfig(), vm, 1234, apply),
         std::runtime_error);
@@ -183,9 +181,7 @@ TEST(OpBlockExecute, SystemCallRunsBeforeAttributesTx)
         evmc::from_hex("6000600060006000600073000f3df6d732807ef1319fb7b8bb8522d0beac025af15000")
             .value();
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
 
     std::vector<OpBlockTx> txs{wrap(attributesTx())};
     const auto r = processOpBlock(ts, blk(), hashes, txs, isthmusConfig(), vm, 1234, apply);
@@ -210,9 +206,7 @@ TEST(OpBlockExecute, FinalizeIsActuallyWired)
     test::TestState ts;
     seedL1BlockStub(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     OpForkConfig cfg = isthmusConfig();
     cfg.disable_prague_requests = false;
     std::vector<OpBlockTx> txs{wrap(attributesTx())};
@@ -228,9 +222,7 @@ TEST(OpBlockExecute, DepositOnlyBlockSucceeds)
     test::TestState ts;
     seedL1BlockStub(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
 
     std::vector<OpBlockTx> txs{wrap(attributesTx())};
     const auto r = processOpBlock(ts, blk(), hashes, txs, isthmusConfig(), vm, 1234, apply);
@@ -255,9 +247,7 @@ TEST(OpBlockExecute, BlockStartSystemCallWritesBeaconSlot)
     ts[state::BEACON_ROOTS_ADDRESS] = {
         .nonce = 1, .balance = intx::uint256{0}, .code = evmc::from_hex("600035425500").value()};
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
 
     std::vector<OpBlockTx> txs{wrap(attributesTx())};
     const auto b = blk();
@@ -275,9 +265,7 @@ TEST(OpBlockExecute, MissingSystemContractIsSilentlySkipped)
     test::TestState ts;
     seedL1BlockStub(ts);  // 不种 BEACON_ROOTS
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
 
     std::vector<OpBlockTx> txs{wrap(attributesTx())};
     EXPECT_NO_THROW(processOpBlock(ts, blk(), hashes, txs, isthmusConfig(), vm, 1234, apply));
@@ -297,7 +285,7 @@ TEST(OpBlockExecute, HistoryStorageOnlyWrittenFromIsthmus)
             .balance = intx::uint256{0},
             .code = evmc::from_hex("600035425500").value()};
         const auto apply = [&](const state::StateDiff& d) {
-            bcos::evmref::applyStateDiffStrict(ts, d);
+            bcos::evm::applyStateDiffStrict(ts, d);
         };
         std::vector<OpBlockTx> txs{wrap(attributesTx())};
         processOpBlock(ts, blk(), hashes, txs, cfg, vm, 1234, apply);
@@ -316,9 +304,7 @@ TEST(OpBlockExecute, CumulativeGasAccumulatesAcrossMixedTxs)
     ts[kDepFrom] = {.nonce = 0, .balance = intx::uint256{0}};
     seedL1BlockSetter(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
 
     // 普通 deposit：mint=1000，to=自身（同 harness :155-162）。
     DepositTx dep{.source_hash = 0x02_bytes32,
@@ -372,7 +358,7 @@ TEST(OpBlockExecute, BlockGasPoolExactBoundary)
     seedNormalSender(tsMeasure);
     test::TestBlockHashes hashesMeasure;
     const auto applyMeasure = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(tsMeasure, d);
+        bcos::evm::applyStateDiffStrict(tsMeasure, d);
     };
     std::vector<OpBlockTx> txsMeasure{wrap(attr), wrap(normalTx(0), {env.data(), env.size()})};
     const auto rMeasure = processOpBlock(
@@ -386,9 +372,7 @@ TEST(OpBlockExecute, BlockGasPoolExactBoundary)
     seedL1BlockStub(ts);
     seedNormalSender(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     const auto tx2 = normalTx(1);
     std::vector<OpBlockTx> txs{wrap(attr), wrap(normalTx(0), {env.data(), env.size()}),
         wrap(tx2, {env.data(), env.size()})};
@@ -401,9 +385,7 @@ TEST(OpBlockExecute, BlockGasPoolExactBoundary)
     test::TestState ts3;
     seedL1BlockStub(ts3);
     seedNormalSender(ts3);
-    const auto apply3 = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts3, d);
-    };
+    const auto apply3 = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts3, d); };
     auto bMinus1 = blk();
     bMinus1.gas_limit = bExact.gas_limit - 1;
     EXPECT_THROW(processOpBlock(ts3, bMinus1, hashes, txs, isthmusConfig(), vm, 1234, apply3),
@@ -432,7 +414,7 @@ TEST(OpBlockExecute, DepositUnusedGasReleasedToPool)
     seedL1BlockStub(tsMeasure);
     test::TestBlockHashes hashesMeasure;
     const auto applyMeasure = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(tsMeasure, d);
+        bcos::evm::applyStateDiffStrict(tsMeasure, d);
     };
     std::vector<OpBlockTx> txsMeasure{wrap(attr)};
     const auto rMeasure = processOpBlock(
@@ -445,9 +427,7 @@ TEST(OpBlockExecute, DepositUnusedGasReleasedToPool)
     seedL1BlockStub(ts);
     seedNormalSender(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     const auto tx = normalTx(0);
     std::vector<OpBlockTx> txs{wrap(attr), wrap(tx, {env.data(), env.size()})};
     auto b = blk();
@@ -467,9 +447,7 @@ TEST(OpBlockExecute, DepositAfterNormalTxIsBlockError)
     seedNormalSender(ts);
     ts[kDepFrom] = {.nonce = 0, .balance = intx::uint256{0}};
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     std::vector<uint8_t> env(50, 0x11);
     DepositTx dep{.source_hash = 0x02_bytes32,
         .from = kDepFrom,
@@ -505,9 +483,7 @@ TEST(OpBlockExecute, FeeParamsLoadedAfterAttributesExecution)
     ts[OP_L1_BLOCK].storage[slotKey(1)] =
         intx::be::store<evmc::bytes32>(intx::uint256{5'000'000'000});  // 陈旧 A
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     std::vector<uint8_t> env(50, 0x11);
     std::vector<OpBlockTx> txs{
         wrap(realAttributesTx()), wrap(normalTx(0), {env.data(), env.size()})};
@@ -529,9 +505,7 @@ TEST(OpBlockExecute, InvalidNormalTxIsBlockError)
     seedL1BlockStub(ts);
     seedNormalSender(ts);
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     std::vector<uint8_t> env(50, 0x11);
     std::vector<OpBlockTx> txs{wrap(attributesTx()), wrap(normalTx(99), {env.data(), env.size()})};
 
@@ -561,9 +535,7 @@ TEST(OpBlockExecute, LaterTxSeesEarlierTxWrites)
         .balance = intx::uint256{0},
         .code = evmc::from_hex("60005460010160005500").value()};
     test::TestBlockHashes hashes;
-    const auto apply = [&](const state::StateDiff& d) {
-        bcos::evmref::applyStateDiffStrict(ts, d);
-    };
+    const auto apply = [&](const state::StateDiff& d) { bcos::evm::applyStateDiffStrict(ts, d); };
     std::vector<uint8_t> env(50, 0x11);
     auto tx1 = normalTx(0);
     tx1.to = kSeq;
