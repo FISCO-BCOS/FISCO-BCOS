@@ -4,7 +4,7 @@
 
 namespace evmone::test
 {
-struct TestState;
+class TestState;
 }
 
 namespace bcos::evmref::opstack
