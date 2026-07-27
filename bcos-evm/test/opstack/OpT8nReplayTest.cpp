@@ -28,9 +28,6 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <bcos-evm/eth/state/hash_utils.hpp>
-#include <bcos-evm/eth/utils/rlp.hpp>
-#include <bcos-evm/eth/utils/statetest.hpp>
-#include <bcos-evm/eth/utils/test_state.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <filesystem>
 #include <fstream>
@@ -41,6 +38,9 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <test/utils/rlp.hpp>
+#include <test/utils/statetest.hpp>
+#include <test/utils/test_state.hpp>
 #include <vector>
 
 namespace fs = std::filesystem;

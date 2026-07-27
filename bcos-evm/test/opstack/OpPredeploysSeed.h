@@ -7,7 +7,7 @@
 // 需连同全部测试调用方同步改。
 
 #include <bcos-evm/opstack/OpPredeploys.h>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 namespace bcos::evm::opstack
 {

@@ -2,8 +2,8 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
-#include <bcos-evm/eth/utils/rlp.hpp>
-#include <bcos-evm/eth/utils/rlp_encode.hpp>
+#include <test/utils/rlp.hpp>
+#include <test/utils/rlp_encode.hpp>
 
 using namespace bcos::evm::opstack;
 using namespace evmc::literals;

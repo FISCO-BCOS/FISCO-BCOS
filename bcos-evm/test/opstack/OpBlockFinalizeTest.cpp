@@ -1,7 +1,7 @@
 #include <bcos-evm/opstack/OpBlock.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <gtest/gtest.h>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
 using namespace evmc::literals;

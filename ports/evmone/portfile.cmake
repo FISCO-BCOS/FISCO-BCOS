@@ -92,6 +92,16 @@ file(INSTALL
 file(INSTALL "${SOURCE_PATH}/lib/evmone_precompiles/pairing"
      DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmone_precompiles")
 
+# 4d. Install evmone's test/utils sources (headers AND .cpp) verbatim under their upstream
+#     include prefix. bcos-evm consumes them directly (compiling the .cpp files from this
+#     directory) instead of carrying an in-repo vendored copy; the upstream-quoted includes
+#     ("statetest.hpp", "stdx/utility.hpp") resolve in-directory, and the <test/state/...>
+#     cross-references are satisfied by the consumer (bcos-evm forwards them to its vendored
+#     eth/state copy, which is byte-identical to upstream test/state modulo include paths).
+file(INSTALL "${SOURCE_PATH}/test/utils/"
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils"
+     FILES_MATCHING PATTERN "*.hpp" PATTERN "*.cpp" PATTERN "*.h")
+
 # 5. Write a manual cmake config file (avoids install(EXPORT) issues)
 #    Creates evmone::evmone imported target with proper dependencies.
 #    Uses platform-aware library suffixes (.lib on Windows, .a on Unix).

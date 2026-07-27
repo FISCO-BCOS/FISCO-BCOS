@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/state.hpp>
 #include <bcos-evm/eth/state/system_contracts.hpp>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
 using namespace bcos::evm::opstack::testhelpers;

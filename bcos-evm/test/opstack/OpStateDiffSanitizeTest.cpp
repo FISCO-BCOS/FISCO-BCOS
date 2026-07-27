@@ -15,7 +15,7 @@
 #include <algorithm>
 #include <optional>
 #include <bcos-evm/eth/state/host.hpp>  // compute_create_address
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 #include <vector>
 
 using namespace bcos::evm::opstack;

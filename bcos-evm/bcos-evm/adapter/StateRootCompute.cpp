@@ -2,7 +2,7 @@
 #include <bcos-evm/adapter/StateRootCompute.h>
 
 // TODO(eth-utils-removal): 去除本 include,mpt_hash 调用改为自研 MPT 建根实现。
-#include <bcos-evm/eth/utils/mpt_hash.hpp>
+#include <test/utils/mpt_hash.hpp>
 
 namespace bcos::evm
 {

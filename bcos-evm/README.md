@@ -4,9 +4,11 @@
 hash_fn 挂 VM)的 ETH + OP Stack 执行参考模块。自 `bcos-evm-ref`
 (分支 `feat-evm-mb1-block-execution`,基准 1cec91b27639cab7037bcf344d4109fd19334fff)
 全保真移植,底座由 vcpkg 导出 `evmone::state` 改为 vendored 源
-(`bcos-evm/eth/state/`、`bcos-evm/eth/utils/`,取自官方 v0.21.0,仅 include 改写)。
+(`bcos-evm/eth/state/`,取自官方 v0.21.0,仅 include 改写);test/utils 改由
+evmone 包直装源(ports/evmone port-version 8)编译,<test/state/...> 交叉引用经
+`include-compat/` 转发头指回 vendored eth/state。
 
-- `eth/`:ETH 状态转换内核(EthTransition + vendored state/utils)
+- `eth/`:ETH 状态转换内核(EthTransition + vendored state)
 - `adapter/`:StateDiff 消毒/严格写回/stateRootOf/StateView 适配
 - `opstack/`:OP 薄层(processOpBlock/sealOpBlock/deposit/fee/receipt)
 - `test/opstack/`:21 测试文件 124 用例,含 `OpT8nReplay.Vectors`

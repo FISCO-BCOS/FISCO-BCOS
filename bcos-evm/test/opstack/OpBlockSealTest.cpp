@@ -9,10 +9,10 @@
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/state.hpp>
-#include <bcos-evm/eth/utils/mpt.hpp>
-#include <bcos-evm/eth/utils/mpt_hash.hpp>
-#include <bcos-evm/eth/utils/rlp.hpp>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/mpt.hpp>
+#include <test/utils/mpt_hash.hpp>
+#include <test/utils/rlp.hpp>
+#include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
 using namespace bcos::evm::opstack::testhelpers;

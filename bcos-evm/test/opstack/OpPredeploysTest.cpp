@@ -1,7 +1,7 @@
 #include "OpPredeploysSeed.h"
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <gtest/gtest.h>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
 using namespace evmc::literals;

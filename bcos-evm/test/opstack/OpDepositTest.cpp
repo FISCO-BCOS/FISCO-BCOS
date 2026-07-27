@@ -7,7 +7,7 @@
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 #include <bcos-evm/eth/state/host.hpp>
 #include <bcos-evm/eth/state/state.hpp>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
 using namespace evmone;

@@ -6,7 +6,7 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 #include <algorithm>
 #include <cstring>

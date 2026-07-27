@@ -12,6 +12,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(evmone CONFIG REQUIRED)
 
+# The evmone port installs test/utils sources verbatim (headers AND .cpp) under
+# include/test/utils; compile the ones we use straight from the package instead of
+# carrying a vendored copy. Their <test/state/...> cross-references are routed to the
+# vendored eth/state copy via the forwarding headers in include-compat/.
+# TODO(eth-utils-removal): C 路线下改为自研——mpt/mpt_hash→自研 MPT,rlp_encode→
+# bcos-codec RLP,test_state→自研内存账本;届时删除 include-compat/ 与本段包源编译。
+get_target_property(_evmone_include_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
+list(GET _evmone_include_dirs 0 _evmone_include_dir)
+cmake_path(NORMAL_PATH _evmone_include_dir)
+set(EVMONE_TEST_UTILS_DIR "${_evmone_include_dir}/test/utils")
+if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/mpt.cpp")
+    message(FATAL_ERROR "evmone package does not ship test/utils sources; "
+        "port-version >= 8 of the overlay port is required (${EVMONE_TEST_UTILS_DIR})")
+endif()
+
 add_library(bcos-evm-eth STATIC
     bcos-evm/adapter/StateRootCompute.cpp
     bcos-evm/eth/EthTransition.cpp
@@ -22,18 +37,16 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # TODO(eth-utils-removal): C 路线下移除以下 6 个 eth/utils 源——mpt/mpt_hash→自研 MPT,
-    # rlp_encode→bcos-codec RLP,test_state→自研内存账本,blob_schedule/utils 随
-    # statetest 装载链路迁测试侧或删除;同步清理下方告警抑制列表与 eth/state 对
-    # ../utils/stdx/utility.hpp 的相对引用(vendored 文件,需迁移点见移除清单文档)。
-    bcos-evm/eth/utils/blob_schedule.cpp
-    bcos-evm/eth/utils/mpt.cpp
-    bcos-evm/eth/utils/mpt_hash.cpp
-    bcos-evm/eth/utils/rlp_encode.cpp
-    bcos-evm/eth/utils/test_state.cpp
-    bcos-evm/eth/utils/utils.cpp)
+    ${EVMONE_TEST_UTILS_DIR}/blob_schedule.cpp
+    ${EVMONE_TEST_UTILS_DIR}/mpt.cpp
+    ${EVMONE_TEST_UTILS_DIR}/mpt_hash.cpp
+    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+    ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
+    ${EVMONE_TEST_UTILS_DIR}/utils.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
-target_include_directories(bcos-evm-eth PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(bcos-evm-eth PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include-compat)
 target_link_libraries(bcos-evm-eth PUBLIC evmone::evmone evmone::precompiles intx::intx)
 
 # 移植文件按上游原样编译；并入本仓后会继承全局 -Werror -Wall -Wextra -pedantic
@@ -47,12 +60,12 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    bcos-evm/eth/utils/blob_schedule.cpp
-    bcos-evm/eth/utils/mpt.cpp
-    bcos-evm/eth/utils/mpt_hash.cpp
-    bcos-evm/eth/utils/rlp_encode.cpp
-    bcos-evm/eth/utils/test_state.cpp
-    bcos-evm/eth/utils/utils.cpp
+    ${EVMONE_TEST_UTILS_DIR}/blob_schedule.cpp
+    ${EVMONE_TEST_UTILS_DIR}/mpt.cpp
+    ${EVMONE_TEST_UTILS_DIR}/mpt_hash.cpp
+    ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
+    ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
+    ${EVMONE_TEST_UTILS_DIR}/utils.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
 add_library(bcos-evm-opstack STATIC

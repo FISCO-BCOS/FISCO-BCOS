@@ -5,11 +5,11 @@
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/eth/state/bloom_filter.hpp>
 // TODO(eth-utils-removal): 三根建根(state/tx/receiptsRoot)从 evmone mpt_hash 迁自研 MPT。
-#include <bcos-evm/eth/utils/mpt_hash.hpp>
 #include <functional>
 #include <map>
 #include <optional>
 #include <span>
+#include <test/utils/mpt_hash.hpp>
 #include <variant>
 #include <vector>
 

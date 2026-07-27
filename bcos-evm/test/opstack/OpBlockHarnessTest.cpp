@@ -9,7 +9,7 @@
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
 #include <bcos-evm/eth/state/state.hpp>
-#include <bcos-evm/eth/utils/test_state.hpp>
+#include <test/utils/test_state.hpp>
 #include <vector>
 
 using namespace bcos::evm::opstack;

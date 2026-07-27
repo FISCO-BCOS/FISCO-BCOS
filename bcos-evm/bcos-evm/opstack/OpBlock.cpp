@@ -7,10 +7,10 @@
 // 注意:opStorageRoot 与 receipts_root 循环照抄自 evmone test/utils/mpt_hash.cpp
 // (官方 v0.21.0),替换后须重验 33/33 向量。
 #include <algorithm>
-#include <bcos-evm/eth/utils/mpt.hpp>
-#include <bcos-evm/eth/utils/rlp.hpp>
 #include <functional>
 #include <stdexcept>
+#include <test/utils/mpt.hpp>
+#include <test/utils/rlp.hpp>
 
 namespace bcos::evm::opstack
 {
