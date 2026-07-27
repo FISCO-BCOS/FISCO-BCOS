@@ -22,6 +22,7 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
+    bcos-evm/ledger/MemoryLedger.cpp
     # TODO(eth-utils-removal): C 路线下移除以下 6 个 eth/utils 源——mpt/mpt_hash→自研 MPT,
     # rlp_encode→bcos-codec RLP,test_state→自研内存账本,blob_schedule/utils 随
     # statetest 装载链路迁测试侧或删除;同步清理下方告警抑制列表与 eth/state 对
