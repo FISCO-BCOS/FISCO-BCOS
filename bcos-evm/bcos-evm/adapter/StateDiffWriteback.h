@@ -3,6 +3,8 @@
 
 #include <evmc/hex.hpp>
 #include <bcos-evm/eth/state/state_diff.hpp>
+// TODO(eth-utils-removal): TestState(eth/utils)→自研内存账本;applyStateDiff/
+// applyStateDiffStrict 形参与下方三条写回契约(删除/清槽/条件覆写)原样保留。
 #include <bcos-evm/eth/utils/test_state.hpp>
 #include <stdexcept>
 

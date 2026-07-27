@@ -44,6 +44,9 @@ target_compile_definitions(bcos-evm-opstack-tests PRIVATE
 # alongside statetest.hpp/utils.hpp/stdx/ and includes them unqualified ("statetest.hpp").
 # It now lives outside eth/utils/ (test-only, not part of bcosevm::eth), so its quoted
 # includes need the vendored eth/utils/ directory on the search path to resolve.
+# TODO(eth-utils-removal): 向量装载链路整体替换——statetest.hpp/statetest_loader.cpp/
+# utils/blob_schedule 换自研 JSON→账本装载器后,本 include 路径与 loader 源一并删除;
+# 15 个用 TestState 的测试文件与 OpT8nReplayTest 同步迁自研账本(见移除清单文档)。
 target_include_directories(bcos-evm-opstack-tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../bcos-evm/eth/utils
 )

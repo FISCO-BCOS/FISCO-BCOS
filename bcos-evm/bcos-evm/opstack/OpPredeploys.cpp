@@ -1,4 +1,6 @@
 #include <bcos-evm/opstack/OpPredeploys.h>
+// TODO(eth-utils-removal): seedOpPredeploys 形参 TestState→自研内存账本,
+// 需连同 OpPredeploys.h 声明与全部调用方(OpTransition/测试)同步改。
 #include <bcos-evm/eth/utils/test_state.hpp>
 
 namespace bcos::evmref::opstack
