@@ -50,8 +50,19 @@ upstream-diff golden),并与 `bcos-evm-ref` 永久分叉——实施前须重建
 
 ## 5. 护栏与文档连带
 
-- upstream-diff:OpTransition/OpBlockSeal 照抄段重写 → `manifest.tsv` 段落重划 +
-  golden 全量 `--regenerate-goldens`;"照抄 evmone"的护栏定位需重新表述(照抄面缩小)。
+- **upstream-diff 护栏整体退役(2026-07-27 用户裁定"方式一":随照抄段重写自然退役,
+  不做 golden 重做)**。照抄段重写完成(§6 第 4 步)即执行:
+  - 删除 `bcos-evm/scripts/upstream-diff.sh` 与 `bcos-evm/scripts/upstream-diff/`
+    全部内容(EVMONE_REF/manifest.tsv/normalize.sed/golden×10);`scripts/` 若因此
+    为空则一并删除;
+  - `OpTransition.cpp`/`OpBlockSeal.cpp` 内引用 manifest/追踪段/--regenerate-goldens
+    的 TODO 注释去悬空指向;
+  - `bcos-evm/README.md` 删护栏行;port spec §6.2 标注"已退役,转历史记录"、
+    §8 验收清单该项标注退役、§4.6 追加条目(e)明示"照抄面静态追溯自此不存在,
+    照抄段改动此后仅由 33 向量 gate 行为判定";
+  - §4.6(c) 的"ref 侧 golden 欠账"跟进项在本仓侧随之关闭(ref 仓自身护栏不受影响)。
+  - **退役前窗口期护栏保持有效**:凡触碰照抄段的中间步骤仍须跑护栏并按仪式处理
+    (行号平移 / 有意改动 regenerate)。
 - spec `2026-07-24-...-port-design.md`:§3 架构图、§4.2 vendor 清单、§4.6 偏离台账追加。
 - `bcos-evm/README.md`:vendored 描述、目录清单更新。
 - 与 `bcos-evm-ref` 的同步关系:C 路线后 ref→bcos-evm 的文件级同步不再可行,
@@ -62,5 +73,5 @@ upstream-diff golden),并与 `bcos-evm-ref` 永久分叉——实施前须重建
 1. 自研账本(替 TestState)+ 测试迁移(gate 保绿)
 2. RLP 适配层(OpReceiptEncode 先行,gate 判字节等价)
 3. 自研 MPT + 三根建根(stateRoot 单腿比对族判定)
-4. OpTransition 照抄段重写 + golden 重做
+4. OpTransition 照抄段重写 + upstream-diff 护栏退役(方式一,见 §5 首条;不做 golden 重做)
 5. 装载器自研 + eth/utils 目录删除 + 文档收尾
