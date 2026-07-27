@@ -1,6 +1,7 @@
 // Op7702Test.cpp — EIP-7702 真实 ecrecover 端到端测试矩阵
 //
-// 金值来源: bcos-evm-ref/test/opstack/scripts/gen_7702_vectors.py
+// 金值来源: Python eth-account/eth-utils 权威实现按 keccak256(0x05 || rlp([chain_id,
+// address, nonce])) 签出(原 scripts/gen_7702_vectors.py,已删;金值勿手改)。
 // 私钥: 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 // 对应地址 (authority): 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 // 签名哈希公式: keccak256(0x05 || rlp([chain_id, address, nonce]))
@@ -27,7 +28,7 @@ namespace
 constexpr auto kSender = 0x00000000000000000000000000000000000000aa_address;
 constexpr auto kDelegate = 0x00000000000000000000000000000000000000cc_address;
 
-// === 金值：gen_7702_vectors.py, 私钥 0x59c6995e...86dae88c7a8412f4603b6b78690d ===
+// === 金值:eth-account 签出, 私钥 0x59c6995e...86dae88c7a8412f4603b6b78690d ===
 // authority = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
 constexpr auto kAuthority = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8_address;
 
