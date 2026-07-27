@@ -1,4 +1,5 @@
 # Standalone EEST runner (no Boost.Test dependency, uses TBB for parallelism)
+find_package(jsoncpp CONFIG REQUIRED)
 add_executable(eest-runner EESTStandalone.cpp)
 target_link_libraries(eest-runner
     ethereum-executor bcos-evm-eth executor ledger protocol-tars bcos-framework rpc

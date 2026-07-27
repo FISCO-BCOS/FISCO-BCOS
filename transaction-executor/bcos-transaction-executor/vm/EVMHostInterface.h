@@ -179,17 +179,16 @@ struct EVMHostInterface
     }
 
     static evmc_access_status accessAccount(
-        evmc_host_context* context, const evmc_address* addr) noexcept
+        evmc_host_context* /*context*/, const evmc_address* /*addr*/) noexcept
     {
-        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        return hostContext.accessAccount(*addr);
+        return EVMC_ACCESS_COLD;
     }
 
     static evmc_access_status accessStorage(
-        evmc_host_context* context, const evmc_address* addr, const evmc_bytes32* key) noexcept
+        evmc_host_context* /*context*/, const evmc_address* /*addr*/,
+        const evmc_bytes32* /*key*/) noexcept
     {
-        auto& hostContext = *reinterpret_cast<HostContextType*>(context);
-        return hostContext.accessStorage(*addr, *key);
+        return EVMC_ACCESS_COLD;
     }
 
     static evmc_tx_context getTxContext(evmc_host_context* context) noexcept
