@@ -79,3 +79,5 @@ CLAUDE.local.md
 
 docs/superpowers/
 bcos-evm/README.md
+bcos-evm/bcos-evm/opstack/OpBlock.h
+bcos-evm/bcos-evm/opstack/OpBlock.cpp
