@@ -109,14 +109,17 @@ CacheExecutables& getCacheExecutables();
 task::Task<std::shared_ptr<Executable>> getExecutable(
     auto& storage, const evmc_address& address, const evmc_revision& revision, bool binaryAddress)
 {
-    // Bypass global cache: the shared static CacheExecutables (LRU, max 100)
-    // can evict entries across deeply-nested contract calls (259+ contracts),
-    // and may serve stale Executables whose underlying storage has changed.
-    // Always re-read from storage and construct a fresh Executable per lookup.
+    if (auto executable = co_await storage2::readOne(getCacheExecutables(), address))
+    {
+        co_return std::move(*executable);
+    }
+
     if (Account<std::decay_t<decltype(storage)>> account(storage, address, binaryAddress);
         auto codeEntry = co_await account.code())
     {
-        co_return std::make_shared<Executable>(std::move(*codeEntry));
+        auto executable = std::make_shared<Executable>(std::move(*codeEntry));
+        co_await storage2::writeOne(getCacheExecutables(), address, executable);
+        co_return executable;
     }
     co_return {};
 }
@@ -157,9 +160,6 @@ private:
     std::shared_ptr<executor::Eip2929AccessState> m_eip2929Access;
     std::shared_ptr<const executor::Eip2930AccessList> m_eip2930AccessList;
     uint8_t m_web3TypedTxKindForAccessList = 0;
-
-    // EIP-6780: track addresses created in this transaction (shared across nested contexts)
-    std::shared_ptr<std::set<evmc_address>> m_createdInTx;
 
     constexpr auto buildLegacyExternalCaller()
     {
@@ -209,8 +209,7 @@ private:
         const evmc_host_interface* hostInterface,
         std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
         uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr,
-        std::shared_ptr<std::set<evmc_address>> createdInTx = nullptr)
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
       : m_hostInterface(hostInterface),
         m_rollbackableStorage(storage),
         m_rollbackableTransientStorage(transientStorage),
@@ -225,20 +224,17 @@ private:
         m_message(getMessage(
             web3Tx, message, m_blockHeader.get().number(), m_contextID, m_seq, nonce, m_hashImpl)),
         m_recipientAccount(getAccount(*this, this->message().recipient)),
-        // Ethereum mode: use explicit revision if set, else toRevision.
-        // BCOS mode: never downgrade below EVMC_CANCUN (pre-PR baseline).
+        // Never downgrade below EVMC_CANCUN (pre-PR baseline).
+        // Future EVM feature flags (Amsterdam, etc.) automatically upgrade through
+        // toRevision without requiring code changes here.
         m_revision(
-            ledgerConfig.features().get(ledger::Features::Flag::feature_ethereum_executor) ?
-                ledgerConfig.evmcRevision().value_or(
-                    bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version())) :
-                std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
-                    EVMC_CANCUN)),
+            std::max(bcos::executor::toRevision(ledgerConfig.features(), blockHeader.version()),
+                EVMC_CANCUN)),
         m_level(seq),
         m_web3Tx(web3Tx),
         m_eip2929Access(std::move(eip2929Access)),
         m_eip2930AccessList(std::move(accessList)),
-        m_web3TypedTxKindForAccessList(web3TypedTxKind),
-        m_createdInTx(std::move(createdInTx))
+        m_web3TypedTxKindForAccessList(web3TypedTxKind)
     {
         // W1 warm at top-level construction (sync). Nested HostContext (m_level>0) skips.
         // prepare() handles prepareCall/Create only; see TransactionExecutorImpl executeStep<0>.
@@ -254,13 +250,11 @@ public:
         crypto::Hash const& hashImpl, bool web3Tx, const u256& nonce, auto&& waitOperator,
         std::shared_ptr<const executor::Eip2930AccessList> accessList = nullptr,
         uint8_t web3TypedTxKind = 0,
-        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr,
-        std::shared_ptr<std::set<evmc_address>> createdInTx = nullptr)
+        std::shared_ptr<executor::Eip2929AccessState> eip2929Access = nullptr)
       : HostContext(innerConstructor, storage, transientStorage, blockHeader, message, origin, abi,
             contextID, seq, precompiledManager, ledgerConfig, hashImpl, web3Tx, nonce,
             getHostInterface<HostContext>(std::forward<decltype(waitOperator)>(waitOperator)),
-            std::move(accessList), web3TypedTxKind, std::move(eip2929Access),
-            std::move(createdInTx))
+            std::move(accessList), web3TypedTxKind, std::move(eip2929Access))
     {}
 
     ~HostContext() noexcept = default;
@@ -368,11 +362,10 @@ public:
         co_return co_await account.codeHash();
     }
 
-    task::Task<bool> exists(const evmc_address& address, auto&&... /*unused*/)
+    task::Task<bool> exists([[maybe_unused]] const evmc_address& address, auto&&... /*unused*/)
     {
-        Account<Storage> account(m_rollbackableStorage.get(), address,
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
-        co_return co_await account.exists();
+        // TODO: impl the full support for solidity
+        co_return true;
     }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
@@ -404,25 +397,6 @@ public:
     evmc_address const& origin() const { return m_origin; }
     int64_t blockGasLimit() const { return std::get<0>(m_ledgerConfig.get().gasLimit()); }
     u256 gasPrice() const { return u256(std::get<0>(m_ledgerConfig.get().gasPrice())); }
-    u256 blockBaseFee() const
-    {
-        // EIP-1559: BASEFEE opcode returns the block's base fee.
-        // Pre-London forks return 0.
-        if (m_revision < EVMC_LONDON)
-            return u256{0};
-        return u256(std::get<0>(m_ledgerConfig.get().gasPrice()));
-    }
-    evmc_address coinbaseEvmc() const
-    {
-        auto const cb = m_blockHeader.get().coinbase();
-        if (cb.size() == sizeof(evmc_address))
-        {
-            evmc_address addr{};
-            std::copy(cb.begin(), cb.end(), addr.bytes);
-            return addr;
-        }
-        return {};
-    }
     evmc_uint256be chainId() const
     {
         return m_ledgerConfig.get().chainId().value_or(evmc_uint256be{});
@@ -439,47 +413,6 @@ public:
     void suicide()
     {
         // suicide(m_myContractTable); // TODO: add suicide
-
-        auto const isEthereum =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
-        if (!isEthereum)
-            return;
-
-        // --- Ethereum-native SELFDESTRUCT (EIP-6780) ---
-        // Reference: bcos-evm/bcos-evm/eth/state/host.cpp Host::selfdestruct()
-        auto& ref = message();
-        auto const& selfAddr = ref.code_address;
-        auto const& beneficiary = ref.recipient;
-
-        auto selfAccount = getAccount(*this, selfAddr);
-        auto beneficiaryAccount = getAccount(*this, beneficiary);
-
-        auto selfBalance = task::syncWait(selfAccount.balance());
-        auto benBalance = task::syncWait(beneficiaryAccount.balance());
-
-        // EIP-6780 (Cancun+): contracts NOT created in the current transaction
-        // only transfer balance, do NOT register destruction → no SELFDESTRUCT gas refund.
-        bool const justCreated = m_createdInTx && m_createdInTx->count(selfAddr) > 0;
-        if (m_revision >= EVMC_CANCUN && !justCreated)
-        {
-            auto newBenBalance = benBalance + selfBalance;
-            task::syncWait(selfAccount.setBalance(u256{0}));
-            task::syncWait(beneficiaryAccount.setBalance(newBenBalance));
-            HOST_CONTEXT_LOG(TRACE)
-                << "Ethereum SELFDESTRUCT (EIP-6780, not same-tx create)"
-                << LOG_KV("addr", selfAddr) << LOG_KV("beneficiary", beneficiary)
-                << LOG_KV("balance", selfBalance);
-            return;
-        }
-
-        // Pre-Cancun or same-tx create: full selfdestruct with SELFDESTRUCT refund
-        auto newBenBalance = benBalance + selfBalance;
-        task::syncWait(selfAccount.setBalance(u256{0}));
-        task::syncWait(beneficiaryAccount.setBalance(newBenBalance));
-
-        HOST_CONTEXT_LOG(TRACE) << "Ethereum SELFDESTRUCT (registered, refund eligible)"
-                                << LOG_KV("addr", selfAddr) << LOG_KV("beneficiary", beneficiary)
-                                << LOG_KV("balance", selfBalance);
     }
 
     task::Task<void> prepare()
@@ -523,10 +456,7 @@ public:
         {
             // FIB-91: checkAuth() moved inside try block so exceptions
             // trigger rollback/cleanup instead of bypassing it
-            // Ethereum native mode skips BCOS-specific auth checks.
-            auto const isEthereumExec = m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::feature_ethereum_executor);
-            if (!isEthereumExec && m_ledgerConfig.get().authCheckStatus() != 0U)
+            if (m_ledgerConfig.get().authCheckStatus() != 0U)
             {
                 HOST_CONTEXT_LOG(DEBUG)
                     << "Checking auth..." << m_ledgerConfig.get().authCheckStatus()
@@ -543,91 +473,45 @@ public:
 
             if (!evmResult)
             {
-                // EIP-7623 calldata floor cost is handled centrally in
-                // TransactionExecutorImpl::computeTxIntrinsicCost() for Prague+.
-
-                // Ethereum mode: transfer value unconditionally for the initial
-                // message (CALL/CREATE/CREATE2).  This matches evmone's
-                // Host::execute_message() which transfers value from sender to
-                // recipient before running the VM.  The savepoint captured above
-                // allows rolling this back on EVMC failure.
-                const bool isEthereumForTransfer = m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::feature_ethereum_executor);
-                // Only transfer value at the top-level (m_level == 0).
-                // Sub-calls (m_level > 0) have their value handled by evmone's
-                // CALL/CREATE instruction processing which calls the host's call()
-                // function → externalCall() → sub-HostContext::execute().
-                if (isEthereumForTransfer && m_level == 0)
+                // EIP-7623 calldata floor cost (Prague+, top-level transactions only)
+                // Computes max(standard_calldata_gas, tokens*10) and deducts it upfront.
+                // The 21000 base cost sits outside this formula and is handled separately.
+                if (m_level == 0 && m_revision >= EVMC_PRAGUE)
                 {
-                    if ((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
-                        ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
+                    auto& msg = mutableMessage();
+                    const int64_t calldataGas = executor::calcEip7623CalldataGas(
+                        bcos::bytesConstRef(msg.input_data, msg.input_size));
+                    if (msg.gas < calldataGas)
                     {
-                        if (!::ranges::equal(
-                                ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes))
-                        {
-                            // EIP-7610: skip value transfer for CREATE/CREATE2
-                            // collision.  The collision will be detected in
-                            // executeCreate() and the value must not be
-                            // transferred (matching evmone's Host::create()).
-                            bool skipTransfer = false;
-                            if (ref->kind == EVMC_CREATE || ref->kind == EVMC_CREATE2)
-                            {
-                                if (co_await m_recipientAccount.existsEthereum())
-                                {
-                                    auto codeHash = co_await m_recipientAccount.codeHash();
-                                    static const bcos::h256 EMPTY_CODE_HASH{};
-                                    auto existingNonce =
-                                        co_await m_recipientAccount.nonce();
-                                    auto existingNonceVal =
-                                        u256(existingNonce.value_or("0"));
-                                    bool isCollision;
-                                    if (m_revision >= EVMC_PARIS)
-                                    {
-                                        isCollision = (codeHash != EMPTY_CODE_HASH ||
-                                                       existingNonceVal != 0);
-                                    }
-                                    else
-                                    {
-                                        auto existingBalance =
-                                            co_await m_recipientAccount.balance();
-                                        isCollision =
-                                            (codeHash != EMPTY_CODE_HASH ||
-                                                existingNonceVal != 0 ||
-                                                existingBalance != 0);
-                                    }
-                                    skipTransfer = isCollision;
-                                }
-                            }
-                            if (!skipTransfer)
-                            {
-                                co_await transferBalance(*ref);
-                            }
-                        }
+                        evmResult.emplace(
+                            makeErrorEVMCResult(m_hashImpl, protocol::TransactionStatus::OutOfGas,
+                                EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : msg.gas,
+                                "EIP-7623 calldata floor OOG", fixErrorHandling));
+                    }
+                    else
+                    {
+                        msg.gas -= calldataGas;
+                    }
+                }
+
+                // Transfer first, then proceed execute
+                if (m_ledgerConfig.get().features().get(
+                        ledger::Features::Flag::bugfix_delegatecall_transfer))
+                {
+                    if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
+                            (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
+                        !::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        m_ledgerConfig.get().balanceTransfer())
+                    {
+                        co_await transferBalance(*ref);
                     }
                 }
                 else
                 {
-                    // Transfer first, then proceed execute
-                    if (m_ledgerConfig.get().features().get(
-                            ledger::Features::Flag::bugfix_delegatecall_transfer))
+                    if (!::ranges::equal(ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
+                        m_ledgerConfig.get().balanceTransfer())
                     {
-                        if (((ref->kind == EVMC_CALL && (ref->flags & EVMC_STATIC) == 0) ||
-                                (ref->kind == EVMC_CREATE) || ref->kind == EVMC_CREATE2) &&
-                            !::ranges::equal(
-                                ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                            m_ledgerConfig.get().balanceTransfer())
-                        {
-                            co_await transferBalance(*ref);
-                        }
-                    }
-                    else
-                    {
-                        if (!::ranges::equal(
-                                ref->value.bytes, executor::EMPTY_EVM_BYTES32.bytes) &&
-                            m_ledgerConfig.get().balanceTransfer())
-                        {
-                            co_await transferBalance(*ref);
-                        }
+                        co_await transferBalance(*ref);
                     }
                 }
 
@@ -696,45 +580,11 @@ public:
                 EVMC_OUT_OF_GAS, fixErrorHandling ? 0 : ref->gas, "", fixErrorHandling));
         }
 
-        // Ethereum mode: exceptional halts (stack error, invalid instruction,
-        // bad jump, OOG, etc.) consume all gas but don't revert state at this
-        // call-frame level. evmone treats these as sub-call failures (pushes 0
-        // on stack) but the outer execution continues.
-        // REVERT is special: gas_left is preserved — the caller pays gas up to
-        // the revert point and gets the remainder refunded.
-        bool const isEthereumExec =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
         if (evmResult->status_code != EVMC_SUCCESS)
         {
-            if (isEthereumExec)
-            {
-                // Exceptional halts (INVALID, UNDEFINED, STACK_OVERFLOW,
-                // OOG, etc.) consume all remaining gas.
-                // REVERT preserves gas_left for correct gas accounting.
-                if (evmResult->status_code != EVMC_REVERT)
-                {
-                    evmResult->gas_left = 0;
-                }
-                // Rollback value transfer + EVM state changes for non-SUCCESS
-                // at the top-level only. This matches evmone's Host::call()
-                // which saves a checkpoint before Host::execute_message() and
-                // rolls back on failure. Sub-calls (m_level > 0) are rolled
-                // back by externalCall() independently.
-                // Gas pre-deduction (in TransactionExecutorImpl) is unaffected
-                // because it happens outside this execute() scope.
-                if (m_level == 0)
-                {
-                    co_await m_rollbackableStorage.get().rollback(savepoint);
-                    co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
-                    m_logs.clear();
-                }
-            }
-            else
-            {
-                co_await m_rollbackableStorage.get().rollback(savepoint);
-                co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
-                m_logs.clear();
-            }
+            co_await m_rollbackableStorage.get().rollback(savepoint);
+            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
+            m_logs.clear();
         }
 
         HOST_CONTEXT_LOG(TRACE) << "HostContext execute finished, kind: " << ref->kind
@@ -755,18 +605,6 @@ public:
         auto nonceStr = co_await senderAccount.nonce();
         auto nonce = u256(nonceStr.value_or(std::string("0")));
 
-        // --- Bump caller nonce for CREATE/CREATE2 BEFORE the savepoint ---
-        // Ethereum consensus: nonce is consumed even for failed creates
-        // (EIP-3541 rejection, collision, OOG, etc.).  Must happen here so
-        // the rollback on sub-call failure does NOT undo the nonce bump.
-        auto const isEthereumExec =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
-        if ((m_web3Tx || isEthereumExec) &&
-            (message.kind == EVMC_CREATE || message.kind == EVMC_CREATE2))
-        {
-            co_await senderAccount.increaseNonce();
-        }
-
         std::optional<bcos::executor::Eip2929CheckpointGuard> checkpointGuard;
         if (m_eip2929Access && executor::eip2929Enabled(m_revision, m_ledgerConfig.get()))
         {
@@ -783,28 +621,12 @@ public:
         HostContext hostcontext(innerConstructor, m_rollbackableStorage.get(),
             m_rollbackableTransientStorage.get(), m_blockHeader, message, m_origin, {}, m_contextID,
             m_seq, m_precompiledManager.get(), m_ledgerConfig, m_hashImpl, m_web3Tx, nonce,
-            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access,
-            m_createdInTx);
+            m_hostInterface, m_eip2930AccessList, m_web3TypedTxKindForAccessList, m_eip2929Access);
 
         co_await hostcontext.prepare();
-
-        // Save a storage checkpoint before the sub-call so we can rollback
-        // state changes on REVERT or other sub-call failures (evmone pushes
-        // 0 on the stack but expects the host to restore state).
-        auto const subCallSavepoint = m_rollbackableStorage.get().current();
-        auto const transientSavepoint = m_rollbackableTransientStorage.get().current();
-
         auto result = co_await hostcontext.execute();
         auto& logs = hostcontext.logs();
-
-        // Ethereum mode: sub-call REVERT / exceptional halt → rollback sub-call
-        // state changes. evmone has already pushed 0 on the EVM stack.
-        if (isEthereumExec && result.status_code != EVMC_SUCCESS)
-        {
-            co_await m_rollbackableStorage.get().rollback(subCallSavepoint);
-            co_await m_rollbackableTransientStorage.get().rollback(transientSavepoint);
-        }
-        else if (result.status_code == EVMC_SUCCESS && !logs.empty())
+        if (result.status_code == EVMC_SUCCESS && !logs.empty())
         {
             m_logs.reserve(m_logs.size() + ::ranges::size(logs));
             ::ranges::move(logs, std::back_inserter(m_logs));
@@ -827,11 +649,6 @@ public:
             !executor::eip2929Enabled(m_revision, m_ledgerConfig.get().features()))
         {
             return EVMC_ACCESS_COLD;
-        }
-        // EIP-2929: precompile addresses are always warm
-        if (m_precompiledManager.get().getPrecompiled(addr, m_ledgerConfig.get().features()))
-        {
-            return EVMC_ACCESS_WARM;
         }
         return m_eip2929Access->warmUpAddress(addr) ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
     }
@@ -867,17 +684,7 @@ private:
         {
             input.createCodeAddress = ref.code_address;
         }
-        // EIP-3651: warm COINBASE address at transaction entry (Shanghai+).
-        if (m_revision >= EVMC_SHANGHAI)
-        {
-            auto const cb = m_blockHeader.get().coinbase();
-            if (cb.size() == sizeof(evmc_address))
-            {
-                evmc_address coinbaseAddr{};
-                std::copy(cb.begin(), cb.end(), coinbaseAddr.bytes);
-                input.coinbase = coinbaseAddr;
-            }
-        }
+        // TODO(EIP-3651): set input.coinbase from block sealer at revision >= EVMC_SHANGHAI.
         input.web3TypedTxKind = m_web3TypedTxKindForAccessList;
         input.accessList = m_eip2930AccessList.get();
         executor::warmEip2929AtTransactionEntry(
@@ -894,208 +701,54 @@ private:
     task::Task<EVMCResult> executeCreate()
     {
         auto& ref = message();
-        auto const isEthereum =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
-
-        if (!isEthereum)
+        if (m_blockHeader.get().number() != 0)
         {
-            // BCOS mode: create auth table for permission checking
-            if (m_blockHeader.get().number() != 0)
+            std::string authTablePath;
+            // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a binary
+            // path, but ContractAuthMgrPrecompiled always looks up auth tables using hex paths.
+            // Force hex to match the lookup path.
+            if (m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_auth_check) &&
+                m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address))
             {
-                std::string authTablePath;
-                // FIB-82: when feature_raw_address is on, m_recipientAccount.path() returns a
-                // binary path, but ContractAuthMgrPrecompiled always looks up auth tables using
-                // hex paths. Force hex to match the lookup path.
-                if (m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::bugfix_auth_check) &&
-                    m_ledgerConfig.get().features().get(
-                        ledger::Features::Flag::feature_raw_address))
-                {
-                    authTablePath = std::string(executor::USER_APPS_PREFIX) +
-                                    address2HexString(ref.code_address);
-                }
-                else
-                {
-                    authTablePath = std::string(co_await m_recipientAccount.path());
-                }
-                co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
-                    authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(),
-                    m_contextID, m_seq, m_ledgerConfig);
+                authTablePath =
+                    std::string(executor::USER_APPS_PREFIX) + address2HexString(ref.code_address);
             }
+            else
+            {
+                authTablePath = std::string(co_await m_recipientAccount.path());
+            }
+            co_await createAuthTable(m_rollbackableStorage.get(), m_blockHeader, ref, m_origin,
+                authTablePath, buildLegacyExternalCaller(), m_precompiledManager.get(), m_contextID,
+                m_seq, m_ledgerConfig);
         }
 
-        // --- EIP-7610: create collision check (Ethereum mode) ---
-        if (isEthereum)
+        if (m_web3Tx && m_level != 0)
         {
-            // EIP-161 (Spurious Dragon): empty accounts don't exist.
-            // Use existsEthereum() to skip accounts with nonce=0, balance=0, no code.
-            if (co_await m_recipientAccount.existsEthereum())
-            {
-                auto codeHash = co_await m_recipientAccount.codeHash();
-                static const bcos::h256 EMPTY_CODE_HASH{};
-                auto existingNonce = co_await m_recipientAccount.nonce();
-                auto existingNonceVal = u256(existingNonce.value_or("0"));
-                // EIP-7610 (Paris+): an account with only a non-zero balance (but nonce=0
-                // and empty code) is NOT a collision — it can be pre-funded before deployment.
-                bool isCollision;
-                if (m_revision >= EVMC_PARIS)
-                {
-                    isCollision = (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0);
-                }
-                else
-                {
-                    auto existingBalance = co_await m_recipientAccount.balance();
-                    isCollision = (codeHash != EMPTY_CODE_HASH || existingNonceVal != 0 ||
-                                   existingBalance != 0);
-                }
-                if (isCollision)
-                {
-                    // EIP-7610 (Paris+): CREATE collision — the creation fails silently
-                    // (returns 0 on the EVM stack) but the transaction succeeds.
-                    // Pre-Paris: same semantics — NOT a revert, the CREATE just returns 0.
-                    // We return EVMC_SUCCESS with zero create_address to signal that
-                    // no code was deployed but the EVM execution continues normally.
-                    // Value transfer is skipped in execute() for this case.
-                    HOST_CONTEXT_LOG(DEBUG)
-                        << "CREATE collision detected" << LOG_KV("addr", ref.code_address)
-                        << LOG_KV("revision", m_revision);
-                    co_return EVMCResult{evmc_result{.status_code = EVMC_SUCCESS,
-                                             .gas_left = 0,
-                                             .gas_refund = 0,
-                                             .output_data = nullptr,
-                                             .output_size = 0,
-                                             .release = nullptr,
-                                             .create_address = {},
-                                             .padding = {}},
-                        protocol::TransactionStatus::None};
-                }
-            }
+            auto senderAccount = getAccount(*this, ref.sender);
+            co_await senderAccount.increaseNonce();
         }
 
         co_await m_recipientAccount.create();
-
-        // Set nonce=1 before VM execution (EIP-161 / Spurious Dragon+).
-        // Pre-Spurious Dragon (Frontier, Homestead, Tangerine Whistle):
-        // new accounts start with nonce=0 per the Yellow Paper.
-        if (isEthereum)
+        auto bugfixNest =
+            m_ledgerConfig.get().features().get(ledger::Features::Flag::bugfix_nonce_initialize);
+        if (bugfixNest)
         {
-            if (m_revision >= EVMC_SPURIOUS_DRAGON)
-            {
-                co_await m_recipientAccount.setNonce("1");
-            }
+            co_await m_recipientAccount.setNonce("1");
         }
-        else
-        {
-            auto bugfixNest = m_ledgerConfig.get().features().get(
-                ledger::Features::Flag::bugfix_nonce_initialize);
-            if (bugfixNest)
-            {
-                co_await m_recipientAccount.setNonce("1");
-            }
-        }
-
         auto result = m_executable->m_vmInstance.execute(m_hostInterface,
             reinterpret_cast<evmc_host_context*>(this), m_revision, std::addressof(ref),
             ref.input_data, ref.input_size);
         if (result.status_code == EVMC_SUCCESS)
         {
             auto code = bytesConstRef(result.output_data, result.output_size);
-
-            // --- EIP-3541: reject code starting with 0xEF (Ethereum mode, London+) ---
-            if (isEthereum && m_revision >= EVMC_LONDON && !code.empty() && code[0] == 0xEF)
-            {
-                co_return EVMCResult{evmc_result{.status_code = EVMC_CONTRACT_VALIDATION_FAILURE,
-                                         .gas_left = 0,
-                                         .gas_refund = 0,
-                                         .output_data = nullptr,
-                                         .output_size = 0,
-                                         .release = nullptr,
-                                         .create_address = ref.code_address,
-                                         .padding = {}},
-                    protocol::TransactionStatus::BadInstruction};
-            }
-
-            // --- MAX_CODE_SIZE check (Ethereum mode, Spurious Dragon+) ---
-            if (isEthereum && m_revision >= EVMC_SPURIOUS_DRAGON)
-            {
-                static constexpr size_t MAX_CODE_SIZE = 24576;
-                if (code.size() > MAX_CODE_SIZE)
-                {
-                    co_return EVMCResult{evmc_result{.status_code = EVMC_FAILURE,
-                                             .gas_left = 0,
-                                             .gas_refund = 0,
-                                             .output_data = nullptr,
-                                             .output_size = 0,
-                                             .release = nullptr,
-                                             .create_address = ref.code_address,
-                                             .padding = {}},
-                        protocol::TransactionStatus::OutOfGas};
-                }
-            }
-
-            // Code deposit cost (Ethereum: 200/byte, BCOS: VMSchedule().createDataGas).
-            // Must be checked BEFORE storing code — Frontier returns EVMC_SUCCESS
-            // when code deposit runs OOG, but does NOT store the code.
-            // Reference: bcos-evm/bcos-evm/eth/state/host.cpp Host::create().
-            const auto codeDepositGas = isEthereum ?
-                                            static_cast<int64_t>(code.size()) * 200 :
-                                            static_cast<int64_t>(code.size()) *
-                                                bcos::executor::VMSchedule().createDataGas;
-            if (codeDepositGas > result.gas_left)
-            {
-                // Frontier: transaction succeeds but code is NOT stored.
-                // Homestead+: transaction fails (EVMC_FAILURE), state rolled back.
-                if (m_revision == EVMC_FRONTIER)
-                {
-                    HOST_CONTEXT_LOG(DEBUG)
-                        << "Frontier code deposit OOG — success, code not stored"
-                        << LOG_KV("gas_left", result.gas_left)
-                        << LOG_KV("codeDepositGas", codeDepositGas)
-                        << LOG_KV("codeSize", code.size());
-                    // Return EVMC_SUCCESS with unchanged gas_left; code is NOT stored.
-                    result.create_address = ref.code_address;
-                    if (result.release)
-                    {
-                        result.release(std::addressof(result));
-                        result.release = nullptr;
-                    }
-                    result.output_data = nullptr;
-                    result.output_size = 0;
-                    co_return result;
-                }
-                // Homestead+: code deposit OOG → EVMC_FAILURE (state rolled back).
-                co_return EVMCResult{evmc_result{.status_code = EVMC_FAILURE,
-                                         .gas_left = 0,
-                                         .gas_refund = 0,
-                                         .output_data = nullptr,
-                                         .output_size = 0,
-                                         .release = nullptr,
-                                         .create_address = ref.code_address,
-                                         .padding = {}},
-                    protocol::TransactionStatus::OutOfGas};
-            }
-            result.gas_left -= codeDepositGas;
-
             auto codeHash = m_hashImpl.get().hash(code);
             co_await m_recipientAccount.setCode(code.toBytes(), std::string(m_abi), codeHash);
-
-            if (!isEthereum)
+            if (!bugfixNest)
             {
-                auto bugfixNest = m_ledgerConfig.get().features().get(
-                    ledger::Features::Flag::bugfix_nonce_initialize);
-                if (!bugfixNest)
-                {
-                    co_await m_recipientAccount.setNonce("1");
-                }
+                co_await m_recipientAccount.setNonce("1");
             }
-
+            result.gas_left -= result.output_size * bcos::executor::VMSchedule().createDataGas;
             result.create_address = ref.code_address;
-
-            // Track created address for EIP-6780 (selfdestruct only for same-tx creates)
-            if (isEthereum && m_createdInTx)
-            {
-                m_createdInTx->insert(ref.code_address);
-            }
 
             // Clear the output
             if (result.release)
@@ -1192,39 +845,9 @@ private:
     task::Task<EVMCResult> executeCall()
     {
         auto& ref = mutableMessage();
-        // BCOS mode: deduct BALANCE_TRANSFER_GAS up front.
-        // Ethereum mode: intrinsic gas (including 21000 base) is already computed
-        // by TransactionExecutorImpl::computeTxIntrinsicCost, and the EVM handles
-        // the base cost internally — skip the extra deduction.
-        auto const isEthereum =
-            m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor);
-        if (!isEthereum)
-        {
-            consumeTransferGas(ref);
-        }
-
-        // --- Ethereum mode: transfer value for sub-CALL messages ---
-        // evmone's Host::execute_message() transfers value for CALL before
-        // processing.  Top-level value transfer is handled by execute().
-        // Sub-calls must transfer here (inside the savepoint so it rolls
-        // back on REVERT/exception, matching evmone behaviour).
-        // Only EVMC_CALL transfers value; CALLCODE/DELEGATECALL/STATICCALL do not.
-        if (isEthereum && m_level > 0 && ref.kind == EVMC_CALL &&
-            (ref.flags & EVMC_STATIC) == 0 &&
-            !::ranges::equal(ref.value.bytes, executor::EMPTY_EVM_BYTES32.bytes))
-        {
-            auto value = fromEvmC(ref.value);
-            auto senderAcc = getAccount(*this, ref.sender);
-            auto fromBalance = co_await senderAcc.balance();
-            if (fromBalance >= value)
-            {
-                if (!co_await m_recipientAccount.exists())
-                    co_await m_recipientAccount.create();
-                auto toBalance = co_await m_recipientAccount.balance();
-                co_await senderAcc.setBalance(fromBalance - value);
-                co_await m_recipientAccount.setBalance(toBalance + value);
-            }
-        }
+        // 先扣除BALANCE_TRANSFER_GAS
+        // First deduct the BALANCE_TRANSFER_GAS.
+        consumeTransferGas(ref);
 
         if (m_preparedPrecompiled != nullptr)
         {
@@ -1239,10 +862,7 @@ private:
                 m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_raw_address));
             !m_executable)
         {
-            // Ethereum mode: call to an address with no code succeeds silently
-            // (returns success, empty output, no state change).
-            // BCOS mode: preserve NotFoundCodeError behavior for non-empty input.
-            if (!isEthereum && ref.input_size > 0)
+            if (ref.input_size > 0)
             {
                 BOOST_THROW_EXCEPTION(NotFoundCodeError());
             }
@@ -1257,11 +877,7 @@ private:
                                      .padding = {}},
                 protocol::TransactionStatus::None};
         }
-        // BCOS dynamic precompile redirect — skip in Ethereum native mode
-        if (!m_ledgerConfig.get().features().get(ledger::Features::Flag::feature_ethereum_executor))
-        {
-            processDynamicPrecompiled();
-        }
+        processDynamicPrecompiled();
 
         if (m_preparedPrecompiled != nullptr)
         {

@@ -84,8 +84,8 @@ struct EVMHostInterface
             // registered in the parallel scheduler's read set, otherwise pure SSTORE
             // writes would create false RAW edges against any earlier writer of the
             // same slot.
-            auto existingValue = syncWait(
-                hostContext.get(key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER));
+            auto existingValue = syncWait(hostContext.get(
+                key, storage2::BYPASS_READ_SET, storage2::BYPASS_MULTILAYER));
             const bool existingIsZero = concepts::bytebuffer::equalTo(
                 existingValue.bytes, executor::EMPTY_EVM_BYTES32.bytes);
             if (newIsZero)
@@ -198,13 +198,15 @@ struct EVMHostInterface
         evmc_tx_context result = {
             .tx_gas_price = toEvmC(hostContext.gasPrice()),
             .tx_origin = hostContext.origin(),
-            .block_coinbase = hostContext.coinbaseEvmc(),
+            // TODO(EIP-3651): block_coinbase from HostContext (sealer-derived); must match W1 warm
+            // set.
+            .block_coinbase = {},
             .block_number = hostContext.blockNumber(),
             .block_timestamp = hostContext.timestamp(),
             .block_gas_limit = hostContext.blockGasLimit(),
             .block_prev_randao = {},
             .chain_id = hostContext.chainId(),
-            .block_base_fee = toEvmC(hostContext.blockBaseFee()),
+            .block_base_fee = {},
             .blob_base_fee = {},
             .blob_hashes = {},
             .blob_hashes_count = 0,

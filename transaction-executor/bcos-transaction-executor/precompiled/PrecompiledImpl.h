@@ -57,49 +57,38 @@ inline EVMCResult buildBuiltinPrecompiledResult(bool success, auto const& output
 }
 
 // Execute an EVM built-in precompiled contract (sha256, ecrecover, etc.).
-// Ethereum native mode: uses evmc_revision to select revision-dependent gas formulas
-// (e.g. ecadd 150→500 pre-Istanbul, modexp EIP-2565/198/7883).
 inline EVMCResult callBuiltinPrecompiled(executor::PrecompiledContract const& precompiledContract,
-    evmc_message const& message, ledger::Features const& features,
-    evmc_message const& origMsg, evmc_revision rev)
+    evmc_message const& message, ledger::Features const& features)
 {
-    // FIB-79 guards compatibility; ethereum mode uses revision-independent base cost
-    // from PrecompiledContract for simpler precompiles (ecrecover/sha256/ripemd160/identity).
-    // For precompiles with revision-dependent gas (ecadd/ecmul/ecpairing/modexp/blake2bf),
-    // the gas formula is determined by the pricer registered in PrecompiledManager.
     if (features.get(ledger::Features::Flag::bugfix_v1_error_handling))
     {
-        const auto gas = precompiledContract.cost({origMsg.input_data, origMsg.input_size});
+        // FIB-76: validate cost BEFORE execute to guard against overflow / insufficient gas.
+        const auto gas = precompiledContract.cost({message.input_data, message.input_size});
         if (gas > std::numeric_limits<int64_t>::max() || gas < 0)
         {
-            // Precompile gas overflow: return empty output
-            return buildBuiltinPrecompiledResult(
-                false, bcos::bytes{}, 0);
+            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
+                "Precompiled contract gas cost overflow",
+                features.get(ledger::Features::Flag::bugfix_v1_error_handling));
         }
         const auto gasCost = gas.template convert_to<int64_t>();
-        if (gasCost > origMsg.gas)
+        if (gasCost > message.gas)
         {
-            // Precompile OOG: return empty output so returndata is not polluted
-            // with ABI-encoded error strings (matching evmone behavior).
-            return buildBuiltinPrecompiledResult(
-                false, bcos::bytes{}, 0 /* gasLeft=0 for OOG */);
+            return makeErrorEVMCResult(*executor::GlobalHashImpl::g_hashImpl,
+                protocol::TransactionStatus::OutOfGas, EVMC_OUT_OF_GAS, 0,
+                "Precompiled contract out of gas",
+                features.get(ledger::Features::Flag::bugfix_v1_error_handling));
         }
         auto [success, output] =
-            precompiledContract.execute({origMsg.input_data, origMsg.input_size});
-        auto gasLeft = origMsg.gas - gasCost;
-        // Ethereum mode: return 0 gas on precompile failure
-        if (features.get(ledger::Features::Flag::feature_ethereum_executor) && !success)
-            gasLeft = 0;
-        return buildBuiltinPrecompiledResult(success, output, gasLeft);
+            precompiledContract.execute({message.input_data, message.input_size});
+        return buildBuiltinPrecompiledResult(success, output, message.gas - gasCost);
     }
 
     // Legacy path: execute first, then compute cost (no validation).
-    auto [success, output] = precompiledContract.execute({origMsg.input_data, origMsg.input_size});
-    const auto gas = precompiledContract.cost({origMsg.input_data, origMsg.input_size});
-    auto gasLeft = origMsg.gas - gas.template convert_to<int64_t>();
-    if (features.get(ledger::Features::Flag::feature_ethereum_executor) && !success)
-        gasLeft = 0;
-    return buildBuiltinPrecompiledResult(success, output, gasLeft);
+    auto [success, output] = precompiledContract.execute({message.input_data, message.input_size});
+    const auto gas = precompiledContract.cost({message.input_data, message.input_size});
+    return buildBuiltinPrecompiledResult(
+        success, output, message.gas - gas.template convert_to<int64_t>());
 }
 
 // Execute a bcos precompiled contract (BFS, table ops, auth, etc.).
@@ -191,9 +180,7 @@ inline constexpr struct
         {
             return std::visit(
                 bcos::overloaded{[&](executor::PrecompiledContract const& contract) {
-                                     return callBuiltinPrecompiled(
-                                         contract, message, features, message,
-                                         EVMC_CANCUN /* minimal rev, pricer handles override */);
+                                     return callBuiltinPrecompiled(contract, message, features);
                                  },
                     [&](std::shared_ptr<precompiled::Precompiled> const& contract) {
                         return callBcosPrecompiled(contract, storage, blockHeader, message, origin,

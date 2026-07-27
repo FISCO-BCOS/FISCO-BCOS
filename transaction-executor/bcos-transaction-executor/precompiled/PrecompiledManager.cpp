@@ -174,18 +174,11 @@ bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::get
 // FIB-84: feature-aware lookup, gated by bugfix_precompiled_feature_gate
 // When the bugfix flag is off, returns unconditionally (pre-fix behavior) to preserve
 // replay of historical blocks that ran with feature flags improperly enforced.
-// Ethereum native mode (feature_ethereum_executor): skip BCOS-specific precompiles (addr>=0x1000).
 bcos::executor_v1::Precompiled const* bcos::executor_v1::PrecompiledManager::getPrecompiled(
     unsigned long contractAddress, const ledger::Features& features) const
 {
     const auto* precompiled = getPrecompiled(contractAddress);
     if (precompiled == nullptr)
-    {
-        return nullptr;
-    }
-    // Ethereum native mode: only expose standard Ethereum precompiles (0x01-0x11, 0x0100)
-    if (features.get(ledger::Features::Flag::feature_ethereum_executor) &&
-        contractAddress >= 0x1000)
     {
         return nullptr;
     }

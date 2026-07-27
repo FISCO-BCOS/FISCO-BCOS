@@ -258,6 +258,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_storage)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     auto host = makeHost(features);
     evmc_address addr{};
@@ -292,6 +293,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_eip2929_access_account)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     auto host = makeHost(features);
     evmc_address addr{};
@@ -335,6 +337,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_flag_on_cold_warm_cycle)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
     auto host = makeHost(features);
     BOOST_CHECK_EQUAL(
         bcos::executor::toRevision(host.ledgerConfig().features(), host.blockVersion()),
@@ -407,6 +410,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_warm_shared_across_external_call_depth)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     using HostTy =
         HostContext<decltype(rollbackableStorage), decltype(rollbackableTransientStorage)>;
@@ -451,6 +455,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_origin_consistency)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x11;
@@ -491,6 +496,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_to_consistency)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x33;
@@ -512,6 +518,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_precompile_consistency)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x55;
@@ -538,6 +545,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_initial_prewarm_prague_includes_0x0a_and_bls)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x55;
@@ -611,6 +619,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_initial_warm_create_skips_to)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x77;
@@ -661,6 +670,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_prepare_warms_account_and_storage)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x11;
@@ -691,6 +701,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_eip1559_access_list_warms)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x33;
@@ -720,6 +731,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2930_empty_access_list_no_extra_warm)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x55;
@@ -848,6 +860,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_child_warm)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x71;
@@ -903,6 +916,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_success_commits_child_warm)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x71;
@@ -952,6 +966,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_fail_outer_ok)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x70;
@@ -1018,6 +1033,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_parent_call_nested_revert_rolls_back_child_
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x68;
@@ -1071,6 +1087,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_sequential_child_revert_then_success_warm)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x50;
@@ -1143,6 +1160,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_child_revert_preserves_parent_warm_same_add
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x58;
@@ -1296,6 +1314,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_nested_inner_ok_outer_fail)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x60;
@@ -1349,6 +1368,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_oog_rolls_back_child_warm)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x71;
@@ -1401,6 +1421,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_preserves_tx_baseline)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x11;
@@ -1467,6 +1488,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_revert_rolls_back_storage_slot)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x71;
@@ -1592,6 +1614,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_keeps_contract_warm)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x61;
@@ -1640,6 +1663,7 @@ BOOST_AUTO_TEST_CASE(TE_FC_A_eip2929_create_fail_evmone_inner_warm_rolled_back)
     features.setGenesisFeatures(bcos::protocol::BlockVersion::MAX_VERSION);
     features.set(bcos::ledger::Features::Flag::feature_evm_cancun);
     features.set(bcos::ledger::Features::Flag::feature_evm_prague);
+    features.set(bcos::ledger::Features::Flag::feature_evm_eip2929);
 
     evmc_address origin{};
     origin.bytes[19] = 0x63;
