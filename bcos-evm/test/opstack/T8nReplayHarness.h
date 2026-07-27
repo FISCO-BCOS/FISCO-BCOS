@@ -32,6 +32,7 @@
 
 #include <bcos-evm/adapter/StateDiffWriteback.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
+#include <bcos-evm/ledger/LedgerSeed.h>
 #include <bcos-evm/ledger/MemoryLedger.h>
 #include <bcos-evm/opstack/OpBlockExecute.h>
 #include <bcos-evm/opstack/OpBlockSeal.h>
@@ -347,8 +348,9 @@ struct TestStateBackend
     }
 };
 
-// MemoryLedgerBackend：真账本桥 Task 2 新增腿——fromPre 是 seedFromTestState 的
-// 雏形（Task 4 的 LedgerSeed.h 泛化为播种路径正式实现）；apply 直接走
+// MemoryLedgerBackend：真账本桥 Task 2 新增腿——fromPre 经 Task 4 的 LedgerSeed.h
+// 泛化播种路径（seedFromTestState 把 pre 合成一枚创世 StateDiff，走
+// MemoryLedger::applyDiff 落账，与 Storage2Ledger 腿共用同一份播种实现）；apply 直接走
 // MemoryLedger::applyDiff（strict 语义内置，无需外部 tripwire 包装）；
 // stateRoot/forEachPostAccount 经 visitAccounts（Task 1 已交付、const 遍历
 // 契约）驱动，其中 stateRoot 暂经"导出为 TestState 再调既有 stateRootOf"的
@@ -360,14 +362,7 @@ struct MemoryLedgerBackend
     static Ledger fromPre(const evmone::test::TestState& pre)
     {
         Ledger ledger;
-        for (const auto& [addr, acc] : pre)
-        {
-            auto& la = ledger.accounts()[addr];
-            la.nonce = acc.nonce;
-            la.balance = acc.balance;
-            la.code = acc.code;
-            la.storage = acc.storage;
-        }
+        bcos::evm::ledger::seedFromTestState(ledger, pre);
         return ledger;
     }
 

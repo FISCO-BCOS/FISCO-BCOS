@@ -41,6 +41,7 @@
 // ACCOUNT_TABLE_FIELDS 中的已知短字段名),冷读时探测一次并入账户缓存(design §4.4)。
 
 #include <bcos-framework/executor/PrecompiledTypeDef.h>
+#include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
 #include <bcos-framework/storage2/Storage.h>
 #include <bcos-framework/transaction-executor/StateKey.h>
@@ -48,6 +49,7 @@
 #include <boost/algorithm/hex.hpp>
 #include <array>
 #include <bcos-evm/eth/state/hash_utils.hpp>
+#include <bcos-evm/eth/state/state_diff.hpp>
 #include <bcos-evm/eth/state/state_view.hpp>
 #include <cstring>
 #include <evmc/evmc.hpp>
@@ -59,6 +61,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace bcos::evm::ledger
 {
@@ -181,7 +184,131 @@ public:
     /// 只记第一条错误;实例隔离——毒旗随桥实例生命周期,新实例不受影响。
     [[nodiscard]] std::string_view firstError() const noexcept { return m_firstError; }
 
+    /// 写回(design §5):**单一 strict 形态**——deleted_accounts 项在底层不存在即 tripwire
+    /// (std::runtime_error),不提供 raw 版。序列化格式不自造:balance/nonce/code/create 逐字段
+    /// 委托 `ledger::account::EVMAccount`(syncWait 驱动,与读桥同源);槽零值删除与账户删除走
+    /// storage2 `removeOne`/`range` 扫删(EVMAccount 无删除 API)。**每个** modified entry 无条件
+    /// ensure-exists,不因空 entry 跳过(EIP-161 touch-only / 完全空账户播种前置)。写穿:每步
+    /// 同步更新三张读缓存;删除账户 ⇒ 三表按地址全量失效/置负(含全部已缓存槽与 code,design
+    /// §4.2——CREATE2 同址重生场景,漏清即静默脏读)。不是 noexcept:strict tripwire 允许上抛。
+    void applyDiff(const evmone::state::StateDiff& diff)
+    {
+        for (const auto& entry : diff.modified_accounts)
+            task::syncWait(applyModifiedEntry(entry));
+        for (const auto& addr : diff.deleted_accounts)
+            task::syncWait(applyDeletedEntry(addr));
+    }
+
 private:
+    task::Task<void> applyModifiedEntry(const evmone::state::StateDiff::Entry& entry)
+    {
+        bcos::ledger::account::EVMAccount<Storage> account(
+            m_storage.get(), entry.addr, /*binaryAddress=*/false);
+
+        // 账户 ensure-exists(design §5,rev.2 补):无条件确保 SYS_TABLES 标记行存在,不得优化为
+        // "无字段可写则跳过"——pre 中完全空账户(EIP-161 touch-delete 向量前置)正依赖此落账;
+        // evmone build_diff 把只读 touched 账户也放进 modified,对其重写同值 nonce/balance 无害。
+        if (!co_await account.exists())
+            co_await account.create();
+
+        const std::string tableName(account.address());
+
+        co_await account.setBalance(bcos::u256(intx::to_string(entry.balance)));
+        co_await account.setNonce(std::to_string(entry.nonce));
+
+        // 契约③:code 仅 has_value() 时覆写;codeHash 由本桥自行 keccak(code)(StateDiff 无
+        // code_hash 字段);不写 ABI 内容(setCode 的 abi 形参传空串——往返测试显式豁免 abi 字段,
+        // design §5/§7)。
+        if (entry.code.has_value())
+        {
+            const auto codeHash = evmone::keccak256(*entry.code);
+            bcos::h256 codeHashValue(
+                reinterpret_cast<const bcos::byte*>(codeHash.bytes), sizeof(codeHash.bytes));
+            co_await account.setCode(
+                bcos::bytes(entry.code->begin(), entry.code->end()), std::string{}, codeHashValue);
+        }
+
+        // 契约②:槽值为 0 = 删槽(storage2::removeOne,不写零值,EVMAccount 无删除 API);
+        // 非零走 EVMAccount::setStorage(与读桥 fetchStorage 同一键空间)。
+        for (const auto& [key, value] : entry.modified_storage)
+        {
+            if (evmc::is_zero(value))
+            {
+                std::string_view keyView(
+                    reinterpret_cast<const char*>(key.bytes), sizeof(key.bytes));
+                co_await storage2::removeOne(
+                    m_storage.get(), executor_v1::StateKeyView{tableName, keyView});
+            }
+            else
+            {
+                co_await account.setStorage(key, value);
+            }
+        }
+
+        // 写穿(design §4.2):账户/code 缓存经权威重读同步刷新——直接复用读路径的
+        // fetchAccount/fetchCode,避免读写两处分叉出不一致的字段默认值/has_storage 计算逻辑;
+        // 槽缓存按本轮写入的确切值直接更新(契约②:零值缓存为全零 bytes32,与读路径对已删槽的
+        // 归一化返回值一致)。
+        m_accountCache.insert_or_assign(entry.addr, co_await fetchAccount(tableName));
+        m_codeCache.insert_or_assign(entry.addr, co_await fetchCode(tableName));
+        for (const auto& [key, value] : entry.modified_storage)
+        {
+            m_storageCache.insert_or_assign(
+                std::make_pair(entry.addr, key), evmc::is_zero(value) ? evmc::bytes32{} : value);
+        }
+    }
+
+    task::Task<void> applyDeletedEntry(const evmc::address& addr)
+    {
+        std::string tableName;
+        if (!accountTableName(addr, tableName))
+            throw std::runtime_error(
+                "Storage2Ledger::applyDiff: deleted address routes to /sys/ "
+                "(c_systemTxsAddress member); bridge refuses to guess the routing, see design "
+                "§4.4");
+
+        // strict 单形态(design §5):tripwire 内置——底层不存在即使用错误,不提供 raw 版
+        // (与 EVMAccount::exists() 同一判据,直接复用 accountTableName 已解出的 tableName)。
+        if (!co_await storage2::existsOne(
+                m_storage.get(), executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, tableName)))
+            throw std::runtime_error(
+                "Storage2Ledger::applyDiff: deleted_accounts entry not found in ledger (ghost "
+                "delete, strict tripwire)");
+
+        // 契约①:range 扫删账户表全部字段行 + 存量槽行——先收集键、range 结束后再逐个删除,
+        // 避免边扫边删的迭代器失效风险;SYS_CODE_BINARY/SYS_CONTRACT_ABI 行永不触碰(内容寻址表,
+        // 键空间在 tableName 之外,天然不落入本次 range 扫描,design §5 表格)。
+        std::vector<std::string> fieldKeys;
+        {
+            auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
+                executor_v1::StateKeyView{tableName, std::string_view{}});
+            while (auto item = co_await iterator.next())
+            {
+                const auto& key = std::get<0>(*item);
+                executor_v1::StateKeyView view(key);
+                auto [table, fieldKey] = view.get();
+                if (table != tableName)
+                    break;
+                fieldKeys.emplace_back(fieldKey);
+            }
+        }
+        for (const auto& fieldKey : fieldKeys)
+            co_await storage2::removeOne(
+                m_storage.get(), executor_v1::StateKeyView{tableName, fieldKey});
+
+        co_await storage2::removeOne(
+            m_storage.get(), executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, tableName));
+
+        // 写穿(design §4.2):删除账户 ⇒ 三张缓存表对该地址全量失效/置负,含全部已缓存槽与
+        // code——CREATE2 同址重生场景漏清即静默脏读。账户/code 直接写负缓存(与桥"nullopt 也
+        // 缓存"的既有负缓存设计一致,不留给下次读触发额外 syncWait);槽缓存逐一擦除而非置零,
+        // 让重生后未被本轮显式写入的槽自然落回冷读路径。
+        m_accountCache.insert_or_assign(addr, std::nullopt);
+        m_codeCache.insert_or_assign(addr, evmc::bytes{});
+        std::erase_if(
+            m_storageCache, [&addr](const auto& item) { return item.first.first == addr; });
+    }
+
     void poison(std::string_view reason) const noexcept
     {
         if (m_poisoned)
