@@ -19,6 +19,7 @@
  */
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
+#include <bcos-utilities/BoostLog.h>
 #include <boost/asio/detail/socket_ops.hpp>
 #include <iterator>
 
@@ -59,8 +60,7 @@ uint16_t WsMessage::version() const
     return m_version;
 }
 
-void WsMessage::setVersion(uint16_t)
-{}
+void WsMessage::setVersion(uint16_t) {}
 
 uint16_t WsMessage::packetType() const
 {

@@ -20,6 +20,7 @@
 
 #include <bcos-cpp-sdk/event/EventSubParams.h>
 #include <bcos-cpp-sdk/utilities/abi/ContractABIEventTopic.h>
+#include <bcos-utilities/BoostLog.h>
 #include <json/json.h>
 #include <exception>
 
@@ -129,7 +130,7 @@ void EventSubParams::fromJson(const Json::Value& jParams)
             if (jIndex.isArray())
             {  // array topics
                 for (Json::Value::ArrayIndex innerIndex = 0; innerIndex < jIndex.size();
-                     ++innerIndex)
+                    ++innerIndex)
                 {
                     addTopic(index, jIndex[innerIndex].asString());
                 }

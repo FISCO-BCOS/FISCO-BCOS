@@ -111,9 +111,21 @@ void Service::heartBeat()
         return;
     }
 
+    // FIB-186 (vector D): snapshot the static-node list under x_nodes and release it BEFORE calling
+    // isConnected()/asyncConnect(), both of which take x_sessions. Holding x_nodes across an
+    // x_sessions acquisition here is the reverse of the order onConnect uses (x_sessions ->
+    // x_nodes, via updateStaticNodes), which deadlocks under connection churn: onConnect holds
+    // x_sessions(W) waiting for x_nodes(W) while heartBeat holds x_nodes(R) waiting for
+    // x_sessions(R). Copying the list then dropping x_nodes makes every path acquire x_sessions
+    // before x_nodes.
+    std::vector<std::pair<NodeIPEndpoint, P2pID>> staticNodes;
+    {
+        std::shared_lock nodeLock(x_nodes);
+        staticNodes.assign(m_staticNodes.begin(), m_staticNodes.end());
+    }
+
     // Reconnect all nodes
-    std::shared_lock nodeLock(x_nodes);
-    for (auto& it : m_staticNodes)
+    for (auto& it : staticNodes)
     {
         /// exclude myself
         if (it.second == id())
@@ -134,7 +146,6 @@ void Service::heartBeat()
                 service->onConnect(std::move(error), p2pInfo, std::move(session));
             });
     }
-    nodeLock.unlock();
 
     std::shared_lock sessionLock(x_sessions);
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
@@ -522,10 +533,25 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 {
     try
     {
-        std::shared_lock lock(x_sessions);
-        for (auto const& session : m_sessions)
+        // FIB-186 (vector D): snapshot the session keys under x_sessions and release it BEFORE the
+        // per-session asyncSendMessageByNodeID(), which re-acquires x_sessions(shared) via
+        // getP2PSessionByNodeId. Holding x_sessions across that re-acquisition is a recursive
+        // shared lock: once an onConnect thread is waiting for x_sessions(W), libc++
+        // writer-priority blocks the second lock_shared(), so this thread can neither finish nor
+        // release its first shared lock and every session operation (including all PBFT delivery)
+        // stalls -> consensus halts under connection churn.
+        std::vector<P2pID> nodeIDs;
         {
-            asyncSendMessageByNodeID(session.first, message, {}, options);
+            std::shared_lock lock(x_sessions);
+            nodeIDs.reserve(m_sessions.size());
+            for (auto const& session : m_sessions)
+            {
+                nodeIDs.push_back(session.first);
+            }
+        }
+        for (auto const& nodeID : nodeIDs)
+        {
+            asyncSendMessageByNodeID(nodeID, message, {}, options);
         }
     }
     catch (std::exception& e)
@@ -784,6 +810,10 @@ void bcos::gateway::Service::registerUnreachableHandler(std::function<void(std::
 {}
 std::map<NodeIPEndpoint, P2pID> bcos::gateway::Service::staticNodes()
 {
+    // FIB-186 (vector D): read m_staticNodes under x_nodes -- the same member heartBeat now
+    // snapshots under the lock. Returning it unlocked races with onConnect's updateStaticNodes
+    // writer (the exact data race this fix closes inline in heartBeat).
+    std::shared_lock lock(x_nodes);
     return m_staticNodes;
 }
 void bcos::gateway::Service::setStaticNodes(const std::set<NodeIPEndpoint>& staticNodes)

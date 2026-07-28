@@ -98,6 +98,12 @@ protected:
 
     unsigned const SEQ_SYNC_PERIOD = 1000;
     std::shared_ptr<Timer> m_timer;
+    // FIB-186 (vector D): coalesce disconnect-driven node-list syncs. onRemoveNodeIDs syncs inline
+    // only on the first drop of a burst (the clean->dirty transition) and otherwise sets this flag;
+    // the seqSync timer flushes it at most once per SEQ_SYNC_PERIOD. So the front is refreshed
+    // promptly on the first drop, while a persistent bulk-disconnect is bounded to ~one sync per
+    // period instead of one full node-list broadcast to every front per dropped session.
+    std::atomic_bool m_nodeIDListDirty{false};
 
     GatewayNodeStatusFactory::Ptr m_gatewayNodeStatusFactory;
 };

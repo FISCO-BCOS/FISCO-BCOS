@@ -7,6 +7,16 @@
     nodes_file=nodes.json
     ; enable p2p ssl verify, default is true
     ; enable_ssl_verify = true
+    ; FIB-186: bound concurrent in-flight TLS handshakes (global) so connection churn from a low-trust
+    ; peer cannot saturate the shared I/O pool and starve consensus message delivery. Defaults shown.
+    ; max_pending_handshakes = 64
+    ; reclaim a stalled / slow handshake's admission slot after this many ms, default 10000
+    ; handshake_timeout_ms = 10000
+    ; FIB-186: cap accepted new connections per second to bound handshake CPU under connection
+    ; churn (0 = unlimited), default 100
+    ; max_connections_per_second = 100
+    ; threads for the P2P I/O pool, default 8
+    ; thread_count = 8
 
 [certificate_blacklist]
     ; crl.0 should be nodeid, nodeid's length is 512

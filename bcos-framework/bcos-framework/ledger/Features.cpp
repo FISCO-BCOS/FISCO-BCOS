@@ -202,6 +202,7 @@ void Features::setUpgradeFeatures(
                     Flag::bugfix_precompiled_feature_gate,
                     Flag::bugfix_evm_storage_status,
                     Flag::bugfix_statestorage_hash_v3_17,
+                    Flag::bugfix_nonce_ordering,
                 }}});
     for (const auto& upgradeFeatures : upgradeRoadmap)
     {

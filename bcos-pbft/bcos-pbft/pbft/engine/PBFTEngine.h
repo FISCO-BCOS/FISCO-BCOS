@@ -58,8 +58,7 @@ class PBFTEngine : public ConsensusEngine, public std::enable_shared_from_this<P
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
     using SendResponseCallback = std::function<void(bytesConstRef)>;
-    explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config,
-        boost::asio::io_context& _ioContext,
+    explicit PBFTEngine(std::shared_ptr<PBFTConfig> _config, boost::asio::io_context& _ioContext,
         bcos::IOServicePool::Ptr _ioServicePool);
     ~PBFTEngine() override { stop(); }
 
@@ -116,6 +115,11 @@ public:
 protected:
     virtual void initSendResponseHandler();
     virtual void tryToResendCheckPoint();
+    // FIB-185: watchdog that recovers a stalled consensus timer. If the node is a running
+    // consensus node sitting in the timeout state but the view-change timer is not armed,
+    // re-arm it. Only re-arms the timer (the actual view-change fires later from onTimeout),
+    // so it cannot itself emit a view-change. Invoked from the periodic checkpoint timer path.
+    virtual void checkConsensusTimerWatchdog();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse);
 

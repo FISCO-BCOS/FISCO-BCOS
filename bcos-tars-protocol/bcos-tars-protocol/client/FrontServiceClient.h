@@ -6,6 +6,7 @@
 #include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/RefDataContainer.h>
+#include <range/v3/view/any_view.hpp>
 
 namespace bcostars
 {

@@ -104,8 +104,8 @@ BOOST_AUTO_TEST_CASE(strandSpreadsAcrossThreads)
     BOOST_CHECK_EQUAL(done.load(), N);
     // Count unique thread IDs to verify round-robin distribution.
     std::sort(threadIds.begin(), threadIds.end());
-    auto uniqueCount = (size_t)std::distance(
-        threadIds.begin(), std::unique(threadIds.begin(), threadIds.end()));
+    auto uniqueCount =
+        (size_t)std::distance(threadIds.begin(), std::unique(threadIds.begin(), threadIds.end()));
     // With >1 io_context and round-robin, we should have used more than 1 thread.
     BOOST_CHECK_GT(uniqueCount, 1U);
 }
@@ -150,7 +150,8 @@ BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
             do
             {
                 prev = postMaxConcurrency.load();
-                if (current <= prev) break;
+                if (current <= prev)
+                    break;
             } while (!postMaxConcurrency.compare_exchange_weak(prev, current));
 
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -161,7 +162,7 @@ BOOST_AUTO_TEST_CASE(strandAndPostAreIndependent)
 
     // Wait for completion.
     for (int timeout = 0; timeout < 100 && (strandDone.load() < N || postDone.load() < N);
-         ++timeout)
+        ++timeout)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -217,6 +218,24 @@ BOOST_AUTO_TEST_CASE(strandOrderWithMixedSubmission)
     {
         BOOST_CHECK_EQUAL(strandOrder[i], (int)i);
     }
+}
+
+// getIOService() hands the pool's io_contexts out round-robin, wrapping past the last one.
+// Carried over from release-3.17.0's startRoundRobinStop: this file was an add/add conflict and
+// the 3.18.0 side (all Strand semantics) does not cover the pool's own dispatch. The explicit
+// start()/stop() calls are gone -- the pool now spins its threads in the constructor and stops and
+// joins them in the destructor -- so only the round-robin half of the original case survives.
+BOOST_AUTO_TEST_CASE(getIOServiceRoundRobinWraps)
+{
+    bcos::IOServicePool pool(2, "roundRobinTest");
+    auto first = pool.getIOService();
+    auto second = pool.getIOService();
+    auto wrapped = pool.getIOService();  // index wraps back to the first service
+    BOOST_CHECK(first);
+    BOOST_CHECK(second);
+    BOOST_CHECK(wrapped);
+    BOOST_CHECK(first != second);
+    BOOST_CHECK(first == wrapped);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

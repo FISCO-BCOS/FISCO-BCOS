@@ -19,6 +19,7 @@
  */
 #include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSubResponse.h>
+#include <bcos-utilities/BoostLog.h>
 #include <json/json.h>
 #include <boost/exception/diagnostic_information.hpp>
 

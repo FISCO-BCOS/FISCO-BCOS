@@ -26,6 +26,7 @@
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include <boost/endian/conversion.hpp>
+#include <range/v3/view/any_view.hpp>
 #include <range/v3/view/transform.hpp>
 
 DERIVE_BCOS_EXCEPTION(EmptyBlockHeaderHash);

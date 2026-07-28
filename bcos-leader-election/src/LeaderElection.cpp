@@ -71,6 +71,13 @@ void LeaderElection::stop()
 
 std::pair<bool, int64_t> LeaderElection::grantLease()
 {
+    // FIB-175: leasegrant().get() blocks until etcd answers. A stalled or
+    // unreachable etcd would otherwise wedge the campaign thread (and the
+    // campaign timer callback that drives it) indefinitely. The client is armed
+    // with a grpc timeout (set_grpc_timeout in the constructor), so etcd-cpp-apiv3
+    // bounds this blocking get() on its completion-queue wait and returns a
+    // not-ok response once the deadline elapses; callers (campaignLeader) already
+    // fall back to backup + restart the timer on a non-ok result.
     auto response = m_etcdClient->leasegrant(m_config->leaseTTL()).get();
     if (!response.is_ok())
     {
@@ -223,6 +230,16 @@ bool LeaderElection::campaignLeader()
                                << LOG_KV("leaderKey", m_config->leaderKey());
             keepAlive->Cancel();
         }
+        // FIB-178: the non-exception failure paths above all re-arm local
+        // recovery (tryToSwitchToBackup + campaign timer restart). The catch-all
+        // previously just returned, leaving the node stuck: no campaign retry is
+        // scheduled and the upper layer is never told to drop master mode. Mirror
+        // the normal failure path so a transient exception self-heals.
+        tryToSwitchToBackup();
+        if (m_campaignTimer)
+        {
+            m_campaignTimer->restart();
+        }
     }
     return false;
 }
@@ -240,6 +257,27 @@ void LeaderElection::onKeepAliveException(std::exception_ptr _exception)
     {
         ELECTION_LOG(WARNING) << LOG_DESC("onKeepAliveException, restart campaign")
                               << LOG_KV("message", boost::diagnostic_information(e));
+    }
+    // FIB-173: the keepAlive heartbeat is dead, so the etcd lease that made
+    // node-self the leader is gone. Drop our reference to the dead keepAlive and
+    // the stale self-leader pointer, and notify the upper layer to leave master
+    // mode BEFORE restarting the campaign. Otherwise node-self keeps believing
+    // it is the leader (and stays in master mode) even though etcd no longer
+    // holds its key, which can produce two masters once another node wins.
+    //
+    // Do NOT call Cancel() on this keepAlive here: this handler runs ON the
+    // keepAlive's own refresh thread, and etcd::KeepAlive::Cancel() joins that
+    // thread — calling it here would self-join and deadlock. The thread is
+    // already terminating (it just raised this exception); moving the shared_ptr
+    // out releases our reference and lets it tear down.
+    {
+        RecursiveGuard l(m_mutex);
+        m_keepAlive.reset();
+    }
+    m_config->resetLeader(nullptr);
+    if (m_onCampaignHandler)
+    {
+        m_onCampaignHandler(false, nullptr);
     }
     if (m_campaignTimer)
     {
