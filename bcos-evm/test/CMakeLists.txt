@@ -41,4 +41,11 @@ target_link_libraries(bcos-evm-opstack-tests PRIVATE
     GTest::gtest_main
     nlohmann_json::nlohmann_json
 )
+# statetest_loader.cpp is the ported evmone test util compiled fresh in this (test/) directory;
+# its partial designated-aggregate inits trip GCC's -Werror=missing-field-initializers under the
+# integrated -Werror build. The top-level suppression (set_source_files_properties) is directory-
+# scoped and does not reach here, so re-apply it locally — same warning class, same ported-code
+# rationale as the eth/state and OpTransition sources.
+set_source_files_properties("${EVMONE_TEST_UTILS_DIR}/statetest_loader.cpp"
+    PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)
