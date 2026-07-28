@@ -16,6 +16,11 @@
 //   static void apply(Ledger&, const evmone::state::StateDiff&);
 //   static evmone::hash256 stateRoot(const Ledger&);
 //   static void forEachPostAccount(const Ledger&, PostVisitor);
+//   static void afterVector(const std::string& id, const Ledger&);
+//     真账本桥 Task 6 新增钩子：向量末（postState 比对与 comparisons 计数之后、
+//     replayVector 返回之前）调用一次，供后端做自身特有的常驻判据检查（如
+//     Storage2Backend 的 poisoned()/storage2 调用计数——design §7 探针 5"接线完整性"）。
+//     TestStateBackend/MemoryLedgerBackend 均为 no-op，两腿行为逐字节不变。
 //
 // 硬断言纪律（plan rev.2 红队 1/2/7 强制，随迁移原样保留——见下方各段注释）：
 //   A) 目录 *.json 文件名集合 == manifest.txt 集合（缺/多均 FAILURE）；
@@ -360,6 +365,8 @@ struct TestStateBackend
         for (const auto& [addr, acc] : ledger)
             visitor(addr, acc.nonce, acc.balance, acc.code, acc.storage);
     }
+
+    static void afterVector(const std::string& /*id*/, const Ledger& /*ledger*/) {}
 };
 
 // MemoryLedgerBackend：真账本桥 Task 2 新增腿——fromPre 经 Task 4 的 LedgerSeed.h
@@ -400,6 +407,8 @@ struct MemoryLedgerBackend
             return true;
         });
     }
+
+    static void afterVector(const std::string& /*id*/, const Ledger& /*ledger*/) {}
 };
 
 // ── 单向量回放（Backend 参数化：四个耦合点——applyStateDiffStrict(ts,d) /
@@ -838,6 +847,10 @@ void replayVector(const std::string& id, const Json& v, DivergenceLedger& ledger
     ::testing::Test::RecordProperty(id + ".comparisons", ctx.comparisons);
     if (ctx.comparisons == 0)
         ADD_FAILURE() << id << ": zero comparisons executed";
+
+    // 向量末钩子（真账本桥 Task 6，design §7 探针 5）：多数后端 no-op；Storage2Backend
+    // 在此检查 poisoned()/记录 storage2 调用计数常驻判据。
+    Backend::afterVector(id, ledgerState);
 }
 
 // ── 全量向量回放（原 TEST(OpT8nReplay, Vectors) 主体，Backend 参数化）───────

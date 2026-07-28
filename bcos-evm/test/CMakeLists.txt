@@ -67,6 +67,7 @@ add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)
 if(TARGET bcos-framework)
     target_sources(bcos-evm-opstack-tests PRIVATE
         opstack/Storage2LedgerTest.cpp
-        opstack/LedgerRootTest.cpp)
+        opstack/LedgerRootTest.cpp
+        opstack/EbT8nReplayTest.cpp)
     target_link_libraries(bcos-evm-opstack-tests PRIVATE bcos-framework)
 endif()
