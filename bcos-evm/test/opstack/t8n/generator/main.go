@@ -86,11 +86,13 @@ const ringSize = 8191 // EIP-4788 HISTORY_BUFFER_LENGTH == EIP-2935 window
 
 func main() {
 	var (
-		writeCases   = flag.String("write-cases", "", "write the 33 corpus case files into <dir> and exit")
-		inputPath    = flag.String("input", "", "input case JSON")
-		outputPath   = flag.String("output", "", "output vector JSON")
-		opGethCommit = flag.String("op-geth-commit", "unknown", "full sha of the op-geth checkout, recorded into _op_test_vectors.generator_commit")
-		probeWrap    = flag.Bool("probe-genesis-number", false, "dev probe: attempt Genesis.Number=8191 (ring-wrap feasibility) and report")
+		writeCases     = flag.String("write-cases", "", "write the 33 corpus case files into <dir> and exit")
+		inputPath      = flag.String("input", "", "input case JSON")
+		outputPath     = flag.String("output", "", "output vector JSON")
+		opGethCommit   = flag.String("op-geth-commit", "unknown", "full sha of the op-geth checkout, recorded into _op_test_vectors.generator_commit")
+		probeWrap      = flag.Bool("probe-genesis-number", false, "dev probe: attempt Genesis.Number=8191 (ring-wrap feasibility) and report")
+		goldenOutput   = flag.String("golden-output", "", "Task 2 (engine gate golden ritual): also emit blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/encodedHeaderHex for this vector to this path (vectors/ itself is untouched)")
+		chainOutputDir = flag.String("chain-output-dir", "", "Task 2 Step 2: generate the off-line 1->2 chained golden pair (GenerateChainWithGenesis n=2, InsertChain-validated) into this directory and exit")
 	)
 	flag.Parse()
 
@@ -102,13 +104,18 @@ func main() {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
+	case *chainOutputDir != "":
+		if err := runChainPair(*chainOutputDir, *opGethCommit); err != nil {
+			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
+			os.Exit(1)
+		}
 	case *inputPath != "" && *outputPath != "":
-		if err := run(*inputPath, *outputPath, *opGethCommit); err != nil {
+		if err := run(*inputPath, *outputPath, *opGethCommit, *goldenOutput); err != nil {
 			fmt.Fprintf(os.Stderr, "opt8n-ref: %v\n", err)
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --input <case.in.json> --output <vector.json> [--op-geth-commit <sha>]")
+		fmt.Fprintln(os.Stderr, "usage: opt8n-ref --write-cases <dir> | --input <case.in.json> --output <vector.json> [--golden-output <golden.json>] [--op-geth-commit <sha>] | --chain-output-dir <dir> [--op-geth-commit <sha>]")
 		os.Exit(2)
 	}
 }
@@ -380,7 +387,7 @@ func buildChainConfig(fork string) (*params.ChainConfig, error) {
 // Vector generation
 // ---------------------------------------------------------------------
 
-func run(inputPath, outputPath, opGethCommit string) error {
+func run(inputPath, outputPath, opGethCommit, goldenOutputPath string) error {
 	raw, err := os.ReadFile(inputPath)
 	if err != nil {
 		return err
@@ -391,7 +398,7 @@ func run(inputPath, outputPath, opGethCommit string) error {
 	}
 	id := strings.TrimSuffix(filepath.Base(inputPath), ".in.json")
 
-	vec, err := processBlockVector(&in, id)
+	vec, golden, err := processBlockVector(&in, id)
 	if err != nil {
 		return fmt.Errorf("vector %q: %w", id, err)
 	}
@@ -410,24 +417,30 @@ func run(inputPath, outputPath, opGethCommit string) error {
 		return err
 	}
 	outBytes = append(outBytes, '\n')
-	return os.WriteFile(outputPath, outBytes, 0o644)
+	if err := os.WriteFile(outputPath, outBytes, 0o644); err != nil {
+		return err
+	}
+	if goldenOutputPath == "" {
+		return nil
+	}
+	return writeJSON(goldenOutputPath, golden)
 }
 
-func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
+func processBlockVector(in *inputCase, id string) (json.RawMessage, *goldenRecord, error) {
 	fork := in.Info.Hardfork
 	cfg, err := buildChainConfig(fork)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// --- Startup consistency assertion (iron rule 2): L1Block slots <->
 	// attributes calldata, field for field, plus the first-Ecotone-fallback
 	// trap guard. Mismatch = corpus authoring error, hard stop.
 	if err := assertL1BlockConsistency(cfg, in); err != nil {
-		return nil, fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
+		return nil, nil, fmt.Errorf("L1Block slot<->calldata consistency: %w", err)
 	}
 	if err := assertDepositsFirst(in.Transactions); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// --- Genesis (iron rule 1: extraData on BOTH genesis and the generated
@@ -439,7 +452,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
 	var minBaseFee *uint64
 	if cfg.IsJovian(genesisTime) {
 		if in.Genesis.MinBaseFee == nil {
-			return nil, fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
+			return nil, nil, fmt.Errorf("jovian case must set genesis.minBaseFee (EncodeOptimismExtraData requires it)")
 		}
 		v := uint64(*in.Genesis.MinBaseFee)
 		minBaseFee = &v
@@ -461,34 +474,16 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
 	// --- Build transactions. Signer per iron rule 9: MakeSigner(cfg, 1, blockTime).
 	signer := types.MakeSigner(cfg, big.NewInt(1), blockTime)
 	var (
-		txs        []*types.Transaction
-		outTxs     []json.RawMessage
-		candidates = newAddrSet()
+		txs    []*types.Transaction
+		outTxs []json.RawMessage
 	)
 	for i := range in.Transactions {
 		tx, outTx, err := buildTx(&in.Transactions[i], signer, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("tx %d: %w", i, err)
+			return nil, nil, fmt.Errorf("tx %d: %w", i, err)
 		}
 		txs = append(txs, tx)
 		outTxs = append(outTxs, outTx)
-		// Tx participants -> candidate set (senders, to, 7702 authorities).
-		from, err := types.Sender(signer, tx)
-		if err == nil {
-			candidates.add(from)
-		} else if tx.IsDepositTx() {
-			candidates.add(in.Transactions[i].OpDeposit.From)
-		} else {
-			return nil, fmt.Errorf("tx %d: sender recovery: %w", i, err)
-		}
-		if to := tx.To(); to != nil {
-			candidates.add(*to)
-		}
-		for _, auth := range tx.SetCodeAuthorizations() {
-			if authority, err := auth.Authority(); err == nil {
-				candidates.add(authority)
-			}
-		}
 	}
 
 	// --- Generate the block (iron rules 1(ii), 3, 4).
@@ -515,29 +510,78 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
 		})
 		return nil
 	}(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(blocks) != 1 {
-		return nil, fmt.Errorf("expected 1 generated block, got %d", len(blocks))
+		return nil, nil, fmt.Errorf("expected 1 generated block, got %d", len(blocks))
 	}
 	block, receipts := blocks[0], receiptsAll[0]
 	header := block.Header()
 	if header.Time != blockTime || header.Number.Uint64() != 1 {
-		return nil, fmt.Errorf("unexpected generated header number/time: %d/%d", header.Number.Uint64(), header.Time)
+		return nil, nil, fmt.Errorf("unexpected generated header number/time: %d/%d", header.Number.Uint64(), header.Time)
 	}
 	if len(receipts) != len(txs) {
-		return nil, fmt.Errorf("receipt/tx count mismatch: %d vs %d", len(receipts), len(txs))
+		return nil, nil, fmt.Errorf("receipt/tx count mismatch: %d vs %d", len(receipts), len(txs))
 	}
 
 	// --- Self-check (iron rule 5): independent fresh DB, real
 	// Process+ValidateState. Failure = generator/corpus defect; NEVER bypass.
 	if err := selfCheck(genesis, blocks); err != nil {
-		return nil, fmt.Errorf("InsertChain self-check FAILED (corpus/generator defect, do not bypass): %w", err)
+		return nil, nil, fmt.Errorf("InsertChain self-check FAILED (corpus/generator defect, do not bypass): %w", err)
 	}
+
+	out, golden, err := assembleOutput(in, cfg, signer, db, block, receipts, txs, outTxs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("vector %q: %w", id, err)
+	}
+	vec, err := json.Marshal(out)
+	if err != nil {
+		return nil, nil, err
+	}
+	return vec, golden, nil
+}
+
+// assembleOutput turns one generated block (still open on its generation db,
+// together with its receipts/txs) into both the existing v3-block
+// outputVector and the Task 2 engine-gate golden record (spec §7.1:
+// blockHash/transactionsRoot/extraData/excessBlobGas/rawTransactions/
+// encodedHeaderHex -- extraData taken VERBATIM from header.Extra, no
+// hand-picked value). This is the "扩展 opt8n-ref 发射段" (裁定 A3): the
+// candidate-set / postState / receipt-expectation logic below is byte-for-
+// byte what processBlockVector always computed (moved here unchanged, just
+// with the pre-generation and post-generation halves of the candidate-set
+// build merged into one pass now that txs/receipts are both in scope) --
+// only the golden extraction at the end is new. Shared verbatim between the
+// 33-case single-block path (processBlockVector) and the off-line 1->2
+// chained pair (processChainPair, Step 2): both need identical assembly
+// logic, just fed a different (in, db, block, receipts, txs, signer) tuple
+// per block.
+func assembleOutput(in *inputCase, cfg *params.ChainConfig, signer types.Signer, db ethdb.Database, block *types.Block, receipts types.Receipts, txs []*types.Transaction, outTxs []json.RawMessage) (outputVector, *goldenRecord, error) {
+	header := block.Header()
 
 	// --- postState: decision-record-8 candidate set, all accounts, all slots,
 	// with a trie-iteration completeness check (any post-state account or
 	// storage slot outside the declared candidate sets = hard error).
+	candidates := newAddrSet()
+	for i := range txs {
+		// Tx participants -> candidate set (senders, to, 7702 authorities).
+		from, err := types.Sender(signer, txs[i])
+		if err == nil {
+			candidates.add(from)
+		} else if txs[i].IsDepositTx() {
+			candidates.add(in.Transactions[i].OpDeposit.From)
+		} else {
+			return outputVector{}, nil, fmt.Errorf("tx %d: sender recovery: %w", i, err)
+		}
+		if to := txs[i].To(); to != nil {
+			candidates.add(*to)
+		}
+		for _, auth := range txs[i].SetCodeAuthorizations() {
+			if authority, err := auth.Authority(); err == nil {
+				candidates.add(authority)
+			}
+		}
+	}
 	// Created-contract candidates (tx/receipt paired by index): the runtime
 	// half of the double-bottoming -- the corpus also pre-derives the same
 	// addresses into extra_candidates, and the slot-completeness check would
@@ -560,30 +604,30 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
 	for _, addr := range in.ExtraCandidates {
 		candidates.add(addr)
 	}
-	slotCands := buildSlotCandidates(in, blockTime, header.Number.Uint64())
+	slotCands := buildSlotCandidates(in, header.Time, header.Number.Uint64())
 	postState, postDB, err := emitPostState(db, block.Root(), candidates, slotCands)
 	if err != nil {
-		return nil, fmt.Errorf("postState emission: %w", err)
+		return outputVector{}, nil, fmt.Errorf("postState emission: %w", err)
 	}
 
 	// --- Receipt expectations. Operator fee is computed BY THIS GENERATOR
 	// per fork formula (iron rule 7; rollup_cost.go:254-287) from the
 	// pre-state slot-8 params, then cross-checked against op-geth's own
 	// NewOperatorCostFunc and against the OperatorFeeVault balance delta.
-	expReceipts, err := buildExpectedReceipts(cfg, in, txs, receipts, blockTime)
+	expReceipts, err := buildExpectedReceipts(cfg, in, txs, receipts, header.Time)
 	if err != nil {
-		return nil, err
+		return outputVector{}, nil, err
 	}
 	if err := crossCheckVaults(in, expReceipts, postDB); err != nil {
-		return nil, err
+		return outputVector{}, nil, err
 	}
 
 	// --- Header expectations + env (both emissions from the header; iron rule 6).
 	if header.WithdrawalsHash == nil || header.RequestsHash == nil || header.BlobGasUsed == nil {
-		return nil, fmt.Errorf("generated header missing WithdrawalsHash/RequestsHash/BlobGasUsed")
+		return outputVector{}, nil, fmt.Errorf("generated header missing WithdrawalsHash/RequestsHash/BlobGasUsed")
 	}
 	if header.MixDigest != (common.Hash{}) {
-		return nil, fmt.Errorf("generated header MixDigest expected zero, got %s", header.MixDigest)
+		return outputVector{}, nil, fmt.Errorf("generated header MixDigest expected zero, got %s", header.MixDigest)
 	}
 	out := outputVector{
 		Info: in.Info,
@@ -595,7 +639,7 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
 			CurrentBaseFee:        hexutil.EncodeBig(header.BaseFee),
 			CurrentRandom:         "0x0", // header.MixDigest is zero (asserted above)
 			ParentBeaconBlockRoot: header.ParentBeaconRoot.Hex(),
-			ParentHash:            header.ParentHash.Hex(), // == genesis hash (single generated block)
+			ParentHash:            header.ParentHash.Hex(),
 		},
 		Pre:       emitPre(in.Pre),
 		Block:     outputBlock{Transactions: outTxs},
@@ -613,7 +657,280 @@ func processBlockVector(in *inputCase, id string) (json.RawMessage, error) {
 			Receipts: expReceipts,
 		},
 	}
-	return json.Marshal(out)
+
+	golden, err := buildGoldenRecord(block, txs)
+	if err != nil {
+		return outputVector{}, nil, fmt.Errorf("golden record: %w", err)
+	}
+	return out, golden, nil
+}
+
+// goldenRecord is the Task 2 engine-gate golden extension (spec §7.1): the
+// fields the corpus's own v3-block vectors are structurally missing, and
+// nothing else -- vectors/*.json stay byte-for-byte unmodified.
+//
+//   - BlockHash/TransactionsRoot: block.Hash() / header.TxHash, the off-line
+//     op-geth-backed values the newPayload gate cross-checks against
+//     (diagnostic honesty per spec §7.1: NOT self-consistency).
+//   - ExtraData: header.Extra VERBATIM (9B Isthmus / 17B Jovian incl. the
+//     mandatory minBaseFee) -- rev.2's hand-picked-value scheme is retired.
+//   - ExcessBlobGas: always "0x0" on this no-blob OP chain (asserted, not
+//     assumed).
+//   - RawTransactions: tx.MarshalBinary() for every tx INCLUDING the 0x7E
+//     deposit envelope (outputDepositTx carries no raw bytes) -- doubles as
+//     the Task 3 OpDepositEncode byte-level golden.
+//   - EncodedHeaderHex: the full header RLP hex, for the field-level
+//     encode()==golden assertion that must precede the hash() assertion
+//     (spec §7.5, decision C3).
+type goldenRecord struct {
+	BlockHash        string   `json:"blockHash"`
+	TransactionsRoot string   `json:"transactionsRoot"`
+	ExtraData        string   `json:"extraData"`
+	ExcessBlobGas    string   `json:"excessBlobGas"`
+	RawTransactions  []string `json:"rawTransactions"`
+	EncodedHeaderHex string   `json:"encodedHeaderHex"`
+}
+
+func buildGoldenRecord(block *types.Block, txs []*types.Transaction) (*goldenRecord, error) {
+	header := block.Header()
+	if header.ExcessBlobGas == nil || *header.ExcessBlobGas != 0 {
+		return nil, fmt.Errorf("expected header.ExcessBlobGas == 0 (no-blob OP chain), got %v", header.ExcessBlobGas)
+	}
+	rawTxs := make([]string, len(txs))
+	for i, tx := range txs {
+		b, err := tx.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("tx %d MarshalBinary: %w", i, err)
+		}
+		rawTxs[i] = hexutil.Encode(b)
+	}
+	headerRLP, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		return nil, fmt.Errorf("header RLP encode: %w", err)
+	}
+	return &goldenRecord{
+		BlockHash:        block.Hash().Hex(),
+		TransactionsRoot: header.TxHash.Hex(),
+		ExtraData:        hexutil.Encode(header.Extra),
+		ExcessBlobGas:    hexutil.EncodeUint64(*header.ExcessBlobGas),
+		RawTransactions:  rawTxs,
+		EncodedHeaderHex: hexutil.Encode(headerRLP),
+	}, nil
+}
+
+func writeJSON(path string, v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return os.WriteFile(path, b, 0o644)
+}
+
+// ---------------------------------------------------------------------
+// Off-line chained pair (Task 2 Step 2, spec §7.1 rev.3 decision A2): a
+// dedicated 1->2 block chain generated in ONE GenerateChainWithGenesis(n=2)
+// call (real chain_makers parent-chaining -- block B's pre-state IS block
+// A's generated post-state) and re-validated by InsertChain-ing BOTH blocks
+// together. This is NOT two independent single-block vectors spliced by hand
+// (rev.2's "set A's blockHash as B's parentHash" splice is retired -- three
+// ways broken: static validation would reject it first, the golden values
+// would be wrong, and state/number would disagree with a real chain).
+// ---------------------------------------------------------------------
+
+func processChainPair() (outputVector, outputVector, *goldenRecord, *goldenRecord, error) {
+	cfg, err := buildChainConfig("isthmus")
+	if err != nil {
+		return outputVector{}, outputVector{}, nil, nil, err
+	}
+	fp := defaultFeeParams()
+	const (
+		genesisTime = uint64(1000)
+		denom       = uint64(50)
+		elasticity  = uint64(6)
+		gasLimit    = uint64(10_000_000)
+	)
+	beaconRoot := common.HexToHash("0x0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c")
+	senderAddr := addrOfKey(1)
+	genesisPre := types.GenesisAlloc{
+		l1BlockAddr:       {Balance: big.NewInt(0), Nonce: 1, Storage: fp.l1BlockStorage(false)},
+		messagePasserAddr: {Balance: big.NewInt(0), Nonce: 1},
+		senderAddr:        {Balance: eth(100)},
+	}
+	genesis := &core.Genesis{
+		Config:     cfg,
+		Timestamp:  genesisTime,
+		GasLimit:   gasLimit,
+		BaseFee:    big.NewInt(1_000_000_000),
+		Difficulty: big.NewInt(0),
+		ExtraData:  eip1559.EncodeOptimismExtraData(cfg, genesisTime, denom, elasticity, nil),
+		Alloc:      genesisPre,
+	}
+	knobs := genesisKnobs{
+		Timestamp:          math.HexOrDecimal64(genesisTime),
+		GasLimit:           math.HexOrDecimal64(gasLimit),
+		BaseFee:            hdu(1_000_000_000),
+		EIP1559Denominator: math.HexOrDecimal64(denom),
+		EIP1559Elasticity:  math.HexOrDecimal64(elasticity),
+	}
+
+	var (
+		ins     [2]*inputCase
+		txSets  [2][]*types.Transaction
+		outSets [2][]json.RawMessage
+	)
+	engine := beacon.New(ethash.NewFaker())
+	var (
+		db          ethdb.Database
+		blocks      []*types.Block
+		receiptsAll []types.Receipts
+	)
+	if err := func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("GenerateChainWithGenesis panic: %v", r)
+			}
+		}()
+		db, blocks, receiptsAll = core.GenerateChainWithGenesis(genesis, engine, 2, func(i int, bg *core.BlockGen) {
+			blockTime := bg.Timestamp() // chain_makers: parent.Time()+10, real per-block advance
+			blockExtra := eip1559.EncodeOptimismExtraData(cfg, blockTime, denom, elasticity, nil)
+			bg.SetCoinbase(sequencerVault)
+			bg.SetExtra(blockExtra)
+			bg.SetParentBeaconRoot(beaconRoot)
+			signer := bg.Signer() // == MakeSigner(cfg, bg.Number(), bg.Timestamp())
+
+			attr := fp.attributesTx(fmt.Sprintf("chain_%d", i), false)
+			tx0, outTx0, terr := buildTx(&attr, signer, cfg)
+			if terr != nil {
+				panic(fmt.Errorf("block %d attributes tx: %w", i, terr))
+			}
+			bg.AddTx(tx0)
+
+			nonce := bg.TxNonce(senderAddr) // real chained nonce (0 in A, 1 in B), not hand-tracked
+			transfer := transferTx(1, nonce, recA, eth(1), 21_000, nil)
+			tx1, outTx1, terr := buildTx(&transfer, signer, cfg)
+			if terr != nil {
+				panic(fmt.Errorf("block %d transfer tx: %w", i, terr))
+			}
+			bg.AddTx(tx1)
+
+			in := &inputCase{
+				Info:                  caseInfo{Hardfork: "isthmus", Description: fmt.Sprintf("off-line chained pair (spec §7.1 Step 2, decision A2), block %d/2", i+1)},
+				Genesis:               knobs,
+				Coinbase:              sequencerVault,
+				ParentBeaconBlockRoot: beaconRoot,
+				Transactions:          []inputTx{attr, transfer},
+			}
+			if i == 0 {
+				in.Pre = genesisPre // block B's Pre is filled in AFTER generation, from A's postState
+			}
+			ins[i] = in
+			txSets[i] = []*types.Transaction{tx0, tx1}
+			outSets[i] = []json.RawMessage{outTx0, outTx1}
+		})
+		return nil
+	}(); err != nil {
+		return outputVector{}, outputVector{}, nil, nil, err
+	}
+	if len(blocks) != 2 {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("expected 2 generated blocks, got %d", len(blocks))
+	}
+
+	if err := assertL1BlockConsistency(cfg, ins[0]); err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block A: %w", err)
+	}
+	if err := assertDepositsFirst(ins[0].Transactions); err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block A: %w", err)
+	}
+
+	// --- Self-check (iron rule 5, extended to a real 2-block InsertChain):
+	// independent fresh DB, Process+ValidateState over BOTH blocks in
+	// sequence -- this IS the "经 InsertChain 头校验" the chain pair exists
+	// to exercise (real parent-child header linkage), not two independently
+	// self-checked singles spliced by hand.
+	if err := selfCheck(genesis, blocks); err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain pair InsertChain self-check FAILED: %w", err)
+	}
+
+	signerA := types.MakeSigner(cfg, blocks[0].Number(), blocks[0].Time())
+	outA, goldenA, err := assembleOutput(ins[0], cfg, signerA, db, blocks[0], receiptsAll[0], txSets[0], outSets[0])
+	if err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain block A: %w", err)
+	}
+
+	// Block B's pre IS block A's post -- not a second seed (decision A2).
+	ins[1].Pre = outA.PostState
+	if err := assertL1BlockConsistency(cfg, ins[1]); err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block B: %w", err)
+	}
+	if err := assertDepositsFirst(ins[1].Transactions); err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("block B: %w", err)
+	}
+	signerB := types.MakeSigner(cfg, blocks[1].Number(), blocks[1].Time())
+	outB, goldenB, err := assembleOutput(ins[1], cfg, signerB, db, blocks[1], receiptsAll[1], txSets[1], outSets[1])
+	if err != nil {
+		return outputVector{}, outputVector{}, nil, nil, fmt.Errorf("chain block B: %w", err)
+	}
+
+	return outA, outB, goldenA, goldenB, nil
+}
+
+// chainedBlockOutput is one block of the off-line chained pair (Task 2 Step
+// 2): the full v3-block payload (same fields as outputVector) merged flatly
+// with the golden extension (same fields as goldenRecord) -- there is no
+// pre-existing vectors/chainX.json to complement, so unlike the 33 flat
+// golden files, these carry the complete per-block record.
+type chainedBlockOutput struct {
+	Info       caseInfo                         `json:"_info"`
+	Env        outputEnv                        `json:"env"`
+	Pre        map[common.Address]outputAccount `json:"pre"`
+	Block      outputBlock                      `json:"block"`
+	PostState  types.GenesisAlloc               `json:"postState"`
+	OpExpected opExpected                       `json:"_op_expected"`
+
+	BlockHash        string   `json:"blockHash"`
+	TransactionsRoot string   `json:"transactionsRoot"`
+	ExtraData        string   `json:"extraData"`
+	ExcessBlobGas    string   `json:"excessBlobGas"`
+	RawTransactions  []string `json:"rawTransactions"`
+	EncodedHeaderHex string   `json:"encodedHeaderHex"`
+}
+
+func runChainPair(outputDir, opGethCommit string) error {
+	_ = opGethCommit // recorded in golden/engine/README.md's generation record, not per-file (chained pair has no vectors/ counterpart to key off)
+	outA, outB, goldenA, goldenB, err := processChainPair()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return err
+	}
+	write := func(id string, out outputVector, g *goldenRecord) error {
+		merged := chainedBlockOutput{
+			Info: out.Info, Env: out.Env, Pre: out.Pre, Block: out.Block,
+			PostState: out.PostState, OpExpected: out.OpExpected,
+			BlockHash: g.BlockHash, TransactionsRoot: g.TransactionsRoot,
+			ExtraData: g.ExtraData, ExcessBlobGas: g.ExcessBlobGas,
+			RawTransactions: g.RawTransactions, EncodedHeaderHex: g.EncodedHeaderHex,
+		}
+		if err := writeJSON(filepath.Join(outputDir, id+".golden.json"), merged); err != nil {
+			return err
+		}
+		if err := writeJSON(filepath.Join(outputDir, id+".pre.json"), out.Pre); err != nil {
+			return err
+		}
+		if err := writeJSON(filepath.Join(outputDir, id+".post.json"), out.PostState); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err := write("chainA", outA, goldenA); err != nil {
+		return fmt.Errorf("chainA: %w", err)
+	}
+	if err := write("chainB", outB, goldenB); err != nil {
+		return fmt.Errorf("chainB: %w", err)
+	}
+	return nil
 }
 
 func selfCheck(genesis *core.Genesis, blocks []*types.Block) error {
