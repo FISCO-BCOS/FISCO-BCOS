@@ -117,9 +117,10 @@ private:
         auto& storage = const_cast<Storage&>(m_storage);
         EVMAccount<Storage> evmAccount(storage, addr, false);
 
-        if (!co_await evmAccount.exists())
-            co_return {};
-
+        // SLOAD on a non-existent account returns 0 per EVM spec.
+        // EVMAccount::storage() already returns empty bytes32 for missing
+        // accounts/keys, so we can omit the redundant exists() check here
+        // and save one storage round-trip per SLOAD.
         co_return co_await evmAccount.storage(key);
     }
 };

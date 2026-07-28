@@ -31,6 +31,7 @@
 #include <cstring>
 #include <exception>
 #include <range/v3/view/any_view.hpp>
+#include <set>
 
 DERIVE_BCOS_EXCEPTION(EmptyTransactionHash);
 
@@ -232,21 +233,13 @@ uint8_t bcostars::protocol::TransactionImpl::web3TypedTxKind() const
     return static_cast<uint8_t>(m_inner()->web3TypedTxKind);
 }
 
-void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
+bcos::protocol::Web3AccessList bcostars::protocol::TransactionImpl::web3AccessList() const
 {
-    std::lock_guard<std::mutex> const lock(*m_web3AccessListCacheMutex);
-    if (m_web3AccessListCacheBuilt)
-    {
-        return;
-    }
-    m_web3AccessListCache.clear();
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        m_web3AccessListCacheBuilt = true;
-        return;
-    }
+        return {};
     auto const& entries = m_inner()->data.accessList;
-    m_web3AccessListCache.reserve(entries.size());
+    bcos::protocol::Web3AccessList result;
+    result.reserve(entries.size());
     for (auto const& entry : entries)
     {
         bcos::protocol::Web3AccessListEntry out;
@@ -276,116 +269,78 @@ void bcostars::protocol::TransactionImpl::ensureWeb3AccessListCache() const
             std::memcpy(key.data(), keyBytes.data(), bcos::h256::SIZE);
             out.storageKeys.emplace_back(key);
         }
-        m_web3AccessListCache.emplace_back(std::move(out));
+        result.emplace_back(std::move(out));
     }
-    m_web3AccessListCacheBuilt = true;
+    return result;
 }
 
-bcos::protocol::Web3AccessList const& bcostars::protocol::TransactionImpl::web3AccessList() const
+bcos::protocol::AuthorizationList
+bcostars::protocol::TransactionImpl::authorizationList() const
 {
-    ensureWeb3AccessListCache();
-    return m_web3AccessListCache;
-}
-
-void bcostars::protocol::TransactionImpl::ensureAuthorizationListCache() const
-{
-    std::lock_guard<std::mutex> const lock(*m_authorizationListCacheMutex);
-    if (m_authorizationListCacheBuilt)
-    {
-        return;
-    }
-    m_authorizationListCache.clear();
     if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        m_authorizationListCacheBuilt = true;
-        return;
-    }
+        return {};
     auto const& entries = m_inner()->data.authorizationList;
-    m_authorizationListCache.reserve(entries.size());
+    bcos::protocol::AuthorizationList result;
+    result.reserve(entries.size());
     for (auto const& entry : entries)
     {
         bcos::protocol::Authorization auth;
         auth.chainId = entry.chainID;
         auth.nonce = entry.nonce;
         auth.v = entry.v;
-        try
-        {
-            auth.address = bcos::toAddress(entry.address);
-        }
-        catch (std::exception const&)
-        {
-            continue;
-        }
-        try
-        {
-            auth.signer = bcos::toAddress(entry.signer);
-        }
-        catch (std::exception const&)
-        {
-            continue;
-        }
-        try
-        {
-            auth.r = bcos::hex2u(entry.r);
-        }
-        catch (std::exception const&)
-        {
-            continue;
-        }
-        try
-        {
-            auth.s = bcos::hex2u(entry.s);
-        }
-        catch (std::exception const&)
-        {
-            continue;
-        }
-        m_authorizationListCache.emplace_back(std::move(auth));
+        // EIP-7702 authorization entries are consensus-critical.
+        // Fail-loud on malformed data instead of silently skipping
+        // (which produces wrong state root vs Ethereum reference).
+        auth.address = bcos::toAddress(entry.address);
+        auth.signer = bcos::toAddress(entry.signer);
+        auth.r = bcos::hex2u(entry.r);
+        auth.s = bcos::hex2u(entry.s);
+        result.emplace_back(std::move(auth));
     }
-    m_authorizationListCacheBuilt = true;
+    return result;
 }
 
-void bcostars::protocol::TransactionImpl::ensureBlobVersionedHashesCache() const
-{
-    std::lock_guard<std::mutex> const lock(*m_blobVersionedHashesCacheMutex);
-    if (m_blobVersionedHashesCacheBuilt)
-        return;
-    m_blobVersionedHashesCache.clear();
-    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
-    {
-        m_blobVersionedHashesCacheBuilt = true;
-        return;
-    }
-    auto const& entries = m_inner()->data.blobVersionedHashes;
-    m_blobVersionedHashesCache.reserve(entries.size());
-    for (auto const& entry : entries)
-    {
-        bcos::h256 h{};
-        std::copy_n(entry.begin(), std::min(entry.size(), size_t{32}), h.begin());
-        m_blobVersionedHashesCache.emplace_back(std::move(h));
-    }
-    m_blobVersionedHashesCacheBuilt = true;
-}
-
-bcos::protocol::AuthorizationList const&
-bcostars::protocol::TransactionImpl::authorizationList() const
-{
-    ensureAuthorizationListCache();
-    return m_authorizationListCache;
-}
-
-bcos::protocol::VersionedHashes const&
+bcos::protocol::VersionedHashes
 bcostars::protocol::TransactionImpl::blobVersionedHashes() const
 {
-    ensureBlobVersionedHashesCache();
-    return m_blobVersionedHashesCache;
+    if (type() != static_cast<uint8_t>(bcos::protocol::TransactionType::Web3Transaction))
+        return {};
+    auto const& entries = m_inner()->data.blobVersionedHashes;
+    bcos::protocol::VersionedHashes result;
+    result.reserve(entries.size());
+    for (auto const& entry : entries)
+    {
+        if (entry.size() != 32)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "blobVersionedHash must be exactly 32 bytes, got " +
+                std::to_string(entry.size())));
+        }
+        bcos::h256 h{};
+        std::copy_n(entry.begin(), 32, h.begin());
+        result.emplace_back(std::move(h));
+    }
+    return result;
 }
 
 std::optional<bcos::u256> bcostars::protocol::TransactionImpl::maxFeePerBlobGas() const
 {
     if (m_inner()->data.maxFeePerBlobGas.empty())
         return std::nullopt;
-    return bcos::hex2u(m_inner()->data.maxFeePerBlobGas);
+    auto val = bcos::hex2u(m_inner()->data.maxFeePerBlobGas);
+    // Defend against hex2u silently returning 0 for malformed input
+    if (val == 0)
+    {
+        auto const& s = m_inner()->data.maxFeePerBlobGas;
+        static const std::set<std::string_view> validZeros = {
+            "0", "0x0", "0x00", "0x", "00"};
+        if (!validZeros.count(s))
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error(
+                "Invalid maxFeePerBlobGas: " + s));
+        }
+    }
+    return val;
 }
 
 const bcostars::Transaction& bcostars::protocol::TransactionImpl::inner() const

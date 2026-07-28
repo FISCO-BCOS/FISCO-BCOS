@@ -14,6 +14,8 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/TBBWait.h"
 #include <evmone/evmone.h>
+#include <map>
+#include <set>
 #include <string>
 
 namespace bcos::executor_v1::eth
@@ -106,13 +108,26 @@ inline evmone::state::Transaction bcosTransactionToEvmone(
         std::copy_n(h.begin(), sizeof(evmc_bytes32), hash.bytes);
         evmTx.blob_hashes.push_back(hash);
     }
-    // chainId and nonce from BCOS tx are stripped hex (no 0x prefix)
+    // chainId and nonce from BCOS tx may or may not have 0x prefix.
+    // RPC/Web3 decoding stores values with 0x prefix (toQuantity).
+    // Guard against double 0x (e.g. "0x0x1a") which would throw.
     auto cid = tx.chainId();
     if (!cid.empty())
-        evmTx.chain_id = static_cast<uint64_t>(bcos::u256("0x" + std::string(cid)));
+    {
+        auto cidStr = std::string(cid);
+        if (cidStr.size() >= 2 && cidStr[0] == '0' && cidStr[1] == 'x')
+            evmTx.chain_id = static_cast<uint64_t>(bcos::u256(cidStr));
+        else
+            evmTx.chain_id = static_cast<uint64_t>(bcos::u256("0x" + cidStr));
+    }
     auto nonceStr = std::string(tx.nonce());
-    evmTx.nonce = static_cast<uint64_t>(
-        nonceStr.empty() ? bcos::u256{} : bcos::u256("0x" + nonceStr));
+    if (!nonceStr.empty())
+    {
+        if (nonceStr.size() >= 2 && nonceStr[0] == '0' && nonceStr[1] == 'x')
+            evmTx.nonce = static_cast<uint64_t>(bcos::u256(nonceStr));
+        else
+            evmTx.nonce = static_cast<uint64_t>(bcos::u256("0x" + nonceStr));
+    }
     for (auto const& auth : tx.authorizationList())
     {
         evmone::state::Authorization ea{};
@@ -142,19 +157,16 @@ inline bcos::u256 toBcosU256(intx::uint256 const& val)
 
 template <class Storage>
 task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const& diff,
-    evmc_revision, crypto::Hash const& hashImpl)
+    evmc_revision, crypto::Hash const& hashImpl,
+    std::map<evmc::address, std::set<evmc::bytes32>>& storageTracker)
 {
     using namespace bcos::ledger::account;
-    for (auto const& addr : diff.deleted_accounts)
-    {
-        EVMAccount<Storage> acc(storage, addr, false);
-        if (co_await acc.exists())
-        {
-            co_await acc.setBalance(0);
-            co_await acc.setNonce("0");
-            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
-        }
-    }
+
+    // Process modified_accounts first to collect all storage keys written.
+    // This way, for accounts that are both deleted and recreated (SELFDESTRUCT
+    // + CREATE2 at the same address), the tracker only contains the new keys,
+    // so old residual storage keys from the destroyed contract are properly
+    // cleared in the deletion loop below.
     for (auto const& m : diff.modified_accounts)
     {
         EVMAccount<Storage> acc(storage, m.addr, false);
@@ -184,6 +196,28 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
                 co_await acc.setStorage(key, evmc_bytes32{});
             else
                 co_await acc.setStorage(key, value);
+            storageTracker[m.addr].insert(key);
+        }
+    }
+
+    for (auto const& addr : diff.deleted_accounts)
+    {
+        EVMAccount<Storage> acc(storage, addr, false);
+        if (co_await acc.exists())
+        {
+            // Clear all tracked storage slots for this address.
+            // If the account was also in modified_accounts (recreated),
+            // the tracker contains only the new keys set above, so only
+            // residual old storage from the destroyed contract is cleared.
+            auto trackerIt = storageTracker.find(addr);
+            if (trackerIt != storageTracker.end())
+            {
+                for (auto const& key : trackerIt->second)
+                    co_await acc.setStorage(key, evmc_bytes32{});
+            }
+            co_await acc.setBalance(0);
+            co_await acc.setNonce("0");
+            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
         }
     }
 }
@@ -203,10 +237,11 @@ inline protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(
         bcos::bytes data(l.data.begin(), l.data.end());
         logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
     }
-    // All transactions that reach transition() are valid Ethereum transactions.
-    // Exceptional halts (stack overflow, invalid opcode, etc.) still produce a
-    // valid receipt with status=0 in Ethereum.
-    int32_t status = 0;
+    // EVMC_SUCCESS == 0 maps to Ethereum status 1 (success).
+    // All other evmc_status_codes (revert, exceptional halt, etc.) map to 0.
+    int32_t status = (er.status == EVMC_SUCCESS) ? 1 : 0;
+    // evmone state::TransactionReceipt does not carry output data;
+    // return data is consumed during execution and not stored per spec.
     bcos::bytes output;
     return rf.createReceipt(
         bcos::u256(static_cast<uint64_t>(er.gas_used)),

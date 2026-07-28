@@ -92,14 +92,14 @@ public:
     /// unset.
     virtual uint8_t web3TypedTxKind() const { return 0; }
     /// Parsed access list when populated at submission (may be empty for non-EIP-2930 Web3 txs).
-    virtual Web3AccessList const& web3AccessList() const;
+    virtual Web3AccessList web3AccessList() const;
 
     /// EIP-7702 authorization list (Prague+ set_code transactions).
     /// Returns empty vector for non-set_code transactions.
-    virtual AuthorizationList const& authorizationList() const;
+    virtual AuthorizationList authorizationList() const;
 
     /// EIP-4844 blob versioned hashes (Cancun+ blob transactions, type 3).
-    virtual VersionedHashes const& blobVersionedHashes() const;
+    virtual VersionedHashes blobVersionedHashes() const;
 
     /// EIP-4844 max fee per blob gas (type 3 blob transactions).
     virtual std::optional<u256> maxFeePerBlobGas() const;
@@ -205,10 +205,6 @@ private:
     mutable bool m_tainted = {true};
     // the transaction has been stored to the storage or not
     mutable bool m_storeToBackend = {false};
-
-    static Web3AccessList const& emptyWeb3AccessList();
-    static AuthorizationList const& emptyAuthorizationList();
-    static VersionedHashes const& emptyBlobVersionedHashes();
 };
 
 // FIB-75: Return the effective gas price for a transaction.
@@ -225,7 +221,7 @@ using TransactionsConstPtr = std::shared_ptr<const Transactions>;
 using ConstTransactions = std::vector<Transaction::ConstPtr>;
 using ConstTransactionsPtr = std::shared_ptr<ConstTransactions>;
 using AnyTransaction =
-    AnyHolder<bcos::protocol::Transaction, 256>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
+    AnyHolder<bcos::protocol::Transaction, 224>;  // 多平台TransactinImpl的最大尺寸 (Maximum size of
                                                   // TransactinImpl across platforms)
 
 std::ostream& operator<<(std::ostream& stream, const Transaction& transaction);
