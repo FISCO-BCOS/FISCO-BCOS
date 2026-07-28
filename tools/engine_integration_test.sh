@@ -10,7 +10,7 @@
 #
 # 默认:
 #   BUILD_DIR = ./build
-#   RPC_PORT  = 8545
+#   RPC_PORT  = 8551
 #
 # CI 用法:
 #   bash tools/engine_integration_test.sh build 8545
@@ -21,7 +21,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${1:-${ROOT_DIR}/build}"
-RPC_PORT="${2:-8645}"
+RPC_PORT="${2:-8551}"
 RPC_URL="http://127.0.0.1:${RPC_PORT}"
 BINARY="${BUILD_DIR}/fisco-bcos-air/fisco-bcos"
 WORK_DIR="${BUILD_DIR}/engine_integration_test"
@@ -37,6 +37,10 @@ NC='\033[0m'
 PASSED=0
 FAILED=0
 
+# Kill any stale fisco-bcos processes from previous runs
+pkill -f "fisco-bcos" 2>/dev/null || true
+sleep 1
+
 # ---- Cleanup handler ----
 cleanup() {
     echo ""
@@ -45,12 +49,16 @@ cleanup() {
         kill "${LODESTAR_PID}" 2>/dev/null || true
         wait "${LODESTAR_PID}" 2>/dev/null || true
     fi
-    if [ -n "${NODE_PID:-}" ]; then
-        kill "${NODE_PID}" 2>/dev/null || true
-        wait "${NODE_PID}" 2>/dev/null || true
-    fi
+    # Kill fisco-bcos processes (daemonized children have different PIDs)
+    pkill -f "fisco-bcos" 2>/dev/null || true
+    sleep 1
+    shopt -s nullglob 2>/dev/null || true
+    for f in "${WORK_DIR}"/log_*.log; do
+        echo "--- ${f} (last 30 lines) ---"
+        tail -30 "${f}" 2>/dev/null || true
+    done
     if [ -f "${WORK_DIR}/nohup.out" ]; then
-        echo "--- Last 30 lines of node output ---"
+        echo "--- nohup.out (last 30 lines) ---"
         tail -30 "${WORK_DIR}/nohup.out" 2>/dev/null || true
     fi
     rm -rf "${WORK_DIR}"
@@ -87,6 +95,7 @@ rpc_call() {
     local params="$2"
     curl -s -X POST "${RPC_URL}" \
         -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${JWT_TOKEN}" \
         -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"${method}\",\"params\":${params}}" 2>/dev/null
 }
 
@@ -157,17 +166,24 @@ cat > "${WORK_DIR}/config.genesis" << GENESIS_EOF
 consensus_type=pbft
 block_tx_count_limit=1000
 leader_period=1
-node.0=9418c37b060ecc49dc558d858a3e313a45e504ee7601034f657ed23ec8cce2aa2ef93c55e04b17f40bf98337c8c8acdf2af982929834a0bb2e3633b37ee9be5f3:1
+node.0=__NODE_ID_PLACEHOLDER__:1
 [rpc]
 listen_ip=0.0.0.0
-listen_port=21200
+listen_port=20201
 disable_ssl=true
 sm_ssl=false
 
 [web3_rpc]
 enable=true
 listen_ip=0.0.0.0
+listen_port=$((RPC_PORT + 1))
+
+[op_engine_rpc]
+enable=true
+listen_ip=0.0.0.0
 listen_port=${RPC_PORT}
+jwt_secret_file=${WORK_DIR}/jwt.hex
+clock_skew_secs=300
 
 [p2p]
 listen_ip=0.0.0.0
@@ -203,7 +219,7 @@ type=RocksDB
 [log]
 enable=true
 log_path=./
-level=info
+level=debug
 GENESIS_EOF
 
 # Generate minimal certs (use existing from repo if available, otherwise generate self-signed)
@@ -236,6 +252,23 @@ if [ "${CERT_FOUND}" -eq 0 ]; then
     # Generate node.pem (P-256 keypair for consensus signing)
     openssl ecparam -name prime256v1 -genkey -noout -out "${WORK_DIR}/conf/node.pem" 2>/dev/null
 
+    # Extract the node ID from node.pem (keccak256 of uncompressed pubkey, without 04 prefix)
+    NODE_ID=$(python3 -c "
+import sys, subprocess, hashlib
+pem = open('${WORK_DIR}/conf/node.pem', 'rb').read()
+# use openssl to get DER-encoded pubkey
+der = subprocess.check_output(['openssl', 'pkey', '-pubout', '-outform', 'DER'], input=pem)
+# Skip the 04 prefix byte (uncompressed point indicator) and take last 64 bytes
+pub = der.decode('latin-1')[-64:]
+# FISCO-BCOS node ID is hex encoding of the 64-byte uncompressed pubkey
+print(pub.encode('latin-1').hex())
+" 2>/dev/null)
+    if [ -z "${NODE_ID}" ]; then
+        log_fail "Failed to extract node ID from node.pem"
+        exit 1
+    fi
+    log_info "Node ID: ${NODE_ID}"
+
     # Verify all required cert files were created
     CERT_MISSING=0
     for f in ca.crt ca.key ssl.crt ssl.key node.pem; do
@@ -251,6 +284,13 @@ if [ "${CERT_FOUND}" -eq 0 ]; then
     log_info "Self-signed certs generated"
 fi
 
+# Replace node.0 placeholder with the actual node ID from node.pem
+if [ "$(uname)" = "Darwin" ]; then
+    sed -i '' "s/__NODE_ID_PLACEHOLDER__/${NODE_ID}/g" "${WORK_DIR}/config.genesis"
+else
+    sed -i "s/__NODE_ID_PLACEHOLDER__/${NODE_ID}/g" "${WORK_DIR}/config.genesis"
+fi
+
 # Copy certs to work dir root (config expects them there too)
 cp "${WORK_DIR}/conf/"* "${WORK_DIR}/" 2>/dev/null || true
 
@@ -262,6 +302,27 @@ NODES_EOF
 log_info "Workspace prepared"
 log_pass
 
+# ---- Generate JWT for OP Engine RPC ----
+log_section "Step 1b: Generate JWT secret"
+openssl rand -hex 32 > "${WORK_DIR}/jwt.hex" 2>/dev/null || \
+    python3 -c "import secrets; print(secrets.token_hex(32))" > "${WORK_DIR}/jwt.hex" 2>/dev/null || {
+        log_fail "Failed to generate JWT secret"
+        exit 1
+    }
+JWT_TOKEN=$(python3 -c "
+import json, time, hmac, hashlib, base64
+with open('${WORK_DIR}/jwt.hex','r') as f: secret = bytes.fromhex(f.read().strip())
+h = base64.urlsafe_b64encode(json.dumps({'alg':'HS256','typ':'JWT'}).encode()).rstrip(b'=').decode()
+p = base64.urlsafe_b64encode(json.dumps({'iat':int(time.time()),'id':'12345678','clv':'FISCO-BCOS'}).encode()).rstrip(b'=').decode()
+sig = base64.urlsafe_b64encode(hmac.new(secret, f'{h}.{p}'.encode(), hashlib.sha256).digest()).rstrip(b'=').decode()
+print(f'{h}.{p}.{sig}')" 2>/dev/null)
+if [ -z "${JWT_TOKEN}" ]; then
+    log_fail "Failed to generate JWT token"
+    exit 1
+fi
+log_info "JWT secret + token generated"
+log_pass
+
 # ---- Step 2: Start FISCO-BCOS node ----
 log_section "Step 2: Start FISCO-BCOS node"
 
@@ -269,54 +330,70 @@ log_section "Step 2: Start FISCO-BCOS node"
 ulimit -c unlimited 2>/dev/null || true
 
 cd "${WORK_DIR}"
+# Binary daemonizes: nohup only captures parent's brief version output.
+# The child writes to a timestamped log file — we must watch that instead.
+rm -f log_*.log 2>/dev/null
 nohup "${ABS_BINARY}" -c config.genesis -g config.genesis > nohup.out 2>&1 &
 NODE_PID=$!
-# Allow the process a moment to settle (binary may daemonize)
 sleep 1
-# Verify with pgrep in case the binary daemonized
-VERIFY_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
-if [ -n "${VERIFY_PID}" ]; then
-    NODE_PID="${VERIFY_PID}"
+
+# After daemonization, find the real child PID via pgrep
+CHILD_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
+if [ -n "${CHILD_PID}" ]; then
+    NODE_PID="${CHILD_PID}"
 fi
 log_info "Node PID: ${NODE_PID}"
 
-# Wait for node to be ready (up to 60s)
-READY=0
+# Wait for the log file to appear and the RPC HTTP server to be up
+STARTUP_LOG=""
 for i in $(seq 1 30); do
     sleep 2
-    if kill -0 "${NODE_PID}" 2>/dev/null; then
-        RESP=$(rpc_call "eth_chainId" "[]" 2>/dev/null || echo "")
-        if echo "${RESP}" | grep -q '"result"'; then
-            READY=1
-            CHAIN_ID=$(json_val "${RESP}" "")
-            log_info "Node ready, PID=${NODE_PID}, chainId=${CHAIN_ID}"
-            break
-        fi
-    else
-        log_fail "Node process died unexpectedly"
-        # Capture exit code
-        set +e
-        wait "${NODE_PID}" 2>/dev/null
-        NODE_EXIT_CODE=$?
-        set -e
-        log_info "Exit code: ${NODE_EXIT_CODE}"
-        # Check for core dumps
-        if [ -f core ]; then
-            log_info "Core dump found: $(ls -lh core 2>/dev/null)"
-        fi
-        # Check dmesg for OOM killer (requires sudo, may fail silently)
-        dmesg 2>/dev/null | grep -i "killed process.*fisco" | tail -5 || true
-        log_info "--- nohup.out ---"
-        cat nohup.out 2>/dev/null | tail -30
+    # Binaries daemonize — if the process is gone, find it again
+    if ! kill -0 "${NODE_PID}" 2>/dev/null; then
+        NODE_PID=$(pgrep -f "$(basename "${ABS_BINARY}")" | head -1)
+    fi
+    if [ -z "${NODE_PID}" ]; then
+        log_fail "Node process died"
+        # Dump any available logs
+        for f in log_*.log; do tail -30 "$f"; done
         exit 1
+    fi
+
+    # Find the daemonized child's log file
+    STARTUP_LOG=$(ls -t log_*.log 2>/dev/null | head -1)
+    if [ -n "${STARTUP_LOG}" ]; then
+        # Check if the OP Engine HTTP server has started listening
+        if grep -q "startListen.*${RPC_PORT}" "${STARTUP_LOG}" 2>/dev/null; then
+            # Refresh JWT token now that the node is up
+            JWT_TOKEN=$(python3 -c "
+import json, time, hmac, hashlib, base64
+with open('${WORK_DIR}/jwt.hex','r') as f: secret = bytes.fromhex(f.read().strip())
+h = base64.urlsafe_b64encode(json.dumps({'alg':'HS256','typ':'JWT'}).encode()).rstrip(b'=').decode()
+p = base64.urlsafe_b64encode(json.dumps({'iat':int(time.time()),'id':'12345678','clv':'FISCO-BCOS'}).encode()).rstrip(b'=').decode()
+sig = base64.urlsafe_b64encode(hmac.new(secret, f'{h}.{p}'.encode(), hashlib.sha256).digest()).rstrip(b'=').decode()
+print(f'{h}.{p}.{sig}')
+" 2>/dev/null)
+            RESP=$(rpc_call "eth_chainId" "[]" 2>/dev/null || echo "")
+            if echo "${RESP}" | grep -q '"result"'; then
+                READY=1
+                CHAIN_ID=$(json_val "${RESP}" "")
+                log_info "Node ready, PID=${NODE_PID}, chainId=${CHAIN_ID}"
+                break
+            fi
+        fi
     fi
     echo -n "."
 done
 echo ""
 
-if [ "${READY}" -ne 1 ]; then
+if [ "${READY:-0}" -ne 1 ]; then
     log_fail "Node failed to start within 60s"
-    cat nohup.out 2>/dev/null | tail -50
+    log_info "--- nohup.out ---"
+    cat nohup.out 2>/dev/null | tail -30
+    if [ -n "${STARTUP_LOG}" ] && [ -f "${STARTUP_LOG}" ]; then
+        log_info "--- ${STARTUP_LOG} (last 30 lines) ---"
+        tail -30 "${STARTUP_LOG}"
+    fi
     exit 1
 fi
 log_pass
@@ -399,16 +476,19 @@ if [ -n "${PAYLOAD_ID:-}" ]; then
     # getPayload
     GET_RESP=$(rpc_call "engine_getPayloadV2" "[\"${PAYLOAD_ID}\"]")
     if echo "${GET_RESP}" | grep -q '"blockHash"'; then
-        # Extract payload and feed to newPayload
-        NEW_RESP=$(echo "${GET_RESP}" | python3 -c "
-import sys,json,urllib.request
-payload=json.load(sys.stdin)['result']
-req=urllib.request.Request('${RPC_URL}',
-    data=json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params':[payload]}).encode(),
-    headers={'Content-Type':'application/json'})
-resp=urllib.request.urlopen(req,timeout=30)
-print(resp.read().decode())
-" 2>/dev/null || echo '{}')
+        # Extract payload and feed to newPayload. Use a temp file to avoid
+        # shell quoting issues with the multi-KB JSON.
+        NEW_REQ_FILE="${WORK_DIR}/newPayload_req.json"
+        echo "${GET_RESP}" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)['result']
+p=d['executionPayload'] if 'executionPayload' in d else d
+print(json.dumps({'jsonrpc':'2.0','id':1,'method':'engine_newPayloadV2','params':[p]}))
+" 2>/dev/null > "${NEW_REQ_FILE}"
+        NEW_RESP=$(curl -s -X POST "${RPC_URL}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${JWT_TOKEN}" \
+            -d "@${NEW_REQ_FILE}" 2>/dev/null || echo '{}')
         NEW_STATUS=$(json_val "${NEW_RESP}" "status")
         log_info "newPayload status = ${NEW_STATUS}"
         if [ "${NEW_STATUS}" = "VALID" ] || [ "${NEW_STATUS}" = "ACCEPTED" ]; then
@@ -429,7 +509,11 @@ log_section "Step 4: Python mock CL test"
 
 PYTHON_SCRIPT="${ROOT_DIR}/tests/mock_consensus_client.py"
 if [ -f "${PYTHON_SCRIPT}" ]; then
-    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" 2>&1; then
+    # Ensure 'requests' is installed
+    python3 -c "import requests" 2>/dev/null || \
+        pip3 install --quiet requests 2>/dev/null || \
+        pip3 install --break-system-packages --quiet requests 2>/dev/null || true
+    if python3 "${PYTHON_SCRIPT}" "${RPC_URL}" "${WORK_DIR}/jwt.hex" 2>&1; then
         log_info "Python tests passed"
         log_pass
     else

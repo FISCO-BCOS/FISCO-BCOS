@@ -518,6 +518,7 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
             m_nodeConfig->sendTxTimeout(), opEngineWsService, groupManager, web3FilterSystem, true);
 
         rpc->setOpEngineJsonRpcImpl(std::move(opEngineJsonRpc));
+        rpc->setOpEngineService(std::move(opEngineWsService));
     }
     if (m_nodeConfig->enableWeb3Rpc())
     {

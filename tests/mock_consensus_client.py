@@ -194,6 +194,10 @@ def test_get_payload(payload_id: str) -> Optional[Dict[str, Any]]:
 
     result = rpc_result("engine_getPayloadV2", [payload_id])
 
+    # V2 wraps the execution payload under "executionPayload" key
+    if "executionPayload" in result:
+        result = result["executionPayload"]
+
     required_fields = [
         "parentHash", "feeRecipient", "stateRoot", "receiptsRoot",
         "logsBloom", "prevRandao", "blockNumber", "gasLimit", "gasUsed",
@@ -264,11 +268,25 @@ def test_invalid_method() -> None:
 
 # ---- Main ----
 
+def generate_jwt(secret_file: str) -> str:
+    import base64, hashlib, hmac, time as _time
+    with open(secret_file, "r") as f:
+        secret = bytes.fromhex(f.read().strip())
+    h = base64.urlsafe_b64encode(json.dumps({"alg":"HS256","typ":"JWT"}).encode()).rstrip(b"=").decode()
+    p = base64.urlsafe_b64encode(json.dumps({"iat":int(_time.time()),"id":"12345678","clv":"FISCO-BCOS"}).encode()).rstrip(b"=").decode()
+    sig = base64.urlsafe_b64encode(hmac.new(secret,f"{h}.{p}".encode(),hashlib.sha256).digest()).rstrip(b"=").decode()
+    return f"{h}.{p}.{sig}"
+
+
 def main() -> int:
-    global RPC_URL
+    global RPC_URL, HEADERS
 
     if len(sys.argv) > 1:
         RPC_URL = sys.argv[1]
+    if len(sys.argv) > 2:
+        jwt_token = generate_jwt(sys.argv[2])
+        HEADERS["Authorization"] = f"Bearer {jwt_token}"
+        _log_info(f"JWT token generated")
 
     print("=" * 50)
     print("  FISCO-BCOS Engine API Smoke Test (Python)")
