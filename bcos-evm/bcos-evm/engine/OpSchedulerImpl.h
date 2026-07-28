@@ -48,6 +48,7 @@
 #include <bcos-evm/eth/state/transaction.hpp>
 #include <bcos-evm/eth/utils/mpt.hpp>
 #include <bcos-evm/eth/utils/rlp.hpp>
+#include <bcos-evm/eth/utils/rlp_encode.hpp>
 #include <cstdint>
 #include <cstring>
 #include <evmc/evmc.hpp>
@@ -386,23 +387,29 @@ inline evmc::address recoverTxSender(const evmc::bytes& signingPreimage,
 /// empty per OpBlockExecute.h's OpBlockTx contract ("empty for deposit", OpBlockExecute.h:18).
 inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 {
+    // envelope shape: 0x7E || rlp([sourceHash, from, to, mint, value, gas, isSystemTransaction,
+    // data]) — `body` starts at the LIST HEADER, not at the first field (fix C1, coordinator
+    // review: golden bytes are literally `0x7e f9…`); enterList() consumes that header and
+    // returns a view scoped to the list's own payload for the field-by-field decode below.
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
+    auto listBody = enterList(body);
     bcos::evm::opstack::DepositTx dep;
-    dep.source_hash = decodeHashField(body);
-    dep.from = decodeAddressField(body);
-    dep.to = decodeOptionalAddressField(body);
+    dep.source_hash = decodeHashField(listBody);
+    dep.from = decodeAddressField(listBody);
+    dep.to = decodeOptionalAddressField(listBody);
     // mint/value nilability: nil and a present-but-zero big.Int are RLP-indistinguishable (both
     // encode to the empty string) — OpDepositEncode.h's OpDepositFields comment resolves this
     // same ambiguity the same way (a plain, non-optional scalar defaulting to 0); decoding
     // DepositTx::mint as present-and-possibly-zero rather than guessing nullopt mirrors that,
     // even though DepositTx::mint (OpDepositTx.h:29) is itself std::optional for execution-side
     // reasons this decoder cannot recover from the wire bytes alone.
-    dep.mint = decodeU256Scalar(body);
-    dep.value = decodeU256Scalar(body);
-    dep.gas_limit = static_cast<int64_t>(decodeU64Scalar(body));
-    dep.is_system_tx = decodeBoolField(body);
-    dep.data = decodeBytesField(body);
-    expectExhausted(body, "deposit envelope");
+    dep.mint = decodeU256Scalar(listBody);
+    dep.value = decodeU256Scalar(listBody);
+    dep.gas_limit = static_cast<int64_t>(decodeU64Scalar(listBody));
+    dep.is_system_tx = decodeBoolField(listBody);
+    dep.data = decodeBytesField(listBody);
+    expectExhausted(listBody, "deposit envelope fields");
+    expectExhausted(body, "deposit envelope (trailing bytes after the field list)");
     return bcos::evm::opstack::OpBlockTx{.tx = std::move(dep), .signedEnvelope = {}};
 }
 
@@ -411,22 +418,32 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
 inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
+    // envelope shape: 0x02 || rlp([...]) — same list-header fix as decodeDepositTx (C1).
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
+    auto listBody = enterList(body);
     evmone::state::Transaction tx;
     tx.type = evmone::state::Transaction::Type::eip1559;
-    tx.chain_id = decodeU64Scalar(body);
-    tx.nonce = decodeU64Scalar(body);
-    tx.max_priority_gas_price = decodeU256Scalar(body);
-    tx.max_gas_price = decodeU256Scalar(body);
-    tx.gas_limit = static_cast<int64_t>(decodeU64Scalar(body));
-    tx.to = decodeOptionalAddressField(body);
-    tx.value = decodeU256Scalar(body);
-    tx.data = decodeBytesField(body);
-    tx.access_list = decodeAccessList(body);
-    const auto yParity = decodeU256Scalar(body);
-    tx.r = decodeU256Scalar(body);
-    tx.s = decodeU256Scalar(body);
-    expectExhausted(body, "eip1559 envelope");
+    tx.chain_id = decodeU64Scalar(listBody);
+    tx.nonce = decodeU64Scalar(listBody);
+    tx.max_priority_gas_price = decodeU256Scalar(listBody);
+    tx.max_gas_price = decodeU256Scalar(listBody);
+    tx.gas_limit = static_cast<int64_t>(decodeU64Scalar(listBody));
+    tx.to = decodeOptionalAddressField(listBody);
+    tx.value = decodeU256Scalar(listBody);
+    tx.data = decodeBytesField(listBody);
+    tx.access_list = decodeAccessList(listBody);
+    const auto yParity = decodeU256Scalar(listBody);
+    // I1 (coordinator review): op-geth rejects yParity > 1 as "invalid y parity" before it ever
+    // reaches sender recovery; without this check a >1 value gets silently truncated by
+    // `static_cast<uint8_t>` into a bogus-but-plausible 0/1 that could pass downstream, and
+    // `recoverTxSender`'s `yParity != 0` test would treat any nonzero value (including 256,
+    // 257, ...) as parity=1.
+    if (yParity > 1)
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid y parity (eip1559)");
+    tx.r = decodeU256Scalar(listBody);
+    tx.s = decodeU256Scalar(listBody);
+    expectExhausted(listBody, "eip1559 envelope fields");
+    expectExhausted(body, "eip1559 envelope (trailing bytes after the field list)");
     tx.v = static_cast<uint8_t>(yParity);
 
     const auto signingPreimage =
@@ -445,23 +462,30 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry)
 inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry)
 {
     const evmc::bytes fullEnvelope(rawEntry.begin(), rawEntry.end());
+    // envelope shape: 0x04 || rlp([...]) — same list-header fix as decodeDepositTx (C1).
     bcos::bytesRef body(rawEntry.data() + 1, rawEntry.size() - 1);
+    auto listBody = enterList(body);
     evmone::state::Transaction tx;
     tx.type = evmone::state::Transaction::Type::set_code;
-    tx.chain_id = decodeU64Scalar(body);
-    tx.nonce = decodeU64Scalar(body);
-    tx.max_priority_gas_price = decodeU256Scalar(body);
-    tx.max_gas_price = decodeU256Scalar(body);
-    tx.gas_limit = static_cast<int64_t>(decodeU64Scalar(body));
-    tx.to = decodeOptionalAddressField(body);
-    tx.value = decodeU256Scalar(body);
-    tx.data = decodeBytesField(body);
-    tx.access_list = decodeAccessList(body);
-    tx.authorization_list = decodeAuthorizationList(body);
-    const auto yParity = decodeU256Scalar(body);
-    tx.r = decodeU256Scalar(body);
-    tx.s = decodeU256Scalar(body);
-    expectExhausted(body, "setcode envelope");
+    tx.chain_id = decodeU64Scalar(listBody);
+    tx.nonce = decodeU64Scalar(listBody);
+    tx.max_priority_gas_price = decodeU256Scalar(listBody);
+    tx.max_gas_price = decodeU256Scalar(listBody);
+    tx.gas_limit = static_cast<int64_t>(decodeU64Scalar(listBody));
+    tx.to = decodeOptionalAddressField(listBody);
+    tx.value = decodeU256Scalar(listBody);
+    tx.data = decodeBytesField(listBody);
+    tx.access_list = decodeAccessList(listBody);
+    tx.authorization_list = decodeAuthorizationList(listBody);
+    const auto yParity = decodeU256Scalar(listBody);
+    // I1 (coordinator review): see the matching check in decodeEip1559Tx — same op-geth
+    // "invalid y parity" rejection, same truncation/mod-256 hazard if left unchecked.
+    if (yParity > 1)
+        throw OpConsensusError("OpSchedulerImpl: raw tx decode: invalid y parity (setcode)");
+    tx.r = decodeU256Scalar(listBody);
+    tx.s = decodeU256Scalar(listBody);
+    expectExhausted(listBody, "setcode envelope fields");
+    expectExhausted(body, "setcode envelope (trailing bytes after the field list)");
     tx.v = static_cast<uint8_t>(yParity);
 
     const auto signingPreimage =
