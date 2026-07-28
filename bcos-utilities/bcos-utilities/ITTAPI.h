@@ -111,6 +111,7 @@ struct ITT_DOMAINS
     __itt_string_handle* EXECUTE_CHUNK1 = __itt_string_handle_create("executeChunk1");
     __itt_string_handle* EXECUTE_CHUNK2 = __itt_string_handle_create("executeChunk2");
     __itt_string_handle* EXECUTE_CHUNK3 = __itt_string_handle_create("executeChunk3");
+    __itt_string_handle* EXECUTE_CHUNK4 = __itt_string_handle_create("executeChunk4");
     __itt_string_handle* RELEASE_CONFLICT = __itt_string_handle_create("releaseConflict");
     __itt_string_handle* MERGE_RWSET = __itt_string_handle_create("mergeRWSet");
     __itt_string_handle* MERGE_CHUNK = __itt_string_handle_create("mergeChunk");

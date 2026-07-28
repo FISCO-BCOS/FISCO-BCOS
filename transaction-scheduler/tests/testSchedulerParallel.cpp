@@ -137,7 +137,6 @@ struct MockConflictExecutor
             toEntry->set(
                 boost::lexical_cast<std::string>(boost::lexical_cast<int>(toEntry->get()) + 1));
             co_await storage2::writeOne(*storage, toKey, *toEntry);
-            co_return;
         }
 
         task::Task<protocol::TransactionReceipt::Ptr> finish()
