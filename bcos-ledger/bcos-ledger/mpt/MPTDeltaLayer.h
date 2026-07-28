@@ -40,8 +40,12 @@ struct MPTDeltaLayer
     /// The post-block MPT state root.
     bcos::h256 stateRoot;
     /// Every newly produced node (hash → raw RLP), aggregated from every commitTrie() result of
-    /// this block. The commit flow writes these under /mpt/<hash> keys in the SAME WriteBatch as
-    /// the flat state (single db->Write, spec §5.6).
+    /// this block. buildAndCollect's end-of-build flush writes these as ordinary "/mpt/:<hash>"
+    /// state rows into the block's mutable layer, so commit persists them in the SAME WriteBatch
+    /// as the flat state (single db->Write, spec §5.6); this map stays the CommitObserver's
+    /// payload. The flush COPIES each node's RLP into its row's Entry (it takes the map by
+    /// const reference and never moves out of it), so newNodes is still complete when
+    /// CommitObserver::onCommit receives the delta after the WriteBatch lands.
     std::unordered_map<bcos::h256, bcos::bytes> newNodes;
     /// Nodes that the tries rebuilt by THIS block no longer reference, disjoint from newNodes.
     ///
