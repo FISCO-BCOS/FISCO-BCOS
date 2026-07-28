@@ -1,4 +1,5 @@
-// Test-only strict StateDiff write-back helper (moved from bcos-evm/adapter/: all
+// Test-only strict StateDiff write-back helper (moved out of bcos-evm/adapter/: all callers
+// are tests, so it does not belong in the production adapter surface).
 #pragma once
 
 #include <evmc/hex.hpp>
