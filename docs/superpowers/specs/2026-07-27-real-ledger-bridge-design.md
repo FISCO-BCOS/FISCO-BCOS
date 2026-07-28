@@ -50,6 +50,24 @@ OP 块级执行现状是 **reference-gate 层面等价**:33 向量 t8n gate 的 
 | 抽象锚点 | 读 = `evmone::state::StateView`,写 = `applyDiff`(strict 单形态,§5),遍历 = `visitAccounts`(§6);接口演进留 C 路线后续 |
 | 环境前置(E-b) | `feature_raw_address` 关闭;向量地址不含 `c_systemTxsAddress` 集合;单线程串行调用 |
 
+### 2.1 条件编译边界(实施实况,Task 7 回填)
+
+`Storage2Ledger.h` 是纯模板头,直接引用 `bcos-framework`(`storage2`/`ledger::EVMAccount`/
+`task::syncWait`)的公开头——单向依赖已核实(框架不回依赖 `bcos-evm`),但代价是它只能在
+`bcos-framework` 目标可见处编译。`bcos-evm/test/CMakeLists.txt` 用
+`if(TARGET bcos-framework)` 把 `Storage2LedgerTest.cpp`/`LedgerRootTest.cpp`/
+`EbT8nReplayTest.cpp` 三个源码只并入 in-tree 构建(根仓库 `add_subdirectory(bcos-framework)`
+早于 `add_subdirectory(bcos-evm)` 的那条路径)。**standalone 构建**(`bcos-evm/build/`,独立
+`vcpkg.json`,不含 tbb/magic-enum/proxy/wedprcrypto 等 `bcos-framework` 传递依赖)不满足该
+条件,三个守卫源码不参与编译——`Storage2Ledger`/`Storage2Backend`/`EbT8nReplay` 在
+standalone 产物中不存在,standalone 只交付账本抽象的 `MemoryLedger` 部分(`ledger/` 目录
+本体、`MemoryLedgerT8nReplayTest.cpp`、`MemoryLedgerTest.cpp` 均无条件编译,两路构建一致)。
+这条边界从 Task 1 起即成立(`MemoryLedger` 不依赖 `bcos-framework`),Task 3 引入
+`Storage2Ledger` 起该边界开始产生实际的"两路构建用例数不同"效果,Task 7 在此实测验证并
+回填:in-tree `build/` 155 个 `bcos-evm-opstack-tests` 用例,standalone `bcos-evm/build/`
+131 个(差值 24 = 三个守卫文件的用例数:`Storage2LedgerTest.cpp` 20 + `LedgerRootTest.cpp`
+3 + `EbT8nReplayTest.cpp` 1),双路 `ctest` 均全绿。
+
 ## 3. 总体架构
 
 ```
@@ -219,20 +237,41 @@ storage2 fixture)。同一 DIVERGENCES 纪律;每向量比对计数>0、`known_d
 **探针留痕纪律**(比照 DIVERGENCES"11 项变异全部翻红"先例):每个探针的注入点、
 翻红实际输出、回退复绿确认,记入任务报告/PR 描述,供审查复核——不许无痕勾选。
 
-## 8. 验收清单(rev.2 改相对基线口径,附执行命令)
+## 8. 验收清单(rev.2 改相对基线口径,附执行命令;实测值 Task 7 回填)
 
-- [ ] 三腿回放全绿:`ctest -R BcosEvmOpstackTests`(含既有 gate)+
+- [x] 三腿回放全绿:`ctest -R BcosEvmOpstackTests`(含既有 gate)+
       `--gtest_filter='MemoryLedgerT8nReplay*'` + `--gtest_filter='EbT8nReplay*'`,
-      各 33/33、`known_diverges=0`、每向量比对计数>0
-- [ ] 既有套件零回归:**合并前捕获基线用例清单 N0**(`--gtest_list_tests`),合并后
-      N0 全部通过;新增用例数量与名单在 PR 描述如实记录(不硬编总数)
-- [ ] `Storage2Ledger`/`MemoryLedger` 专项单测全绿(§7 点名清单逐项对应,独立行,
-      不折叠进"零回归")
-- [ ] 往返测试(vs EVMAccount 双向,abi 豁免口径)绿
-- [ ] 三后端同根测试绿
-- [ ] 五个翻红探针逐个按预期翻红并复绿,**留痕记录在案**
-- [ ] 接线完整性:storage2 读写计数 `RecordProperty` >0(常驻断言)
-- [ ] `ports/` 零改动;库目标纯净约束不变(gtest/nlohmann 不入库)
+      各 33/33、`known_diverges=0`、每向量比对计数>0 ——
+      **实测**:`--gtest_filter='OpT8nReplay.*:MemoryLedgerT8nReplay.*:EbT8nReplay.*'` +
+      `--gtest_output=xml` 解析确认三腿各自 33 条 `*.comparisons` 属性全部存在且值>0
+      (zero_valued_comparisons=0)、`known_diverges=0`;`ctest -R BcosEvmOpstackTests`
+      PASS(in-tree)。
+- [x] 既有套件零回归:**合并前捕获基线用例清单 N0**(`--gtest_list_tests`),合并后
+      N0 全部通过;新增用例数量与名单在 PR 描述如实记录(不硬编总数)——
+      **实测**:N0(Task 6 末态)= 154;Task 7 新增 1 条
+      (`OpBlockSeal.AccountStorageRootMatchesOpStorageRootOnSameMap`,漂移防线单测,见下)
+      → N1 = 155,154 条基线用例逐一比对姓名确认全部仍在且全部 PASS(`--gtest_list_tests`
+      diff 仅新增一行)。
+- [x] `Storage2Ledger`/`MemoryLedger` 专项单测全绿(§7 点名清单逐项对应,独立行,
+      不折叠进"零回归")—— **实测**:`Storage2Ledger` 20/20、`MemoryLedger` 5/5、
+      `LedgerRoot` 3/3,均 PASS(既随 N1 全量 155/155 一次跑出,也逐类目
+      `--gtest_filter` 单独确认)。
+- [x] 往返测试(vs EVMAccount 双向,abi 豁免口径)绿 —— **实测**:
+      `Storage2Ledger.RoundTripFields`/`RoundTripWriteDirectionVsEVMAccount` PASS。
+- [x] 三后端同根测试绿 —— **实测**:
+      `LedgerRoot.ThreeBackendsSameRootWithCodeAndSlots` PASS(TestState/MemoryLedger/
+      Storage2Ledger 三根逐字节相等,含带码带槽账户/多槽账户/完全空账户三类混合状态)。
+- [x] 五个翻红探针逐个按预期翻红并复绿,**留痕记录在案** —— 详见
+      `.superpowers/sdd/probe-ledger-bridge-report.md`(每探针的注入 diff、翻红实际输出、
+      回退命令、复绿输出、`git status` 全程干净)。
+- [x] 接线完整性:storage2 读写计数 `RecordProperty` >0(常驻断言)—— **实测**:
+      `EbT8nReplay.Vectors` XML `storage2_reads`=188/`storage2_writes`=36(末次记录的
+      `jovian_tx_reverted` 向量值,`ASSERT_GT(reads,0U)` 对 33 个向量均非平凡通过);
+      接线完整性探针(假后端注入)复现见探针留痕文档。
+- [x] `ports/` 零改动;库目标纯净约束不变(gtest/nlohmann 不入库)—— **实测**:
+      `git diff --stat 8c8dbd7 -- ports/` 空输出;`bcos-evm/test/opstack/t8n/vectors/`
+      同样零改动;`grep -rl "nlohmann\|gtest" bcos-evm/bcos-evm/ | grep -v statetest.hpp`
+      空输出(唯一命中是 vendored 测试装载器 `eth/utils/statetest.hpp`,非库产物)。
 
 ## 9. 风险与预案
 
@@ -264,3 +303,36 @@ stateRoot(TA-1d~1f)、RocksDB 后端测试、老执行栈兼容、EEST 套件、
 
 **C 路线 step 1 口径**:15 测试迁移完成则全额清账;裁剪则 MemoryLedger 的落地
 仅覆盖回放腿与单测,迁移债务延后并如实记账。
+
+### 10.1 实施期偏离与发现(Task 7 回填)
+
+- **gitignore `build**` 误伤 golden**:`.gitignore` 的 `build**` 反选规则会连带匹配
+  `bcos-evm/scripts/upstream-diff/golden/build_message.patch`(路径含 `build` 子串),
+  致该 golden 文件曾静默逃逸出提交历史而不自知。Task 5 审查发现,本分支已修复
+  (commit `f8656949f`,加一条 `!**/upstream-diff/golden/*.patch` 反选例外 + 补交丢失的
+  golden 文件)。**同一缺口在 `feat-evm-opstack-port` 主分支上原样存在**(PR #5361 引入
+  `upstream-diff` 护栏时未预见 `build_message.patch` 这个文件名与 `build**` 规则的
+  冲突)——本次修复只落在本桥接分支,未回合并进主分支,如需消除该缺口需另行处理。
+- **`pushView` 有意省略**(Task 6 审查 Minor):`EbT8nReplayTest.cpp` 的 `Storage2Backend`
+  fixture(每向量独立 `MultiLayerStorage`)只调用 `multiLayerStorage.fork()` +
+  `view.newMutable()` 取一枚可写 view,全程不调用 `MultiLayerStorage::pushView()`(把
+  forked view 的写入合并回底层/跨 checkpoint 持久化的操作)。这不是遗漏,而是本 fixture
+  的隔离架构决定的:每个向量的账本状态只在该向量的作用域内存在(design §7"33 向量互不
+  共享底层存储",与"一块一实例"的桥生命周期契约一致),向量结束后整个 `Impl`
+  (含 `multiLayerStorage`/`view`/`bridge`)连同其状态一并析构丢弃,没有下一层需要把
+  写入合并进去——`pushView` 要解决的"view 内写入需要对其他 view/下一个区块可见"的问题在
+  这个单向量、用后即弃的测试拓扑里不存在。brief 中"失败弃 view(天然回滚),不 pushView"
+  一句描述的正是同一件事:测试对失败向量的处理不需要显式回滚逻辑,因为**从不曾提交**。
+  这条边界仅对本测试 fixture 成立;真实编排接入(design §10 非目标)把桥接进跨块状态时,
+  `pushView` 的调用时机与失败回滚策略需要重新设计,不能照搬本 fixture 的"从不调用"。
+- **visitor 异常边界契约(不对称,Task 5 审查 Minor)**:`MemoryLedger::visitAccounts` 的
+  函数签名是字面 `noexcept`(`MemoryLedger.h:77`)——它本身没有任何会抛异常的内部路径
+  (`poisoned()` 恒 false),但如果调用方传入的 **visitor 回调本身抛出异常**,该异常会在一个
+  `noexcept` 函数内传播且找不到匹配的 catch,依 C++ 标准触发 `std::terminate()`,没有任何
+  优雅降级路径。`Storage2Ledger::visitAccounts` 表面签名同样是 `noexcept`,但实现上用
+  `try/catch` 包住了整个 `syncWait(visitAccountsImpl(visitor))`(含 `visitor(accountView)`
+  调用本身),因此 visitor 抛出的异常会被这层 catch 接住转成 `poison()`,不会 terminate——
+  两个后端对"visitor 抛异常"这一事件的实际后果并不对称,尽管公开签名看起来一致。这是**调用
+  方义务**:传给 `visitAccounts` 的 visitor 必须自身不抛(或自行吞掉全部异常),不能依赖
+  `MemoryLedger` 侧提供任何异常安全网——本设计与既有 33 向量回放腿代码的 visitor(仅做字段
+  搬运/比对,不抛)都遵守这条隐性契约,但契约本身此前未在文档中明文,Task 7 在此补记。

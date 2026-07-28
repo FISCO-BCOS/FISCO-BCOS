@@ -71,6 +71,18 @@ upstream-diff golden),并与 `bcos-evm-ref` 永久分叉——实施前须重建
 ## 6. 建议实施顺序(未排期)
 
 1. 自研账本(替 TestState)+ 测试迁移(gate 保绿)
+   **状态(2026-07-28,`feat-evm-ledger-bridge` 分支,真账本桥 Task 1-7 完成后回填)**:
+   自研内存账本 `MemoryLedger`(`bcos-evm/bcos-evm/ledger/MemoryLedger.{h,cpp}`)**已交付**
+   ——`StateView` + `applyDiff` + `visitAccounts`,33 向量 t8n gate 已有独立参数化回放腿
+   (`MemoryLedgerT8nReplayTest.cpp`,33/33、`known_diverges=0`)与既有 TestState 腿互为对照,
+   证明其可完整替代 TestState 承担本清单"自研账本"这一件。**未完成的是本条目的后半句
+   "测试迁移"**:本文档 §4 点名的 15 个直接 `include test_state.hpp` 的测试文件本轮**一个
+   都未迁移**(仍是 TestState),`OpT8nReplayTest.cpp`(既有 TestState gate 腿)本身也不动
+   ——真账本桥设计 spec §3"内存态退役终态"与本仓 `.superpowers/sdd/task-7-brief.md` 均将
+   该 15 测试迁移列为可裁剪的收尾任务(桥 Task 8,当前分支 pending 未启动)。因此本条目口径
+   为**半清账**:账本本体这一件完成,测试迁移这一件延后,不构成"自研账本已替 TestState"
+   的整体断言(`test_state.hpp`/`statetest.hpp`/loader 等 vendor 依赖仍原样存在,本清单 §1-§5
+   的其余各件均未动)。
 2. RLP 适配层(OpReceiptEncode 先行,gate 判字节等价)
 3. 自研 MPT + 三根建根(stateRoot 单腿比对族判定)
 4. OpTransition 照抄段重写 + upstream-diff 护栏退役(方式一,见 §5 首条;不做 golden 重做)

@@ -1,5 +1,6 @@
 #include "OpL1AttributesTestHelpers.h"
 #include <bcos-evm/adapter/StateDiffWriteback.h>
+#include <bcos-evm/adapter/StateRootCompute.h>
 #include <bcos-evm/opstack/OpBlockExecute.h>
 #include <bcos-evm/opstack/OpBlockSeal.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
@@ -195,6 +196,24 @@ TEST(OpBlockSeal, ZeroValueSlotsDoNotAffectStorageRoot)
     std::map<evmc::bytes32, evmc::bytes32> withoutZero{{0x01_bytes32, 0x05_bytes32}};
     EXPECT_EQ(opStorageRoot(withZero), opStorageRoot(withoutZero));
     EXPECT_EQ(opStorageRoot({}), state::EMPTY_MPT_HASH);
+}
+
+// 漂移防线(真账本桥 Task 5 审查 Minor,Task 7 附加项落地):accountStorageRoot(adapter/
+// StateRootCompute.h,MemoryLedger/Storage2Ledger 泛型 stateRootOf<Ledger> 的建根引擎)与
+// opStorageRoot(本文件,OP 区块头 withdrawalsRoot 引擎)是同一构造(secure-trie,键
+// keccak256(slot),值 rlp(trim(value)))的两份物理拷贝——design §6 头注明文:出于①分层单向
+// 依赖(bcos-evm-opstack 链接 bcos-evm-eth,反向不成立,adapter/ 调 opstack/ 是反向依赖)②
+// opStorageRoot 行区间被 scripts/upstream-diff/manifest.tsv 的 op_storage_root 条目锚定跟踪
+// 两个理由,选择复用逻辑而非复用符号。物理重复意味着两处各自的未来改动都可能悄悄漂移出
+// 一致性而没有编译期信号——本测试在同一 storage map(含零值槽/空槽)上钉死两者逐字节相等,
+// 任一方独立改动导致行为分叉即翻红,是这对"验证过的同构造"关系的唯一运行期兜底。
+TEST(OpBlockSeal, AccountStorageRootMatchesOpStorageRootOnSameMap)
+{
+    std::map<evmc::bytes32, evmc::bytes32> snap{{0x01_bytes32, 0x05_bytes32},
+        {0x02_bytes32, 0x2a_bytes32}, {0x03_bytes32, {}}};  // 零值槽:两侧均需防御性剔除,不入树
+    EXPECT_EQ(bcos::evm::accountStorageRoot(snap), opStorageRoot(snap));
+    EXPECT_EQ(bcos::evm::accountStorageRoot({}), opStorageRoot({}));
+    EXPECT_EQ(bcos::evm::accountStorageRoot({}), state::EMPTY_MPT_HASH);
 }
 
 // 端到端：processOpBlock 产出直接喂 sealOpBlock（Isthmus）。本用例钉**接线兼容性 +
