@@ -192,7 +192,7 @@ storage root,无法从恒空 withdrawals 列表推得;op-geth NewPayloadV4 在 O
 不成立。本期**不支持 attributes 构块**(与 getPayload OP 化同属一条路,列 op-node
 实连前置欠账):OP 模式收到 attributes → JSON-RPC **`-38003 Invalid payload
 attributes`,且 forkchoiceState 更新不回滚**(head 照常推进,仅不开启 build,规范语义)。
-attributes 的 OP 扩展字段归属(транsactions/noTxPool/gasLimit 自 Bedrock,
+attributes 的 OP 扩展字段归属(transactions/noTxPool/gasLimit 自 Bedrock,
 eip1559Params 自 Holocene,均挂在 attributes 对象、不引入新 FCU 版本)记录在案。
 
 ### 6.3 版本闸与端点
