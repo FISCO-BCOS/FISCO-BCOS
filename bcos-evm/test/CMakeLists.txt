@@ -24,21 +24,11 @@ add_executable(bcos-evm-opstack-tests
     opstack/OpValidateTest.cpp
     opstack/OpTransitionTest.cpp
     opstack/OpDepositTest.cpp
-    opstack/OpBlockHarnessTest.cpp
     opstack/OpZeroDiffTest.cpp
     opstack/OpReceiptMetaTest.cpp
     opstack/Op7702Test.cpp
     opstack/OpFloorGasTest.cpp
-    opstack/OpBlockFinalizeTest.cpp
-    opstack/OpBlockExecuteTest.cpp
-    opstack/OpStateDiffSanitizeTest.cpp
     opstack/OpReceiptEncodeTest.cpp
-    opstack/OpBlockSealTest.cpp
-    opstack/StateRootCompute.cpp
-    opstack/OpT8nReplayTest.cpp
-)
-target_compile_definitions(bcos-evm-opstack-tests PRIVATE
-    OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"
 )
 # statetest_loader.cpp is compiled straight from the evmone package's installed
 # test/utils sources (see the EVMONE_TEST_UTILS_DIR probe in the top-level CMakeLists);

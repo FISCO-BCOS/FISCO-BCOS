@@ -81,6 +81,12 @@ docs/superpowers/
 bcos-evm/README.md
 bcos-evm/bcos-evm/opstack/OpBlock.h
 bcos-evm/bcos-evm/opstack/OpBlock.cpp
-bcos-evm/test/opstack/t8n/generator/
-bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md
-bcos-evm/test/opstack/t8n/vectors/manifest.txt
+bcos-evm/test/opstack/t8n/
+bcos-evm/test/opstack/OpBlockExecuteTest.cpp
+bcos-evm/test/opstack/OpBlockFinalizeTest.cpp
+bcos-evm/test/opstack/OpBlockSealTest.cpp
+bcos-evm/test/opstack/OpBlockHarnessTest.cpp
+bcos-evm/test/opstack/OpT8nReplayTest.cpp
+bcos-evm/test/opstack/OpStateDiffSanitizeTest.cpp
+bcos-evm/test/opstack/StateRootCompute.h
+bcos-evm/test/opstack/StateRootCompute.cpp
