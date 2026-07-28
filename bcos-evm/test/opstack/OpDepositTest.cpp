@@ -32,7 +32,7 @@ TEST(OpDeposit, SuccessMintsAndAdvancesNonce)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     test::TestBlockHashes hashes;
 
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -59,10 +59,10 @@ TEST(OpDeposit, EvmRevertKeepsMintAndChargesActualGas)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kRevert = 0x00000000000000000000000000000000000000dd_address;
     ts[kRevert] = {
-        .nonce = 0, .balance = intx::uint256{0}, .code = evmc::from_hex("60006000fd").value()};
+        .nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = evmc::from_hex("60006000fd").value()};
     test::TestBlockHashes hashes;
 
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -87,7 +87,7 @@ TEST(OpDeposit, EntryFailureChargesFullGasLimitButKeepsMint)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
@@ -110,7 +110,7 @@ TEST(OpDeposit, ContractCreationDerivesAddressFromPreExecutionNonce)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     test::TestBlockHashes hashes;
 
     // PUSH1 0x00 PUSH1 0x00 RETURN：部署空 runtime code，仅用于验证 CREATE 地址派生的 nonce。
@@ -161,7 +161,7 @@ TEST(OpDeposit, RefundLowersDepositGasUsed)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kClear = 0x00000000000000000000000000000000000000ee_address;
     ts[kClear] = {.nonce = 1,
         .balance = intx::uint256{0},
@@ -188,7 +188,7 @@ TEST(OpDeposit, RefundIsCappedAtOneFifthOfGasUsed)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kClear4 = 0x00000000000000000000000000000000000000e4_address;
     ts[kClear4] = {.nonce = 1,
         .balance = intx::uint256{0},
@@ -215,10 +215,10 @@ TEST(OpDeposit, DepositReceiptCarriesLogsBloom)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kLogger = 0x00000000000000000000000000000000000000ef_address;
     ts[kLogger] = {
-        .nonce = 1, .balance = intx::uint256{0}, .code = evmc::from_hex("60006000a000").value()};
+        .nonce = 1, .balance = intx::uint256{0}, .storage = {}, .code = evmc::from_hex("60006000a000").value()};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
@@ -241,10 +241,11 @@ TEST(OpDeposit, RevertedDepositHasEmptyLogsAndZeroBloom)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kLogRevert = 0x00000000000000000000000000000000000000e5_address;
     ts[kLogRevert] = {.nonce = 1,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("60006000a060006000fd").value()};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -267,13 +268,14 @@ TEST(OpDeposit, DepositResolvesEip7702Delegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kImpl = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto kEoa = 0x00000000000000000000000000000000000000ab_address;
     ts[kImpl] = {
-        .nonce = 1, .balance = intx::uint256{0}, .code = evmc::from_hex("600160005500").value()};
+        .nonce = 1, .balance = intx::uint256{0}, .storage = {}, .code = evmc::from_hex("600160005500").value()};
     ts[kEoa] = {.nonce = 1,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("ef0100").value() + evmone::state::bytes{kImpl.bytes, 20}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -296,11 +298,12 @@ TEST(OpDeposit, DelegationToPrecompileFallsBackToEmptyCode)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto k100 = 0x0000000000000000000000000000000000000100_address;
     constexpr auto kEoa = 0x00000000000000000000000000000000000000ac_address;
     ts[kEoa] = {.nonce = 1,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("ef0100").value() + evmone::state::bytes{k100.bytes, 20}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -321,10 +324,11 @@ TEST(OpDeposit, DepositWarmsSenderPerEip2929)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kProbe = 0x00000000000000000000000000000000000000ba_address;
     ts[kProbe] = {.nonce = 1,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("32315000").value()};  // ORIGIN BALANCE POP STOP
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -345,10 +349,11 @@ TEST(OpDeposit, DepositWarmsCoinbasePerEip3651)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kProbe = 0x00000000000000000000000000000000000000bc_address;
     ts[kProbe] = {.nonce = 1,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("41315000").value()};  // COINBASE BALANCE POP STOP
     test::TestBlockHashes hashes;
     auto b = blk();
@@ -379,9 +384,9 @@ TEST(OpDeposit, WarmColdDifferentialIs2500)
     };
     const auto run = [&](const evmc::address& target) {
         test::TestState ts;
-        ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+        ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
         constexpr auto kProbe = 0x00000000000000000000000000000000000000be_address;
-        ts[kProbe] = {.nonce = 1, .balance = intx::uint256{0}, .code = probeCode(target)};
+        ts[kProbe] = {.nonce = 1, .balance = intx::uint256{0}, .storage = {}, .code = probeCode(target)};
         test::TestBlockHashes hashes;
         DepositTx dep{.source_hash = 0x01_bytes32,
             .from = kFrom,
@@ -403,7 +408,7 @@ TEST(OpDeposit, BridgeDepositSpendsMintedValue)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kTo = 0x00000000000000000000000000000000000000f1_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -428,7 +433,7 @@ TEST(OpDeposit, ValueFundedByPreexistingBalanceWithoutMint)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{100}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{100}, .storage = {}, .code = {}};
     constexpr auto kTo = 0x00000000000000000000000000000000000000f2_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -451,7 +456,7 @@ TEST(OpDeposit, ValueFundedJointlyByBalanceAndMint)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{50}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{50}, .storage = {}, .code = {}};
     constexpr auto kTo = 0x00000000000000000000000000000000000000f3_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -477,6 +482,7 @@ TEST(OpDeposit, SenderWithCodeIsAllowed)
     test::TestState ts;
     ts[kFrom] = {.nonce = 3,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("00").value()};  // 任意非委托字节码（STOP）
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -497,7 +503,7 @@ TEST(OpDeposit, ValueOverPostMintBalanceFailsWithFullGasLimit)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     constexpr auto kTo = 0x00000000000000000000000000000000000000f1_address;
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
@@ -522,7 +528,7 @@ TEST(OpDeposit, GasLimitOverBlockBudgetIsBlockError)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
@@ -542,7 +548,7 @@ TEST(OpDeposit, GasLimitExactlyBlockBudgetIsAccepted)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 0, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,
@@ -564,7 +570,7 @@ TEST(OpDeposit, FailedCreateDepositStillBumpsNonceAndDeploysNothing)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}};
+    ts[kFrom] = {.nonce = 5, .balance = intx::uint256{0}, .storage = {}, .code = {}};
     test::TestBlockHashes hashes;
     DepositTx dep{.source_hash = 0x01_bytes32,
         .from = kFrom,

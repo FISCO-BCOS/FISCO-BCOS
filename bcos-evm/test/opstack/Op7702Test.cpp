@@ -106,7 +106,10 @@ TEST(Op7702, RecoversAuthorityAndWritesDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[kDelegate] = {};
     seedOpPredeploys(ts);
 
@@ -141,7 +144,10 @@ TEST(Op7702, BadSignatureRecoverFailsNoDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     seedOpPredeploys(ts);
 
     // r=0 → ecrecover 失败，不写 delegation
@@ -176,7 +182,10 @@ TEST(Op7702, NonceMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     // kAuthority 不存在（state nonce=0），但 auth.nonce=5 → 不匹配
     seedOpPredeploys(ts);
 
@@ -206,7 +215,10 @@ TEST(Op7702, ChainIdMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     seedOpPredeploys(ts);
 
     // auth.chain_id=999, tx chainId=1 → step1 不匹配 → skip
@@ -232,14 +244,18 @@ TEST(Op7702, DelegatedCallAfterAuthorization)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     // kDelegate: PUSH1 42 PUSH1 0 SSTORE — 在委托上下文中写入 kAuthority 的 slot0
-    ts[kDelegate] = {.code = evmc::bytes{0x60, 0x2a, 0x60, 0x00, 0x55}};
+    ts[kDelegate] = {
+        .nonce = 0, .balance = 0, .storage = {}, .code = evmc::bytes{0x60, 0x2a, 0x60, 0x00, 0x55}};
     // kAuthority 已有委托代码指向 kDelegate（nonce=1 已 bump）
     {
         auto delegation_code = evmone::state::bytes(evmone::DELEGATION_MAGIC) +
                                evmone::state::bytes(kDelegate.bytes, kDelegate.bytes + 20);
-        ts[kAuthority] = {.nonce = 1, .code = delegation_code};
+        ts[kAuthority] = {.nonce = 1, .balance = 0, .storage = {}, .code = delegation_code};
     }
     seedOpPredeploys(ts);
 

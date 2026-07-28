@@ -41,11 +41,11 @@ target_link_libraries(bcos-evm-opstack-tests PRIVATE
     GTest::gtest_main
     nlohmann_json::nlohmann_json
 )
-# Suppress -Wmissing-field-initializers for the whole opstack test target: the tests pervasively
-# use evmone's TestState/TestAccount partial designated-aggregate init (e.g.
-# ts[addr] = {.nonce=.., .balance=..} with storage/code defaulted), and the ported
-# statetest_loader.cpp does likewise. GCC treats these as -Werror under the integrated build
-# (AppleClang does not); the top-level set_source_files_properties suppression is directory-scoped
-# and does not reach test/. Scope: test code only — production libraries keep the full warning set.
-target_compile_options(bcos-evm-opstack-tests PRIVATE -Wno-missing-field-initializers)
+# statetest_loader.cpp is compiled from the evmone package install tree (not an in-repo file, so
+# it cannot be edited): its ported partial designated-aggregate inits trip GCC's
+# -Werror=missing-field-initializers under the integrated build (AppleClang does not). The FISCO
+# test .cpp files instead give TestAccount all fields explicitly, so only this one packaged source
+# needs the suppression.
+set_source_files_properties("${EVMONE_TEST_UTILS_DIR}/statetest_loader.cpp"
+    PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)

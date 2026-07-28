@@ -85,7 +85,7 @@ TEST(OpZeroDiff, SimpleTransferMatchesEthExceptBaseFeeVault)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = kFunding};
+    ts[kSender] = {.nonce = 0, .balance = kFunding, .storage = {}, .code = {}};
     ts[kDest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;

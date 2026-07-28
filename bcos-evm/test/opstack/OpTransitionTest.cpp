@@ -37,7 +37,10 @@ TEST(OpTransition, RoutesFeesToFourVaults)
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -91,7 +94,10 @@ TEST(OpTransition, ReceiptCarriesL1AndOperatorMeta)
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -143,7 +149,10 @@ TEST(OpTransition, JovianReceiptMetaAndOperatorFormula)
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -208,9 +217,13 @@ TEST(OpTransition, AccessListKeepsStorageWarm)
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {.nonce = 1,
         .balance = intx::uint256{0},
+        .storage = {},
         .code = evmc::from_hex("6000545000").value()};  // PUSH1 0 SLOAD POP STOP
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -254,7 +267,10 @@ TEST(OpTransition, AccessListWithOverridePrecompileStorageKey)
     constexpr auto kP256 = 0x0000000000000000000000000000000000000100_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -305,7 +321,10 @@ TEST(OpTransition, OperatorFeeConservesWhenCfgDisagreesWithProps)
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;

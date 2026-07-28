@@ -39,7 +39,7 @@ state::Transaction baseTx()
 TEST(OpValidate, RejectsBlobTx)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256};
+    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     auto tx = baseTx();
     tx.type = state::Transaction::Type::blob;
     tx.to = 0x0000000000000000000000000000000000001234_address;
@@ -53,7 +53,7 @@ TEST(OpValidate, RejectsBlobTx)
 TEST(OpValidate, InsufficientForL1CostFails)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 100000000_u256};
+    ts[kSender] = {.nonce = 0, .balance = 100000000_u256, .storage = {}, .code = {}};
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
@@ -67,7 +67,7 @@ TEST(OpValidate, InsufficientForL1CostFails)
 TEST(OpValidate, EmptyEnvelopeFails)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256};
+    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const auto r = opValidate(ts, blk(), baseTx(), {}, isthmusConfig(), OpFeeParams{}, 30000000);
     ASSERT_TRUE(std::holds_alternative<std::error_code>(r));
     EXPECT_EQ(std::get<std::error_code>(r), std::errc::invalid_argument);
@@ -76,7 +76,7 @@ TEST(OpValidate, EmptyEnvelopeFails)
 TEST(OpValidate, SufficientBalancePasses)
 {
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256};
+    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const std::vector<uint8_t> env{0x02};
     const auto r = opValidate(
         ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);

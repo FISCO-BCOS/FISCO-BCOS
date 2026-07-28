@@ -39,7 +39,10 @@ TEST(OpFloorGas, UserTxGasUsedRaisedToFloor)
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     // 2^128 — ample sender balance for gas payment
-    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[sender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
     ts[dest] = {};  // 空账户，纯转账无执行开销
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
@@ -83,7 +86,7 @@ TEST(OpFloorGas, DepositGasUsedRaisedToFloor)
     constexpr auto depositor = OP_DEPOSITOR;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[depositor] = {.nonce = 0, .balance = 0_u256};
+    ts[depositor] = {.nonce = 0, .balance = 0_u256, .storage = {}, .code = {}};
     seedOpPredeploys(ts);
     test::TestBlockHashes hashes;
 
@@ -113,7 +116,7 @@ TEST(OpFloorGas, DepositGasUsedRaisedToFloor)
     DepositTx small = dep;
     small.data = state::bytes{};
     test::TestState ts2;
-    ts2[depositor] = {.nonce = 0, .balance = 0_u256};
+    ts2[depositor] = {.nonce = 0, .balance = 0_u256, .storage = {}, .code = {}};
     seedOpPredeploys(ts2);
     const auto rs =
         runDeposit(ts2, block, hashes, small, isthmusConfig(), vm, 1234, block.gas_limit);

@@ -89,7 +89,7 @@ TEST(OpHost, CallToP256TransfersValue)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = 1000_u256};
+    ts[kSender] = {.nonce = 0, .balance = 1000_u256, .storage = {}, .code = {}};
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
@@ -137,7 +137,7 @@ TEST(OpHost, DelegatedFlagToP256FallsBackToEmptyCode)
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
     // Host::prepare_message(depth==0) 会 get(sender)，必须先入账。
-    ts[kSender] = {.nonce = 0, .balance = 0_u256};
+    ts[kSender] = {.nonce = 0, .balance = 0_u256, .storage = {}, .code = {}};
     state::State st{ts};
     test::TestBlockHashes hashes;
     state::Transaction tx;
@@ -193,9 +193,12 @@ TEST(OpHost, JovianBn256PairingInputAtLimitExecutes)
     constexpr auto kBn256 = 0x0000000000000000000000000000000000000008_address;
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
-    ts[kSender] = {.nonce = 0, .balance = intx::uint256{0}};  // prepare_message(depth==0) 会
-                                                              // get(sender)，必须先入账
-                                                              // （同 OpHostTest.cpp:139 先例）
+    ts[kSender] = {.nonce = 0,
+        .balance = intx::uint256{0},
+        .storage = {},
+        .code = {}};  // prepare_message(depth==0) 会
+                      // get(sender)，必须先入账
+                      // （同 OpHostTest.cpp:139 先例）
     evmone::state::State st{ts};
     test::TestBlockHashes hashes;
     evmone::state::Transaction tx;
