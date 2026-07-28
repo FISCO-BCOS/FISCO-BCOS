@@ -82,3 +82,5 @@ bcos-evm/README.md
 bcos-evm/bcos-evm/opstack/OpBlock.h
 bcos-evm/bcos-evm/opstack/OpBlock.cpp
 bcos-evm/test/opstack/t8n/generator/
+bcos-evm/test/opstack/t8n/vectors/DIVERGENCES.md
+bcos-evm/test/opstack/t8n/vectors/manifest.txt
