@@ -51,6 +51,18 @@ std::vector<std::string> bcos::engine::detail::supportedCapabilities()
         "engine_newPayloadV3"};
 }
 
+std::vector<std::string> bcos::engine::detail::supportedOpCapabilities()
+{
+    // task-5a (spec §6.3): OP composition root only -- appends the V4 entries to the generic
+    // list. `newPayloadV4`/`getPayloadV4`'s semantics are `EngineServiceImpl`-layer only; RPC
+    // endpoint registration is out of scope for this whole feature (spec §6.4 欠账台账,裁定
+    // A6), so advertising these two capabilities here does not imply an RPC-reachable method.
+    auto capabilities = supportedCapabilities();
+    capabilities.push_back("engine_newPayloadV4");
+    capabilities.push_back("engine_getPayloadV4");
+    return capabilities;
+}
+
 bool bcos::engine::detail::isGetPayloadVersionCompatible(
     EngineApiVersion requestVersion, std::uint32_t payloadVersion)
 {

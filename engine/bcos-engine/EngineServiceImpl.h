@@ -64,6 +64,26 @@ bcos::h256 syntheticHash(std::string_view seed);
 
 std::vector<std::string> supportedCapabilities();
 
+/// OP-mode capability list (task-5a, spec §6.3): `supportedCapabilities()` plus the V4
+/// entries. Selected via `if constexpr` on `EngineServiceImpl::c_opMode` in
+/// `exchangeCapabilities` below -- never reached by the generic composition root, so the
+/// generic path's capability list stays byte-for-byte the pre-existing 10 entries.
+std::vector<std::string> supportedOpCapabilities();
+
+/// Unevaluated-context universal sink (same declared-but-never-defined contract as
+/// `std::declval` -- never odr-used, only appears inside the unevaluated `requires`-expression
+/// below). Used solely to probe for `SchedulerType::executeOpBlock`'s second parameter
+/// (`bcos::evm::engine::OpBlockEnv const&` on the real OP scheduler, task 4) without
+/// engine/bcos-engine naming -- and thus depending on -- bcos-evm's `OpBlockEnv` type: the
+/// templated conversion operator matches whatever concrete parameter type the probed call site
+/// declares, keeping this generic engine library free of any bcos-evm dependency (task-5a "库
+/// 纯净" constraint; the `engine` CMake target does not, and must not, link bcos-evm).
+struct AnyArg
+{
+    template <class T>
+    operator T() const;
+};
+
 bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion);
 
 std::optional<std::string> validatePayloadAttributes(
@@ -84,16 +104,33 @@ class EngineServiceImpl
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
+    /// opMode compile-time judgment (spec §6.3, 裁定 B1): probes for
+    /// `SchedulerType::executeOpBlock` via an unevaluated `requires`-expression -- no runtime
+    /// bool, matching this class's existing all-template style. Only `OpSchedulerImpl` (task 4)
+    /// defines a member function with this name; every SchedulerType used by the generic
+    /// composition root today (StubScheduler/BloomScheduler in EngineServiceTest.cpp,
+    /// SchedulerSerialImpl in production) does not, so `c_opMode` is false for all of them and
+    /// the generic path is byte-for-byte unaffected (task-5a zero-drift constraint). The probe
+    /// call's first argument is a real `ViewType&` (this class already knows that type); the
+    /// second and third arguments use `detail::AnyArg`/`std::declval` sinks so this header never
+    /// needs to name `bcos::evm::engine::OpBlockEnv` itself.
+    static constexpr bool c_opMode = requires(SchedulerType& scheduler, ViewType& view) {
+        scheduler.executeOpBlock(
+            view, detail::AnyArg{}, std::declval<std::vector<bcos::bytes> const&>());
+    };
+
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,
         bcos::protocol::BlockFactory::Ptr blockFactory,
-        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit)
+        int64_t blockTxCountLimit = bcos::engine::c_defaultBlockTxCountLimit,
+        std::uint32_t maxEngineVersion = static_cast<std::uint32_t>(EngineApiVersion::V3))
       : m_memPool(std::ref(memPool)),
         m_globalStateStorage(std::ref(globalStateStorage)),
         m_blockTxCountLimit(blockTxCountLimit),
         m_executor(std::ref(executor)),
         m_scheduler(std::ref(scheduler)),
-        m_blockFactory(std::move(blockFactory))
+        m_blockFactory(std::move(blockFactory)),
+        m_maxEngineVersion(maxEngineVersion)
     {
         if (!m_blockFactory)
         {
@@ -110,7 +147,18 @@ public:
         std::vector<std::string> remoteCapabilities)
     {
         (void)remoteCapabilities;
-        co_return detail::supportedCapabilities();
+        // opMode compile-time branch (task-5a, spec §6.3): selects the capability list at
+        // compile time via `if constexpr` on `c_opMode` -- not a runtime bool -- so the generic
+        // composition root's codegen for this function is exactly what it was before this task
+        // (the `else` branch, unconditionally).
+        if constexpr (c_opMode)
+        {
+            co_return detail::supportedOpCapabilities();
+        }
+        else
+        {
+            co_return detail::supportedCapabilities();
+        }
     }
 
     bcos::task::Task<ForkchoiceUpdatedResult> updateForkchoice(
@@ -305,10 +353,17 @@ private:
         std::shared_ptr<ViewType> view;
     };
 
-    static bool isVersionSupported(std::uint32_t version)
+    /// Version-gate upper bound is member state, not a compile-time/static constant (task-5a,
+    /// spec §6.3, decision table "V4 放宽门控"): the generic composition root leaves
+    /// `m_maxEngineVersion` at its default (V3, identical to the pre-existing `static` bound --
+    /// zero drift); only the OP composition root passes `maxEngineVersion = 4` at construction.
+    /// The lower bound (V1) stays a compile-time constant -- only the upper bound is a runtime
+    /// (per-instance, constructor-time-fixed) gate, matching the decision's literal wording
+    /// ("版本上界成员化").
+    bool isVersionSupported(std::uint32_t version) const
     {
         return version >= static_cast<std::uint32_t>(EngineApiVersion::V1) &&
-               version <= static_cast<std::uint32_t>(EngineApiVersion::V3);
+               version <= m_maxEngineVersion;
     }
 
     static PayloadStatus makeStatus(PayloadValidationStatus status,
@@ -668,6 +723,7 @@ private:
     std::reference_wrapper<ExecutorType> m_executor;
     std::reference_wrapper<SchedulerType> m_scheduler;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
+    std::uint32_t m_maxEngineVersion;
     ForkchoiceState m_forkchoiceState;
     std::optional<TrackedHeadBlock> m_trackedHeadBlock;
     std::optional<bcos::protocol::BlockNumber> m_safeBlockNumber;
