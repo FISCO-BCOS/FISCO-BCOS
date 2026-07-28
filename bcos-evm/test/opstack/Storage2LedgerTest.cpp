@@ -276,6 +276,31 @@ TEST(Storage2Ledger, WriteThroughPositiveCacheOverwriteAndDelete)
     EXPECT_FALSE(bridge.poisoned());
 }
 
+// (i2) has_storage 墓碑变体(终审 I-1 回归锚点):此前 probeHasStorage 是纯 range 扫描,不判
+//     值变体——LOGICAL_DELETION 存储上"删至最后一个槽"后,墓碑行(DELETED_TYPE)仍会被
+//     range() 扫到,has_storage 翻不回 false。与 fetchAllStorage/visitAccountsImpl 同一
+//     LOGICAL_DELETION fixture(见 (p2)/(p3)),setStorage 一槽 → storage2::removeOne(不带
+//     BYPASS_LOGICAL_DELETE_TYPE,保留墓碑而非物理擦除)→ 断言 has_storage==false。
+TEST(Storage2Ledger, HasStorageFalseAfterLogicalDeleteOfOnlySlot)
+{
+    LogicalDeleteStorage storage;
+    LogicalDeleteAccount acc(storage, 0x01_address, false);
+    bcos::task::syncWait(acc.create());
+    const auto key = slotKey(0x01);
+    bcos::task::syncWait(acc.setStorage(key, slotKey(0x2a)));
+
+    const auto tableName = tableNameOf(0x01_address);
+    std::string_view keyView(reinterpret_cast<const char*>(key.bytes), sizeof(key.bytes));
+    bcos::task::syncWait(
+        bcos::storage2::removeOne(storage, bcos::executor_v1::StateKeyView{tableName, keyView}));
+
+    Storage2Ledger<LogicalDeleteStorage> bridge(storage);
+    auto result = bridge.get_account(0x01_address);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_FALSE(result->has_storage);
+    EXPECT_FALSE(bridge.poisoned());
+}
+
 // (j) 删除三表失效(CREATE2 同址重生):建账户+槽+code → 桥读全部(种满三缓存)→
 //     applyDiff 删除 → applyDiff 同址重建不同 code/槽 → 再读全部得新值,无陈旧残留。
 TEST(Storage2Ledger, DeleteInvalidatesAllThreeCachesForCreate2Respawn)

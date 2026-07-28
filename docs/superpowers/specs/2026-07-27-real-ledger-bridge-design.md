@@ -66,7 +66,10 @@ standalone 产物中不存在,standalone 只交付账本抽象的 `MemoryLedger`
 `Storage2Ledger` 起该边界开始产生实际的"两路构建用例数不同"效果,Task 7 在此实测验证并
 回填:in-tree `build/` 155 个 `bcos-evm-opstack-tests` 用例,standalone `bcos-evm/build/`
 131 个(差值 24 = 三个守卫文件的用例数:`Storage2LedgerTest.cpp` 20 + `LedgerRootTest.cpp`
-3 + `EbT8nReplayTest.cpp` 1),双路 `ctest` 均全绿。
+3 + `EbT8nReplayTest.cpp` 1),双路 `ctest` 均全绿。**终审修复后更新**(I-1 新增
+`Storage2Ledger.HasStorageFalseAfterLogicalDeleteOfOnlySlot` 墓碑变体回归测试):
+in-tree 156(`Storage2LedgerTest.cpp` 21),standalone 仍 131(该文件仍属守卫文件,不参与
+standalone 编译),差值改为 25;双路 `ctest` 复测均全绿(README.md 同步更新)。
 
 ## 3. 总体架构
 
@@ -252,10 +255,15 @@ storage2 fixture)。同一 DIVERGENCES 纪律;每向量比对计数>0、`known_d
       (`OpBlockSeal.AccountStorageRootMatchesOpStorageRootOnSameMap`,漂移防线单测,见下)
       → N1 = 155,154 条基线用例逐一比对姓名确认全部仍在且全部 PASS(`--gtest_list_tests`
       diff 仅新增一行)。
-- [x] `Storage2Ledger`/`MemoryLedger` 专项单测全绿(§7 点名清单逐项对应,独立行,
-      不折叠进"零回归")—— **实测**:`Storage2Ledger` 20/20、`MemoryLedger` 5/5、
-      `LedgerRoot` 3/3,均 PASS(既随 N1 全量 155/155 一次跑出,也逐类目
-      `--gtest_filter` 单独确认)。
+- [~] `Storage2Ledger`/`MemoryLedger` 专项单测全绿(§7 点名清单逐项对应,独立行,
+      不折叠进"零回归")—— **实测**:`Storage2Ledger` 21/21(终审新增 I-1 墓碑变体
+      `HasStorageFalseAfterLogicalDeleteOfOnlySlot`)、`MemoryLedger` 5/5、`LedgerRoot`
+      3/3,均 PASS(既随全量用例一次跑出,也逐类目 `--gtest_filter` 单独确认)。
+      **如实状态(终审 I-2 补记,原勾选 [x] 不成立)**:§7 点名清单中"协程重入契约"
+      一项**未交付对应单测**——评估后判定在现有基建下无法可靠实现(`libtask/bcos-task/
+      Wait.h` 的 `syncWait` 不带任何线程本地/全局重入检测状态,判断"当前是否已处于
+      协程上下文"没有标准手段,勉强实现只会是脆弱的时序猜测,而非确定性判据)。裁剪
+      详情见 §10.1。
 - [x] 往返测试(vs EVMAccount 双向,abi 豁免口径)绿 —— **实测**:
       `Storage2Ledger.RoundTripFields`/`RoundTripWriteDirectionVsEVMAccount` PASS。
 - [x] 三后端同根测试绿 —— **实测**:
@@ -336,3 +344,19 @@ stateRoot(TA-1d~1f)、RocksDB 后端测试、老执行栈兼容、EEST 套件、
   方义务**:传给 `visitAccounts` 的 visitor 必须自身不抛(或自行吞掉全部异常),不能依赖
   `MemoryLedger` 侧提供任何异常安全网——本设计与既有 33 向量回放腿代码的 visitor(仅做字段
   搬运/比对,不抛)都遵守这条隐性契约,但契约本身此前未在文档中明文,Task 7 在此补记。
+- **协程重入契约单测裁剪未交付(终审 I-2,验收诚实性修复)**:§7 测试清单点名的"协程重入
+  契约(协程上下文内调桥可判定失败)"单测此前**从未真正实现**——`task-3-report.md` 把它列进
+  "Task 4/5/7 范畴,未在本任务重复交付",但 Task 4/5/7
+  均未补上,§8 却在验收清单里把"`Storage2Ledger`/`MemoryLedger` 专项单测全绿(§7 点名清单
+  逐项对应)"一项勾成 `[x]`——这是一处验收诚实性缺口(名不副实的勾选),终审复核发现后已把
+  该行改回 `[~]` 并如实注明。**裁剪原因**:实现依赖对"当前调用是否已处于协程上下文(即外层
+  已有一个 `syncWait` 尚未返回)"的判定,而 `libtask/bcos-task/Wait.h`(`SyncWait::operator()`,
+  Wait.h:42-121)不带任何线程本地/全局的重入检测状态——`finished`/`waitFlag` 是每次调用的
+  局部 `boost::atomic_flag`,不跨调用留痕。没有标准手段能在测试里从外部观测"是否嵌套"而不
+  改动生产代码(加检测本身超出本轮修复范围,且会引入新的运行期开销/复杂度以换取一个仅测试
+  场景使用的断言点,不划算)。**当前的契约落地形态**:头注文档化(`Storage2Ledger.h:20-31`,
+  含终审 I-3 新增的惰性 code getter 单层嵌套例外)+ 代码评审守卫(任何新增调用点是否会造成
+  嵌套 `syncWait` 需人工核查,而非自动化测试捕获)——这是**已知的覆盖薄弱环节**,不是"测了但
+  弱",而是"没测,靠文档和评审两道人工防线"。未来若确有必要补上自动化契约测试,前提是先在
+  `Wait.h` 或桥内部引入某种重入检测原语(如线程本地深度计数器),而这本身是一处需要独立设计
+  的生产代码改动,不属于本轮终审修复范围。

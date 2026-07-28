@@ -21,6 +21,15 @@
 // 在已处于协程上下文(即外层已有一个 syncWait 尚未返回)时再次调用本桥的读方法——
 // 嵌套 syncWait 是已知的栈陷阱,本桥不做该场景下的正确性保证(design §4.1)。
 //
+// 许可例外(终审 I-3,单层嵌套):AccountView::code()(§6 惰性 code getter)是本条款下
+// 唯一的合法用法——它在 visitAccountsImpl 的协程体内被 visitor 同步调用,内部经
+// get_account_code 再次 syncWait 驱动 fetchCode,构成一层嵌套。安全前提不是"嵌套
+// syncWait 总体安全"这条被推翻的论断,而是本桥当前只对接内存/线程内阻塞完成的
+// storage2 后端——底层任务在 co_await 处同步落地,不会真正让出线程、不会在嵌套帧
+// 之间产生并发观察窗口。仅此一层嵌套、仅此一个调用点被认可;禁令本身不放宽——任何
+// 更深的嵌套,或未来后端引入真正跨线程/跨事件循环的异步完成语义,都会使这条例外失效
+// (design §4.1)。
+//
 // 唯一写者不变式:桥实例存续期内(一块一实例,不提供 reset()),底层 storage2 的
 // 唯一写入路径是本桥自身的 applyDiff(Task 4 落地);越过桥直接写底层存储,会使三张
 // 读缓存(账户/槽/code)静默失真而不自知,属使用错误,桥不做检测(design §4.2)。
@@ -615,8 +624,11 @@ private:
         co_return account;
     }
 
-    /// has_storage 判据(design §4.4):账户表 range seek 探测首个 32 字节原始键
-    /// (区别于 ACCOUNT_TABLE_FIELDS 的已知短字段名)。
+    /// has_storage 判据(design §4.4):账户表 range seek 探测首个存活(非墓碑)的 32 字节
+    /// 原始键(区别于 ACCOUNT_TABLE_FIELDS 的已知短字段名)。终审 I-1:range 扫描不判值
+    /// 变体会把逻辑删除的墓碑行(storage2::DELETED_TYPE)当成活槽——"删至最后一个槽"后
+    /// has_storage 仍会翻不回 false。与 fetchAllStorage/visitAccountsImpl 同源,用
+    /// liveContent() 过滤墓碑(design §6 Critical)。
     task::Task<bool> probeHasStorage(std::string_view tableName) const
     {
         auto iterator = co_await storage2::range(m_storage.get(), storage2::RANGE_SEEK,
@@ -624,13 +636,15 @@ private:
         while (auto item = co_await iterator.next())
         {
             const auto& key = std::get<0>(*item);
+            const auto& rawValue = std::get<1>(*item);
             executor_v1::StateKeyView view(key);
             auto [table, fieldKey] = view.get();
             if (table != tableName)
                 co_return false;
-            if (fieldKey.size() == kStorageSlotKeySize)
+            if (fieldKey.size() == kStorageSlotKeySize && liveContent(rawValue).has_value())
                 co_return true;
-            // 已知字段名(codeHash/code/balance/abi/nonce/alive/frozen/shard)——继续找下一行。
+            // 已知字段名(codeHash/code/balance/abi/nonce/alive/frozen/shard)或已墓碑化的槽
+            // (逻辑删除,liveContent 判负)——继续找下一行,不能提前判定 has_storage=true。
         }
         co_return false;
     }
@@ -660,9 +674,16 @@ private:
                 m_storage.get(), executor_v1::StateKeyView{tableName, keyView}))
         {
             auto view = entry->get();
+            // 终审 M-1:槽值长度 != 32 字节此前静默返回全零槽,与"值不存在"混同,把存储层布局
+            // 违规悄悄降级成了合法的零值。改为与 fetchAllStorage 一致的校验——throw,由
+            // get_storage 的读路径 catch 并置毒旗(design §4.3),不让调用方把损坏数据当零值用。
+            if (view.size() != sizeof(evmc_bytes32::bytes))
+                throw std::length_error(
+                    "Storage2Ledger::fetchStorage: storage slot value size mismatch in account "
+                    "table '" +
+                    tableName + "'");
             evmc::bytes32 value{};
-            if (view.size() == sizeof(value.bytes))
-                std::memcpy(value.bytes, view.data(), view.size());
+            std::memcpy(value.bytes, view.data(), view.size());
             co_return value;
         }
         co_return evmc::bytes32{};

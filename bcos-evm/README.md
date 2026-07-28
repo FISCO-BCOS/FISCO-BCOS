@@ -16,7 +16,11 @@ hash_fn 挂 VM)的 ETH + OP Stack 执行参考模块。自 `bcos-evm-ref`
   `LedgerSeed.h` 提供统一播种。`Storage2Ledger` 依赖 `bcos-framework`(storage2/EVMAccount/
   task),仅在 in-tree 构建(`bcos-framework` 目标存在)参与编译;standalone 构建只交付
   `MemoryLedger` 部分,见下方"条件编译边界"。
-- `test/opstack/`:21 测试文件 124 用例,含 `OpT8nReplay.Vectors`
+- `test/`(`eth/` + `opstack/`)：终审修复后分支实况 27 测试文件——in-tree `build/`
+  `bcos-evm-opstack-tests` 156 用例、standalone `bcos-evm/build/` 同名目标 131 用例
+  (双路口径同下方"条件编译边界"一节,差值 25 = `Storage2LedgerTest`/`LedgerRootTest`/
+  `EbT8nReplayTest` 三个仅 in-tree 编译的守卫文件用例数;数字随后续任务增测浮动,不作为
+  硬编码基线),含 `OpT8nReplay.Vectors`
   块级 op-geth(pinned v1.101702.2)差分 gate(33 向量,ctest 常驻)。真账本桥新增三腿回放
   互为对照:`OpT8nReplay`(TestState,既有不动)/`MemoryLedgerT8nReplay`(33 向量)/
   `EbT8nReplay`(33 向量,storage2 真桥,仅 in-tree),`Storage2LedgerTest`/`LedgerRootTest`
@@ -35,8 +39,11 @@ hash_fn 挂 VM)的 ETH + OP Stack 执行参考模块。自 `bcos-evm-ref`
 不满足该条件,三个守卫源码**不参与编译**,`Storage2Ledger`/`Storage2Backend`/`EbT8nReplay`
 在 standalone 产物中不存在——standalone 交付的是账本抽象的 `MemoryLedger` 部分(`ledger/`
 目录本体、`MemoryLedgerT8nReplayTest.cpp`、`MemoryLedgerTest.cpp` 均无条件编译,两路构建
-一致)。实测:in-tree `build/` 155 个 `bcos-evm-opstack-tests` 用例;standalone
-`bcos-evm/build/` 131 个(差值 24 = 上述三个守卫文件的用例数),双路 `ctest` 均全绿。
+一致)。实测(终审修复后):in-tree `build/` 156 个 `bcos-evm-opstack-tests` 用例
+(含终审 I-1 新增的 `Storage2Ledger.HasStorageFalseAfterLogicalDeleteOfOnlySlot` 墓碑
+变体回归测试);standalone `bcos-evm/build/` 131 个(不变——新增测试位于三个守卫文件
+之一 `Storage2LedgerTest.cpp`,不参与 standalone 编译);差值 25 = 上述三个守卫文件的
+用例数,双路 `ctest` 均全绿。
 
 ## Build(standalone)
 
