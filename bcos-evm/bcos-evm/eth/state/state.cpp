@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "state.hpp"
+#include "../Eip7702Recover.h"
 #include "../utils/stdx/utility.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
@@ -17,8 +18,6 @@ namespace evmone::state
 {
 namespace
 {
-/// Secp256k1's N/2 is the upper bound of the signature's s value.
-constexpr auto SECP256K1N_OVER_2 = evmmax::secp256k1::Curve::ORDER / 2;
 /// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist before.
 constexpr auto AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
 /// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
@@ -108,25 +107,30 @@ int64_t process_authorization_list(
         // y_parity must be 0 or 1 for EIP-7702/2930 signatures.
         if (auth.v > 1)
             continue;
-        // TODO: We actually only do "partial" verification by assuming the signature is valid
-        //   when the test has the signer specified.
-        if (!auth.signer.has_value())
+        // s value must be less than or equal to secp256k1n/2, as specified in EIP-2.
+        // Validated before ecrecover, as op-geth does (ValidateSignatureValues before Recover).
+        if (auth.s > bcos::evm::eth::SECP256K1N_OVER_2)
             continue;
 
-        // s value must be less than or equal to secp256k1n/2, as specified in EIP-2.
-        if (auth.s > SECP256K1N_OVER_2)
+        // FISCO-BCOS: real ecrecover (shared with the opstack path) instead of the upstream
+        // signer-shortcut stub — a pre-set auth.signer (test shortcut) is honored, otherwise the
+        // authority is recovered from the signature. A recovery failure skips this authorization.
+        std::optional<evmc::address> signer = auth.signer;
+        if (!signer.has_value())
+            signer = bcos::evm::eth::recoverAuthority(auth);
+        if (!signer.has_value())
             continue;
 
         // Get or create the authority account.
         // It is still empty at this point until nonce bump following successful authorization.
-        auto& authority = state.get_or_insert(*auth.signer, {.erase_if_empty = true});
+        auto& authority = state.get_or_insert(*signer, {.erase_if_empty = true});
 
         // 4. Add authority to accessed_addresses (as defined in EIP-2929.)
         authority.access_status = EVMC_ACCESS_WARM;
 
         // 5. Verify the code of authority is either empty or already delegated.
         if (authority.code_hash != Account::EMPTY_CODE_HASH &&
-            !is_code_delegated(state.get_code(*auth.signer)))
+            !is_code_delegated(state.get_code(*signer)))
             continue;
 
         // 6. Verify the nonce of authority is equal to nonce.

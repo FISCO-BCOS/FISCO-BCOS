@@ -1,4 +1,5 @@
 #include <bcos-evm/adapter/StateDiffSanitize.h>
+#include <bcos-evm/eth/Eip7702Recover.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpHost.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
@@ -24,30 +25,15 @@ using namespace intx;
 
 namespace bcos::evm::opstack
 {
+using bcos::evm::eth::recoverAuthority;
+using bcos::evm::eth::SECP256K1N_OVER_2;
+
 namespace
 {
-/// Secp256k1's N/2 is the upper bound of the signature's s value.
-constexpr auto SECP256K1N_OVER_2 = evmmax::secp256k1::Curve::ORDER / 2;
 /// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist before.
 constexpr auto AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
 /// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
 constexpr auto AUTHORIZATION_BASE_COST = 12500;
-/// EIP-7702 authorization magic byte (prefix of signing hash).
-constexpr uint8_t kSetCodeMagic = 0x05;
-
-/// Recover the authority address from an EIP-7702 authorization via ecrecover.
-/// signing hash = keccak256(0x05 || rlp([chain_id, address, nonce]))
-std::optional<evmc::address> recoverAuthority(const evmone::state::Authorization& auth)
-{
-    auto msg = evmone::bytes{kSetCodeMagic} +
-               evmone::rlp::encode_tuple(auth.chain_id, auth.addr, auth.nonce);
-    const auto h = evmone::keccak256(msg);
-    const auto r = intx::be::store<evmc::bytes32>(auth.r);
-    const auto s = intx::be::store<evmc::bytes32>(auth.s);
-    return evmmax::secp256k1::ecrecover(std::span<const uint8_t, 32>{h.bytes, 32},
-        std::span<const uint8_t, 32>{r.bytes, 32}, std::span<const uint8_t, 32>{s.bytes, 32},
-        auth.v != 0);
-}
 
 int64_t process_authorization_list(evmone::state::State& state, uint64_t chain_id,
     const evmone::state::AuthorizationList& authorization_list)
