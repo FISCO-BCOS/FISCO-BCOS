@@ -170,7 +170,9 @@ TEST(Op7702, BadSignatureRecoverFailsNoDelegation)
     // 真实 kAuthority 必须没有被委托
     auto it = ts.find(kAuthority);
     if (it != ts.end())
+    {
         EXPECT_TRUE(it->second.code.empty()) << "kAuthority must NOT have delegation after bad sig";
+    }
 
     // ecrecover 可能恢复出其他地址；任何账户都不应被写入 delegation designator
     expectNoDelegationDesignatorAnywhere(ts);
@@ -235,7 +237,9 @@ TEST(Op7702, ChainIdMismatchSkips)
 
     auto it = ts.find(kAuthority);
     if (it != ts.end())
+    {
         EXPECT_TRUE(it->second.code.empty()) << "no delegation on chain_id mismatch";
+    }
 }
 
 // ─── 用例 5: 授权后委托调用 → kAuthority 预设委托代码，call to kAuthority 走 kDelegate 逻辑 ───

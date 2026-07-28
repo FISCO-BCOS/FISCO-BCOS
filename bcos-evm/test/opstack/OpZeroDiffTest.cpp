@@ -159,9 +159,13 @@ TEST(OpZeroDiff, SimpleTransferMatchesEthExceptBaseFeeVault)
 
     // L1 / operator 费用为 0：不应出现在 eth diff；OP 侧若 touch 余额须仍为 0。
     if (const auto l1 = balanceOf(opReceipt.state_diff, OP_L1_FEE_VAULT))
+    {
         EXPECT_EQ(*l1, intx::uint256{0});
+    }
     if (const auto opv = balanceOf(opReceipt.state_diff, OP_OPERATOR_FEE_VAULT))
+    {
         EXPECT_EQ(*opv, intx::uint256{0});
+    }
     EXPECT_FALSE(balanceOf(ethReceipt.state_diff, OP_BASE_FEE_VAULT).has_value());
     EXPECT_FALSE(balanceOf(ethReceipt.state_diff, OP_L1_FEE_VAULT).has_value());
     EXPECT_FALSE(balanceOf(ethReceipt.state_diff, OP_OPERATOR_FEE_VAULT).has_value());
