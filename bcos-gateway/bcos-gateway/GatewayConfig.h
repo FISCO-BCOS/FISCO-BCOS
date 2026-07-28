@@ -92,7 +92,7 @@ public:
         bool enableOutConnRateLimit() const;
 
         bool enableInRateLimit() const;
-    bool enableInP2pBasicMsgLimit() const;
+        bool enableInP2pBasicMsgLimit() const;
 
         bool enableInP2pModuleMsgLimit(uint16_t _moduleID) const
         {
@@ -187,6 +187,28 @@ public:
     uint32_t sessionRecvBufferSize() const;
     void setSessionRecvBufferSize(uint32_t _sessionRecvBufferSize);
 
+    // FIB-184: caps on inbound sessions, configurable via p2p.max_concurrent_sessions /
+    // p2p.max_sessions_per_ip (previously hardcoded in Host). Bound memory under TLS churn.
+    std::size_t maxConcurrentSessions() const { return m_maxConcurrentSessions; }
+    void setMaxConcurrentSessions(std::size_t _limit) { m_maxConcurrentSessions = _limit; }
+    std::size_t maxSessionsPerIP() const { return m_maxSessionsPerIP; }
+    void setMaxSessionsPerIP(std::size_t _limit) { m_maxSessionsPerIP = _limit; }
+
+    // FIB-186: cap on concurrent in-flight TLS handshakes, configurable via
+    // p2p.max_pending_handshakes. Bounds accept/handshake work so connection churn cannot starve
+    // the shared I/O pool that also delivers consensus messages. Global only (no per-IP: see
+    // Host.h).
+    std::size_t maxPendingHandshakes() const { return m_maxPendingHandshakes; }
+    void setMaxPendingHandshakes(std::size_t _limit) { m_maxPendingHandshakes = _limit; }
+    // FIB-186: per-handshake timeout (ms), configurable via p2p.handshake_timeout_ms. Reclaims the
+    // admission slot of a stalled / slow-loris handshake instead of letting it hold forever.
+    int handshakeTimeout() const { return m_handshakeTimeout; }
+    void setHandshakeTimeout(int _timeoutMs) { m_handshakeTimeout = _timeoutMs; }
+    // FIB-186: max accepted new connections per second, configurable via
+    // p2p.max_connections_per_second. Bounds handshake CPU under connection churn (0 = unlimited).
+    uint32_t maxConnectionsPerSecond() const { return m_maxConnectionsPerSecond; }
+    void setMaxConnectionsPerSecond(uint32_t _limit) { m_maxConnectionsPerSecond = _limit; }
+
     uint32_t maxReadDataSize() const;
     void setMaxReadDataSize(uint32_t _maxReadDataSize);
 
@@ -242,6 +264,16 @@ private:
     uint32_t m_allowMaxMsgSize = MAX_MESSAGE_LENGTH;
     // p2p session read buffer size, default: 128k
     uint32_t m_sessionRecvBufferSize{128 * 1024};
+    // FIB-184: inbound session caps (defaults match the prior hardcoded Host constants)
+    std::size_t m_maxConcurrentSessions{1024};
+    std::size_t m_maxSessionsPerIP{32};
+    // FIB-186: in-flight TLS handshake cap (default matches Host::DEFAULT_MAX_PENDING_HANDSHAKES)
+    std::size_t m_maxPendingHandshakes{64};
+    // FIB-186: per-handshake timeout in ms (default matches Host::DEFAULT_HANDSHAKE_TIMEOUT_MS)
+    int m_handshakeTimeout{10000};
+    // FIB-186: accepted new-connection rate cap (default matches
+    // Host::DEFAULT_MAX_CONNECTIONS_PER_SECOND)
+    uint32_t m_maxConnectionsPerSecond{100};
     uint32_t m_maxReadDataSize = 40 * 1024;
     uint32_t m_maxSendDataSize = 1024 * 1024;
     uint32_t m_maxSendMsgCount = 10;

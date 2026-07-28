@@ -82,6 +82,8 @@ public:
     std::string_view sender() const override;
     void forceSender(const bcos::bytes& _sender) override;
     void clearSenderAndHash() override;
+    bcos::crypto::HashType recomputeWeb3CanonicalHash(
+        bcos::bytesConstRef payload, bcos::bytesConstRef signature);
 
     void setSignatureData(bcos::bytes& signature);
 

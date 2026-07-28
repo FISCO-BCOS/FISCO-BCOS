@@ -22,6 +22,8 @@
 #include "bcos-crypto/hash/Keccak256.h"
 #include "bcos-framework/protocol/LogEntry.h"
 #include "bcos-utilities/Common.h"
+#include <range/v3/range/concepts.hpp>
+#include <range/v3/range/traits.hpp>
 
 namespace bcos
 {

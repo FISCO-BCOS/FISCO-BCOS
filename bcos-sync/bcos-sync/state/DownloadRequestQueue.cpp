@@ -137,17 +137,39 @@ std::set<DownloadRequestQueue::BlockRequest> DownloadRequestQueue::mergeAndPop()
     UpgradeGuard ulock(lock);
     std::set<DownloadRequestQueue::BlockRequest> fetchSet{};
 
-    while (!m_reqQueue.empty())
+    // FIB-19: hard cap on the number of generated block requests. A malicious peer can request a
+    // range spanning billions of blocks; without this cap mergeAndPop() expands it into an
+    // unbounded fetchSet and the caller (maintainBlockRequest) issues one ledger read + outbound
+    // message per entry. Stop once the cap is reached and drop the remaining queue; the requester
+    // retries for anything beyond the cap.
+    bool capped = false;
+    while (!m_reqQueue.empty() && !capped)
     {
         auto topReq = m_reqQueue.top();
         auto interval = (topReq->interval() == 0 ? 1 : topReq->interval());
         for (BlockNumber i = topReq->fromNumber(); i <= topReq->toNumber(); i += interval)
         {
+            if (fetchSet.size() >= MAX_MERGED_REQUEST_BLOCKS_COUNT)
+            {
+                capped = true;
+                break;
+            }
             fetchSet.insert({i, topReq->blockDataFlag() > 0 ?
                                     topReq->blockDataFlag() :
                                     (bcos::ledger::HEADER | bcos::ledger::TRANSACTIONS)});
         }
         m_reqQueue.pop();
+    }
+    if (capped)
+    {
+        BLKSYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("Request")
+                             << LOG_DESC("mergeAndPop hit hard cap, dropping remaining requests")
+                             << LOG_KV("cap", MAX_MERGED_REQUEST_BLOCKS_COUNT)
+                             << LOG_KV("fetchSetSize", fetchSet.size())
+                             << LOG_KV("droppedQueueSize", m_reqQueue.size())
+                             << LOG_KV("peer", m_nodeId->shortHex());
+        RequestQueue empty;
+        m_reqQueue.swap(empty);
     }
     if (c_fileLogLevel == LogLevel::TRACE)
     {

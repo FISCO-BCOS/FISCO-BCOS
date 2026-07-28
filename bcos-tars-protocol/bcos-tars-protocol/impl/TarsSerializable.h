@@ -3,6 +3,8 @@
 #include "TarsStruct.h"
 #include <bcos-concepts/Basic.h>
 #include <bcos-concepts/ByteBuffer.h>
+#include <range/v3/range/access.hpp>
+#include <range/v3/range/primitives.hpp>
 
 namespace bcostars
 {

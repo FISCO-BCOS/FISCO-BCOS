@@ -110,8 +110,14 @@ void Transaction::verify(crypto::Hash& hashImpl, crypto::SignatureCrypto& signat
     }
     else if (type() == static_cast<uint8_t>(TransactionType::Web3Transaction))
     {
-        auto const bytesRef = extraTransactionBytes();
-        hashResult = bcos::crypto::keccak256Hash(bytesRef);
+        // Recompute and store the canonical txHash from the signed payload. The computation lives
+        // in the tars layer (calculateHash -> hash::calculate), so this framework core stays free
+        // of RLP/codec. Callers clear extraTransactionHash before verify() (clearSenderAndHash),
+        // so a wire-supplied value from an untrusted peer is never believed (FIB-New1).
+        calculateHash(hashImpl);
+        // Recover uses the EIP signing hash keccak256(preimage), which differs from the canonical
+        // txHash stored above.
+        hashResult = bcos::crypto::keccak256Hash(extraTransactionBytes());
     }
 
     auto const signature = signatureData();

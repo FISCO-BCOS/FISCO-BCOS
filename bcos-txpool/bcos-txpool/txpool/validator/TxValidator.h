@@ -32,6 +32,12 @@
 
 namespace bcos::txpool
 {
+// Issue #5318: a valid `to` is empty (deployment) or a 20-byte hex address with an optional
+// 0x/0X prefix; WASM chains are exempt because their `to` carries a BFS path. Anything else
+// used to get packed into a block and deterministically fail execution (BASELINE_SCHEDULER
+// throws while hex-decoding `to`), which PBFT re-proposes forever — halting the whole chain.
+bool isValidToField(std::string_view toField);
+
 class TxValidator : public TxValidatorInterface
 {
 public:

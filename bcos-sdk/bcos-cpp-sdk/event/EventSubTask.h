@@ -23,6 +23,7 @@
 #include <bcos-cpp-sdk/event/Common.h>
 #include <bcos-cpp-sdk/event/EventSubInterface.h>
 #include <bcos-cpp-sdk/event/EventSubParams.h>
+#include <bcos-utilities/BoostLog.h>
 #include <atomic>
 #include <utility>
 

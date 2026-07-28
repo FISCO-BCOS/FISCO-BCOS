@@ -76,9 +76,16 @@ jobs:
       - name: Install macOS dependencies
         if: matrix.os == 'macos-15' || matrix.os == 'macos-15-intel'
         run: brew install libomp autoconf automake libtool
-      - name: Add MSbuild to PATH
+      - name: Set up MSVC environment
+        # The windows-2025 image ships Visual Studio 18 (2026), which the pinned
+        # CMake 3.28 cannot recognize as a generator: generator auto-detection
+        # falls back to "NMake Makefiles" and fails with "'nmake' '-?' failed"
+        # because nothing put the VC tools on PATH. Use the Ninja generator with
+        # cl.exe from the developer environment instead (version-agnostic).
         if: matrix.os == 'windows-2025'
-        uses: microsoft/setup-msbuild@v1.1
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - uses: actions-rs/toolchain@v1
         if: matrix.os != 'windows-2025'
         with:
@@ -390,6 +397,11 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           files: build/coverage.info
+          # Upload only the clean lcov file. Without this, codecov-cli also
+          # sweeps the build/ tree and uploads thousands of raw .gcov/.gcda
+          # intermediates whose paths do not map to the repo, which makes
+          # Codecov reject the whole commit as an unusable report.
+          disable_search: true
           flags: unittests
           fail_ci_if_error: false
           verbose: true

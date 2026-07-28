@@ -20,6 +20,7 @@
 
 #include <bcos-boostssl/context/Common.h>
 #include <bcos-boostssl/context/NodeInfoTools.h>
+#include <bcos-utilities/BoostLog.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 #include <boost/algorithm/string/classification.hpp>

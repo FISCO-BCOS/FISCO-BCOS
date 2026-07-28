@@ -98,10 +98,18 @@ struct Payload
 class Session : public SessionFace, public std::enable_shared_from_this<Session>
 {
 public:
+    // Grow ceiling: the recv buffer never grows beyond this (see Session::doRead grow path).
     constexpr static const std::size_t MIN_SESSION_RECV_BUFFER_SIZE = 512 * 1024UL;
+    // FIB-184: initial recv-buffer size for a freshly created session. Previously every
+    // session unconditionally allocated MIN_SESSION_RECV_BUFFER_SIZE (512KB) up front, so a
+    // flood of unauthenticated/short-lived sessions caused heap exhaustion. Start small and
+    // rely on the existing grow path (doRead grows up to m_maxRecvBufferSize) to expand only
+    // for sessions that actually carry large messages. Must stay well above the message
+    // header length so the first read can always make forward progress.
+    constexpr static const std::size_t INITIAL_SESSION_RECV_BUFFER_SIZE = 16 * 1024UL;
 
     Session(std::shared_ptr<SocketFace> socket, Host& server,
-        size_t _recvBufferSize = MIN_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
+        size_t _recvBufferSize = INITIAL_SESSION_RECV_BUFFER_SIZE, bool _forceSize = false);
 
     Session(const Session&) = delete;
     Session(Session&&) = delete;
@@ -153,6 +161,15 @@ public:
 
     void setHostInfo(P2PInfo _hostInfo);
 
+    // FIB-184: attach an opaque object whose lifetime is bound to this session. It is destroyed
+    // exactly when the session object is destroyed, which Host uses to release a session-cap
+    // slot (the guard's destructor decrements the Host counters). Kept opaque so libnetwork
+    // does not depend on the accounting type.
+    void setLifetimeGuard(std::shared_ptr<void> _guard) override
+    {
+        m_lifetimeGuard = std::move(_guard);
+    }
+
     uint32_t maxReadDataSize() const;
     void setMaxReadDataSize(uint32_t _maxReadDataSize);
 
@@ -170,6 +187,11 @@ public:
 
     SessionRecvBuffer& recvBuffer();
     const SessionRecvBuffer& recvBuffer() const;
+
+    // FIB-184 (review): grow ceiling for the recv buffer, set from the config-validated size at
+    // construction. Exposed read-only; the member itself is private (below) so external callers
+    // can read but never widen this security bound.
+    std::size_t maxRecvBufferSize() const { return m_maxRecvBufferSize; }
     /**
      * @brief The packets that can be sent are obtained based on the configured policy
      *
@@ -185,7 +207,13 @@ public:
 
     void doRead();
 
+    // FIB-184 (review): keep the grow ceiling private so it can only be read via
+    // maxRecvBufferSize() and never widened from outside. Declared before m_recvBuffer to preserve
+    // member init order.
+private:
     std::size_t m_maxRecvBufferSize;
+
+public:
     SessionRecvBuffer m_recvBuffer;
 
     // ------ for optimize send message parameters  begin ---------------
@@ -204,6 +232,16 @@ public:
     /// Drop the connection for the reason @a _reason.
     void drop(DisconnectReason _reason);
 
+private:
+    // FIB-184: perform the actual SSL/socket teardown (close + graceful async_shutdown). It has a
+    // strict threading contract — it must run on the socket's io_context (or, on the shutdown path,
+    // with the io_context threads already joined) so it never touches the ssl::stream concurrently
+    // with an in-flight async_read_some/async_write. It is therefore private and reachable only via
+    // drop(), which enforces that contract (post to the io_context, or inline once the network is
+    // down); calling it directly from an arbitrary thread would reintroduce the original race.
+    void closeSocket(DisconnectReason _reason);
+
+public:
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
 
@@ -223,7 +261,11 @@ public:
     MessageFactory::Ptr m_messageFactory;
     tbb::concurrent_queue<Payload> m_writeQueue;
     std::mutex m_writingQueueMutex;
-    bool m_active = false;
+    // FIB-184 (review): atomic so the active flag is read/written without a data race between the
+    // network worker (set/clear in start/drop) and readers in active()/doRead(). Note active() is
+    // still a composite read (also m_socket / haveNetwork()), so this narrows but does not by
+    // itself make the whole liveness check atomic.
+    std::atomic<bool> m_active{false};
 
     SessionCallbackManagerInterface::Ptr m_sessionCallbackManager;
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
@@ -244,6 +286,10 @@ public:
     // actual teardown body runs exactly once; all subsequent callers no-op.
     std::atomic_bool m_dropped{false};
     P2PInfo m_hostInfo;
+
+    // FIB-184: opaque guard whose destructor releases the Host session-cap slot. Destroyed with
+    // the session, so the slot is freed exactly once on session teardown.
+    std::shared_ptr<void> m_lifetimeGuard;
 
     struct Writings
     {
