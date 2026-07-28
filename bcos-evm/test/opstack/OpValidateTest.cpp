@@ -57,7 +57,9 @@ TEST(OpValidate, InsufficientForL1CostFails)
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
-        .blob_base_fee = 10000000_u256};
+        .blob_base_fee = 10000000_u256,
+        .operator_fee_scalar = 0,
+        .operator_fee_constant = 0};
     std::vector<uint8_t> env(50, 0x11);
     const auto r =
         opValidate(ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), fee, 30000000);

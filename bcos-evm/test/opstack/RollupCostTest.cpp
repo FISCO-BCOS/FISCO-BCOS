@@ -90,7 +90,9 @@ TEST(RollupCost, EcotoneL1DiffersFromFjordSameEnvelope)
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 2,
         .blob_base_fee_scalar = 3,
-        .blob_base_fee = 10000000_u256};
+        .blob_base_fee = 10000000_u256,
+        .operator_fee_scalar = 0,
+        .operator_fee_constant = 0};
     std::vector<uint8_t> env(200, 0x11);
     const auto ecotone = computeL1Cost(fee, {env.data(), env.size()}, ecotoneConfig());
     const auto fjord = computeL1Cost(fee, {env.data(), env.size()}, fjordConfig());
