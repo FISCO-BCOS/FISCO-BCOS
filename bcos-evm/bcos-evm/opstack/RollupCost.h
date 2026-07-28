@@ -37,6 +37,11 @@ intx::uint256 computeL1Cost(
     const OpFeeParams& params, evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg) noexcept;
 
 /// Operator fee: Isthmus gas*scalar/1e6+constant; Jovian gas*scalar*100+constant.
+/// The bool overload takes the formula selection directly so a caller can pin it to a snapshot
+/// (OpTxProperties) and stay consistent across the validate/transition split; the cfg overload
+/// forwards cfg.has_jovian_operator_formula.
+intx::uint256 computeOperatorCost(
+    const OpFeeParams& params, uint64_t gas, bool jovianFormula) noexcept;
 intx::uint256 computeOperatorCost(
     const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept;
 }  // namespace bcos::evm::opstack

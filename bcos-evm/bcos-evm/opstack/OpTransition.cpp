@@ -195,7 +195,7 @@ RunTxResult runTxMessage(evmone::state::State& state, OpHost& host,
 OpTxReceipt opTransition(const evmone::state::StateView& view,
     const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
     const evmone::state::Transaction& tx, const OpForkConfig& cfg, evmc::VM& vm,
-    const OpTxProperties& props, uint64_t chainId, evmc::bytes_view signedTxEnvelope)
+    const OpTxProperties& props, uint64_t chainId)
 {
     const auto rev = cfg.rev;
     evmone::state::State state{view};
@@ -232,25 +232,24 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
     state.touch(block.coinbase).balance += gas_used * priority_gas_price;
 
-    const auto opAtUsed = cfg.has_operator_fee ?
-                              computeOperatorCost(props.fee, static_cast<uint64_t>(gas_used), cfg) :
+    // Operator fee: charge the vault with the SAME formula/params that priced the sender's
+    // pre-charge (operator_cost_at_gas_limit), taken from the validate-time snapshot in props —
+    // NOT from this call's cfg. This makes the two sides conserve even if validate and transition
+    // straddle a fork boundary: cap = opCost(gas_limit, snapshot), used = opCost(gas_used,
+    // snapshot); opCost is monotonic in gas and gas_used <= gas_limit, so cap >= used holds and
+    // the refund never underflows. sender net = cap - (cap - used) = used = vault credit.
+    const auto opAtUsed = props.has_operator_fee ?
+                              computeOperatorCost(props.fee, static_cast<uint64_t>(gas_used),
+                                  props.jovian_operator_formula) :
                               intx::uint256{0};
     state.touch(OP_BASE_FEE_VAULT).balance +=
         intx::uint256{static_cast<uint64_t>(gas_used)} * intx::uint256{base_fee};
     state.touch(OP_L1_FEE_VAULT).balance += props.l1_cost;
-    if (cfg.has_operator_fee)
+    if (props.has_operator_fee)
     {
         state.touch(OP_OPERATOR_FEE_VAULT).balance += opAtUsed;
-        // Refund the over-charge (operator cost was pre-charged at gas_limit, actual is at
-        // gas_used, so cap >= used holds when validate and transition run under the same cfg —
-        // guaranteed by OpTxProperties::fee snapshotting). Guard the subtraction defensively: a
-        // cfg mismatch across the two calls (e.g. a fork boundary between validation and
-        // inclusion) must never wrap uint256 into a ~2^256 credit. assert catches it in debug;
-        // the saturating floor prevents consensus-breaking balance inflation in release.
         assert(props.operator_cost_at_gas_limit >= opAtUsed);
-        sender_acc.balance += props.operator_cost_at_gas_limit > opAtUsed ?
-                                  props.operator_cost_at_gas_limit - opAtUsed :
-                                  intx::uint256{0};
+        sender_acc.balance += props.operator_cost_at_gas_limit - opAtUsed;
     }
 
     evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used, {},
@@ -263,13 +262,6 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     return OpTxReceipt{std::move(receipt), meta};
 }
 
-OpTxReceipt opTransitionFromState(const evmone::state::StateView& view,
-    const evmone::state::BlockInfo& block, const evmone::state::BlockHashes& hashes,
-    const evmone::state::Transaction& tx, const OpForkConfig& cfg, evmc::VM& vm,
-    const OpTxProperties& props, uint64_t chainId, evmc::bytes_view signedTxEnvelope)
-{
-    return opTransition(view, block, hashes, tx, cfg, vm, props, chainId, signedTxEnvelope);
-}
 
 // ---- tx validation (formerly OpValidate.cpp) ----
 
@@ -309,8 +301,8 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     if (balance < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
-    return OpTxProperties{
-        std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee, flzLen};
+    return OpTxProperties{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
+        flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula};
 }
 
 std::variant<OpTxProperties, std::error_code> opValidateFromState(

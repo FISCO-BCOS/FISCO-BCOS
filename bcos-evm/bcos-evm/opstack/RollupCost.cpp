@@ -194,9 +194,9 @@ intx::uint256 computeL1Cost(
 }
 
 intx::uint256 computeOperatorCost(
-    const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept
+    const OpFeeParams& params, uint64_t gas, bool jovianFormula) noexcept
 {
-    if (cfg.has_jovian_operator_formula)
+    if (jovianFormula)
     {
         return intx::uint256{gas} * intx::uint256{params.operator_fee_scalar} *
                    intx::uint256{kJovianOperatorFeeMultiplier} +
@@ -205,5 +205,11 @@ intx::uint256 computeOperatorCost(
     return intx::uint256{gas} * intx::uint256{params.operator_fee_scalar} /
                intx::uint256{kOperatorFeeScalarDivisor} +
            intx::uint256{params.operator_fee_constant};
+}
+
+intx::uint256 computeOperatorCost(
+    const OpFeeParams& params, uint64_t gas, const OpForkConfig& cfg) noexcept
+{
+    return computeOperatorCost(params, gas, cfg.has_jovian_operator_formula);
 }
 }  // namespace bcos::evm::opstack

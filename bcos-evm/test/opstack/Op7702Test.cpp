@@ -81,8 +81,7 @@ OpTxReceipt runWithAuth(
         return OpTxReceipt{kEmpty, {}};
     }
     const auto& props = std::get<OpTxProperties>(v);
-    return opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, props, chainId, {env.data(), env.size()});
+    return opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, chainId);
 }
 
 [[nodiscard]] bool isDelegationDesignator(const evmc::bytes& code) noexcept
@@ -273,8 +272,7 @@ TEST(Op7702, DelegatedCallAfterAuthorization)
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
     ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
-    const auto txR = opTransition(
-        ts, block, hashes, tx, isthmusConfig(), vm, props, 1, {env.data(), env.size()});
+    const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1);
 
     // 委托调用应成功执行 kDelegate 代码；SSTORE 在 authority 上下文中落槽
     EXPECT_EQ(txR.receipt.status, EVMC_SUCCESS);

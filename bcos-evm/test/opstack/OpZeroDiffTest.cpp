@@ -121,7 +121,7 @@ TEST(OpZeroDiff, SimpleTransferMatchesEthExceptBaseFeeVault)
     EXPECT_EQ(props.operator_cost_at_gas_limit, intx::uint256{0});
 
     const auto opTxR = opTransition(
-        ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1, {env.data(), env.size()});
+        ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1);
     ASSERT_EQ(opTxR.receipt.status, EVMC_SUCCESS);
     const auto& opReceipt = opTxR.receipt;
 
