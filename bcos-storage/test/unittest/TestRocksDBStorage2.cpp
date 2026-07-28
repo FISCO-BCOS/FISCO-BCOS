@@ -2,8 +2,8 @@
 #include "bcos-framework/storage2/Storage.h"
 #include "bcos-framework/transaction-executor/StateKey.h"
 #include "bcos-task/Wait.h"
-#include <bcos-storage/CheckpointRocksDBStorage.h>
 #include <bcos-framework/storage/Entry.h>
+#include <bcos-storage/CheckpointRocksDBStorage.h>
 #include <bcos-storage/RocksDBStorage2.h>
 #include <bcos-storage/StateKVResolver.h>
 #include <fmt/format.h>
@@ -58,8 +58,8 @@ struct TestRocksDBStorage2Fixture
 
         RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver> storage(
             *guard, StateKeyResolver{}, StateValueResolver{});
-        task::syncWait(storage2::writeOne(
-            storage, StateKey{table, key}, storage::Entry(std::string(value))));
+        task::syncWait(
+            storage2::writeOne(storage, StateKey{table, key}, storage::Entry(std::string(value))));
     }
 };
 
@@ -236,13 +236,55 @@ BOOST_AUTO_TEST_CASE(merge)
     }());
 }
 
+// merge() folds its sources into ONE WriteBatch in ARGUMENT ORDER, so when two sources carry
+// the same key the LAST one wins on disk. MultiLayerStorage::mergeBackStorage leans on exactly
+// this: it passes the committing block's own layer first and commit's prewrite storage second,
+// so a row both of them hold — SYS_NUMBER_2_BLOCK_HEADER, written unsigned at execute time and
+// signed at commit time — persists in the prewrite (signed) version. The MultiLayerStorage-level
+// test lives in TestMPTSchedulerWiring; this one pins the property at the physical RocksDB layer.
+BOOST_AUTO_TEST_CASE(mergeAppliesSourcesInArgumentOrder)
+{
+    task::syncWait([this]() -> task::Task<void> {
+        RocksDBStorage2<StateKey, StateValue, StateKeyResolver, StateValueResolver> rocksDB(
+            *originRocksDB, StateKeyResolver{}, StateValueResolver{});
+
+        storage2::memory_storage::MemoryStorage<StateKey, StateValue,
+            storage2::memory_storage::ORDERED>
+            firstSource;
+        storage2::memory_storage::MemoryStorage<StateKey, StateValue,
+            storage2::memory_storage::ORDERED>
+            secondSource;
+
+        StateKey const sharedKey{"s_number_2_header"sv, "7"sv};
+        co_await storage2::writeOne(firstSource, sharedKey, storage::Entry{"executed-unsigned"});
+        co_await storage2::writeOne(secondSource, sharedKey, storage::Entry{"committed-signed"});
+        // A key only the first source holds must survive the merge untouched.
+        StateKey const firstOnlyKey{"s_number_2_hash"sv, "7"sv};
+        co_await storage2::writeOne(firstSource, firstOnlyKey, storage::Entry{"hash-row"});
+
+        co_await storage2::merge(rocksDB, firstSource, secondSource);
+
+        auto shared = co_await storage2::readOne(rocksDB, sharedKey);
+        BOOST_REQUIRE(shared);
+        BOOST_CHECK_EQUAL(shared->get(), "committed-signed");
+
+        auto firstOnly = co_await storage2::readOne(rocksDB, firstOnlyKey);
+        BOOST_REQUIRE(firstOnly);
+        BOOST_CHECK_EQUAL(firstOnly->get(), "hash-row");
+
+        co_return;
+    }());
+}
+
 BOOST_AUTO_TEST_CASE(openLatestOrCheckpointByDirectory)
 {
     auto root = path + "_checkpoint_root";
     TestCheckpointStorage checkpointRocksDBStorage(root, StateKeyResolver{}, StateValueResolver{});
     auto latestPath = checkpointRocksDBStorage.latestPath();
-    auto firstCheckpointName = h256("1111111111111111111111111111111111111111111111111111111111111111");
-    auto secondCheckpointName = h256("2222222222222222222222222222222222222222222222222222222222222222");
+    auto firstCheckpointName =
+        h256("1111111111111111111111111111111111111111111111111111111111111111");
+    auto secondCheckpointName =
+        h256("2222222222222222222222222222222222222222222222222222222222222222");
     auto firstCheckpointPath = checkpointRocksDBStorage.checkpointPath(firstCheckpointName);
     auto secondCheckpointPath = checkpointRocksDBStorage.checkpointPath(secondCheckpointName);
 
@@ -266,8 +308,8 @@ BOOST_AUTO_TEST_CASE(openLatestOrCheckpointByDirectory)
         BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.oldestCheckpointName(), firstCheckpointName);
 
         auto firstCheckpointStorage = checkpointRocksDBStorage.open(firstCheckpointName);
-        auto firstCheckpointValue = co_await storage2::readOne(
-            firstCheckpointStorage, StateKey{"sys"sv, "key"sv});
+        auto firstCheckpointValue =
+            co_await storage2::readOne(firstCheckpointStorage, StateKey{"sys"sv, "key"sv});
         BOOST_REQUIRE(firstCheckpointValue);
         BOOST_CHECK_EQUAL(firstCheckpointValue->get(), "latest-value-1");
         BOOST_CHECK_EQUAL(
@@ -284,8 +326,8 @@ BOOST_AUTO_TEST_CASE(openLatestOrCheckpointByDirectory)
         BOOST_CHECK_EQUAL(*checkpointRocksDBStorage.oldestCheckpointName(), firstCheckpointName);
 
         auto secondCheckpointStorage = checkpointRocksDBStorage.open(secondCheckpointName);
-        auto secondCheckpointValue = co_await storage2::readOne(
-            secondCheckpointStorage, StateKey{"sys"sv, "key"sv});
+        auto secondCheckpointValue =
+            co_await storage2::readOne(secondCheckpointStorage, StateKey{"sys"sv, "key"sv});
         BOOST_REQUIRE(secondCheckpointValue);
         BOOST_CHECK_EQUAL(secondCheckpointValue->get(), "latest-value-2");
         BOOST_CHECK_EQUAL(
