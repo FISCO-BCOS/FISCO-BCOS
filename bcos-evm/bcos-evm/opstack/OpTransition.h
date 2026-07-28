@@ -48,7 +48,7 @@ struct OpTxProperties
 
 // ---- shared execution core ----
 
-struct ExecOutcome
+struct RunTxResult
 {
     evmc::Result result;
     int64_t gas_used;  // EIP-3529 refund and the EIP-7623 floor already settled
@@ -61,7 +61,7 @@ struct ExecOutcome
 /// get_or_insert'd and its nonce already incremented (CREATE address derivation uses nonce-1,
 /// evmone host.cpp:239). Shared execution core: used by opTransition (normal txs) and
 /// runDeposit (0x7E deposits, which skip buy-gas but share this middle).
-ExecOutcome runTxMessage(evmone::state::State& state, OpHost& host,
+RunTxResult runTxMessage(evmone::state::State& state, OpHost& host,
     const evmone::state::Transaction& tx, evmc_revision rev, const evmc::address& coinbase,
     int64_t execution_gas_limit, int64_t min_gas_cost, int64_t delegation_refund);
 

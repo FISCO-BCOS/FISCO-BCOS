@@ -164,7 +164,7 @@ evmc_message build_message(
 
 }  // namespace
 
-ExecOutcome runTxMessage(evmone::state::State& state, OpHost& host,
+RunTxResult runTxMessage(evmone::state::State& state, OpHost& host,
     const evmone::state::Transaction& tx, evmc_revision rev, const evmc::address& coinbase,
     int64_t execution_gas_limit, int64_t min_gas_cost, int64_t delegation_refund)
 {
