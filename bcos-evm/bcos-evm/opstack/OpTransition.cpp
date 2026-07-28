@@ -160,6 +160,11 @@ RunTxResult runTxMessage(evmone::state::State& state, OpHost& host,
     for (const auto& [a, storage_keys] : tx.access_list)
     {
         host.access_account(a);
+        if (storage_keys.empty())
+            continue;
+        // OpHost::access_account returns early for override-table addresses without inserting
+        // the account; State::get_storage requires it to exist.
+        state.get_or_insert(a, {.erase_if_empty = true});
         for (const auto& key : storage_keys)
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }
@@ -220,7 +225,7 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     sender_acc.balance -= tx_max_cost;
 
     sender_acc.balance -= props.l1_cost;
-    if (cfg.has_operator_fee)
+    if (props.has_operator_fee)
         sender_acc.balance -= props.operator_cost_at_gas_limit;
 
     OpHost host{cfg.rev, vm, state, block, hashes, tx, chainId, cfg.precompiles};

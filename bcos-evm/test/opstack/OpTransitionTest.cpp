@@ -7,6 +7,7 @@
 #include <bcos-evm/opstack/RollupCost.h>
 #include <evmone/evmone.h>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <test/utils/test_state.hpp>
 #include <vector>
 
@@ -14,6 +15,21 @@ using namespace bcos::evm::opstack;
 using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
+
+namespace
+{
+/// 全账户余额之和，用于守恒断言（费用只在账户间搬运，总量不变）。
+[[nodiscard]] intx::uint256 totalSupply(const test::TestState& ts)
+{
+    intx::uint256 sum{0};
+    for (const auto& [addr, acc] : ts)
+    {
+        sum += acc.balance;
+        (void)addr;
+    }
+    return sum;
+}
+}  // namespace
 
 TEST(OpTransition, RoutesFeesToFourVaults)
 {
@@ -225,4 +241,117 @@ TEST(OpTransition, AccessListKeepsStorageWarm)
         opTransition(ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234);
     ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
     EXPECT_EQ(txR.receipt.gas_used, 25405);
+}
+
+// 回归：access list 列入覆写表内的预编译地址 + 存储槽 key。
+// OpHost::access_account 对表内地址提前返回且不插入账户，而 State::get_storage 内部
+// get() 断言账户非空——修复前此处 debug 断言中止 / release 空指针解引用。
+// 同时确认 sanitize 仍生效：0x100 不得作为幽灵账户进入 deleted_accounts。
+TEST(OpTransition, AccessListWithOverridePrecompileStorageKey)
+{
+    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
+    constexpr auto kP256 = 0x0000000000000000000000000000000000000100_address;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[dest] = {};
+    seedOpPredeploys(ts);
+    test::TestBlockHashes hashes;
+
+    state::BlockInfo block;
+    block.number = 1;
+    block.gas_limit = 30000000;
+    block.base_fee = 7;
+    block.coinbase = OP_SEQUENCER_FEE_VAULT;
+
+    state::Transaction tx;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.sender = sender;
+    tx.to = dest;
+    tx.gas_limit = 100000;
+    tx.max_gas_price = 1000;
+    tx.max_priority_gas_price = 10;
+    tx.value = intx::uint256{0};
+    tx.nonce = 0;
+    // 覆写表内地址（Isthmus 的 0x100 P256Verify）带存储槽 key
+    tx.access_list = {{kP256, {0x00_bytes32}}};
+
+    OpFeeParams fee{};
+    std::vector<uint8_t> env{0x02, 0x11};
+    const auto v =
+        opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    const auto txR =
+        opTransition(ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234);
+    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    // 纯转账 21000 + accessList(2400 地址 + 1900 槽) = 25300
+    EXPECT_EQ(txR.receipt.gas_used, 25300);
+
+    // 幽灵删除必须已被 sanitizeStateDiff 剥离
+    EXPECT_EQ(std::count(txR.receipt.state_diff.deleted_accounts.begin(),
+                  txR.receipt.state_diff.deleted_accounts.end(), kP256),
+        0)
+        << "override-table precompile must not enter deleted_accounts as a ghost";
+    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
+}
+
+// 回归：cfg 与 props 的 operator-fee 标志在分叉边界上不一致时，扣费与退款/入账
+// 必须同源（均取 props 快照），否则凭空增发或销毁 operator_cost_at_gas_limit。
+// 以 isthmus（has_operator_fee=true）做 validate，再用关掉该标志的 cfg 副本做 transition。
+TEST(OpTransition, OperatorFeeConservesWhenCfgDisagreesWithProps)
+{
+    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[sender] = {.nonce = 0, .balance = 340282366920938463463374607431768211456_u256};
+    ts[dest] = {};
+    seedOpPredeploys(ts);
+    test::TestBlockHashes hashes;
+
+    state::BlockInfo block;
+    block.number = 1;
+    block.gas_limit = 30000000;
+    block.base_fee = 7;
+    block.coinbase = OP_SEQUENCER_FEE_VAULT;
+
+    state::Transaction tx;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.sender = sender;
+    tx.to = dest;
+    tx.gas_limit = 100000;
+    tx.max_gas_price = 1000;
+    tx.max_priority_gas_price = 10;
+    tx.value = intx::uint256{0};
+    tx.nonce = 0;
+
+    OpFeeParams fee{.l1_base_fee = 0_u256,
+        .base_fee_scalar = 0,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = 0_u256,
+        .operator_fee_scalar = 1000000,
+        .operator_fee_constant = 500};
+    std::vector<uint8_t> env{0x02, 0x11};
+
+    // validate 侧：operator fee 生效，props 记录快照与金额
+    const auto v =
+        opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    const auto& props = std::get<OpTxProperties>(v);
+    ASSERT_TRUE(props.has_operator_fee);
+    ASSERT_GT(props.operator_cost_at_gas_limit, intx::uint256{0});
+
+    // transition 侧：cfg 关掉 operator fee，与 props 不一致
+    OpForkConfig cfg = isthmusConfig();
+    cfg.has_operator_fee = false;
+
+    const auto before = totalSupply(ts);
+    const auto txR = opTransition(ts, block, hashes, tx, cfg, vm, props, 1234);
+    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
+
+    // 总供应量守恒：修复前发送方未被扣费却仍获退款 + 金库入账 → 增发
+    EXPECT_EQ(totalSupply(ts), before)
+        << "operator fee must conserve across cfg/props disagreement";
 }
