@@ -101,11 +101,7 @@ public:
             if (m_hasRAW.get().test())
             {
                 PARALLEL_SCHEDULER_LOG(DEBUG)
-<<<<<<< HEAD
-                    << "Chunk: " << m_chunkIndex << " aborted in createContexts, executed " << index
-=======
                     << "Chunk: " << m_chunkIndex << " aborted in prepare, executed " << index
->>>>>>> bb243a00fa42c0922cee8e17a74717c496784dae
                     << " transactions";
                 break;
             }
@@ -122,11 +118,7 @@ public:
             if (m_hasRAW.get().test())
             {
                 PARALLEL_SCHEDULER_LOG(DEBUG)
-<<<<<<< HEAD
-                    << "Chunk: " << m_chunkIndex << " aborted in prepare, executed " << index
-=======
                     << "Chunk: " << m_chunkIndex << " aborted in execute, executed " << index
->>>>>>> bb243a00fa42c0922cee8e17a74717c496784dae
                     << " transactions";
                 break;
             }
