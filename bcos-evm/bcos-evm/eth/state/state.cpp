@@ -18,11 +18,6 @@ namespace evmone::state
 {
 namespace
 {
-/// EIP-7702: The cost of authorization that sets delegation to an account that didn't exist before.
-constexpr auto AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
-/// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
-constexpr auto AUTHORIZATION_BASE_COST = 12500;
-
 constexpr int64_t num_words(size_t size_in_bytes) noexcept
 {
     return static_cast<int64_t>((size_in_bytes + 31) / 32);
@@ -73,7 +68,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto access_list_cost = compute_access_list_cost(tx.access_list);
 
     const auto auth_list_cost =
-        static_cast<int64_t>(tx.authorization_list.size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST;
+        static_cast<int64_t>(tx.authorization_list.size()) * bcos::evm::eth::AUTHORIZATION_EMPTY_ACCOUNT_COST;
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
@@ -88,98 +83,6 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     return {intrinsic_cost, min_cost};
 }
 
-int64_t process_authorization_list(
-    State& state, uint64_t chain_id, const AuthorizationList& authorization_list)
-{
-    int64_t delegation_refund = 0;
-    for (const auto& auth : authorization_list)
-    {
-        // 1. Verify the chain id is either 0 or the chain’s current ID.
-        if (auth.chain_id != 0 && auth.chain_id != chain_id)
-            continue;
-
-        // 2. Verify the nonce is less than 2**64 - 1.
-        if (auth.nonce == Account::NonceMax)
-            continue;
-
-        // 3. Verify if the signer has been successfully recovered from the signature.
-        //    authority = ecrecover(...)
-        // y_parity must be 0 or 1 for EIP-7702/2930 signatures.
-        if (auth.v > 1)
-            continue;
-        // s value must be less than or equal to secp256k1n/2, as specified in EIP-2.
-        // Validated before ecrecover, as op-geth does (ValidateSignatureValues before Recover).
-        if (auth.s > bcos::evm::eth::SECP256K1N_OVER_2)
-            continue;
-
-        // FISCO-BCOS: real ecrecover (shared with the opstack path) instead of the upstream
-        // signer-shortcut stub — a pre-set auth.signer (test shortcut) is honored, otherwise the
-        // authority is recovered from the signature. A recovery failure skips this authorization.
-        std::optional<evmc::address> signer = auth.signer;
-        if (!signer.has_value())
-            signer = bcos::evm::eth::recoverAuthority(auth);
-        if (!signer.has_value())
-            continue;
-
-        // Get or create the authority account.
-        // It is still empty at this point until nonce bump following successful authorization.
-        auto& authority = state.get_or_insert(*signer, {.erase_if_empty = true});
-
-        // 4. Add authority to accessed_addresses (as defined in EIP-2929.)
-        authority.access_status = EVMC_ACCESS_WARM;
-
-        // 5. Verify the code of authority is either empty or already delegated.
-        if (authority.code_hash != Account::EMPTY_CODE_HASH &&
-            !is_code_delegated(state.get_code(*signer)))
-            continue;
-
-        // 6. Verify the nonce of authority is equal to nonce.
-        // In case authority does not exist in the trie, verify that nonce is equal to 0.
-        if (auth.nonce != authority.nonce)
-            continue;
-
-        // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
-        // if authority exists in the trie.
-        // Successful authorization validation makes an account non-empty.
-        // We apply the refund only if the account has existed before.
-        // We detect "exists in the trie" by inspecting _empty_ property (EIP-161) because _empty_
-        // implies an account doesn't exist in the state (EIP-7523).
-        if (!authority.is_empty())
-        {
-            static constexpr auto EXISTING_AUTHORITY_REFUND =
-                AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST;
-            delegation_refund += EXISTING_AUTHORITY_REFUND;
-        }
-
-        // As a special case, if address is 0 do not write the designation.
-        // Clear the account’s code and reset the account’s code hash to the empty hash.
-        if (is_zero(auth.addr))
-        {
-            if (authority.code_hash != Account::EMPTY_CODE_HASH)
-            {
-                authority.code_changed = true;
-                authority.code.clear();
-                authority.code_hash = Account::EMPTY_CODE_HASH;
-            }
-        }
-        // 8. Set the code of authority to be 0xef0100 || address. This is a delegation designation.
-        else
-        {
-            auto new_code = bytes(DELEGATION_MAGIC) + bytes(auth.addr);
-            if (authority.code != new_code)
-            {
-                // We are doing this only if the code is different to make the state diff precise.
-                authority.code_changed = true;
-                authority.code = std::move(new_code);
-                authority.code_hash = keccak256(authority.code);
-            }
-        }
-
-        // 9. Increase the nonce of authority by one.
-        ++authority.nonce;
-    }
-    return delegation_refund;
-}
 
 evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) noexcept
 {
@@ -573,7 +476,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     ++sender_acc.nonce;                            // Bump sender nonce.
 
     const auto delegation_refund =
-        process_authorization_list(state, tx.chain_id, tx.authorization_list);
+        bcos::evm::eth::processAuthorizationList(state, tx.chain_id, tx.authorization_list);
 
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Required for valid tx.
