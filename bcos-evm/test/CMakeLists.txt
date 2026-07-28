@@ -71,11 +71,22 @@ if(TARGET bcos-framework)
         opstack/Storage2LedgerTest.cpp
         opstack/LedgerRootTest.cpp
         opstack/EbT8nReplayTest.cpp
-        opstack/EthBlockHeaderTest.cpp)
+        opstack/EthBlockHeaderTest.cpp
+        opstack/OpSchedulerImplTest.cpp)
     target_link_libraries(bcos-evm-opstack-tests PRIVATE bcos-framework)
+    # bcos-tars-protocol (`protocol-tars`) and bcos-crypto: OpSchedulerImplTest.cpp needs a
+    # concrete bcos::protocol::TransactionReceiptFactory/BlockHeader implementation
+    # (bcostars::protocol::TransactionReceiptFactoryImpl/BlockHeaderImpl) and a CryptoSuite to
+    # construct it, mirroring engine/test/unittests/engine/EngineServiceTest.cpp's own fixture
+    # construction. Both targets are added by the root CMakeLists.txt unconditionally, ahead of
+    # bcos-evm, under the same in-tree-build condition as bcos-framework's presence — gated here
+    # rather than unconditionally for the same reason as the `codec` link below (op-validator
+    # 闭环 Task 4, task-4-brief.md).
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE protocol-tars bcos-crypto)
     # bcos-codec's `codec` target only exists in an in-tree build (top-level
     # add_subdirectory(bcos-codec) precedes add_subdirectory(bcos-evm)) — same condition as
     # bcos-framework's presence, hence gated here rather than unconditionally (op-validator
-    # 闭环 Task 3, task-3-brief.md).
+    # 闭环 Task 3, task-3-brief.md). OpSchedulerImpl.h (Task 4) also depends on bcos-codec/rlp's
+    # decode primitives (RLPDecode.h), reusing this same link edge.
     target_link_libraries(bcos-evm-opstack-tests PRIVATE codec)
 endif()

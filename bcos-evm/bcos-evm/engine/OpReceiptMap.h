@@ -1,0 +1,83 @@
+// FISCO BCOS
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+// OpReceiptMap — OP block-execution receipt (evmone::state::TransactionReceipt) ->
+// bcos::protocol::TransactionReceipt (op-validator-minimal-loop design §4.1/§4.3,
+// task-4-brief.md). Scope is deliberately narrow, per brief: only status/gasUsed/logs are
+// mapped. contractAddress/output/blockNumber are not part of the six-way comparison surface
+// (design §4.1 "六项比对面": seal.{receiptsRoot,logsBloom,withdrawalsRoot} +
+// result.{stateRoot,gasUsed,txRoot}) and are left at their factory defaults (empty
+// contractAddress, empty output, blockNumber 0) — a genuine widening of this mapping (OP meta
+// fields such as deposit_nonce/l1_fee/operator_fee/da_footprint, per OpReceiptMeta.h) is
+// out-of-scope non-goal territory per the design doc §2 table ("OP meta 回执 RPC").
+//
+// receiptFactory is injected (constructor parameter on OpSchedulerImpl, design §4.1 "receipt
+// factory 注入"), not looked up globally — this header is a pure function, no state.
+//
+// Status mapping (FISCO convention, e.g. precompiled contracts / BlockExecutive.cpp receipt
+// construction): 0 == success. evmc_status_code's much finer-grained failure taxonomy collapses
+// to a single non-zero "failed" code here — this is the "只映射 status" scope the brief
+// specifies, not an oversight.
+
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/TransactionReceipt.h>
+#include <bcos-framework/protocol/TransactionReceiptFactory.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <bcos-evm/eth/state/transaction.hpp>
+#include <cstring>
+
+namespace bcos::evm::engine
+{
+
+/// FISCO convention: TransactionStatus::None (success) == 0. Any non-EVMC_SUCCESS status
+/// collapses to 1 (generic failure) — see file header "Status mapping" note.
+inline constexpr int32_t kOpReceiptStatusSuccess = 0;
+inline constexpr int32_t kOpReceiptStatusFailure = 1;
+
+/// bytes-for-bytes copy of a 20-byte address into a bcos::bytes payload — LogEntry::address()
+/// reinterprets its stored bytes as raw binary (not a hex string), see LogEntry.h:41, so this is
+/// a plain byte copy, not a hex encode.
+inline bcos::bytes mapOpLogAddress(const evmc::address& addr)
+{
+    return bcos::bytes(std::begin(addr.bytes), std::end(addr.bytes));
+}
+
+inline bcos::h256 mapOpTopic(const evmc::bytes32& topic)
+{
+    return bcos::h256(reinterpret_cast<const bcos::byte*>(topic.bytes), sizeof(topic.bytes));
+}
+
+inline bcos::protocol::LogEntries mapOpLogs(const std::vector<evmone::state::Log>& logs)
+{
+    bcos::protocol::LogEntries out;
+    out.reserve(logs.size());
+    for (const auto& log : logs)
+    {
+        bcos::h256s topics;
+        topics.reserve(log.topics.size());
+        for (const auto& topic : log.topics)
+            topics.push_back(mapOpTopic(topic));
+        out.emplace_back(mapOpLogAddress(log.addr), std::move(topics),
+            bcos::bytes(log.data.begin(), log.data.end()));
+    }
+    return out;
+}
+
+/// Maps one OP-executed transaction's receipt (the evmone::state::TransactionReceipt common to
+/// both OpDepositReceipt and OpTxReceipt, see OpBlockExecute.h's OpBlockResult) into a
+/// bcos::protocol::TransactionReceipt via the injected factory. Only status/gasUsed/logs are
+/// populated (see file header).
+inline bcos::protocol::TransactionReceipt::Ptr mapOpReceipt(
+    const evmone::state::TransactionReceipt& receipt,
+    const bcos::protocol::TransactionReceiptFactory::Ptr& receiptFactory)
+{
+    const bcos::u256 gasUsed(static_cast<uint64_t>(receipt.gas_used));
+    const int32_t status =
+        receipt.status == EVMC_SUCCESS ? kOpReceiptStatusSuccess : kOpReceiptStatusFailure;
+    return receiptFactory->createReceipt(gasUsed, std::string{}, mapOpLogs(receipt.logs), status,
+        bcos::bytesConstRef{}, /*blockNumber=*/0);
+}
+
+}  // namespace bcos::evm::engine
