@@ -1,6 +1,7 @@
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <test/utils/test_state.hpp>
 
 using namespace bcos::evm::opstack;
@@ -24,7 +25,9 @@ evmc::bytes32 fullWord(uint64_t low)  // 整槽放一个小数值（低 8 字节
 }
 }  // namespace
 
-TEST(OpFeeParams, UnpacksScalarsFromPackedSlots)
+BOOST_AUTO_TEST_SUITE(OpFeeParamsSuite)
+
+BOOST_AUTO_TEST_CASE(UnpacksScalarsFromPackedSlots)
 {
     const auto slot1 = fullWord(1000);  // l1_base_fee = 1000
     const auto slot3 = [] {             // baseFeeScalar=7, blobBaseFeeScalar=9
@@ -44,15 +47,15 @@ TEST(OpFeeParams, UnpacksScalarsFromPackedSlots)
     }();
 
     const auto p = unpackOpFeeParams(slot1, slot3, slot7, slot8);
-    EXPECT_EQ(p.l1_base_fee, intx::uint256{1000});
-    EXPECT_EQ(p.base_fee_scalar, 7u);
-    EXPECT_EQ(p.blob_base_fee_scalar, 9u);
-    EXPECT_EQ(p.blob_base_fee, intx::uint256{2000});
-    EXPECT_EQ(p.operator_fee_scalar, 11u);
-    EXPECT_EQ(p.operator_fee_constant, 13u);
+    BOOST_CHECK_EQUAL(p.l1_base_fee, intx::uint256{1000});
+    BOOST_CHECK_EQUAL(p.base_fee_scalar, 7u);
+    BOOST_CHECK_EQUAL(p.blob_base_fee_scalar, 9u);
+    BOOST_CHECK_EQUAL(p.blob_base_fee, intx::uint256{2000});
+    BOOST_CHECK_EQUAL(p.operator_fee_scalar, 11u);
+    BOOST_CHECK_EQUAL(p.operator_fee_constant, 13u);
 }
 
-TEST(OpFeeParams, LoadFromStateEqualsManualUnpack)
+BOOST_AUTO_TEST_CASE(LoadFromStateEqualsManualUnpack)
 {
     using namespace evmone;
     test::TestState ts;
@@ -74,12 +77,12 @@ TEST(OpFeeParams, LoadFromStateEqualsManualUnpack)
     const auto manual =
         unpackOpFeeParams(ts.get_storage(OP_L1_BLOCK, key(1)), ts.get_storage(OP_L1_BLOCK, key(3)),
             ts.get_storage(OP_L1_BLOCK, key(7)), ts.get_storage(OP_L1_BLOCK, key(8)));
-    EXPECT_EQ(loaded.l1_base_fee, manual.l1_base_fee);
-    EXPECT_EQ(loaded.blob_base_fee, manual.blob_base_fee);
-    EXPECT_EQ(loaded.l1_base_fee, 1000000000_u256);
+    BOOST_CHECK_EQUAL(loaded.l1_base_fee, manual.l1_base_fee);
+    BOOST_CHECK_EQUAL(loaded.blob_base_fee, manual.blob_base_fee);
+    BOOST_CHECK_EQUAL(loaded.l1_base_fee, 1000000000_u256);
 }
 
-TEST(OpFeeParams, UnpacksDaFootprintGasScalarFromSlot8)
+BOOST_AUTO_TEST_CASE(UnpacksDaFootprintGasScalarFromSlot8)
 {
     const auto slot1 = fullWord(1000);
     const auto slot3 = [] {
@@ -101,7 +104,9 @@ TEST(OpFeeParams, UnpacksDaFootprintGasScalarFromSlot8)
     }();
 
     const auto p = unpackOpFeeParams(slot1, slot3, slot7, slot8);
-    EXPECT_EQ(p.da_footprint_gas_scalar, 0x1234u);
-    EXPECT_EQ(p.operator_fee_scalar, 11u);
-    EXPECT_EQ(p.operator_fee_constant, 13u);
+    BOOST_CHECK_EQUAL(p.da_footprint_gas_scalar, 0x1234u);
+    BOOST_CHECK_EQUAL(p.operator_fee_scalar, 11u);
+    BOOST_CHECK_EQUAL(p.operator_fee_constant, 13u);
 }
+
+BOOST_AUTO_TEST_SUITE_END()

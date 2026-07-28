@@ -1,7 +1,8 @@
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <limits>
 #include <test/utils/test_state.hpp>
 #include <vector>
@@ -37,7 +38,9 @@ state::Transaction baseTx()
 }
 }  // namespace
 
-TEST(OpValidate, RejectsBlobTx)
+BOOST_AUTO_TEST_SUITE(OpValidateSuite)
+
+BOOST_AUTO_TEST_CASE(RejectsBlobTx)
 {
     test::TestState ts;
     ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
@@ -47,11 +50,11 @@ TEST(OpValidate, RejectsBlobTx)
     tx.blob_hashes = {0x0100000000000000000000000000000000000000000000000000000000000001_bytes32};
     tx.max_blob_gas_price = 1;
     const auto r = opValidate(ts, blk(), tx, {}, isthmusConfig(), OpFeeParams{}, 30000000);
-    ASSERT_TRUE(std::holds_alternative<std::error_code>(r));
-    EXPECT_EQ(std::get<std::error_code>(r), std::errc::not_supported);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+    BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
 }
 
-TEST(OpValidate, InsufficientForL1CostFails)
+BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
 {
     test::TestState ts;
     ts[kSender] = {.nonce = 0, .balance = 100000000_u256, .storage = {}, .code = {}};
@@ -64,27 +67,27 @@ TEST(OpValidate, InsufficientForL1CostFails)
     std::vector<uint8_t> env(50, 0x11);
     const auto r =
         opValidate(ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<std::error_code>(r));
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
 }
 
-TEST(OpValidate, EmptyEnvelopeFails)
+BOOST_AUTO_TEST_CASE(EmptyEnvelopeFails)
 {
     test::TestState ts;
     ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const auto r = opValidate(ts, blk(), baseTx(), {}, isthmusConfig(), OpFeeParams{}, 30000000);
-    ASSERT_TRUE(std::holds_alternative<std::error_code>(r));
-    EXPECT_EQ(std::get<std::error_code>(r), std::errc::invalid_argument);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+    BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::invalid_argument);
 }
 
-TEST(OpValidate, SufficientBalancePasses)
+BOOST_AUTO_TEST_CASE(SufficientBalancePasses)
 {
     test::TestState ts;
     ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
     const std::vector<uint8_t> env{0x02};
     const auto r = opValidate(
         ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(r));
-    EXPECT_EQ(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+    BOOST_CHECK_EQUAL(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
 }
 
 // 余额上限求和不得在 2^256 处回绕（对齐 evmone validate_transaction 的 512 位口径）。
@@ -92,7 +95,7 @@ TEST(OpValidate, SufficientBalancePasses)
 // gasCost+value 检查恰好通过；再叠加任何非零 l1Cost，总额越过 2^256——
 // 256 位求和会回绕成一个极小值而放行（回绕后的差额在 opTransition 侧变成余额下溢增发），
 // 512 位求和则正确判定资金不足。
-TEST(OpValidate, BalanceCapDoesNotWrapAt2Pow256)
+BOOST_AUTO_TEST_CASE(BalanceCapDoesNotWrapAt2Pow256)
 {
     test::TestState ts;
     const auto balance = std::numeric_limits<intx::uint256>::max();
@@ -112,7 +115,9 @@ TEST(OpValidate, BalanceCapDoesNotWrapAt2Pow256)
 
     const auto r =
         opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<std::error_code>(r))
-        << "a total past 2^256 must be rejected, not wrapped into a tiny passing cap";
-    EXPECT_EQ(std::get<std::error_code>(r), std::errc::result_out_of_range);
+    BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(r),
+        "a total past 2^256 must be rejected, not wrapped into a tiny passing cap");
+    BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::result_out_of_range);
 }
+
+BOOST_AUTO_TEST_SUITE_END()

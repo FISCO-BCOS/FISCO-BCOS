@@ -8,12 +8,13 @@
 
 #include "OpPredeploysSeed.h"
 #include "StateDiffWriteback.h"
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <evmone/delegation.hpp>
 #include <test/utils/test_state.hpp>
 #include <vector>
@@ -73,10 +74,10 @@ OpTxReceipt runWithAuth(
     std::vector<uint8_t> env{0x04, 0x11};  // 非空 envelope 满足验证
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    EXPECT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_CHECK(std::holds_alternative<OpTxProperties>(v));
     if (!std::holds_alternative<OpTxProperties>(v))
     {
-        // 返回失败 receipt 以免崩溃，由调用方 EXPECT_TRUE 捕获
+        // 返回失败 receipt 以免崩溃，由调用方 BOOST_CHECK 捕获
         static const evmone::state::TransactionReceipt kEmpty{};
         return OpTxReceipt{kEmpty, {}};
     }
@@ -93,16 +94,18 @@ void expectNoDelegationDesignatorAnywhere(const test::TestState& ts)
 {
     for (const auto& [addr, acc] : ts)
     {
-        EXPECT_FALSE(isDelegationDesignator(acc.code))
-            << "account must NOT have delegation designator (0xef0100||addr)";
+        BOOST_CHECK_MESSAGE(!(isDelegationDesignator(acc.code)),
+            "account must NOT have delegation designator (0xef0100||addr)");
         (void)addr;
     }
 }
 }  // namespace
 
+BOOST_AUTO_TEST_SUITE(Op7702Suite)
+
 // ─── 用例 1: 真实 ecrecover 成功 → 写 0xef0100||kDelegate，nonce 从 0→1 ───
 // signer = nullopt，强制走 ecrecover
-TEST(Op7702, RecoversAuthorityAndWritesDelegation)
+BOOST_AUTO_TEST_CASE(RecoversAuthorityAndWritesDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -122,25 +125,26 @@ TEST(Op7702, RecoversAuthorityAndWritesDelegation)
         .s = intx::be::load<intx::uint256>(kS_ok),
         .v = intx::uint256{kV_ok}};
     const auto r = runWithAuth(ts, vm, auth);
-    ASSERT_EQ(r.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
     bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
     // authority 被写 0xef0100||kDelegate，nonce 从 0 → 1
-    ASSERT_NE(ts.find(kAuthority), ts.end()) << "authority account must exist after delegation";
+    BOOST_REQUIRE_MESSAGE(
+        (ts.find(kAuthority)) != (ts.end()), "authority account must exist after delegation");
     const auto& acc = ts.at(kAuthority);
-    ASSERT_EQ(acc.code.size(), 23u);  // 3(magic) + 20(addr)
-    EXPECT_EQ(acc.code[0], 0xef);
-    EXPECT_EQ(acc.code[1], 0x01);
-    EXPECT_EQ(acc.code[2], 0x00);
+    BOOST_REQUIRE_EQUAL(acc.code.size(), 23u);  // 3(magic) + 20(addr)
+    BOOST_CHECK_EQUAL(acc.code[0], 0xef);
+    BOOST_CHECK_EQUAL(acc.code[1], 0x01);
+    BOOST_CHECK_EQUAL(acc.code[2], 0x00);
     // 后 20 字节应为 kDelegate
     const evmc::bytes expected_addr(kDelegate.bytes, kDelegate.bytes + 20);
-    EXPECT_EQ(evmc::bytes(acc.code.begin() + 3, acc.code.end()), expected_addr);
-    EXPECT_EQ(acc.nonce, 1u);
+    BOOST_CHECK_EQUAL(evmc::bytes(acc.code.begin() + 3, acc.code.end()), expected_addr);
+    BOOST_CHECK_EQUAL(acc.nonce, 1u);
 }
 
 // ─── 用例 2: 无效 r → ecrecover 失败 → 不写 delegation ───
 // signer = nullopt，强制走 ecrecover；r=0 使恢复失败 → skip
-TEST(Op7702, BadSignatureRecoverFailsNoDelegation)
+BOOST_AUTO_TEST_CASE(BadSignatureRecoverFailsNoDelegation)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -164,14 +168,15 @@ TEST(Op7702, BadSignatureRecoverFailsNoDelegation)
     const auto r = runWithAuth(ts, vm, auth);
     // 坏签名只 skip 该条 authorization，tx 本身必须成功——否则"无委托"断言会把
     // "交易整体失败"误判为"正确跳过坏签名"。
-    ASSERT_EQ(r.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
     bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
     // 真实 kAuthority 必须没有被委托
     auto it = ts.find(kAuthority);
     if (it != ts.end())
     {
-        EXPECT_TRUE(it->second.code.empty()) << "kAuthority must NOT have delegation after bad sig";
+        BOOST_CHECK_MESSAGE(
+            it->second.code.empty(), "kAuthority must NOT have delegation after bad sig");
     }
 
     // ecrecover 可能恢复出其他地址；任何账户都不应被写入 delegation designator
@@ -180,7 +185,7 @@ TEST(Op7702, BadSignatureRecoverFailsNoDelegation)
 
 // ─── 用例 3: nonce 不匹配 → 恢复出的正确 authority，但 auth.nonce=5 ≠ state_nonce=0 → skip ───
 // signer = nullopt，强制走 ecrecover
-TEST(Op7702, NonceMismatchSkips)
+BOOST_AUTO_TEST_CASE(NonceMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -206,14 +211,14 @@ TEST(Op7702, NonceMismatchSkips)
     auto it = ts.find(kAuthority);
     if (it != ts.end())
     {
-        EXPECT_TRUE(it->second.code.empty()) << "no delegation on nonce mismatch";
-        EXPECT_EQ(it->second.nonce, 0u) << "nonce must not be bumped on skip";
+        BOOST_CHECK_MESSAGE(it->second.code.empty(), "no delegation on nonce mismatch");
+        BOOST_CHECK_MESSAGE((it->second.nonce) == (0u), "nonce must not be bumped on skip");
     }
 }
 
 // ─── 用例 4: chain_id 不匹配 → 步骤1 直接 skip，不进 ecrecover ───
 // signer = nullopt；chain_id 检查在最前，不依赖签名有效性
-TEST(Op7702, ChainIdMismatchSkips)
+BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -238,13 +243,13 @@ TEST(Op7702, ChainIdMismatchSkips)
     auto it = ts.find(kAuthority);
     if (it != ts.end())
     {
-        EXPECT_TRUE(it->second.code.empty()) << "no delegation on chain_id mismatch";
+        BOOST_CHECK_MESSAGE(it->second.code.empty(), "no delegation on chain_id mismatch");
     }
 }
 
 // ─── 用例 5: 授权后委托调用 → kAuthority 预设委托代码，call to kAuthority 走 kDelegate 逻辑 ───
 // 使用预置 signer（此用例测委托调用路径，不测 ecrecover）
-TEST(Op7702, DelegatedCallAfterAuthorization)
+BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -290,17 +295,19 @@ TEST(Op7702, DelegatedCallAfterAuthorization)
     std::vector<uint8_t> env{0x04, 0x11};
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
     const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1);
 
     // 委托调用应成功执行 kDelegate 代码；SSTORE 在 authority 上下文中落槽
-    EXPECT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(txR.receipt.status, EVMC_SUCCESS);
     bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
 
     constexpr auto kSlot0 = evmc::bytes32{};
     const auto expectedSlot0 = intx::be::store<evmc::bytes32>(intx::uint256{42});
-    ASSERT_NE(ts.find(kAuthority), ts.end());
-    EXPECT_EQ(ts.at(kAuthority).storage.at(kSlot0), expectedSlot0)
-        << "delegated call must execute kDelegate SSTORE under kAuthority context";
+    BOOST_REQUIRE((ts.find(kAuthority)) != (ts.end()));
+    BOOST_CHECK_MESSAGE((ts.at(kAuthority).storage.at(kSlot0)) == (expectedSlot0),
+        "delegated call must execute kDelegate SSTORE under kAuthority context");
 }
+
+BOOST_AUTO_TEST_SUITE_END()

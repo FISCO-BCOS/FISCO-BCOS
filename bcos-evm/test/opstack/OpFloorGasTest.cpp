@@ -17,12 +17,13 @@
 //   - Deposit：runDeposit 后 gas_used 亦走 7623 floor（无 Isthmus deposit 豁免）
 
 #include "OpPredeploysSeed.h"
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/state.hpp>
 #include <test/utils/test_state.hpp>
 #include <vector>
@@ -32,7 +33,9 @@ using namespace evmone;
 using namespace evmc::literals;
 using intx::operator""_u256;
 
-TEST(OpFloorGas, UserTxGasUsedRaisedToFloor)
+BOOST_AUTO_TEST_SUITE(OpFloorGasSuite)
+
+BOOST_AUTO_TEST_CASE(UserTxGasUsedRaisedToFloor)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -68,20 +71,20 @@ TEST(OpFloorGas, UserTxGasUsedRaisedToFloor)
     std::vector<uint8_t> env{0x02, 0x11};
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
 
     const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
     // 7623 floor 生效：gas_used 恰等于公式推导的 floor，且严格大于 intrinsic
     constexpr int64_t kExpectedFloor3000 = 21000 + 3000 * 10;  // = 51000
     constexpr int64_t kIntrinsic3000 = 21000 + 3000 * 4;       // = 33000
-    EXPECT_EQ(txR.receipt.gas_used, kExpectedFloor3000);
-    EXPECT_EQ(txR.receipt.gas_used, props.props.min_gas_cost);
-    EXPECT_GT(props.props.min_gas_cost, kIntrinsic3000);  // floor 51000 > intrinsic 33000
+    BOOST_CHECK_EQUAL(txR.receipt.gas_used, kExpectedFloor3000);
+    BOOST_CHECK_EQUAL(txR.receipt.gas_used, props.props.min_gas_cost);
+    BOOST_CHECK_GT(props.props.min_gas_cost, kIntrinsic3000);  // floor 51000 > intrinsic 33000
 }
 
-TEST(OpFloorGas, DepositGasUsedRaisedToFloor)
+BOOST_AUTO_TEST_CASE(DepositGasUsedRaisedToFloor)
 {
     constexpr auto depositor = OP_DEPOSITOR;
     auto vm = evmc::VM{evmc_create_evmone()};
@@ -106,11 +109,11 @@ TEST(OpFloorGas, DepositGasUsedRaisedToFloor)
         .data = state::bytes(3000, 0x00)};
 
     const auto r = runDeposit(ts, block, hashes, dep, isthmusConfig(), vm, 1234, block.gas_limit);
-    ASSERT_EQ(r.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
     // deposit 同样吃 7623 floor（op-geth Isthmus 无豁免）：gas_used == floor
     constexpr int64_t kExpectedFloor3000 = 21000 + 3000 * 10;  // = 51000
     constexpr int64_t kExpectedFloorEmpty = 21000;             // empty calldata
-    EXPECT_EQ(r.receipt.gas_used, kExpectedFloor3000);
+    BOOST_CHECK_EQUAL(r.receipt.gas_used, kExpectedFloor3000);
 
     // 对照：空 calldata deposit 在独立 state 上运行，避免大 deposit 污染
     DepositTx small = dep;
@@ -120,7 +123,9 @@ TEST(OpFloorGas, DepositGasUsedRaisedToFloor)
     seedOpPredeploys(ts2);
     const auto rs =
         runDeposit(ts2, block, hashes, small, isthmusConfig(), vm, 1234, block.gas_limit);
-    ASSERT_EQ(rs.receipt.status, EVMC_SUCCESS);
-    EXPECT_EQ(rs.receipt.gas_used, kExpectedFloorEmpty);
-    EXPECT_GT(r.receipt.gas_used, rs.receipt.gas_used);
+    BOOST_REQUIRE_EQUAL(rs.receipt.status, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(rs.receipt.gas_used, kExpectedFloorEmpty);
+    BOOST_CHECK_GT(r.receipt.gas_used, rs.receipt.gas_used);
 }
+
+BOOST_AUTO_TEST_SUITE_END()

@@ -1,7 +1,8 @@
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpHost.h>
 #include <bcos-evm/opstack/OpPrecompiles.h>
 #include <evmone/evmone.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/state.hpp>
 #include <test/utils/test_state.hpp>
 #include <vector>
@@ -24,7 +25,9 @@ state::BlockInfo makeBlock()
 }
 }  // namespace
 
-TEST(OpHost, GetTxContextUsesConfiguredChainId)
+BOOST_AUTO_TEST_SUITE(OpHostSuite)
+
+BOOST_AUTO_TEST_CASE(GetTxContextUsesConfiguredChainId)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -36,10 +39,10 @@ TEST(OpHost, GetTxContextUsesConfiguredChainId)
     OpHost host{
         EVMC_PRAGUE, vm, st, block, hashes, tx, /*chainId=*/1234, &isthmusPrecompileOverrides()};
     const auto ctx = host.get_tx_context();
-    EXPECT_EQ(intx::be::load<intx::uint256>(ctx.chain_id), intx::uint256{1234});
+    BOOST_CHECK_EQUAL(intx::be::load<intx::uint256>(ctx.chain_id), intx::uint256{1234});
 }
 
-TEST(OpHost, GetTxContextGasPriceZeroForSystemCall)
+BOOST_AUTO_TEST_CASE(GetTxContextGasPriceZeroForSystemCall)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -48,12 +51,13 @@ TEST(OpHost, GetTxContextGasPriceZeroForSystemCall)
     state::Transaction tx;
     const auto block = makeBlock();
     OpHost host{EVMC_PRAGUE, vm, st, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
-    EXPECT_EQ(intx::be::load<intx::uint256>(host.get_tx_context().tx_gas_price), intx::uint256{0});
+    BOOST_CHECK_EQUAL(
+        intx::be::load<intx::uint256>(host.get_tx_context().tx_gas_price), intx::uint256{0});
 }
 
-TEST(OpHost, OverrideTableInterceptsP256)
+BOOST_AUTO_TEST_CASE(OverrideTableInterceptsP256)
 {
-    EXPECT_TRUE(
+    BOOST_CHECK(
         isthmusPrecompileOverrides().contains(0x0000000000000000000000000000000000000100_address));
 }
 
@@ -64,7 +68,7 @@ constexpr auto kP256 = 0x0000000000000000000000000000000000000100_address;
 constexpr int64_t kP256Gas = 3450;
 }  // namespace
 
-TEST(OpHost, CallToP256EmptyAccountIsNotSilentSuccess)
+BOOST_AUTO_TEST_CASE(CallToP256EmptyAccountIsNotSilentSuccess)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -82,10 +86,10 @@ TEST(OpHost, CallToP256EmptyAccountIsNotSilentSuccess)
     msg.sender = tx.sender;
     msg.gas = 100000;
     const auto r = host.call(msg);
-    EXPECT_EQ(r.gas_left, msg.gas - kP256Gas);
+    BOOST_CHECK_EQUAL(r.gas_left, msg.gas - kP256Gas);
 }
 
-TEST(OpHost, CallToP256TransfersValue)
+BOOST_AUTO_TEST_CASE(CallToP256TransfersValue)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -106,12 +110,12 @@ TEST(OpHost, CallToP256TransfersValue)
     msg.value = intx::be::store<evmc::uint256be>(intx::uint256{42});
 
     const auto r = host.call(msg);
-    EXPECT_EQ(r.gas_left, msg.gas - kP256Gas);
-    EXPECT_EQ(st.get(kSender).balance, intx::uint256{1000 - 42});
-    EXPECT_EQ(st.get(kP256).balance, intx::uint256{42});
+    BOOST_CHECK_EQUAL(r.gas_left, msg.gas - kP256Gas);
+    BOOST_CHECK_EQUAL(st.get(kSender).balance, intx::uint256{1000 - 42});
+    BOOST_CHECK_EQUAL(st.get(kP256).balance, intx::uint256{42});
 }
 
-TEST(OpHost, DelegateCallToP256IsNotSilentSuccess)
+BOOST_AUTO_TEST_CASE(DelegateCallToP256IsNotSilentSuccess)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -129,10 +133,10 @@ TEST(OpHost, DelegateCallToP256IsNotSilentSuccess)
     msg.sender = kSender;
     msg.gas = 100000;
     const auto r = host.call(msg);
-    EXPECT_EQ(r.gas_left, msg.gas - kP256Gas);
+    BOOST_CHECK_EQUAL(r.gas_left, msg.gas - kP256Gas);
 }
 
-TEST(OpHost, DelegatedFlagToP256FallsBackToEmptyCode)
+BOOST_AUTO_TEST_CASE(DelegatedFlagToP256FallsBackToEmptyCode)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -154,11 +158,11 @@ TEST(OpHost, DelegatedFlagToP256FallsBackToEmptyCode)
     msg.gas = 100000;
     const auto r = host.call(msg);
     // 母本：DELEGATED 命中 precompile 地址 → 空 code 成功，保留全 gas。
-    EXPECT_EQ(r.status_code, EVMC_SUCCESS);
-    EXPECT_EQ(r.gas_left, msg.gas);
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(r.gas_left, msg.gas);
 }
 
-TEST(OpHost, JovianBn256PairingInputOverLimitFails)
+BOOST_AUTO_TEST_CASE(JovianBn256PairingInputOverLimitFails)
 {
     constexpr auto kBn256Pairing = 0x0000000000000000000000000000000000000008_address;
     constexpr size_t kJovianMax = 81984;
@@ -182,13 +186,13 @@ TEST(OpHost, JovianBn256PairingInputOverLimitFails)
     msg.input_size = input.size();
 
     const auto r = host.call(msg);
-    EXPECT_EQ(r.status_code, EVMC_FAILURE);
-    EXPECT_EQ(r.gas_left, 0);
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_FAILURE);
+    BOOST_CHECK_EQUAL(r.gas_left, 0);
 }
 
 // D-11 边界（红队 F-9）：恰在 81984（=427×192）上限的输入必须执行（全零点对 → pairing 成功）。
 // 挡住 OpHost 限长比较符 > 被改成 >= 的回归。gas = 45000 + 427*34000 = 14,563,000。
-TEST(OpHost, JovianBn256PairingInputAtLimitExecutes)
+BOOST_AUTO_TEST_CASE(JovianBn256PairingInputAtLimitExecutes)
 {
     constexpr auto kBn256 = 0x0000000000000000000000000000000000000008_address;
     auto vm = evmc::VM{evmc_create_evmone()};
@@ -216,13 +220,13 @@ TEST(OpHost, JovianBn256PairingInputAtLimitExecutes)
     msg.input_data = input.data();
     msg.input_size = input.size();
     const auto r = host.call(msg);
-    EXPECT_EQ(r.status_code, EVMC_SUCCESS);
-    EXPECT_GT(r.gas_left, 0);
+    BOOST_CHECK_EQUAL(r.status_code, EVMC_SUCCESS);
+    BOOST_CHECK_GT(r.gas_left, 0);
 }
 
 // D-12：0x100 在 Isthmus（rev=PRAGUE）必须预热（evmone is_precompile 门槛 OSAKA），
 // 且不得产生幽灵空账户进入 state diff 的 deleted_accounts。
-TEST(OpHost, OverrideTablePrecompilesAreWarm)
+BOOST_AUTO_TEST_CASE(OverrideTablePrecompilesAreWarm)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -233,12 +237,12 @@ TEST(OpHost, OverrideTablePrecompilesAreWarm)
     OpHost host{EVMC_PRAGUE, vm, state, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
 
     constexpr auto k100 = 0x0000000000000000000000000000000000000100_address;
-    EXPECT_EQ(host.access_account(k100), EVMC_ACCESS_WARM);
-    EXPECT_EQ(state.find(k100), nullptr);
+    BOOST_CHECK_EQUAL(host.access_account(k100), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(state.find(k100), nullptr);
 }
 
 // D-12 反作弊（红队 F-8）：覆写不得吞掉基类冷→暖迁移（「不委托基类」的手滑在此暴露）
-TEST(OpHost, OffTableAccessTransitionsColdToWarm)
+BOOST_AUTO_TEST_CASE(OffTableAccessTransitionsColdToWarm)
 {
     auto vm = evmc::VM{evmc_create_evmone()};
     test::TestState ts;
@@ -249,6 +253,8 @@ TEST(OpHost, OffTableAccessTransitionsColdToWarm)
     OpHost host{EVMC_PRAGUE, vm, state, block, hashes, tx, 1234, &isthmusPrecompileOverrides()};
 
     constexpr auto kPlain = 0x00000000000000000000000000000000000000ce_address;
-    EXPECT_EQ(host.access_account(kPlain), EVMC_ACCESS_COLD);
-    EXPECT_EQ(host.access_account(kPlain), EVMC_ACCESS_WARM);
+    BOOST_CHECK_EQUAL(host.access_account(kPlain), EVMC_ACCESS_COLD);
+    BOOST_CHECK_EQUAL(host.access_account(kPlain), EVMC_ACCESS_WARM);
 }
+
+BOOST_AUTO_TEST_SUITE_END()

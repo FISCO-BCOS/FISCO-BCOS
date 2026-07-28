@@ -9,9 +9,8 @@ target_link_libraries(bcos-evm-eth-tests PRIVATE
 )
 add_test(NAME BcosEvmEthTests COMMAND bcos-evm-eth-tests)
 
-find_package(GTest CONFIG REQUIRED)
-
 add_executable(bcos-evm-opstack-tests
+    opstack/TestMain.cpp
     opstack/OpForkScheduleTest.cpp
     opstack/OpHostTest.cpp
     opstack/OpPrecompilesTest.cpp
@@ -30,6 +29,6 @@ add_executable(bcos-evm-opstack-tests
 )
 target_link_libraries(bcos-evm-opstack-tests PRIVATE
     bcosevm::opstack
-    GTest::gtest_main
+    Boost::unit_test_framework
 )
 add_test(NAME BcosEvmOpstackTests COMMAND bcos-evm-opstack-tests)

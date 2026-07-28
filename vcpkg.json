@@ -109,8 +109,7 @@
         "benchmark",
         "zlib",
         "tarscpp",
-        "hsm-crypto",
-        "gtest"
+        "hsm-crypto"
       ]
     },
     "etcd": {

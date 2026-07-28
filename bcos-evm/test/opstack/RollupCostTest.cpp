@@ -1,7 +1,8 @@
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/RollupCost.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <evmc/hex.hpp>
 #include <vector>
 
@@ -46,46 +47,48 @@ evmc::bytes_view view(const std::vector<uint8_t>& v)
 }
 }  // namespace
 
-TEST(RollupCost, FlzCompressLenMatchesOpGethVectors)
+BOOST_AUTO_TEST_SUITE(RollupCostSuite)
+
+BOOST_AUTO_TEST_CASE(FlzCompressLenMatchesOpGethVectors)
 {
-    EXPECT_EQ(flzCompressLen({}), 0u);
+    BOOST_CHECK_EQUAL(flzCompressLen({}), 0u);
     std::vector<uint8_t> ones(1000, 0x01);
-    EXPECT_EQ(flzCompressLen(view(ones)), 21u);
+    BOOST_CHECK_EQUAL(flzCompressLen(view(ones)), 21u);
     std::vector<uint8_t> zeros(1000, 0x00);
-    EXPECT_EQ(flzCompressLen(view(zeros)), 21u);
-    EXPECT_EQ(flzCompressLen(kEmptyTx), 31u);
-    EXPECT_EQ(flzCompressLen(kContractCallTx), 202u);
+    BOOST_CHECK_EQUAL(flzCompressLen(view(zeros)), 21u);
+    BOOST_CHECK_EQUAL(flzCompressLen(kEmptyTx), 31u);
+    BOOST_CHECK_EQUAL(flzCompressLen(kContractCallTx), 202u);
 }
 
-TEST(RollupCost, EstimatedDaSizeFloorsToMinimum)
+BOOST_AUTO_TEST_CASE(EstimatedDaSizeFloorsToMinimum)
 {
-    EXPECT_EQ(estimatedDaSizeScaled(0), 100000000_u256);
-    EXPECT_EQ(estimatedDaSizeScaled(64), 100000000_u256);
-    EXPECT_EQ(estimatedDaSizeScaled(200), 124714400_u256);
+    BOOST_CHECK_EQUAL(estimatedDaSizeScaled(0), 100000000_u256);
+    BOOST_CHECK_EQUAL(estimatedDaSizeScaled(64), 100000000_u256);
+    BOOST_CHECK_EQUAL(estimatedDaSizeScaled(200), 124714400_u256);
 }
 
-TEST(RollupCost, EmptyEnvelopeIsZeroL1Cost)
+BOOST_AUTO_TEST_CASE(EmptyEnvelopeIsZeroL1Cost)
 {
-    EXPECT_EQ(
+    BOOST_CHECK_EQUAL(
         computeL1Cost(feeParams(1000000000, 10000000, 2, 3), {}, fjordConfig()), intx::uint256{0});
 }
 
-TEST(RollupCost, FjordL1CostEmptyTxMatches3203000)
+BOOST_AUTO_TEST_CASE(FjordL1CostEmptyTxMatches3203000)
 {
     const evmc::bytes_view env = kEmptyTx;
-    EXPECT_EQ(
+    BOOST_CHECK_EQUAL(
         computeL1Cost(feeParams(1000000000, 10000000, 2, 3), env, fjordConfig()), 3203000_u256);
 }
 
-TEST(RollupCost, BedrockCalldataGasUsedNoPlus68)
+BOOST_AUTO_TEST_CASE(BedrockCalldataGasUsedNoPlus68)
 {
     // 3 个零字节 + 2 个非零字节 = 3*4 + 2*16 = 44；确认没有 pre-Regolith 的 +68。
     const std::vector<uint8_t> env{0x00, 0x00, 0x00, 0x11, 0x22};
-    EXPECT_EQ(bedrockCalldataGasUsed({env.data(), env.size()}), 44u);
-    EXPECT_NE(bedrockCalldataGasUsed({env.data(), env.size()}), 44u + 68u);
+    BOOST_CHECK_EQUAL(bedrockCalldataGasUsed({env.data(), env.size()}), 44u);
+    BOOST_CHECK_NE(bedrockCalldataGasUsed({env.data(), env.size()}), 44u + 68u);
 }
 
-TEST(RollupCost, EcotoneL1DiffersFromFjordSameEnvelope)
+BOOST_AUTO_TEST_CASE(EcotoneL1DiffersFromFjordSameEnvelope)
 {
     OpFeeParams fee{.l1_base_fee = 1000000000_u256,
         .base_fee_scalar = 2,
@@ -96,7 +99,7 @@ TEST(RollupCost, EcotoneL1DiffersFromFjordSameEnvelope)
     std::vector<uint8_t> env(200, 0x11);
     const auto ecotone = computeL1Cost(fee, {env.data(), env.size()}, ecotoneConfig());
     const auto fjord = computeL1Cost(fee, {env.data(), env.size()}, fjordConfig());
-    EXPECT_NE(ecotone, fjord);
+    BOOST_CHECK_NE(ecotone, fjord);
 
     // Ecotone 公式钉死：calldataGas * (l1BaseFee*16*baseScalar + blobBaseFee*blobScalar) / 16e6
     const auto calldataGas = intx::uint256{bedrockCalldataGasUsed({env.data(), env.size()})};
@@ -104,58 +107,60 @@ TEST(RollupCost, EcotoneL1DiffersFromFjordSameEnvelope)
                           (fee.l1_base_fee * 16 * intx::uint256{fee.base_fee_scalar} +
                               fee.blob_base_fee * intx::uint256{fee.blob_base_fee_scalar}) /
                           intx::uint256{16'000'000};
-    EXPECT_EQ(ecotone, expected);
+    BOOST_CHECK_EQUAL(ecotone, expected);
 }
 
-TEST(RollupCost, OperatorCostIsthmus)
+BOOST_AUTO_TEST_CASE(OperatorCostIsthmus)
 {
     const auto p = feeParams(0, 0, 0, 0, /*opScalar=*/2000000, /*opConst=*/500);
-    EXPECT_EQ(computeOperatorCost(p, 1000, isthmusConfig()),
+    BOOST_CHECK_EQUAL(computeOperatorCost(p, 1000, isthmusConfig()),
         intx::uint256{1000ull * 2000000 / 1000000 + 500});
 }
 
-TEST(RollupCost, OperatorCostJovianUsesTimes100)
+BOOST_AUTO_TEST_CASE(OperatorCostJovianUsesTimes100)
 {
     const auto p = feeParams(0, 0, 0, 0, /*opScalar=*/2000000, /*opConst=*/500);
     // Isthmus: 1000*2000000/1e6 + 500 = 2500
-    EXPECT_EQ(computeOperatorCost(p, 1000, isthmusConfig()), intx::uint256{2500});
+    BOOST_CHECK_EQUAL(computeOperatorCost(p, 1000, isthmusConfig()), intx::uint256{2500});
     // Jovian: 1000*2000000*100 + 500 = 200000000500
-    EXPECT_EQ(computeOperatorCost(p, 1000, jovianConfig()),
+    BOOST_CHECK_EQUAL(computeOperatorCost(p, 1000, jovianConfig()),
         intx::uint256{1000ull * 2000000ull * 100ull + 500});
-    EXPECT_EQ(
+    BOOST_CHECK_EQUAL(
         computeOperatorCost(p, 1000, karstConfig()), computeOperatorCost(p, 1000, jovianConfig()));
 }
 
-TEST(RollupCost, EstimatedDaSizeDividesScaledBy1e6)
+BOOST_AUTO_TEST_CASE(EstimatedDaSizeDividesScaledBy1e6)
 {
-    EXPECT_EQ(estimatedDaSize({}), 0u);
+    BOOST_CHECK_EQUAL(estimatedDaSize({}), 0u);
     // fastlz 0 → scaled floor 100e6 → size 100
-    EXPECT_EQ(estimatedDaSizeScaled(0) / 1000000_u256, intx::uint256{100});
+    BOOST_CHECK_EQUAL(estimatedDaSizeScaled(0) / 1000000_u256, intx::uint256{100});
     std::vector<uint8_t> empty;
-    EXPECT_EQ(estimatedDaSize(view(empty)), 0u);
+    BOOST_CHECK_EQUAL(estimatedDaSize(view(empty)), 0u);
     const evmc::bytes_view env = kEmptyTx;
     const auto scaled = estimatedDaSizeScaled(flzCompressLen(env));
-    EXPECT_EQ(estimatedDaSize(env), static_cast<uint64_t>(scaled / 1000000_u256));
+    BOOST_CHECK_EQUAL(estimatedDaSize(env), static_cast<uint64_t>(scaled / 1000000_u256));
 }
 
 // D-14b：FastLZ 只压一次——分解 API 与原 API 等价
-TEST(RollupCost, FromFlzVariantsMatchEnvelopeVariants)
+BOOST_AUTO_TEST_CASE(FromFlzVariantsMatchEnvelopeVariants)
 {
     std::vector<uint8_t> envBytes(120);
     for (size_t i = 0; i < envBytes.size(); ++i)
         envBytes[i] = static_cast<uint8_t>(i * 7 + 3);
     const evmc::bytes_view env{envBytes.data(), envBytes.size()};
     const auto flz = flzCompressLen(env);
-    ASSERT_GT(flz, 0u);
-    EXPECT_EQ(estimatedDaSizeFromFlz(flz), estimatedDaSize(env));
-    EXPECT_EQ(estimatedDaSizeFromFlz(0), 0u);
+    BOOST_REQUIRE_GT(flz, 0u);
+    BOOST_CHECK_EQUAL(estimatedDaSizeFromFlz(flz), estimatedDaSize(env));
+    BOOST_CHECK_EQUAL(estimatedDaSizeFromFlz(0), 0u);
 
     OpFeeParams fee{};
     fee.l1_base_fee = intx::uint256{1000};
     fee.base_fee_scalar = 11;
     fee.blob_base_fee = intx::uint256{5};
     fee.blob_base_fee_scalar = 7;
-    EXPECT_EQ(
+    BOOST_CHECK_EQUAL(
         computeL1CostFromFlz(fee, flz, fjordConfig()), computeL1Cost(fee, env, fjordConfig()));
-    EXPECT_EQ(computeL1CostFromFlz(fee, 0, fjordConfig()), intx::uint256{0});
+    BOOST_CHECK_EQUAL(computeL1CostFromFlz(fee, 0, fjordConfig()), intx::uint256{0});
 }
+
+BOOST_AUTO_TEST_SUITE_END()

@@ -1,12 +1,13 @@
 #include "OpPredeploysSeed.h"
 #include "StateDiffWriteback.h"
+#include "TestPrinters.h"
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/RollupCost.h>
 #include <evmone/evmone.h>
-#include <gtest/gtest.h>
+#include <boost/test/unit_test.hpp>
 #include <algorithm>
 #include <test/utils/test_state.hpp>
 #include <vector>
@@ -31,7 +32,9 @@ namespace
 }
 }  // namespace
 
-TEST(OpTransition, RoutesFeesToFourVaults)
+BOOST_AUTO_TEST_SUITE(OpTransitionSuite)
+
+BOOST_AUTO_TEST_CASE(RoutesFeesToFourVaults)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -70,25 +73,25 @@ TEST(OpTransition, RoutesFeesToFourVaults)
     std::vector<uint8_t> env(50, 0x11);
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
 
     const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
     bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
 
     // 纯转账无 calldata：gas_used = intrinsic = 21000（7623 floor 空 calldata 亦为 21000）。
-    ASSERT_EQ(txR.receipt.gas_used, 21000);
+    BOOST_REQUIRE_EQUAL(txR.receipt.gas_used, 21000);
     const auto gasUsed = intx::uint256{static_cast<uint64_t>(txR.receipt.gas_used)};
     // BaseFeeVault = gasUsed×baseFee(7)；Sequencer(coinbase) = gasUsed×priority(10)；
     // Isthmus operator = gasUsed×scalar(1e6)/1e6 + 0 = gasUsed。
-    EXPECT_EQ(ts.at(OP_BASE_FEE_VAULT).balance, gasUsed * intx::uint256{7});
-    EXPECT_EQ(ts.at(OP_L1_FEE_VAULT).balance, props.l1_cost);
-    EXPECT_EQ(ts.at(OP_SEQUENCER_FEE_VAULT).balance, gasUsed * intx::uint256{10});
-    EXPECT_EQ(ts.at(OP_OPERATOR_FEE_VAULT).balance, gasUsed);
+    BOOST_CHECK_EQUAL(ts.at(OP_BASE_FEE_VAULT).balance, gasUsed * intx::uint256{7});
+    BOOST_CHECK_EQUAL(ts.at(OP_L1_FEE_VAULT).balance, props.l1_cost);
+    BOOST_CHECK_EQUAL(ts.at(OP_SEQUENCER_FEE_VAULT).balance, gasUsed * intx::uint256{10});
+    BOOST_CHECK_EQUAL(ts.at(OP_OPERATOR_FEE_VAULT).balance, gasUsed);
 }
 
-TEST(OpTransition, ReceiptCarriesL1AndOperatorMeta)
+BOOST_AUTO_TEST_CASE(ReceiptCarriesL1AndOperatorMeta)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -127,23 +130,24 @@ TEST(OpTransition, ReceiptCarriesL1AndOperatorMeta)
     std::vector<uint8_t> env(50, 0x11);
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
 
     const auto txR = opTransition(ts, block, hashes, tx, isthmusConfig(), vm, props, 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
 
-    ASSERT_TRUE(txR.meta.l1_fee.has_value());
-    EXPECT_EQ(*txR.meta.l1_fee, props.l1_cost);
-    ASSERT_TRUE(txR.meta.l1_gas_price.has_value());
-    EXPECT_EQ(*txR.meta.l1_gas_price, fee.l1_base_fee);
-    ASSERT_TRUE(txR.meta.operator_fee.has_value());
+    BOOST_REQUIRE(txR.meta.l1_fee.has_value());
+    BOOST_CHECK_EQUAL(*txR.meta.l1_fee, props.l1_cost);
+    BOOST_REQUIRE(txR.meta.l1_gas_price.has_value());
+    BOOST_CHECK_EQUAL(*txR.meta.l1_gas_price, fee.l1_base_fee);
+    BOOST_REQUIRE(txR.meta.operator_fee.has_value());
     // Isthmus operator = gasUsed×scalar(1e6)/1e6 + 0 = gasUsed（纯转账 21000）。
-    EXPECT_EQ(*txR.meta.operator_fee, intx::uint256{static_cast<uint64_t>(txR.receipt.gas_used)});
-    EXPECT_EQ(txR.receipt.gas_used, 21000);
+    BOOST_CHECK_EQUAL(
+        *txR.meta.operator_fee, intx::uint256{static_cast<uint64_t>(txR.receipt.gas_used)});
+    BOOST_CHECK_EQUAL(txR.receipt.gas_used, 21000);
 }
 
-TEST(OpTransition, JovianReceiptMetaAndOperatorFormula)
+BOOST_AUTO_TEST_CASE(JovianReceiptMetaAndOperatorFormula)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -184,34 +188,34 @@ TEST(OpTransition, JovianReceiptMetaAndOperatorFormula)
     std::vector<uint8_t> env(50, 0x11);
     const auto& cfg = jovianConfig();
     const auto v = opValidate(ts, block, tx, {env.data(), env.size()}, cfg, fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
 
     const auto txR = opTransition(ts, block, hashes, tx, cfg, vm, props, 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
 
     const auto expectedOp =
         computeOperatorCost(fee, static_cast<uint64_t>(txR.receipt.gas_used), cfg);
-    ASSERT_TRUE(txR.meta.operator_fee.has_value());
-    EXPECT_EQ(*txR.meta.operator_fee, expectedOp);
-    EXPECT_EQ(expectedOp, intx::uint256{static_cast<uint64_t>(txR.receipt.gas_used)} *
-                                  intx::uint256{1} * intx::uint256{100} +
-                              intx::uint256{500});
+    BOOST_REQUIRE(txR.meta.operator_fee.has_value());
+    BOOST_CHECK_EQUAL(*txR.meta.operator_fee, expectedOp);
+    BOOST_CHECK_EQUAL(expectedOp, intx::uint256{static_cast<uint64_t>(txR.receipt.gas_used)} *
+                                          intx::uint256{1} * intx::uint256{100} +
+                                      intx::uint256{500});
 
-    ASSERT_TRUE(txR.meta.da_footprint_gas_scalar.has_value());
-    EXPECT_EQ(*txR.meta.da_footprint_gas_scalar, 2u);
-    ASSERT_TRUE(txR.meta.da_footprint.has_value());
-    EXPECT_EQ(*txR.meta.da_footprint, estimatedDaSize({env.data(), env.size()}) * 2u);
+    BOOST_REQUIRE(txR.meta.da_footprint_gas_scalar.has_value());
+    BOOST_CHECK_EQUAL(*txR.meta.da_footprint_gas_scalar, 2u);
+    BOOST_REQUIRE(txR.meta.da_footprint.has_value());
+    BOOST_CHECK_EQUAL(*txR.meta.da_footprint, estimatedDaSize({env.data(), env.size()}) * 2u);
 
     bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
-    EXPECT_EQ(ts.at(OP_OPERATOR_FEE_VAULT).balance, expectedOp);
-    EXPECT_EQ(ts.at(OP_L1_FEE_VAULT).balance, props.l1_cost);
+    BOOST_CHECK_EQUAL(ts.at(OP_OPERATOR_FEE_VAULT).balance, expectedOp);
+    BOOST_CHECK_EQUAL(ts.at(OP_L1_FEE_VAULT).balance, props.l1_cost);
 }
 
 // 重构护栏：共享执行核不得丢 EIP-2930 access_list 预热。
 // gas = 21000 + accessList(2400+1900) + PUSH1(3)+SLOAD(warm 100)+POP(2) = 25405；
 // 预热被丢时 SLOAD 冷 2100 → 27405。
-TEST(OpTransition, AccessListKeepsStorageWarm)
+BOOST_AUTO_TEST_CASE(AccessListKeepsStorageWarm)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -249,18 +253,18 @@ TEST(OpTransition, AccessListKeepsStorageWarm)
     std::vector<uint8_t> env{0x02, 0x11};
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto txR =
         opTransition(ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
-    EXPECT_EQ(txR.receipt.gas_used, 25405);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_CHECK_EQUAL(txR.receipt.gas_used, 25405);
 }
 
 // 回归：access list 列入覆写表内的预编译地址 + 存储槽 key。
 // OpHost::access_account 对表内地址提前返回且不插入账户，而 State::get_storage 内部
 // get() 断言账户非空——修复前此处 debug 断言中止 / release 空指针解引用。
 // 同时确认 sanitize 仍生效：0x100 不得作为幽灵账户进入 deleted_accounts。
-TEST(OpTransition, AccessListWithOverridePrecompileStorageKey)
+BOOST_AUTO_TEST_CASE(AccessListWithOverridePrecompileStorageKey)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -297,25 +301,24 @@ TEST(OpTransition, AccessListWithOverridePrecompileStorageKey)
     std::vector<uint8_t> env{0x02, 0x11};
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto txR =
         opTransition(ts, block, hashes, tx, isthmusConfig(), vm, std::get<OpTxProperties>(v), 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
     // 纯转账 21000 + accessList(2400 地址 + 1900 槽) = 25300
-    EXPECT_EQ(txR.receipt.gas_used, 25300);
+    BOOST_CHECK_EQUAL(txR.receipt.gas_used, 25300);
 
     // 幽灵删除必须已被 sanitizeStateDiff 剥离
-    EXPECT_EQ(std::count(txR.receipt.state_diff.deleted_accounts.begin(),
-                  txR.receipt.state_diff.deleted_accounts.end(), kP256),
-        0)
-        << "override-table precompile must not enter deleted_accounts as a ghost";
+    BOOST_CHECK_MESSAGE((std::count(txR.receipt.state_diff.deleted_accounts.begin(),
+                            txR.receipt.state_diff.deleted_accounts.end(), kP256)) == (0),
+        "override-table precompile must not enter deleted_accounts as a ghost");
     bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
 }
 
 // 回归：cfg 与 props 的 operator-fee 标志在分叉边界上不一致时，扣费与退款/入账
 // 必须同源（均取 props 快照），否则凭空增发或销毁 operator_cost_at_gas_limit。
 // 以 isthmus（has_operator_fee=true）做 validate，再用关掉该标志的 cfg 副本做 transition。
-TEST(OpTransition, OperatorFeeConservesWhenCfgDisagreesWithProps)
+BOOST_AUTO_TEST_CASE(OperatorFeeConservesWhenCfgDisagreesWithProps)
 {
     constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
     constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
@@ -356,10 +359,10 @@ TEST(OpTransition, OperatorFeeConservesWhenCfgDisagreesWithProps)
     // validate 侧：operator fee 生效，props 记录快照与金额
     const auto v =
         opValidate(ts, block, tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
-    ASSERT_TRUE(std::holds_alternative<OpTxProperties>(v));
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
     const auto& props = std::get<OpTxProperties>(v);
-    ASSERT_TRUE(props.has_operator_fee);
-    ASSERT_GT(props.operator_cost_at_gas_limit, intx::uint256{0});
+    BOOST_REQUIRE(props.has_operator_fee);
+    BOOST_REQUIRE_GT(props.operator_cost_at_gas_limit, intx::uint256{0});
 
     // transition 侧：cfg 关掉 operator fee，与 props 不一致
     OpForkConfig cfg = isthmusConfig();
@@ -367,10 +370,12 @@ TEST(OpTransition, OperatorFeeConservesWhenCfgDisagreesWithProps)
 
     const auto before = totalSupply(ts);
     const auto txR = opTransition(ts, block, hashes, tx, cfg, vm, props, 1234);
-    ASSERT_EQ(txR.receipt.status, EVMC_SUCCESS);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
     bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
 
     // 总供应量守恒：修复前发送方未被扣费却仍获退款 + 金库入账 → 增发
-    EXPECT_EQ(totalSupply(ts), before)
-        << "operator fee must conserve across cfg/props disagreement";
+    BOOST_CHECK_MESSAGE(
+        (totalSupply(ts)) == (before), "operator fee must conserve across cfg/props disagreement");
 }
+
+BOOST_AUTO_TEST_SUITE_END()
