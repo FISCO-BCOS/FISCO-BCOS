@@ -196,9 +196,7 @@ public:
                 stateView, blockInfo, blockHashes, evmTx, rev, m_vm, txProps);
 
             // Apply state diff back to storage
-            std::map<evmc::address, std::set<evmc::bytes32>> storageTracker;
-            co_await applyStateDiff(storage, evmReceipt.state_diff, rev, *m_hashImpl,
-                storageTracker);
+            co_await applyStateDiff(storage, evmReceipt.state_diff, rev, *m_hashImpl);
 
             // Convert receipt
             co_return evmoneReceiptToBcos(evmReceipt, m_receiptFactory, blockHeader.number());
@@ -226,8 +224,7 @@ public:
         auto diff = evmone::state::finalize(
             stateView, rev, coinbase, blockReward, {}, {});
 
-        std::map<evmc::address, std::set<evmc::bytes32>> storageTracker;
-        co_await applyStateDiff(storage, diff, rev, *m_hashImpl, storageTracker);
+        co_await applyStateDiff(storage, diff, rev, *m_hashImpl);
     }
 
     // TransactionExecutor concept support: ExecuteContext

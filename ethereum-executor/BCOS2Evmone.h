@@ -14,8 +14,6 @@
 #include "bcos-framework/protocol/TransactionReceiptFactory.h"
 #include "bcos-task/TBBWait.h"
 #include <evmone/evmone.h>
-#include <map>
-#include <set>
 #include <string>
 
 namespace bcos::executor_v1::eth
@@ -157,16 +155,19 @@ inline bcos::u256 toBcosU256(intx::uint256 const& val)
 
 template <class Storage>
 task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const& diff,
-    evmc_revision, crypto::Hash const& hashImpl,
-    std::map<evmc::address, std::set<evmc::bytes32>>& storageTracker)
+    evmc_revision, crypto::Hash const& hashImpl)
 {
     using namespace bcos::ledger::account;
-
-    // Process modified_accounts first to collect all storage keys written.
-    // This way, for accounts that are both deleted and recreated (SELFDESTRUCT
-    // + CREATE2 at the same address), the tracker only contains the new keys,
-    // so old residual storage keys from the destroyed contract are properly
-    // cleared in the deletion loop below.
+    for (auto const& addr : diff.deleted_accounts)
+    {
+        EVMAccount<Storage> acc(storage, addr, false);
+        if (co_await acc.exists())
+        {
+            co_await acc.setBalance(0);
+            co_await acc.setNonce("0");
+            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
+        }
+    }
     for (auto const& m : diff.modified_accounts)
     {
         EVMAccount<Storage> acc(storage, m.addr, false);
@@ -196,28 +197,6 @@ task::Task<void> applyStateDiff(Storage& storage, evmone::state::StateDiff const
                 co_await acc.setStorage(key, evmc_bytes32{});
             else
                 co_await acc.setStorage(key, value);
-            storageTracker[m.addr].insert(key);
-        }
-    }
-
-    for (auto const& addr : diff.deleted_accounts)
-    {
-        EVMAccount<Storage> acc(storage, addr, false);
-        if (co_await acc.exists())
-        {
-            // Clear all tracked storage slots for this address.
-            // If the account was also in modified_accounts (recreated),
-            // the tracker contains only the new keys set above, so only
-            // residual old storage from the destroyed contract is cleared.
-            auto trackerIt = storageTracker.find(addr);
-            if (trackerIt != storageTracker.end())
-            {
-                for (auto const& key : trackerIt->second)
-                    co_await acc.setStorage(key, evmc_bytes32{});
-            }
-            co_await acc.setBalance(0);
-            co_await acc.setNonce("0");
-            co_await acc.setCode(bcos::bytes{}, std::string{}, bcos::h256{});
         }
     }
 }
@@ -237,9 +216,21 @@ inline protocol::TransactionReceipt::Ptr evmoneReceiptToBcos(
         bcos::bytes data(l.data.begin(), l.data.end());
         logs.emplace_back(std::move(addr), std::move(topics), std::move(data));
     }
-    // EVMC_SUCCESS == 0 maps to Ethereum status 1 (success).
-    // All other evmc_status_codes (revert, exceptional halt, etc.) map to 0.
-    int32_t status = (er.status == EVMC_SUCCESS) ? 1 : 0;
+    // Map evmc_status_code to FISCO internal status convention:
+    // 0 = success (TransactionStatus::None), non-zero = failure.
+    // The 0↔1 flip for Ethereum JSON-RPC is done by ReceiptResponse.cpp.
+    int32_t status = [&]() -> int32_t {
+        switch (er.status)
+        {
+        case EVMC_SUCCESS: return 0;
+        case EVMC_REVERT: return 16;   // TransactionStatus::RevertInstruction
+        case EVMC_OUT_OF_GAS: return 12;   // TransactionStatus::OutOfGas
+        case EVMC_UNDEFINED_INSTRUCTION:
+        case EVMC_INVALID_INSTRUCTION:
+            return 11;  // TransactionStatus::BadJumpDestination
+        default: return 2;  // non-zero failure
+        }
+    }();
     // evmone state::TransactionReceipt does not carry output data;
     // return data is consumed during execution and not stored per spec.
     bcos::bytes output;

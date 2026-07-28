@@ -88,6 +88,8 @@ private:
                 if (d[i] != 0) { hasCodeHash = true; break; }
             if (hasCodeHash)
                 std::copy_n(d, sizeof(evmc_bytes32), acc.code_hash.bytes);
+            else
+                acc.code_hash = evmone::state::Account::EMPTY_CODE_HASH;
         }
 
         acc.has_storage = true;
