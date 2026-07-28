@@ -110,8 +110,7 @@
         "zlib",
         "tarscpp",
         "hsm-crypto",
-        "gtest",
-        "nlohmann-json"
+        "gtest"
       ]
     },
     "etcd": {

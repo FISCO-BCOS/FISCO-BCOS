@@ -55,9 +55,9 @@ inline constexpr int64_t AUTHORIZATION_BASE_COST = 12500;
 /// refund earned by authorities that already existed. The SINGLE implementation both execution
 /// paths call — see the file header for why this is not duplicated per path.
 ///
-/// Ported from evmone's transition() with the signer-shortcut stub replaced by real ecrecover:
-/// a pre-set auth.signer (test shortcut) is honored, otherwise the authority is recovered from
-/// the signature, and a recovery failure skips that authorization.
+/// Ported from evmone's transition() with the signer-shortcut stub replaced by real ecrecover
+/// (auth.signer is ignored — see the comment at the recovery site); a recovery failure skips
+/// that authorization.
 inline int64_t processAuthorizationList(evmone::state::State& state, uint64_t chainId,
     const evmone::state::AuthorizationList& authorizationList)
 {
@@ -82,10 +82,13 @@ inline int64_t processAuthorizationList(evmone::state::State& state, uint64_t ch
         if (auth.s > SECP256K1N_OVER_2)
             continue;
 
-        // Recover signer: use pre-set signer if available (test shortcut); otherwise ecrecover.
-        std::optional<evmc::address> signer = auth.signer;
-        if (!signer.has_value())
-            signer = recoverAuthority(auth);
+        // ALWAYS recover the signer via ecrecover. auth.signer (evmone's fixture-loader
+        // shortcut field) is deliberately ignored: honouring it would be a signature-verification
+        // bypass in the single implementation both consensus paths share — an Authorization built
+        // from decoded user input with an attacker-supplied signer would skip ecrecover entirely.
+        // No in-repo test relies on the shortcut (they all pass signer = nullopt), and the
+        // fixture loader that populated it is no longer built.
+        const auto signer = recoverAuthority(auth);
         if (!signer.has_value())
             continue;  // ecrecover failed → skip this authorization
 

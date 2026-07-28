@@ -202,9 +202,16 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
                             intx::uint256{0};
     const auto acc = view.get_account(tx.sender);
     const auto balance = acc ? acc->balance : intx::uint256{0};
-    const auto maxCost = intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * tx.max_gas_price +
-                         tx.value + l1Cost + opCost;
-    if (balance < maxCost)
+    // 512-bit like upstream validate_transaction ("The computation cannot overflow if done with
+    // 512-bit precision", eth/state/state.cpp): a wrapping uint256 sum would let
+    // gasLimit*maxGasPrice + value + l1Cost + opCost pass the cap when it exceeds 2^256, and
+    // opTransition's unchecked balance subtractions would then underflow (mint). The asserts
+    // there compile away under NDEBUG, so this comparison is the only guard they have.
+    auto maxCost = intx::umul(intx::uint256{static_cast<uint64_t>(tx.gas_limit)}, tx.max_gas_price);
+    maxCost += tx.value;
+    maxCost += l1Cost;
+    maxCost += opCost;
+    if (intx::uint512{balance} < maxCost)
         return make_error_code(std::errc::result_out_of_range);
 
     return OpTxProperties{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,

@@ -20,7 +20,7 @@ namespace bcos::evm
 /// relied on when computing this diff, and must be evaluated before the diff has been applyDiff'd
 /// — call only at the production site.
 /// op-geth semantic anchor: statedb.go:1485-1512 (access list is pure in-memory bookkeeping),
-/// checked out at /Users/octopus/octo/code/blockchain-impl/op-geth @ v1.101702.2.
+/// op-geth @ v1.101702.2.
 /// **StateView adapter contract (KEEP direction, final-review pin-down)**: get_account(addr)
 /// .has_value() must ⇔ the account exists in the ledger's committed representation — it must
 /// **not** collapse "exists but empty" into nullopt. Otherwise a legitimate EIP-161 touch-delete

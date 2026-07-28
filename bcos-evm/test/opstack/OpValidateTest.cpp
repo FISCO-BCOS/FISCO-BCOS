@@ -2,6 +2,7 @@
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpTransition.h>
 #include <gtest/gtest.h>
+#include <limits>
 #include <test/utils/test_state.hpp>
 #include <vector>
 
@@ -84,4 +85,34 @@ TEST(OpValidate, SufficientBalancePasses)
         ts, blk(), baseTx(), {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
     ASSERT_TRUE(std::holds_alternative<OpTxProperties>(r));
     EXPECT_EQ(std::get<OpTxProperties>(r).l1_cost, intx::uint256{0});
+}
+
+// 余额上限求和不得在 2^256 处回绕（对齐 evmone validate_transaction 的 512 位口径）。
+// 构造：balance = 2^256-1，value = balance - gasLimit*maxGasPrice，使 evmone 的 512 位
+// gasCost+value 检查恰好通过；再叠加任何非零 l1Cost，总额越过 2^256——
+// 256 位求和会回绕成一个极小值而放行（回绕后的差额在 opTransition 侧变成余额下溢增发），
+// 512 位求和则正确判定资金不足。
+TEST(OpValidate, BalanceCapDoesNotWrapAt2Pow256)
+{
+    test::TestState ts;
+    const auto balance = std::numeric_limits<intx::uint256>::max();
+    ts[kSender] = {.nonce = 0, .balance = balance, .storage = {}, .code = {}};
+
+    auto tx = baseTx();
+    tx.value = balance - intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * tx.max_gas_price;
+
+    // 非零 L1 费用参数：l1Cost > 0 即足以触发回绕
+    OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .base_fee_scalar = 2,
+        .blob_base_fee_scalar = 3,
+        .blob_base_fee = 10000000_u256,
+        .operator_fee_scalar = 0,
+        .operator_fee_constant = 0};
+    std::vector<uint8_t> env(50, 0x11);
+
+    const auto r =
+        opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+    ASSERT_TRUE(std::holds_alternative<std::error_code>(r))
+        << "a total past 2^256 must be rejected, not wrapped into a tiny passing cap";
+    EXPECT_EQ(std::get<std::error_code>(r), std::errc::result_out_of_range);
 }
