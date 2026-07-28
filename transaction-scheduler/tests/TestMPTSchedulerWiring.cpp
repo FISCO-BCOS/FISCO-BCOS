@@ -785,6 +785,48 @@ BOOST_AUTO_TEST_CASE(commitPrewriteOverwritesExecuteTimeHeaderRow)
     BOOST_CHECK_EQUAL(std::string(entry->get()), "committed-signed");
 }
 
+// ViewNodeStorage's batch paths: writeSome lands every node in the top mutable layer and
+// readSome answers in key order with nullopt for absent nodes. flushTrieNodes is the only
+// production caller of writeSome and nothing calls readSome yet (the trie walk resolves nodes
+// one at a time), so pin both here rather than let the batch read ship unexercised.
+BOOST_AUTO_TEST_CASE(viewNodeStorageBatchReadWrite)
+{
+    auto view = multiLayerStorage.fork();
+    view.newMutable();
+    ViewNodeStorage<MWMultiLayerStorage::ViewType> nodeStorage(view);
+
+    h256 hashA;
+    hashA[0] = 0xA1;
+    h256 hashB;
+    hashB[0] = 0xB2;
+    h256 absent;
+    absent[0] = 0xC3;
+
+    std::vector<std::pair<h256, bytes>> nodes{
+        {hashA, bytes{0x01, 0x02}}, {hashB, bytes{0x03, 0x04, 0x05}}};
+    task::syncWait(nodeStorage.writeSome(nodes));
+
+    // Written through the batch path, readable as ordinary "/mpt/" rows of the mutable layer.
+    auto storedA = task::syncWait(storage2::readOne(view, storage2::mptNodeStateKey(hashA)));
+    BOOST_REQUIRE(storedA);
+    BOOST_CHECK_EQUAL(storedA->get(), std::string("\x01\x02", 2));
+
+    // The source map is untouched — the flush copies, so the delta stays whole for the
+    // CommitObserver.
+    BOOST_CHECK_EQUAL(nodes[0].second.size(), 2U);
+    BOOST_CHECK_EQUAL(nodes[1].second.size(), 3U);
+
+    auto values = task::syncWait(nodeStorage.readSome(std::vector<h256>{hashB, absent, hashA}));
+    BOOST_REQUIRE_EQUAL(values.size(), 3U);
+    BOOST_REQUIRE(values[0]);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        values[0]->begin(), values[0]->end(), nodes[1].second.begin(), nodes[1].second.end());
+    BOOST_CHECK(!values[1]);
+    BOOST_REQUIRE(values[2]);
+    BOOST_CHECK_EQUAL_COLLECTIONS(
+        values[2]->begin(), values[2]->end(), nodes[0].second.begin(), nodes[0].second.end());
+}
+
 // The execute-time header row exists for ONE reason — letting the next MPT block resolve its
 // parent's stateRoot through the view — so finishExecute publishes it for MPT blocks only. An
 // XOR block's header is never read that way (buildMPTStateRoot takes the empty-trie arm when

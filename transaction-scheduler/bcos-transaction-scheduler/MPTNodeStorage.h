@@ -28,6 +28,7 @@
 #include <bcos-utilities/FixedBytes.h>
 #include <memory>
 #include <optional>
+#include <range/v3/view/transform.hpp>
 #include <utility>
 #include <vector>
 
@@ -79,14 +80,23 @@ public:
 
     task::Task<std::vector<std::optional<bcos::bytes>>> readSome(::ranges::input_range auto keys)
     {
+        // One batched read through the view rather than a coroutine round-trip per node: a
+        // block's build resolves thousands of parent nodes.
+        auto entries = co_await storage2::readSome(
+            *m_view, keys | ::ranges::views::transform(
+                                [](auto const& key) { return storage2::mptNodeStateKey(key); }));
+
         std::vector<std::optional<bcos::bytes>> values;
-        if constexpr (::ranges::sized_range<decltype(keys)>)
+        values.reserve(entries.size());
+        for (auto const& entry : entries)
         {
-            values.reserve(::ranges::size(keys));
-        }
-        for (auto&& key : keys)
-        {
-            values.emplace_back(co_await readOne(key));
+            if (!entry)
+            {
+                values.emplace_back(std::nullopt);
+                continue;
+            }
+            auto raw = entry->get();
+            values.emplace_back(bcos::bytes(raw.begin(), raw.end()));
         }
         co_return values;
     }
@@ -101,12 +111,16 @@ public:
 
     task::Task<void> writeSome(::ranges::input_range auto keyValues)
     {
-        for (auto&& [key, value] : keyValues)
-        {
-            // flushTrieNodes hands const references (the delta must stay intact for the
-            // CommitObserver) — copy each node's RLP into its row's Entry.
-            co_await writeOne(key, bcos::bytes(value.begin(), value.end()));
-        }
+        // One batched write into the top mutable layer, same reason as readSome above. The
+        // RLP is COPIED into each row's Entry, never moved out: flushTrieNodes hands const
+        // references and MPTDeltaLayer::newNodes must stay intact for the CommitObserver.
+        co_await storage2::writeSome(
+            mutableStorage(*m_view), keyValues | ::ranges::views::transform([](auto&& keyValue) {
+                auto const& [key, value] = keyValue;
+                storage::Entry entry;
+                entry.set(bcos::bytes(value.begin(), value.end()));
+                return std::make_pair(storage2::mptNodeStateKey(key), std::move(entry));
+            }));
     }
 
 private:

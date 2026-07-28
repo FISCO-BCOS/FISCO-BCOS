@@ -55,6 +55,14 @@ inline bool shouldBuildMPT(
 //         beats silently building an MPT that classifies no account table (see
 //         validateMPTFlagMatrix for why the combination is unsupported) — fail-loud over
 //         fail-silent. @p blockNumber is diagnostic only.
+//
+// OPERATIONAL CONSEQUENCE, deliberate: on a chain already building an MPT, turning
+// feature_raw_address on mid-chain halts block production from the next block, and there is
+// no in-protocol recovery — the flag cannot be turned off again through consensus once every
+// node refuses to execute. The alternative is worse: an MPT over a key space the delta scan
+// cannot classify commits roots that cover no account at all, which forks the chain against
+// every honest replica silently. feature_raw_address and the MPT state root are mutually
+// exclusive for the life of a chain, not just at boot.
 inline void rejectRawAddressWithMPT(
     bcos::ledger::Features const& features, bcos::protocol::BlockNumber blockNumber)
 {

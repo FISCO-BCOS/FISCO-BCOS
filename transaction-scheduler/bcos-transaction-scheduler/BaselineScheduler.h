@@ -300,11 +300,12 @@ private:
         protocol::Block::Ptr m_block;
         bool m_sysBlock{};
         /// Engaged when the block was executed with an MPT state root (shouldBuildMPT).
-        /// Observer payload and parent-root source ONLY: its stateRoot seeds the NEXT block's
-        /// build while this one awaits commit, and coCommitBlock hands the whole delta to the
-        /// CommitObserver after the merge lands. Node PERSISTENCE never reads it — the node
-        /// rows ride the block's mutable layer into mergeBackStorage as ordinary state rows
-        /// (MPTNodeStorage.h).
+        /// CommitObserver payload ONLY: coCommitBlock hands the whole delta to the observer
+        /// after the merge lands. Nothing else reads it — node PERSISTENCE goes through the
+        /// block's mutable layer into mergeBackStorage as ordinary state rows
+        /// (MPTNodeStorage.h), and the NEXT block reads its parent root from the published
+        /// header row, not from here (buildMPTStateRoot), so this field is not a channel any
+        /// consensus-path data flows through.
         std::optional<ledger::mpt::MPTDeltaLayer> m_mptDelta;
     };
     std::deque<std::shared_ptr<ExecuteResult>> m_results;
@@ -328,8 +329,19 @@ private:
      * included — from the backend's signed header (restart / sequential; genesis is the
      * ledger's own genesis header, which is why finishExecute must not publish one). A
      * missing header under an MPT parent throws NotFoundBlockHeader (getBlockData,
-     * LedgerMethods.h) — never a silent empty-trie rebuild. An XOR parent (scenario-A
-     * activation boundary) starts from the empty trie, and never has its header read here.
+     * LedgerMethods.h) — never a silent empty-trie rebuild.
+     *
+     * An XOR parent (the scenario-A activation boundary) starts from the EMPTY trie, and
+     * never has its header read here. That is the scenario-A semantics, not an oversight:
+     * activating feature_mpt_state_root mid-chain commits only to state written AFTER
+     * activation — accounts dormant since the flip stay outside the trie and answer
+     * AccountNotInMPT, and the root is deliberately NOT a full-state Ethereum commitment
+     * (spec design3 §1.1.2 / §1.1.4 / §1.1.6; the 2026-07-09 revision removed first-touch
+     * bootstrap and the preheat tooling on purpose — no stop-the-world scan, no migration).
+     * Sync completeness on such a chain comes from replaying the block sequence, as it did
+     * before MPT. Scenario B (L2 from genesis) is the full-state case: every account enters
+     * the trie when it is created.
+     *
      * Scenario-B limitation unchanged: a non-empty-alloc L2 genesis persists its header but
      * no trie NODES, so only empty-alloc genesis chains block 1 today.
      */
@@ -490,6 +502,20 @@ private:
                     BASELINE_SCHEDULER_LOG(ERROR)
                         << "MPT state root build failed, refusing XOR fallback, block="
                         << blockHeader->number() << " | " << boost::diagnostic_information(e);
+                    if (blockHeader->number() == 1)
+                    {
+                        // The known scenario-B gap has exactly this shape, and a bare
+                        // missing-node error from the trie core cannot say so: an L2 genesis
+                        // built from a NON-EMPTY alloc writes the genesis stateRoot but not
+                        // the trie nodes behind it, so block 1's incremental build cannot
+                        // resolve the parent trie. Name it instead of leaving operators to
+                        // guess.
+                        BASELINE_SCHEDULER_LOG(ERROR)
+                            << "Block 1 build failure on an L2 chain: if genesis was created "
+                               "with a non-empty alloc, its trie nodes were never persisted "
+                               "(known limitation) — only empty-alloc genesis chains block 1 "
+                               "today";
+                    }
                     throw;
                 }
             }
