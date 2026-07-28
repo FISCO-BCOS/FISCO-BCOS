@@ -1,10 +1,29 @@
 #pragma once
 #include "../storage/Entry.h"
 #include "bcos-task/Trait.h"
+#include <bcos-utilities/FixedBytes.h>
 #include <evmc/evmc.h>
+#include <algorithm>
+#include <iterator>
 
 namespace bcos::ledger::account
 {
+
+/// The Account interface speaks evmc_bytes32 while storage and crypto speak h256, so every
+/// implementation converts between the two. Shared here rather than re-privatised per class:
+/// bcos-executor has its own toEvmC/fromEvmC (executor-private Common.h, and fromEvmC yields
+/// u256 rather than h256), which layers below the executor cannot include.
+inline h256 toH256(const evmc_bytes32& value)
+{
+    return h256{bytesConstRef{value.bytes, sizeof(value.bytes)}};
+}
+
+inline evmc_bytes32 toEvmcBytes32(h256 const& value)
+{
+    evmc_bytes32 out{};
+    std::copy(value.begin(), value.end(), std::begin(out.bytes));
+    return out;
+}
 template <class AccountType>
 concept Account = requires(AccountType account) {
     { account.exists() } -> task::IsAwaitableReturnValue<bool>;
