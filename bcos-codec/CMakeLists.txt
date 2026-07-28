@@ -21,6 +21,7 @@ file(GLOB HEADERS "*.h")
 
 aux_source_directory(bcos-codec/abi SRC_LIST)
 aux_source_directory(bcos-codec/scale SRC_LIST)
+aux_source_directory(bcos-codec/rlp SRC_LIST)
 
 find_package(Microsoft.GSL CONFIG REQUIRED)
 

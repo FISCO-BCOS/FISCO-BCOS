@@ -41,6 +41,8 @@ add_executable(bcos-evm-opstack-tests
 target_compile_definitions(bcos-evm-opstack-tests PRIVATE
     EVM_REF_OPSTACK_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/opstack"
     OP_T8N_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/vectors"
+    OP_T8N_CASES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/cases"
+    OP_T8N_GOLDEN_ENGINE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/opstack/t8n/golden/engine"
 )
 # support/statetest_loader.cpp is vendored from evmone's test/utils/ tree, where it sits
 # alongside statetest.hpp/utils.hpp/stdx/ and includes them unqualified ("statetest.hpp").
@@ -68,6 +70,12 @@ if(TARGET bcos-framework)
     target_sources(bcos-evm-opstack-tests PRIVATE
         opstack/Storage2LedgerTest.cpp
         opstack/LedgerRootTest.cpp
-        opstack/EbT8nReplayTest.cpp)
+        opstack/EbT8nReplayTest.cpp
+        opstack/EthBlockHeaderTest.cpp)
     target_link_libraries(bcos-evm-opstack-tests PRIVATE bcos-framework)
+    # bcos-codec's `codec` target only exists in an in-tree build (top-level
+    # add_subdirectory(bcos-codec) precedes add_subdirectory(bcos-evm)) — same condition as
+    # bcos-framework's presence, hence gated here rather than unconditionally (op-validator
+    # 闭环 Task 3, task-3-brief.md).
+    target_link_libraries(bcos-evm-opstack-tests PRIVATE codec)
 endif()
