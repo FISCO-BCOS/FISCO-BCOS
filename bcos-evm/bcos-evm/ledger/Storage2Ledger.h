@@ -17,18 +17,25 @@
 // 毒旗成员回填状态,不带任何锁——并发共享同一实例即数据竞争。并行调度接入时这是
 // 第一个需要重新设计的点(design §4.1/§10)。
 //
-// 禁协程上下文调用:每次读操作由 task::syncWait 驱动单层协程(Wait.h:42-121)。禁止
-// 在已处于协程上下文(即外层已有一个 syncWait 尚未返回)时再次调用本桥的读方法——
-// 嵌套 syncWait 是已知的栈陷阱,本桥不做该场景下的正确性保证(design §4.1)。
+// 禁协程上下文调用(默认规则):每次读操作由 task::syncWait 驱动单层协程(Wait.h:42-121)。
+// 默认禁止在已处于协程上下文(即外层已有一个 syncWait 尚未返回)时再次调用本桥的读
+// 方法——嵌套 syncWait 是已知的栈陷阱,本桥的正确性保证以下述条件式许可为界,超出
+// 该许可范围的嵌套不受保证(design §4.1)。
 //
-// 许可例外(终审 I-3,单层嵌套):AccountView::code()(§6 惰性 code getter)是本条款下
-// 唯一的合法用法——它在 visitAccountsImpl 的协程体内被 visitor 同步调用,内部经
-// get_account_code 再次 syncWait 驱动 fetchCode,构成一层嵌套。安全前提不是"嵌套
-// syncWait 总体安全"这条被推翻的论断,而是本桥当前只对接内存/线程内阻塞完成的
-// storage2 后端——底层任务在 co_await 处同步落地,不会真正让出线程、不会在嵌套帧
-// 之间产生并发观察窗口。仅此一层嵌套、仅此一个调用点被认可;禁令本身不放宽——任何
-// 更深的嵌套,或未来后端引入真正跨线程/跨事件循环的异步完成语义,都会使这条例外失效
-// (design §4.1)。
+// 条件式许可(op-validator-loop design §4.4,取代终审 I-3"仅一层、仅一个调用点"的
+// 表述——该表述已不敷合流执行链的实际嵌套深度,改写为以下三条):
+// 1) 嵌套拓扑声明:本条款许可的嵌套链路为 engine newPayload → executeOpBlock →
+//    桥读方法(syncWait)→(stateRoot 段)visitAccounts(syncWait)→ 惰性 code getter
+//    (AccountView::code(),§6 惰性 code getter,内部经 get_account_code 再次 syncWait
+//    驱动 fetchCode)——多层嵌套,不再限定"仅一层、仅一个调用点";
+// 2) 安全前提:a) 桥对接的 storage2 后端全部在 co_await 处线程内同步完成(内存
+//    MultiLayerStorage;RocksDB 为线程内阻塞读),内层任务从不真正让出线程、外层协程
+//    从不跨线程恢复,嵌套 syncWait 因而退化为纯栈递归,而非真正的并发调度;
+//    b) engine 执行段整体被 `x_state` 锁串行(单线程执行,同一时刻至多一条嵌套链路
+//    在跑,不存在并发观察窗口);
+// 3) 失效判据:任何后端引入跨线程/事件循环的真正异步完成语义,本许可立即失效,必须
+//    重新设计——该判据同时覆盖 handleNewPayload"持锁跨 co_await"现存 TODO,两者共享
+//    同一安全前提(op-validator-loop design §1/§4.4)。
 //
 // 唯一写者不变式:桥实例存续期内(一块一实例,不提供 reset()),底层 storage2 的
 // 唯一写入路径是本桥自身的 applyDiff(Task 4 落地);越过桥直接写底层存储,会使三张
