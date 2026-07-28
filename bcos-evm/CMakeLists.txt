@@ -34,8 +34,17 @@ endif()
 set(EVMONE_PKG_SHIM_DIR "${CMAKE_CURRENT_BINARY_DIR}/pkg-include-shim")
 file(MAKE_DIRECTORY "${EVMONE_PKG_SHIM_DIR}/test")
 if(NOT EXISTS "${EVMONE_PKG_SHIM_DIR}/test/state")
+    # Prefer a symlink (stays live as eth/state changes). CREATE_LINK's COPY_ON_ERROR only
+    # copies regular files, not directories, so it cannot serve as the fallback here; do the
+    # directory copy explicitly when the symlink cannot be created (e.g. Windows without the
+    # symlink privilege). The copied tree is a configure-time snapshot — remove the build dir
+    # to refresh it after editing eth/state on such platforms.
     file(CREATE_LINK "${CMAKE_CURRENT_SOURCE_DIR}/bcos-evm/eth/state"
-        "${EVMONE_PKG_SHIM_DIR}/test/state" SYMBOLIC COPY_ON_ERROR)
+        "${EVMONE_PKG_SHIM_DIR}/test/state" SYMBOLIC RESULT _shim_link_result)
+    if(NOT _shim_link_result STREQUAL "0")
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/bcos-evm/eth/state"
+            DESTINATION "${EVMONE_PKG_SHIM_DIR}/test")
+    endif()
 endif()
 
 add_library(bcos-evm-eth STATIC

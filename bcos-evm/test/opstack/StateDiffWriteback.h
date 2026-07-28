@@ -11,8 +11,8 @@
 namespace bcos::evm
 {
 /// v1 write-back seam: apply an evmone StateDiff to the in-memory TestState.
-/// Contract (a real-ledger write-back implementation must satisfy this, see the
-/// StateDiffWritebackTest seam-contract cases):
+/// Contract (a real-ledger write-back implementation must satisfy this; the block-level
+/// seam-contract test suite that exercises it is out of this PR's tx-level scope):
 ///   1) deleted_accounts must be deleted (not always empty after Cancun: EIP-6780 same-tx
 ///      selfdestruct and EIP-161 empty-account erasure both produce deletion entries; the
 ///      "always empty" comment in state_diff.hpp is outdated);
@@ -30,8 +30,7 @@ inline void applyStateDiff(evmone::test::TestState& state, const evmone::state::
 /// class is already stripped at the production site, and cross-tx duplicate deletes are stripped
 /// by the post-prior-tx view sanitize — zero false positives). Any future exit that misses
 /// sanitizing turns the write-back-type tests red immediately, without relying on corpus coverage.
-/// Tests that verify the raw, un-sanitized behavior (StateDiffWritebackTest) continue to use the
-/// raw applyStateDiff.
+/// Tests that verify the raw, un-sanitized behavior continue to use the raw applyStateDiff.
 inline void applyStateDiffStrict(
     evmone::test::TestState& state, const evmone::state::StateDiff& diff)
 {

@@ -58,9 +58,7 @@
     {
       "name": "tarscpp",
       "version>=": "3.0.3-3"
-    },
-    "gtest",
-    "nlohmann-json"
+    }
   ],
   "features": {
     "fullnode": {
@@ -111,7 +109,9 @@
         "benchmark",
         "zlib",
         "tarscpp",
-        "hsm-crypto"
+        "hsm-crypto",
+        "gtest",
+        "nlohmann-json"
       ]
     },
     "etcd": {

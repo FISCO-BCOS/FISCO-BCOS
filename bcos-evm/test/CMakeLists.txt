@@ -34,8 +34,8 @@ add_executable(bcos-evm-opstack-tests
 # test/utils sources (see the EVMONE_TEST_UTILS_DIR probe in the top-level CMakeLists);
 # its quoted includes ("statetest.hpp", "stdx/utility.hpp") resolve in-directory there.
 # TODO(eth-utils-removal): 向量装载链路整体替换——statetest.hpp/statetest_loader.cpp/
-# utils/blob_schedule 换自研 JSON→账本装载器后,本段包源编译一并删除;
-# 15 个用 TestState 的测试文件与 OpT8nReplayTest 同步迁自研账本(见移除清单文档)。
+# utils/blob_schedule 换自研 JSON→账本装载器后,本段包源编译一并删除;届时用 TestState
+# 的测试文件同步迁自研账本(块级回放测试在本 PR 范围外,随块级 PR 一并处理)。
 target_link_libraries(bcos-evm-opstack-tests PRIVATE
     bcosevm::opstack
     GTest::gtest_main

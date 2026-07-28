@@ -85,7 +85,8 @@ const OpForkConfig& jovianConfig() noexcept
     return cfg;
 }
 
-// Karst execution/receipt behavior is temporarily identical to Jovian (see README); derived from
+// Karst is NOT independently adapted yet: its execution/receipt behavior is temporarily an alias
+// of Jovian (placeholder). Do not treat karstConfig() as a real Karst adaptation. Derived from
 // jovianConfig, changing only the fork tag, the same pattern as granite/holocene deriving from
 // fjord -- future Jovian changes are automatically carried into Karst, avoiding parallel-literal
 // drift.

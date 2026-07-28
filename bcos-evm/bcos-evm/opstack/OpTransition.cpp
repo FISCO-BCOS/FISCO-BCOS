@@ -241,7 +241,16 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     if (cfg.has_operator_fee)
     {
         state.touch(OP_OPERATOR_FEE_VAULT).balance += opAtUsed;
-        sender_acc.balance += props.operator_cost_at_gas_limit - opAtUsed;
+        // Refund the over-charge (operator cost was pre-charged at gas_limit, actual is at
+        // gas_used, so cap >= used holds when validate and transition run under the same cfg —
+        // guaranteed by OpTxProperties::fee snapshotting). Guard the subtraction defensively: a
+        // cfg mismatch across the two calls (e.g. a fork boundary between validation and
+        // inclusion) must never wrap uint256 into a ~2^256 credit. assert catches it in debug;
+        // the saturating floor prevents consensus-breaking balance inflation in release.
+        assert(props.operator_cost_at_gas_limit >= opAtUsed);
+        sender_acc.balance += props.operator_cost_at_gas_limit > opAtUsed ?
+                                  props.operator_cost_at_gas_limit - opAtUsed :
+                                  intx::uint256{0};
     }
 
     evmone::state::TransactionReceipt receipt{tx.type, outcome.result.status_code, gas_used, {},

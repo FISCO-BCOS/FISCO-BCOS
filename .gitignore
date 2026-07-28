@@ -90,3 +90,4 @@ bcos-evm/test/opstack/OpT8nReplayTest.cpp
 bcos-evm/test/opstack/OpStateDiffSanitizeTest.cpp
 bcos-evm/test/opstack/StateRootCompute.h
 bcos-evm/test/opstack/StateRootCompute.cpp
+bcos-evm/test/opstack/OpL1AttributesTestHelpers.h
