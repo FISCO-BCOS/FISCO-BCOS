@@ -39,6 +39,7 @@
 #include "bcos-framework/storage/StorageInterface.h"
 #include "bcos-ledger/LedgerMethods.h"
 #include "bcos-scheduler/src/TarsExecutorManager.h"
+#include "bcos-storage/MPTNodeReadStorage.h"
 #include "bcos-storage/RocksDBStorage.h"
 #include "bcos-task/Wait.h"
 #include "bcos-utilities/Error.h"
@@ -1349,6 +1350,20 @@ std::string Initializer::getBlockDBPath(bool _airVersion) const
     // if the stateDBPath is absolute path, the result stateDBPath will deep
     return tars::ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
            c_fileSeparator + blockDBPath;
+}
+
+std::shared_ptr<bcos::storage2::AnyStorage<bcos::h256, bcos::bytes>> Initializer::mptNodeReader()
+{
+    if (!m_globalStateStorageInitializer)
+    {
+        return nullptr;
+    }
+    // The committed plane only: block commit merges each block's node rows (with its flat
+    // state, one WriteBatch) into latestBackend(), and eth_getProof targets committed
+    // headers — the pending layers of the MultiLayerStorage belong to in-flight blocks and
+    // must stay invisible to proofs.
+    return bcos::storage2::makeMPTNodeReader(
+        m_globalStateStorageInitializer->storage().latestBackend());
 }
 
 std::string Initializer::getConsensusStorageDBPath(bool _airVersion) const
