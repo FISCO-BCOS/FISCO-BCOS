@@ -29,12 +29,16 @@ bcos::bytes EthBlockHeader::encode() const
     bcos::bytes out;
     // Field order is load-bearing: it is the spec §5.1 21-field order (== go-ethereum
     // core/types.Header field order), verified by manual RLP walkthrough against
-    // golden.encodedHeaderHex (see task-3-report.md). Unqualified encode() resolves via
-    // ordinary lookup to the overload set declared in this same namespace (RLPEncode.h).
-    encode(out, parentHash, ommersHash, feeRecipient, stateRoot, transactionsRoot, receiptsRoot,
-        logsBloom, difficulty, number, gasLimit, gasUsed, timestamp, extraData, prevRandao, nonce,
-        baseFeePerGas, withdrawalsRoot, blobGasUsed, excessBlobGas, parentBeaconBlockRoot,
-        requestsHash);
+    // golden.encodedHeaderHex (see task-3-report.md). MUST be fully qualified:
+    // EthBlockHeader::encode() is itself a member named `encode`, and inside a member
+    // function body ordinary unqualified lookup finds the class's own member first —
+    // that hides (not overloads-with) the free `bcos::codec::rlp::encode(...)` template
+    // set from RLPEncode.h, so an unqualified call here binds to the 0-arg member and
+    // fails to compile ("too many arguments", found the hard way in build verification).
+    bcos::codec::rlp::encode(out, parentHash, ommersHash, feeRecipient, stateRoot, transactionsRoot,
+        receiptsRoot, logsBloom, difficulty, number, gasLimit, gasUsed, timestamp, extraData,
+        prevRandao, nonce, baseFeePerGas, withdrawalsRoot, blobGasUsed, excessBlobGas,
+        parentBeaconBlockRoot, requestsHash);
     return out;
 }
 
