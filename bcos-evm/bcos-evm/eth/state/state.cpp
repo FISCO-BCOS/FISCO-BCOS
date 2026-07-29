@@ -7,10 +7,10 @@
 #include "../utils/stdx/utility.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include <algorithm>
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
-#include <algorithm>
 
 using namespace intx;
 
@@ -67,8 +67,8 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
 
     const auto access_list_cost = compute_access_list_cost(tx.access_list);
 
-    const auto auth_list_cost =
-        static_cast<int64_t>(tx.authorization_list.size()) * bcos::evm::eth::AUTHORIZATION_EMPTY_ACCOUNT_COST;
+    const auto auth_list_cost = static_cast<int64_t>(tx.authorization_list.size()) *
+                                bcos::evm::eth::AUTHORIZATION_EMPTY_ACCOUNT_COST;
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
@@ -467,7 +467,7 @@ StateDiff finalize(const StateView& state_view, evmc_revision rev, const address
 
 TransactionReceipt transition(const StateView& state_view, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props)
+    const TransactionProperties& tx_props, uint64_t chain_id)
 {
     State state{state_view};
 
@@ -475,8 +475,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     assert(sender_acc.nonce < Account::NonceMax);  // Required for valid tx.
     ++sender_acc.nonce;                            // Bump sender nonce.
 
+    // The NODE's chain id, not tx.chain_id: validate_transaction never checks tx.chain_id, so
+    // passing it here would make EIP-7702 step 1 compare sender input against sender input and
+    // accept an authorization signed for any other chain. See the declaration in state.hpp.
     const auto delegation_refund =
-        bcos::evm::eth::processAuthorizationList(state, tx.chain_id, tx.authorization_list);
+        bcos::evm::eth::processAuthorizationList(state, chain_id, tx.authorization_list);
 
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Required for valid tx.

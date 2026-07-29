@@ -1,9 +1,12 @@
 #define BOOST_TEST_MODULE BcosEvmEthTests
-#include <bcos-evm/eth/EthTransition.h>
+#include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <bcos-evm/eth/state/hash_utils.hpp>  // keccak256（Stub 的 code_hash 计算）
+#include <bcos-evm/eth/state/state.hpp>
 #include <map>
+#include <system_error>
+#include <variant>
 
 using namespace evmone;
 using namespace evmc::literals;
@@ -11,6 +14,25 @@ using intx::operator""_u256;
 
 namespace
 {
+using EthResult = std::variant<state::TransactionReceipt, std::error_code>;
+
+/// validate -> transition -> sanitize, inlined here after EthTransition.{h,cpp} was removed.
+/// chainId is the NODE's chain id: state::transition compares each EIP-7702 authorization
+/// against it, and validate_transaction never checks tx.chain_id, so it must not be read off
+/// the transaction.
+EthResult runTx(const state::StateView& view, const state::BlockInfo& block,
+    const state::BlockHashes& hashes, const state::Transaction& tx, evmc_revision rev, evmc::VM& vm,
+    int64_t blockGasLeft, int64_t blobGasLeft, uint64_t chainId)
+{
+    const auto validated =
+        state::validate_transaction(view, block, tx, rev, blockGasLeft, blobGasLeft);
+    if (const auto* err = std::get_if<std::error_code>(&validated))
+        return *err;
+    auto receipt = state::transition(view, block, hashes, tx, rev, vm,
+        std::get<state::TransactionProperties>(validated), chainId);
+    receipt.state_diff = bcos::evm::sanitizeStateDiff(view, std::move(receipt.state_diff));
+    return receipt;
+}
 // NOTE: 原始数字分隔符写法 1'000'...'_u256 在本仓库 vcpkg 锁定的 intx 0.15.0 下编译失败：
 // intx::from_string 的 from_dec_digit 不识别 '\'' 分隔符（consteval 求值直接抛错，
 // 见 intx.hpp from_dec_digit/from_string）。数值不变，仅去除分隔符使其可编译。
@@ -103,8 +125,8 @@ BOOST_AUTO_TEST_CASE(SimpleTransfer21000)
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
-    const auto res = bcos::evm::eth::runTransaction(
-        state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432);
+    const auto res =
+        runTx(state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432, /*chainId=*/1);
 
     if (const auto* err = std::get_if<std::error_code>(&res))
         BOOST_FAIL("runTransaction: " + err->message());
@@ -140,8 +162,8 @@ BOOST_AUTO_TEST_CASE(InvalidTxRejectedWithoutSideEffect)
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
-    const auto res = bcos::evm::eth::runTransaction(
-        state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432);
+    const auto res =
+        runTx(state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, 786432, /*chainId=*/1);
 
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(res));
     BOOST_CHECK(std::get<std::error_code>(res) ==
@@ -175,8 +197,9 @@ BOOST_AUTO_TEST_CASE(BlobTxRejectedWhenNoBlobGasLeft)
 
     evmc::VM vm{evmc_create_evmone()};
     StubBlockHashes hashes;
-    const auto res = bcos::evm::eth::runTransaction(
-        state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, /*blobGasLeft=*/0);
+    const auto res =
+        runTx(state, block, hashes, tx, EVMC_CANCUN, vm, block.gas_limit, /*blobGasLeft=*/0,
+            /*chainId=*/1);
 
     BOOST_REQUIRE(std::holds_alternative<std::error_code>(res));
     BOOST_CHECK(std::get<std::error_code>(res) ==
@@ -191,8 +214,9 @@ BOOST_AUTO_TEST_CASE(FinalizeAppliesWithdrawalGweiToWei)
 
     const state::Withdrawal w{
         .index = 0, .validator_index = 0, .recipient = payee, .amount_in_gwei = 5};
-    const auto diff = bcos::evm::eth::runBlockFinalize(state, EVMC_CANCUN,
-        0x00000000000000000000000000000000c014ba5e_address, std::nullopt, {}, std::span{&w, 1});
+    const auto diff = bcos::evm::sanitizeStateDiff(state,
+        state::finalize(state, EVMC_CANCUN, 0x00000000000000000000000000000000c014ba5e_address,
+            std::nullopt, {}, std::span{&w, 1}));
 
     const auto* entry = findModified(diff, payee);
     BOOST_REQUIRE(entry != nullptr);

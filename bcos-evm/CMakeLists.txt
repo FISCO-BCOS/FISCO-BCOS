@@ -48,7 +48,6 @@ if(NOT EXISTS "${EVMONE_PKG_SHIM_DIR}/test/state")
 endif()
 
 add_library(bcos-evm-eth STATIC
-    bcos-evm/eth/EthTransition.cpp
     bcos-evm/eth/state/block.cpp
     bcos-evm/eth/state/bloom_filter.cpp
     bcos-evm/eth/state/host.cpp

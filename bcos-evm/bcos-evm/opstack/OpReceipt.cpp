@@ -10,15 +10,18 @@
 namespace bcos::evm::opstack
 {
 OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fee, uint32_t flzLen,
-    intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars) noexcept
+    intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars,
+    std::optional<bool> has_operator_fee) noexcept
 {
+    // The charge decision, not this call's cfg — see the declaration.
+    const bool charged_operator_fee = has_operator_fee.value_or(cfg.has_operator_fee);
     OpReceiptMeta m;
     m.l1_gas_price = fee.l1_base_fee;
     m.l1_blob_base_fee = fee.blob_base_fee;
     m.l1_base_fee_scalar = fee.base_fee_scalar;
     m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = l1_cost;
-    if (cfg.has_operator_fee)
+    if (charged_operator_fee)
     {
         m.operator_fee = operator_fee_at_used;
         if (fill_operator_scalars &&

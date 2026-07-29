@@ -163,8 +163,12 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
 
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
 
+    // has_operator_fee from the SAME validate-time snapshot that gated the charge above, not from
+    // cfg: when the two disagree across a fork boundary (the case
+    // OperatorFeeConservesWhenCfgDisagreesWithProps covers), reading cfg here would report an
+    // operator_fee the sender was never charged, or omit one they were.
     auto meta = deriveOpReceiptMeta(cfg, props.fee, props.flz_len, props.l1_cost, opAtUsed,
-        /*fill_operator_scalars=*/true);
+        /*fill_operator_scalars=*/true, props.has_operator_fee);
     return OpTxReceipt{std::move(receipt), meta};
 }
 

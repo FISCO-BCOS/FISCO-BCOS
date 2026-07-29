@@ -1,12 +1,13 @@
-#include <bcos-evm/eth/EthTransition.h>
+#include "OpPredeploysSeed.h"
+#include "TestPrinters.h"
+#include <bcos-evm/adapter/StateDiffSanitize.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
-#include "OpPredeploysSeed.h"
 #include <bcos-evm/opstack/OpTransition.h>
 #include <evmone/evmone.h>
-#include "TestPrinters.h"
 #include <boost/test/unit_test.hpp>
+#include <bcos-evm/eth/state/state.hpp>
 #include <test/utils/test_state.hpp>
 
 #include <algorithm>
@@ -123,15 +124,18 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
     BOOST_CHECK_EQUAL(props.l1_cost, intx::uint256{0});
     BOOST_CHECK_EQUAL(props.operator_cost_at_gas_limit, intx::uint256{0});
 
-    const auto opTxR = opTransition(
-        ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1);
+    const auto opTxR = opTransition(ts, block, hashes, tx, cfg, vm, props, /*chainId=*/1);
     BOOST_REQUIRE_EQUAL(opTxR.receipt.status, EVMC_SUCCESS);
     const auto& opReceipt = opTxR.receipt;
 
-    const auto ethRes = bcos::evm::eth::runTransaction(
-        ts, block, hashes, tx, cfg.rev, vm, block.gas_limit, /*blobGasLeft=*/0);
-    BOOST_REQUIRE(std::holds_alternative<state::TransactionReceipt>(ethRes));
-    const auto& ethReceipt = std::get<state::TransactionReceipt>(ethRes);
+    // eth side: validate -> transition -> sanitize, the three steps EthTransition.{h,cpp}
+    // used to wrap. Both sides sanitize, so the diffs stay comparable.
+    const auto ethValidated =
+        state::validate_transaction(ts, block, tx, cfg.rev, block.gas_limit, /*blobGasLeft=*/0);
+    BOOST_REQUIRE(std::holds_alternative<state::TransactionProperties>(ethValidated));
+    auto ethReceipt = state::transition(ts, block, hashes, tx, cfg.rev, vm,
+        std::get<state::TransactionProperties>(ethValidated), /*chainId=*/1);
+    ethReceipt.state_diff = bcos::evm::sanitizeStateDiff(ts, std::move(ethReceipt.state_diff));
     BOOST_REQUIRE_EQUAL(ethReceipt.status, EVMC_SUCCESS);
 
     BOOST_CHECK_EQUAL(opReceipt.gas_used, ethReceipt.gas_used);
@@ -141,21 +145,25 @@ BOOST_AUTO_TEST_CASE(SimpleTransferMatchesEthExceptBaseFeeVault)
     const auto ethNonVault = nonVaultEntries(ethReceipt.state_diff);
     BOOST_REQUIRE_EQUAL(opNonVault.size(), ethNonVault.size());
     for (size_t i = 0; i < opNonVault.size(); ++i)
-        BOOST_CHECK_MESSAGE(entryEq(opNonVault[i], ethNonVault[i]), "mismatch at non-vault index " << i);
+        BOOST_CHECK_MESSAGE(
+            entryEq(opNonVault[i], ethNonVault[i]), "mismatch at non-vault index " << i);
 
-    BOOST_CHECK((nonVaultDeleted(opReceipt.state_diff)) == (nonVaultDeleted(ethReceipt.state_diff)));
+    BOOST_CHECK(
+        (nonVaultDeleted(opReceipt.state_diff)) == (nonVaultDeleted(ethReceipt.state_diff)));
 
     // fee=0 下四个 vault 因已有 stub code 不再被判为空账户删除
     for (const auto& v :
         {OP_BASE_FEE_VAULT, OP_L1_FEE_VAULT, OP_OPERATOR_FEE_VAULT, OP_SEQUENCER_FEE_VAULT})
     {
         BOOST_CHECK_MESSAGE((std::count(opReceipt.state_diff.deleted_accounts.begin(),
-                      opReceipt.state_diff.deleted_accounts.end(), v)) == (0), "vault should not be deleted");
+                                opReceipt.state_diff.deleted_accounts.end(), v)) == (0),
+            "vault should not be deleted");
     }
 
     const auto baseVaultBal = balanceOf(opReceipt.state_diff, OP_BASE_FEE_VAULT);
     BOOST_REQUIRE(baseVaultBal.has_value());
-    BOOST_CHECK_EQUAL(*baseVaultBal, intx::uint256{static_cast<uint64_t>(opReceipt.gas_used)} * intx::uint256{block.base_fee});
+    BOOST_CHECK_EQUAL(*baseVaultBal,
+        intx::uint256{static_cast<uint64_t>(opReceipt.gas_used)} * intx::uint256{block.base_fee});
 
     // L1 / operator 费用为 0：不应出现在 eth diff；OP 侧若 touch 余额须仍为 0。
     if (const auto l1 = balanceOf(opReceipt.state_diff, OP_L1_FEE_VAULT))

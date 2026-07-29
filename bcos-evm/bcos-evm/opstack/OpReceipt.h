@@ -44,8 +44,14 @@ struct OpDepositReceipt
     uint64_t deposit_receipt_version;  // = 1 (Canyon+)
 };
 
+/// @param has_operator_fee whether an operator fee was actually CHARGED. opTransition passes the
+/// validate-time snapshot (props.has_operator_fee), not cfg.has_operator_fee: when the two
+/// disagree across a fork boundary the receipt must describe what the sender was charged, not
+/// what this call's cfg would charge. Defaults to cfg.has_operator_fee for callers with no
+/// snapshot (tests, tooling).
 OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fee, uint32_t flzLen,
-    intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars) noexcept;
+    intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars,
+    std::optional<bool> has_operator_fee = std::nullopt) noexcept;
 
 /// receipts-root leaf encoding (op-geth Receipts.EncodeIndex semantics, receipt.go:568-592 --
 /// note this is NOT MarshalBinary :279-288; the two deliberately differ for a receipt that

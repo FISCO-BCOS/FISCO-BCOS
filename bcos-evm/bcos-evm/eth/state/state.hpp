@@ -30,7 +30,8 @@ class State
     };
 
     struct JournalTouched : JournalBase
-    {};
+    {
+    };
 
     struct JournalStorageChange : JournalBase
     {
@@ -46,7 +47,8 @@ class State
     };
 
     struct JournalNonceBump : JournalBase
-    {};
+    {
+    };
 
     struct JournalCreate : JournalBase
     {
@@ -54,10 +56,12 @@ class State
     };
 
     struct JournalDestruct : JournalBase
-    {};
+    {
+    };
 
     struct JournalAccessAccount : JournalBase
-    {};
+    {
+    };
 
     using JournalEntry =
         std::variant<JournalBalanceChange, JournalTouched, JournalStorageChange, JournalNonceBump,
@@ -139,10 +143,16 @@ public:
 
 /// Executes a valid transaction.
 ///
+/// @param chain_id the NODE's chain id, from the caller — not tx.chain_id. EIP-7702 step 1
+/// compares each authorization's chain id against it, and validate_transaction never checks
+/// tx.chain_id, so feeding tx.chain_id here would compare sender-supplied input against
+/// sender-supplied input and accept an authorization signed for any other chain. The opstack
+/// path (opTransition) takes it the same way.
+///
 /// @return Transaction receipt with state diff.
 TransactionReceipt transition(const StateView& state, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props);
+    const TransactionProperties& tx_props, uint64_t chain_id);
 
 /// Validate a transaction.
 ///
