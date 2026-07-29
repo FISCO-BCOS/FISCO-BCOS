@@ -9,6 +9,7 @@
 #include "OpPredeploysSeed.h"
 #include "StateDiffWriteback.h"
 #include "TestPrinters.h"
+#include <bcos-evm/eth/Eip7702Recover.h>
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpPredeploys.h>
@@ -16,6 +17,7 @@
 #include <evmone/evmone.h>
 #include <boost/test/unit_test.hpp>
 #include <evmone/delegation.hpp>
+#include <limits>
 #include <test/utils/test_state.hpp>
 #include <vector>
 
@@ -98,6 +100,20 @@ void expectNoDelegationDesignatorAnywhere(const test::TestState& ts)
             "account must NOT have delegation designator (0xef0100||addr)");
         (void)addr;
     }
+}
+
+/// 是否有任一账户被写入委托描述符。用于「该授权应当生效」的正向断言：改动 auth 的被签字段
+/// （chain_id / nonce / addr）会让 ecrecover 恢复出另一个地址，因此只能按「某处生效」来断言，
+/// 不能按 kAuthority 断言 —— 后者会让断言体永不执行而变成空转。
+[[nodiscard]] bool anyDelegationDesignator(const test::TestState& ts)
+{
+    for (const auto& [addr, acc] : ts)
+    {
+        (void)addr;
+        if (isDelegationDesignator(acc.code))
+            return true;
+    }
+    return false;
 }
 }  // namespace
 
@@ -240,11 +256,10 @@ BOOST_AUTO_TEST_CASE(ChainIdMismatchSkips)
     const auto r = runWithAuth(ts, vm, auth, /*chainId=*/1);
     bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
 
-    auto it = ts.find(kAuthority);
-    if (it != ts.end())
-    {
-        BOOST_CHECK_MESSAGE(it->second.code.empty(), "no delegation on chain_id mismatch");
-    }
+    // 必须全量扫描，不能只看 kAuthority：chain_id=999 时签名恢复出的是另一个（垃圾）地址，
+    // kAuthority 根本不会进入 state，于是 `if (it != ts.end())` 形式的断言体永不执行——把
+    // 链 id 判断改成 if(false) 也能全绿。用例 2 已经在用这个全量辅助。
+    expectNoDelegationDesignatorAnywhere(ts);
 }
 
 // ─── 用例 5: 授权后委托调用 → kAuthority 预设委托代码，call to kAuthority 走 kDelegate 逻辑 ───
@@ -308,6 +323,174 @@ BOOST_AUTO_TEST_CASE(DelegatedCallAfterAuthorization)
     BOOST_REQUIRE((ts.find(kAuthority)) != (ts.end()));
     BOOST_CHECK_MESSAGE((ts.at(kAuthority).storage.at(kSlot0)) == (expectedSlot0),
         "delegated call must execute kDelegate SSTORE under kAuthority context");
+}
+
+// ─── 以下五条覆盖此前无任何测试的 EIP-7702 校验规则 ───
+// 变异审计表明：删掉 chain_id==0 的 universal 分支、EIP-2 malleability 守卫、y-parity 守卫、
+// nonce 上限守卫，或步骤 5 的「代码须为空或已委托」检查，整套 93 个用例都照样全绿。
+//
+// 注意断言方向：改动 auth 中被签名覆盖的字段（chain_id / nonce）会让 ecrecover 恢复出另一个
+// 地址，因此否定断言必须全量扫描（expectNoDelegationDesignatorAnywhere），正向断言也只能断
+// 「某处生效」（anyDelegationDesignator）——按 kAuthority 断言会变成永不执行的空转。
+
+// chain_id == 0 表示「对任何链有效」。丢掉 `auth.chain_id != 0 &&` 这半个条件，会把这类
+// universal 授权在所有链上一律误拒。
+BOOST_AUTO_TEST_CASE(ChainIdZeroIsUniversal)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[kDelegate] = {};
+    seedOpPredeploys(ts);
+
+    state::Authorization auth{.chain_id = 0,  // universal
+        .addr = kDelegate,
+        .nonce = 0,
+        .signer = std::nullopt,
+        .r = intx::be::load<intx::uint256>(kR_ok),
+        .s = intx::be::load<intx::uint256>(kS_ok),
+        .v = intx::uint256{kV_ok}};
+    // 节点在链 999：universal 授权仍须被处理。
+    const auto r = runWithAuth(ts, vm, auth, /*chainId=*/999);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+
+    BOOST_CHECK_MESSAGE(anyDelegationDesignator(ts),
+        "an authorization with chain_id == 0 must be applied on any chain");
+}
+
+// EIP-2：s 必须 <= secp256k1n/2。高 s 是同一签名的可延展变体，去掉该守卫后 ecrecover 仍会
+// 成功恢复出某个地址并写入委托。
+BOOST_AUTO_TEST_CASE(HighSValueIsRejected)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[kDelegate] = {};
+    seedOpPredeploys(ts);
+
+    state::Authorization auth{.chain_id = 1,
+        .addr = kDelegate,
+        .nonce = 0,
+        .signer = std::nullopt,
+        .r = intx::be::load<intx::uint256>(kR_ok),
+        .s = bcos::evm::eth::SECP256K1N_OVER_2 + 1,  // 恰好越过 EIP-2 上界
+        .v = intx::uint256{kV_ok}};
+    const auto r = runWithAuth(ts, vm, auth);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+
+    expectNoDelegationDesignatorAnywhere(ts);
+}
+
+// y-parity 只能是 0 或 1。去掉该守卫后 v=2 会被 `auth.v != 0` 当成 parity 1 送进 ecrecover。
+BOOST_AUTO_TEST_CASE(InvalidYParityIsRejected)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[kDelegate] = {};
+    seedOpPredeploys(ts);
+
+    state::Authorization auth{.chain_id = 1,
+        .addr = kDelegate,
+        .nonce = 0,
+        .signer = std::nullopt,
+        .r = intx::be::load<intx::uint256>(kR_ok),
+        .s = intx::be::load<intx::uint256>(kS_ok),
+        .v = intx::uint256{2}};  // 非法 parity
+    const auto r = runWithAuth(ts, vm, auth);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+
+    expectNoDelegationDesignatorAnywhere(ts);
+}
+
+// 步骤 2：nonce == 2^64-1 必须跳过——否则步骤 9 的 ++authority.nonce 会回绕到 0。
+//
+// 这条要能证伪，必须让步骤 6（auth.nonce == authority.nonce）也放行，否则去掉步骤 2 的守卫后
+// 交易仍会被步骤 6 拦下，用例就成了「两条守卫都能让它通过」的假覆盖——最初写成那样时，去掉
+// 守卫的变异确实没有被抓到。
+//
+// 把 auth.nonce 改成 2^64-1 会改变签名哈希，ecrecover 因而恢复出另一个确定地址；该地址由
+// recoverAuthority 对下方金值直接算出（确定性函数，重复运行一致）。把它的 state nonce 预置成
+// 2^64-1，步骤 6 即放行，此时唯一还能拦住这条授权的就是步骤 2。
+constexpr auto kNonceMaxRecovered = 0x4e2cad1f006ebe3e4b701d4e77bc145167fb8ede_address;
+
+BOOST_AUTO_TEST_CASE(NonceMaxIsRejected)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[kDelegate] = {};
+    constexpr auto kNonceMax = std::numeric_limits<uint64_t>::max();
+    ts[kNonceMaxRecovered] = {.nonce = kNonceMax, .balance = 0_u256, .storage = {}, .code = {}};
+    seedOpPredeploys(ts);
+
+    state::Authorization auth{.chain_id = 1,
+        .addr = kDelegate,
+        .nonce = kNonceMax,
+        .signer = std::nullopt,
+        .r = intx::be::load<intx::uint256>(kR_ok),
+        .s = intx::be::load<intx::uint256>(kS_ok),
+        .v = intx::uint256{kV_ok}};
+    const auto r = runWithAuth(ts, vm, auth);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+
+    // 前置条件：签名确实恢复到我们预置的那个地址，否则本用例退化为空转。
+    BOOST_REQUIRE_MESSAGE((ts.find(kNonceMaxRecovered)) != (ts.end()),
+        "recovered authority must be present; golden vector may have drifted");
+    // 不得写入委托，且 nonce 不得从 2^64-1 回绕到 0。
+    expectNoDelegationDesignatorAnywhere(ts);
+    BOOST_CHECK_MESSAGE((ts.at(kNonceMaxRecovered).nonce) == (kNonceMax),
+        "nonce at 2^64-1 must not be incremented (would wrap to 0)");
+}
+
+// 步骤 5：authority 已有非委托代码（普通合约）时必须跳过，否则会把一个已部署合约的代码
+// 覆盖成委托描述符。这里签名与状态 nonce 都匹配，唯一该拦住它的就是这条代码检查。
+BOOST_AUTO_TEST_CASE(AuthorityWithNonDelegatedCodeIsSkipped)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0,
+        .balance = 340282366920938463463374607431768211456_u256,
+        .storage = {},
+        .code = {}};
+    ts[kDelegate] = {};
+    // authority 预置为一个普通合约（非委托代码），nonce 仍为 0 以便匹配 auth.nonce。
+    const evmc::bytes existingCode{0x60, 0x00, 0x60, 0x00, 0xf3};
+    ts[kAuthority] = {.nonce = 0, .balance = 0_u256, .storage = {}, .code = existingCode};
+    seedOpPredeploys(ts);
+
+    state::Authorization auth{.chain_id = 1,
+        .addr = kDelegate,
+        .nonce = 0,
+        .signer = std::nullopt,
+        .r = intx::be::load<intx::uint256>(kR_ok),
+        .s = intx::be::load<intx::uint256>(kS_ok),
+        .v = intx::uint256{kV_ok}};
+    const auto r = runWithAuth(ts, vm, auth);
+    BOOST_REQUIRE_EQUAL(r.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, r.receipt.state_diff);
+
+    BOOST_REQUIRE_MESSAGE((ts.find(kAuthority)) != (ts.end()), "authority must still exist");
+    BOOST_CHECK_MESSAGE((ts.at(kAuthority).code) == (existingCode),
+        "existing non-delegated code must not be overwritten by a delegation designator");
+    BOOST_CHECK_MESSAGE(
+        (ts.at(kAuthority).nonce) == (0u), "a skipped authorization must not advance the nonce");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

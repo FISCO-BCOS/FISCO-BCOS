@@ -450,4 +450,76 @@ BOOST_AUTO_TEST_CASE(ReceiptMetaFollowsSnapshotNotTransitionCfg)
         "receipt must not report a DA footprint the transaction was not priced under");
 }
 
+// 守恒必须在 l1_cost 非零时验证。既有的 OperatorFeeConservesWhenCfgDisagreesWithProps 把
+// l1_base_fee 设为 0，于是 props.l1_cost == 0，扣款那一侧根本没被覆盖：删掉
+// `sender_acc.balance -= props.l1_cost`（OpTransition.cpp:130）后整套 93 个用例仍然全绿，
+// 而那正是一笔每交易增发 l1_cost wei 的 mint。
+//
+// 这条同时钉住两侧：发送方净扣款额，以及总供应量不变。
+BOOST_AUTO_TEST_CASE(L1CostIsDebitedFromSenderAndConserves)
+{
+    constexpr auto sender = 0x00000000000000000000000000000000000000aa_address;
+    constexpr auto dest = 0x00000000000000000000000000000000000000bb_address;
+    auto vm = evmc::VM{evmc_create_evmone()};
+    test::TestState ts;
+    constexpr auto kFunding = 340282366920938463463374607431768211456_u256;
+    ts[sender] = {.nonce = 0, .balance = kFunding, .storage = {}, .code = {}};
+    ts[dest] = {};
+    seedOpPredeploys(ts);
+    test::TestBlockHashes hashes;
+
+    state::BlockInfo block;
+    block.number = 1;
+    block.gas_limit = 30000000;
+    block.base_fee = 7;
+    block.coinbase = OP_SEQUENCER_FEE_VAULT;
+
+    state::Transaction tx;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.sender = sender;
+    tx.to = dest;
+    tx.gas_limit = 100000;
+    tx.max_gas_price = 1000;
+    tx.max_priority_gas_price = 10;
+    tx.value = intx::uint256{0};
+    tx.nonce = 0;
+
+    // l1_base_fee 非零，operator fee 关闭：把 l1 这一项单独隔离出来。
+    OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .base_fee_scalar = 1100,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = 0_u256,
+        .operator_fee_scalar = 0,
+        .operator_fee_constant = 0};
+    std::vector<uint8_t> env(120, 0x11);
+
+    OpForkConfig cfg = isthmusConfig();
+    cfg.has_operator_fee = false;
+
+    const auto v = opValidate(ts, block, tx, {env.data(), env.size()}, cfg, fee, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(v));
+    const auto& props = std::get<OpTxProperties>(v);
+    BOOST_REQUIRE_MESSAGE(
+        props.l1_cost > intx::uint256{0}, "test is vacuous unless l1_cost is non-zero");
+    BOOST_REQUIRE_EQUAL(props.operator_cost_at_gas_limit, intx::uint256{0});
+
+    const auto before = totalSupply(ts);
+    const auto txR = opTransition(ts, block, hashes, tx, cfg, vm, props, 1234);
+    BOOST_REQUIRE_EQUAL(txR.receipt.status, EVMC_SUCCESS);
+    bcos::evm::applyStateDiffStrict(ts, txR.receipt.state_diff);
+
+    // 发送方净扣款 = gas_used*(base+tip) + l1_cost。少扣 l1_cost 即为增发。
+    const auto gasUsed = intx::uint256{static_cast<uint64_t>(txR.receipt.gas_used)};
+    const auto tip = std::min(intx::uint256{tx.max_priority_gas_price},
+        intx::uint256{tx.max_gas_price} - intx::uint256{block.base_fee});
+    const auto expectedDebit = gasUsed * (intx::uint256{block.base_fee} + tip) + props.l1_cost;
+    BOOST_CHECK_MESSAGE((kFunding - ts.at(sender).balance) == expectedDebit,
+        "sender must be debited gas_used*(base+tip) + l1_cost");
+
+    // L1 金库入账等额，且总量守恒。
+    BOOST_CHECK_MESSAGE(
+        (ts.at(OP_L1_FEE_VAULT).balance) == (props.l1_cost), "L1 vault must receive l1_cost");
+    BOOST_CHECK_MESSAGE((totalSupply(ts)) == (before), "fees only move value between accounts");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

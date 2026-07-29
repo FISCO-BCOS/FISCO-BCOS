@@ -192,4 +192,67 @@ BOOST_AUTO_TEST_CASE(BalanceCapDoesNotWrapAt2Pow256)
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::result_out_of_range);
 }
 
+// balance cap 的四项必须逐项精确：既不能少算（放行付不起的交易 → opTransition 随后从不足额
+// 余额里做无检查减法，NDEBUG 下 assert 已失效，即 mint），也不能多算（误拒付得起的交易）。
+//
+// 既有用例只断言「返回了某个 error_code」，因此以下变异都能全身而退：把 `maxCost += l1Cost`
+// 重复计一次、或删掉 `maxCost += opCost`。本用例用「余额恰好等于四项之和」这个边界把它们钉死：
+// 恰好足额必须通过，少一个 wei 必须以 result_out_of_range 拒绝。
+BOOST_AUTO_TEST_CASE(BalanceCapCountsEveryTermExactlyOnce)
+{
+    const std::vector<uint8_t> env(120, 0x11);
+    // l1 与 operator 两项都非零，否则漏算任一项都察觉不到。
+    const OpFeeParams fee{.l1_base_fee = 1000000000_u256,
+        .base_fee_scalar = 1100,
+        .blob_base_fee_scalar = 0,
+        .blob_base_fee = 0_u256,
+        .operator_fee_scalar = 2000000,
+        .operator_fee_constant = 500};
+
+    auto tx = baseTx();
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+    tx.value = intx::uint256{12345};
+
+    // 先用充裕余额取得四项的真实值。
+    intx::uint256 exact{0};
+    {
+        test::TestState ts;
+        ts[kSender] = {.nonce = 0,
+            .balance = 340282366920938463463374607431768211456_u256,
+            .storage = {},
+            .code = {}};
+        const auto r =
+            opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        BOOST_REQUIRE(std::holds_alternative<OpTxProperties>(r));
+        const auto& p = std::get<OpTxProperties>(r);
+        BOOST_REQUIRE_MESSAGE(p.l1_cost > intx::uint256{0}, "l1_cost must be non-zero");
+        BOOST_REQUIRE_MESSAGE(
+            p.operator_cost_at_gas_limit > intx::uint256{0}, "operator cost must be non-zero");
+        exact =
+            intx::uint256{static_cast<uint64_t>(tx.gas_limit)} * intx::uint256{tx.max_gas_price} +
+            tx.value + p.l1_cost + p.operator_cost_at_gas_limit;
+    }
+
+    // 恰好足额 → 必须通过。多算任何一项（例如 l1Cost 计两次）都会在此误拒。
+    {
+        test::TestState ts;
+        ts[kSender] = {.nonce = 0, .balance = exact, .storage = {}, .code = {}};
+        const auto r =
+            opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        BOOST_CHECK_MESSAGE(std::holds_alternative<OpTxProperties>(r),
+            "a balance exactly covering gasLimit*maxGasPrice + value + l1Cost + opCost must pass");
+    }
+
+    // 少一个 wei → 必须拒绝。漏算任何一项（例如不加 opCost）都会在此放行。
+    {
+        test::TestState ts;
+        ts[kSender] = {.nonce = 0, .balance = exact - 1, .storage = {}, .code = {}};
+        const auto r =
+            opValidate(ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), fee, 30000000);
+        BOOST_REQUIRE_MESSAGE(std::holds_alternative<std::error_code>(r),
+            "one wei short of the cap must be rejected");
+        BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::result_out_of_range);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
