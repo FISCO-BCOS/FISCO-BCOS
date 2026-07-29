@@ -1,7 +1,7 @@
 #include "bcos-task/Generator.h"
 #include "bcos-task/Task.h"
 #include "bcos-task/Wait.h"
-#include "bcos-task/pmr/Task.h"
+
 #include "bcos-utilities/Common.h"
 #include <oneapi/tbb/blocked_range.h>
 #include <oneapi/tbb/concurrent_vector.h>
@@ -16,7 +16,6 @@
 #include <chrono>
 #include <future>
 #include <iostream>
-#include <memory_resource>
 #include <stdexcept>
 #include <thread>
 
@@ -213,57 +212,6 @@ BOOST_AUTO_TEST_CASE(memoryLeak)
 
     bcos::task::wait(
         []() -> Task<void> { BOOST_CHECK_THROW(co_await taskWithThrow(), std::runtime_error); }());
-}
-
-struct MyMemoryResource : public std::pmr::monotonic_buffer_resource
-{
-    MyMemoryResource(void* buffer, size_t bufferSize)
-      : std::pmr::monotonic_buffer_resource(buffer, bufferSize, std::pmr::get_default_resource())
-    {}
-
-    void* do_allocate(size_t bytes, size_t alignment) override
-    {
-        ++allocate;
-        return std::pmr::monotonic_buffer_resource::do_allocate(bytes, alignment);
-    }
-
-    void do_deallocate(void* p, size_t bytes, size_t alignment) override
-    {
-        ++deallocate;
-        return std::pmr::monotonic_buffer_resource::do_deallocate(p, bytes, alignment);
-    }
-
-    bool do_is_equal(const memory_resource& other) const noexcept override
-    {
-        return std::pmr::monotonic_buffer_resource::do_is_equal(other);
-    }
-
-    void reset()
-    {
-        allocate = 0;
-        deallocate = 0;
-    }
-
-    int allocate = 0;
-    int deallocate = 0;
-};
-
-bcos::task::pmr::Task<void> selfAlloc(
-    int /*unused*/, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
-{
-    std::array<char, 1024> buf{};
-    co_return;
-}
-
-Generator<int> generatorWithAlloc(
-    int total, std::allocator_arg_t /*unused*/, std::pmr::polymorphic_allocator<> /*unused*/)
-{
-    std::array<char, 1024> buf{};
-
-    for (auto i = 0; i < total; ++i)
-    {
-        co_yield i;
-    }
 }
 
 Task<bcos::u256> testU256()

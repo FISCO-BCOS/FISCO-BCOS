@@ -1,11 +1,11 @@
 
 find_package(Boost REQUIRED COMPONENTS atomic)
 
-add_library(bcos-task bcos-task/pmr/MemoryResourceBase.cpp)
-target_include_directories(bcos-task PUBLIC
+add_library(bcos-task INTERFACE)
+target_include_directories(bcos-task INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/bcos-task>)
-target_link_libraries(bcos-task PUBLIC Boost::atomic)
+target_link_libraries(bcos-task INTERFACE Boost::atomic)
 
 include(GNUInstallDirs)
 install(TARGETS bcos-task EXPORT fiscobcosTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

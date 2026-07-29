@@ -53,10 +53,12 @@ constexpr inline struct SyncWait
             std::variant<std::monostate, ReturnTypeWrap, std::exception_ptr>>;
         ReturnVariant result;
         boost::atomic_flag finished;
-        boost::atomic_flag waitFlag;
+        std::shared_ptr<boost::atomic_flag> waitFlagSlot;
+        boost::atomic_flag slotReady;
 
         auto handle = [](Task&& task, decltype(result)& result, boost::atomic_flag& finished,
-                          boost::atomic_flag& waitFlag,
+                          std::shared_ptr<boost::atomic_flag>& waitFlagSlot,
+                          boost::atomic_flag& slotReady,
                           auto&&... args) -> task::Task<void> {
             try
             {
@@ -84,22 +86,27 @@ constexpr inline struct SyncWait
 
             if (finished.test_and_set())
             {
-                // 此处返回true说明外部首先设置了finished，那么需要通知外部已经执行完成了
-                // If true is returned here, the external finish is set first, and the external
-                // execution needs to be notified
-                waitFlag.test_and_set();
-                waitFlag.notify_one();
+                // Slow path: external set finished first, wait for the slot to be filled
+                // and copy shared_ptr to keep waitFlag alive through notify_one()
+                slotReady.wait(false);
+                auto waitFlag = waitFlagSlot;
+                waitFlag->test_and_set();
+                waitFlag->notify_one();
             }
-        }(std::forward<Task>(task), result, finished, waitFlag,
+        }(std::forward<Task>(task), result, finished, waitFlagSlot, slotReady,
                                               std::forward<decltype(args)>(args)...);
         handle.start();
 
         if (!finished.test_and_set())
         {
-            // 此处返回false说明task还在执行中，需要等待task完成
-            // If false is returned, the task is still being executed and you need to wait for the
-            // task to complete
-            waitFlag.wait(false);
+            // Slow path: coroutine hasn't finished, allocate waitFlag on heap and wait
+            waitFlagSlot = std::make_shared<boost::atomic_flag>();
+            slotReady.test_and_set();
+            slotReady.notify_one();
+            while (!waitFlagSlot->test())
+            {
+                waitFlagSlot->wait(false);
+            }
         }
         if (auto* exception = std::get_if<std::exception_ptr>(std::addressof(result)))
         {
