@@ -15,13 +15,13 @@ find_package(evmone CONFIG REQUIRED)
 # The evmone port installs test/utils sources verbatim (headers AND .cpp) under
 # include/test/utils; compile the ones we use straight from the package instead of
 # carrying a vendored copy.
-# TODO(eth-utils-removal): C 路线下改为自研——mpt/mpt_hash→自研 MPT,rlp_encode→
-# bcos-codec RLP,test_state→自研内存账本;届时删除本段包源编译与下方 shim。
+# TODO(eth-utils-removal): C 路线下改为自研——rlp_encode→bcos-codec RLP,
+# test_state→自研内存账本;届时删除本段包源编译与下方 shim。
 get_target_property(_evmone_include_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
 list(GET _evmone_include_dirs 0 _evmone_include_dir)
 cmake_path(NORMAL_PATH _evmone_include_dir)
 set(EVMONE_TEST_UTILS_DIR "${_evmone_include_dir}/test/utils")
-if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/mpt.cpp")
+if(NOT EXISTS "${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp")
     message(FATAL_ERROR "evmone package does not ship test/utils sources; "
         "port-version >= 8 of the overlay port is required (${EVMONE_TEST_UTILS_DIR})")
 endif()
@@ -55,12 +55,12 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    ${EVMONE_TEST_UTILS_DIR}/blob_schedule.cpp
-    ${EVMONE_TEST_UTILS_DIR}/mpt.cpp
-    ${EVMONE_TEST_UTILS_DIR}/mpt_hash.cpp
+    # 仅编入实际被引用的两个：rlp_encode 供 OpReceipt.cpp 的回执编码，test_state 供测试目标的
+    # 内存账本。blob_schedule/mpt/mpt_hash/utils 曾在此，但全模块零引用（符号可达性核验 + 去掉
+    # 后两个测试目标仍完整链接通过），徒增编译时间与 -Werror 受面：上游改一个纯测试辅助即可
+    # 弄坏本仓生产库构建。两者的移除计划见上方 TODO(eth-utils-removal)。
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
-    ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
-    ${EVMONE_TEST_UTILS_DIR}/utils.cpp)
+    ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
 target_include_directories(bcos-evm-eth PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -78,12 +78,8 @@ set_source_files_properties(
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    ${EVMONE_TEST_UTILS_DIR}/blob_schedule.cpp
-    ${EVMONE_TEST_UTILS_DIR}/mpt.cpp
-    ${EVMONE_TEST_UTILS_DIR}/mpt_hash.cpp
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp
-    ${EVMONE_TEST_UTILS_DIR}/utils.cpp
     PROPERTIES COMPILE_OPTIONS "-Wno-missing-field-initializers")
 
 add_library(bcos-evm-opstack STATIC
