@@ -23,6 +23,7 @@
 
 #include <bcos-codec/rlp/RLPDecode.h>
 #include <bcos-evm/adapter/StateRootCompute.h>
+#include <bcos-evm/engine/OpEngineSeam.h>
 #include <bcos-evm/engine/OpReceiptMap.h>
 #include <bcos-evm/ledger/Storage2Ledger.h>
 #include <bcos-evm/opstack/OpBlockExecute.h>
@@ -142,10 +143,9 @@ inline evmc::bytes32 toEvmcBytes32(const bcos::h256& h) noexcept
     return out;
 }
 
-inline bcos::h256 toBcosH256(const evmc::bytes32& h)
-{
-    return bcos::h256(reinterpret_cast<const bcos::byte*>(h.bytes), sizeof(h.bytes));
-}
+// `toBcosH256` (evmc::bytes32 -> bcos::h256) moved to OpEngineSeam.h (task-5b): that header is
+// included above and needs the same conversion, and two identical inline definitions of one name
+// in `bcos::evm::engine::detail` would be a redefinition error. Call sites below are unchanged.
 
 /// bcos::u256 -> uint64_t, explicit bounds-checked narrowing — NOT a raw static_cast/convert_to.
 /// This repo has a documented silent-truncation incident with unchecked wide-integer narrowing
@@ -536,6 +536,69 @@ public:
         m_vm(evmc_create_evmone())
     {}
 
+    // ---- engine-facing seam surface (task-5b, design §6.1) ----
+    //
+    // `engine/bcos-engine/EngineServiceImpl.h`'s newPayload OP branch reaches every one of the
+    // names below as a **dependent name on its `SchedulerType` template parameter**
+    // (`typename SchedulerType::BlockEnv`, `SchedulerType::computeTxRoot(...)`, ...). That is the
+    // only channel available: engine must not `#include` anything from bcos-evm (库纯净, see the
+    // `c_opMode` comment in EngineServiceImpl.h), and dependent names are looked up at
+    // instantiation — inside `if constexpr (c_opMode)`, in a TU that has already included this
+    // header. See `OpEngineSeam.h`'s file comment for the full rationale; the definitions live
+    // there, this block only re-publishes them under the class scope the engine can reach.
+
+    /// The block-execution environment the engine fills in from the payload (design §4.2).
+    using BlockEnv = OpBlockEnv;
+    /// What `executeOpBlock` returns (design §4.1).
+    using ExecuteResult = OpExecuteBlockResult;
+    /// Consensus-level rejection -> engine maps to INVALID (design §4.3 error table).
+    using ConsensusError = OpConsensusError;
+    /// Storage-layer failure -> engine maps to JSON-RPC -32603, never INVALID (design §4.3).
+    using StorageError = OpStorageError;
+    /// Table for the ETH/OP header RLP written on VALID (design §6.1 step 6, 裁定 B5).
+    static constexpr std::string_view c_ethBlockHeaderTable = SYS_ETH_BLOCK_HEADER;
+
+    /// The six-way comparison surface (+ the two §5.1 seal outputs) in bcos:: types.
+    static OpBlockCommitments commitmentsOf(const OpExecuteBlockResult& result)
+    {
+        return bcos::evm::engine::commitmentsOf(
+            result.seal, result.stateRoot, result.gasUsed, result.txRoot);
+    }
+
+    /// transactionsRoot over raw EIP-2718 envelopes — the engine needs it *before* execution to
+    /// reconstruct the header for the blockHash check (`ExecutionPayload` carries no
+    /// transactionsRoot field); `executeOpBlock`'s step 6 calls the same function.
+    static bcos::h256 computeTxRoot(::ranges::input_range auto const& rawTxBytes)
+    {
+        return computeOpTxRoot(rawTxBytes);
+    }
+
+    /// Isthmus activation predicate for the engine's -38005 timestamp x version gate (design
+    /// §6.1 step 1). The threshold comparison deliberately lives on this side of the seam, next
+    /// to `configAt`, rather than being reimplemented in the engine.
+    ///
+    /// It is a *separate* function from `configAt` on purpose (task-4 review item M4):
+    /// `configAt` cannot answer this question — it resolves sub-`isthmusTime` timestamps to the
+    /// Isthmus config as well (documented in OpForkSchedule.h: "Timestamps below isthmusTime also
+    /// resolve to Isthmus"), because the minimal loop has no pre-Isthmus config to fall back to.
+    /// The version gate, by contrast, must reject V4 for a pre-Isthmus timestamp, so it needs the
+    /// raw threshold. Both read the same injected `m_forkTimestamps.isthmusTime`, so there is
+    /// still exactly one source of truth for the value.
+    [[nodiscard]] bool isIsthmusActiveAt(uint64_t timestamp) const noexcept
+    {
+        return timestamp >= m_forkTimestamps.isthmusTime;
+    }
+
+    /// Jovian activation predicate. The engine needs it for one fork-dependent static check: the
+    /// header's `blobGasUsed` slot must be 0 under Isthmus, but from Jovian on the same slot is
+    /// repurposed as the DA footprint and is validated by seal comparison instead (design §5.1 /
+    /// OpBlockSeal.h:31-38). Same "threshold comparison stays on this side" reasoning as
+    /// `isIsthmusActiveAt`.
+    [[nodiscard]] bool isJovianActiveAt(uint64_t timestamp) const noexcept
+    {
+        return timestamp >= m_forkTimestamps.jovianTime;
+    }
+
     OpSchedulerImpl(const OpSchedulerImpl&) = delete;
     OpSchedulerImpl(OpSchedulerImpl&&) = delete;
     OpSchedulerImpl& operator=(const OpSchedulerImpl&) = delete;
@@ -643,16 +706,11 @@ public:
         // Step 6: txRoot (op-geth DeriveSha convention: trie key = canonical RLP encoding of the
         // index, trie value = the raw tx bytes as-is — MPT::insert's value parameter is the leaf
         // payload, not re-wrapped by the caller, same contract stateRootOf<Ledger>'s account
-        // leaves rely on via encode_tuple) + gasUsed.
-        evmone::state::MPT txTrie;
-        uint64_t index = 0;
-        for (auto const& rawItem : rawTxBytes)
-        {
-            const auto key = evmone::rlp::encode(index);
-            txTrie.insert(evmc::bytes_view{key.data(), key.size()},
-                evmc::bytes(std::begin(rawItem), std::end(rawItem)));
-            ++index;
-        }
+        // leaves rely on via encode_tuple) + gasUsed. The trie construction itself moved to
+        // `OpEngineSeam.h`'s `computeOpTxRoot` (task-5b) because the engine's newPayload OP branch
+        // must derive the same value *before* execution, for the header reconstruction the
+        // blockHash check depends on — same function, two call sites, no second implementation.
+        const auto txRoot = computeOpTxRoot(rawTxBytes);
 
         std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
         receipts.reserve(result.receipts.size());
@@ -669,7 +727,7 @@ public:
             .seal = seal,
             .stateRoot = detail::toBcosH256(stateRootHash),
             .gasUsed = static_cast<uint64_t>(result.gasUsed),
-            .txRoot = detail::toBcosH256(txTrie.hash()),
+            .txRoot = txRoot,
         };
     }
 
