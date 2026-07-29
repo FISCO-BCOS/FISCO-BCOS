@@ -165,12 +165,13 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
 
     receipt.logs_bloom_filter = evmone::state::compute_bloom_filter(receipt.logs);
 
-    // has_operator_fee from the SAME validate-time snapshot that gated the charge above, not from
-    // cfg: when the two disagree across a fork boundary (the case
-    // OperatorFeeConservesWhenCfgDisagreesWithProps covers), reading cfg here would report an
-    // operator_fee the sender was never charged, or omit one they were.
-    auto meta = deriveOpReceiptMeta(cfg, props.fee, props.flz_len, props.l1_cost, opAtUsed,
-        /*fill_operator_scalars=*/true, props.has_operator_fee);
+    // Both flags come from the SAME validate-time snapshot that priced and charged this
+    // transaction, never from this call's cfg: when the two disagree across a fork boundary (the
+    // case OperatorFeeConservesWhenCfgDisagreesWithProps covers) the receipt must describe what
+    // the sender was actually charged. deriveOpReceiptMeta takes no cfg at all, so there is no
+    // second source of truth left to get this wrong.
+    auto meta = deriveOpReceiptMeta(props.fee, props.flz_len, props.l1_cost, opAtUsed,
+        /*fill_operator_scalars=*/true, props.has_operator_fee, props.has_da_footprint);
     return OpTxReceipt{std::move(receipt), meta};
 }
 
@@ -221,7 +222,7 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
         return make_error_code(std::errc::result_out_of_range);
 
     return OpTxProperties{std::get<evmone::state::TransactionProperties>(base), l1Cost, opCost, fee,
-        flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula};
+        flzLen, cfg.has_operator_fee, cfg.has_jovian_operator_formula, cfg.has_da_footprint};
 }
 
 std::variant<OpTxProperties, std::error_code> opValidateFromState(

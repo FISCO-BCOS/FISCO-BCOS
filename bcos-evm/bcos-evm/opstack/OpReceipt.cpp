@@ -9,19 +9,17 @@
 
 namespace bcos::evm::opstack
 {
-OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fee, uint32_t flzLen,
-    intx::uint256 l1_cost, intx::uint256 operator_fee_at_used, bool fill_operator_scalars,
-    std::optional<bool> has_operator_fee) noexcept
+OpReceiptMeta deriveOpReceiptMeta(const OpFeeParams& fee, uint32_t flzLen, intx::uint256 l1_cost,
+    intx::uint256 operator_fee_at_used, bool fill_operator_scalars, bool has_operator_fee,
+    bool has_da_footprint) noexcept
 {
-    // The charge decision, not this call's cfg — see the declaration.
-    const bool charged_operator_fee = has_operator_fee.value_or(cfg.has_operator_fee);
     OpReceiptMeta m;
     m.l1_gas_price = fee.l1_base_fee;
     m.l1_blob_base_fee = fee.blob_base_fee;
     m.l1_base_fee_scalar = fee.base_fee_scalar;
     m.l1_blob_base_fee_scalar = fee.blob_base_fee_scalar;
     m.l1_fee = l1_cost;
-    if (charged_operator_fee)
+    if (has_operator_fee)
     {
         m.operator_fee = operator_fee_at_used;
         if (fill_operator_scalars &&
@@ -31,7 +29,7 @@ OpReceiptMeta deriveOpReceiptMeta(const OpForkConfig& cfg, const OpFeeParams& fe
             m.operator_fee_constant = fee.operator_fee_constant;
         }
     }
-    if (cfg.has_da_footprint)
+    if (has_da_footprint)
     {
         const auto scalar = static_cast<uint64_t>(fee.da_footprint_gas_scalar);
         m.da_footprint_gas_scalar = scalar;

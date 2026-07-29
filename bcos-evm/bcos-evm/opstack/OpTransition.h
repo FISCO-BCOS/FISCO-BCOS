@@ -35,6 +35,11 @@ struct OpTxProperties
     // vault by a different formula than the sender was charged → non-conservation / mint.
     bool has_operator_fee = false;
     bool jovian_operator_formula = false;
+    // Likewise for the receipt's DA-footprint fields: they must describe the fork the transaction
+    // was PRICED under, not whichever cfg reaches opTransition. Validate under Ecotone (flz_len
+    // forced to 0) and transition under Jovian would otherwise report a da_footprint_gas_scalar
+    // for a transaction the Ecotone L1 formula priced, with da_footprint computed from flz_len 0.
+    bool has_da_footprint = false;
 };
 
 /// Reuses evmone validate_transaction then applies OP checks: reject blob tx; balance cap
