@@ -54,6 +54,38 @@ using TestMPTAccount = MPTAccount<FlatStorage, NodeStorage, FlatStorage>;
 // HostContext is coded against is satisfied by the no-argument calls.
 static_assert(bcos::ledger::account::Account<TestMPTAccount>);
 
+// A root and a storage tag cannot be combined. Without the deleted overload this compiles and
+// resolves to the inherited tag pack, forwarding the root as a tag and reading today's flat value.
+// The concepts are templates on purpose: a requires-expression over concrete types is checked
+// eagerly, so selecting the deleted overload would be a hard error rather than an unmet
+// requirement.
+template <class AccountType>
+concept CombinesRootAndTag = requires(AccountType& account, evmc_bytes32 key, bcos::h256 root) {
+    account.storage(key, root, bcos::storage2::BYPASS_READ_SET);
+};
+static_assert(!CombinesRootAndTag<TestMPTAccount>);
+
+// Same for the optional form. Deleting only the plain-root arity would leave this one resolving to
+// the inherited tag pack, where MemoryStorage::readOneRaw discards every extra argument — the root
+// vanishes and the call reads today's flat value.
+template <class AccountType>
+concept CombinesOptionalRootAndTag =
+    requires(AccountType& account, evmc_bytes32 key, std::optional<bcos::h256> root) {
+        account.storage(key, root, bcos::storage2::BYPASS_READ_SET);
+    };
+static_assert(!CombinesOptionalRootAndTag<TestMPTAccount>);
+
+// The forms that must keep working, so the deletion cannot silently swallow them.
+template <class AccountType>
+concept HasEveryStorageForm = requires(AccountType& account, evmc_bytes32 key, bcos::h256 root) {
+    account.storage(key, root);
+    account.storage(key, std::optional<bcos::h256>{root});
+    account.storage(key, std::nullopt);
+    account.storage(key);
+    account.storage(key, bcos::storage2::BYPASS_READ_SET);
+};
+static_assert(HasEveryStorageForm<TestMPTAccount>);
+
 namespace
 {
 
@@ -347,10 +379,90 @@ BOOST_AUTO_TEST_CASE(EOALeafHasNoCodeAndEmptyStorage)
         fromEvmc(bcos::task::syncWait(eoa.storage(toEvmc(state.slot1), state.at()))), bcos::h256{});
 }
 
-// A leaf whose codeHash has no s_code_binary row falls back to the base resolution, exactly as
-// EVMAccount does — that is where contracts deployed by old versions keep their code. An
-// account absent from the trie does NOT fall back: it did not exist at that block.
-BOOST_AUTO_TEST_CASE(MissingCodeRowFallsBackToAccountTable)
+// A rooted read answers from the MPT alone. A leaf committing emptyCodeHash means the account had
+// no code at that block, full stop — bytes sitting in today's account-table CODE field do not
+// change that answer, even though the inherited flat path serves them. This pins the scope
+// decision: the two pre-3.18 shapes that put code in the account table (old-logic deploy, and
+// internal create with bugfix_internal_create_redundant_storage off, which writes CODE and no
+// CODE_HASH so FlatToMPT commits emptyCodeHash) are not producible at 3.18.0, and answering a
+// block-N question out of today's flat tables cannot be right in general.
+BOOST_AUTO_TEST_CASE(EmptyCodeHashLeafIsCodelessEvenWithFlatCodeBytes)
+{
+    SeededState state;
+    Account codeless;
+    codeless.nonce = 1;
+    codeless.balance = 1;
+    codeless.storageRoot = emptyRootHash();
+    codeless.codeHash = emptyCodeHash();
+    auto const addr = makeAddress(0xc0);
+    auto const root = seedTrieFlushed(
+        state.nodeStorage, state.stateRoot, {{accountKeyHash(addr), codeless.encode()}})
+                          .root;
+
+    bcos::bytes const flatCode{0x0a, 0x0b};
+    bcos::task::syncWait(bcos::storage2::writeOne(state.execStorage,
+        bcos::executor_v1::StateKey{
+            "/apps/" + addr.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE},
+        bcos::storage::Entry{flatCode}));
+
+    auto account = state.accountAt(addr);
+    BOOST_CHECK(bcos::task::syncWait(account.exists(root)));
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash(root)), emptyCodeHash());
+    BOOST_CHECK(!bcos::task::syncWait(account.code(root)).has_value());
+    // The flat path does serve those bytes; the divergence is deliberate, not an oversight.
+    auto const flat = bcos::task::syncWait(account.code());
+    BOOST_REQUIRE(flat.has_value());
+    auto const flatView = flat->get();
+    BOOST_CHECK(bcos::bytes(flatView.begin(), flatView.end()) == flatCode);
+}
+
+// exists() means leaf presence with a root — the Ethereum meaning — and a SYS_TABLES row without
+// one. They disagree for an account that has a table row but never produced a leaf, and Ethereum
+// agrees with the historical answer: it keeps no EIP-161 empty account in state.
+BOOST_AUTO_TEST_CASE(ExistsMeansLeafPresenceHistoricallyAndTableRowFlatly)
+{
+    SeededState state;
+    auto account = state.accountAt(makeAddress(0xf1));
+
+    // create() writes the SYS_TABLES row the flat exists() tests for, and nothing else.
+    bcos::task::syncWait(account.create());
+    BOOST_CHECK(bcos::task::syncWait(account.exists()));
+    BOOST_CHECK(!bcos::task::syncWait(account.exists(state.at())));
+
+    // The seeded contract is the converse control: present on both paths.
+    auto seeded = state.account();
+    BOOST_CHECK(bcos::task::syncWait(seeded.exists(state.at())));
+}
+
+// abi() is the one read with no root parameter: it is BCOS metadata outside the committed 4-tuple,
+// so a historical snapshot pairs block-N code/codeHash with the CURRENT abi. Pinned so the
+// asymmetry is a decision on record rather than something a reader has to infer.
+BOOST_AUTO_TEST_CASE(AbiIsNotHistoricised)
+{
+    SeededState state;
+    auto account = state.account();
+
+    // Deploy different code, and thus a different abi, "today".
+    bcos::bytes newCode{0xfe, 0xed};
+    bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
+    bcos::h256 newCodeHash;
+    bcos::crypto::hasher::hash(hasher, bcos::ref(newCode), newCodeHash);
+    bcos::task::syncWait(account.setCode(newCode, "todays-abi", newCodeHash));
+
+    // The rooted reads still answer for block N...
+    BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash(state.at())), state.codeHash);
+    // ...while abi() has no rooted form at all and answers with today's.
+    auto const abi = bcos::task::syncWait(account.abi());
+    BOOST_REQUIRE(abi.has_value());
+    BOOST_CHECK_EQUAL(abi->get(), "todays-abi");
+}
+
+// Ethereum resolves code through exactly one store, so a leaf whose codeHash has no s_code_binary
+// row is corruption, not an EOA: returning nullopt would run the contract as an EOA and answer
+// calls to it with success and empty output. The account table's CODE field is deliberately NOT
+// consulted — the two pre-3.18 shapes that put code there cannot be produced at this blockVersion,
+// and reading today's flat tables to answer a question about block N cannot be right in general.
+BOOST_AUTO_TEST_CASE(MissingCodeRowThrowsAndNeverFallsBackToFlat)
 {
     SeededState state;
     Account legacy;
@@ -363,66 +475,45 @@ BOOST_AUTO_TEST_CASE(MissingCodeRowFallsBackToAccountTable)
         state.nodeStorage, state.stateRoot, {{accountKeyHash(legacyAddr), legacy.encode()}})
                           .root;
 
-    bcos::bytes const legacyCode{0x01, 0x02, 0x03};
+    // Flat state holds code for this address under both pre-3.18 shapes. Neither may rescue the
+    // historical read: the CODE field's bytes hash to nothing the leaf committed, and the flat
+    // CODE_HASH is today's, not block N's.
+    bcos::bytes const flatCode{0x01, 0x02, 0x03};
     bcos::task::syncWait(bcos::storage2::writeOne(state.execStorage,
         bcos::executor_v1::StateKey{
             "/apps/" + legacyAddr.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE},
-        bcos::storage::Entry{legacyCode}));
-
-    // Today's flat state has this address on a DIFFERENT, hash-addressed code. The fallback must
-    // not go through the base's full resolution, which starts from this flat codeHash and would
-    // return bytes hashing to something other than the codeHash the leaf committed.
-    bcos::bytes const todaysCode{0xaa, 0xbb};
+        bcos::storage::Entry{flatCode}));
     bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher hasher;
-    bcos::h256 todaysCodeHash;
-    bcos::crypto::hasher::hash(hasher, bcos::ref(todaysCode), todaysCodeHash);
+    bcos::h256 flatCodeHash;
+    bcos::crypto::hasher::hash(hasher, bcos::ref(flatCode), flatCodeHash);
     bcos::task::syncWait(bcos::storage2::writeOne(state.execStorage,
         bcos::executor_v1::StateKey{
             "/apps/" + legacyAddr.hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE_HASH},
-        bcos::storage::Entry{bcos::concepts::bytebuffer::toView(todaysCodeHash)}));
+        bcos::storage::Entry{bcos::concepts::bytebuffer::toView(flatCodeHash)}));
     bcos::task::syncWait(bcos::storage2::writeOne(state.execStorage,
         bcos::executor_v1::StateKey{
-            bcos::ledger::SYS_CODE_BINARY, bcos::concepts::bytebuffer::toView(todaysCodeHash)},
-        bcos::storage::Entry{todaysCode}));
+            bcos::ledger::SYS_CODE_BINARY, bcos::concepts::bytebuffer::toView(flatCodeHash)},
+        bcos::storage::Entry{flatCode}));
 
     auto account = state.accountAt(legacyAddr);
     BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash(root)), makeHash(0x77));
-    auto const code = bcos::task::syncWait(account.code(root));
-    BOOST_REQUIRE(code.has_value());
-    auto const view = code->get();
-    BOOST_CHECK(bcos::bytes(view.begin(), view.end()) == legacyCode);
-    BOOST_CHECK(bcos::bytes(view.begin(), view.end()) != todaysCode);
+    BOOST_CHECK_THROW(
+        bcos::task::syncWait(account.code(root)), bcos::ledger::mpt::MPTInvariantViolation);
+    // The flat path still serves those bytes; only the historical path refuses them.
+    auto const flat = bcos::task::syncWait(account.code());
+    BOOST_REQUIRE(flat.has_value());
+    auto const flatView = flat->get();
+    BOOST_CHECK(bcos::bytes(flatView.begin(), flatView.end()) == flatCode);
 
-    // Absent from the trie: no code and no fallback, even though the flat row is right there.
+    // Absent from the trie: no code, and no exception either — it did not exist at that block.
     auto absent = state.accountAt(makeAddress(0xcd));
     bcos::task::syncWait(bcos::storage2::writeOne(state.execStorage,
         bcos::executor_v1::StateKey{
             "/apps/" + makeAddress(0xcd).hex(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE},
-        bcos::storage::Entry{legacyCode}));
+        bcos::storage::Entry{flatCode}));
     BOOST_CHECK(!bcos::task::syncWait(absent.code(root)).has_value());
 }
 
-// A committed non-empty codeHash asserts the code existed; neither store holding it is corruption,
-// not absence. Reporting nullopt would run the contract as an EOA and answer calls to it with
-// success and empty output, which the caller cannot tell from a correct answer.
-BOOST_AUTO_TEST_CASE(CodeMissingFromBothStoresThrows)
-{
-    SeededState state;
-    Account corrupt;
-    corrupt.nonce = 1;
-    corrupt.balance = 1;
-    corrupt.storageRoot = emptyRootHash();
-    corrupt.codeHash = makeHash(0x99);  // no s_code_binary row, and no account-table CODE row
-    auto const corruptAddr = makeAddress(0xde);
-    auto const root = seedTrieFlushed(
-        state.nodeStorage, state.stateRoot, {{accountKeyHash(corruptAddr), corrupt.encode()}})
-                          .root;
-
-    auto account = state.accountAt(corruptAddr);
-    BOOST_CHECK_EQUAL(bcos::task::syncWait(account.codeHash(root)), makeHash(0x99));
-    BOOST_CHECK_THROW(
-        bcos::task::syncWait(account.code(root)), bcos::ledger::mpt::MPTInvariantViolation);
-}
 
 // storageEntry: the 32-byte slot value at a root, or the base's any-field-name read without one.
 BOOST_AUTO_TEST_CASE(StorageEntryHistoricalAndFlat)

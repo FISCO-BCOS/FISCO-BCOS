@@ -26,6 +26,7 @@
 #include "StorageValueCodec.h"
 #include "Trie.h"
 #include <bcos-concepts/ByteBuffer.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-framework/ledger/Account.h>
 #include <bcos-framework/ledger/EVMAccount.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
@@ -73,11 +74,23 @@ concept HistoricalStorageContext = requires(Storage& storage) {
 /// mode the object is locked into: a caller that never passes a root cannot tell this class from
 /// EVMAccount.
 ///
-/// Absence at a given root is Ethereum semantics, not an error: an account with no leaf reads as
-/// exists()==false / balance 0 / nonce nullopt / zero codeHash, and a slot with no leaf reads as
-/// zero. That is exact for scenario B (genesis-enabled MPT, spec §4.4), where the trie is the
-/// complete state. Scenario-A cold data makes exclusion ambiguous, so gating historical queries
-/// to scenario B is the caller's job (PR-43, per OQ6 resolution (c)+(a)).
+/// A rooted read answers from the MPT and from nothing else. What the trie does not hold at that
+/// root does not exist as far as this path is concerned — the flat tables are never consulted to
+/// paper over a gap, because they hold TODAY's values and cannot answer a question about block N.
+///
+/// Absence at a given root is therefore Ethereum semantics, not an error: an account with no leaf
+/// reads as exists()==false / balance 0 / nonce nullopt / zero codeHash, and a slot with no leaf
+/// reads as zero. That is exact for scenario B (genesis-enabled MPT, spec §4.4), where the trie is
+/// the complete state. Scenario-A cold data makes exclusion ambiguous, so gating historical
+/// queries to scenario B is the caller's job (PR-43, per OQ6 resolution (c)+(a)).
+///
+/// One consequence to know about: exists() means different things on the two paths, and the rooted
+/// one is the Ethereum meaning. With a root it is leaf presence, exactly as an Ethereum client
+/// answers "does this account exist". The inherited flat exists() (EVMAccount.h:27-31) tests for a
+/// SYS_TABLES row, a BCOS notion with no Ethereum counterpart, and the two can disagree: an
+/// account touched only by rows carrying no Ethereum state never produces a leaf (MPTBuilder.h:
+/// 92-97, 215-227 keep that one member of the EIP-161 empty-account class out of the trie), so it
+/// reads as absent historically and present flatly. Ethereum agrees with the historical answer.
 ///
 /// abi() and increaseNonce() are inherited unchanged. abi is BCOS metadata outside the committed
 /// 4-tuple and is deliberately not historicised — a historical query returns the CURRENT abi,
@@ -109,7 +122,6 @@ public:
     MPTAccount(Storage& storage, NodeStorage& nodeStorage, BackendStorage& backendStorage,
         bcos::Address address, bool binaryAddress)
       : Base(storage, address, binaryAddress),
-        m_storage(storage),
         m_nodeStorage(nodeStorage),
         m_backendStorage(backendStorage),
         m_address(address)
@@ -127,7 +139,6 @@ public:
     MPTAccount(Storage& storage, const evmc_address& address, bool binaryAddress)
         requires HistoricalStorageContext<Storage>
       : Base(storage, address, binaryAddress),
-        m_storage(storage),
         m_nodeStorage(storage.mptNodeStorage()),
         m_backendStorage(storage.mptBackendStorage()),
         m_address(bcos::bytesConstRef{address.bytes, sizeof(address.bytes)})
@@ -150,21 +161,26 @@ public:
         co_return account.has_value();
     }
 
-    /// The code bytes. With a root: the leaf's codeHash resolved through s_code_binary, falling
-    /// back to the account table's code field when that row is missing — EVMAccount's own last
-    /// resort, and where contracts deployed by old versions and internal precompiled keep their
-    /// code. The fallback reads ONLY that field, never the full base resolution: the base
-    /// starts from today's flat codeHash, which for an address whose code changed since would
-    /// return bytes hashing to something other than the codeHash this very object reports.
-    /// An account absent from the trie has no code and does NOT fall back at all — it did not
-    /// exist at that block, and the flat tables only hold today's value.
+    /// The code bytes, resolved exactly as Ethereum resolves them: `codeHash == keccak256("")`
+    /// means the account has no code, and otherwise the code is whatever the one content-addressed
+    /// store holds under that hash. There is no second place to look and no fallback.
     ///
-    /// Neither source holding the code is an invariant violation, not an absence: a leaf that
-    /// commits a non-empty codeHash asserts the code existed at that block, so failing to find it
-    /// means the store is corrupt or pruned. Reporting nullopt there would make the EVM read the
-    /// contract as an EOA and answer a call to it with success and empty output — a wrong result
-    /// the caller cannot distinguish from a right one. Throwing is loud instead; the historical
-    /// call path (PR-43) must catch it at the RPC boundary, as it must MPTDecodeError.
+    /// That is a deliberate narrowing of what the flat path does. `EVMAccount::code()` also probes
+    /// the account table's CODE field, because two pre-3.18 shapes put code there: the old-logic
+    /// deploy (HostContext.cpp:483-495, blockVersion < 3.1) and internal create with
+    /// bugfix_internal_create_redundant_storage off (TransactionExecutive.cpp:963-967, which
+    /// writes CODE and no CODE_HASH at all, so FlatToMPT commits emptyCodeHash for an account
+    /// that does have code). Neither shape is producible at 3.18.0 — `EVMAccount::setCode`
+    /// (EVMAccount.h:65-88) always writes s_code_binary — and a future fork that changes code
+    /// storage again gets its own feature flag. Serving them here would mean reading TODAY's flat
+    /// tables to answer a question about block N, which cannot be right in general.
+    ///
+    /// A missing blob under a non-empty codeHash is an invariant violation, not an absence: the
+    /// leaf asserts the code existed at that block, so failing to find it means the store is
+    /// corrupt or pruned. Returning nullopt would run the contract as an EOA and answer calls to
+    /// it with success and empty output — a wrong result the caller cannot distinguish from a
+    /// right one, and geth likewise fails block processing rather than degrading. The historical
+    /// call path (PR-43) must catch this at the RPC boundary, as it must MPTDecodeError.
     bcos::task::Task<std::optional<bcos::storage::Entry>> code(
         std::optional<bcos::h256> stateRoot = {})
     {
@@ -183,16 +199,9 @@ public:
         {
             co_return codeEntry;
         }
-        if (auto codeEntry = co_await bcos::storage2::readOne(
-                m_storage.get(), bcos::executor_v1::StateKeyView{
-                                     this->address(), bcos::ledger::ACCOUNT_TABLE_FIELDS::CODE}))
-        {
-            co_return codeEntry;
-        }
-        BOOST_THROW_EXCEPTION(
-            MPTInvariantViolation{} << bcos::errinfo_comment(
-                "historical code(): account leaf commits codeHash " + account->codeHash.hex() +
-                " but neither s_code_binary nor the account table holds the code"));
+        BOOST_THROW_EXCEPTION(MPTInvariantViolation{} << bcos::errinfo_comment(
+                                  "historical code(): account leaf commits codeHash " +
+                                  account->codeHash.hex() + " but s_code_binary has no such row"));
     }
 
     /// The code hash: the leaf's, or (no root) the flat account row's.
@@ -280,10 +289,18 @@ public:
         co_return co_await Base::storage(key);
     }
 
-    /// A root and storage tags CANNOT be combined: storage(key, root, BYPASS_READ_SET) matches
-    /// none of the overloads above on arity and lands on the inherited tag pack, which forwards
-    /// the root as if it were a tag and reads today's flat value. Read the historical slot and
-    /// the tagged flat slot as two separate calls.
+    /// A root and storage tags CANNOT be combined. Without the deletion below,
+    /// storage(key, root, BYPASS_READ_SET) matches none of the overloads above on arity, lands on
+    /// the inherited tag pack, forwards the root as if it were a tag and reads today's flat value
+    /// — the same silent latest-for-historical failure the plain-root overload exists to prevent,
+    /// one arity up. Deleting it makes the call a compile error instead. Read the historical slot
+    /// and the tagged flat slot as two separate calls.
+    template <class... Tags>
+    bcos::task::Task<evmc_bytes32> storage(
+        const evmc_bytes32&, bcos::h256 const&, Tags&&...) = delete;
+    template <class... Tags>
+    bcos::task::Task<evmc_bytes32> storage(
+        const evmc_bytes32&, std::optional<bcos::h256> const&, Tags&&...) = delete;
 
     /// The raw 32-byte slot value as a storage Entry, or nullopt when the slot is absent. With a
     /// root, @p key must be a 32-byte slot key — nothing else can exist in a storage trie — so
@@ -339,7 +356,15 @@ private:
             co_return std::nullopt;
         }
         Trie<NodeStorage> const trie{m_nodeStorage.get(), account->storageRoot};
-        auto const leaf = co_await trie.get(slotKeyHash(slot));
+        // The hasher-injection form, per StorageValueCodec.h's hot-path convention: this is the
+        // per-SLOAD path of a historical call, and the convenience overload builds a fresh
+        // OpenSSL context every time. Constructed on first use rather than held by value, so the
+        // default (flat) path keeps EVMAccount's allocation-free, non-throwing construction.
+        if (!m_hasher)
+        {
+            m_hasher.emplace();
+        }
+        auto const leaf = co_await trie.get(slotKeyHash(slot, *m_hasher));
         if (!leaf)
         {
             co_return std::nullopt;
@@ -347,15 +372,14 @@ private:
         co_return decodeStorageValue(bcos::ref(*leaf));
     }
 
-    // The base holds this privately; the historical code() fallback needs it to read the
-    // account table's code field directly.
-    std::reference_wrapper<Storage> m_storage;
     std::reference_wrapper<NodeStorage> m_nodeStorage;
     std::reference_wrapper<BackendStorage> m_backendStorage;
     bcos::Address m_address;
 
     std::optional<bcos::h256> m_cachedLeafRoot;
     std::optional<Account> m_cachedLeaf;
+    /// Reused slot-key hash context, built on the first rooted slot read (see readTrieSlot).
+    std::optional<bcos::crypto::hasher::openssl::OpenSSL_Keccak256_Hasher> m_hasher;
 };
 
 }  // namespace bcos::ledger::mpt

@@ -25,6 +25,7 @@
 // leaks in), so keep both explicit.
 #include <bcos-crypto/hasher/AnyHasher.h>
 #include <bcos-crypto/hasher/OpenSSLHasher.h>
+#include <bcos-utilities/DataConvertUtility.h>  // fromBigEndian
 
 namespace bcos::ledger::mpt
 {
@@ -56,8 +57,14 @@ bcos::u256 decodeStorageValue(bcos::bytesConstRef leaf)
     // The RLP cursor API advances a mutable ref; decode only reads, so the cast is safe (same
     // shape as NodeDecoder.cpp / Account.cpp).
     bcos::bytesRef cursor{const_cast<bcos::byte*>(leaf.data()), leaf.size()};
-    bcos::u256 value;
-    if (auto error = bcos::codec::rlp::decode(cursor, value); error)
+    // Decode to a byte string first, NOT straight to u256: rlp::decode(cursor, u256) feeds the
+    // payload to fromBigEndian (DataConvertUtility.h:279-285), a `ret = (ret << 8) | b` loop over
+    // a fixed-width unchecked u256. A 33-byte payload would shift its high byte out and yield a
+    // plausible wrong slot value mod 2^256 instead of an error, and a leading-zero payload would
+    // decode as if canonical. Ethereum's storage values are minimal big-endian byte strings of at
+    // most 32 bytes; anything else is a corrupt leaf.
+    bcos::bytes payload;
+    if (auto error = bcos::codec::rlp::decode(cursor, payload); error)
     {
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
                                   "storage leaf: bad RLP value: " + error->errorMessage()));
@@ -67,7 +74,19 @@ bcos::u256 decodeStorageValue(bcos::bytesConstRef leaf)
         BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
                                   "storage leaf: trailing bytes after the RLP value"));
     }
-    return value;
+    if (payload.size() > static_cast<size_t>(bcos::h256::SIZE))
+    {
+        BOOST_THROW_EXCEPTION(MPTDecodeError{} << bcos::errinfo_comment(
+                                  "storage leaf: value payload is " +
+                                  std::to_string(payload.size()) + " bytes, over the 32-byte max"));
+    }
+    if (!payload.empty() && payload.front() == 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            MPTDecodeError{} << bcos::errinfo_comment(
+                "storage leaf: value payload has a leading zero byte (not minimal big-endian)"));
+    }
+    return bcos::fromBigEndian<bcos::u256>(payload);
 }
 
 }  // namespace bcos::ledger::mpt

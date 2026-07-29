@@ -71,6 +71,43 @@ BOOST_AUTO_TEST_CASE(MalformedLeavesThrow)
     BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(list)), MPTDecodeError);
 }
 
+// Ethereum storage values are minimal big-endian byte strings of at most 32 bytes. Decoding
+// straight to u256 would accept both of these: fromBigEndian shifts an over-long payload's high
+// bytes out and hands back a plausible wrong value mod 2^256, and a leading zero decodes as if
+// it were canonical.
+BOOST_AUTO_TEST_CASE(NonCanonicalPayloadsThrow)
+{
+    // 33-byte payload, short-string form (0x80 + 33). Its first byte would be shifted out
+    // entirely. It must be 0xa1 and not 0xb8|33: the long-string form requires a payload of at
+    // least 56 bytes (RLPDecode.h:65-84), so 0xb8|33 is rejected by the header parser before the
+    // length check below ever runs.
+    bcos::bytes overlong{0xa1};
+    overlong.push_back(0xff);
+    overlong.insert(overlong.end(), 32, 0x11);
+    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(overlong)), MPTDecodeError);
+
+    // The long-string form itself, canonically encoded: 0xb8 + length 56 + 56 bytes.
+    bcos::bytes longForm{0xb8, 56};
+    longForm.insert(longForm.end(), 56, 0x11);
+    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(longForm)), MPTDecodeError);
+
+    // Exactly 32 bytes is the boundary and must still decode.
+    bcos::bytes maxWidth{0xa0};
+    maxWidth.insert(maxWidth.end(), 32, 0x11);
+    BOOST_CHECK_NO_THROW(decodeStorageValue(bcos::ref(maxWidth)));
+
+    // Leading zero: 0x82 0x00 0x01 encodes the same value as 0x01, non-minimally.
+    bcos::bytes const leadingZero{0x82, 0x00, 0x01};
+    BOOST_CHECK_THROW(decodeStorageValue(bcos::ref(leadingZero)), MPTDecodeError);
+
+    // The encoder never produces either form, so nothing valid is rejected.
+    BOOST_CHECK_EQUAL(decodeStorageValue(bcos::ref(encodeStorageValue(
+                          bcos::h256(bcos::u256{"0x00ff00000000000000000000000000000000000000000000"
+                                                "0000000000000001"})
+                              .ref()))),
+        bcos::u256{"0x00ff000000000000000000000000000000000000000000000000000000000001"});
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace bcos::ledger::mpt::test
