@@ -57,6 +57,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <bcos-evm/eth/state/transaction.hpp>
@@ -322,6 +323,20 @@ static_assert(bcos::scheduler_v1::TransactionScheduler<bcos::evm::engine::OpSche
 // final-batch1-report.md). A plain transfer's floor is exactly TX_BASE_COST = 21000, matching
 // every gasLimit=21000 test tx here precisely (not by a wide margin that could mask a different
 // off-by-one).
+//
+// Every negative test in this file signs with `r = intx::uint256{1}` (see the individual TEST
+// bodies below) and relies on `evmmax::secp256k1::ecrecover` actually recovering *some* address
+// from it — every check under test except C3 lives *before* `recoverTxSender` runs, but if
+// ecrecover itself threw ("sender ecrecover failed") first, that exception would also be an
+// OpConsensusError and could silently make a test "pass" for the wrong reason again, the same
+// class of bug this file's other builder-shape fixes were chasing. `r = 1` is not an arbitrary
+// "small nonzero value" that happens to work — it IS a valid x-coordinate on secp256k1
+// (`y^2 = x^3 + 7` at x=1 gives `y^2 = 8`, and 2 is a quadratic residue mod this curve's field
+// prime `p` because `p ≡ 7 (mod 8)`, so a square root exists), so ecrecover always succeeds for
+// it regardless of `s`/`yParity`/the message hash. This constraint is coordinate-specific, not
+// value-specific: if a future edit changes `r` to some other small constant without checking it
+// is also a valid x-coordinate, ecrecover may start failing and every test relying on execution
+// reaching *past* sender recovery would go back to silently passing for the wrong reason.
 inline constexpr evmc::address kPlaceholderTransferTo =
     0x0000000000000000000000000000000000dead_address;
 
@@ -405,6 +420,37 @@ bcos::evm::engine::OpBlockEnv minimalEnv(const bcos::protocol::BlockHeader& head
         .extraData = {},
         .blobGasUsed = 0,
     };
+}
+
+/// Asserts `invoke()` throws `bcos::evm::engine::OpConsensusError` whose `what()` contains
+/// `expectedSubstring` (coordinator review I-1). Plain `EXPECT_THROW(..., OpConsensusError)` only
+/// distinguishes exception *type*, and `OpSchedulerImpl::executeOpBlock`'s `catch(...)` fallback
+/// (its own file header comment: "Typed-catch RTTI bypass") reclassifies *any* uncaught
+/// exception from `processOpBlock` into the same `OpConsensusError` type with a generic,
+/// check-independent message — so for a check whose removal still leaves some *other*,
+/// unrelated block-level validation failing (this file's setcode gas-limit/chain-id sub-cases;
+/// see `final-batch1-report.md`'s I-1 section for which specific sub-cases need this and why),
+/// type-only assertion cannot tell "my check fired" apart from "something else fired instead".
+/// Message-substring assertion can, because the guard under test's own throw site produces a
+/// literal, field-name-qualified message (`narrowGasLimit`'s `fieldName` parameter, M-2) that
+/// the catch(...) fallback's fixed diagnostic string never contains. Reuses this file's own
+/// `ExecuteBlockThrowsInOpMode` test's `std::string(e.what()).find(...) != npos` idiom rather
+/// than pulling in gmock's `HasSubstr` (this test binary does not otherwise link GTest::gmock).
+template <class Invoke>
+void expectOpConsensusErrorWithMessage(Invoke&& invoke, std::string_view expectedSubstring)
+{
+    bool threw = false;
+    try
+    {
+        invoke();
+    }
+    catch (const bcos::evm::engine::OpConsensusError& e)
+    {
+        threw = true;
+        EXPECT_NE(std::string(e.what()).find(expectedSubstring), std::string::npos)
+            << "e.what()=\"" << e.what() << "\" does not contain \"" << expectedSubstring << "\"";
+    }
+    EXPECT_TRUE(threw) << "expected OpConsensusError, none thrown";
 }
 
 }  // namespace
@@ -611,6 +657,13 @@ TEST(OpSchedulerImpl, TypedTxGasLimitOverflowIsConsensusError)
             << "eip1559";
     }
     {
+        // setcode sub-case (coordinator review I-1): plain EXPECT_THROW(..., OpConsensusError)
+        // cannot tell this guard's own throw apart from executeOpBlock's catch(...) RTTI-bypass
+        // fallback reclassifying some *other*, unrelated block-level failure into the same
+        // exception type — both paths are OpConsensusError. Message-substring assertion against
+        // narrowGasLimit's field-name-qualified text (M-2) distinguishes them; see
+        // expectOpConsensusErrorWithMessage's doc comment and final-batch1-report.md's I-1
+        // section for the full rationale and the delete-and-rebuild evidence that motivated it.
         MutableStorage storage;
         auto receiptFactory = makeReceiptFactory();
         bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
@@ -618,9 +671,9 @@ TEST(OpSchedulerImpl, TypedTxGasLimitOverflowIsConsensusError)
         std::vector<bcos::bytes> rawTxBytes{
             leadingL1AttributesDeposit(), buildSetCodeRawTx(kChainId, hugeGas, intx::uint256{0},
                                               intx::uint256{1}, intx::uint256{1})};
-        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
-            bcos::evm::engine::OpConsensusError)
-            << "setcode";
+        expectOpConsensusErrorWithMessage(
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            "gas limit exceeds int64_t range: setcode.gasLimit");
     }
 }
 
@@ -649,6 +702,10 @@ TEST(OpSchedulerImpl, TypedTxChainIdMismatchIsConsensusError)
             << "eip1559";
     }
     {
+        // setcode sub-case (coordinator review I-1): same rationale as
+        // TypedTxGasLimitOverflowIsConsensusError's setcode sub-case above — the chain-id check's
+        // own throw text ("chain id mismatch (setcode)") is distinguishable from the catch(...)
+        // fallback's generic message, which type-only EXPECT_THROW cannot tell apart.
         MutableStorage storage;
         auto receiptFactory = makeReceiptFactory();
         bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
@@ -656,9 +713,9 @@ TEST(OpSchedulerImpl, TypedTxChainIdMismatchIsConsensusError)
         std::vector<bcos::bytes> rawTxBytes{
             leadingL1AttributesDeposit(), buildSetCodeRawTx(kWrongChainId, 21000, intx::uint256{0},
                                               intx::uint256{1}, intx::uint256{1})};
-        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
-            bcos::evm::engine::OpConsensusError)
-            << "setcode";
+        expectOpConsensusErrorWithMessage(
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            "chain id mismatch (setcode)");
     }
 }
 
@@ -694,40 +751,90 @@ TEST(OpSchedulerImpl, HighSSignatureIsConsensusError)
 // yParity=2 (smallest invalid value) and yParity=256 (probes the exact truncation hazard the
 // I1 fix's own comment describes — `static_cast<uint8_t>(256) == 0`, which would silently look
 // like a valid parity=0 if the guard were absent). Two-tx blocks, same rationale as (g)/(h)/(i).
+//
+// I-2 (coordinator review, second-round): decodeEip1559Tx's and decodeSetCodeTx's
+// `if (yParity > 1) throw` lines are two INDEPENDENT copy-pasted statements, not one shared
+// function — unlike C3's `requireLowSSignature`, which is a single function both decoders call
+// through. A first draft of this test file only ever exercised `buildEip1559RawTx`, leaving
+// decodeSetCodeTx's copy with zero coverage (confirmed by the coordinator's own
+// delete-and-rebuild experiment: removing just the setcode line still left 212/212 green). Both
+// tests below now cover both decoders. The setcode sub-case's authorization_list stays empty
+// (`buildSetCodeRawTx`'s own shape) rather than adding EIP-7702 authorization tuples — the
+// coordinator's review separately ruled out a non-empty-authorization-list construction as a
+// viable alternative test vector here: each authorization tuple adds a flat 25000 intrinsic-gas
+// cost (`AUTHORIZATION_EMPTY_ACCOUNT_COST`, eth/state/state.cpp), which this file's fixed
+// gasLimit=21000 test transactions could never cover regardless of what's being tested.
 TEST(OpSchedulerImpl, YParityEquals2IsConsensusError)
 {
-    MutableStorage storage;
-    auto receiptFactory = makeReceiptFactory();
-    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
-        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
-
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
     auto env = minimalEnv(header);
 
-    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
-        buildEip1559RawTx(kChainId, 21000, intx::uint256{2}, intx::uint256{1}, intx::uint256{1})};
-
-    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
-        bcos::evm::engine::OpConsensusError);
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildEip1559RawTx(kChainId, 21000, intx::uint256{2},
+                                              intx::uint256{1}, intx::uint256{1})};
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+            bcos::evm::engine::OpConsensusError)
+            << "eip1559";
+    }
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildSetCodeRawTx(kChainId, 21000, intx::uint256{2},
+                                              intx::uint256{1}, intx::uint256{1})};
+        // setcode sub-case needs message assertion, not plain EXPECT_THROW (coordinator review
+        // I-1's rationale generalizes here too, confirmed by this task's own diagnostic run):
+        // with r=1/yParity!=0 still recoverable, decode succeeds all the way through when the
+        // guard is disabled, and *something* downstream in processOpBlock's execution of a
+        // truncated tx.v still throws — via the same catch(...) RTTI-bypass fallback, same
+        // generic message, same OpConsensusError type. Only the guard's own message text
+        // ("invalid y parity (setcode)") distinguishes "my check fired" from "something else did".
+        expectOpConsensusErrorWithMessage(
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            "invalid y parity (setcode)");
+    }
 }
 
 TEST(OpSchedulerImpl, YParityEquals256IsConsensusError)
 {
-    MutableStorage storage;
-    auto receiptFactory = makeReceiptFactory();
-    bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
-        bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
-
     bcostars::protocol::BlockHeaderImpl header;
     header.setNumber(1);
     header.setTimestamp(1000);
     auto env = minimalEnv(header);
 
-    std::vector<bcos::bytes> rawTxBytes{leadingL1AttributesDeposit(),
-        buildEip1559RawTx(kChainId, 21000, intx::uint256{256}, intx::uint256{1}, intx::uint256{1})};
-
-    EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
-        bcos::evm::engine::OpConsensusError);
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildEip1559RawTx(kChainId, 21000, intx::uint256{256},
+                                              intx::uint256{1}, intx::uint256{1})};
+        EXPECT_THROW(bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)),
+            bcos::evm::engine::OpConsensusError)
+            << "eip1559";
+    }
+    {
+        MutableStorage storage;
+        auto receiptFactory = makeReceiptFactory();
+        bcos::evm::engine::OpSchedulerImpl<MutableStorage> scheduler(receiptFactory, kChainId,
+            bcos::evm::opstack::OpForkTimestamps{.isthmusTime = 0, .jovianTime = 100000});
+        std::vector<bcos::bytes> rawTxBytes{
+            leadingL1AttributesDeposit(), buildSetCodeRawTx(kChainId, 21000, intx::uint256{256},
+                                              intx::uint256{1}, intx::uint256{1})};
+        // setcode sub-case: same message-assertion rationale as YParityEquals2's setcode
+        // sub-case above.
+        expectOpConsensusErrorWithMessage(
+            [&] { bcos::task::syncWait(scheduler.executeOpBlock(storage, env, rawTxBytes)); },
+            "invalid y parity (setcode)");
+    }
 }

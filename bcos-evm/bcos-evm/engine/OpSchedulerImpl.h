@@ -176,10 +176,16 @@ inline uint64_t narrowU256ToU64(const bcos::u256& v, const char* fieldName)
 /// comparison surface and get a block VALID that op-geth rejects outright (`GasPool.SubGas`
 /// returns `ErrGasLimitReached`, and `state_transition.go`'s failed-deposit branch explicitly
 /// excludes that error from the "still charge, still succeed" path — the whole block is invalid).
-inline int64_t narrowGasLimit(uint64_t v)
+/// `fieldName` (coordinator review M-2): mirrors `narrowU256ToU64`'s own `fieldName` parameter
+/// above — without it, all three call sites (deposit/eip1559/setcode) produced the exact same
+/// message ("gas limit exceeds int64_t range"), which is also what I-1's fix-vs-no-fix message
+/// assertion in OpSchedulerImplTest.cpp needs to distinguish per call site.
+inline int64_t narrowGasLimit(uint64_t v, const char* fieldName)
 {
     if (v > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-        throw OpConsensusError("OpSchedulerImpl: raw tx decode: gas limit exceeds int64_t range");
+        throw OpConsensusError(
+            std::string("OpSchedulerImpl: raw tx decode: gas limit exceeds int64_t range: ") +
+            fieldName);
     return static_cast<int64_t>(v);
 }
 
@@ -454,7 +460,8 @@ inline bcos::evm::opstack::OpBlockTx decodeDepositTx(bcos::bytes rawEntry)
     // reasons this decoder cannot recover from the wire bytes alone.
     dep.mint = decodeU256Scalar(listBody);
     dep.value = decodeU256Scalar(listBody);
-    dep.gas_limit = narrowGasLimit(decodeU64Scalar(listBody));  // C4 (coordinator review).
+    dep.gas_limit =
+        narrowGasLimit(decodeU64Scalar(listBody), "deposit.gas");  // C4 (coordinator review).
     dep.is_system_tx = decodeBoolField(listBody);
     dep.data = decodeBytesField(listBody);
     expectExhausted(listBody, "deposit envelope fields");
@@ -487,7 +494,8 @@ inline bcos::evm::opstack::OpBlockTx decodeEip1559Tx(bcos::bytes rawEntry, uint6
     tx.nonce = decodeU64Scalar(listBody);
     tx.max_priority_gas_price = decodeU256Scalar(listBody);
     tx.max_gas_price = decodeU256Scalar(listBody);
-    tx.gas_limit = narrowGasLimit(decodeU64Scalar(listBody));  // C4 (coordinator review).
+    tx.gas_limit =
+        narrowGasLimit(decodeU64Scalar(listBody), "eip1559.gasLimit");  // C4 (coordinator review).
     tx.to = decodeOptionalAddressField(listBody);
     tx.value = decodeU256Scalar(listBody);
     tx.data = decodeBytesField(listBody);
@@ -535,7 +543,8 @@ inline bcos::evm::opstack::OpBlockTx decodeSetCodeTx(bcos::bytes rawEntry, uint6
     tx.nonce = decodeU64Scalar(listBody);
     tx.max_priority_gas_price = decodeU256Scalar(listBody);
     tx.max_gas_price = decodeU256Scalar(listBody);
-    tx.gas_limit = narrowGasLimit(decodeU64Scalar(listBody));  // C4 (coordinator review).
+    tx.gas_limit =
+        narrowGasLimit(decodeU64Scalar(listBody), "setcode.gasLimit");  // C4 (coordinator review).
     tx.to = decodeOptionalAddressField(listBody);
     tx.value = decodeU256Scalar(listBody);
     tx.data = decodeBytesField(listBody);
