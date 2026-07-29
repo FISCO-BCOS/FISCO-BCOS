@@ -15,6 +15,7 @@
 
 #include "BCOS2Evmone.h"
 #include "StorageStateView.h"
+#include "bcos-evm/eth/state/errors.hpp"
 #include "bcos-evm/eth/state/state.hpp"
 #include "bcos-framework/ledger/LedgerConfig.h"
 #include "bcos-framework/protocol/BlockHeader.h"
@@ -52,6 +53,9 @@ public:
         m_vm(evmc_create_evmone())
     {}
 
+    /// Access the EVM instance (needed for system_call functions).
+    evmc::VM& vm() { return m_vm; }
+
     /// Execute a single Ethereum transaction.
     ///
     /// Flow:
@@ -84,110 +88,82 @@ public:
             // Build state view adapter
             StorageStateView<Storage> stateView(storage);
 
-            // Compute intrinsic gas and TransactionProperties manually.
-            // We skip evmone's validate_transaction() because EEST fixtures
-            // may set code on sender accounts (EIP-3607 SENDER_NOT_EOA).
-            // Reference: bcos-evm state.cpp compute_tx_intrinsic_cost() and validate_transaction()
-            static constexpr int64_t TX_BASE_COST = 21000;
-            static constexpr int64_t TX_CREATE_COST = 32000;
-            static constexpr int64_t DATA_TOKEN_COST = 4;
-            static constexpr int64_t INITCODE_WORD_COST = 2;
-            static constexpr int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;
-            static constexpr int64_t ACCESS_LIST_ADDRESS_COST = 2400;
-            static constexpr int64_t ACCESS_LIST_STORAGE_KEY_COST = 1900;
+            // Validate transaction using evmone's built-in logic.
+            // This ensures the intrinsic gas, min_gas_cost, and all validation
+            // checks match evmone exactly.
+            // We handle SENDER_NOT_EOA specially because EEST fixtures may set
+            // code on sender accounts for testing purposes.
+            evmone::state::TransactionProperties txProps;
+            auto validationResult = evmone::state::validate_transaction(
+                stateView, blockInfo, evmTx, rev,
+                evmTx.gas_limit /*block_gas_left - whole block available*/,
+                evmTx.blob_gas_used() /*blob_gas_left*/);
 
-            auto const& input = evmTx.data;
-            size_t numZero = std::count(input.begin(), input.end(), uint8_t(0));
-            size_t numNonzero = input.size() - numZero;
-            size_t nonzeroMult = (rev >= EVMC_ISTANBUL) ? 4 : 17;
-            int64_t numTokens = static_cast<int64_t>(nonzeroMult * numNonzero + numZero);
-
-            bool isCreate = !evmTx.to.has_value();
-            int64_t createCost = (isCreate && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
-            int64_t dataCost = numTokens * DATA_TOKEN_COST;
-
-            int64_t accessListCost = 0;
-            for (auto const& [_, keys] : evmTx.access_list)
-                accessListCost += ACCESS_LIST_ADDRESS_COST +
-                    static_cast<int64_t>(keys.size()) * ACCESS_LIST_STORAGE_KEY_COST;
-
-            int64_t authListCost = static_cast<int64_t>(evmTx.authorization_list.size()) * 25000;
-
-            int64_t initcodeCost = (isCreate && rev >= EVMC_SHANGHAI) ?
-                INITCODE_WORD_COST * static_cast<int64_t>((input.size() + 31) / 32) : 0;
-
-            int64_t intrinsicCost = TX_BASE_COST + createCost + dataCost + accessListCost +
-                                    authListCost + initcodeCost;
-
-            int64_t minCost = (rev >= EVMC_PRAGUE) ?
-                TX_BASE_COST + numTokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
-
-            evmone::state::TransactionProperties txProps{};
-            txProps.execution_gas_limit = evmTx.gas_limit - intrinsicCost;
-            txProps.min_gas_cost = std::max(intrinsicCost, minCost);
-
-            // Pre-checks mirroring validate_transaction() constraints that
-            // transition() asserts on.  We skip EIP-3607 (SENDER_NOT_EOA) for
-            // EEST tests where fixture senders may have code.
+            if (auto* props = std::get_if<evmone::state::TransactionProperties>(&validationResult))
             {
-                auto senderAcc = stateView.get_account(evmTx.sender).value_or(
-                    evmone::state::StateView::Account{});
-                auto const baseFee =
-                    (rev >= EVMC_LONDON) ? intx::uint256{blockInfo.base_fee} : intx::uint256{};
-
-                // 0. Nonce must not be max (EIP-2681, transition asserts)
-                static constexpr auto NONCE_MAX = std::numeric_limits<uint64_t>::max();
-                if (senderAcc.nonce == NONCE_MAX)
-                    BOOST_THROW_EXCEPTION(
-                        NonceAtMaxValue{} << bcos::errinfo_comment("nonce has max value"));
-
-                // 1. max_gas_price >= base_fee (transition asserts)
-                if (evmTx.max_gas_price < baseFee)
-                    BOOST_THROW_EXCEPTION(
-                        GasPriceBelowBaseFee{} << bcos::errinfo_comment("gas price too low"));
-
-                // 2. max_gas_price >= max_priority_gas_price (transition asserts)
-                if (evmTx.max_gas_price < evmTx.max_priority_gas_price)
-                    BOOST_THROW_EXCEPTION(PriorityGasPriceExceedsMax{}
-                                         << bcos::errinfo_comment(
-                                             "priority gas price exceeds max gas price"));
-
-                // 3. Intrinsic gas must be affordable
-                auto const minGas = std::max(intrinsicCost, minCost);
-                if (evmTx.gas_limit < minGas)
-                    BOOST_THROW_EXCEPTION(
-                        IntrinsicGasTooLow{} << bcos::errinfo_comment("intrinsic gas too low"));
-
-                // 3. Balance must cover max possible cost
-                auto maxTotalFee =
-                    intx::umul(intx::uint256{evmTx.gas_limit}, evmTx.max_gas_price);
-                maxTotalFee += evmTx.value;
-
-                // Blob tx specifics
-                if (evmTx.type == evmone::state::Transaction::Type::blob)
+                // Validation succeeded - use evmone's computed properties
+                txProps = *props;
+            }
+            else
+            {
+                auto& error = std::get<std::error_code>(validationResult);
+                // EIP-3607 SENDER_NOT_EOA: EEST fixtures may set code on senders.
+                // Fall back to manual intrinsic gas computation for this case.
+                if (error == make_error_code(evmone::state::SENDER_NOT_EOA))
                 {
-                    if (!evmTx.to.has_value())
-                        BOOST_THROW_EXCEPTION(
-                            BlobTxMissingTo{} << bcos::errinfo_comment("create blob tx"));
-                    if (evmTx.blob_hashes.empty())
-                        BOOST_THROW_EXCEPTION(
-                            EmptyBlobVersionedHashes{}
-                            << bcos::errinfo_comment("empty blob hashes"));
+                    static constexpr int64_t TX_BASE_COST = 21000;
+                    static constexpr int64_t TX_CREATE_COST = 32000;
+                    static constexpr int64_t DATA_TOKEN_COST = 4;
+                    static constexpr int64_t INITCODE_WORD_COST = 2;
+                    static constexpr int64_t TOTAL_COST_FLOOR_PER_TOKEN = 10;
+                    static constexpr int64_t ACCESS_LIST_ADDRESS_COST = 2400;
+                    static constexpr int64_t ACCESS_LIST_STORAGE_KEY_COST = 1900;
 
-                    auto bbf = blockInfo.blob_base_fee.value_or(intx::uint256{});
-                    // transition asserts max_blob_gas_price >= blob_base_fee
-                    if (evmTx.max_blob_gas_price < bbf)
-                        BOOST_THROW_EXCEPTION(BlobFeeCapBelowBaseFee{}
-                                             << bcos::errinfo_comment(
-                                                 "blob fee cap less than block blob base fee"));
+                    auto const& input = evmTx.data;
+                    size_t numZero = std::count(input.begin(), input.end(), uint8_t(0));
+                    size_t numNonzero = input.size() - numZero;
+                    size_t nonzeroMult = (rev >= EVMC_ISTANBUL) ? 4 : 17;
+                    int64_t numTokens = static_cast<int64_t>(nonzeroMult * numNonzero + numZero);
 
-                    auto blobCost =
-                        intx::umul(intx::uint256(evmTx.blob_gas_used()), evmTx.max_blob_gas_price);
-                    maxTotalFee += blobCost;
+                    bool isCreate = !evmTx.to.has_value();
+                    int64_t createCost = (isCreate && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
+                    int64_t dataCost = numTokens * DATA_TOKEN_COST;
+
+                    int64_t accessListCost = 0;
+                    for (auto const& [_, keys] : evmTx.access_list)
+                        accessListCost += ACCESS_LIST_ADDRESS_COST +
+                            static_cast<int64_t>(keys.size()) * ACCESS_LIST_STORAGE_KEY_COST;
+
+                    int64_t authListCost =
+                        static_cast<int64_t>(evmTx.authorization_list.size()) * 25000;
+
+                    int64_t initcodeCost = (isCreate && rev >= EVMC_SHANGHAI) ?
+                        INITCODE_WORD_COST *
+                            static_cast<int64_t>((input.size() + 31) / 32) :
+                        0;
+
+                    int64_t intrinsicCost =
+                        TX_BASE_COST + createCost + dataCost + accessListCost +
+                        authListCost + initcodeCost;
+
+                    int64_t minCost = (rev >= EVMC_PRAGUE) ?
+                        TX_BASE_COST + numTokens * TOTAL_COST_FLOOR_PER_TOKEN :
+                        0;
+
+                    txProps.execution_gas_limit = evmTx.gas_limit - intrinsicCost;
+                    txProps.min_gas_cost = minCost;
+
+                    // Pre-check: intrinsic gas must be affordable
+                    if (evmTx.gas_limit < std::max(intrinsicCost, minCost))
+                        BOOST_THROW_EXCEPTION(
+                            IntrinsicGasTooLow{} << bcos::errinfo_comment("intrinsic gas too low"));
                 }
-                if (senderAcc.balance < maxTotalFee)
-                    BOOST_THROW_EXCEPTION(
-                        InsufficientBalance{} << bcos::errinfo_comment("insufficient funds"));
+                else
+                {
+                    // Transaction is genuinely invalid - throw an exception
+                    BOOST_THROW_EXCEPTION(std::runtime_error(
+                        "Transaction validation failed: " + error.message()));
+                }
             }
 
             // Execute

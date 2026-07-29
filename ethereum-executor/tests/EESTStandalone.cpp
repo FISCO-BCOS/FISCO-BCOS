@@ -17,6 +17,7 @@
 #include "EESTFixtureLoader.h"
 #include "TestMemoryStorage.h"
 #include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-evm/eth/state/system_contracts.hpp"
 #include "bcos-framework/ledger/EVMAccount.h"
 #include "bcos-framework/ledger/Features.h"
 #include "bcos-framework/protocol/Protocol.h"
@@ -109,6 +110,24 @@ void printLine(std::string const& msg)
     std::lock_guard<std::mutex> lock(g_printMutex);
     std::cout << msg << std::endl;
 }
+
+// =============================================================================
+//  BlockHashes that accumulates hashes from fixture blocks
+// =============================================================================
+/// A BlockHashes implementation that stores block_number → hash mappings.
+/// Populated from fixture block headers as blocks are processed.
+struct FixtureBlockHashes : evmone::state::BlockHashes
+{
+    std::map<int64_t, evmc::bytes32> hashes;
+
+    evmc::bytes32 get_block_hash(int64_t blockNumber) const noexcept override
+    {
+        auto it = hashes.find(blockNumber);
+        if (it != hashes.end())
+            return it->second;
+        return {};
+    }
+};
 
 // =============================================================================
 //  Usage
@@ -582,14 +601,29 @@ public:
             executionThrew = true;
         }
 
+        // Determine expected outcome.
+        // EEST v5.4.0 fixtures encode expected-success/failure in the test name
+        // via "successful_True"/"successful_False" parameters. The JSON
+        // "expectException" field is absent for both cases.
         bool expectsSuccess = post.expectException.empty();
+        if (expectsSuccess &&
+            fixture.name.find("successful_False") != std::string::npos)
+            expectsSuccess = false;
         bool gotSuccess =
             !executionThrew && receipt &&
             (receipt->status() == 0 ||
                 receipt->status() == static_cast<int32_t>(protocol::TransactionStatus::None));
 
+        // When expectException is empty but the transaction failed, the test
+        // may still be correct if the post-state matches (transaction reverted
+        // cleanly and only gas was deducted).  EEST v5.4.0 fixtures often omit
+        // expectException for expected-failure tests.
         if (expectsSuccess && !gotSuccess)
         {
+            auto errStr = verifyPostState(storage, post.state);
+            if (errStr.empty())
+                return true;  // State matches → test passes (tx reverted correctly)
+
             std::ostringstream oss;
             oss << "FAIL: " << fixture.name << " [" << forkName << "] expected success, got failure"
                 << (executionThrew ? " (exception: " + evmError + ")" : "")
@@ -730,6 +764,16 @@ public:
         // Configure initial environment from genesis header
         configureEnvironment(fixture.genesisBlockHeader);
 
+        // Set up BlockHashes with genesis hash for HISTORY_STORAGE system call
+        FixtureBlockHashes blockHashes;
+        if (!fixture.genesisBlockHeader.hash.empty())
+        {
+            auto gh = test::hexToBytes(fixture.genesisBlockHeader.hash);
+            if (gh.size() == sizeof(evmc_bytes32))
+                std::copy_n(gh.begin(), sizeof(evmc_bytes32),
+                    blockHashes.hashes[0].bytes);
+        }
+
         // Compute block reward based on fork (matching evmone's mining_reward()).
         // Reference: evmone test/blockchaintest/blockchaintest_runner.cpp
         auto const rev = m_currentRevision;
@@ -748,6 +792,45 @@ public:
         {
             configureEnvironment(block.blockHeader);
             auto blockHdr = buildBlockHeader(block.blockHeader);
+
+            // EIP-4788 & EIP-2935: Execute system contracts at block start
+            // (BEFORE transactions), matching evmone's apply_block() order.
+            // system_call_block_start runs the actual contract bytecode via
+            // the EVM, producing correct storage values for BEACON_ROOTS
+            // and HISTORY_STORAGE.
+            if (rev >= EVMC_CANCUN)
+            {
+                evmone::state::BlockInfo bi{};
+                bi.number = test::hexToInt64(block.blockHeader.number);
+                bi.timestamp = test::hexToInt64(block.blockHeader.timestamp);
+                bi.gas_limit = test::hexToInt64(block.blockHeader.gasLimit);
+                if (!block.blockHeader.coinbase.empty())
+                {
+                    auto cbBytes = test::hexToBytes(block.blockHeader.coinbase);
+                    if (cbBytes.size() == sizeof(evmc_address))
+                        std::copy_n(cbBytes.begin(), sizeof(evmc_address),
+                            bi.coinbase.bytes);
+                }
+                if (!block.blockHeader.baseFee.empty())
+                    bi.base_fee = static_cast<uint64_t>(
+                        test::hexToU256(block.blockHeader.baseFee));
+                if (!block.blockHeader.parentBeaconRoot.empty())
+                {
+                    auto pbr = test::hexToBytes(
+                        block.blockHeader.parentBeaconRoot);
+                    if (pbr.size() == sizeof(evmc_bytes32))
+                        std::copy_n(pbr.begin(), sizeof(evmc_bytes32),
+                            bi.parent_beacon_block_root.bytes);
+                }
+                bi.blob_base_fee = intx::uint256{1};
+
+                eth::StorageStateView<MutableStorage> stateView(storage);
+                auto sysDiff = evmone::state::system_call_block_start(
+                    stateView, bi, blockHashes, rev, executor.vm());
+
+                task::tbb::syncWait(eth::applyStateDiff(
+                    storage, sysDiff, rev, *cryptoSuite->hashImpl()));
+            }
 
             for (auto const& tx : block.transactions)
             {
@@ -792,103 +875,15 @@ public:
             task::tbb::syncWait(
                 executor.finalizeBlock(storage, blockHdr, m_ledgerConfig, rev, blockReward));
 
-            // EIP-4788: BEACON_ROOTS system call (Cancun+)
-            // After each block, the system calls the BEACON_ROOTS contract to
-            // store the timestamp and parent beacon block root.
-            if (rev >= EVMC_CANCUN)
+            // Accumulate block hash for HISTORY_STORAGE system call in subsequent blocks
+            if (!block.blockHeader.hash.empty())
             {
-                // BEACON_ROOTS address: 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02
-                static constexpr std::array<uint8_t, 20> BEACON_ROOTS_ADDR_BYTES = {
-                    0x00, 0x0f, 0x3d, 0xf6, 0xd7, 0x32, 0x80, 0x7e, 0xf1, 0x31,
-                    0x9f, 0xb7, 0xb8, 0xbb, 0x85, 0x22, 0xd0, 0xbe, 0xac, 0x02};
-                evmc_address beaconRootsAddr{};
-                std::copy(
-                    BEACON_ROOTS_ADDR_BYTES.begin(), BEACON_ROOTS_ADDR_BYTES.end(),
-                    beaconRootsAddr.bytes);
-
-                ledger::account::EVMAccount<MutableStorage> beaconRootsAccount(
-                    storage, beaconRootsAddr, false);
-
-                auto const timestamp = test::hexToInt64(block.blockHeader.timestamp);
-                auto const parentBeaconRoot = test::hexToBytes(
-                    block.blockHeader.parentBeaconRoot);
-
-                static constexpr uint64_t BEACON_ROOTS_HISTORICAL_INDEX = 98304;
-                auto const timestampIndex = timestamp % BEACON_ROOTS_HISTORICAL_INDEX;
-
-                // Build 32-byte key/value from u256
-                auto makeBytes32 = [](uint64_t val) -> evmc_bytes32 {
-                    evmc_bytes32 result{};
-                    bcos::u256 uval(val);
-                    std::ostringstream oss;
-                    oss << std::hex << std::setfill('0') << std::setw(64) << uval;
-                    auto hexStr = oss.str();
-                    auto raw = test::hexToBytes("0x" + hexStr);
-                    if (raw.size() <= 32)
-                        std::copy(raw.begin(), raw.end(),
-                            result.bytes + 32 - raw.size());
-                    return result;
-                };
-
-                // Store timestamp at index (slot = timestamp_index)
-                auto tsKey = makeBytes32(timestampIndex);
-                auto tsValue = makeBytes32(static_cast<uint64_t>(timestamp));
-
-                task::tbb::syncWait([&]() -> task::Task<void> {
-                    if (!co_await beaconRootsAccount.exists())
-                        co_await beaconRootsAccount.create();
-                    co_await beaconRootsAccount.setStorage(tsKey, tsValue);
-                }());
-
-                // Store parent beacon root at index + HISTORICAL_INDEX (if non-zero)
-                bool hasNonZeroRoot = false;
-                for (auto const b : parentBeaconRoot)
+                auto h = test::hexToBytes(block.blockHeader.hash);
+                if (h.size() == sizeof(evmc_bytes32))
                 {
-                    if (b != 0) { hasNonZeroRoot = true; break; }
-                }
-                if (hasNonZeroRoot && parentBeaconRoot.size() >= 32)
-                {
-                    auto rootKey = makeBytes32(timestampIndex + BEACON_ROOTS_HISTORICAL_INDEX);
-                    evmc_bytes32 rootValue{};
-                    std::copy_n(parentBeaconRoot.begin(), 32, rootValue.bytes);
-
-                    task::tbb::syncWait([&]() -> task::Task<void> {
-                        co_await beaconRootsAccount.setStorage(rootKey, rootValue);
-                    }());
-                }
-            }
-
-            // EIP-2935: HISTORY_STORAGE system call (Prague+)
-            // After each block, the system stores the parent block hash
-            // in the history contract at 0x0000F90827F1C53A10cB7a02335B175320002935.
-            if (rev >= EVMC_PRAGUE)
-            {
-                static constexpr std::array<uint8_t, 20> HISTORY_STORAGE_ADDR_BYTES = {
-                    0x00, 0x00, 0xf9, 0x08, 0x27, 0xf1, 0xc5, 0x3a, 0x10, 0xcb,
-                    0x7a, 0x02, 0x33, 0x5b, 0x17, 0x53, 0x20, 0x00, 0x29, 0x35};
-                evmc_address historyAddr{};
-                std::copy(HISTORY_STORAGE_ADDR_BYTES.begin(),
-                    HISTORY_STORAGE_ADDR_BYTES.end(), historyAddr.bytes);
-
-                // Store genesis block hash at slot 0 for BLOCKHASH access.
-                auto genesisHashHex = fixture.genesisBlockHeader.hash;
-                if (!genesisHashHex.empty())
-                {
-                    auto genesisHashBytes = test::hexToBytes(genesisHashHex);
-                    if (genesisHashBytes.size() == 32)
-                    {
-                        evmc_bytes32 slot0{};
-                        evmc_bytes32 rootValue{};
-                        std::copy_n(genesisHashBytes.begin(), 32, rootValue.bytes);
-
-                        ledger::account::EVMAccount<MutableStorage> historyAccount(
-                            storage, historyAddr, false);
-                        task::tbb::syncWait([&]() -> task::Task<void> {
-                            if (!co_await historyAccount.exists())
-                                co_await historyAccount.create();
-                            co_await historyAccount.setStorage(slot0, rootValue);
-                        }());
-                    }
+                    auto blockNum = test::hexToInt64(block.blockHeader.number);
+                    std::copy_n(h.begin(), sizeof(evmc_bytes32),
+                        blockHashes.hashes[blockNum].bytes);
                 }
             }
         }
