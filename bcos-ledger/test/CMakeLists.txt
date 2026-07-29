@@ -24,6 +24,8 @@ set(TEST_BINARY_NAME test-bcos-ledger)
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/bcos-framework)
+# header-only bcos-storage/KeyPrefixes.h ("/mpt/" node-row keys), same as the ledger target
+target_include_directories(${TEST_BINARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/bcos-storage)
 
 find_package(Boost REQUIRED unit_test_framework)
 

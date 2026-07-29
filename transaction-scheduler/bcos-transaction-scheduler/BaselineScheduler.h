@@ -342,8 +342,9 @@ private:
      * before MPT. Scenario B (L2 from genesis) is the full-state case: every account enters
      * the trie when it is created.
      *
-     * Scenario-B limitation unchanged: a non-empty-alloc L2 genesis persists its header but
-     * no trie NODES, so only empty-alloc genesis chains block 1 today.
+     * Scenario-B genesis nodes: Ledger::buildGenesisBlock persists every genesis trie node
+     * (account trie + storage sub-tries, computeGenesisStateTrie) as "/mpt/" state rows on
+     * first init of an L2 chain, so block 1's incremental build reads its parents here.
      */
     task::Task<ledger::mpt::MPTDeltaLayer> buildMPTStateRoot(
         typename MultiLayerStorage::ViewType& view, protocol::BlockHeader const& blockHeader,
