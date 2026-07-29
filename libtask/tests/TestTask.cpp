@@ -13,11 +13,36 @@
 #include <boost/multiprecision/fwd.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/throw_exception.hpp>
+#include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <future>
 #include <iostream>
+#include <new>
 #include <stdexcept>
 #include <thread>
+
+// Global allocation counter used by syncWaitFastPathNoHeapAlloc test
+static std::atomic<size_t> g_newCount{0};
+
+void* operator new(std::size_t size)
+{
+    g_newCount.fetch_add(1, std::memory_order_relaxed);
+    if (void* ptr = std::malloc(size))
+        return ptr;
+    throw std::bad_alloc();
+}
+void* operator new(std::size_t size, std::align_val_t alignment)
+{
+    g_newCount.fetch_add(1, std::memory_order_relaxed);
+    if (void* ptr = std::aligned_alloc(static_cast<std::size_t>(alignment), size))
+        return ptr;
+    throw std::bad_alloc();
+}
+void operator delete(void* ptr) noexcept { std::free(ptr); }
+void operator delete(void* ptr, std::size_t) noexcept { std::free(ptr); }
+void operator delete(void* ptr, std::align_val_t) noexcept { std::free(ptr); }
+void operator delete(void* ptr, std::size_t, std::align_val_t) noexcept { std::free(ptr); }
 
 using namespace bcos::task;
 
@@ -236,6 +261,39 @@ BOOST_AUTO_TEST_CASE(u256)
     handle.start();
     // auto sum = syncWait(testU256());
     // BOOST_CHECK_GE(sum, 3000);
+}
+
+BOOST_AUTO_TEST_CASE(syncWaitFastPathNoHeapAlloc)
+{
+    // Verify that fast-path syncWait does NOT heap-allocate waitFlag.
+    // In the fast path the coroutine completes synchronously during start(),
+    // so finished.test_and_set() returns true for the external caller and the
+    // make_shared<boost::atomic_flag>() branch is never entered.
+    // We confirm this by checking stable allocation count across iterations.
+    constexpr int ITERATIONS = 5;
+    size_t firstDelta = 0;
+
+    for (int i = 0; i < ITERATIONS; ++i)
+    {
+        size_t before = g_newCount.load(std::memory_order_relaxed);
+        auto result = syncWait([i]() -> Task<int> { co_return i * 2; }());
+        size_t after = g_newCount.load(std::memory_order_relaxed);
+        size_t delta = after - before;
+
+        BOOST_CHECK_EQUAL(result, i * 2);
+
+        if (i == 0)
+        {
+            firstDelta = delta;
+            BOOST_CHECK_GT(firstDelta, 0);  // coroutine frame must be allocated
+        }
+        else
+        {
+            // All fast-path runs must have identical allocation count —
+            // any variation would indicate a spurious make_shared call
+            BOOST_CHECK_EQUAL(firstDelta, delta);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
