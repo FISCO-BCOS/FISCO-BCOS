@@ -125,6 +125,13 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     assert(effective_gas_price <= tx.max_gas_price);
     const auto tx_max_cost = tx.gas_limit * effective_gas_price;
 
+    // The three subtractions below are unchecked, and what makes them safe lives in another
+    // function: opValidate's 512-bit cap (:230-235) has already verified
+    //   balance >= gasLimit*maxGasPrice + value + l1Cost + opCost(gasLimit).
+    // That is a runtime comparison, not an assert, so it still holds under NDEBUG. What is
+    // deducted here is gasLimit*effective + l1 + opCost(gasLimit) with effective <= maxGasPrice,
+    // so the amount taken never exceeds the bound that was checked. Changing either side means
+    // changing both.
     sender_acc.balance -= tx_max_cost;
 
     sender_acc.balance -= props.l1_cost;
