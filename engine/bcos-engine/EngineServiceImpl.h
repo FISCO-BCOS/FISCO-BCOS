@@ -637,6 +637,12 @@ private:
     /// the seam's full rationale, and `c_opMode` above for the purity constraint).
     ///
     /// The six numbered steps below are design §6.1's six steps, in order.
+    ///
+    /// This function is the version gate plus a **classification barrier**: it guarantees that
+    /// every way out of the OP branch is one of the classified outcomes (a `PayloadStatus`,
+    /// `UnsupportedFork`, or `OpExecutionInternalError`) and that nothing escapes unclassified.
+    /// The steps themselves live in `runOpNewPayloadSteps` so that a single try/catch pair can
+    /// cover all of them without wrapping the version gate too -- see the barrier below.
     bcos::task::Task<PayloadStatus> handleOpNewPayload(
         const NewPayloadRequest& request, std::uint32_t version)
     {
@@ -649,6 +655,9 @@ private:
         // `configAt` itself: that function resolves sub-`isthmusTime` timestamps to the Isthmus
         // config too (OpForkSchedule.h's own note; task-4 review item M4), so it cannot answer
         // "is this payload pre-Isthmus?" -- the exact question this gate asks.
+        //
+        // Deliberately OUTSIDE the barrier below: `UnsupportedFork` (-38005) is itself a
+        // classified outcome and must reach the caller unchanged, not be re-labelled.
         const bool isthmusActive = m_scheduler.get().isIsthmusActiveAt(payload.timestamp);
         constexpr std::uint32_t c_opIsthmusPayloadVersion = 4;
         if (isthmusActive != (version == c_opIsthmusPayloadVersion))
@@ -660,6 +669,57 @@ private:
                         "engine_newPayloadV4 requires an Isthmus+ payload timestamp (JSON-RPC "
                         "-38005)"});
         }
+
+        // ---- Classification barrier (final review batch-2 second pass, I-1) ----
+        //
+        // The `catch (...)` added around `executeOpBlock` in the first pass closed only ONE
+        // window. Everything else in the OP branch still ran outside any handler: step 2's
+        // `computeTxRoot` / `rebuildOpEthHeader` / `hash()`, step 5's `commitmentsOf` and the
+        // comparisons, and the whole of step 6's `registerOpBlock` -- whose `lexical_cast`,
+        // `Entry::set`, `ethHeader.encode()`, `receipt->encode()`, `hashImpl.hash()` and four
+        // `storage2::writeOne` calls can each raise something that is neither
+        // `OpExecutionInternalError` nor an execution-classified error (`bad_alloc`, a tars
+        // encoding error, ...). Such an escape left `handleOpNewPayload` entirely and surfaced at
+        // the caller's `co_await` as neither INVALID nor -32603 -- the outcome design §4.3 rules
+        // out. (The two `BOOST_THROW_EXCEPTION(OpExecutionInternalError)` calls inside
+        // `registerOpBlock` were never the problem: they arrive already classified, and the
+        // rethrow handler below preserves them verbatim.)
+        //
+        // The barrier is a wrapper rather than an outer try around the existing body so that the
+        // version gate above stays outside it, and so the already-classified paths keep their own
+        // (more specific) messages: `catch (const OpExecutionInternalError&) { throw; }` passes
+        // through the non-tip refusal, the receipt-count invariant, and the execution-phase
+        // fallback untouched, while `catch (...)` labels everything else.
+        try
+        {
+            co_return co_await runOpNewPayloadSteps(request);
+        }
+        catch (const OpExecutionInternalError&)
+        {
+            // Already classified (and carrying a more specific marker) -- pass through unchanged.
+            throw;
+        }
+        catch (...)
+        {
+            // -32603 rather than INVALID, for the same reason as the execution-phase fallback: an
+            // unknown local failure must not make this node vote against a block. The marker
+            // distinguishes this barrier from that fallback, so a test can tell which window an
+            // escape came through (batch-1 lesson: a bare `catch (...)` otherwise collapses every
+            // refusal into one indistinguishable type).
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP newPayload threw an unclassified exception outside block execution "
+                    "(validation, comparison or registration phase)"});
+        }
+    }
+
+    /// Design §6.1 steps 2-6. Never called outside `handleOpNewPayload`'s classification barrier;
+    /// the signature carries no OP-dependent name, so the declaration instantiates harmlessly for
+    /// the generic composition root while the body (which is full of them) only instantiates in
+    /// OP mode.
+    bcos::task::Task<PayloadStatus> runOpNewPayloadSteps(const NewPayloadRequest& request)
+    {
+        auto const& payload = request.executionPayload;
 
         // ---- Step 2: static validation + blockHash ----
         // All rejections here carry latestValidHash = null: they happen before parentKnown, so no
@@ -764,10 +824,26 @@ private:
         // run against the wrong base state and produce a result that cannot match the payload,
         // reported as INVALID: a wrong verdict dressed up as a consensus judgement.
         //
-        // Detecting it needs no new bookkeeping: the parent is the tip iff nothing is registered
-        // at the child's height yet. (A block already occupying that height that IS this payload
-        // was short-circuited immediately above, so reaching here with an occupied height means a
-        // genuine sibling/side-chain delivery.)
+        // Detecting it needs no new bookkeeping -- but the criterion is one-directional, and the
+        // comment here previously claimed an "iff" it does not have (final review batch-2 second
+        // pass, I-2):
+        //   (<=) an occupied child height ALWAYS implies the parent is not the tip. This is
+        //        unconditional, and it is the direction this check relies on to refuse;
+        //   (=>) an empty child height implies the parent IS the tip only under an invariant that
+        //        is nowhere else stated: **every hash in `SYS_HASH_2_NUMBER` occupies its own
+        //        height in `SYS_NUMBER_2_HASH`** (the two tables agree). `registerOpBlock` below
+        //        writes both, always together, as does the production precedent
+        //        `BaselineScheduler.h:207-220` -- so on a real ledger the invariant holds and the
+        //        criterion is exact. A store where the two disagree (notably a TEST FIXTURE that
+        //        seeds only `SYS_HASH_2_NUMBER`, an explicitly documented exemption) can present
+        //        an empty child height for a parent that is not the tip, and this check will let
+        //        it through. The parent/child number continuity check above does not close that
+        //        gap: a parent seeded at height 5 with a payload at height 6 satisfies it.
+        // The invariant is recorded in spec §6.4 alongside the arbitrary-parent base-state debt.
+        //
+        // (A block already occupying the child height that IS this payload was short-circuited
+        // immediately above, so reaching here with an occupied height means a genuine
+        // sibling/side-chain delivery.)
         //
         // Answering `OpExecutionInternalError` (-32603) rather than INVALID is the honest
         // reply: this node cannot evaluate the block, which is a capability limit, not a verdict.
@@ -844,8 +920,10 @@ private:
             // repo has a known typed-catch RTTI bypass (evmone is built `-fno-rtti`, so
             // `std::exception`'s typeinfo is not unique across the boundary). `OpSchedulerImpl`
             // and `Storage2Ledger` already pair every typed handler with a `catch (...)` for
-            // that reason; the engine boundary was the last layer without one, and it is the
-            // layer that decides consensus verdicts.
+            // that reason, and this is the engine layer's counterpart for the execution call.
+            // It does NOT by itself make the layer complete -- the first pass claimed that and
+            // was wrong (final review I-1): it guards this one call, and the rest of the OP
+            // branch is covered by `handleOpNewPayload`'s classification barrier.
             //
             // -32603 rather than INVALID is the safe default: an unknown local failure must not
             // make this node vote against a block. The message deliberately carries a

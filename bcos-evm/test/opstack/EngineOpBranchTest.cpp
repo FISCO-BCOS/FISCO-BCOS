@@ -460,6 +460,11 @@ struct StubOpScheduler
     {
         std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
         StubCommitments commitments;
+        /// Makes the STATIC `commitmentsOf` throw an unclassified exception, i.e. injects an
+        /// escape into step 5 — outside `executeOpBlock`'s own try, which is the point. The flag
+        /// lives in the result rather than in the scheduler because `commitmentsOf` is called
+        /// statically and cannot read instance state.
+        bool throwFromCommitmentsOf = false;
     };
 
     struct ConsensusError : std::runtime_error
@@ -487,11 +492,24 @@ struct StubOpScheduler
 
     static StubCommitments commitmentsOf(const ExecuteResult& executeResult)
     {
+        if (executeResult.throwFromCommitmentsOf)
+        {
+            throw std::runtime_error("commitmentsOf blew up (comparison phase)");
+        }
         return executeResult.commitments;
     }
 
+    /// `s_throwFromComputeTxRoot` injects an escape into step 2 (the earliest unguarded window,
+    /// before parentKnown). Static because `computeTxRoot` is; `ComputeTxRootThrowGuard` below
+    /// keeps it from leaking between tests.
+    static inline bool s_throwFromComputeTxRoot = false;
+
     static bcos::h256 computeTxRoot(::ranges::input_range auto const& rawTxBytes)
     {
+        if (s_throwFromComputeTxRoot)
+        {
+            throw std::runtime_error("computeTxRoot blew up (static validation phase)");
+        }
         return bcos::evm::engine::computeOpTxRoot(rawTxBytes);
     }
 
@@ -550,6 +568,28 @@ bcos::protocol::TransactionReceipt::Ptr makeReceipt(
     return receiptFactory->createReceipt(bcos::u256(gasUsed), std::string{},
         bcos::protocol::LogEntries{}, /*status=*/0, bcos::bytesConstRef{}, /*blockNumber=*/0);
 }
+
+/// RAII switch for the static step-2 injection above.
+struct ComputeTxRootThrowGuard
+{
+    ComputeTxRootThrowGuard() { StubOpScheduler::s_throwFromComputeTxRoot = true; }
+    ~ComputeTxRootThrowGuard() { StubOpScheduler::s_throwFromComputeTxRoot = false; }
+    ComputeTxRootThrowGuard(const ComputeTxRootThrowGuard&) = delete;
+    ComputeTxRootThrowGuard& operator=(const ComputeTxRootThrowGuard&) = delete;
+};
+
+/// A receipt whose `encode()` throws — the injection point for step 6, inside `registerOpBlock`.
+/// It stands in for the real hazards there (`bad_alloc` from `Entry::set`/`writeOne`, a tars
+/// encoding error, ...), none of which are reachable on demand; `encode()` is the one call in
+/// that function whose implementation the test owns. Deriving from the tars implementation keeps
+/// the other 25 `TransactionReceipt` members real.
+struct ThrowingEncodeReceipt : public bcostars::protocol::TransactionReceiptImpl
+{
+    void encode(bcos::bytes& /*encodedData*/) const override
+    {
+        throw std::runtime_error("receipt encode blew up (registration phase)");
+    }
+};
 
 /// The commitments a correct execution of `request` would produce: every one of the six
 /// comparison-surface fields equal to what the payload claims, plus the §5.1 `requestsHash`
@@ -988,10 +1028,18 @@ TEST(EngineOpBranch, UnclassifiedExecutionEscapeIsInternalErrorNotEscaping)
     EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
         bcos::engine::OpExecutionInternalError);
 
-    // Type alone is no longer discriminating (three different refusals share it) — the marker is.
+    // Type alone is not discriminating (five different refusals share it) — and neither is the
+    // bare phrase "unclassified exception", which `handleOpNewPayload`'s outer classification
+    // barrier also uses. Assert the EXECUTION-phase marker specifically, and assert the barrier's
+    // marker is absent: without both halves this test would stay green if the handler below were
+    // deleted and the escape merely fell through to the barrier instead (a false green the
+    // batch-1 review warned about, and one this file actually hit before being tightened).
     const auto diagnostic = thrownDiagnostic(
         [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
-    EXPECT_NE(diagnostic.find("unclassified exception"), std::string::npos) << diagnostic;
+    EXPECT_NE(
+        diagnostic.find("OP block execution threw an unclassified exception"), std::string::npos)
+        << diagnostic;
+    EXPECT_EQ(diagnostic.find("outside block execution"), std::string::npos) << diagnostic;
     // Not INVALID, and nothing registered: an unknown local failure must not become a vote
     // against the block, nor leave a half-written block behind.
     EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
@@ -1108,4 +1156,77 @@ TEST(EngineOpBranch, ExtraDataAboveThirtyTwoBytesIsInvalid)
         matchingCommitments(boundary.request, rebuiltHeader(boundary.request));
     EXPECT_EQ(bcos::task::syncWait(atBound.service.newPayload(boundary.request, 4)).status,
         bcos::engine::PayloadValidationStatus::Valid);
+}
+
+// ══════ final review batch 2, second pass: the classification barrier (I-1) ══════
+//
+// The first pass' `catch (...)` guarded only the `executeOpBlock` call. Everything else in the OP
+// branch still ran outside any handler, so an escape from static validation, from the comparison
+// surface, or from block registration left `handleOpNewPayload` entirely and reached the caller as
+// NEITHER INVALID NOR -32603 — the outcome design §4.3 rules out. The three tests below inject one
+// unclassified escape into each of those windows.
+//
+// Each asserts the barrier's own marker ("outside block execution") rather than only the exception
+// type: `OpExecutionInternalError` now covers five distinct refusals, so the type alone identifies
+// nothing (batch-1 lesson). The execution-phase fallback keeps its own marker and is asserted
+// separately by `UnclassifiedExecutionEscapeIsInternalErrorNotEscaping` above — that pairing is
+// what proves the two windows stay distinguishable.
+
+// (r) I-1, window 1: step 2 (`computeTxRoot` / `rebuildOpEthHeader` / `hash()`), before
+// parentKnown.
+TEST(EngineOpBranch, StaticValidationPhaseEscapeIsInternalError)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+
+    ComputeTxRootThrowGuard guard;
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+    const auto diagnostic = thrownDiagnostic(
+        [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
+    EXPECT_NE(diagnostic.find("outside block execution"), std::string::npos) << diagnostic;
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// (s) I-1, window 2: step 5 (`commitmentsOf` and the comparison surface), after execution.
+TEST(EngineOpBranch, ComparisonPhaseEscapeIsInternalError)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    fixture.scheduler.result.throwFromCommitmentsOf = true;
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+    const auto diagnostic = thrownDiagnostic(
+        [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
+    EXPECT_NE(diagnostic.find("outside block execution"), std::string::npos) << diagnostic;
+    // Execution DID run (this window is downstream of it) — and the block is still not registered.
+    EXPECT_GT(fixture.scheduler.executeOpBlockCalls, 0U);
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// (t) I-1, window 3: step 6 (`registerOpBlock`) — the case the review called out by name, where a
+// `bad_alloc` out of `storage2::writeOne`/`Entry::set`, or a tars encoding error, previously
+// escaped after the block had already been judged VALID.
+TEST(EngineOpBranch, RegistrationPhaseEscapeIsInternalError)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    // Everything compares equal, so the payload reaches step 6 as a VALID block; only the
+    // registration itself fails.
+    fixture.scheduler.result.receipts = {std::make_shared<ThrowingEncodeReceipt>()};
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+    const auto diagnostic = thrownDiagnostic(
+        [&] { bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)); });
+    EXPECT_NE(diagnostic.find("outside block execution"), std::string::npos) << diagnostic;
+    // A block whose registration failed must not be visible as registered: the writes that did
+    // land are discarded with the un-pushed view.
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
 }
