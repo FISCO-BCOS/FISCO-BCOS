@@ -15,8 +15,9 @@ find_package(evmone CONFIG REQUIRED)
 # The evmone port installs test/utils sources verbatim (headers AND .cpp) under
 # include/test/utils; compile the ones we use straight from the package instead of
 # carrying a vendored copy.
-# TODO(eth-utils-removal): C 路线下改为自研——rlp_encode→bcos-codec RLP,
-# test_state→自研内存账本;届时删除本段包源编译与下方 shim。
+# TODO(eth-utils-removal): 改为自研——rlp_encode→bcos-codec RLP,test_state→自研内存账本;
+# 届时删除本段包源编译、portfile 的 vcpkg_replace_string 补丁与下方 shim。
+# （mpt/mpt_hash 曾在此列，现已不随 port 安装，无需替换。）
 get_target_property(_evmone_include_dirs evmone::evmone INTERFACE_INCLUDE_DIRECTORIES)
 list(GET _evmone_include_dirs 0 _evmone_include_dir)
 cmake_path(NORMAL_PATH _evmone_include_dir)
@@ -57,10 +58,24 @@ add_library(bcos-evm-eth STATIC
     bcos-evm/eth/state/requests.cpp
     bcos-evm/eth/state/state.cpp
     bcos-evm/eth/state/system_contracts.cpp
-    # 仅编入实际被引用的两个：rlp_encode 供 OpReceipt.cpp 的回执编码，test_state 供测试目标的
-    # 内存账本。blob_schedule/mpt/mpt_hash/utils 曾在此，但全模块零引用（符号可达性核验 + 去掉
-    # 后两个测试目标仍完整链接通过），徒增编译时间与 -Werror 受面：上游改一个纯测试辅助即可
-    # 弄坏本仓生产库构建。两者的移除计划见上方 TODO(eth-utils-removal)。
+    # 只编入实际被引用的两个。blob_schedule/mpt/mpt_hash/utils 曾在此，但全模块零引用
+    # （符号可达性核验，且去掉后两个测试目标仍完整链接通过）；它们已不再随 port 安装。
+    #
+    # rlp_encode：OpReceipt.cpp 的回执编码用它，属生产依赖。
+    #
+    # DEBT(eth-utils-removal): test_state 是 evmone 的内存**测试**账本。全部 11 个引用点都在
+    # bcos-evm/test/ 下，两个生产库一个都不引用（nm 核验），所以它出现在生产库
+    # bcos-evm-eth 里是不对的——bcosevm::eth 正是节点/执行器将要链接的那个库。
+    #
+    # 它没有被挪到测试 target，是因为那样解决不了根因：state::transition() 的声明是共享的，
+    # 测试 target 编译 test_state.cpp 时同样会撞上上游的 7 参数调用，签名问题原样存在。真正
+    # 的代价已经具体化过一次——为了让 chain id 参数保持「必需」而不是退回带默认值的
+    # optional（那会让不安全语义成为 API 默认），ports/evmone/portfile.cmake 不得不用
+    # vcpkg_replace_string 去改上游那一处调用点。一个上游测试助手就这样决定了共识函数的接口。
+    #
+    # 唯一干净的出口是块级 PR 里的自研内存账本：届时 test_state.{hpp,cpp} 不再需要安装，
+    # 这一行、portfile 的补丁、以及下方的 shim 一并删除。在那之前这是一笔明确记账的债务，
+    # 不是疏漏。
     ${EVMONE_TEST_UTILS_DIR}/rlp_encode.cpp
     ${EVMONE_TEST_UTILS_DIR}/test_state.cpp)
 add_library(bcosevm::eth ALIAS bcos-evm-eth)
