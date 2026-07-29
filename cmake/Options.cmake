@@ -100,7 +100,11 @@ macro(configure_project)
     if (ONLY_CPP_SDK)
         add_compile_definitions(ONLY_CPP_SDK)
         add_definitions(-DONLY_CPP_SDK)
-        #list(APPEND VCPKG_MANIFEST_FEATURES "cppsdk")
+        # LedgerConfig.h (reached from bcos-tars-protocol/Common.h, which the SDK builds)
+        # includes <evmc/evmc.hpp>; without this the SDK-only build fails at LedgerConfig.h:26
+        # with C1083. The feature pulls in the header-only evmc port only — depending on evmone
+        # instead would drag in blst, which has no MSVC build.
+        list(APPEND VCPKG_MANIFEST_FEATURES "cppsdk")
     endif()
     if(WITH_LIGHTNODE)
         list(APPEND VCPKG_MANIFEST_FEATURES "lightnode")

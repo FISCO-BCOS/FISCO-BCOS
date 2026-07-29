@@ -112,6 +112,12 @@
         "hsm-crypto"
       ]
     },
+    "cppsdk": {
+      "description": "C++ SDK only build. bcos-framework's LedgerConfig.h declares evmc_uint256be / evmc_revision and is reached from bcos-tars-protocol/Common.h, which the SDK builds, so the EVMC headers are needed even with FULLNODE=OFF. Depends on the header-only evmc port, NOT evmone: evmone drags in blst, whose port builds via `bash -lc ./build.sh` and has no MSVC path.",
+      "dependencies": [
+        "evmc"
+      ]
+    },
     "etcd": {
       "description": "ETCD dependencies",
       "dependencies": [

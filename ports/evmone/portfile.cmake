@@ -37,9 +37,11 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/lib/cmake/evmone"
 )
 
-# 4. Install evmc headers (evmone's build doesn't install them)
-file(INSTALL "${SOURCE_PATH}/evmc/include/evmc/"
-    DESTINATION "${CURRENT_PACKAGES_DIR}/include/evmc")
+# 4. EVMC headers come from the separate `evmc` port (declared as a dependency), not from here.
+#    Installing them in both would collide on include/evmc/ the moment both are present. The
+#    split exists so a consumer that only needs the EVMC declarations — the C++ SDK build, via
+#    bcos-framework/ledger/LedgerConfig.h — does not have to build evmone and, through it, blst,
+#    which has no MSVC build. Both ports pin the same REF/SHA512, so they cannot drift apart.
 
 # 4a. Install evmone precompiles static library because evmone.a depends on it transitively.
 # Use platform-aware library name: .lib on Windows, .a on Unix.

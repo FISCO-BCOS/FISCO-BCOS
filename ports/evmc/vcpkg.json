@@ -1,0 +1,13 @@
+{
+    "name": "evmc",
+    "version-string": "0.21.0",
+    "port-version": 0,
+    "homepage": "https://github.com/ipsilon/evmone",
+    "description": "EVMC headers, split out of the evmone overlay port (header-only, no library)",
+    "dependencies": [
+        {
+            "name": "vcpkg-cmake",
+            "host": true
+        }
+    ]
+}
