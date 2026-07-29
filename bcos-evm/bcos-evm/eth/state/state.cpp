@@ -467,7 +467,7 @@ StateDiff finalize(const StateView& state_view, evmc_revision rev, const address
 
 TransactionReceipt transition(const StateView& state_view, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props, std::optional<uint64_t> chain_id)
+    const TransactionProperties& tx_props, uint64_t chain_id)
 {
     State state{state_view};
 
@@ -475,12 +475,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     assert(sender_acc.nonce < Account::NonceMax);  // Required for valid tx.
     ++sender_acc.nonce;                            // Bump sender nonce.
 
-    // The NODE's chain id. Falling back to tx.chain_id makes EIP-7702 step 1 compare sender
-    // input against sender input and accept an authorization signed for any other chain; that
-    // fallback exists only for upstream's test/utils helper, which this library still compiles.
-    // See the declaration in state.hpp.
-    const auto delegation_refund = bcos::evm::eth::processAuthorizationList(
-        state, chain_id.value_or(tx.chain_id), tx.authorization_list);
+    // The NODE's chain id, never tx.chain_id: validate_transaction does not check that field,
+    // so passing it would make EIP-7702 step 1 compare sender input against sender input and
+    // accept an authorization signed for any other chain. See the declaration in state.hpp.
+    const auto delegation_refund =
+        bcos::evm::eth::processAuthorizationList(state, chain_id, tx.authorization_list);
 
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Required for valid tx.

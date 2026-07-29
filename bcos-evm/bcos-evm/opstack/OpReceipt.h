@@ -10,6 +10,7 @@
 namespace bcos::evm::opstack
 {
 struct OpFeeParams;
+struct OpTxProperties;
 struct OpForkConfig;
 
 struct OpReceiptMeta
@@ -51,12 +52,11 @@ struct OpDepositReceipt
 /// validate and transition straddle a fork boundary — which is exactly the bug this signature
 /// now makes unrepresentable.
 ///
-/// @param has_operator_fee  whether an operator fee was actually CHARGED (props.has_operator_fee)
-/// @param has_da_footprint  whether the transaction was PRICED under a DA-footprint fork
-///                          (props.has_da_footprint)
-OpReceiptMeta deriveOpReceiptMeta(const OpFeeParams& fee, uint32_t flzLen, intx::uint256 l1_cost,
-    intx::uint256 operator_fee_at_used, bool fill_operator_scalars, bool has_operator_fee,
-    bool has_da_footprint) noexcept;
+/// Takes the whole snapshot rather than its booleans: three adjacent bool parameters would let a
+/// caller swap has_operator_fee and has_da_footprint with a clean compile and nothing visible in
+/// review. fill_operator_scalars stays separate because it is caller policy, not a snapshot fact.
+OpReceiptMeta deriveOpReceiptMeta(const OpTxProperties& props, intx::uint256 operator_fee_at_used,
+    bool fill_operator_scalars) noexcept;
 
 /// receipts-root leaf encoding (op-geth Receipts.EncodeIndex semantics, receipt.go:568-592 --
 /// note this is NOT MarshalBinary :279-288; the two deliberately differ for a receipt that

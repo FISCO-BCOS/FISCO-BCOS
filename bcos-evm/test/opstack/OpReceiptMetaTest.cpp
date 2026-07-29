@@ -2,12 +2,31 @@
 #include <bcos-evm/opstack/OpFeeParams.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-evm/opstack/OpReceipt.h>
+#include <bcos-evm/opstack/OpTransition.h>
 #include <bcos-evm/opstack/RollupCost.h>
 #include <boost/test/unit_test.hpp>
 #include <vector>
 
 using namespace bcos::evm::opstack;
 using intx::operator""_u256;
+
+namespace
+{
+/// 按「validate 期快照」的语义构造 props：deriveOpReceiptMeta 现在整体接收它，而不是散开的
+/// 三个 bool —— 后者允许调用方把 has_operator_fee 与 has_da_footprint 写反且编译无警告。
+[[nodiscard]] OpTxProperties props(
+    const OpFeeParams& fee, uint32_t flzLen, intx::uint256 l1Cost, const OpForkConfig& cfg)
+{
+    OpTxProperties p{};
+    p.fee = fee;
+    p.flz_len = flzLen;
+    p.l1_cost = l1Cost;
+    p.has_operator_fee = cfg.has_operator_fee;
+    p.jovian_operator_formula = cfg.has_jovian_operator_formula;
+    p.has_da_footprint = cfg.has_da_footprint;
+    return p;
+}
+}  // namespace
 
 BOOST_AUTO_TEST_SUITE(OpReceiptMetaSuite)
 
@@ -21,11 +40,9 @@ BOOST_AUTO_TEST_CASE(IsthmusHasFeesWithoutDa)
     fee.operator_fee_scalar = 11;
     fee.operator_fee_constant = 13;
     std::vector<uint8_t> env{0x02};
-    const auto m =
-        deriveOpReceiptMeta(fee, flzCompressLen({env.data(), env.size()}), /*l1=*/100_u256,
-            /*opUsed=*/50_u256, /*fill_operator_scalars=*/true,
-            /*has_operator_fee=*/isthmusConfig().has_operator_fee,
-            /*has_da_footprint=*/isthmusConfig().has_da_footprint);
+    const auto m = deriveOpReceiptMeta(
+        props(fee, flzCompressLen({env.data(), env.size()}), 100_u256, isthmusConfig()),
+        /*opUsed=*/50_u256, /*fill_operator_scalars=*/true);
     BOOST_REQUIRE(m.l1_fee.has_value());
     BOOST_CHECK_EQUAL(*m.l1_fee, 100_u256);
     BOOST_REQUIRE(m.l1_gas_price.has_value());
@@ -43,10 +60,9 @@ BOOST_AUTO_TEST_CASE(OperatorScalarsOmittedWhenBothZero)
 {
     OpFeeParams fee{};  // operator scalar/constant both 0
     std::vector<uint8_t> env{0x02};
-    const auto m = deriveOpReceiptMeta(fee, flzCompressLen({env.data(), env.size()}), 0_u256,
-        0_u256, /*fill_operator_scalars=*/true,
-        /*has_operator_fee=*/isthmusConfig().has_operator_fee,
-        /*has_da_footprint=*/isthmusConfig().has_da_footprint);
+    const auto m = deriveOpReceiptMeta(
+        props(fee, flzCompressLen({env.data(), env.size()}), 0_u256, isthmusConfig()), 0_u256,
+        /*fill_operator_scalars=*/true);
     BOOST_CHECK(m.operator_fee.has_value());            // 值始终填（FISCO 扩展）
     BOOST_CHECK(!(m.operator_fee_scalar.has_value()));  // 守卫：全 0 不填 scalar/constant
     BOOST_CHECK(!(m.operator_fee_constant.has_value()));
@@ -58,10 +74,9 @@ BOOST_AUTO_TEST_CASE(JovianFillsDaFootprint)
     fee.da_footprint_gas_scalar = 2;
     std::vector<uint8_t> env(50, 0x11);
     const auto size = estimatedDaSize({env.data(), env.size()});
-    const auto m = deriveOpReceiptMeta(fee, flzCompressLen({env.data(), env.size()}), 0_u256,
-        0_u256, /*fill_operator_scalars=*/false,
-        /*has_operator_fee=*/jovianConfig().has_operator_fee,
-        /*has_da_footprint=*/jovianConfig().has_da_footprint);
+    const auto m = deriveOpReceiptMeta(
+        props(fee, flzCompressLen({env.data(), env.size()}), 0_u256, jovianConfig()), 0_u256,
+        /*fill_operator_scalars=*/false);
     BOOST_REQUIRE(m.da_footprint_gas_scalar.has_value());
     BOOST_CHECK_EQUAL(*m.da_footprint_gas_scalar, 2u);
     BOOST_REQUIRE(m.da_footprint.has_value());
@@ -87,10 +102,8 @@ BOOST_AUTO_TEST_CASE(DaFootprintFollowsSnapshotNotTransitionCfg)
 
     // 按 Ecotone 定价（快照 false，flz_len 为 0）→ 即使 transition 期身处 Jovian，
     // 回执也不得出现 DA footprint 字段。
-    const auto pricedUnderEcotone = deriveOpReceiptMeta(fee, /*flzLen=*/0, 0_u256, 0_u256,
-        /*fill_operator_scalars=*/false,
-        /*has_operator_fee=*/false,
-        /*has_da_footprint=*/ecotoneConfig().has_da_footprint);
+    const auto pricedUnderEcotone = deriveOpReceiptMeta(
+        props(fee, /*flzLen=*/0, 0_u256, ecotoneConfig()), 0_u256, /*fill_operator_scalars=*/false);
     BOOST_CHECK(!pricedUnderEcotone.da_footprint_gas_scalar.has_value());
     BOOST_CHECK(!pricedUnderEcotone.da_footprint.has_value());
 
@@ -98,10 +111,10 @@ BOOST_AUTO_TEST_CASE(DaFootprintFollowsSnapshotNotTransitionCfg)
     // 字段仍须存在——快照说了算。
     std::vector<uint8_t> env(50, 0x11);
     const auto flz = flzCompressLen({env.data(), env.size()});
-    const auto pricedUnderJovian = deriveOpReceiptMeta(fee, flz, 0_u256, 0_u256,
-        /*fill_operator_scalars=*/false,
-        /*has_operator_fee=*/false,
-        /*has_da_footprint=*/jovianConfig().has_da_footprint);
+    auto jovianProps = props(fee, flz, 0_u256, jovianConfig());
+    jovianProps.has_operator_fee = false;
+    const auto pricedUnderJovian =
+        deriveOpReceiptMeta(jovianProps, 0_u256, /*fill_operator_scalars=*/false);
     BOOST_REQUIRE(pricedUnderJovian.da_footprint_gas_scalar.has_value());
     BOOST_CHECK_EQUAL(*pricedUnderJovian.da_footprint_gas_scalar, 2u);
     BOOST_REQUIRE(pricedUnderJovian.da_footprint.has_value());

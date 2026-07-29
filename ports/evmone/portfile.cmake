@@ -102,6 +102,18 @@ file(INSTALL "${SOURCE_PATH}/test/utils/"
      DESTINATION "${CURRENT_PACKAGES_DIR}/include/test/utils"
      FILES_MATCHING PATTERN "*.hpp" PATTERN "*.cpp" PATTERN "*.h")
 
+# 4e. bcos-evm's state::transition() takes the node's chain id as an explicit trailing argument
+#     (EIP-7702 step 1 must not compare tx.chain_id against itself — see
+#     bcos-evm/eth/state/state.hpp). test_state.cpp is the only caller that cannot be edited in
+#     tree, and leaving it on the upstream arity would force a default argument onto the
+#     declaration, i.e. make the unsafe value the API's default for every future caller. Patch
+#     this one call site to state tx.chain_id in its own source instead; it is a test helper, so
+#     upstream behaviour is preserved exactly.
+vcpkg_replace_string(
+    "${CURRENT_PACKAGES_DIR}/include/test/utils/test_state.cpp"
+    "get<state::TransactionProperties>(tx_props_or_error))"
+    "get<state::TransactionProperties>(tx_props_or_error), tx.chain_id)")
+
 # 5. Write a manual cmake config file (avoids install(EXPORT) issues)
 #    Creates evmone::evmone imported target with proper dependencies.
 #    Uses platform-aware library suffixes (.lib on Windows, .a on Unix).

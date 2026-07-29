@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(RejectsEveryOutOfEnumTxType)
         BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
     }
 
-    // 反向守卫：五种合法类型不得被白名单误伤（blob 另有其独立拒绝理由，已由 RejectsBlobTx 覆盖）。
+    // 反向守卫：四种合法类型不得被白名单误伤（blob 另有其独立拒绝理由，已由 RejectsBlobTx 覆盖）。
     for (const auto t : {state::Transaction::Type::legacy, state::Transaction::Type::access_list,
              state::Transaction::Type::eip1559, state::Transaction::Type::set_code})
     {

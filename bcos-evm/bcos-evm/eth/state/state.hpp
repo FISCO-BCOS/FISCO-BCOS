@@ -151,16 +151,16 @@ public:
 /// setting tx.chain_id to that chain. Every consensus caller must pass the node's value; the
 /// opstack path (opTransition) takes it the same way.
 ///
-/// It is optional only because upstream's own helper — test/utils/test_state.cpp, which this
-/// port compiles into bcos-evm-eth (see the TODO(eth-utils-removal) note in CMakeLists.txt) —
-/// calls the upstream 7-argument form and cannot be edited here. Passing nullopt reproduces
-/// that upstream behaviour and is unsafe on a consensus path. Once test/utils no longer builds
-/// into this library, make the parameter required again.
+/// Required, with no default: a default would make the unsafe value the API's behaviour for
+/// every caller that simply omits the argument. Upstream's own helper
+/// (test/utils/test_state.cpp) calls the 7-argument form and cannot be edited in tree, so the
+/// overlay port patches that one call site to pass tx.chain_id explicitly — the caller that
+/// genuinely wants the upstream value states it in its own source.
 ///
 /// @return Transaction receipt with state diff.
 TransactionReceipt transition(const StateView& state, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props, std::optional<uint64_t> chain_id = std::nullopt);
+    const TransactionProperties& tx_props, uint64_t chain_id);
 
 /// Validate a transaction.
 ///

@@ -170,8 +170,7 @@ OpTxReceipt opTransition(const evmone::state::StateView& view,
     // case OperatorFeeConservesWhenCfgDisagreesWithProps covers) the receipt must describe what
     // the sender was actually charged. deriveOpReceiptMeta takes no cfg at all, so there is no
     // second source of truth left to get this wrong.
-    auto meta = deriveOpReceiptMeta(props.fee, props.flz_len, props.l1_cost, opAtUsed,
-        /*fill_operator_scalars=*/true, props.has_operator_fee, props.has_da_footprint);
+    auto meta = deriveOpReceiptMeta(props, opAtUsed, /*fill_operator_scalars=*/true);
     return OpTxReceipt{std::move(receipt), meta};
 }
 
