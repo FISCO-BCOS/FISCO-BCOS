@@ -240,8 +240,19 @@ std::optional<std::string> bcos::engine::detail::validateOpNewPayloadRequest(
         return std::string("blobGasUsed must be zero before Jovian (OP Isthmus)");
     }
 
-    // Range checks for the four header fields that are u256 in `ExecutionPayload` but uint64_t in
-    // the ETH header (design §5.1). Doing them here makes `rebuildOpEthHeader` total.
+    // Range checks for the header fields whose `ExecutionPayload` type is wider (or signed)
+    // relative to the ETH header's uint64_t (design §5.1). Doing them here makes
+    // `rebuildOpEthHeader` total.
+    //
+    // `blockNumber` is `bcos::protocol::BlockNumber` (int64_t), not u256 -- the narrowing hazard
+    // is the sign, not the width (task-5b review M1): a negative value would wrap to a huge
+    // uint64 in the header and, worse, be lexical_cast into a bogus registration key. Same
+    // "explicit check before narrowing" discipline as `narrowU256ToU64` below, which exists
+    // because of this repo's documented silent-truncation incident.
+    if (payload.blockNumber < 0)
+    {
+        return std::string("blockNumber must not be negative");
+    }
     if (!narrowU256ToU64(payload.gasLimit).has_value())
     {
         return std::string("gasLimit exceeds the uint64 range of the ETH header field");

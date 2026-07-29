@@ -45,7 +45,6 @@
 // (Task 3) precisely so that both the engine and the OP execution side can reach it.
 #include <bcos-codec/rlp/EthBlockHeader.h>
 #include <boost/lexical_cast.hpp>
-#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -302,6 +301,16 @@ public:
         // Phase 1: Validate and update tracked block state under lock.
         // The lock is released before any co_await to avoid holding a mutex
         // across a coroutine suspension point (which is UB under POSIX).
+        //
+        // Scope note (task-5b review M5): this rule is this function's, not the class's. The OP
+        // `newPayload` branch (`handleOpNewPayload` below) deliberately DOES hold `x_state` across
+        // `co_await`s — that is required by the op-validator-loop design §4.4 coroutine contract
+        // (safety premise 2, "engine 执行段被 x_state 锁串行"), which grants the permission
+        // conditionally: every storage2 backend in play completes synchronously in-thread, so no
+        // coroutine ever resumes on another thread. §4.4's invalidation criterion explicitly
+        // covers both that usage and the pre-existing lock-across-`co_await` TODO in
+        // `handleNewPayload`'s generic path. The two are consistent, not contradictory: this
+        // comment states the default, §4.4 states the audited exception.
         {
             std::unique_lock lock(x_state);
             if (m_trackedHeadBlock.has_value())
@@ -706,6 +715,19 @@ private:
         // here on reports `latestValidHash = parentHash`.
         const auto latestValidHash = std::make_optional(payload.parentHash);
 
+        // Parent/child number continuity (task-5b review I2). Not spelled out among §6.1's six
+        // steps, but load-bearing here: `parentBlockNumber` is already in hand, and both
+        // registration indices written in step 6 (`SYS_NUMBER_2_HASH` and the ETH header table)
+        // are keyed BY NUMBER. Without this check a payload naming a verified parent but carrying
+        // an arbitrary `blockNumber` would silently overwrite an existing height's index entries
+        // -- a corrupted chain index, not merely a rejected block. Classified with steps 4/5
+        // (INVALID + latestValidHash = parent) because the parent is established valid.
+        if (payload.blockNumber != *parentBlockNumber + 1)
+        {
+            co_return makeStatus(PayloadValidationStatus::Invalid, latestValidHash,
+                std::string("blockNumber must be exactly one greater than the parent's"));
+        }
+
         // ---- Step 4: execute ----
         view.newMutable();
         auto fiscoHeader = m_blockFactory->blockHeaderFactory()->createBlockHeader();
@@ -812,6 +834,16 @@ private:
         // a `mergeBackStorage()` (design §6.1 step 6 "merge 时机"). No chain-head progress table
         // is written this cycle (裁定 A4): FCU stays read-only + in-memory, and
         // `SYS_CURRENT_STATE`'s current number is on the §6.4 欠账台账.
+        //
+        // Known consequence, deliberately not solved here (task-5b review I3, for the §6.4
+        // ledger): this branch NEVER calls `mergeBackStorage()`, so every accepted block leaves
+        // one more immutable layer on the MultiLayerStorage stack -- unbounded growth, and read
+        // amplification linear in the number of blocks accepted since process start. Deciding
+        // when to merge (and how it interacts with reorg windows) belongs to the orchestration
+        // layer that also owns `SYS_CURRENT_STATE`'s head progression; both land together when
+        // the loop is wired into a real node, and both are on the same §6.4 欠账台账. The minimal
+        // loop's block counts are small enough that this is a scaling issue, not a correctness
+        // one.
         m_globalStateStorage.get().pushView(std::move(view));
         co_return makeStatus(PayloadValidationStatus::Valid, payload.blockHash, std::nullopt);
     }
@@ -861,10 +893,19 @@ private:
         // keccak256 `hashImpl` in its BlockFactory's crypto suite.)
         auto const& rawTransactions = *payload.rawTransactions;
         auto& hashImpl = *m_blockFactory->cryptoSuite()->hashImpl();
-        // `processOpBlock` produces exactly one receipt per transaction; `min` is belt-and-braces
-        // so a future divergence truncates instead of reading out of bounds.
-        const auto receiptCount = std::min(rawTransactions.size(), executeResult.receipts.size());
-        for (std::size_t index = 0; index < receiptCount; ++index)
+        // `processOpBlock` produces exactly one receipt per transaction. A divergence is a broken
+        // invariant in the execution layer, not a condition to paper over: truncating to the
+        // shorter of the two (task-5b review M2) would silently drop receipts from the registry
+        // while still reporting the block VALID. Fail loudly instead -- and as an internal error,
+        // since it is this node's bug, not a verdict on the payload.
+        if (rawTransactions.size() != executeResult.receipts.size())
+        {
+            BOOST_THROW_EXCEPTION(
+                OpExecutionInternalError{} << bcos::errinfo_comment{
+                    "OP block execution returned a receipt count differing from the transaction "
+                    "count"});
+        }
+        for (std::size_t index = 0; index < rawTransactions.size(); ++index)
         {
             auto const& receipt = executeResult.receipts[index];
             if (!receipt)

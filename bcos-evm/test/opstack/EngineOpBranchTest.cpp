@@ -15,11 +15,19 @@
 //   (g) Isthmus blobGasUsed != 0 -> INVALID;
 //   (h) getPayload in OP mode -> explicit "building is not OP-ized" error (design §6.3).
 //
-// NOT covered here, by design: the end-to-end VALID path (six-way comparison all-match + block
-// registration). Producing a payload whose stateRoot/receiptsRoot/... match real execution cannot
-// be done by hand-written literals — that is exactly what Task 6's golden-vector gate does, with
-// op-geth-anchored values. The tests below therefore exercise every rejection branch and the
-// ordering between them; VALID is Task 6's.
+// Tests (a)-(h) drive the REAL `OpSchedulerImpl`. Three further groups need outcomes real
+// execution cannot be steered into from hand-written literals, and are driven by `StubOpScheduler`
+// (see its comment — the seam is pure duck typing, so a stand-in is a first-class client of it):
+//   (i) end-to-end VALID + the four-table block registration asserted table by table;
+//   (j) each of the six comparison-surface fields mismatched individually;
+//   (k) OpStorageError -> -32603, never INVALID;
+//   (l) non-consecutive blockNumber -> INVALID (task-5b review I2).
+//
+// What still cannot be tested here at all: whether `rebuildOpEthHeader`'s payload-field ->
+// header-field mapping is the RIGHT one. Every blockHash in this file is computed by that same
+// mapping, so a systematically wrong mapping passes silently (see `rebuiltHeader`'s comment).
+// Pinning it is Task 6's job, with op-geth golden blockHash values — a hard constraint on that
+// task, not an optional extra.
 //
 // Fixture composition follows EngineVersionGateTest.cpp (this directory's Task 5a file) verbatim
 // in structure — StubMemPool / StubExecutor / local MultiLayerStorage fixture / manually
@@ -50,6 +58,8 @@
 #include <bcos-evm/engine/OpSchedulerImpl.h>
 #include <bcos-evm/opstack/OpForkSchedule.h>
 #include <bcos-framework/ledger/LedgerTypeDef.h>
+#include <bcos-framework/protocol/LogEntry.h>
+#include <bcos-framework/protocol/TransactionReceiptFactory.h>
 #include <bcos-framework/storage2/MemoryStorage.h>
 #include <bcos-framework/storage2/MultiLayerStorage.h>
 #include <bcos-framework/storage2/Storage.h>
@@ -69,7 +79,9 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -143,12 +155,34 @@ void registerVerifiedBlock(StorageFixture& fixture, bcos::h256 const& blockHash,
     fixture.multiLayerStorage.pushView(std::move(view));
 }
 
-bool isBlockRegistered(StorageFixture& fixture, bcos::h256 const& blockHash)
+std::optional<bcos::protocol::BlockNumber> registeredBlockNumber(
+    StorageFixture& fixture, bcos::h256 const& blockHash)
 {
     auto view = fixture.multiLayerStorage.fork();
     return bcos::task::syncWait(
-        bcos::ledger::getBlockNumber(view, blockHash, bcos::ledger::fromStorage))
-        .has_value();
+        bcos::ledger::getBlockNumber(view, blockHash, bcos::ledger::fromStorage));
+}
+
+bool isBlockRegistered(StorageFixture& fixture, bcos::h256 const& blockHash)
+{
+    return registeredBlockNumber(fixture, blockHash).has_value();
+}
+
+/// Raw table read-back (`storage2::readOne` + `StateKeyView`, the shape
+/// `bcos-ledger/LedgerMethods.h:110-119` uses on the write side's mirror image).
+std::optional<bcos::storage::Entry> readEntry(
+    StorageFixture& fixture, std::string_view table, std::string_view key)
+{
+    auto view = fixture.multiLayerStorage.fork();
+    return bcos::task::syncWait(
+        bcos::storage2::readOne(view, bcos::executor_v1::StateKeyView{table, key}));
+}
+
+/// `Entry::get()` returns a `string_view` over raw stored bytes; this is how a `bcos::bytes`
+/// expectation is compared against it without a hex round-trip.
+std::string_view asStringView(bcos::bytes const& data)
+{
+    return {reinterpret_cast<const char*>(data.data()), data.size()};
 }
 
 // ---- stand-ins (EngineVersionGateTest.cpp) ----
@@ -308,21 +342,225 @@ bcos::engine::NewPayloadRequest makeOpRequest(
     return request;
 }
 
-/// Sets `blockHash` to the hash the OP branch will recompute for this payload.
+/// The 21-field header the OP branch will reconstruct for this payload.
 ///
 /// It asks the production reconstruction (`detail::rebuildOpEthHeader`) rather than re-deriving
-/// the 21-field header here on purpose: this file's subject is the *branch structure* (which
-/// verdict, which latestValidHash, in which order), not the header encoding — that is Task 3's
-/// 33-vector golden gate (EthBlockHeaderTest.cpp) and Task 6's engine gate, both anchored to
-/// op-geth. Re-deriving the header here would duplicate a formula that is already golden-checked
-/// elsewhere while adding no independent signal to these tests.
+/// the header here on purpose: this file's subject is the *branch structure* (which verdict,
+/// which latestValidHash, in which order), not the header encoding — that is Task 3's 33-vector
+/// golden gate (EthBlockHeaderTest.cpp) and Task 6's engine gate, both anchored to op-geth.
+/// Re-deriving the header here would duplicate a formula that is already golden-checked elsewhere
+/// while adding no independent signal to these tests.
+///
+/// **T6 hard constraint follows from this** (task-5b review I4): because every blockHash in this
+/// file is self-computed by the very mapping under test, NOTHING here can catch a wrong
+/// payload-field -> header-field mapping in `rebuildOpEthHeader` (e.g. swapping prevRandao and
+/// parentBeaconBlockRoot: both sides move together and the comparison still passes). Task 6's
+/// gate MUST therefore feed op-geth golden `blockHash` values into `newPayload` and assert VALID
+/// — that is the only place the mapping itself is pinned externally.
+bcos::codec::rlp::EthBlockHeader rebuiltHeader(bcos::engine::NewPayloadRequest const& request)
+{
+    auto const& payload = request.executionPayload;
+    const auto transactionsRoot = bcos::evm::engine::computeOpTxRoot(*payload.rawTransactions);
+    return bcos::engine::detail::rebuildOpEthHeader(
+        payload, transactionsRoot, *request.parentBeaconBlockRoot);
+}
+
+/// Sets `blockHash` to the hash the OP branch will recompute for this payload.
 void sealWithBlockHash(bcos::engine::NewPayloadRequest& request)
 {
-    auto& payload = request.executionPayload;
-    const auto transactionsRoot = bcos::evm::engine::computeOpTxRoot(*payload.rawTransactions);
-    payload.blockHash = bcos::engine::detail::rebuildOpEthHeader(
-        payload, transactionsRoot, *request.parentBeaconBlockRoot)
-                            .hash();
+    request.executionPayload.blockHash = rebuiltHeader(request).hash();
+}
+
+// ---- StubOpScheduler: the seam driven by a scriptable stand-in ----
+//
+// The engine's OP branch reaches the OP side only through dependent names on `SchedulerType`
+// (`BlockEnv`, `ExecuteResult`, `ConsensusError`, `StorageError`, `c_ethBlockHeaderTable`,
+// `commitmentsOf`, `computeTxRoot`, `isIsthmusActiveAt`, `isJovianActiveAt`, `executeOpBlock`) —
+// i.e. the seam is pure duck typing, with no inheritance and no bcos-evm dependency on the engine
+// side. That is exactly what lets this stub stand in for `OpSchedulerImpl` and drive the branches
+// that real execution cannot reach without op-geth golden values (task-5b review I1): the
+// end-to-end VALID path with its four-table registration, each of the six comparison-surface
+// mismatches individually, and the OpStorageError -> -32603 classification.
+//
+// `computeTxRoot` deliberately forwards to the REAL `computeOpTxRoot`: the transactionsRoot feeds
+// the header reconstruction whose hash the payload must match, so faking it would only mean
+// faking both sides of the blockHash check.
+struct StubCommitments
+{
+    bcos::h256 receiptsRoot;
+    bcos::h2048 logsBloom;
+    bcos::h256 withdrawalsRoot;
+    bcos::h256 stateRoot;
+    bcos::u256 gasUsed;
+    bcos::h256 txRoot;
+    std::optional<uint64_t> blobGasUsed;
+    std::optional<bcos::h256> requestsHash;
+};
+
+struct StubOpScheduler
+{
+    /// Field names and order must match `bcos::evm::engine::OpBlockEnv` — the engine
+    /// aggregate-initializes this type with designated initializers.
+    struct BlockEnv
+    {
+        const bcos::protocol::BlockHeader& fiscoHeader;
+        bcos::h256 parentHash;
+        bcos::h256 prevRandao;
+        bcos::u256 baseFeePerGas;
+        bcos::Address feeRecipient;
+        bcos::h256 parentBeaconBlockRoot;
+        uint64_t gasLimit;
+        bcos::bytes extraData;
+        uint64_t blobGasUsed;
+    };
+
+    /// Carries the commitments inline because `commitmentsOf` is called *statically* by the
+    /// engine (`SchedulerType::commitmentsOf(result)`) and so cannot read instance state.
+    struct ExecuteResult
+    {
+        std::vector<bcos::protocol::TransactionReceipt::Ptr> receipts;
+        StubCommitments commitments;
+    };
+
+    struct ConsensusError : std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+    };
+    struct StorageError : std::runtime_error
+    {
+        using std::runtime_error::runtime_error;
+    };
+
+    static constexpr std::string_view c_ethBlockHeaderTable =
+        bcos::evm::engine::SYS_ETH_BLOCK_HEADER;
+
+    // ---- script ----
+    ExecuteResult result;
+    std::optional<std::string> consensusErrorToThrow;
+    std::optional<std::string> storageErrorToThrow;
+    // ---- observation ----
+    unsigned executeOpBlockCalls = 0;
+
+    static StubCommitments commitmentsOf(const ExecuteResult& executeResult)
+    {
+        return executeResult.commitments;
+    }
+
+    static bcos::h256 computeTxRoot(::ranges::input_range auto const& rawTxBytes)
+    {
+        return bcos::evm::engine::computeOpTxRoot(rawTxBytes);
+    }
+
+    [[nodiscard]] bool isIsthmusActiveAt(uint64_t timestamp) const noexcept
+    {
+        return timestamp >= kIsthmusTime;
+    }
+    [[nodiscard]] bool isJovianActiveAt(uint64_t timestamp) const noexcept
+    {
+        return timestamp >= kJovianTime;
+    }
+
+    /// Concept satisfaction only (`scheduler_v1::TransactionScheduler`), never called in OP mode —
+    /// same role and same throw-before-any-suspend shape as `OpSchedulerImpl::executeBlock`.
+    bcos::task::Task<std::vector<bcos::protocol::TransactionReceipt::Ptr>> executeBlock(ViewType&,
+        auto&, bcos::protocol::BlockHeader const&, ::ranges::input_range auto const&,
+        bcos::ledger::LedgerConfig const&)
+    {
+        throw std::logic_error("StubOpScheduler::executeBlock: OP mode must not call this");
+        co_return {};  // unreachable; satisfies the coroutine's declared return type
+    }
+
+    /// Shape must match `OpSchedulerImpl::executeOpBlock` exactly (one invented template
+    /// parameter, for `rawTxBytes`), or `EngineServiceImpl::c_opMode`'s
+    /// `&SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>` probe would not
+    /// resolve — the static_assert below is what pins that.
+    bcos::task::Task<ExecuteResult> executeOpBlock(
+        ViewType& /*storage*/, BlockEnv const& /*env*/, ::ranges::input_range auto const&)
+    {
+        ++executeOpBlockCalls;
+        if (consensusErrorToThrow.has_value())
+        {
+            throw ConsensusError(*consensusErrorToThrow);
+        }
+        if (storageErrorToThrow.has_value())
+        {
+            throw StorageError(*storageErrorToThrow);
+        }
+        co_return result;
+    }
+};
+
+using StubEngineService =
+    bcos::engine::EngineServiceImpl<StubMemPool, MLS, StubExecutor, StubOpScheduler>;
+static_assert(StubEngineService::c_opMode,
+    "StubOpScheduler must satisfy the same opMode probe as OpSchedulerImpl");
+
+bcos::protocol::TransactionReceipt::Ptr makeReceipt(
+    bcos::protocol::TransactionReceiptFactory::Ptr const& receiptFactory, uint64_t gasUsed)
+{
+    // Same call shape as OpReceiptMap.h's `mapOpReceipt`.
+    return receiptFactory->createReceipt(bcos::u256(gasUsed), std::string{},
+        bcos::protocol::LogEntries{}, /*status=*/0, bcos::bytesConstRef{}, /*blockNumber=*/0);
+}
+
+/// The commitments a correct execution of `request` would produce: every one of the six
+/// comparison-surface fields equal to what the payload claims, plus the §5.1 `requestsHash`
+/// (engaged, so the VALID path exercises that comparison too) and no `blobGasUsed` (pre-Jovian).
+StubCommitments matchingCommitments(
+    bcos::engine::NewPayloadRequest const& request, bcos::codec::rlp::EthBlockHeader const& header)
+{
+    auto const& payload = request.executionPayload;
+    return StubCommitments{
+        .receiptsRoot = payload.receiptsRoot,
+        .logsBloom = bcos::engine::detail::toEthLogsBloom(payload.logsBloom),
+        .withdrawalsRoot = *payload.withdrawalsRoot,
+        .stateRoot = payload.stateRoot,
+        .gasUsed = payload.gasUsed,
+        .txRoot = bcos::evm::engine::computeOpTxRoot(*payload.rawTransactions),
+        .blobGasUsed = std::nullopt,
+        .requestsHash = header.requestsHash,
+    };
+}
+
+/// Stub-driven composition root. Same lifetime discipline as `OpFixture` below.
+struct StubFixture
+{
+    StorageFixture storage;
+    StubMemPool memPool;
+    StubExecutor executor;
+    bcos::protocol::TransactionReceiptFactory::Ptr receiptFactory{makeReceiptFactory()};
+    StubOpScheduler scheduler;
+    bcos::protocol::BlockFactory::Ptr blockFactory{makeBlockFactory()};
+    StubEngineService service{memPool, storage.multiLayerStorage, executor, scheduler, blockFactory,
+        bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4};
+};
+
+/// Builds a sealed, parent-registered, stub-backed VALID scenario: one raw transaction, one
+/// receipt, commitments that match the payload exactly.
+struct ValidScenario
+{
+    bcos::engine::NewPayloadRequest request;
+    bcos::codec::rlp::EthBlockHeader header;
+    bcos::bytes rawTransaction;
+    bcos::protocol::TransactionReceipt::Ptr receipt;
+};
+
+ValidScenario prepareValidScenario(StubFixture& fixture, bcos::h256 const& parentHash)
+{
+    registerVerifiedBlock(fixture.storage, parentHash, 0);
+
+    // Arbitrary envelope bytes: the stub never decodes them. They still matter — they are what
+    // the transactionsRoot and the receipt's storage key are derived from.
+    ValidScenario scenario;
+    scenario.rawTransaction = bcos::bytes{0x7e, 0x01, 0x02, 0x03};
+    scenario.request = makeOpRequest({scenario.rawTransaction}, kIsthmusTimestamp, parentHash);
+    sealWithBlockHash(scenario.request);
+    scenario.header = rebuiltHeader(scenario.request);
+    scenario.receipt = makeReceipt(fixture.receiptFactory, 21000);
+
+    fixture.scheduler.result.receipts = {scenario.receipt};
+    fixture.scheduler.result.commitments = matchingCommitments(scenario.request, scenario.header);
+    return scenario;
 }
 
 /// Everything the OP composition root needs, as named members so that scheduler/executor/storage
@@ -384,10 +622,10 @@ TEST(EngineOpBranch, BlockHashMismatchIsInvalidWithNullLatestValidHash)
 
     auto status = bcos::task::syncWait(fixture.service.newPayload(request, 4));
 
+    // `Invalid`, never the deprecated-since-Shanghai `InvalidBlockHash` the generic path still
+    // uses for this condition — the equality assertion above already pins that (design §6.1
+    // step 2).
     EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
-    // Never `InvalidBlockHash`: that Engine API status is deprecated since Shanghai and the OP
-    // branch deliberately does not use it (design §6.1 step 2).
-    EXPECT_NE(status.status, bcos::engine::PayloadValidationStatus::InvalidBlockHash);
     EXPECT_FALSE(status.latestValidHash.has_value());
     ASSERT_TRUE(status.validationError.has_value());
     EXPECT_NE(status.validationError->find("blockHash"), std::string::npos);
@@ -534,4 +772,152 @@ TEST(EngineOpBranch, GetPayloadIsRefusedInOpMode)
     const bcos::engine::PayloadID payloadId{"0x1"};
     EXPECT_THROW(bcos::task::syncWait(fixture.service.getPayload(payloadId, 4)),
         bcos::engine::OpPayloadBuildingUnsupported);
+}
+
+// ===================== stub-driven branches (task-5b review I1) =====================
+// The three groups below are unreachable with the real scheduler without op-geth golden values
+// (a hand-written payload cannot match real execution's stateRoot/receiptsRoot), and Task 6's
+// golden gate cannot reach two of them either (a golden vector is by construction consistent, so
+// it exercises neither an individual field mismatch nor a storage fault). Hence the stub.
+
+// (i) Step 6, design §6.1: the end-to-end VALID path and its four-table block registration.
+TEST(EngineOpBranch, ValidPayloadRegistersAllFourTables)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    auto const& payload = scenario.request.executionPayload;
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+
+    ASSERT_EQ(status.status, bcos::engine::PayloadValidationStatus::Valid);
+    ASSERT_TRUE(status.latestValidHash.has_value());
+    EXPECT_EQ(*status.latestValidHash, payload.blockHash);
+    EXPECT_FALSE(status.validationError.has_value());
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 1U);
+
+    const auto blockNumberStr = boost::lexical_cast<std::string>(payload.blockNumber);
+
+    // 1. s_hash_2_number — and specifically through the same accessor the OP branch's own
+    //    parentKnown step uses, so this doubles as proof that a registered block is a valid
+    //    parent for the next one (design §6.1 step 5's "parent 已验证" definition).
+    auto registeredNumber = registeredBlockNumber(fixture.storage, payload.blockHash);
+    ASSERT_TRUE(registeredNumber.has_value());
+    EXPECT_EQ(*registeredNumber, payload.blockNumber);
+
+    // 2. s_number_2_hash — key = number decimal string, value = the hash's raw 32 bytes.
+    auto numberToHash = readEntry(fixture.storage, bcos::ledger::SYS_NUMBER_2_HASH, blockNumberStr);
+    ASSERT_TRUE(numberToHash.has_value());
+    EXPECT_EQ(numberToHash->get(), asStringView(payload.blockHash.asBytes()));
+
+    // 3. s_eth_block_header (the new OP-only table) — key = number, value = the 21-field RLP.
+    auto headerEntry =
+        readEntry(fixture.storage, bcos::evm::engine::SYS_ETH_BLOCK_HEADER, blockNumberStr);
+    ASSERT_TRUE(headerEntry.has_value());
+    const auto encodedHeader = scenario.header.encode();
+    EXPECT_EQ(headerEntry->get(), asStringView(encodedHeader));
+    // The stored header is the one whose keccak is the accepted blockHash — i.e. the registry is
+    // self-consistent with the verdict.
+    EXPECT_EQ(scenario.header.hash(), payload.blockHash);
+
+    // 4. s_hash_2_receipt — key = keccak(raw EIP-2718 envelope), value = encoded receipt.
+    const auto txHash =
+        fixture.blockFactory->cryptoSuite()->hashImpl()->hash(scenario.rawTransaction);
+    auto receiptEntry = readEntry(fixture.storage, bcos::ledger::SYS_HASH_2_RECEIPT,
+        bcos::concepts::bytebuffer::toView(txHash));
+    ASSERT_TRUE(receiptEntry.has_value());
+    bcos::bytes encodedReceipt;
+    scenario.receipt->encode(encodedReceipt);
+    EXPECT_EQ(receiptEntry->get(), asStringView(encodedReceipt));
+}
+
+// (j) Step 4/5, design §6.1 "六项比对面": each of the six fields, perturbed one at a time, must
+// produce INVALID + latestValidHash = parent + a validationError naming that field. One
+// perturbation per case, so a comparison that is silently missing from the chain shows up as
+// exactly one failing case instead of being masked by its neighbours.
+TEST(EngineOpBranch, EachComparisonSurfaceFieldMismatchIsNamed)
+{
+    struct MismatchCase
+    {
+        const char* fieldName;
+        void (*perturb)(StubCommitments&);
+    };
+
+    const MismatchCase cases[] = {
+        {"receiptsRoot", [](StubCommitments& c) { c.receiptsRoot = bcos::h256{}; }},
+        {"logsBloom",
+            [](StubCommitments& c) {
+                bcos::h2048 bloom;
+                bloom.data()[0] = 0x01;
+                c.logsBloom = bloom;
+            }},
+        {"withdrawalsRoot", [](StubCommitments& c) { c.withdrawalsRoot = bcos::h256{}; }},
+        {"stateRoot", [](StubCommitments& c) { c.stateRoot = bcos::h256{}; }},
+        {"gasUsed", [](StubCommitments& c) { c.gasUsed = bcos::u256(1); }},
+        {"transactionsRoot", [](StubCommitments& c) { c.txRoot = bcos::h256{}; }},
+    };
+
+    for (auto const& mismatchCase : cases)
+    {
+        SCOPED_TRACE(mismatchCase.fieldName);
+
+        StubFixture fixture;
+        const auto parentHash = hashOf("parent");
+        auto scenario = prepareValidScenario(fixture, parentHash);
+        mismatchCase.perturb(fixture.scheduler.result.commitments);
+
+        auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+
+        EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+        ASSERT_TRUE(status.latestValidHash.has_value());
+        EXPECT_EQ(*status.latestValidHash, parentHash);
+        ASSERT_TRUE(status.validationError.has_value());
+        EXPECT_NE(status.validationError->find(mismatchCase.fieldName), std::string::npos);
+        // A rejected block must leave the registry untouched.
+        EXPECT_FALSE(
+            isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+    }
+}
+
+// (k) Step 4, design §6.1: an `OpStorageError` is a fault in *this node's* storage, not a verdict
+// on the payload — it must surface as JSON-RPC -32603 and must NEVER become INVALID (that would
+// make the node vote against a block it merely failed to read). No golden vector can reach this
+// branch, since a consistent vector never faults storage.
+TEST(EngineOpBranch, StorageErrorFromExecutionIsInternalErrorNotInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);
+    fixture.scheduler.storageErrorToThrow = "ledger bridge poisoned";
+
+    EXPECT_THROW(bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4)),
+        bcos::engine::OpExecutionInternalError);
+    // Nothing registered: a storage fault leaves no trace of the block.
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
+}
+
+// (l) Step 3, task-5b review I2: a payload naming a verified parent but claiming a
+// non-consecutive height is INVALID. Without this check it would have overwritten the
+// number-keyed registration entries of an existing height.
+TEST(EngineOpBranch, NonConsecutiveBlockNumberIsInvalid)
+{
+    StubFixture fixture;
+    const auto parentHash = hashOf("parent");
+    auto scenario = prepareValidScenario(fixture, parentHash);  // parent registered at number 0
+
+    scenario.request.executionPayload.blockNumber = 7;  // parent is 0, so the only valid one is 1
+    sealWithBlockHash(scenario.request);                // keep the blockHash self-consistent
+    fixture.scheduler.result.commitments =
+        matchingCommitments(scenario.request, rebuiltHeader(scenario.request));
+
+    auto status = bcos::task::syncWait(fixture.service.newPayload(scenario.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    ASSERT_TRUE(status.latestValidHash.has_value());
+    EXPECT_EQ(*status.latestValidHash, parentHash);
+    ASSERT_TRUE(status.validationError.has_value());
+    EXPECT_NE(status.validationError->find("blockNumber"), std::string::npos);
+    // Rejected before execution — the height check precedes step 4.
+    EXPECT_EQ(fixture.scheduler.executeOpBlockCalls, 0U);
+    EXPECT_FALSE(isBlockRegistered(fixture.storage, scenario.request.executionPayload.blockHash));
 }
