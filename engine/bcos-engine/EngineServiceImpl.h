@@ -70,20 +70,6 @@ std::vector<std::string> supportedCapabilities();
 /// generic path's capability list stays byte-for-byte the pre-existing 10 entries.
 std::vector<std::string> supportedOpCapabilities();
 
-/// Unevaluated-context universal sink (same declared-but-never-defined contract as
-/// `std::declval` -- never odr-used, only appears inside the unevaluated `requires`-expression
-/// below). Used solely to probe for `SchedulerType::executeOpBlock`'s second parameter
-/// (`bcos::evm::engine::OpBlockEnv const&` on the real OP scheduler, task 4) without
-/// engine/bcos-engine naming -- and thus depending on -- bcos-evm's `OpBlockEnv` type: the
-/// templated conversion operator matches whatever concrete parameter type the probed call site
-/// declares, keeping this generic engine library free of any bcos-evm dependency (task-5a "库
-/// 纯净" constraint; the `engine` CMake target does not, and must not, link bcos-evm).
-struct AnyArg
-{
-    template <class T>
-    operator T() const;
-};
-
 bool isGetPayloadVersionCompatible(EngineApiVersion requestVersion, std::uint32_t payloadVersion);
 
 std::optional<std::string> validatePayloadAttributes(
@@ -104,20 +90,38 @@ class EngineServiceImpl
 public:
     using ViewType = typename GlobalStateStorageType::ViewType;
 
-    /// opMode compile-time judgment (spec §6.3, 裁定 B1): probes for
+    /// opMode compile-time judgment (spec §6.3, 裁定 B1; task-5a review fix I2): probes for
     /// `SchedulerType::executeOpBlock` via an unevaluated `requires`-expression -- no runtime
     /// bool, matching this class's existing all-template style. Only `OpSchedulerImpl` (task 4)
     /// defines a member function with this name; every SchedulerType used by the generic
     /// composition root today (StubScheduler/BloomScheduler in EngineServiceTest.cpp,
     /// SchedulerSerialImpl in production) does not, so `c_opMode` is false for all of them and
-    /// the generic path is byte-for-byte unaffected (task-5a zero-drift constraint). The probe
-    /// call's first argument is a real `ViewType&` (this class already knows that type); the
-    /// second and third arguments use `detail::AnyArg`/`std::declval` sinks so this header never
-    /// needs to name `bcos::evm::engine::OpBlockEnv` itself.
-    static constexpr bool c_opMode = requires(SchedulerType& scheduler, ViewType& view) {
-        scheduler.executeOpBlock(
-            view, detail::AnyArg{}, std::declval<std::vector<bcos::bytes> const&>());
-    };
+    /// the generic path is byte-for-byte unaffected (task-5a zero-drift constraint).
+    ///
+    /// Takes the *address* of the member function template rather than calling it, pinning an
+    /// explicit template argument only for the sole `auto`-deduced parameter (`executeOpBlock`'s
+    /// third, `::ranges::input_range auto const& rawTxBytes`); the second parameter
+    /// (`bcos::evm::engine::OpBlockEnv const&` on the real OP scheduler) is a fixed,
+    /// non-dependent part of the declaration itself and needs no argument *value* to resolve --
+    /// unlike a call expression, `&SchedulerType::template executeOpBlock<...>` never needs
+    /// engine/bcos-engine to name `OpBlockEnv`, so this stays free of any bcos-evm dependency
+    /// (task-5a "库纯净" constraint) without an extra sink type. `std::vector<bcos::bytes>` is
+    /// the type `OpSchedulerImpl::executeOpBlock`'s `rawTxBytes` parameter is actually
+    /// instantiated with elsewhere (matches `::ranges::input_range`). Address-of is an
+    /// unevaluated operand inside a requires-expression ([expr.prim.req.simple]), so this does
+    /// not odr-use (and therefore does not force instantiation of) the function body -- only its
+    /// declaration needs to typecheck, same non-triggering-instantiation guarantee `sizeof`/
+    /// `decltype`/`std::declval` rely on elsewhere in this codebase.
+    ///
+    /// This does not separately verify that `executeOpBlock`'s first parameter (`Storage&`) is
+    /// exactly this class's `ViewType` -- redundant by construction: the enclosing class
+    /// template's own `requires` clause already requires
+    /// `scheduler_v1::TransactionScheduler<SchedulerType, ViewType, ExecutorType, ...>`, which
+    /// for `OpSchedulerImpl<Storage>` can only be satisfied (via its dummy `executeBlock`'s
+    /// `Storage&` parameter) when `Storage == ViewType` -- so any `SchedulerType` reaching this
+    /// point already has that identity pinned by the class's own instantiation constraint.
+    static constexpr bool c_opMode =
+        requires { &SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>; };
 
     EngineServiceImpl(MemPoolType& memPool, GlobalStateStorageType& globalStateStorage,
         ExecutorType& executor, SchedulerType& scheduler,

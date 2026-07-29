@@ -8,11 +8,15 @@
 //       version 4 is still rejected with `UnsupportedEngineApiVersion`, the same as before
 //       `maxEngineVersion` existed (zero-drift, spec §6.3 "V4 放宽门控");
 //   (b) the OP composition root (constructed with `maxEngineVersion = 4`) is no longer rejected
-//       by the version gate — `newPayload(request, 4)` reaches past `isVersionSupported` into
-//       the pre-existing generic validation body (Task 5b has not wired an OP branch there yet,
-//       so what it lands on is `detail::validateExecutionPayload`'s ordinary V2+ withdrawals
-//       check, not any OP-specific outcome — asserted as "did not throw
-//       UnsupportedEngineApiVersion", per task-5-brief.md's own two allowed formulations).
+//       by the version gate — `newPayload(request, 4)` reaches past `isVersionSupported`,
+//       asserted narrowly as "did not throw UnsupportedEngineApiVersion" (per
+//       task-5-brief.md's own two allowed formulations for this task's boundary). Task 5b has
+//       not wired an OP branch yet, so this call currently falls through into the pre-existing
+//       generic validation body — but that fallthrough outcome is deliberately NOT asserted
+//       here (task-5a review fix I1): it is an artifact of Task 5b's static validation not
+//       existing yet, not a contract this task owns, and would silently start asserting the
+//       wrong thing the moment Task 5b lands its own OP-specific validation on this exact
+//       request shape. See the routing comment at the end of test (b) below.
 //
 // Fixture composition (brief-mandated, not this file's own choice):
 //   - generic root: the REAL `bcos::scheduler_v1::SchedulerSerialImpl` (production scheduler,
@@ -301,18 +305,15 @@ TEST(EngineVersionGate, OpCompositionRootNotRejectedByVersionGate)
     OpEngineService engineService(memPool, fixture.multiLayerStorage, executor, scheduler,
         blockFactory, bcos::engine::c_defaultBlockTxCountLimit, /*maxEngineVersion=*/4);
 
-    // Default-constructed request: `withdrawals` stays nullopt, so once the (now-passing)
-    // version gate lets execution through, `detail::validateExecutionPayload` deterministically
-    // returns the V2+ "withdrawals are required" error -- a fixed, non-OP-specific fallthrough
-    // outcome, not an accidental one (unlike relying on both `parentHash`/`headBlockHash`
-    // defaulting to the same zero hash, which this test deliberately avoids).
+    // Default-constructed request: the version gate is the only thing this task's OP branch
+    // wiring can make assertions about (Task 5b has not landed the OP `newPayload` branch body
+    // yet), so no field needs to be populated here.
     bcos::engine::NewPayloadRequest request;
 
     bool threwUnsupportedVersion = false;
-    std::optional<bcos::engine::PayloadStatus> status;
     try
     {
-        status = bcos::task::syncWait(engineService.newPayload(request, 4));
+        bcos::task::syncWait(engineService.newPayload(request, 4));
     }
     catch (const bcos::engine::UnsupportedEngineApiVersion&)
     {
@@ -320,9 +321,11 @@ TEST(EngineVersionGate, OpCompositionRootNotRejectedByVersionGate)
     }
 
     EXPECT_FALSE(threwUnsupportedVersion);
-    ASSERT_TRUE(status.has_value());
-    EXPECT_EQ(static_cast<int>(status->status),
-        static_cast<int>(bcos::engine::PayloadValidationStatus::Invalid));
-    ASSERT_TRUE(status->validationError.has_value());
-    EXPECT_NE(status->validationError->find("withdrawals"), std::string::npos);
+    // T5b(spec §6.1 步骤2)落地 OP 静态校验后,可在此追加 OP 分支行为断言。
+    // (task-5a review fix I1: this test previously also asserted the resulting status was
+    // `Invalid` with a "withdrawals" validationError -- that outcome is the pre-existing
+    // *generic* static-validation fallthrough that `newPayload` currently lands on only because
+    // Task 5b's OP-specific static validation doesn't exist yet; once T5b lands, this same
+    // request will be routed through the OP branch instead and that assertion would silently
+    // start asserting the wrong thing. Narrowed to the one guarantee this task actually owns.)
 }

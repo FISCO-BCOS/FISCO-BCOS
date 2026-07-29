@@ -104,12 +104,108 @@ brief 本身的 Files 清单里也没有列 `CMakeLists.txt`。因此判定这�
 `BloomScheduler` 均无 `executeOpBlock`,`c_opMode` 恒 false,原 10 条能力表/所有既有断言逐字
 不变)。
 
-## Commit
+## Commit(首次)
 
 `feat(engine): 版本闸成员化(maxEngineVersion)+ opMode 编译期判据(if constexpr requires)+ 通用组合根 V4 零漂移`
+(`a6513b530`)
 
 改动文件:
 - `engine/bcos-engine/EngineServiceImpl.h`
 - `engine/bcos-engine/EngineServiceImpl.cpp`
 - `bcos-evm/test/opstack/EngineVersionGateTest.cpp`(新增,未接入 CMake,随 Task 6)
 - 本报告(`.superpowers/sdd/.../task-5a-report.md`,`.gitignore` 命中,需 `git add -f`)
+
+## 审查修复轮(两条 Important,控制器裁定按审查建议修复)
+
+### I1:测试断言收窄(`bcos-evm/test/opstack/EngineVersionGateTest.cpp`)
+
+**问题**:`OpCompositionRootNotRejectedByVersionGate` 除"未抛
+`UnsupportedEngineApiVersion`"外,还额外断言 `status.status==Invalid` 且
+`validationError` 含 `"withdrawals"`。这两条依赖的是"落入既有通用
+`detail::validateExecutionPayload` 的 V2+ withdrawals 必填检查"这条**巧合路径**——
+一旦 T5b 按 spec §6.1 落地 OP 分支自己的静态校验,同一 default-constructed
+request 会被 OP 分支接管,不再落到通用校验,这两条断言会静默开始断言错误的东西
+(不是重新失败提醒你改,而是继续通过但语义已经不对——因为 OP 分支对同一形状的
+request 完全可能也返回 Invalid,只是 validationError 文案换了,`find("withdrawals")`
+未必再失败)。
+
+**修复**:删除这两条附加断言,只保留 `EXPECT_FALSE(threwUnsupportedVersion)`;在原
+位置(assert 之后)加显式路标注释
+`// T5b(spec §6.1 步骤2)落地 OP 静态校验后,可在此追加 OP 分支行为断言。`,并展开英文
+说明记录被删断言的原因(防止后续再被"顺手加回")。连带精简了文件头部对该用例的
+描述段落,不再暗示"withdrawals 检查是本用例的断言内容"。
+
+**diff 摘要**:`bcos-evm/test/opstack/EngineVersionGateTest.cpp` 测试(b)体内删除
+`std::optional<bcos::engine::PayloadStatus> status;` 变量与其后 3 行
+`EXPECT_EQ`/`ASSERT_TRUE`/`EXPECT_NE`,`try` 块内 `status = syncWait(...)` 改回纯
+`syncWait(...)`(丢弃返回值);文件头部第 (b) 条描述改写为强调"未抛异常"是本任务
+仅有的契约。
+
+### I2:`c_opMode` 探测改用成员函数模板取址(`engine/bcos-engine/EngineServiceImpl.h`)
+
+**问题**:原实现引入 `detail::AnyArg`(万能 sink 模板转换算子)规避在探测表达式里
+具名 `bcos::evm::engine::OpBlockEnv`。审查指出这是可用更简惯用法替代的过度设计:
+`&SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>`——对唯一的
+`auto` 推导参(`executeOpBlock` 第三参 `::ranges::input_range auto const&
+rawTxBytes`)显式钉类型实参,第二参 `OpBlockEnv const&` 是声明里已固定、非依赖的
+部分,取地址只需要类型层面解析,不需要构造任何参数**值**,因此完全不需要在源码
+中出现 `OpBlockEnv` 这个名字,也不需要 sink 类型。
+
+**控制器要求的静态推导(合式性)**:已逐条核验,推理如下:
+1. `[expr.prim.req.simple]`:simple-requirement 的表达式是**未求值操作数**
+   (unevaluated operand)——与 `sizeof`/`decltype`/`std::declval` 同一范畴,因此
+   `&SchedulerType::template executeOpBlock<...>` 出现在 `requires{...}` 里**不
+   构成 odr-use**,不会强制实例化 `executeOpBlock` 的函数体,只需要函数**声明**
+   (返回类型+形参类型)可解析——这正是取地址与"调用表达式"的关键区别:调用需要
+   构造合法的实参值(此前 AnyArg 存在的原因),取地址只需要类型匹配。
+2. `executeOpBlock` 因第三参是 `auto`,是一个"缩写函数模板"(abbreviated function
+   template),隐含一个模板形参(对应该 `auto` 位置)。`SchedulerType::template
+   executeOpBlock<std::vector<bcos::bytes>>` 对这一个隐含模板形参显式钉
+   `std::vector<bcos::bytes>`,其余两个形参(`Storage&`——已由 `OpSchedulerImpl<Storage>`
+   类模板自身实例化固定,不是 `executeOpBlock` 自己的模板参数;`OpBlockEnv
+   const&`——固定非模板类型)均由声明本身补全,无需在探测点重复指定。`template`
+   消歧符必需(`SchedulerType` 是依赖类型,`executeOpBlock` 是其依赖成员)。
+3. 对 `StubScheduler`/`SchedulerSerialImpl`(无 `executeOpBlock` 成员)——
+   `SchedulerType::executeOpBlock` 成员查找直接失败,是"简单 requirement 内表达式
+   不合式" ⟹ 该 requirement 不满足 ⟹ `c_opMode=false`,SFINAE 友好、不产生硬错误,
+   与原 AnyArg 方案在这条分支上行为一致。
+4. 对 `OpSchedulerImpl<Storage>`——显式实参代入后,`::ranges::input_range auto`
+   隐式生成的 `requires ::ranges::input_range<std::vector<bcos::bytes>>` 已满足
+   (`vector<bytes>` 是 forward range),该具体实例化的声明合式 ⟹ 取址表达式合式
+   ⟹ `c_opMode=true`。
+5. 冗余性复核(审查论点):是否还需要额外验证 `Storage==ViewType`?不需要——
+   `EngineServiceImpl` 类模板自身的 `requires` 子句已要求
+   `scheduler_v1::TransactionScheduler<SchedulerType, ViewType, ExecutorType,...>`,
+   该 concept 内部调用 `scheduler.executeBlock(storage, ...)` 其中 `storage` 类型
+   是 `ViewType&`;对 `OpSchedulerImpl<Storage>::executeBlock(Storage&
+   storage,...)` 而言 `Storage&` 是非推导上下文(`Storage` 已被类模板自身实例化
+   固定),`ViewType&` 要绑定到 `Storage&` 只能在 `Storage==ViewType` 时成立——
+   也就是说,任何能让 `EngineServiceImpl<...,OpSchedulerImpl<Storage>>` 通过外层
+   `requires` 子句完成实例化的场景,`Storage==ViewType` 已被外层约束保证,
+   `c_opMode` 探测里再单独校验一遍纯属重复。
+
+**结论**:该写法**合式且无疑虑**,已按控制器"默认执行替换"的裁定采用,未保留
+AnyArg 分支。`detail::AnyArg` 类型声明与其上方大段注释已整体删除。
+
+**diff 摘要**:`engine/bcos-engine/EngineServiceImpl.h`——(1)`detail` 命名空间内删除
+`AnyArg` 结构体及其注释块;(2)`c_opMode` 定义体从
+`requires(SchedulerType& scheduler, ViewType& view) { scheduler.executeOpBlock(view,
+detail::AnyArg{}, std::declval<std::vector<bcos::bytes> const&>()); }` 改为
+`requires { &SchedulerType::template executeOpBlock<std::vector<bcos::bytes>>; }`;
+(3)`c_opMode` 上方文档注释重写,记录取址-vs-调用的合式性推导与"Storage==ViewType
+冗余性"论证(即上文静态推导的精简版,内联进源码注释供后续读者复核)。
+
+**回归影响**:两条修复均不改变 `c_opMode` 的真值表(对 `StubScheduler`/
+`SchedulerSerialImpl`/`BloomScheduler` 仍为 `false`,对 `OpSchedulerImpl<ViewType>`
+仍为 `true`),不改变 `isVersionSupported`/构造函数/`exchangeCapabilities` 的任何
+行为;`engine/bcos-engine/EngineServiceImpl.cpp`(`supportedOpCapabilities`)未涉及,
+本轮无改动。**仍未编译验证**——上述合式性推导是静态论证,不替代实际编译器判定。
+
+## Commit(修复轮,待提交)
+
+`fix(engine): 审查修复——EngineVersionGateTest 断言收窄防 T5b 巧合路径漂移 + c_opMode 探测改用成员函数模板取址替换 AnyArg sink`
+
+改动文件:
+- `engine/bcos-engine/EngineServiceImpl.h`
+- `bcos-evm/test/opstack/EngineVersionGateTest.cpp`
+- 本报告(同上,`git add -f`)
