@@ -42,9 +42,9 @@ public:
         engine::ForkchoiceUpdatedResult forkchoiceUpdatedResult{
             .payloadStatus =
                 engine::PayloadStatus{
-                    .status = engine::PayloadValidationStatus::Valid,
                     .latestValidHash = std::nullopt,
                     .validationError = std::nullopt,
+                    .status = engine::PayloadValidationStatus::Valid,
                 },
             .payloadId = std::nullopt,
         };

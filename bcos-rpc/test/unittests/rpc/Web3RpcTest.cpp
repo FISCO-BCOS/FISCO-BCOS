@@ -57,8 +57,9 @@ public:
     struct State
     {
         engine::PayloadStatus payloadStatusResult{
-            .status = engine::PayloadValidationStatus::Valid,
-            .latestValidHash = std::nullopt, .validationError = std::nullopt};
+            .latestValidHash = std::nullopt,
+            .validationError = std::nullopt,
+            .status = engine::PayloadValidationStatus::Valid};
         engine::GetPayloadResult getPayloadResult = std::make_unique<engine::GetPayloadData>();
         std::optional<engine::NewPayloadRequest> capturedNewPayloadRequest;
         std::optional<std::uint32_t> capturedNewPayloadVersion;

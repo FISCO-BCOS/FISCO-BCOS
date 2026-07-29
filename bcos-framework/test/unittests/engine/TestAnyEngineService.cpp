@@ -32,14 +32,16 @@ struct MockEngineService
 {
     std::vector<std::string> m_capabilities;
     ForkchoiceUpdatedResult m_forkchoiceResult{
-        .payloadStatus = PayloadStatus{.status = PayloadValidationStatus::Valid,
+        .payloadStatus = PayloadStatus{
             .latestValidHash = std::nullopt,
-            .validationError = std::nullopt},
+            .validationError = std::nullopt,
+            .status = PayloadValidationStatus::Valid},
         .payloadId = std::nullopt};
     GetPayloadResult m_getPayloadResult = std::make_unique<GetPayloadData>();
-    PayloadStatus m_payloadStatus{.status = PayloadValidationStatus::Valid,
+    PayloadStatus m_payloadStatus{
         .latestValidHash = std::nullopt,
-        .validationError = std::nullopt};
+        .validationError = std::nullopt,
+        .status = PayloadValidationStatus::Valid};
     std::optional<BlockNumber> m_safeBlockNumber{42};
     std::optional<BlockNumber> m_finalizedBlockNumber{21};
 
@@ -117,9 +119,10 @@ struct NonCopyableEngineService
         const ForkchoiceState&, const PayloadAttributes*, std::uint32_t)
     {
         co_return ForkchoiceUpdatedResult{
-            .payloadStatus = PayloadStatus{.status = PayloadValidationStatus::Valid,
+            .payloadStatus = PayloadStatus{
                 .latestValidHash = std::nullopt,
-                .validationError = std::nullopt},
+                .validationError = std::nullopt,
+                .status = PayloadValidationStatus::Valid},
             .payloadId = std::nullopt};
     }
 
@@ -130,9 +133,10 @@ struct NonCopyableEngineService
 
     task::Task<PayloadStatus> newPayload(const NewPayloadRequest&, std::uint32_t)
     {
-        co_return PayloadStatus{.status = PayloadValidationStatus::Valid,
+        co_return PayloadStatus{
             .latestValidHash = std::nullopt,
-            .validationError = std::nullopt};
+            .validationError = std::nullopt,
+            .status = PayloadValidationStatus::Valid};
     }
 
     std::optional<BlockNumber> getSafeBlockNumber() const { return m_safeBlockNumber; }

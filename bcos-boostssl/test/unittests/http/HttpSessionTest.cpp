@@ -59,8 +59,8 @@ struct HttpSessionTestFixture
 
     ~HttpSessionTestFixture() { BOOST_TEST_MESSAGE("Teardown fixture"); }
 
-    // 创建测试用的 HttpSession 对象
-    HttpSession session{10240000, CorsConfig{}};
+    // 创建测试用的 HttpSession 对象 (shared_ptr for shared_from_this)
+    std::shared_ptr<HttpSession> session = std::make_shared<HttpSession>(10240000, CorsConfig{});
 
     CorsConfig defaultCorsConfig;
     CorsConfig disabledCorsConfig;
@@ -223,7 +223,7 @@ BOOST_AUTO_TEST_CASE(test_buildHttpRespTest)
         bcos::bytes content = stringToBytes(testContent);
 
         // Act
-        auto response = session.buildHttpResp(
+        auto response = session->buildHttpResp(
             status, keepAlive, version, std::move(content), defaultCorsConfig);
 
         // Assert
@@ -253,7 +253,7 @@ BOOST_AUTO_TEST_CASE(test_buildHttpRespTest)
         {
             BOOST_TEST_CONTEXT("Testing status: " << testCase.description)
             {
-                auto response = session.buildHttpResp(
+                auto response = session->buildHttpResp(
                     testCase.status, true, 11, bcos::bytes(emptyContent), defaultCorsConfig);
 
                 BOOST_CHECK_EQUAL(response->result(), testCase.status);
@@ -266,7 +266,7 @@ BOOST_AUTO_TEST_CASE(test_corsEnabledTest)
 {
     bcos::bytes content = stringToBytes("test");
 
-    auto response = session.buildHttpResp(
+    auto response = session->buildHttpResp(
         boost::beast::http::status::ok, true, 11, std::move(content), customCorsConfig);
 
     // 验证所有CORS头部都被设置
@@ -297,7 +297,7 @@ BOOST_AUTO_TEST_CASE(test_corsDisabledTest)
 {
     bcos::bytes content = stringToBytes("test");
 
-    auto response = session.buildHttpResp(
+    auto response = session->buildHttpResp(
         boost::beast::http::status::ok, true, 11, std::move(content), disabledCorsConfig);
 
     // 验证CORS头部都没有被设置
@@ -330,9 +330,9 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerReceivesHeaders)
     Queue queue;
     HttpResponsePtr response;
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
-    session.setQueue(std::move(queue));
+    session->setQueue(std::move(queue));
 
-    session.setRequestHandler([this](const bcos::boostssl::http::HttpRequest& req,
+    session->setRequestHandler([this](const bcos::boostssl::http::HttpRequest& req,
                                 std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         BOOST_CHECK_EQUAL(req.body(), R"({"jsonrpc":"2.0","method":"eth_chainId","params":[]})");
         capturedMethod = std::string(req.method_string());
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerReceivesHeaders)
         sender(stringToBytes(R"({"result":"ok"})"), boost::beast::http::status::ok);
     });
 
-    session.handleRequest(request);
+    session->handleRequest(request);
 
     BOOST_REQUIRE(capturedMethod.has_value());
     BOOST_CHECK_EQUAL(*capturedMethod, "POST");
@@ -362,9 +362,9 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtUnauthorizedTo401)
     Queue queue;
     HttpResponsePtr response;
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
-    session.setQueue(std::move(queue));
+    session->setQueue(std::move(queue));
 
-    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
+    session->setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         sender(bcos::bytes{'{', '"', 'j', 's', 'o', 'n', 'r', 'p', 'c', '"', ':', '"', '2', '.',
             '0', '"', ',', '"', 'i', 'd', '"', ':', '1', ',', '"', 'e', 'r', 'r', 'o', 'r', '"',
             ':', '{', '"', 'c', 'o', 'd', 'e', '"', ':', '-', '3', '2', '0', '1', '0', ',',
@@ -372,7 +372,7 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtUnauthorizedTo401)
             'o', 'r', 'i', 'z', 'e', 'd', '"', '}', '}'}, boost::beast::http::status::unauthorized);
     });
 
-    session.handleRequest(request);
+    session->handleRequest(request);
 
     BOOST_REQUIRE(response != nullptr);
     BOOST_CHECK_EQUAL(response->result(), boost::beast::http::status::unauthorized);
@@ -391,9 +391,9 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtForbiddenTo403)
     Queue queue;
     HttpResponsePtr response;
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
-    session.setQueue(std::move(queue));
+    session->setQueue(std::move(queue));
 
-    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
+    session->setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         sender(bcos::bytes{'{', '"', 'j', 's', 'o', 'n', 'r', 'p', 'c', '"', ':', '"', '2', '.',
             '0', '"', ',', '"', 'i', 'd', '"', ':', '1', ',', '"', 'e', 'r', 'r', 'o', 'r', '"',
             ':', '{', '"', 'c', 'o', 'd', 'e', '"', ':', '-', '3', '2', '0', '1', '1', ',',
@@ -401,7 +401,7 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerMapsJwtForbiddenTo403)
             'd', 'e', 'n', '"', '}', '}'}, boost::beast::http::status::forbidden);
     });
 
-    session.handleRequest(request);
+    session->handleRequest(request);
 
     BOOST_REQUIRE(response != nullptr);
     BOOST_CHECK_EQUAL(response->result(), boost::beast::http::status::forbidden);
@@ -420,15 +420,15 @@ BOOST_AUTO_TEST_CASE(test_httpReqHandlerKeeps200ForNonJwtJsonRpcError)
     Queue queue;
     HttpResponsePtr response;
     queue.setSender([&response](HttpResponsePtr _response) { response = std::move(_response); });
-    session.setQueue(std::move(queue));
+    session->setQueue(std::move(queue));
 
-    session.setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
+    session->setRequestHandler([](const bcos::boostssl::http::HttpRequest&, std::function<void(bcos::bytes, boost::beast::http::status)> sender) {
         auto payload = std::string(R"({"jsonrpc":"2.0","id":1,"error":{"code":)") +
                        std::to_string(bcos::rpc::MethodNotFound) + R"(,"message":"not found"}})";
         sender(bcos::bytes(payload.begin(), payload.end()), boost::beast::http::status::ok);
     });
 
-    session.handleRequest(request);
+    session->handleRequest(request);
 
     BOOST_REQUIRE(response != nullptr);
     BOOST_CHECK_EQUAL(response->result(), boost::beast::http::status::ok);
