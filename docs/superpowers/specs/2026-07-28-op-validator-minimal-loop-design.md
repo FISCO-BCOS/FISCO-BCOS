@@ -1,7 +1,13 @@
 # OP 验证者模式最小闭环设计(engine OP 化 + OpScheduler 组件 + ETH 头哈希层)
 
-日期:2026-07-28
-状态:**rev.3**——spec-plan 成对审查(4 视角:事实/协议/设计/测试,30 项裁定全数
+日期:2026-07-28(rev.3.1 回填:2026-07-29)
+状态:**rev.3.1**——实现完成后的**纯文档修订**(T7,不改任何已实现语义):①§7.3
+latestValidHash 断言口径按裁定 I2 修订为"非 blockHash 桶**且已过 parentKnown**才断言
+parentHash,step 2 静态校验阶段统一 null"(采纳实现口径,修 spec 而非改实现);②§6.1
+补记 step 3b 父子块号连续性校验(T5b 实现已有、rev.3 漏载);③§6.4 欠账台账追加 5 条
+实现期发现;④§8 逐条打钩并回填实测值。以下 rev.3 原文除这四处外**逐字保留**。
+
+rev.3 原状态:spec-plan 成对审查(4 视角:事实/协议/设计/测试,30 项裁定全数
 采纳)重写,裁定书:`.superpowers/sdd/validator-loop-rev3-directive.md`。rev.2→
 rev.3 结构性改动:①`OpExecuteBlockResult` 拆为**六项比对面**(seal 3 字段原样不动
 + result 3 个独立成员 stateRoot/gasUsed/txRoot,替代 rev.2 对 seal 结构的误称);
@@ -222,6 +228,13 @@ storage root,无法从恒空 withdrawals 列表推得;op-geth NewPayloadV4 在 O
 3. **parentKnown(rev.2 修正)**:OP 分支以 **storage 查询**为准
    (`getBlockNumber(view, parentHash, fromStorage)`),未知 → **SYNCING,不入库**
    (op-node 依赖此语义触发同步;内存 map 判据留给通用路径);
+   **3b. 父子块号连续性(rev.3.1 补记,2026-07-29 T7 落地;语义源自 T5b 实现 + T5b 审查 I2,
+   rev.3 原文漏载)**:parentKnown 成功后立即校验 `payload.blockNumber ==
+   *parentBlockNumber + 1`,不等 → **INVALID + latestValidHash=parentHash**(parent 此时
+   已被 step 3 确立为已验证祖先,故归"已过 parentKnown"档,与 step 4/5 同分类)。
+   **它不是可选的加分项**:step 6 的两张登记索引(`SYS_NUMBER_2_HASH` 与 ETH 头表)都**以
+   块号为键**,缺此校验时一个"parent 合法但 blockNumber 任意"的 payload 会静默覆写既有高度
+   的索引条目——后果是链索引损坏,而非仅仅放行一个坏块;
 4. 执行:组 `OpBlockEnv` → `executeOpBlock` → `result` 与 payload 头逐字段比对
    (**六项比对面**全比:seal 的 receiptsRoot/logsBloom/withdrawalsRoot + result
    的 stateRoot/gasUsed/txRoot)→ 错误分类表(OpConsensusError→INVALID;
@@ -273,6 +286,16 @@ attributes 构块(FCU attrs + getPayloadV4)、**`engine_newPayloadV4`/
 baseFee 并比对——真实 op-geth 会拒绝的 baseFee 错块本验证者放行,与 extraData
 形状校验并列,不得被掩盖,裁定 A7)、INVALID_BLOCK_HASH 枚举清理、重组窗口。
 
+**rev.3.1 追加(2026-07-29 T7 落地,实现期发现,逐条不得被"33/33 全绿"掩盖)**:
+
+| # | 欠账 | 事实与后果 |
+|---|---|---|
+| a | **`mergeBackStorage()` 永不调用** | OP 分支每接受一个块只 `pushView`,不 merge——`MultiLayerStorage` 的不可变层单调增长(**层数无界**),且每次 `fork()` 后的读要穿越自进程启动以来累积的全部层(**读放大随已接受块数线性增长**)。何时 merge、与重组窗口如何交互,属于编排层职责,与下一条同时落地。本期最小闭环块数量级小,这是**伸缩性**问题而非正确性问题——但生产接入前必须解决(源于 T5b 审查 I3,`EngineServiceImpl.h` step 6 注释同文在案) |
+| b | **`SYS_CURRENT_STATE` 的 current number 随 FCU head 推进写入** | 本期 FCU 保持只读 + 内存态(裁定 A4,§6.1 step 6),链头进度表不写。与 (a) 同属编排层,一并落地 |
+| c | **`executionRequests` 校验未实现** | `NewPayloadRequest`(`bcos-framework/engine/Types.h`)**没有 `executionRequests` 成员**,§6.1 step 2 的"在场且空"约束因此当前是**真空成立**——不是"检查通过",是"根本没有可检查的载体"。变异矩阵 #7 用 `requestsHash` 位移作代理复现线上后果,并以 `static_assert(!requires(NewPayloadRequest r){ r.executionRequests; })` 钉住:载体一旦被加进来这条断言立刻翻红,强制补真检查与真用例(源于 T5b/T6 偏离台账 ②) |
+| d | **`engine_newPayloadV4` / `engine_getPayloadV4` 的 RPC 端点注册** | 与上文同条,此处重述以并列成表:本期 `bcos-rpc`/`EngineEndpoint` **零改动**(裁定 A6),V4 只在 `EngineServiceImpl` 层生效;OP 异常类型(`UnsupportedFork`/`UnsupportedOpPayloadAttributes`/`OpExecutionInternalError` 等)携带的 -38005/-38003/-32603 **是意图文档,不是线上 JSON-RPC 码**——异常类型→错误码的映射在本仓任何位置都尚未实现(既有通用异常同样如此)。测试断言的是**异常类型**,不是线上码,不得被读作"错误码已验证"(T6 审查 M4) |
+| e | **Holocene EIP-1559 baseFee 父子一致性校验** | 与上文同条,并列备查:真实 op-geth 会拒绝的 baseFee 错块,本验证者放行(裁定 A7) |
+
 ## 7. 金向量 gate 与测试(rev.3 重写)
 
 ### 7.1 金值策略(事实 Critical 落地,rev.3 修正 A2/A3)
@@ -316,8 +339,15 @@ baseFee 并比对——真实 op-geth 会拒绝的 baseFee 错块本验证者放
 
 ### 7.3 变异分档矩阵(逐分支,测试 I-1;rev.3 扩为 13 类 18 例,裁定 C1)
 
-非 blockHash 桶的 INVALID 用例**同时断言 `latestValidHash==parentHash`**(仅
-blockHash 失配桶恒断言 null)。
+**latestValidHash 断言口径(rev.3.1 修订,2026-07-29 T7 落地;裁定 I2)**:非 blockHash 桶
+**且已过 parentKnown(§6.1 step 3)**的 INVALID 用例才**同时断言
+`latestValidHash==parentHash`**——即下表的 #8.1–#8.6 与父子块号连续性一类;**静态校验阶段
+(§6.1 step 2)被拒的全部用例统一断言 null**,含 blockHash 失配桶(#2/#7)与 #3–#6。
+
+修订理由(采纳实现口径、修 spec 而非改实现):step 2 尚未查过 parent,此时声称"最近有效祖先
+= parent"是一句未经验证的断言;Engine API 允许 null;工程上更诚实。rev.3 原文"非 blockHash
+桶的 INVALID 用例同时断言 parentHash"按字面读会要求 #3–#6 断言 parentHash,与实现不符——
+该字面偏离由本次修订消除(来龙去脉见 `task-6-report.md` §4/§8b 的 I1/I2 记录)。
 
 | # | §6 校验分支 | 变异用例 |
 |---|---|---|
@@ -358,24 +388,40 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
 
 ## 8. 验收清单(N0 相对基线 + 命令化,rev.3 修正 C5/C6)
 
-- [ ] 金向量 gate:`--gtest_filter='EngineNewPayloadGate.*'` 33/33 VALID,
+**实测回填口径(2026-07-29,T7,分支 `feat-op-validator-loop` @ `fe2a40c29`)**:全部条目
+逐条命令化执行完毕,勾选处的数字为**实跑输出**而非计划值;逐条命令与原始输出见
+`.superpowers/sdd/2026-07-28-op-validator-minimal-loop/task-7-report.md`。
+
+- [x] 金向量 gate:`--gtest_filter='EngineNewPayloadGate.*'` **5 TEST / 33 向量全绿**
+      (`AllThirtyThreeGoldenVectors` 内断言 `ids.size()==33`,gtest XML 留痕
+      `v_<id>_{status,block_hash,tx_root,tx_count}` 各 **33** 条),
       `latestValidHash==blockHash`;blockHash 与 `EthBlockHeader::encode()`/离线
       金值逐字段交叉断言 33/33;`result.txRoot==golden.transactionsRoot` 33/33
-- [ ] 两块链式用例(专用向量对,`golden/engine/chained/`)绿(parent-known 经
-      块登记因果成立)+ 未知 parent→SYNCING
-- [ ] 变异矩阵(§7.3)13 类 18 例逐例分档正确(六项比对面 6 例各断言点名字段;
-      非 blockHash 桶 INVALID 用例断言 latestValidHash==parentHash)
-- [ ] `--gtest_filter='EthBlockHeader.*:OpDepositEncode.*'` 金值单测绿
-- [ ] 通用组合根 V4 行为零漂移(探针⑤/T5a 单测)
-- [ ] 基线零回归:N0 相对基线(**Task 6 结束、Task 7 探针前**捕获:
+- [x] 两块链式用例(专用向量对,`golden/engine/chained/`)绿(parent-known 经
+      块登记因果成立)+ 未知 parent→SYNCING —— `ChainedPairParentKnownThroughBlockRegistration`
+      OK,因果性另由探针④反证(见下)
+- [x] 变异矩阵(§7.3)13 类 18 例逐例分档正确
+      (`--gtest_filter='EngineNewPayloadMutation.*'` **18/18**;六项比对面 6 例各断言点名字段;
+      非 blockHash 桶**且已过 parentKnown** 的 INVALID 用例断言 latestValidHash==parentHash,
+      **step 2 静态校验阶段一律 null**——口径同 §7.3 rev.3.1 修订)
+- [x] `--gtest_filter='EthBlockHeader.*:OpDepositEncode.*'` 金值单测绿(**8/8**)
+- [x] 通用组合根 V4 行为零漂移(探针⑤ + `EngineVersionGate.*` 2/2 + 变异 #12)
+- [x] 基线零回归:N0 相对基线(**Task 6 结束、Task 7 探针前**捕获:
       `--gtest_list_tests` 双路各一份 + engine Boost.Test
       `test-bcos-engine --list_content 2>&1 | sort`),三份存档
-      `.superpowers/sdd/n0-*.txt`,合并后全过;新增名单入报告
-- [ ] 五探针翻红复绿留痕(`probe-op-validator-gate-report.md`)
-- [ ] `git diff --stat $(git merge-base HEAD feat-evm-ledger-bridge) -- ports/
-      bcos-evm/test/opstack/t8n/vectors/ transaction-scheduler/` 空
-- [ ] 桥 spec §10.1 + `Storage2Ledger.h` 头注的条件式许可修订已落(§4.4 义务,Task 1)
-- [ ] RPC 端点整体豁免确认:`bcos-rpc`/`EngineEndpoint` 零改动(裁定 A6)
+      `.superpowers/sdd/2026-07-28-op-validator-minimal-loop/n0-*.txt`,合并后全过;
+      新增名单入报告 —— **实测:in-tree `bcos-evm-opstack-tests` 206/206、standalone 131/131、
+      engine Boost 11/11(“No errors detected”);本闭环新增 50 例(相对 merge-base
+      `42e62fcef` 的 156 例),零删除、零改名;standalone 名单与 merge-base 逐条相同
+      (50 例全部落在 `if(TARGET bcos-framework)` 守卫内),即通用件改动零外溢**
+- [x] 五探针翻红复绿留痕(`.superpowers/sdd/probe-op-validator-gate-report.md`)
+- [x] `git diff --stat $(git merge-base HEAD feat-evm-ledger-bridge) -- ports/
+      bcos-evm/test/opstack/t8n/vectors/ transaction-scheduler/` 空(实测输出为空)
+- [x] 桥 spec §10.1 + `Storage2Ledger.h` 头注的条件式许可修订已落(§4.4 义务,Task 1)
+- [x] RPC 端点整体豁免确认:`bcos-rpc`/`EngineEndpoint` 零改动(裁定 A6;
+      `git diff --stat <merge-base> -- bcos-rpc/` 为空)
+- [x] 库目标纯净:`grep -rl "nlohmann\|gtest" bcos-evm/bcos-evm/ | grep -v statetest.hpp`
+      为空;`bcos-codec/bcos-codec/rlp/`、`engine/bcos-engine/` 同法为空
 
 ## 9. 风险与预案
 

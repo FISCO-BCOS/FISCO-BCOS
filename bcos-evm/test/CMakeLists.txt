@@ -110,6 +110,16 @@ if(TARGET bcos-framework)
     # even in a full in-tree build. (`target_link_libraries(... ledger)` below still works: CMake
     # resolves target names at generate time, so a target created later in the same project is
     # linked correctly.)
+    #
+    # KNOWN RISK, assessed and accepted (task-6 review M5, closed in task-7): putting the repo root
+    # on the include path means every top-level entry becomes a candidate for an angle-bracket
+    # include. The repo root does contain a directory named `concepts/`, which collides by name with
+    # the C++20 standard header <concepts>. It is harmless in practice — the preprocessor's include
+    # search skips directory entries and keeps looking, so <concepts> still resolves to the standard
+    # library — and the whole in-tree target builds clean (206/206) as evidence. The exposure is
+    # also bounded: these paths are PRIVATE to this one test target and never propagate. Should a
+    # top-level *file* ever collide with a header name, the fix is to narrow these to the specific
+    # subdirectories actually needed rather than to widen the guard.
     target_include_directories(bcos-evm-opstack-tests PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/bcos-ledger

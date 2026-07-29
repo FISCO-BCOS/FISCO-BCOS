@@ -974,10 +974,13 @@ TEST(EngineNewPayloadGate, ChainedPairParentKnownThroughBlockRegistration)
 // though it were. The coordinator has since adjudicated the conflict in the implementation's
 // favour, on the merits: at step 2 the parent has not been looked up at all, so claiming it as
 // the "latest valid ancestor" would be an unverified assertion; the Engine API permits null; and
-// null is the more honest answer. Spec §7.3's note and §8's third acceptance line are to be
-// revised in T7 to "非 blockHash 桶**且已过 parentKnown**的 INVALID 才断言 parentHash". Until
-// that edit lands, these cases are correct against the implementation and knowingly divergent
-// from the spec's current wording — recorded in task-6-report.md §5, not papered over.
+// null is the more honest answer. **That spec edit has since landed (T7, spec rev.3.1):** §7.3's
+// note and §8's third acceptance line now read "非 blockHash 桶**且已过 parentKnown**的 INVALID
+// 才断言 parentHash;静态校验阶段(§6.1 step 2)统一 null" — so the divergence recorded here is
+// closed, and the paragraph is kept as the provenance trail rather than as a live caveat.
+// Written up in task-6-report.md **§4 (前言) and §8b (I1/I2 rows)** — task-7 cross-reference
+// erratum: the earlier pointer to "task-6-report.md §5" was wrong, §5 there is the unrelated
+// three-item deviation ledger.
 //
 // Each case below asserts whichever of the two applies, never neither.
 
