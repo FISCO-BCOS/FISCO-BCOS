@@ -529,7 +529,7 @@ private:
             const std::string tableName{tableKey};
             const auto addr = addressFromTableName(tableKey);
 
-            auto account = co_await fetchAccount(tableName);
+            auto account = co_await fetchAccountForVisit(addr, tableName);
             if (!account.has_value())
                 continue;  // 双重防御:与上面的墓碑判别同一判据(existsOne),理应不可达
 
@@ -581,7 +581,14 @@ private:
         return true;
     }
 
-    task::Task<std::optional<Account>> fetchAccount(std::string tableName) const
+    /// `computeHasStorage=false` skips the `probeHasStorage` range scan (final review B4-4). The
+    /// KEEP contract for `has_storage` (present-but-empty is NOT nullopt — the bridge's core
+    /// invariant) is untouched: this changes only WHETHER the field is computed, never what a
+    /// computed value means. An Account produced with `false` therefore carries a `has_storage`
+    /// that must not be published: only `fetchAccountForVisit` uses it, and it deliberately does
+    /// not put such an Account into `m_accountCache`, so `get_account` can never observe one.
+    task::Task<std::optional<Account>> fetchAccount(
+        std::string tableName, bool computeHasStorage = true) const
     {
         if (!co_await storage2::existsOne(
                 m_storage.get(), executor_v1::StateKeyView(bcos::ledger::SYS_TABLES, tableName)))
@@ -627,8 +634,32 @@ private:
             std::memcpy(account.code_hash.bytes, view.data(), view.size());
         }
 
-        account.has_storage = co_await probeHasStorage(tableName);
+        if (computeHasStorage)
+        {
+            account.has_storage = co_await probeHasStorage(tableName);
+        }
         co_return account;
+    }
+
+    /// Account lookup for `visitAccountsImpl` (final review B4-4). Two savings over calling
+    /// `fetchAccount` directly, both of which were pure waste:
+    ///   * a cache HIT reuses the entry `get_account`/`applyModifiedEntry` already populated —
+    ///     the cache is write-through (`applyModifiedEntry` refreshes it from the authoritative
+    ///     re-read, `applyDeletedEntry` invalidates), so it is authoritative here too, and
+    ///     bypassing it just re-read the same rows;
+    ///   * a cache MISS skips `probeHasStorage`, because `has_storage` is not part of the
+    ///     `AccountView` the visitor receives and is not read anywhere on the `stateRootOf` path.
+    ///     That probe is a full range scan per account, i.e. it doubled the scans this path does.
+    /// A miss result is deliberately NOT cached: it lacks `has_storage`, and `get_account` must
+    /// never be served an Account with an uncomputed field.
+    task::Task<std::optional<Account>> fetchAccountForVisit(
+        const evmc::address& addr, const std::string& tableName) const
+    {
+        if (auto it = m_accountCache.find(addr); it != m_accountCache.end())
+        {
+            co_return it->second;
+        }
+        co_return co_await fetchAccount(tableName, /*computeHasStorage=*/false);
     }
 
     /// has_storage 判据(design §4.4):账户表 range seek 探测首个存活(非墓碑)的 32 字节

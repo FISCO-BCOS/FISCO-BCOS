@@ -632,3 +632,62 @@ TEST(Storage2Ledger, VisitAccountsUnknownKeyPoisons)
     EXPECT_FALSE(ok);
     EXPECT_TRUE(bridge.poisoned());
 }
+
+// ══════════ 终审批 4:B4-4 visitAccounts 的 2× 无谓开销 ══════════
+//
+// visitAccountsImpl 此前对每个账户 (a) 直接调私有 fetchAccount、绕过写穿的 m_accountCache,
+// (b) 在 fetchAccount 里跑 probeHasStorage——而 has_storage 既不在 AccountView 里、也不被
+// stateRootOf 路径读取。两项都是纯浪费,且都乘在 O(层数) 上(每次 range 要为每一层各建一个
+// 迭代器)。
+//
+// 断言用**精确计数**而非"更少即可":精确值才有判别力——任一优化回退、或读模式发生未经审阅
+// 的变化,计数都会变。若将来因合法原因变动,更新数值的同时必须在报告说明变动来源
+// (brief 明文允许该做法)。数值来自本轮实测,并已用"注释掉修复→翻红"自验反向确认:
+// 恢复旧行为后两个断言各自变大且测试翻红。
+TEST(Storage2Ledger, VisitAccountsUsesCacheAndSkipsHasStorageProbe)
+{
+    // 一个带存储槽的账户:有槽才谈得上 probeHasStorage 真的扫了东西。
+    MutableStorage rawStorage;
+    {
+        Storage2Ledger<MutableStorage> seeder(rawStorage);
+        evmone::state::StateDiff seedDiff;
+        seedDiff.modified_accounts.push_back(
+            {0x01_address, 3, 10, evmc::bytes{0x60, 0x00}, {{slotKey(1), slotKey(7)}}});
+        seeder.applyDiff(seedDiff);
+        ASSERT_FALSE(seeder.poisoned());
+    }
+
+    // 冷缓存:visitAccounts 自己发起的全部读。
+    std::size_t coldVisitReads = 0;
+    {
+        bcos::evm::test::CountingStorage<MutableStorage> counting(rawStorage);
+        Storage2Ledger<decltype(counting)> bridge(counting);
+        const auto before = counting.readCount;
+        const bool ok = bridge.visitAccounts([](const auto&) { return true; });
+        ASSERT_TRUE(ok);
+        ASSERT_FALSE(bridge.poisoned());
+        coldVisitReads = counting.readCount - before;
+    }
+
+    // 热缓存:先 get_account 把该账户读进写穿缓存(执行期本来就会发生),再 visitAccounts。
+    std::size_t warmVisitReads = 0;
+    {
+        bcos::evm::test::CountingStorage<MutableStorage> counting(rawStorage);
+        Storage2Ledger<decltype(counting)> bridge(counting);
+        ASSERT_TRUE(bridge.get_account(0x01_address).has_value());
+        const auto before = counting.readCount;
+        const bool ok = bridge.visitAccounts([](const auto&) { return true; });
+        ASSERT_TRUE(ok);
+        ASSERT_FALSE(bridge.poisoned());
+        warmVisitReads = counting.readCount - before;
+    }
+
+    // (1) 冷路:fetchAccount 的 existsOne+字段读 + fetchAllStorage 的 range + SYS_TABLES 扫描,
+    //     但**不含** probeHasStorage 的那次 range。
+    EXPECT_EQ(coldVisitReads, 6U) << "cold visitAccounts read count drifted";
+    // (2) 热路:账户字段整段来自缓存,只剩 SYS_TABLES 扫描与 fetchAllStorage。
+    EXPECT_EQ(warmVisitReads, 2U) << "warm visitAccounts read count drifted";
+    // (3) 关系断言:即使将来两个精确值都合法地变了,"命中缓存必须更省"这条关系也必须成立——
+    //     它是本条修复的语义,而具体数值只是它今天的取值。
+    EXPECT_LT(warmVisitReads, coldVisitReads);
+}
