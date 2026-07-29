@@ -1259,6 +1259,60 @@ TEST(EngineNewPayloadGate, GoldenVectorRedeliveryIsValidWithoutReExecution)
     }
 }
 
+// ══════ Step 2c: the `catch(...)` reclassification leg reaches engine (batch-3 review I-1) ══════
+//
+// spec §6.4 item (h) recorded an asymmetry: `OpStorageError -> -32603` had real-scheduler +
+// real-bridge coverage, while `OpConsensusError -> INVALID` was covered only on the path where
+// the decoder throws directly. The OTHER path — `processOpBlock` throwing INSIDE
+// `OpSchedulerImpl::executeOpBlock`'s try, escaping the `catch (const std::exception&)` because of
+// the -fno-rtti typed-catch bypass, and being reclassified by the `catch (...)` fallback
+// (`OpSchedulerImpl.h:769/787-791`) — is exactly what task-4's fix was written for, and had no
+// engine-side case. The batch-3 report wrongly claimed it was unreachable without a production
+// test hook; it is not, and this is the construction (batch-3 review I-1).
+//
+// The vector is a real golden one with its transaction list truncated: dropping element 0 removes
+// the L1 attributes deposit, which `OpBlockExecute.cpp:40` rejects ("first tx is not the L1
+// attributes deposit"). That throw is a plain `std::runtime_error` raised across the evmone
+// library boundary, i.e. precisely the shape the typed catch fails to bind. `resealBlockHash`
+// keeps the payload self-consistent so the static blockHash check does not reject it first — the
+// block must reach execution for this test to mean anything.
+//
+// Marker discipline is this file's own (spec §11): positive marker = the `catch(...)` clause's
+// unique text, which ONLY that clause emits (the typed handler forwards `e.what()` instead);
+// negative marker = the comparison bucket's prefix, absent.
+//
+// Precision limit, recorded in spec §6.4 item (j): `catch(...)` cannot recover the original
+// `what()`, so all four `OpBlockExecute.cpp` block-level throws collapse onto this one generic
+// message. This test can therefore pin "the catch(...) leg ran", not "which throw ran".
+TEST(EngineNewPayloadGate, ConsensusErrorViaCatchAllReclassificationIsInvalid)
+{
+    auto scenario = prepareScenario("isthmus_contract_logs");
+    auto& rawTransactions = *scenario.request.executionPayload.rawTransactions;
+    ASSERT_EQ(rawTransactions.size(), 2U);
+    ASSERT_EQ(rawTransactions[0][0], 0x7e) << "element 0 must be the deposit envelope to drop";
+
+    rawTransactions.erase(rawTransactions.begin());
+    resealBlockHash(scenario.request);
+
+    auto status = bcos::task::syncWait(scenario.fixture->service.newPayload(scenario.request, 4));
+
+    EXPECT_EQ(status.status, bcos::engine::PayloadValidationStatus::Invalid);
+    ASSERT_TRUE(status.latestValidHash.has_value())
+        << "a consensus-level rejection happens after parentKnown, so the parent is the latest "
+           "valid ancestor";
+    EXPECT_EQ(*status.latestValidHash, scenario.parentHash);
+    ASSERT_TRUE(status.validationError.has_value());
+    // Positive marker: only `OpSchedulerImpl.h`'s catch(...) produces this text.
+    EXPECT_NE(status.validationError->find("typed catch bypassed"), std::string::npos)
+        << *status.validationError;
+    // Negative marker: this is the execution-classification bucket, not the comparison bucket.
+    EXPECT_EQ(status.validationError->find(c_comparisonMismatchPrefix), std::string::npos)
+        << *status.validationError;
+    // A rejected block leaves no trace.
+    EXPECT_FALSE(
+        isBlockRegistered(scenario.fixture->storage, scenario.request.executionPayload.blockHash));
+}
+
 // ═════════════ Step 3: the mutation matrix — 13 classes / 18 cases (spec §7.3) ═════════════
 //
 // latestValidHash discipline, stated once — and stated honestly about its provenance:

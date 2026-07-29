@@ -11,14 +11,14 @@
 
 | 项 | 基线(45b2e8603) | 本批后 |
 |---|---|---|
-| in-tree `bcos-evm-opstack-tests` | 220/220 | **224/224** |
-| 本闭环新增测试(相对 merge-base 156) | 53 | **57** |
+| in-tree `bcos-evm-opstack-tests` | 220/220 | **225/225**(主轮 224 + fix 轮 I-1 补测 1) |
+| 本闭环新增测试(相对 merge-base 156) | 53 | **58** |
 | `EngineOpBranch` | 20 | **22** |
-| `EngineNewPayloadGate` | 5 | **7** |
+| `EngineNewPayloadGate` | 5 | **8** |
 | `EngineNewPayloadMutation` | 18 | 18(断言收紧,数量不变) |
 | `test-bcos-engine`(Boost) | No errors | **No errors** |
 
-新增 4 例 + 4 处既有用例的断言加固(不新增计数但新增判别力)。零退化。
+新增 5 例(主轮 4 + fix 轮 1)+ 4 处既有用例的断言加固(不新增计数但新增判别力)。零退化。
 
 standalone 未重新测量:本批改动全部落在 `bcos-evm/test/CMakeLists.txt` 的
 `if(TARGET bcos-framework)` 守卫内,standalone 源列表逐字未动。
@@ -138,8 +138,19 @@ standalone 未重新测量:本批改动全部落在 `bcos-evm/test/CMakeLists.tx
 
 | 注入 | 翻红 |
 |---|---|
-| 篡改 `isthmus_transfer_basic.golden.json` 的 `blockHash` 一个字符(模拟"重新生成") | `GoldenCorpusProvenanceIsPinned` + `IsthmusSingleTransfer` + `AllThirtyThreeGoldenVectors` + `GoldenVectorRedeliveryIsValidWithoutReExecution` |
+| 篡改 `isthmus_transfer_basic.golden.json` 的 `blockHash` 一个字符(模拟"重新生成") | **全库 11 例**(见下) |
 | 篡改 `vectors/jovian_da_mix.json` 的 `generator_commit` | `GoldenCorpusProvenanceIsPinned`(单独红,证明 (b) 半独立生效) |
+
+> **披露更正(批 3 复审 M-4)**:本表第一行初稿只列了 4 例——那是 `EngineNewPayloadGate.*`
+> **过滤器下**的全部失败,采集确实是自动的,但**报告没有披露加了过滤器**,读者会以为那是全库
+> 结果。复审者实测全库 11 例。这与 B3-13b 纠正批 2 的是同一类遗漏(证据表不完整),
+> 我在同一份报告里又犯了一次,记此为戒。**全库实测(clean binary,重新测量)11 例**:
+> `EthBlockHeader.{IsthmusSingleTxTransferBasic,AllThirtyThreeGoldenVectors}`、
+> `EngineNewPayloadGate.{GoldenCorpusProvenanceIsPinned,IsthmusSingleTransfer,AllThirtyThreeGoldenVectors,GoldenVectorRedeliveryIsValidWithoutReExecution}`、
+> `EngineNewPayloadMutation.{ComparisonSurfaceTransactionsRoot,UnknownParentIsSyncing,SamePayloadResubmittedAfterParentBecomesKnown,ForkchoiceWithAttributesRefusedButHeadStillAdvances,StorageLayoutFaultIsInternalErrorNotInvalid}`。
+> 全库口径更有信息量:它显示金值一旦变动,**不止 provenance 用例**会红——以
+> `isthmus_transfer_basic` 为底料的整条测试链都会红,provenance 用例的价值在于它是唯一
+> **指名道姓说出原因**的那一条。
 
 两次注入后均以原字节回写,`git status --porcelain -- .../t8n/` 为空(实测)。
 
@@ -292,15 +303,103 @@ spec §8 与 README 里 T7 快照的实测数字(206/206、新增 50 例)在批 
 
 ---
 
+# Fix 轮(批 3 复审:Approved,0 Critical;必修 I-1 / M-2 / M-3 / M-4)
+
+回归:**in-tree 225/225**(fix 轮 +1 例)、`test-bcos-engine` "No errors detected"、
+`vectors/` 与 `golden/` 逐字节未变(两次注入均已回写并实测)。
+
+## I-1【撤回错误归因 + 补测】——已闭合
+
+**先撤回**:初稿 CONCERNS #2 的两句话**都不成立**,我在此撤回。我称"没有不改生产代码就能触发
+的入口"并请求裁定加测试注入点——**错**。复审者实测首次即构造成功,而我根本没有尝试构造:我从
+"既有的坏类型字节走的是解码期直接 `throw`"这一条正确观察,跳到了"因此该腿不可达"这个不成立的
+结论,中间缺的正是 `OpSchedulerImpl.h:777-779` 那条注释——**它自己就点名**了
+`processOpBlock` 的 "first tx is not the L1 attributes deposit" 会逃逸 typed catch。证据就在我
+引用过的那段代码里,我没读到底。这是归因失败,不是构造困难。
+
+**补测**:`EngineNewPayloadGate.ConsensusErrorViaCatchAllReclassificationIsInvalid`
+(真调度器 + 真桥,12 行,无新 fixture),按复审给的构造:
+
+```cpp
+auto scenario = prepareScenario("isthmus_contract_logs");   // 2 txs,[0] 是 L1 attributes deposit
+auto& raws = *scenario.request.executionPayload.rawTransactions;
+raws.erase(raws.begin());            // 首笔不再是 attributes deposit -> OpBlockExecute.cpp:40
+resealBlockHash(scenario.request);   // 保持 payload 自洽,否则静态 blockHash 检查先挡下
+```
+
+断言:INVALID + `latestValidHash == parentHash` + 未登记,并按 spec §11 给**双标识**——
+正例含 `"typed catch bypassed"`(**只由** `OpSchedulerImpl.h:769/788-791` 产生;typed handler
+产生的是 `e.what()`),反例**不得含**比对桶前缀 `"execution result does not match payload field: "`。
+
+**翻红自验(两次注入,均全库无过滤)**:
+
+| 注入 | 翻红 |
+|---|---|
+| `catch (...)` → `catch (int)`(该腿整体失效) | `OpSchedulerImpl.FirstTxNotAttributesDepositIsConsensusError`、`OpSchedulerImpl.ThrowingStorageIsStorageError`、**`EngineNewPayloadGate.ConsensusErrorViaCatchAllReclassificationIsInvalid`** |
+| `catch(...)` 内改抛 `OpStorageError` 而非 `OpConsensusError`(腿在但分类错) | `OpSchedulerImpl.FirstTxNotAttributesDepositIsConsensusError`、**`EngineNewPayloadGate.ConsensusErrorViaCatchAllReclassificationIsInvalid`** |
+
+第二次注入是刻意加的:它证明新用例钉的是 **INVALID 这一侧的分类**,而不只是"有异常发生"。
+两次注入前该用例都是**新增的唯一 engine 侧证据**——注入前的三条红里,另外两条都是调度器层的。
+
+**spec/README 同步**:§6.4 条目 (h) 改写为"缺口已闭合 + 构造方式 + 两次翻红自验",并注明
+**保留该条目的理由是断言精度受条目 (j) 限制**;README 的对应条从"覆盖不对称"改为
+"两条腿已对称覆盖,但断不到具体是哪一处 throw"。
+
+**⚠️ 一个必须记下的操作教训**:做完最后一次注入实验后,我的驱动脚本只还原了源码、**没有重建**,
+于是我拿**带变异的二进制**去跑了一次全量,看到 2 红,并一度把它误判成"新用例导致 pre-existing
+用例翻红的顺序依赖"。重建后 **225/225 全绿**,无任何顺序依赖。教训:**变异实验的最后一步必须是
+"还原 + 重建 + 复绿",少一步都会污染下一次测量**——差一点就据此写出一份错误的 CONCERNS。
+
+## M-2【文档事实错误】——已修
+
+spec `:403` 漏否定词:"即它们此前被任何用例触碰过" → "即它们此前**从未**被任何用例触碰过"。
+原文断言了与所记录事实相反的意思。
+
+## M-3【悬空引用未做全量扫描】——已修,并把"扫描"写进标准
+
+`git add -f` 了 `.superpowers/sdd/probe-ledger-bridge-report.md`(README:123 引用)。
+**并按要求做了全量扫描**——脚本抽出 spec / `bcos-evm/README.md` / 金值目录 README 里所有
+`.superpowers/…`、`docs/…` 形状的引用,逐个比对 `git ls-files`。扫描**又发现第三处**:
+spec:11 引用的 `.superpowers/sdd/validator-loop-rev3-directive.md`(rev.3 的裁定书)同样未入库,
+一并 `git add -f`。**复扫结果:悬空引用 0 处**。
+
+§8.1 归档标准同步加严两点:(1) 归档类目明确加入**探针报告 `probe-*.md`** 与
+**控制器裁定书/决策记录 `*-directive.md`**(即 spec 会援引为权威出处的文件);
+(2) 明文规定判定方式是**全量扫描而非逐条点名**,并把"批 3 首轮点名式修补 → 复审发现第二处 →
+扫描又发现第三处"写进去作为该规定的实证理由。
+
+## M-4【证据披露不完整】——已修
+
+见上文 B3-5 自验表下的「披露更正」段:初稿的 4 例是 `EngineNewPayloadGate.*` **过滤器下**的
+全部失败,报告未披露过滤器;全库实测 **11 例**,已逐条列出。与 B3-13b 纠正批 2 的是同一类
+遗漏,已在报告里明写"我在同一份报告里又犯了一次"。
+
+## ⚠️ 台账补记(不改代码)
+
+spec §6.4 新增条目 **(j)**:`catch(...)` 重分类**丢弃 `e.what()`**,导致 `OpBlockExecute.cpp`
+的四处块级 throw(空块 :37 / 首笔非 attributes :40 / deposit 乱序 :55 / 非 deposit 校验失败)
+抵达 engine 后**共用同一条泛化 `validationError`**,运维无法区分是哪一类拒绝。这是 RTTI 变通的
+**既有**后果(非本批引入),此前不在台账上。条目里同时写明:它**限定了 I-1 补测的断言精度**
+——只能断到"走了 `catch(...)` 这条腿",断不到"是四处中的哪一处";真正的修法是消除 RTTI 变通
+本身,不是在这一层拼消息。README 同步一条。
+
+## 澄清接收
+
+- **C2(`yParity > 1`)已在批 1 完全关闭**(主提交 `YParityEquals2/256IsConsensusError` +
+  fix 轮 setcode 侧双子用例 + 翻红自验)。初稿 CONCERNS #5 的"建议下一批直接做"**作废**,不要重做;
+- **C1(语料 `currentRandom`/`currentCoinbase` 恒定)属批 5**;其中"重跑 opt8n-ref 必须同步刷新
+  本批新加的 `SHA256SUMS`"已由控制器记入台账。
+
 # CONCERNS(交控制器裁定)
 
 1. **`SYS_HASH_2_TX` 只披露未实现**——按裁定执行,但重申后果:任何按交易哈希取回交易的读路径
    对 OP 块无数据可返。补实现需要先定"存什么编码"(OP 路径手上只有 raw envelope),是设计决策
    不是补丁,建议在 op-node 实连前置清单里给它一个明确位置而不是留在台账尾部。
-2. **B3-11 的覆盖不对称本轮只补了披露,没补测试**——补它需要让真 `OpSchedulerImpl` 的
-   `processOpBlock` 内部抛出一个非 typed 异常并被 `catch(...)` 重分类,当前没有不改生产代码就能
-   触发的入口(既有的坏类型字节走的是解码期的直接 `throw`,不经那条 `catch(...)`)。若要闭合,
-   最小代价是在 `OpSchedulerImpl` 上加一个测试专用注入点——那是生产代码改动,需裁定。
+2. ~~**B3-11 的覆盖不对称本轮只补了披露,没补测试**……需裁定加测试注入点。~~
+   **【已撤回,见 Fix 轮 I-1】** 该归因不成立:不需要任何生产代码改动,12 行测试即可构造,
+   复审者首次即构造成功。缺口已闭合(`ConsensusErrorViaCatchAllReclassificationIsInvalid`,
+   两次翻红自验)。**残留的真实限制**改记为 spec §6.4 条目 (j):`catch(...)` 丢弃 `e.what()`,
+   四处块级 throw 共用一条 `validationError`,故断言精度到"哪条腿"为止。
 3. **B3-5 的边界**:SHA256 清单挡不住"同时刷新清单"的重新生成。若要更硬,唯一实质选项是把
    pin 与金值哈希放到**本仓之外**(CI secret / 上游制品仓库)。当前方案是"让重新生成变成可审查的
    显式动作",不是密码学保证——这一点已写进文件头和测试注释,不希望它被读成后者。
@@ -308,8 +407,9 @@ spec §8 与 README 里 T7 快照的实测数字(206/206、新增 50 例)在批 
    2 个是空的)本批未处理**——brief 未列入 B3。它需要**重跑 opt8n-ref 生成新向量**,属于金值仪式
    而非补测,且会改动 `golden/`(并因此需要同步刷新本批刚加的 `SHA256SUMS`)。建议单列一批,
    与 B3-5 的清单刷新一起做。
-5. **终审视角 3 的 C2(`yParity > 1` 拒绝在全套零守护)本批未处理**——同样未列入 B3,且它落在
-   `OpSchedulerImplTest.cpp`(解码层)而非 engine 层。补法很便宜(构造 yParity=2/256 的信封,
-   不需要金值),建议下一批直接做掉。
+5. ~~**终审视角 3 的 C2(`yParity > 1` 零守护)本批未处理,建议下一批做掉。**~~
+   **【已作废】** 控制器澄清:C2 **已在批 1 完全关闭**(主提交 `YParityEquals2/256IsConsensusError`,
+   fix 轮补 setcode 侧双子用例并做了翻红自验)。我在初稿里根据终审视角 3 的原始清单提出建议时
+   没有核对批 1 的产物——**不要重做**。
 6. **`progress.md` 本轮未提交**:工作区里它带有控制器写入的终审台账改动,不属于本批产物,
    我未 `git add` 也未改动它,留给控制器自行处置。

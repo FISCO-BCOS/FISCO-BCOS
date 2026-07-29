@@ -303,8 +303,9 @@ baseFee 并比对——真实 op-geth 会拒绝的 baseFee 错块本验证者放
 |---|---|---|
 | f | **`SYS_HASH_2_TX` 从不写入** | `registerOpBlock`(`EngineServiceImpl.h`)写四张表:`SYS_HASH_2_NUMBER` / `SYS_NUMBER_2_HASH` / ETH 头表 / `SYS_HASH_2_RECEIPT`。它援引的生产先例 `bcos-ledger/LedgerMethods.h:106-119` 的 `prewriteBlockToBuffer` **同一函数(:121-155)还写 `SYS_HASH_2_TX`**,本实现跳过。**后果**:OP 接受的块,回执可按 tx hash 查到,**原始交易本体无法按 hash 取回**——任何按交易哈希取回交易的读路径(RPC `eth_getTransactionByHash` 一类)对 OP 块无数据可返。**本轮裁定:只补披露,不补实现**(补写与否是独立决策,不在终审批 3 的零生产代码改动范围内);`registerOpBlock` 处已加一行注释点明,不再是无声跳过(终审视角 4 Critical-1) |
 | g | **缺参 `rawTransactions` 判 INVALID 而非 -32602** | §6.1 步骤 2 提到"缺参为 -32602"的约定,但 `validateOpNewPayloadRequest`(`EngineServiceImpl.cpp:200-206`)对缺失的 `rawTransactions` 返回 **INVALID + 点名字段**。理由:`NewPayloadRequest` 对象层**无法区分"缺参"与"空数组"**——那是 RPC 解析层的区分,而 RPC 端点本期整体豁免(条目 d)。此前该偏离只在未入库的 `task-5b-report.md` §7 交代过,读者从 spec 看不出(终审视角 4 Imp-3) |
-| h | **`OpConsensusError → INVALID` 的覆盖不如 `OpStorageError → -32603` 对称** | `StorageError → -32603` 有真调度器 + 真桥的端到端覆盖(探针③、`EngineNewPayloadGateTest` 的存储布局故障注入);`OpConsensusError → INVALID` 在 engine 层有一条真调度器用例(`EngineOpBranch.ConsensusErrorFromExecutionMapsToInvalid`,坏类型字节 → 解码期抛),但 **`OpSchedulerImpl.h` 的 `catch(...)` 重抛路径**(即 T4 修复真正针对的场景:`processOpBlock` 内部逃逸的非 typed 异常被兜底重分类为 `OpConsensusError` 后抵达 engine)engine 侧**无用例**。两条分类腿因此**不等价可信**,读者从 spec/README 此前完全看不出(终审视角 4 Imp-4) |
+| h | **`OpConsensusError → INVALID` 的覆盖不如 `OpStorageError → -32603` 对称** | `StorageError → -32603` 有真调度器 + 真桥的端到端覆盖(探针③、`EngineNewPayloadGateTest` 的存储布局故障注入);`OpConsensusError → INVALID` 在 engine 层有一条真调度器用例(`EngineOpBranch.ConsensusErrorFromExecutionMapsToInvalid`,坏类型字节 → 解码期抛),但 **`OpSchedulerImpl.h` 的 `catch(...)` 重抛路径**(即 T4 修复真正针对的场景:`processOpBlock` 内部逃逸的非 typed 异常被兜底重分类为 `OpConsensusError` 后抵达 engine)engine 侧此前**无用例**。**该缺口已于终审批 3 复审(I-1)闭合**:`EngineNewPayloadGate.ConsensusErrorViaCatchAllReclassificationIsInvalid` 用真调度器 + 真桥走这条腿(取一条真金值向量、删掉首笔 L1 attributes deposit 使 `OpBlockExecute.cpp:40` 抛出、`resealBlockHash` 保持 payload 自洽),断言 INVALID + `latestValidHash == parentHash` + 正例标识 `typed catch bypassed` + 反例标识(不得含比对桶前缀);翻红自验:把 `catch(...)` 改成 `catch(int)` → 该例翻红,把其分类改成 `OpStorageError` → 该例同样翻红。**保留本条的原因**:断言精度受条目 (j) 限制(断得到腿、断不到具体 throw)|
 | i | **零散记账(此前仅存于 `progress.md` 一行)** | ①`computeOpTxRoot` 对同一批 raw 字节**算两次**(engine step 2 一次、`executeOpBlock` step 6 一次),且形参声明为 `input_range` 而语义要求可重复遍历,**应为 `forward_range`**——当前调用点全是 `std::vector`,故未爆;②`c_opMode` 只探测 `executeOpBlock` **一个成员名**,签名漂移会静默退化为通用分支(护栏只有三个测试里的 `static_assert`);③三个 engine 测试 TU 的匿名命名空间含**同名类型**,当前无 ODR 问题,但 `UNITY_BUILD` 打开后是硬冲突(`engine` target 已 `UNITY_BUILD ON`,测试 target 未开);④`${CMAKE_SOURCE_DIR}` 进 include 路径**作用于整个测试 target 的 20+ 个源文件**,不止三个 engine 测试——实测无遮蔽(仓库根无无扩展名文件,同名目录项被跳过),但 CMake 注释里"暴露面有界"的表述弱化了实际范围 |
+| j | **`catch(...)` 重分类丢弃 `e.what()`,四类块级拒绝共用一条泛化 `validationError`** | `OpSchedulerImpl.h` 的 `catch(...)`(RTTI 变通,`fe2a40c` 引入)无法从被捕获对象上取回原始消息,只能抛一条固定文本的 `OpConsensusError`。后果:`OpBlockExecute.cpp` 的**四处**块级 throw——空块(:37)、首笔非 L1 attributes deposit(:40)、deposit 排在非 deposit 之后(:55)、非 deposit 交易校验失败——抵达 engine 后**共用同一条 `validationError`**,节点运维**无法区分是哪一类拒绝**。这是 RTTI 变通的既有后果(非终审批 3 引入),此前不在本台账上。它同时**限定了测试的断言精度**:`EngineNewPayloadGate.ConsensusErrorViaCatchAllReclassificationIsInvalid`(批 3 review I-1)只能断到"走了 `catch(...)` 这条腿"(消息含 `typed catch bypassed`),断不到"是四处 throw 中的哪一处"。真正的修法是消除 RTTI 变通本身(见 `docs/audits/2026-07-12-typed-catch-rtti-investigation.md`),不是在这一层拼消息 |
 
 ## 7. 金向量 gate 与测试(rev.3 重写)
 
@@ -400,7 +401,7 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
 
 - **step 5 的比对是 8 条,不是 6 条**。§4.1 的"六项比对面"之外还有 §5.1 的两条
   (`blobGasUsed` 的 Jovian DA footprint、`requestsHash` 的常量漂移),终审视角 3 的变异实验
-  把这两条同时短路为恒假,**50 例 engine 测试全绿**——即它们此前被任何用例触碰过。
+  把这两条同时短路为恒假,**50 例 engine 测试全绿**——即它们此前**从未**被任何用例触碰过。
   `EngineOpBranch.EachComparisonSurfaceFieldMismatchIsNamed` 的 mismatch 表因此从 6 行扩到
   **8 行**;§4.1/§5.1 的分类是文档区分,不是覆盖豁免;
 - **块登记的写侧需要真实块的证据**,不能只有桩:gate 的每条向量现在逐笔断言
@@ -455,8 +456,8 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
       为空;`bcos-codec/bcos-codec/rlp/`、`engine/bcos-engine/` 同法为空
 
 **终审后回填(2026-07-29,批 1/2/3 落地后)**:上表的实测数字是 T7 收尾时(`fe2a40c29`)的快照。
-整分支终审的三批修复之后,in-tree `bcos-evm-opstack-tests` **224/224**,本闭环新增 **57** 例
-(相对 merge-base `42e62fcef` 的 156 例;T7 时为 50 例,批 1 +11、批 2 +2、批 3 +4),
+整分支终审的三批修复之后,in-tree `bcos-evm-opstack-tests` **225/225**,本闭环新增 **58** 例
+(相对 merge-base `42e62fcef` 的 156 例;T7 时为 50 例,批 1 +11、批 2 +2、批 3 +5),
 `test-bcos-engine` 仍"No errors detected"。standalone 名单**未重新测量**:批 1/2/3 的测试改动
 全部落在 `if(TARGET bcos-framework)` 守卫内,standalone 侧源列表逐字未动。
 
@@ -465,12 +466,16 @@ OpSchedulerImpl(双签名:通用签名调用即 throw;分拣/首笔违约/毒旗
 此前 8 份 `task-N-report.md` 只归档 3 份,无成文标准,并因此产生过一处悬空引用(§7.3 曾引用
 未入库的 `task-6-report.md`)。**标准(自本次起适用,采用"全归档"口径)**:
 
-- `.superpowers/sdd/<epic>/` 下的 **`task-N-report.md`、`final-batch-N-report.md`、
-  `n0-*.txt`、探针报告**一律入库(`git add -f`——该目录受 `.git/info/exclude` 覆盖,
+- `.superpowers/sdd/` 下的 **`task-N-report.md`、`final-batch-N-report.md`、`n0-*.txt`、
+  **探针报告**(`probe-*.md`)、**控制器裁定书/决策记录**(`*-directive.md` 一类,即 spec 会
+  援引为权威出处的文件)一律入库(`git add -f`——该目录受 `.git/info/exclude` 覆盖,
   不加 `-f` 会被静默跳过,这正是此前漏归档的直接原因);
 - `*-brief.md`(控制器下发的任务书)与 `review-*.diff`(中间产物)**不入库**;
 - **spec / README 只允许引用已入库的文件**。引用未入库文件即悬空引用,视同文档缺陷——
-  这条是上面那条的存在理由,不是附注。
+  这条是上面那条的存在理由,不是附注。判定方式是**全量扫描**而非逐条点名:
+  对 spec 与 README 抽出所有形如 `.superpowers/…`、`docs/…` 的引用,逐个比对 `git ls-files`。
+  批 3 首轮只修了被点名的一处,复审即发现第二处(`probe-ledger-bridge-report.md`),
+  扫描后又发现第三处(`validator-loop-rev3-directive.md`)——**点名式修补不闭合,扫描才闭合**。
 
 ## 9. 风险与预案
 

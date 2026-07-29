@@ -68,7 +68,7 @@ design:`docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md`(r
 - 实测(in-tree `build/bcos-evm-opstack-tests`,**2026-07-29 整分支终审批 1/2/3 落地后**):
   金向量 gate **33/33 VALID**、两块链式对绿(parent-known 经块登记因果成立)、变异矩阵
   **13 类 18 例** 全绿、金值 provenance 校验(SHA256 清单 + op-geth pin)绿、engine/编解码
-  新增测试合计 **57/57**、全量 opstack **224/224**、engine Boost `test-bcos-engine`
+  新增测试合计 **58/58**、全量 opstack **225/225**、engine Boost `test-bcos-engine`
   "No errors detected";五探针翻红复绿留痕
   `.superpowers/sdd/probe-op-validator-gate-report.md`,终审三批的变异自验留痕
   `.superpowers/sdd/2026-07-28-op-validator-minimal-loop/final-batch{1,2,3}-report.md`;
@@ -98,10 +98,13 @@ design:`docs/superpowers/specs/2026-07-28-op-validator-minimal-loop-design.md`(r
   (`SYS_HASH_2_NUMBER` / `SYS_NUMBER_2_HASH` / ETH 头表 / `SYS_HASH_2_RECEIPT`),而它援引的
   生产先例 `prewriteBlockToBuffer` 同时还写 `SYS_HASH_2_TX`。**后果:OP 接受的块,回执可按 tx
   hash 查到,原始交易本体无法按 hash 取回**。本轮只补披露、不补实现;
-- **两条错误分类腿的覆盖不对称**(design §6.4 条目 h):`OpStorageError → -32603` 有真调度器 +
-  真桥的端到端覆盖;`OpConsensusError → INVALID` 只覆盖了解码期抛出这一条路径,
-  `OpSchedulerImpl` 的 `catch(...)` 重分类路径抵达 engine 的链路 engine 侧无用例。不要把两条腿
-  读作等价可信;
+- **四类块级拒绝共用同一条 `validationError`**(design §6.4 条目 j):`OpSchedulerImpl` 的
+  `catch(...)`(RTTI 变通)取不回原始 `what()`,于是 `OpBlockExecute.cpp` 的四处块级 throw
+  (空块 / 首笔非 L1 attributes deposit / deposit 乱序 / 非 deposit 校验失败)抵达 engine 后
+  **无法区分**——节点运维看不出是哪一类拒绝。两条错误分类腿本身现已**对称覆盖**
+  (`OpConsensusError → INVALID` 的 `catch(...)` 重分类腿由
+  `EngineNewPayloadGate.ConsensusErrorViaCatchAllReclassificationIsInvalid` 端到端钉住),
+  但断言精度到"哪条腿"为止,到不了"哪一处 throw";
 - **缺参与空数组不可分**(design §6.4 条目 g):缺失的 `rawTransactions` 判 INVALID 而非
   -32602——该区分属于 RPC 解析层,而 RPC 端点本期整体豁免;
 - SYNCING 完整语义(缓存回填 / 侧链 ACCEPTED)、JWT、重组窗口、增量 stateRoot 均未做。
