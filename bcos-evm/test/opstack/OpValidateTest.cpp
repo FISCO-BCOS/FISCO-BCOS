@@ -54,6 +54,32 @@ BOOST_AUTO_TEST_CASE(RejectsBlobTx)
     BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
 }
 
+// 0x7E 必须走 runDeposit，不得被普通交易路径接受。这条不是「顺手拒绝一个不支持的类型」：
+// kDepositTxType 是 static_cast 出来的、位于 Transaction::Type 枚举之外的值，而
+// validate_transaction 的类型 switch（state.cpp:365-383）没有 default 标号，所以未加这道
+// 判断时 0x7E 会静默穿过全部 revision 门控、被当作 legacy 通过校验。
+//
+// 后果一路错到共识字段：opTransition 会为它买 gas、收 L1 与 operator 费、强制 nonce（deposit
+// 三者都不该有），并产出 OpTxReceipt——其 encodeReceiptForRoot 只编码
+// [status, cumGas, bloom, logs]，缺失 deposit_nonce / deposit_receipt_version，对一笔标记为
+// 0x7E 的交易而言就是错误的 receipts-root 叶子。
+//
+// 用非零 envelope + 充足余额，确保拒因只可能来自类型判断本身，而不是空 envelope 或余额不足。
+BOOST_AUTO_TEST_CASE(RejectsDepositTxOnTheNonDepositPath)
+{
+    test::TestState ts;
+    ts[kSender] = {.nonce = 0, .balance = 1000000000000000000000_u256, .storage = {}, .code = {}};
+    auto tx = baseTx();
+    tx.type = kDepositTxType;
+    tx.to = 0x0000000000000000000000000000000000001234_address;
+
+    const std::vector<uint8_t> env{0x7e, 0x11};
+    const auto r = opValidate(
+        ts, blk(), tx, {env.data(), env.size()}, isthmusConfig(), OpFeeParams{}, 30000000);
+    BOOST_REQUIRE(std::holds_alternative<std::error_code>(r));
+    BOOST_CHECK_EQUAL(std::get<std::error_code>(r), std::errc::not_supported);
+}
+
 BOOST_AUTO_TEST_CASE(InsufficientForL1CostFails)
 {
     test::TestState ts;

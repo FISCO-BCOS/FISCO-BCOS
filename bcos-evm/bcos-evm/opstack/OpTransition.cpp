@@ -183,7 +183,14 @@ std::variant<OpTxProperties, std::error_code> opValidate(const evmone::state::St
     evmc::bytes_view signedTxEnvelope, const OpForkConfig& cfg, const OpFeeParams& fee,
     int64_t blockGasLeft)
 {
-    if (tx.type == evmone::state::Transaction::Type::blob)
+    // 0x7E must go through runDeposit, never this path. It is not merely unsupported here: 0x7E
+    // is a cast-in Transaction::Type value outside the enumeration, and validate_transaction's
+    // type switch (state.cpp:365-383) has no default label, so it would fall through every
+    // revision gate and be validated as a legacy transaction. opTransition would then buy gas,
+    // charge L1 and operator fees and enforce the nonce - none of which a deposit gets - and
+    // emit an OpTxReceipt, whose encodeReceiptForRoot omits deposit_nonce and
+    // deposit_receipt_version, i.e. a wrong receipts-root leaf for a 0x7E-tagged transaction.
+    if (tx.type == evmone::state::Transaction::Type::blob || tx.type == kDepositTxType)
         return make_error_code(std::errc::not_supported);
 
     if (signedTxEnvelope.empty())
