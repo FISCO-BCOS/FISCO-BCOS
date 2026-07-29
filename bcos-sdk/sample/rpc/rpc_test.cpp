@@ -27,7 +27,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <thread>
 #include <unistd.h>
+#include <vector>
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 void usage(void)
@@ -107,10 +109,11 @@ static std::shared_ptr<bcos::boostssl::ws::WsConfig> initWsConfig(
     }
     return wsConfig;
 }
-void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg, int iterations)
+void thread_function(
+    std::shared_ptr<bcos_sdk_c_config> arg, const std::string& group, int iterations)
 {
     int count = 0;
-    while(iterations==0 || count<iterations)
+    while (iterations == 0 || count < iterations)
     {
         auto factory = std::make_shared<bcos::cppsdk::SdkFactory>();
         auto wsConfig = initWsConfig(arg);
@@ -118,13 +121,12 @@ void* thread_function(std::shared_ptr<bcos_sdk_c_config> arg, int iterations)
         sdk->start();
         auto rpc = sdk->jsonRpc();
         rpc->getBlockNumber(
-            "group0", "", [](bcos::Error::Ptr error, std::shared_ptr<bcos::bytes> resp) {});
+            group, "", [](bcos::Error::Ptr error, std::shared_ptr<bcos::bytes> resp) {});
         usleep(100);
         sdk->stop();
         sdk.reset(nullptr);
         count++;
     }
-    return nullptr;
 }
 std::shared_ptr<bcos_sdk_c_config> bcos_sdk_create_config(
     int sm_ssl, std::string host, uint16_t port)
@@ -148,7 +150,6 @@ std::shared_ptr<bcos_sdk_c_config> bcos_sdk_create_config(
     config->peers.push_back(ep);
     config->peers_count = 1;
     // --- set connected peers ---------
-    config->disable_ssl = 1;
     config->send_rpc_request_to_highest_block_node = 1;
     // set ssl type
     config->ssl_type = sm_ssl ? "sm_ssl" : "ssl";
@@ -173,7 +174,16 @@ int main(int argc, char** argv)
     const char* group = argv[4];
     int threadCount = (argc > 5) ? atoi(argv[5]) : 100;
     int iterations = (argc > 6) ? atoi(argv[6]) : 0;
-    if (threadCount <= 0) { threadCount = 100; }
+    if (threadCount <= 0)
+    {
+        fprintf(stderr, "thread_count must be a positive integer\n");
+        return EXIT_FAILURE;
+    }
+    if (iterations < 0)
+    {
+        fprintf(stderr, "iterations must be zero or a positive integer\n");
+        return EXIT_FAILURE;
+    }
     printf(" [RPC] params ===>>>> \n");
     printf(" \t # host: %s\n", host);
     printf(" \t # port: %d\n", port);
@@ -188,15 +198,14 @@ int main(int argc, char** argv)
         is_sm_ssl = 0;
     }
     auto config = bcos_sdk_create_config(is_sm_ssl, (char*)host, port);
-    config->disable_ssl = 1;
     // check success or not
-    std::thread threads[100];
-    int rc;
+    std::vector<std::thread> threads;
+    threads.reserve(threadCount);
     long t;
     for (t = 0; t < threadCount; t++)
     {
         printf("In main: creating thread %ld\n", t);
-        threads[t] = std::thread(thread_function, config, iterations);
+        threads.emplace_back(thread_function, config, group, iterations);
         //        rc = pthread_create(&threads[t], NULL, thread_function);
         //        if (rc)
         //        {

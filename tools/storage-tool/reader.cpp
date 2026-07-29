@@ -217,11 +217,16 @@ int main(int argc, const char* argv[])
         row = std::move(entry);
     });
 
+    if (!row)
+    {
+        cerr << "entry not found: table=" << tableName << ", key=" << key << endl;
+        return 1;
+    }
     auto view = row->get();
     std::string hexData;
     hexData.reserve(view.size() * 2);
     boost::algorithm::hex_lower(view.begin(), view.end(), std::back_inserter(hexData));
-    cout << " [" << hex << "] ";
+    cout << " [key=" << key << "] [value=" << hexData << "] ";
 
     cout << " [status=" << row->status() << "]";
     return 0;

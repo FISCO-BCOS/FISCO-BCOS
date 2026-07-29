@@ -32,7 +32,7 @@ using namespace bcos::tool;
 
 void usage()
 {
-    std::cerr << "Usage: ./echo-client-sample qps(MBit/s) ${server_address} ${port} "
+    std::cerr << "Usage: ./echo-client-sample ${server_address} ${port} qps(MBit/s) "
                  "payloadSize(KBytes, default is 1MBytes) [config_path]\n"
               << std::endl;
     exit(0);
@@ -46,7 +46,7 @@ void sendMessage(NodeIPEndpoint const& _endPoint, std::shared_ptr<P2PMessage> _m
         BCOS_LOG(WARNING) << LOG_DESC("sendMessage: invalid service or message");
         return;
     }
-    while (_service->connected())
+    while (true)
     {
         _rateLimiter->acquire(1, true);
         auto seq = _service->messageFactory()->newSeq();

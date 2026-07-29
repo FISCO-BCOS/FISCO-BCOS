@@ -26,14 +26,13 @@
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
+#include <csignal>
 #include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <set>
 #include <string>
-#include <atomic>
-#include <csignal>
 
 using namespace bcos;
 using namespace bcos::cppsdk;
@@ -42,15 +41,11 @@ using namespace bcos;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-std::atomic<bool> g_running{true};
-static std::shared_ptr<bcos::cppsdk::Sdk> g_sdk = nullptr;
+volatile std::sig_atomic_t g_running = 1;
 
-void signalHandler(int signum)
+void signalHandler(int)
 {
-    std::cout << LOG_DESC(" [BlockNotifier] Received signal ") << signum
-              << ", shutting down gracefully..." << std::endl;
-    g_running = false;
-    if (g_sdk) { g_sdk->stop(); }
+    g_running = 0;
 }
 
 void usage()
@@ -85,7 +80,6 @@ int main(int argc, char** argv)
 
     std::cout << LOG_DESC(" [BlockNotifier] start sdk ... ") << std::endl;
 
-    g_sdk = sdk;
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
@@ -101,6 +95,7 @@ int main(int argc, char** argv)
         std::this_thread::sleep_for(std::chrono::milliseconds(10000));
     }
 
+    sdk->stop();
     std::cout << LOG_DESC(" [BlockNotifier] exited gracefully.") << std::endl;
 
     return EXIT_SUCCESS;

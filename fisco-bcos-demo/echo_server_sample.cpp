@@ -32,9 +32,9 @@ using namespace bcos::tool;
 
 void usage()
 {
-    std::cerr << "Usage: echo-server-sample <listenIP> <listenPort> <ssl>\n"
+    std::cerr << "Usage: echo-server-sample [config_path]\n"
               << "Example:\n"
-              << "./echo-server-sample\n";
+              << "./echo-server-sample ./config.ini\n";
     std::exit(0);
 }
 

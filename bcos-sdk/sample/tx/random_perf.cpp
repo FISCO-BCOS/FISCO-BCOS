@@ -24,7 +24,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
+#include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 void usage()
@@ -43,12 +45,20 @@ int main(int argc, char** argv)
         usage();
     }
 
-    long long count = std::stoul(argv[1]);
-
-    if (count <= 0)
+    long long count = 0;
+    try
     {
-        std::cerr << "Error: count must be positive, got: " << count << std::endl;
-        usage();
+        size_t parsedLength = 0;
+        count = std::stoll(argv[1], &parsedLength);
+        if (parsedLength != std::string(argv[1]).size() || count <= 0)
+        {
+            throw std::invalid_argument("count out of range");
+        }
+    }
+    catch (std::exception const& e)
+    {
+        std::cerr << "Error: count must be a positive integer: " << e.what() << std::endl;
+        return EXIT_FAILURE;
     }
 
     printf("[Random Gen Test] ===>>>> count: %lld\n", count);
